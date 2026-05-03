@@ -118,6 +118,7 @@
                         </button>
                         <ul class="dropdown-menu" aria-labelledby="importDropdown">
                             <li><a class="dropdown-item" href="#" id="import-from-file">From files</a></li>
+                            <li><a class="dropdown-item" href="#" id="import-from-folder">From folder tree</a></li>
                             <li><a class="dropdown-item" href="#" id="import-from-github">From GitHub</a></li>
                         </ul>
                     </div>
@@ -307,6 +308,15 @@
         </div>
 
         <div class="content-container">
+            <aside class="folder-tree-pane" id="folder-tree-pane">
+                <div class="folder-tree-header">
+                    <span><i class="bi bi-folder2-open me-1"></i>Folder</span>
+                    <button id="pick-folder-button" class="tool-button folder-tree-btn" title="Open folder">Open</button>
+                </div>
+                <div id="folder-tree-root" class="folder-tree-root">
+                    <p class="folder-tree-placeholder">Open a folder to browse Markdown files.</p>
+                </div>
+            </aside>
             <div class="editor-pane">
                 <textarea id="markdown-editor" placeholder="Type or paste your Markdown here..."></textarea>
             </div>
