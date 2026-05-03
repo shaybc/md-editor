@@ -553,8 +553,14 @@ This is a fully client-side application. Your content never leaves your browser 
       createdAt: Date.now(),
       isTemporary: false,
       sourceFileName: null,
-      sourceFileHandle: null
+      sourceFileHandle: null,
+      savedContent: content
     };
+  }
+
+  function getTabDisplayName(tab) {
+    const baseName = tab.title || 'Untitled';
+    return tab.savedContent !== tab.content ? baseName + ' *' : baseName;
   }
 
   function renderTabBar(tabsArr, currentActiveTabId) {
@@ -563,7 +569,7 @@ This is a fully client-side application. Your content never leaves your browser 
     tabList.innerHTML = '';
     tabsArr.forEach(function(tab) {
       const item = document.createElement('div');
-      item.className = 'tab-item' + (tab.id === currentActiveTabId ? ' active' : '');
+      item.className = 'tab-item' + (tab.id === currentActiveTabId ? ' active' : '') + (tab.savedContent !== tab.content ? ' unsaved' : '');
       item.setAttribute('data-tab-id', tab.id);
       item.setAttribute('role', 'tab');
       item.setAttribute('aria-selected', tab.id === currentActiveTabId ? 'true' : 'false');
@@ -571,8 +577,9 @@ This is a fully client-side application. Your content never leaves your browser 
 
       const titleSpan = document.createElement('span');
       titleSpan.className = 'tab-title' + (tab.isTemporary ? ' temporary' : '');
-      titleSpan.textContent = tab.title || 'Untitled';
-      titleSpan.title = tab.title || 'Untitled';
+      const displayName = getTabDisplayName(tab);
+      titleSpan.textContent = displayName;
+      titleSpan.title = displayName;
 
       // Three-dot menu button
       const menuBtn = document.createElement('button');
@@ -689,15 +696,16 @@ This is a fully client-side application. Your content never leaves your browser 
     mobileTabList.innerHTML = '';
     tabsArr.forEach(function(tab) {
       const item = document.createElement('div');
-      item.className = 'mobile-tab-item' + (tab.id === currentActiveTabId ? ' active' : '');
+      item.className = 'mobile-tab-item' + (tab.id === currentActiveTabId ? ' active' : '') + (tab.savedContent !== tab.content ? ' unsaved' : '');
       item.setAttribute('role', 'tab');
       item.setAttribute('aria-selected', tab.id === currentActiveTabId ? 'true' : 'false');
       item.setAttribute('data-tab-id', tab.id);
 
       const titleSpan = document.createElement('span');
       titleSpan.className = 'mobile-tab-title' + (tab.isTemporary ? ' temporary' : '');
-      titleSpan.textContent = tab.title || 'Untitled';
-      titleSpan.title = tab.title || 'Untitled';
+      const displayName = getTabDisplayName(tab);
+      titleSpan.textContent = displayName;
+      titleSpan.title = displayName;
 
       // Three-dot menu button (same as desktop)
       const menuBtn = document.createElement('button');
@@ -823,6 +831,7 @@ This is a fully client-side application. Your content never leaves your browser 
       tab.isTemporary = true;
       tab.sourceFileName = sourceFile && sourceFile.name ? sourceFile.name : null;
       tab.sourceFileHandle = sourceFile && sourceFile.handle ? sourceFile.handle : null;
+      tab.savedContent = content || '';
       tabs.push(tab);
     } else {
       tab.title = title || 'Untitled';
@@ -832,6 +841,7 @@ This is a fully client-side application. Your content never leaves your browser 
       tab.isTemporary = true;
       tab.sourceFileName = sourceFile && sourceFile.name ? sourceFile.name : null;
       tab.sourceFileHandle = sourceFile && sourceFile.handle ? sourceFile.handle : null;
+      tab.savedContent = content || '';
     }
 
     activeTabId = tab.id;
@@ -948,6 +958,7 @@ This is a fully client-side application. Your content never leaves your browser 
     saveCurrentTabState();
     const dupTitle = tab.title + ' (copy)';
     const dup = createTab(tab.content, dupTitle, tab.viewMode);
+    dup.savedContent = tab.savedContent;
     const idx = tabs.findIndex(function(t) { return t.id === tabId; });
     tabs.splice(idx + 1, 0, dup);
     switchTab(dup.id);
@@ -994,6 +1005,9 @@ This is a fully client-side application. Your content never leaves your browser 
   function initTabs() {
     untitledCounter = loadUntitledCounter();
     tabs = loadTabsFromStorage();
+    tabs.forEach(function(tab) {
+      if (typeof tab.savedContent !== 'string') tab.savedContent = tab.content || '';
+    });
     activeTabId = loadActiveTabId();
     if (tabs.length === 0) {
       const tab = createTab(sampleMarkdown, 'Welcome to Markdown');
@@ -1198,6 +1212,10 @@ This is a fully client-side application. Your content never leaves your browser 
       const writable = await tab.sourceFileHandle.createWritable();
       await writable.write(markdownEditor.value);
       await writable.close();
+      tab.content = markdownEditor.value;
+      tab.savedContent = markdownEditor.value;
+      saveTabsToStorage(tabs);
+      renderTabBar(tabs, activeTabId);
       return true;
     } catch (error) {
       console.error("Failed to save file to original location:", error);
@@ -1994,6 +2012,11 @@ This is a fully client-side application. Your content never leaves your browser 
   });
 
   markdownEditor.addEventListener("input", function() {
+    const activeTab = tabs.find(function(t) { return t.id === activeTabId; });
+    if (activeTab) {
+      activeTab.content = markdownEditor.value;
+      renderTabBar(tabs, activeTabId);
+    }
     debouncedRender();
     clearTimeout(saveTabStateTimeout);
     saveTabStateTimeout = setTimeout(saveCurrentTabState, 500);

@@ -1446,12 +1446,17 @@ a:focus {
   z-index: 2;
 }
 
+.tab-item.unsaved .tab-title,
+.mobile-tab-item.unsaved .mobile-tab-title {
+  color: #e5534b;
+}
+
 .tab-item.unsaved::after {
   content: '';
   display: inline-block;
   width: 6px;
   height: 6px;
-  background-color: var(--accent-color);
+  background-color: #e5534b;
   border-radius: 50%;
   flex-shrink: 0;
   margin-left: 2px;
