@@ -551,7 +551,9 @@ This is a fully client-side application. Your content never leaves your browser 
       scrollPos: 0,
       viewMode: viewMode,
       createdAt: Date.now(),
-      isTemporary: false
+      isTemporary: false,
+      sourceFileName: null,
+      sourceFileHandle: null
     };
   }
 
@@ -808,7 +810,7 @@ This is a fully client-side application. Your content never leaves your browser 
     return tabs.find(function(t) { return !!t.isTemporary; }) || null;
   }
 
-  function openSidebarFileInTemporaryTab(content, title) {
+  function openSidebarFileInTemporaryTab(content, title, sourceFile) {
     saveCurrentTabState();
     let tab = findTemporaryTab();
 
@@ -819,6 +821,8 @@ This is a fully client-side application. Your content never leaves your browser 
       }
       tab = createTab(content, title || 'Untitled', currentViewMode || 'split');
       tab.isTemporary = true;
+      tab.sourceFileName = sourceFile && sourceFile.name ? sourceFile.name : null;
+      tab.sourceFileHandle = sourceFile && sourceFile.handle ? sourceFile.handle : null;
       tabs.push(tab);
     } else {
       tab.title = title || 'Untitled';
@@ -826,6 +830,8 @@ This is a fully client-side application. Your content never leaves your browser 
       tab.scrollPos = 0;
       tab.viewMode = currentViewMode || tab.viewMode || 'split';
       tab.isTemporary = true;
+      tab.sourceFileName = sourceFile && sourceFile.name ? sourceFile.name : null;
+      tab.sourceFileHandle = sourceFile && sourceFile.handle ? sourceFile.handle : null;
     }
 
     activeTabId = tab.id;
@@ -1104,7 +1110,11 @@ This is a fully client-side application. Your content never leaves your browser 
       try {
         const file = node.file ? node.file : await node.handle.getFile();
         const content = await file.text();
-        openSidebarFileInTemporaryTab(content, node.name.replace(/\.(md|markdown)$/i, ""));
+        openSidebarFileInTemporaryTab(
+          content,
+          node.name.replace(/\.(md|markdown)$/i, ""),
+          { name: node.name, handle: node.handle || null }
+        );
       } catch (error) {
         console.error("Failed to open Markdown file:", error);
         alert("Unable to open selected file.");
@@ -1179,6 +1189,20 @@ This is a fully client-side application. Your content never leaves your browser 
       dropzone.style.display = "none";
     };
     reader.readAsText(file);
+  }
+
+  async function saveActiveTabToSource() {
+    const tab = tabs.find(function(t) { return t.id === activeTabId; });
+    if (!tab || !tab.sourceFileHandle) return false;
+    try {
+      const writable = await tab.sourceFileHandle.createWritable();
+      await writable.write(markdownEditor.value);
+      await writable.close();
+      return true;
+    } catch (error) {
+      console.error("Failed to save file to original location:", error);
+      return false;
+    }
   }
 
   function isMarkdownPath(path) {
@@ -2115,8 +2139,11 @@ This is a fully client-side application. Your content never leaves your browser 
     });
   }
 
-  exportMd.addEventListener("click", function () {
+  exportMd.addEventListener("click", async function () {
     try {
+      if (await saveActiveTabToSource()) {
+        return;
+      }
       const blob = new Blob([markdownEditor.value], {
         type: "text/markdown;charset=utf-8",
       });
