@@ -15,7 +15,11 @@ document.addEventListener("DOMContentLoaded", function () {
   const themeToggle = document.getElementById("theme-toggle");
   const importFromFileButton = document.getElementById("import-from-file");
   const importFromGithubButton = document.getElementById("import-from-github");
+  const importFromFolderButton = document.getElementById("import-from-folder");
+  const pickFolderButton = document.getElementById("pick-folder-button");
+  const folderTreeRoot = document.getElementById("folder-tree-root");
   const fileInput = document.getElementById("file-input");
+  const folderInput = document.getElementById("folder-input");
   const exportMd = document.getElementById("export-md");
   const exportHtml = document.getElementById("export-html");
   const exportPdf = document.getElementById("export-pdf");
@@ -972,6 +976,118 @@ This is a fully client-side application. Your content never leaves your browser 
     }
   }
 
+
+
+  async function listMarkdownTree(dirHandle) {
+    const entries = [];
+    for await (const entry of dirHandle.values()) {
+      if (entry.kind === "directory") {
+        const children = await listMarkdownTree(entry);
+        if (children.length) {
+          entries.push({ kind: "directory", name: entry.name, children });
+        }
+      } else if (entry.kind === "file" && /\.(md|markdown)$/i.test(entry.name)) {
+        entries.push({ kind: "file", name: entry.name, handle: entry });
+      }
+    }
+    entries.sort((a,b) => a.kind === b.kind ? a.name.localeCompare(b.name) : (a.kind === "directory" ? -1 : 1));
+    return entries;
+  }
+
+  function renderFolderTreeNode(node) {
+    const li = document.createElement("li");
+    li.className = "folder-tree-item";
+    if (node.kind === "directory") {
+      const details = document.createElement("details");
+      details.open = true;
+      const summary = document.createElement("summary");
+      summary.className = "folder-tree-label";
+      summary.innerHTML = `<i class="bi bi-folder"></i>${node.name}`;
+      details.appendChild(summary);
+      const ul = document.createElement("ul");
+      ul.className = "folder-tree-list";
+      node.children.forEach((child) => ul.appendChild(renderFolderTreeNode(child)));
+      details.appendChild(ul);
+      li.appendChild(details);
+      return li;
+    }
+
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "folder-tree-file";
+    button.innerHTML = `<i class="bi bi-file-earmark-text"></i>${node.name}`;
+    button.addEventListener("click", async () => {
+      try {
+        const file = node.file ? node.file : await node.handle.getFile();
+        const content = await file.text();
+        newTab(content, node.name.replace(/\.(md|markdown)$/i, ""));
+      } catch (error) {
+        console.error("Failed to open Markdown file:", error);
+        alert("Unable to open selected file.");
+      }
+    });
+    li.appendChild(button);
+    return li;
+  }
+
+  function buildTreeFromFileList(fileList) {
+    const root = [];
+    const ensureDir = (nodes, name) => {
+      let dir = nodes.find((n) => n.kind === "directory" && n.name === name);
+      if (!dir) {
+        dir = { kind: "directory", name, children: [] };
+        nodes.push(dir);
+      }
+      return dir;
+    };
+
+    Array.from(fileList).forEach((file) => {
+      if (!/\.(md|markdown)$/i.test(file.name)) return;
+      const relPath = (file.webkitRelativePath || file.name).split("/");
+      const fileName = relPath.pop();
+      let cursor = root;
+      relPath.forEach((segment) => {
+        cursor = ensureDir(cursor, segment).children;
+      });
+      cursor.push({ kind: "file", name: fileName, file });
+    });
+
+    const sortNodes = (nodes) => {
+      nodes.sort((a,b) => a.kind === b.kind ? a.name.localeCompare(b.name) : (a.kind === "directory" ? -1 : 1));
+      nodes.forEach((n) => n.kind === "directory" && sortNodes(n.children));
+    };
+    sortNodes(root);
+    return root;
+  }
+
+  async function openFolderTree() {
+    if (window.showDirectoryPicker) {
+      try {
+        const dirHandle = await window.showDirectoryPicker();
+        const nodes = await listMarkdownTree(dirHandle);
+        folderTreeRoot.innerHTML = "";
+        if (!nodes.length) {
+          folderTreeRoot.innerHTML = '<p class="folder-tree-placeholder">No Markdown files found in this folder.</p>';
+          return;
+        }
+        const ul = document.createElement("ul");
+        ul.className = "folder-tree-list";
+        nodes.forEach((node) => ul.appendChild(renderFolderTreeNode(node)));
+        folderTreeRoot.appendChild(ul);
+        return;
+      } catch (error) {
+        if (error && error.name === "AbortError") return;
+        console.warn("Directory picker unavailable, using fallback input.", error);
+      }
+    }
+
+    if (folderInput) {
+      folderInput.click();
+    } else {
+      alert("Folder selection is not supported in this environment.");
+    }
+  }
+
   function importMarkdownFile(file) {
     const reader = new FileReader();
     reader.onload = function(e) {
@@ -1825,6 +1941,17 @@ This is a fully client-side application. Your content never leaves your browser 
     });
   }
 
+  if (importFromFolderButton) {
+    importFromFolderButton.addEventListener("click", function (e) {
+      e.preventDefault();
+      openFolderTree();
+    });
+  }
+
+  if (pickFolderButton) {
+    pickFolderButton.addEventListener("click", openFolderTree);
+  }
+
   if (importFromGithubButton) {
     importFromGithubButton.addEventListener("click", function (e) {
       e.preventDefault();
@@ -1867,6 +1994,25 @@ This is a fully client-side application. Your content never leaves your browser 
     }
     this.value = "";
   });
+
+
+
+  if (folderInput) {
+    folderInput.addEventListener("change", function(e) {
+      const files = e.target.files;
+      const nodes = buildTreeFromFileList(files || []);
+      folderTreeRoot.innerHTML = "";
+      if (!nodes.length) {
+        folderTreeRoot.innerHTML = '<p class="folder-tree-placeholder">No Markdown files found in this folder.</p>';
+      } else {
+        const ul = document.createElement("ul");
+        ul.className = "folder-tree-list";
+        nodes.forEach((node) => ul.appendChild(renderFolderTreeNode(node)));
+        folderTreeRoot.appendChild(ul);
+      }
+      this.value = "";
+    });
+  }
 
   exportMd.addEventListener("click", function () {
     try {
