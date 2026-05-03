@@ -594,7 +594,7 @@ This is a fully client-side application. Your content never leaves your browser 
       dropdown.innerHTML =
         '<button class="tab-menu-item" data-action="rename"><i class="bi bi-pencil"></i> Rename</button>' +
         '<button class="tab-menu-item" data-action="duplicate"><i class="bi bi-files"></i> Duplicate</button>' +
-        '<button class="tab-menu-item tab-menu-item-danger" data-action="delete"><i class="bi bi-trash"></i> Delete</button>';
+        '<button class="tab-menu-item tab-menu-item-danger" data-action="close"><i class="bi bi-x-lg"></i> Close</button>';
 
       menuBtn.appendChild(dropdown);
 
@@ -622,7 +622,7 @@ This is a fully client-side application. Your content never leaves your browser 
           const action = actionBtn.getAttribute('data-action');
           if (action === 'rename') renameTab(tab.id);
           else if (action === 'duplicate') duplicateTab(tab.id);
-          else if (action === 'delete') deleteTab(tab.id);
+          else if (action === 'close') closeTab(tab.id, { promptForUnsaved: true });
         });
       });
 
@@ -720,7 +720,7 @@ This is a fully client-side application. Your content never leaves your browser 
       dropdown.innerHTML =
         '<button class="tab-menu-item" data-action="rename"><i class="bi bi-pencil"></i> Rename</button>' +
         '<button class="tab-menu-item" data-action="duplicate"><i class="bi bi-files"></i> Duplicate</button>' +
-        '<button class="tab-menu-item tab-menu-item-danger" data-action="delete"><i class="bi bi-trash"></i> Delete</button>';
+        '<button class="tab-menu-item tab-menu-item-danger" data-action="close"><i class="bi bi-x-lg"></i> Close</button>';
 
       menuBtn.appendChild(dropdown);
 
@@ -749,8 +749,9 @@ This is a fully client-side application. Your content never leaves your browser 
           } else if (action === 'duplicate') {
             duplicateTab(tab.id);
             closeMobileMenu();
-          } else if (action === 'delete') {
-            deleteTab(tab.id);
+          } else if (action === 'close') {
+            closeTab(tab.id, { promptForUnsaved: true });
+            closeMobileMenu();
           }
         });
       });
@@ -870,7 +871,16 @@ This is a fully client-side application. Your content never leaves your browser 
     markdownEditor.focus();
   }
 
-  function closeTab(tabId) {
+  function closeTab(tabId, options) {
+    if (options === undefined) options = {};
+    const tabToClose = tabs.find(function(t) { return t.id === tabId; });
+    if (!tabToClose) return;
+    const hasUnsavedChanges = tabToClose.savedContent !== tabToClose.content;
+    if (options.promptForUnsaved && hasUnsavedChanges) {
+      const shouldClose = window.confirm('You have unsaved changes. Are you sure you want to close this tab?');
+      if (!shouldClose) return;
+    }
+
     const idx = tabs.findIndex(function(t) { return t.id === tabId; });
     if (idx === -1) return;
     tabs.splice(idx, 1);
@@ -897,10 +907,6 @@ This is a fully client-side application. Your content never leaves your browser 
     }
     saveTabsToStorage(tabs);
     renderTabBar(tabs, activeTabId);
-  }
-
-  function deleteTab(tabId) {
-    closeTab(tabId);
   }
 
   function renameTab(tabId) {
