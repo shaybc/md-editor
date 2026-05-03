@@ -15,7 +15,18 @@ document.addEventListener("DOMContentLoaded", function () {
   const themeToggle = document.getElementById("theme-toggle");
   const importFromFileButton = document.getElementById("import-from-file");
   const importFromGithubButton = document.getElementById("import-from-github");
+  const importFromFolderButton = document.getElementById("import-from-folder");
+  const pickFolderButton = document.getElementById("pick-folder-button");
+  let folderTreeRoot = document.getElementById("folder-tree-root");
+
+  console.error("[FolderTree] init", {
+    hasPane: !!document.getElementById("folder-tree-pane"),
+    hasRoot: !!folderTreeRoot,
+    hasImportOption: !!document.getElementById("import-from-folder"),
+    viewportWidth: window.innerWidth
+  });
   const fileInput = document.getElementById("file-input");
+  const folderInput = document.getElementById("folder-input");
   const exportMd = document.getElementById("export-md");
   const exportHtml = document.getElementById("export-html");
   const exportPdf = document.getElementById("export-pdf");
@@ -32,6 +43,31 @@ document.addEventListener("DOMContentLoaded", function () {
   // View Mode Elements - Story 1.1
   const contentContainer = document.querySelector(".content-container");
   const viewModeButtons = document.querySelectorAll(".view-mode-btn");
+
+  function ensureFolderTreePane() {
+    let pane = document.getElementById("folder-tree-pane");
+    if (pane || !contentContainer) return;
+
+    pane = document.createElement("aside");
+    pane.className = "folder-tree-pane";
+    pane.id = "folder-tree-pane";
+    pane.innerHTML = `
+      <div class="folder-tree-header">
+        <span><i class="bi bi-folder2-open me-1"></i>Folder</span>
+        <button id="pick-folder-button" class="tool-button folder-tree-btn" title="Open folder">Open</button>
+      </div>
+      <div id="folder-tree-root" class="folder-tree-root">
+        <p class="folder-tree-placeholder">Open a folder to browse Markdown files.</p>
+      </div>
+    `;
+
+    contentContainer.insertBefore(pane, contentContainer.firstChild);
+    console.error("[FolderTree] pane dynamically inserted.");
+  }
+
+  ensureFolderTreePane();
+  folderTreeRoot = document.getElementById("folder-tree-root");
+
 
   // Mobile View Mode Elements - Story 1.4
   const mobileViewModeButtons = document.querySelectorAll(".mobile-view-mode-btn");
@@ -514,7 +550,8 @@ This is a fully client-side application. Your content never leaves your browser 
       content: content,
       scrollPos: 0,
       viewMode: viewMode,
-      createdAt: Date.now()
+      createdAt: Date.now(),
+      isTemporary: false
     };
   }
 
@@ -531,7 +568,7 @@ This is a fully client-side application. Your content never leaves your browser 
       item.setAttribute('draggable', 'true');
 
       const titleSpan = document.createElement('span');
-      titleSpan.className = 'tab-title';
+      titleSpan.className = 'tab-title' + (tab.isTemporary ? ' temporary' : '');
       titleSpan.textContent = tab.title || 'Untitled';
       titleSpan.title = tab.title || 'Untitled';
 
@@ -585,6 +622,10 @@ This is a fully client-side application. Your content never leaves your browser 
 
       item.addEventListener('click', function() {
         switchTab(tab.id);
+      });
+
+      item.addEventListener('dblclick', function() {
+        pinTemporaryTab(tab.id);
       });
 
       item.addEventListener('dragstart', function() {
@@ -652,7 +693,7 @@ This is a fully client-side application. Your content never leaves your browser 
       item.setAttribute('data-tab-id', tab.id);
 
       const titleSpan = document.createElement('span');
-      titleSpan.className = 'mobile-tab-title';
+      titleSpan.className = 'mobile-tab-title' + (tab.isTemporary ? ' temporary' : '');
       titleSpan.textContent = tab.title || 'Untitled';
       titleSpan.title = tab.title || 'Untitled';
 
@@ -751,6 +792,53 @@ This is a fully client-side application. Your content never leaves your browser 
       markdownEditor.scrollTop = tab.scrollPos || 0;
     });
     renderTabBar(tabs, activeTabId);
+  }
+
+
+
+  function pinTemporaryTab(tabId) {
+    const tab = tabs.find(function(t) { return t.id === tabId; });
+    if (!tab || !tab.isTemporary) return;
+    tab.isTemporary = false;
+    saveTabsToStorage(tabs);
+    renderTabBar(tabs, activeTabId);
+  }
+
+  function findTemporaryTab() {
+    return tabs.find(function(t) { return !!t.isTemporary; }) || null;
+  }
+
+  function openSidebarFileInTemporaryTab(content, title) {
+    saveCurrentTabState();
+    let tab = findTemporaryTab();
+
+    if (!tab) {
+      if (tabs.length >= 20) {
+        alert('Maximum of 20 tabs reached. Please close an existing tab to open a new one.');
+        return;
+      }
+      tab = createTab(content, title || 'Untitled', currentViewMode || 'split');
+      tab.isTemporary = true;
+      tabs.push(tab);
+    } else {
+      tab.title = title || 'Untitled';
+      tab.content = content || '';
+      tab.scrollPos = 0;
+      tab.viewMode = currentViewMode || tab.viewMode || 'split';
+      tab.isTemporary = true;
+    }
+
+    activeTabId = tab.id;
+    saveActiveTabId(activeTabId);
+    markdownEditor.value = tab.content;
+    restoreViewMode(tab.viewMode);
+    renderMarkdown();
+    requestAnimationFrame(function() {
+      markdownEditor.scrollTop = tab.scrollPos || 0;
+    });
+    saveTabsToStorage(tabs);
+    renderTabBar(tabs, activeTabId);
+    markdownEditor.focus();
   }
 
   function newTab(content, title) {
@@ -969,6 +1057,116 @@ This is a fully client-side application. Your content never leaves your browser 
               <strong>Error rendering markdown:</strong> ${e.message}
           </div>
           <pre>${markdownEditor.value}</pre>`;
+    }
+  }
+
+
+
+  async function listMarkdownTree(dirHandle) {
+    const entries = [];
+    for await (const entry of dirHandle.values()) {
+      if (entry.kind === "directory") {
+        const children = await listMarkdownTree(entry);
+        if (children.length) entries.push({ kind: "directory", name: entry.name, children });
+      } else if (entry.kind === "file" && /\.(md|markdown)$/i.test(entry.name)) {
+        entries.push({ kind: "file", name: entry.name, handle: entry });
+      }
+    }
+    entries.sort((a,b) => a.kind === b.kind ? a.name.localeCompare(b.name) : (a.kind === "directory" ? -1 : 1));
+    return entries;
+  }
+
+  function renderFolderTreeNode(node) {
+    const li = document.createElement("li");
+    li.className = "folder-tree-item";
+    if (node.kind === "directory") {
+      const details = document.createElement("details");
+      details.open = true;
+      const summary = document.createElement("summary");
+      summary.className = "folder-tree-label";
+      summary.innerHTML = `<i class="bi bi-folder"></i>${node.name}`;
+      details.appendChild(summary);
+      const ul = document.createElement("ul");
+      ul.className = "folder-tree-list";
+      node.children.forEach((child) => ul.appendChild(renderFolderTreeNode(child)));
+      details.appendChild(ul);
+      li.appendChild(details);
+      return li;
+    }
+
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "folder-tree-file";
+    button.innerHTML = `<i class="bi bi-file-earmark-text"></i>${node.name}`;
+    button.addEventListener("click", async () => {
+      try {
+        const file = node.file ? node.file : await node.handle.getFile();
+        const content = await file.text();
+        openSidebarFileInTemporaryTab(content, node.name.replace(/\.(md|markdown)$/i, ""));
+      } catch (error) {
+        console.error("Failed to open Markdown file:", error);
+        alert("Unable to open selected file.");
+      }
+    });
+    li.appendChild(button);
+    return li;
+  }
+
+  function buildTreeFromFileList(fileList) {
+    const root = [];
+    const ensureDir = (nodes, name) => {
+      let dir = nodes.find((n) => n.kind === "directory" && n.name === name);
+      if (!dir) {
+        dir = { kind: "directory", name, children: [] };
+        nodes.push(dir);
+      }
+      return dir;
+    };
+
+    Array.from(fileList).forEach((file) => {
+      if (!/\.(md|markdown)$/i.test(file.name)) return;
+      const relPath = (file.webkitRelativePath || file.name).split("/");
+      const fileName = relPath.pop();
+      let cursor = root;
+      relPath.forEach((segment) => {
+        cursor = ensureDir(cursor, segment).children;
+      });
+      cursor.push({ kind: "file", name: fileName, file });
+    });
+
+    const sortNodes = (nodes) => {
+      nodes.sort((a,b) => a.kind === b.kind ? a.name.localeCompare(b.name) : (a.kind === "directory" ? -1 : 1));
+      nodes.forEach((n) => n.kind === "directory" && sortNodes(n.children));
+    };
+    sortNodes(root);
+    return root;
+  }
+
+  async function openFolderTree() {
+    if (window.showDirectoryPicker) {
+      try {
+        const dirHandle = await window.showDirectoryPicker();
+        const nodes = await listMarkdownTree(dirHandle);
+        folderTreeRoot.innerHTML = "";
+        if (!nodes.length) {
+          folderTreeRoot.innerHTML = '<p class="folder-tree-placeholder">No Markdown files found in this folder.</p>';
+          return;
+        }
+        const ul = document.createElement("ul");
+        ul.className = "folder-tree-list";
+        nodes.forEach((node) => ul.appendChild(renderFolderTreeNode(node)));
+        folderTreeRoot.appendChild(ul);
+        return;
+      } catch (error) {
+        if (error && error.name === "AbortError") return;
+        console.warn("Directory picker unavailable, using fallback input.", error);
+      }
+    }
+
+    if (folderInput) {
+      folderInput.click();
+    } else {
+      alert("Folder selection is not supported in this environment.");
     }
   }
 
@@ -1825,6 +2023,17 @@ This is a fully client-side application. Your content never leaves your browser 
     });
   }
 
+  if (importFromFolderButton) {
+    importFromFolderButton.addEventListener("click", function (e) {
+      e.preventDefault();
+      openFolderTree();
+    });
+  }
+
+  if (pickFolderButton) {
+    pickFolderButton.addEventListener("click", openFolderTree);
+  }
+
   if (importFromGithubButton) {
     importFromGithubButton.addEventListener("click", function (e) {
       e.preventDefault();
@@ -1860,6 +2069,23 @@ This is a fully client-side application. Your content never leaves your browser 
     });
   }
 
+  setTimeout(() => {
+    const pane = document.getElementById("folder-tree-pane");
+    if (!pane) {
+      console.warn("[FolderTree] pane element not found in DOM.");
+      return;
+    }
+    const rect = pane.getBoundingClientRect();
+    const style = window.getComputedStyle(pane);
+    console.error("[FolderTree] pane layout", {
+      rect: { width: rect.width, left: rect.left, right: rect.right },
+      display: style.display,
+      visibility: style.visibility,
+      flex: style.flex,
+      minWidth: style.minWidth
+    });
+  }, 0);
+
   fileInput.addEventListener("change", function (e) {
     const file = e.target.files[0];
     if (file) {
@@ -1867,6 +2093,25 @@ This is a fully client-side application. Your content never leaves your browser 
     }
     this.value = "";
   });
+
+
+
+  if (folderInput) {
+    folderInput.addEventListener("change", function(e) {
+      const files = e.target.files;
+      const nodes = buildTreeFromFileList(files || []);
+      folderTreeRoot.innerHTML = "";
+      if (!nodes.length) {
+        folderTreeRoot.innerHTML = '<p class="folder-tree-placeholder">No Markdown files found in this folder.</p>';
+      } else {
+        const ul = document.createElement("ul");
+        ul.className = "folder-tree-list";
+        nodes.forEach((node) => ul.appendChild(renderFolderTreeNode(node)));
+        folderTreeRoot.appendChild(ul);
+      }
+      this.value = "";
+    });
+  }
 
   exportMd.addEventListener("click", function () {
     try {
