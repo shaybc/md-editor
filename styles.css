@@ -1975,3 +1975,10 @@ a:focus {
 .folder-tree-file:hover { background: var(--button-hover); }
 .folder-tree-placeholder { color: #8b949e; margin: 6px 2px; }
 
+
+
+.content-container.view-editor-only .folder-tree-pane,
+.content-container.view-preview-only .folder-tree-pane,
+.content-container.view-split .folder-tree-pane {
+  display: flex !important;
+}

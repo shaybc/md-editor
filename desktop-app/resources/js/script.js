@@ -19,7 +19,7 @@ document.addEventListener("DOMContentLoaded", function () {
   const pickFolderButton = document.getElementById("pick-folder-button");
   let folderTreeRoot = document.getElementById("folder-tree-root");
 
-  console.info("[FolderTree] init", {
+  console.error("[FolderTree] init", {
     hasPane: !!document.getElementById("folder-tree-pane"),
     hasRoot: !!folderTreeRoot,
     hasImportOption: !!document.getElementById("import-from-folder"),
@@ -62,7 +62,7 @@ document.addEventListener("DOMContentLoaded", function () {
     `;
 
     contentContainer.insertBefore(pane, contentContainer.firstChild);
-    console.info("[FolderTree] pane dynamically inserted.");
+    console.error("[FolderTree] pane dynamically inserted.");
   }
 
   ensureFolderTreePane();
@@ -2025,7 +2025,7 @@ This is a fully client-side application. Your content never leaves your browser 
     }
     const rect = pane.getBoundingClientRect();
     const style = window.getComputedStyle(pane);
-    console.info("[FolderTree] pane layout", {
+    console.error("[FolderTree] pane layout", {
       rect: { width: rect.width, left: rect.left, right: rect.right },
       display: style.display,
       visibility: style.visibility,
