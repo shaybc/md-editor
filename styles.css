@@ -366,6 +366,7 @@ body {
 .graph-view-canvas {
   flex: 1;
   min-height: 560px;
+  position: relative;
 }
 
 .graph-view-canvas svg {
@@ -420,6 +421,35 @@ body {
 
 .graph-link.dimmed {
   opacity: 0.08;
+}
+
+.graph-context-menu {
+  position: absolute;
+  z-index: 30;
+  min-width: 190px;
+  background: var(--bg-color);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+  padding: 0.35rem;
+}
+
+.graph-context-menu.hidden {
+  display: none;
+}
+
+.graph-context-menu-item {
+  width: 100%;
+  border: none;
+  background: transparent;
+  color: var(--text-color);
+  text-align: left;
+  padding: 0.45rem 0.6rem;
+  border-radius: 4px;
+}
+
+.graph-context-menu-item:hover {
+  background: var(--hover-bg);
 }
 
 .file-input {
