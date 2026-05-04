@@ -2408,6 +2408,12 @@ This is a fully client-side application. Your content never leaves your browser 
         links.push({ source, target });
       });
     }
+    const adjacency = new Map();
+    nodes.forEach((n) => adjacency.set(n.id, new Set([n.id])));
+    links.forEach((l) => {
+      adjacency.get(l.source)?.add(l.target);
+      adjacency.get(l.target)?.add(l.source);
+    });
     const width = graphViewCanvas.clientWidth || 900;
     const height = graphViewCanvas.clientHeight || 560;
     const svg = d3.select(graphViewCanvas).append("svg").attr("width", width).attr("height", height);
@@ -2449,6 +2455,24 @@ This is a fully client-side application. Your content never leaves your browser 
         .on("end", (event, d) => { if (!event.active) simulation.alphaTarget(0); d.fx = null; d.fy = null; }));
     node.append("title").text((d) => d.label);
     const label = graphLayer.append("g").selectAll("text").data(nodes).enter().append("text").text((d) => d.label).attr("class", "graph-label");
+
+    function highlightNeighborhood(focusNode) {
+      const connected = adjacency.get(focusNode.id) || new Set([focusNode.id]);
+      node.classed("dimmed", (n) => !connected.has(n.id));
+      label.classed("dimmed", (n) => !connected.has(n.id));
+      link.classed("dimmed", (l) => !(l.source.id === focusNode.id || l.target.id === focusNode.id));
+    }
+
+    function clearNeighborhoodHighlight() {
+      node.classed("dimmed", false);
+      label.classed("dimmed", false);
+      link.classed("dimmed", false);
+    }
+
+    node
+      .on("mouseenter", (event, d) => highlightNeighborhood(d))
+      .on("mouseleave", clearNeighborhoodHighlight);
+
     simulation.on("tick", () => {
       link.attr("x1", (d) => d.source.x).attr("y1", (d) => d.source.y).attr("x2", (d) => d.target.x).attr("y2", (d) => d.target.y);
       node.attr("cx", (d) => d.x).attr("cy", (d) => d.y);

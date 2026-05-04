@@ -376,10 +376,12 @@ body {
   stroke: var(--border-color);
   stroke-opacity: 0.8;
   stroke-width: 1.5px;
+  transition: opacity 0.15s ease, stroke-opacity 0.15s ease;
 }
 
 .graph-node {
   fill: var(--accent-color);
+  transition: opacity 0.15s ease;
 }
 
 .graph-arrowhead {
@@ -390,6 +392,16 @@ body {
   fill: var(--text-color);
   font-size: 12px;
   pointer-events: none;
+  transition: opacity 0.15s ease;
+}
+
+.graph-node.dimmed,
+.graph-label.dimmed {
+  opacity: 0.2;
+}
+
+.graph-link.dimmed {
+  opacity: 0.08;
 }
 
 .file-input {
