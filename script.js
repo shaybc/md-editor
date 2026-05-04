@@ -625,10 +625,12 @@ This is a fully client-side application. Your content never leaves your browser 
     };
   }
 
-  function createGraphTab(folderName) {
+  function createGraphTab(folderName, options) {
+    if (options === undefined) options = {};
     const tab = createTab("", folderName || "Graph View", "preview");
     tab.type = "graph";
     tab.folderName = folderName || "Graph View";
+    tab.graphViewConfig = options.graphViewConfig || null;
     return tab;
   }
 
@@ -2418,7 +2420,7 @@ This is a fully client-side application. Your content never leaves your browser 
         alert('Maximum of 20 tabs reached. Please close an existing tab to open a new one.');
         return;
       }
-      graphTab = createGraphTab(activeFolderName);
+      graphTab = createGraphTab(activeFolderName, { graphViewConfig: null });
       tabs.push(graphTab);
     }
     graphTab.title = activeFolderName || "Graph View";
@@ -2450,6 +2452,8 @@ This is a fully client-side application. Your content never leaves your browser 
   async function renderGraphView() {
     if (!graphViewCanvas) return;
     graphViewCanvas.innerHTML = "";
+    const activeTab = tabs.find((tab) => tab.id === activeTabId);
+    const graphViewConfig = activeTab && activeTab.type === "graph" ? (activeTab.graphViewConfig || null) : null;
     const files = folderMarkdownFiles || [];
     if (!files.length) {
       graphViewCanvas.innerHTML = '<p class="folder-tree-placeholder">Open a folder first to build the graph view.</p>';
@@ -2477,6 +2481,31 @@ This is a fully client-side application. Your content never leaves your browser 
         seenEdges.add(edgeKey);
         links.push({ source, target });
       });
+    }
+    if (graphViewConfig && Array.isArray(graphViewConfig.hiddenNodeIds) && graphViewConfig.hiddenNodeIds.length) {
+      const hiddenNodeIds = new Set(graphViewConfig.hiddenNodeIds);
+      const visibleNodes = nodes.filter((n) => !hiddenNodeIds.has(n.id));
+      const visibleLinks = links.filter((l) => !hiddenNodeIds.has(l.source) && !hiddenNodeIds.has(l.target));
+      nodes.length = 0;
+      nodes.push(...visibleNodes);
+      links.length = 0;
+      links.push(...visibleLinks);
+    }
+
+    if (graphViewConfig && graphViewConfig.mode === "local" && graphViewConfig.focusNodeId) {
+      const focusNodeId = graphViewConfig.focusNodeId;
+      const localNodeIds = new Set([focusNodeId]);
+      links.forEach((l) => {
+        if (l.source === focusNodeId) localNodeIds.add(l.target);
+        if (l.target === focusNodeId) localNodeIds.add(l.source);
+      });
+
+      const filteredNodes = nodes.filter((n) => localNodeIds.has(n.id));
+      const filteredLinks = links.filter((l) => localNodeIds.has(l.source) && localNodeIds.has(l.target));
+      nodes.length = 0;
+      nodes.push(...filteredNodes);
+      links.length = 0;
+      links.push(...filteredLinks);
     }
     const adjacency = new Map();
     const outgoingDegree = new Map();
@@ -2543,8 +2572,20 @@ This is a fully client-side application. Your content never leaves your browser 
     const magneticToggleBtn = document.createElement("button");
     magneticToggleBtn.type = "button";
     magneticToggleBtn.className = "graph-context-menu-item";
+    const hidePointBtn = document.createElement("button");
+    hidePointBtn.type = "button";
+    hidePointBtn.className = "graph-context-menu-item hidden";
+    hidePointBtn.textContent = "Hide this point";
+    const localGraphBtn = document.createElement("button");
+    localGraphBtn.type = "button";
+    localGraphBtn.className = "graph-context-menu-item hidden";
+    localGraphBtn.textContent = "Show local graph";
     contextMenu.appendChild(magneticToggleBtn);
+    contextMenu.appendChild(hidePointBtn);
+    contextMenu.appendChild(localGraphBtn);
     graphViewCanvas.appendChild(contextMenu);
+
+    let contextTargetNode = null;
 
     const applyMagneticSetting = () => {
       if (graphSettings.magneticEnabled) {
@@ -2566,13 +2607,33 @@ This is a fully client-side application. Your content never leaves your browser 
         : "Turn magnetic forces on";
     };
 
-    const hideContextMenu = () => contextMenu.classList.add("hidden");
+    const hideContextMenu = () => {
+      contextMenu.classList.add("hidden");
+      contextTargetNode = null;
+      hidePointBtn.classList.add("hidden");
+      localGraphBtn.classList.add("hidden");
+    };
 
     graphViewCanvas.addEventListener("contextmenu", (event) => {
       event.preventDefault();
+      contextTargetNode = null;
+      hidePointBtn.classList.add("hidden");
+      localGraphBtn.classList.add("hidden");
       const bounds = graphViewCanvas.getBoundingClientRect();
       contextMenu.style.left = `${Math.min(event.clientX - bounds.left, bounds.width - 200)}px`;
-      contextMenu.style.top = `${Math.min(event.clientY - bounds.top, bounds.height - 48)}px`;
+      contextMenu.style.top = `${Math.min(event.clientY - bounds.top, bounds.height - 120)}px`;
+      contextMenu.classList.remove("hidden");
+    });
+
+    node.on("contextmenu", (event, d) => {
+      event.preventDefault();
+      event.stopPropagation();
+      contextTargetNode = d;
+      hidePointBtn.classList.remove("hidden");
+      localGraphBtn.classList.remove("hidden");
+      const bounds = graphViewCanvas.getBoundingClientRect();
+      contextMenu.style.left = `${Math.min(event.clientX - bounds.left, bounds.width - 200)}px`;
+      contextMenu.style.top = `${Math.min(event.clientY - bounds.top, bounds.height - 120)}px`;
       contextMenu.classList.remove("hidden");
     });
 
@@ -2584,6 +2645,44 @@ This is a fully client-side application. Your content never leaves your browser 
       saveGlobalState({ graphMagneticEnabled: graphSettings.magneticEnabled });
       applyMagneticSetting();
       hideContextMenu();
+    });
+
+    hidePointBtn.addEventListener("click", () => {
+      if (!contextTargetNode) return;
+      const nodeId = contextTargetNode.id;
+      simulation.stop();
+      hideContextMenu();
+
+      graphViewCanvas.innerHTML = "";
+      // Re-render by reusing temporary in-memory file graph and hiding this node for this tab view only.
+      const activeGraphTab = tabs.find((tab) => tab.id === activeTabId);
+      if (activeGraphTab) {
+        activeGraphTab.graphViewConfig = {
+          ...(activeGraphTab.graphViewConfig || {}),
+          hiddenNodeIds: Array.from(new Set([...(activeGraphTab.graphViewConfig?.hiddenNodeIds || []), nodeId]))
+        };
+      }
+      renderGraphView();
+    });
+
+    localGraphBtn.addEventListener("click", () => {
+      if (!contextTargetNode) return;
+      const focusNodeId = contextTargetNode.id;
+      if (tabs.length >= 20) {
+        alert('Maximum of 20 tabs reached. Please close an existing tab to open a new one.');
+        return;
+      }
+      const localTabTitle = `Local Graph: ${contextTargetNode.label}`;
+      const localGraphTab = createGraphTab(localTabTitle, {
+        graphViewConfig: {
+          mode: "local",
+          focusNodeId
+        }
+      });
+      tabs.push(localGraphTab);
+      saveTabsToStorage(tabs);
+      hideContextMenu();
+      switchTab(localGraphTab.id);
     });
 
     function highlightNeighborhood(focusNode) {
