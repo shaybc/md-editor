@@ -1131,6 +1131,11 @@ This is a fully client-side application. Your content never leaves your browser 
     button.addEventListener("click", async () => {
       try {
         const file = node.file ? node.file : await node.handle.getFile();
+        const existingTab = findTabForSidebarFile(node);
+        if (existingTab) {
+          switchTab(existingTab.id);
+          return;
+        }
         const content = await file.text();
         openSidebarFileInTemporaryTab(
           content,
@@ -1144,6 +1149,22 @@ This is a fully client-side application. Your content never leaves your browser 
     });
     li.appendChild(button);
     return li;
+  }
+
+  function findTabForSidebarFile(node) {
+    if (!node || node.kind !== "file") return null;
+
+    if (node.handle) {
+      const handleMatch = tabs.find(function(tab) {
+        return tab.sourceFileHandle === node.handle;
+      });
+      if (handleMatch) return handleMatch;
+    }
+
+    const title = node.name.replace(/\.(md|markdown)$/i, "");
+    return tabs.find(function(tab) {
+      return tab.sourceFileName === node.name || tab.title === title;
+    }) || null;
   }
 
   function buildTreeFromFileList(fileList) {
