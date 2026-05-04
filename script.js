@@ -2533,10 +2533,12 @@ This is a fully client-side application. Your content never leaves your browser 
       outgoingDegree.set(l.source, (outgoingDegree.get(l.source) || 0) + 1);
     });
     const maxOutgoing = Math.max(1, ...Array.from(outgoingDegree.values()));
-    const nodeRadius = (nodeId) => {
+    const GRAPH_NODE_RADIUS_SCALE = 0.8;
+    const graphBaseNodeRadius = (nodeId) => {
       const outCount = outgoingDegree.get(nodeId) || 0;
-      return (6 + (outCount / maxOutgoing) * 12) * 0.8;
+      return 6 + (outCount / maxOutgoing) * 12;
     };
+    const nodeRadius = (nodeId) => graphBaseNodeRadius(nodeId) * GRAPH_NODE_RADIUS_SCALE;
     const width = graphViewCanvas.clientWidth || 900;
     const height = graphViewCanvas.clientHeight || 560;
     const svg = d3.select(graphViewCanvas).append("svg").attr("width", width).attr("height", height);
@@ -2726,7 +2728,35 @@ This is a fully client-side application. Your content never leaves your browser 
       .on("mouseleave", clearNeighborhoodHighlight);
 
     simulation.on("tick", () => {
-      link.attr("x1", (d) => d.source.x).attr("y1", (d) => d.source.y).attr("x2", (d) => d.target.x).attr("y2", (d) => d.target.y);
+      link
+        .attr("x1", (d) => {
+          const dx = d.target.x - d.source.x;
+          const dy = d.target.y - d.source.y;
+          const distance = Math.hypot(dx, dy) || 1;
+          const sourceOffset = nodeRadius(d.source.id);
+          return d.source.x + (dx / distance) * sourceOffset;
+        })
+        .attr("y1", (d) => {
+          const dx = d.target.x - d.source.x;
+          const dy = d.target.y - d.source.y;
+          const distance = Math.hypot(dx, dy) || 1;
+          const sourceOffset = nodeRadius(d.source.id);
+          return d.source.y + (dy / distance) * sourceOffset;
+        })
+        .attr("x2", (d) => {
+          const dx = d.target.x - d.source.x;
+          const dy = d.target.y - d.source.y;
+          const distance = Math.hypot(dx, dy) || 1;
+          const targetOffset = nodeRadius(d.target.id) + 4;
+          return d.target.x - (dx / distance) * targetOffset;
+        })
+        .attr("y2", (d) => {
+          const dx = d.target.x - d.source.x;
+          const dy = d.target.y - d.source.y;
+          const distance = Math.hypot(dx, dy) || 1;
+          const targetOffset = nodeRadius(d.target.id) + 4;
+          return d.target.y - (dy / distance) * targetOffset;
+        });
       node.attr("cx", (d) => d.x).attr("cy", (d) => d.y);
       label.attr("x", (d) => d.x + 10).attr("y", (d) => d.y + 4);
     });
