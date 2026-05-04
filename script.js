@@ -2587,7 +2587,7 @@ This is a fully client-side application. Your content never leaves your browser 
       .attr("class", "graph-link");
     const arrowheads = arrowheadLayer.selectAll("path").data(links).enter().append("path")
       .attr("class", "graph-arrowhead")
-      .attr("d", "M0,0L-10,4L-10,-4Z");
+      .attr("d", "M0,0L-4.9,2.1L-4.9,-2.1Z");
     const node = nodeLayer.selectAll("circle").data(nodes).enter().append("circle")
       .attr("r", (d) => nodeRadius(d.id)).attr("class", "graph-node")
       .call(d3.drag()
