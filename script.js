@@ -2703,13 +2703,15 @@ This is a fully client-side application. Your content never leaves your browser 
       const connected = adjacency.get(focusNode.id) || new Set([focusNode.id]);
       node.classed("dimmed", (n) => !connected.has(n.id));
       label.classed("dimmed", (n) => !connected.has(n.id));
-      link.classed("dimmed", (l) => !(l.source.id === focusNode.id || l.target.id === focusNode.id));
+      link
+        .classed("dimmed", (l) => !(l.source.id === focusNode.id || l.target.id === focusNode.id))
+        .classed("highlighted-direct", (l) => l.source.id === focusNode.id || l.target.id === focusNode.id);
     }
 
     function clearNeighborhoodHighlight() {
       node.classed("dimmed", false);
       label.classed("dimmed", false);
-      link.classed("dimmed", false);
+      link.classed("dimmed", false).classed("highlighted-direct", false);
     }
 
     node

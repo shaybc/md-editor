@@ -393,7 +393,13 @@ body {
   stroke: var(--border-color);
   stroke-opacity: 0.8;
   stroke-width: 1.5px;
-  transition: opacity 0.15s ease, stroke-opacity 0.15s ease;
+  transition: opacity 0.15s ease, stroke-opacity 0.15s ease, stroke 0.15s ease, stroke-width 0.15s ease;
+}
+
+.graph-link.highlighted-direct {
+  stroke: #8b5cf6;
+  stroke-opacity: 0.95;
+  stroke-width: 1.3px;
 }
 
 .graph-node {
