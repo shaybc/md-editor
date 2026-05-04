@@ -146,9 +146,14 @@ document.addEventListener("DOMContentLoaded", function () {
 
   document.documentElement.setAttribute("data-theme", initialTheme);
 
-  themeToggle.innerHTML = initialTheme === "dark"
-    ? '<i class="bi bi-sun"></i>'
-    : '<i class="bi bi-moon"></i>';
+  function updateThemeButtonLabels(theme) {
+    const nextThemeLabel = theme === "dark" ? "Light" : "Dark";
+    const icon = theme === "dark" ? "bi-sun" : "bi-moon";
+    themeToggle.innerHTML = `<i class="bi ${icon} me-2"></i> ${nextThemeLabel}`;
+    mobileThemeToggle.innerHTML = `<i class="bi ${icon} me-2"></i> ${nextThemeLabel} Mode`;
+  }
+
+  updateThemeButtonLabels(initialTheme);
 
   const initMermaid = () => {
     const currentTheme = document.documentElement.getAttribute("data-theme");
@@ -2056,7 +2061,6 @@ This is a fully client-side application. Your content never leaves your browser 
   mobileCopyMarkdown.addEventListener("click", () => copyMarkdownButton.click());
   mobileThemeToggle.addEventListener("click", () => {
     themeToggle.click();
-    mobileThemeToggle.innerHTML = themeToggle.innerHTML + " Toggle Dark Mode";
   });
 
   const mobileNewTabBtn = document.getElementById("mobile-new-tab-btn");
@@ -2146,11 +2150,7 @@ This is a fully client-side application. Your content never leaves your browser 
     document.documentElement.setAttribute("data-theme", theme);
     saveGlobalState({ theme });
 
-    if (theme === "dark") {
-      themeToggle.innerHTML = '<i class="bi bi-sun"></i>';
-    } else {
-      themeToggle.innerHTML = '<i class="bi bi-moon"></i>';
-    }
+    updateThemeButtonLabels(theme);
     
     renderMarkdown();
   });
