@@ -385,7 +385,8 @@ body {
 }
 
 .graph-arrowhead {
-  fill: var(--border-color);
+  fill: #ffffff;
+  opacity: 0.95;
 }
 
 .graph-label {

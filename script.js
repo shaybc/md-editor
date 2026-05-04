@@ -2409,11 +2409,19 @@ This is a fully client-side application. Your content never leaves your browser 
       });
     }
     const adjacency = new Map();
+    const outgoingDegree = new Map();
     nodes.forEach((n) => adjacency.set(n.id, new Set([n.id])));
+    nodes.forEach((n) => outgoingDegree.set(n.id, 0));
     links.forEach((l) => {
       adjacency.get(l.source)?.add(l.target);
       adjacency.get(l.target)?.add(l.source);
+      outgoingDegree.set(l.source, (outgoingDegree.get(l.source) || 0) + 1);
     });
+    const maxOutgoing = Math.max(1, ...Array.from(outgoingDegree.values()));
+    const nodeRadius = (nodeId) => {
+      const outCount = outgoingDegree.get(nodeId) || 0;
+      return 6 + (outCount / maxOutgoing) * 12;
+    };
     const width = graphViewCanvas.clientWidth || 900;
     const height = graphViewCanvas.clientHeight || 560;
     const svg = d3.select(graphViewCanvas).append("svg").attr("width", width).attr("height", height);
@@ -2448,7 +2456,7 @@ This is a fully client-side application. Your content never leaves your browser 
       .attr("class", "graph-link")
       .attr("marker-end", "url(#graph-arrowhead)");
     const node = graphLayer.append("g").selectAll("circle").data(nodes).enter().append("circle")
-      .attr("r", 8).attr("class", "graph-node")
+      .attr("r", (d) => nodeRadius(d.id)).attr("class", "graph-node")
       .call(d3.drag()
         .on("start", (event, d) => { if (!event.active) simulation.alphaTarget(0.3).restart(); d.fx = d.x; d.fy = d.y; })
         .on("drag", (event, d) => { d.fx = event.x; d.fy = event.y; })
