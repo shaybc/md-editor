@@ -59,6 +59,15 @@ document.addEventListener("DOMContentLoaded", function () {
       <div id="folder-tree-root" class="folder-tree-root">
         <p class="folder-tree-placeholder">Open a folder to browse Markdown files.</p>
       </div>
+      <div class="sidebar-dropzone-resizer" id="sidebar-dropzone-resizer" role="separator" aria-orientation="horizontal" aria-label="Resize sidebar dropzone" tabindex="0"></div>
+      <div class="sidebar-dropzone-panel">
+        <div id="dropzone" class="dropzone">
+          <button id="close-dropzone" class="close-btn" title="Close dropzone">
+            <i class="bi bi-x-lg"></i>
+          </button>
+          <p class="mb-0"><i class="bi bi-cloud-arrow-up me-2"></i>Drop your Markdown file here or click to browse</p>
+        </div>
+      </div>
     `;
 
     contentContainer.insertBefore(pane, contentContainer.firstChild);
@@ -67,6 +76,9 @@ document.addEventListener("DOMContentLoaded", function () {
 
   ensureFolderTreePane();
   folderTreeRoot = document.getElementById("folder-tree-root");
+  const folderTreePane = document.getElementById("folder-tree-pane");
+  const sidebarDropzonePanel = document.querySelector(".sidebar-dropzone-panel");
+  const sidebarDropzoneResizer = document.getElementById("sidebar-dropzone-resizer");
 
 
   // Mobile View Mode Elements - Story 1.4
@@ -77,8 +89,10 @@ document.addEventListener("DOMContentLoaded", function () {
   const editorPaneElement = document.querySelector(".editor-pane");
   const previewPaneElement = document.querySelector(".preview-pane");
   let isResizing = false;
+  let isSidebarDropzoneResizing = false;
   let editorWidthPercent = 50; // Default 50%
   const MIN_PANE_PERCENT = 20; // Minimum 20% width
+  const MIN_SIDEBAR_PANEL_HEIGHT = 120;
 
   const mobileMenuToggle    = document.getElementById("mobile-menu-toggle");
   const mobileMenuPanel     = document.getElementById("mobile-menu-panel");
@@ -1879,6 +1893,35 @@ This is a fully client-side application. Your content never leaves your browser 
     resizeDivider.addEventListener('touchstart', startResizeTouch);
     document.addEventListener('touchmove', handleResizeTouch);
     document.addEventListener('touchend', stopResize);
+
+    if (sidebarDropzoneResizer) {
+      sidebarDropzoneResizer.addEventListener('mousedown', startSidebarDropzoneResize);
+      document.addEventListener('mousemove', handleSidebarDropzoneResize);
+      document.addEventListener('mouseup', stopSidebarDropzoneResize);
+    }
+  }
+
+  function startSidebarDropzoneResize(e) {
+    if (!folderTreePane || !sidebarDropzonePanel) return;
+    e.preventDefault();
+    isSidebarDropzoneResizing = true;
+    document.body.classList.add('resizing');
+  }
+
+  function handleSidebarDropzoneResize(e) {
+    if (!isSidebarDropzoneResizing || !folderTreePane || !sidebarDropzonePanel) return;
+    const paneRect = folderTreePane.getBoundingClientRect();
+    const resizerHeight = sidebarDropzoneResizer ? sidebarDropzoneResizer.offsetHeight : 0;
+    const newDropzoneHeight = paneRect.bottom - e.clientY;
+    const maxDropzoneHeight = paneRect.height - MIN_SIDEBAR_PANEL_HEIGHT - resizerHeight;
+    const clampedHeight = Math.max(MIN_SIDEBAR_PANEL_HEIGHT, Math.min(maxDropzoneHeight, newDropzoneHeight));
+    sidebarDropzonePanel.style.flex = `0 0 ${clampedHeight}px`;
+  }
+
+  function stopSidebarDropzoneResize() {
+    if (!isSidebarDropzoneResizing) return;
+    isSidebarDropzoneResizing = false;
+    document.body.classList.remove('resizing');
   }
 
   function startResize(e) {

@@ -298,13 +298,6 @@
           </div>
         </div>
 
-        <div id="dropzone" class="dropzone container-fluid mt-2">
-            <button id="close-dropzone" class="close-btn" title="Close dropzone">
-                <i class="bi bi-x-lg"></i>
-            </button>
-            <p class="mb-0"><i class="bi bi-cloud-arrow-up me-2"></i>Drop your Markdown file here or click to browse</p>
-        </div>
-
         <div class="content-container">
             <aside class="folder-tree-pane" id="folder-tree-pane">
                 <div class="folder-tree-header">
@@ -313,6 +306,15 @@
                 </div>
                 <div id="folder-tree-root" class="folder-tree-root">
                     <p class="folder-tree-placeholder">Open a folder to browse Markdown files.</p>
+                </div>
+                <div class="sidebar-dropzone-resizer" id="sidebar-dropzone-resizer" role="separator" aria-orientation="horizontal" aria-label="Resize sidebar dropzone" tabindex="0"></div>
+                <div class="sidebar-dropzone-panel">
+                    <div id="dropzone" class="dropzone">
+                        <button id="close-dropzone" class="close-btn" title="Close dropzone">
+                            <i class="bi bi-x-lg"></i>
+                        </button>
+                        <p class="mb-0"><i class="bi bi-cloud-arrow-up me-2"></i>Drop your Markdown file here or click to browse</p>
+                    </div>
                 </div>
             </aside>
             <div class="editor-pane">
