@@ -392,14 +392,14 @@ body {
 .graph-link {
   stroke: var(--border-color);
   stroke-opacity: 0.8;
-  stroke-width: 1.5px;
+  stroke-width: 1px;
   transition: opacity 0.15s ease, stroke-opacity 0.15s ease, stroke 0.15s ease, stroke-width 0.15s ease;
 }
 
 .graph-link.highlighted-direct {
   stroke: #8b5cf6;
   stroke-opacity: 1;
-  stroke-width: 1.5px;
+  stroke-width: 1px;
 }
 
 .graph-node {
