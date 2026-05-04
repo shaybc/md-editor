@@ -166,6 +166,9 @@ document.addEventListener("DOMContentLoaded", function () {
   // GLOBAL STATE (persisted across reloads)
   // ========================================
   const GLOBAL_STATE_KEY = 'markdownViewerGlobalState';
+  const graphSettings = {
+    magneticEnabled: loadGlobalState().graphMagneticEnabled !== false
+  };
 
   function loadGlobalState() {
     try { return JSON.parse(localStorage.getItem(GLOBAL_STATE_KEY)) || {}; }
@@ -2495,10 +2498,14 @@ This is a fully client-side application. Your content never leaves your browser 
 
     svg.call(zoomBehavior).on("dblclick.zoom", null);
 
-    const simulation = d3.forceSimulation(nodes)
-      .force("link", d3.forceLink(links).id((d) => d.id).distance(80))
-      .force("charge", d3.forceManyBody().strength(-240))
-      .force("center", d3.forceCenter(width / 2, height / 2));
+    const simulation = d3.forceSimulation(nodes);
+    const baseLinkForce = d3.forceLink(links).id((d) => d.id).distance(80).strength(0.35);
+    const baseChargeForce = d3.forceManyBody().strength(-240);
+    const baseCenterForce = d3.forceCenter(width / 2, height / 2);
+    simulation
+      .force("link", baseLinkForce)
+      .force("charge", baseChargeForce)
+      .force("center", baseCenterForce);
     const defs = svg.append("defs");
     defs.append("marker")
       .attr("id", "graph-arrowhead")
@@ -2524,6 +2531,54 @@ This is a fully client-side application. Your content never leaves your browser 
     node.append("title").text((d) => d.label);
     const label = graphLayer.append("g").selectAll("text").data(nodes).enter().append("text").text((d) => d.label).attr("class", "graph-label");
 
+    const contextMenu = document.createElement("div");
+    contextMenu.className = "graph-context-menu hidden";
+    const magneticToggleBtn = document.createElement("button");
+    magneticToggleBtn.type = "button";
+    magneticToggleBtn.className = "graph-context-menu-item";
+    contextMenu.appendChild(magneticToggleBtn);
+    graphViewCanvas.appendChild(contextMenu);
+
+    const applyMagneticSetting = () => {
+      if (graphSettings.magneticEnabled) {
+        simulation
+          .force("link", baseLinkForce)
+          .force("charge", baseChargeForce)
+          .force("center", baseCenterForce)
+          .alpha(0.7)
+          .restart();
+      } else {
+        simulation
+          .force("link", null)
+          .force("charge", null)
+          .force("center", null)
+          .alphaTarget(0);
+      }
+      magneticToggleBtn.textContent = graphSettings.magneticEnabled
+        ? "Turn magnetic forces off"
+        : "Turn magnetic forces on";
+    };
+
+    const hideContextMenu = () => contextMenu.classList.add("hidden");
+
+    graphViewCanvas.addEventListener("contextmenu", (event) => {
+      event.preventDefault();
+      const bounds = graphViewCanvas.getBoundingClientRect();
+      contextMenu.style.left = `${Math.min(event.clientX - bounds.left, bounds.width - 200)}px`;
+      contextMenu.style.top = `${Math.min(event.clientY - bounds.top, bounds.height - 48)}px`;
+      contextMenu.classList.remove("hidden");
+    });
+
+    graphViewCanvas.addEventListener("click", hideContextMenu);
+    window.addEventListener("blur", hideContextMenu);
+
+    magneticToggleBtn.addEventListener("click", () => {
+      graphSettings.magneticEnabled = !graphSettings.magneticEnabled;
+      saveGlobalState({ graphMagneticEnabled: graphSettings.magneticEnabled });
+      applyMagneticSetting();
+      hideContextMenu();
+    });
+
     function highlightNeighborhood(focusNode) {
       const connected = adjacency.get(focusNode.id) || new Set([focusNode.id]);
       node.classed("dimmed", (n) => !connected.has(n.id));
@@ -2546,6 +2601,8 @@ This is a fully client-side application. Your content never leaves your browser 
       node.attr("cx", (d) => d.x).attr("cy", (d) => d.y);
       label.attr("x", (d) => d.x + 10).attr("y", (d) => d.y + 4);
     });
+
+    applyMagneticSetting();
   }
 
   exportMd.addEventListener("click", async function () {
