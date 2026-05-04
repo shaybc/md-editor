@@ -2482,6 +2482,16 @@ This is a fully client-side application. Your content never leaves your browser 
         links.push({ source, target });
       });
     }
+    if (graphViewConfig && Array.isArray(graphViewConfig.allowedNodeIds) && graphViewConfig.allowedNodeIds.length) {
+      const allowedNodeIds = new Set(graphViewConfig.allowedNodeIds);
+      const allowedNodes = nodes.filter((n) => allowedNodeIds.has(n.id));
+      const allowedLinks = links.filter((l) => allowedNodeIds.has(l.source) && allowedNodeIds.has(l.target));
+      nodes.length = 0;
+      nodes.push(...allowedNodes);
+      links.length = 0;
+      links.push(...allowedLinks);
+    }
+
     if (graphViewConfig && Array.isArray(graphViewConfig.hiddenNodeIds) && graphViewConfig.hiddenNodeIds.length) {
       const hiddenNodeIds = new Set(graphViewConfig.hiddenNodeIds);
       const visibleNodes = nodes.filter((n) => !hiddenNodeIds.has(n.id));
@@ -2672,11 +2682,15 @@ This is a fully client-side application. Your content never leaves your browser 
         alert('Maximum of 20 tabs reached. Please close an existing tab to open a new one.');
         return;
       }
+      const activeGraphTab = tabs.find((tab) => tab.id === activeTabId);
+      const parentConfig = activeGraphTab?.graphViewConfig || {};
       const localTabTitle = `Local Graph: ${contextTargetNode.label}`;
       const localGraphTab = createGraphTab(localTabTitle, {
         graphViewConfig: {
           mode: "local",
-          focusNodeId
+          focusNodeId,
+          allowedNodeIds: Array.from(new Set([...(parentConfig.allowedNodeIds || []), ...nodes.map((n) => n.id)])),
+          hiddenNodeIds: [...(parentConfig.hiddenNodeIds || [])]
         }
       });
       tabs.push(localGraphTab);
