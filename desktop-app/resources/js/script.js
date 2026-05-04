@@ -16,7 +16,6 @@ document.addEventListener("DOMContentLoaded", function () {
   const importFromFileButton = document.getElementById("import-from-file");
   const importFromGithubButton = document.getElementById("import-from-github");
   const importFromFolderButton = document.getElementById("import-from-folder");
-  const pickFolderButton = document.getElementById("pick-folder-button");
   let folderTreeRoot = document.getElementById("folder-tree-root");
 
   console.error("[FolderTree] init", {
@@ -52,12 +51,57 @@ document.addEventListener("DOMContentLoaded", function () {
     pane.className = "folder-tree-pane";
     pane.id = "folder-tree-pane";
     pane.innerHTML = `
-      <div class="folder-tree-header">
-        <span><i class="bi bi-folder2-open me-1"></i>Folder</span>
-        <button id="pick-folder-button" class="tool-button folder-tree-btn" title="Open folder">Open</button>
+      <div class="tree-action-menu dropdown">
+        <button class="tool-button dropdown-toggle w-100 justify-content-center" type="button" id="desktopActionMenu" data-bs-toggle="dropdown" aria-expanded="false" title="Actions">
+          <i class="bi bi-list"></i>
+        </button>
+        <div class="dropdown-menu action-menu w-100" aria-labelledby="desktopActionMenu">
+          <button id="toggle-sync" class="dropdown-item action-menu-item sync-enabled border-primary" title="Toggle Sync Scrolling">
+            <i class="bi bi-link"></i> Sync Off
+          </button>
+          <hr class="dropdown-divider">
+          <button class="dropdown-item action-menu-item" id="import-from-file" title="Import Markdown from files">
+            <i class="bi bi-upload me-2"></i> Open file ...
+          </button>
+          <button class="dropdown-item action-menu-item" id="import-from-folder" title="Import Markdown from folder">
+            <i class="bi bi-folder2-open me-2"></i> Open folder ...
+          </button>
+          <button class="dropdown-item action-menu-item" id="import-from-github" title="Import Markdown from GitHub">
+            <i class="bi bi-github me-2"></i> Import from GitHub
+          </button>
+          <hr class="dropdown-divider">
+          <button class="dropdown-item action-menu-item" id="export-md" title="Export as Markdown">
+            <i class="bi bi-file-earmark-text me-2"></i> Export as Markdown
+          </button>
+          <button class="dropdown-item action-menu-item" id="export-html" title="Export as HTML">
+            <i class="bi bi-file-earmark-code me-2"></i> Export as HTML
+          </button>
+          <button class="dropdown-item action-menu-item" id="export-pdf" title="Export as PDF">
+            <i class="bi bi-file-earmark-pdf me-2"></i> Export as PDF
+          </button>
+          <hr class="dropdown-divider">
+          <button id="copy-markdown-button" class="dropdown-item action-menu-item" title="Copy Markdown">
+            <i class="bi bi-clipboard me-2"></i> Copy
+          </button>
+          <button id="share-button" class="dropdown-item action-menu-item" title="Share via URL">
+            <i class="bi bi-share me-2"></i> Share
+          </button>
+          <button id="theme-toggle" class="dropdown-item action-menu-item" title="Toggle Dark Mode">
+            <i class="bi bi-moon me-2"></i> Theme
+          </button>
+        </div>
       </div>
       <div id="folder-tree-root" class="folder-tree-root">
         <p class="folder-tree-placeholder">Open a folder to browse Markdown files.</p>
+      </div>
+      <div class="sidebar-dropzone-resizer" id="sidebar-dropzone-resizer" role="separator" aria-orientation="horizontal" aria-label="Resize sidebar dropzone" tabindex="0"></div>
+      <div class="sidebar-dropzone-panel">
+        <div id="dropzone" class="dropzone">
+          <button id="close-dropzone" class="close-btn" title="Close dropzone">
+            <i class="bi bi-x-lg"></i>
+          </button>
+          <p class="mb-0"><i class="bi bi-cloud-arrow-up me-2"></i>Drop your Markdown file here or click to browse</p>
+        </div>
       </div>
     `;
 
@@ -67,6 +111,10 @@ document.addEventListener("DOMContentLoaded", function () {
 
   ensureFolderTreePane();
   folderTreeRoot = document.getElementById("folder-tree-root");
+  const folderTreePane = document.getElementById("folder-tree-pane");
+  document.querySelectorAll("#folder-tree-pane .tree-action-menu").forEach((node) => node.remove());
+  const sidebarDropzonePanel = document.querySelector(".sidebar-dropzone-panel");
+  const sidebarDropzoneResizer = document.getElementById("sidebar-dropzone-resizer");
 
 
   // Mobile View Mode Elements - Story 1.4
@@ -77,8 +125,10 @@ document.addEventListener("DOMContentLoaded", function () {
   const editorPaneElement = document.querySelector(".editor-pane");
   const previewPaneElement = document.querySelector(".preview-pane");
   let isResizing = false;
+  let isSidebarDropzoneResizing = false;
   let editorWidthPercent = 50; // Default 50%
   const MIN_PANE_PERCENT = 20; // Minimum 20% width
+  const MIN_SIDEBAR_PANEL_HEIGHT = 120;
 
   const mobileMenuToggle    = document.getElementById("mobile-menu-toggle");
   const mobileMenuPanel     = document.getElementById("mobile-menu-panel");
@@ -95,6 +145,9 @@ document.addEventListener("DOMContentLoaded", function () {
   const mobileExportPdf     = document.getElementById("mobile-export-pdf");
   const mobileCopyMarkdown  = document.getElementById("mobile-copy-markdown");
   const mobileThemeToggle   = document.getElementById("mobile-theme-toggle");
+  const mobileOpenGraphView = document.getElementById("mobile-open-graph-view");
+  const desktopOpenGraphButtons = document.querySelectorAll(".open-graph-view");
+  const graphViewCanvas = document.getElementById("graph-view-canvas");
   const shareButton         = document.getElementById("share-button");
   const mobileShareButton   = document.getElementById("mobile-share-button");
   const githubImportModal = document.getElementById("github-import-modal");
@@ -113,6 +166,9 @@ document.addEventListener("DOMContentLoaded", function () {
   // GLOBAL STATE (persisted across reloads)
   // ========================================
   const GLOBAL_STATE_KEY = 'markdownViewerGlobalState';
+  const graphSettings = {
+    magneticEnabled: loadGlobalState().graphMagneticEnabled !== false
+  };
 
   function loadGlobalState() {
     try { return JSON.parse(localStorage.getItem(GLOBAL_STATE_KEY)) || {}; }
@@ -132,9 +188,14 @@ document.addEventListener("DOMContentLoaded", function () {
 
   document.documentElement.setAttribute("data-theme", initialTheme);
 
-  themeToggle.innerHTML = initialTheme === "dark"
-    ? '<i class="bi bi-sun"></i>'
-    : '<i class="bi bi-moon"></i>';
+  function updateThemeButtonLabels(theme) {
+    const nextThemeLabel = theme === "dark" ? "Light" : "Dark";
+    const icon = theme === "dark" ? "bi-sun" : "bi-moon";
+    themeToggle.innerHTML = `<i class="bi ${icon} me-2"></i> ${nextThemeLabel}`;
+    mobileThemeToggle.innerHTML = `<i class="bi ${icon} me-2"></i> ${nextThemeLabel} Mode`;
+  }
+
+  updateThemeButtonLabels(initialTheme);
 
   const initMermaid = () => {
     const currentTheme = document.documentElement.getAttribute("data-theme");
@@ -168,12 +229,14 @@ document.addEventListener("DOMContentLoaded", function () {
 
   const renderer = new marked.Renderer();
   renderer.code = function (code, language) {
-    if (language === 'mermaid') {
+    const normalizedLanguage = (language || "").trim().split(/\s+/)[0].toLowerCase();
+
+    if (normalizedLanguage === 'mermaid') {
       const uniqueId = 'mermaid-diagram-' + Math.random().toString(36).substr(2, 9);
       return `<div class="mermaid-container"><div class="mermaid" id="${uniqueId}">${code}</div></div>`;
     }
     
-    const validLanguage = hljs.getLanguage(language) ? language : "plaintext";
+    const validLanguage = hljs.getLanguage(normalizedLanguage) ? normalizedLanguage : "plaintext";
     const highlightedCode = hljs.highlight(code, {
       language: validLanguage,
     }).value;
@@ -498,6 +561,8 @@ This is a fully client-side application. Your content never leaves your browser 
   const UNTITLED_COUNTER_KEY = 'markdownViewerUntitledCounter';
   let tabs = [];
   let activeTabId = null;
+  let folderMarkdownFiles = [];
+  let activeFolderName = "Graph View";
   let draggedTabId = null;
   let saveTabStateTimeout = null;
   let untitledCounter = 0;
@@ -553,8 +618,25 @@ This is a fully client-side application. Your content never leaves your browser 
       createdAt: Date.now(),
       isTemporary: false,
       sourceFileName: null,
-      sourceFileHandle: null
+      sourceFileHandle: null,
+      savedContent: content,
+      type: "markdown",
+      folderName: null
     };
+  }
+
+  function createGraphTab(folderName, options) {
+    if (options === undefined) options = {};
+    const tab = createTab("", folderName || "Graph View", "preview");
+    tab.type = "graph";
+    tab.folderName = folderName || "Graph View";
+    tab.graphViewConfig = options.graphViewConfig || null;
+    return tab;
+  }
+
+  function getTabDisplayName(tab) {
+    const baseName = tab.title || 'Untitled';
+    return tab.savedContent !== tab.content ? baseName + ' *' : baseName;
   }
 
   function renderTabBar(tabsArr, currentActiveTabId) {
@@ -563,7 +645,7 @@ This is a fully client-side application. Your content never leaves your browser 
     tabList.innerHTML = '';
     tabsArr.forEach(function(tab) {
       const item = document.createElement('div');
-      item.className = 'tab-item' + (tab.id === currentActiveTabId ? ' active' : '');
+      item.className = 'tab-item' + (tab.id === currentActiveTabId ? ' active' : '') + (tab.savedContent !== tab.content ? ' unsaved' : '');
       item.setAttribute('data-tab-id', tab.id);
       item.setAttribute('role', 'tab');
       item.setAttribute('aria-selected', tab.id === currentActiveTabId ? 'true' : 'false');
@@ -571,8 +653,13 @@ This is a fully client-side application. Your content never leaves your browser 
 
       const titleSpan = document.createElement('span');
       titleSpan.className = 'tab-title' + (tab.isTemporary ? ' temporary' : '');
-      titleSpan.textContent = tab.title || 'Untitled';
-      titleSpan.title = tab.title || 'Untitled';
+      const displayName = getTabDisplayName(tab);
+      titleSpan.title = displayName;
+      if (tab.type === "graph") {
+        titleSpan.innerHTML = `<i class="bi bi-diagram-3 me-1"></i>${displayName}`;
+      } else {
+        titleSpan.textContent = displayName;
+      }
 
       // Three-dot menu button
       const menuBtn = document.createElement('button');
@@ -585,9 +672,9 @@ This is a fully client-side application. Your content never leaves your browser 
       const dropdown = document.createElement('div');
       dropdown.className = 'tab-menu-dropdown';
       dropdown.innerHTML =
-        '<button class="tab-menu-item" data-action="rename"><i class="bi bi-pencil"></i> Rename</button>' +
-        '<button class="tab-menu-item" data-action="duplicate"><i class="bi bi-files"></i> Duplicate</button>' +
-        '<button class="tab-menu-item tab-menu-item-danger" data-action="delete"><i class="bi bi-trash"></i> Delete</button>';
+        (tab.type === "graph" ? '' : '<button class="tab-menu-item" data-action="rename"><i class="bi bi-pencil"></i> Rename</button>' +
+        '<button class="tab-menu-item" data-action="duplicate"><i class="bi bi-files"></i> Duplicate</button>') +
+        '<button class="tab-menu-item tab-menu-item-danger" data-action="close"><i class="bi bi-x-lg"></i> Close</button>';
 
       menuBtn.appendChild(dropdown);
 
@@ -615,7 +702,7 @@ This is a fully client-side application. Your content never leaves your browser 
           const action = actionBtn.getAttribute('data-action');
           if (action === 'rename') renameTab(tab.id);
           else if (action === 'duplicate') duplicateTab(tab.id);
-          else if (action === 'delete') deleteTab(tab.id);
+          else if (action === 'close') closeTab(tab.id, { promptForUnsaved: true });
         });
       });
 
@@ -689,15 +776,20 @@ This is a fully client-side application. Your content never leaves your browser 
     mobileTabList.innerHTML = '';
     tabsArr.forEach(function(tab) {
       const item = document.createElement('div');
-      item.className = 'mobile-tab-item' + (tab.id === currentActiveTabId ? ' active' : '');
+      item.className = 'mobile-tab-item' + (tab.id === currentActiveTabId ? ' active' : '') + (tab.savedContent !== tab.content ? ' unsaved' : '');
       item.setAttribute('role', 'tab');
       item.setAttribute('aria-selected', tab.id === currentActiveTabId ? 'true' : 'false');
       item.setAttribute('data-tab-id', tab.id);
 
       const titleSpan = document.createElement('span');
       titleSpan.className = 'mobile-tab-title' + (tab.isTemporary ? ' temporary' : '');
-      titleSpan.textContent = tab.title || 'Untitled';
-      titleSpan.title = tab.title || 'Untitled';
+      const displayName = getTabDisplayName(tab);
+      titleSpan.title = displayName;
+      if (tab.type === "graph") {
+        titleSpan.innerHTML = `<i class="bi bi-diagram-3 me-1"></i>${displayName}`;
+      } else {
+        titleSpan.textContent = displayName;
+      }
 
       // Three-dot menu button (same as desktop)
       const menuBtn = document.createElement('button');
@@ -710,9 +802,9 @@ This is a fully client-side application. Your content never leaves your browser 
       const dropdown = document.createElement('div');
       dropdown.className = 'tab-menu-dropdown';
       dropdown.innerHTML =
-        '<button class="tab-menu-item" data-action="rename"><i class="bi bi-pencil"></i> Rename</button>' +
-        '<button class="tab-menu-item" data-action="duplicate"><i class="bi bi-files"></i> Duplicate</button>' +
-        '<button class="tab-menu-item tab-menu-item-danger" data-action="delete"><i class="bi bi-trash"></i> Delete</button>';
+        (tab.type === "graph" ? '' : '<button class="tab-menu-item" data-action="rename"><i class="bi bi-pencil"></i> Rename</button>' +
+        '<button class="tab-menu-item" data-action="duplicate"><i class="bi bi-files"></i> Duplicate</button>') +
+        '<button class="tab-menu-item tab-menu-item-danger" data-action="close"><i class="bi bi-x-lg"></i> Close</button>';
 
       menuBtn.appendChild(dropdown);
 
@@ -741,8 +833,9 @@ This is a fully client-side application. Your content never leaves your browser 
           } else if (action === 'duplicate') {
             duplicateTab(tab.id);
             closeMobileMenu();
-          } else if (action === 'delete') {
-            deleteTab(tab.id);
+          } else if (action === 'close') {
+            closeTab(tab.id, { promptForUnsaved: true });
+            closeMobileMenu();
           }
         });
       });
@@ -769,6 +862,7 @@ This is a fully client-side application. Your content never leaves your browser 
   function saveCurrentTabState() {
     const tab = tabs.find(function(t) { return t.id === activeTabId; });
     if (!tab) return;
+    if (tab.type === "graph") return;
     tab.content = markdownEditor.value;
     tab.scrollPos = markdownEditor.scrollTop;
     tab.viewMode = currentViewMode || 'split';
@@ -787,6 +881,14 @@ This is a fully client-side application. Your content never leaves your browser 
     saveActiveTabId(activeTabId);
     const tab = tabs.find(function(t) { return t.id === tabId; });
     if (!tab) return;
+    if (tab.type === "graph") {
+      setViewMode('preview');
+      setGraphViewMode(true);
+      renderTabBar(tabs, activeTabId);
+      renderGraphView();
+      return;
+    }
+    setGraphViewMode(false);
     markdownEditor.value = tab.content;
     restoreViewMode(tab.viewMode);
     renderMarkdown();
@@ -802,6 +904,8 @@ This is a fully client-side application. Your content never leaves your browser 
     const tab = tabs.find(function(t) { return t.id === tabId; });
     if (!tab || !tab.isTemporary) return;
     tab.isTemporary = false;
+    // Promote preview tab to a normal tab without marking it dirty.
+    tab.savedContent = tab.content;
     saveTabsToStorage(tabs);
     renderTabBar(tabs, activeTabId);
   }
@@ -823,6 +927,7 @@ This is a fully client-side application. Your content never leaves your browser 
       tab.isTemporary = true;
       tab.sourceFileName = sourceFile && sourceFile.name ? sourceFile.name : null;
       tab.sourceFileHandle = sourceFile && sourceFile.handle ? sourceFile.handle : null;
+      tab.savedContent = content || '';
       tabs.push(tab);
     } else {
       tab.title = title || 'Untitled';
@@ -832,10 +937,12 @@ This is a fully client-side application. Your content never leaves your browser 
       tab.isTemporary = true;
       tab.sourceFileName = sourceFile && sourceFile.name ? sourceFile.name : null;
       tab.sourceFileHandle = sourceFile && sourceFile.handle ? sourceFile.handle : null;
+      tab.savedContent = content || '';
     }
 
     activeTabId = tab.id;
     saveActiveTabId(activeTabId);
+    setGraphViewMode(false);
     markdownEditor.value = tab.content;
     restoreViewMode(tab.viewMode);
     renderMarkdown();
@@ -860,7 +967,16 @@ This is a fully client-side application. Your content never leaves your browser 
     markdownEditor.focus();
   }
 
-  function closeTab(tabId) {
+  function closeTab(tabId, options) {
+    if (options === undefined) options = {};
+    const tabToClose = tabs.find(function(t) { return t.id === tabId; });
+    if (!tabToClose) return;
+    const hasUnsavedChanges = tabToClose.savedContent !== tabToClose.content;
+    if (options.promptForUnsaved && hasUnsavedChanges) {
+      const shouldClose = window.confirm('You have unsaved changes. Are you sure you want to close this tab?');
+      if (!shouldClose) return;
+    }
+
     const idx = tabs.findIndex(function(t) { return t.id === tabId; });
     if (idx === -1) return;
     tabs.splice(idx, 1);
@@ -878,6 +994,14 @@ This is a fully client-side application. Your content never leaves your browser 
       activeTabId = tabs[newIdx].id;
       saveActiveTabId(activeTabId);
       const newActiveTab = tabs[newIdx];
+      if (newActiveTab.type === 'graph') {
+        setGraphViewMode(true);
+        renderTabBar(tabs, activeTabId);
+        renderGraphView();
+        saveTabsToStorage(tabs);
+        return;
+      }
+      setGraphViewMode(false);
       markdownEditor.value = newActiveTab.content;
       restoreViewMode(newActiveTab.viewMode);
       renderMarkdown();
@@ -887,10 +1011,6 @@ This is a fully client-side application. Your content never leaves your browser 
     }
     saveTabsToStorage(tabs);
     renderTabBar(tabs, activeTabId);
-  }
-
-  function deleteTab(tabId) {
-    closeTab(tabId);
   }
 
   function renameTab(tabId) {
@@ -948,6 +1068,7 @@ This is a fully client-side application. Your content never leaves your browser 
     saveCurrentTabState();
     const dupTitle = tab.title + ' (copy)';
     const dup = createTab(tab.content, dupTitle, tab.viewMode);
+    dup.savedContent = tab.savedContent;
     const idx = tabs.findIndex(function(t) { return t.id === tabId; });
     tabs.splice(idx + 1, 0, dup);
     switchTab(dup.id);
@@ -994,6 +1115,10 @@ This is a fully client-side application. Your content never leaves your browser 
   function initTabs() {
     untitledCounter = loadUntitledCounter();
     tabs = loadTabsFromStorage();
+    tabs.forEach(function(tab) {
+      if (typeof tab.savedContent !== 'string') tab.savedContent = tab.content || '';
+      if (!tab.type) tab.type = 'markdown';
+    });
     activeTabId = loadActiveTabId();
     if (tabs.length === 0) {
       const tab = createTab(sampleMarkdown, 'Welcome to Markdown');
@@ -1006,6 +1131,14 @@ This is a fully client-side application. Your content never leaves your browser 
       saveActiveTabId(activeTabId);
     }
     const activeTab = tabs.find(function(t) { return t.id === activeTabId; });
+    if (activeTab.type === 'graph') {
+      setViewMode('preview');
+      setGraphViewMode(true);
+      renderTabBar(tabs, activeTabId);
+      renderGraphView();
+      return;
+    }
+    setGraphViewMode(false);
     markdownEditor.value = activeTab.content;
     restoreViewMode(activeTab.viewMode);
     renderMarkdown();
@@ -1073,13 +1206,38 @@ This is a fully client-side application. Your content never leaves your browser 
     for await (const entry of dirHandle.values()) {
       if (entry.kind === "directory") {
         const children = await listMarkdownTree(entry);
-        if (children.length) entries.push({ kind: "directory", name: entry.name, children });
+        if (children.length) {
+          entries.push({ kind: "directory", name: entry.name, children });
+        }
       } else if (entry.kind === "file" && /\.(md|markdown)$/i.test(entry.name)) {
         entries.push({ kind: "file", name: entry.name, handle: entry });
       }
     }
     entries.sort((a,b) => a.kind === b.kind ? a.name.localeCompare(b.name) : (a.kind === "directory" ? -1 : 1));
     return entries;
+  }
+
+  async function collectMarkdownFilesFromTree(nodes, parentPath = "") {
+    const files = [];
+    for (const node of (nodes || [])) {
+      const currentPath = parentPath ? `${parentPath}/${node.name}` : node.name;
+      if (node.kind === "directory") {
+        const nestedFiles = await collectMarkdownFilesFromTree(node.children || [], currentPath);
+        files.push(...nestedFiles);
+      } else if (node.kind === "file") {
+        if (node.file) {
+          files.push({ path: currentPath, file: node.file });
+        } else if (node.handle) {
+          try {
+            const file = await node.handle.getFile();
+            files.push({ path: currentPath, file });
+          } catch (error) {
+            console.warn("Failed to read file handle for graph view:", currentPath, error);
+          }
+        }
+      }
+    }
+    return files;
   }
 
   function renderFolderTreeNode(node) {
@@ -1107,6 +1265,11 @@ This is a fully client-side application. Your content never leaves your browser 
     button.addEventListener("click", async () => {
       try {
         const file = node.file ? node.file : await node.handle.getFile();
+        const existingTab = findTabForSidebarFile(node);
+        if (existingTab) {
+          switchTab(existingTab.id);
+          return;
+        }
         const content = await file.text();
         openSidebarFileInTemporaryTab(
           content,
@@ -1120,6 +1283,22 @@ This is a fully client-side application. Your content never leaves your browser 
     });
     li.appendChild(button);
     return li;
+  }
+
+  function findTabForSidebarFile(node) {
+    if (!node || node.kind !== "file") return null;
+
+    if (node.handle) {
+      const handleMatch = tabs.find(function(tab) {
+        return tab.sourceFileHandle === node.handle;
+      });
+      if (handleMatch) return handleMatch;
+    }
+
+    const title = node.name.replace(/\.(md|markdown)$/i, "");
+    return tabs.find(function(tab) {
+      return tab.sourceFileName === node.name || tab.title === title;
+    }) || null;
   }
 
   function buildTreeFromFileList(fileList) {
@@ -1141,7 +1320,7 @@ This is a fully client-side application. Your content never leaves your browser 
       relPath.forEach((segment) => {
         cursor = ensureDir(cursor, segment).children;
       });
-      cursor.push({ kind: "file", name: fileName, file });
+      cursor.push({ kind: "file", name: fileName, file, path: (file.webkitRelativePath || file.name) });
     });
 
     const sortNodes = (nodes) => {
@@ -1156,7 +1335,9 @@ This is a fully client-side application. Your content never leaves your browser 
     if (window.showDirectoryPicker) {
       try {
         const dirHandle = await window.showDirectoryPicker();
+        activeFolderName = dirHandle && dirHandle.name ? dirHandle.name : "Graph View";
         const nodes = await listMarkdownTree(dirHandle);
+        folderMarkdownFiles = await collectMarkdownFilesFromTree(nodes);
         folderTreeRoot.innerHTML = "";
         if (!nodes.length) {
           folderTreeRoot.innerHTML = '<p class="folder-tree-placeholder">No Markdown files found in this folder.</p>';
@@ -1184,26 +1365,43 @@ This is a fully client-side application. Your content never leaves your browser 
     const reader = new FileReader();
     reader.onload = function(e) {
       newTab(e.target.result, file.name.replace(/\.md$/i, ''));
-      dropzone.style.display = "none";
+      hideSidebarDropzone();
     };
     reader.readAsText(file);
+  }
+
+  function hideSidebarDropzone() {
+    if (dropzone) {
+      dropzone.style.display = "none";
+    }
+    if (sidebarDropzonePanel) {
+      sidebarDropzonePanel.style.display = "none";
+      sidebarDropzonePanel.style.flex = "0 0 0px";
+      sidebarDropzonePanel.style.padding = "0";
+      sidebarDropzonePanel.style.minHeight = "0";
+    }
+    if (sidebarDropzoneResizer) {
+      sidebarDropzoneResizer.style.display = "none";
+      sidebarDropzoneResizer.style.flex = "0 0 0px";
+    }
   }
 
   async function saveActiveTabToSource() {
     const tab = tabs.find(function(t) { return t.id === activeTabId; });
     if (!tab || !tab.sourceFileHandle) return false;
     try {
-      if (tab.sourceFileHandle.createWritable) {
-        const writable = await tab.sourceFileHandle.createWritable();
-        await writable.write(markdownEditor.value);
-        await writable.close();
-        return true;
-      }
+      const writable = await tab.sourceFileHandle.createWritable();
+      await writable.write(markdownEditor.value);
+      await writable.close();
+      tab.content = markdownEditor.value;
+      tab.savedContent = markdownEditor.value;
+      saveTabsToStorage(tabs);
+      renderTabBar(tabs, activeTabId);
+      return true;
     } catch (error) {
       console.error("Failed to save file to original location:", error);
       return false;
     }
-    return false;
   }
 
   function isMarkdownPath(path) {
@@ -1831,6 +2029,35 @@ This is a fully client-side application. Your content never leaves your browser 
     resizeDivider.addEventListener('touchstart', startResizeTouch);
     document.addEventListener('touchmove', handleResizeTouch);
     document.addEventListener('touchend', stopResize);
+
+    if (sidebarDropzoneResizer) {
+      sidebarDropzoneResizer.addEventListener('mousedown', startSidebarDropzoneResize);
+      document.addEventListener('mousemove', handleSidebarDropzoneResize);
+      document.addEventListener('mouseup', stopSidebarDropzoneResize);
+    }
+  }
+
+  function startSidebarDropzoneResize(e) {
+    if (!folderTreePane || !sidebarDropzonePanel) return;
+    e.preventDefault();
+    isSidebarDropzoneResizing = true;
+    document.body.classList.add('resizing');
+  }
+
+  function handleSidebarDropzoneResize(e) {
+    if (!isSidebarDropzoneResizing || !folderTreePane || !sidebarDropzonePanel) return;
+    const paneRect = folderTreePane.getBoundingClientRect();
+    const resizerHeight = sidebarDropzoneResizer ? sidebarDropzoneResizer.offsetHeight : 0;
+    const newDropzoneHeight = paneRect.bottom - e.clientY;
+    const maxDropzoneHeight = paneRect.height - MIN_SIDEBAR_PANEL_HEIGHT - resizerHeight;
+    const clampedHeight = Math.max(MIN_SIDEBAR_PANEL_HEIGHT, Math.min(maxDropzoneHeight, newDropzoneHeight));
+    sidebarDropzonePanel.style.flex = `0 0 ${clampedHeight}px`;
+  }
+
+  function stopSidebarDropzoneResize() {
+    if (!isSidebarDropzoneResizing) return;
+    isSidebarDropzoneResizing = false;
+    document.body.classList.remove('resizing');
   }
 
   function startResize(e) {
@@ -1949,7 +2176,6 @@ This is a fully client-side application. Your content never leaves your browser 
   mobileCopyMarkdown.addEventListener("click", () => copyMarkdownButton.click());
   mobileThemeToggle.addEventListener("click", () => {
     themeToggle.click();
-    mobileThemeToggle.innerHTML = themeToggle.innerHTML + " Toggle Dark Mode";
   });
 
   const mobileNewTabBtn = document.getElementById("mobile-new-tab-btn");
@@ -1995,6 +2221,11 @@ This is a fully client-side application. Your content never leaves your browser 
   });
 
   markdownEditor.addEventListener("input", function() {
+    const activeTab = tabs.find(function(t) { return t.id === activeTabId; });
+    if (activeTab) {
+      activeTab.content = markdownEditor.value;
+      renderTabBar(tabs, activeTabId);
+    }
     debouncedRender();
     clearTimeout(saveTabStateTimeout);
     saveTabStateTimeout = setTimeout(saveCurrentTabState, 500);
@@ -2034,11 +2265,7 @@ This is a fully client-side application. Your content never leaves your browser 
     document.documentElement.setAttribute("data-theme", theme);
     saveGlobalState({ theme });
 
-    if (theme === "dark") {
-      themeToggle.innerHTML = '<i class="bi bi-sun"></i>';
-    } else {
-      themeToggle.innerHTML = '<i class="bi bi-moon"></i>';
-    }
+    updateThemeButtonLabels(theme);
     
     renderMarkdown();
   });
@@ -2055,10 +2282,6 @@ This is a fully client-side application. Your content never leaves your browser 
       e.preventDefault();
       openFolderTree();
     });
-  }
-
-  if (pickFolderButton) {
-    pickFolderButton.addEventListener("click", openFolderTree);
   }
 
   if (importFromGithubButton) {
@@ -2126,6 +2349,9 @@ This is a fully client-side application. Your content never leaves your browser 
   if (folderInput) {
     folderInput.addEventListener("change", function(e) {
       const files = e.target.files;
+      folderMarkdownFiles = Array.from(files || [])
+        .filter((file) => /\.(md|markdown)$/i.test(file.name))
+        .map((file) => ({ path: file.webkitRelativePath || file.name, file }));
       const nodes = buildTreeFromFileList(files || []);
       folderTreeRoot.innerHTML = "";
       if (!nodes.length) {
@@ -2138,6 +2364,374 @@ This is a fully client-side application. Your content never leaves your browser 
       }
       this.value = "";
     });
+  }
+
+  function normalizeGraphNodeName(path) {
+    return (path || "")
+      .replace(/\\/g, "/")
+      .replace(/^\/+/, "")
+      .replace(/\.(md|markdown)$/i, "")
+      .replace(/\/+/g, "/")
+      .toLowerCase();
+  }
+
+  function getGraphDisplayLabel(path) {
+    const normalized = (path || "").replace(/\\/g, "/").replace(/\/+/g, "/");
+    const fileName = normalized.split("/").pop() || normalized;
+    return fileName.replace(/\.(md|markdown)$/i, "") || fileName;
+  }
+
+  function resolveGraphTargetId(reference, sourcePath, nodeIndex) {
+    const ref = (reference || "").trim();
+    if (!ref) return null;
+    if (/^(https?:)?\/\//i.test(ref)) return null;
+
+    const cleanedRef = ref
+      .replace(/^\.\//, "")
+      .replace(/^\/+/, "")
+      .replace(/\\/g, "/");
+
+    const sourceDir = (sourcePath || "").split("/").slice(0, -1).join("/");
+    const relativeCandidate = normalizeGraphNodeName(sourceDir ? `${sourceDir}/${cleanedRef}` : cleanedRef);
+    if (nodeIndex.has(relativeCandidate)) return relativeCandidate;
+
+    const directCandidate = normalizeGraphNodeName(cleanedRef);
+    if (nodeIndex.has(directCandidate)) return directCandidate;
+
+    const basenameCandidate = normalizeGraphNodeName(cleanedRef.split("/").pop() || "");
+    if (!basenameCandidate) return null;
+
+    const suffixMatches = Array.from(nodeIndex.keys()).filter((id) =>
+      id === basenameCandidate || id.endsWith(`/${basenameCandidate}`)
+    );
+
+    if (suffixMatches.length === 1) return suffixMatches[0];
+    return null;
+  }
+
+  function extractMarkdownLinks(markdown) {
+    const links = [];
+    const mdLinkRegex = /\[[^\]]*?\]\(([^)]+)\)/g;
+    const wikiLinkRegex = /\[\[([^\]]+)\]\]/g;
+    let match;
+    while ((match = mdLinkRegex.exec(markdown || "")) !== null) links.push(match[1]);
+    while ((match = wikiLinkRegex.exec(markdown || "")) !== null) links.push(match[1]);
+    return links.map((link) => link.split("#")[0].trim()).filter(Boolean);
+  }
+
+  async function openGraphView() {
+    let graphTab = tabs.find((tab) => tab.type === "graph");
+    if (!graphTab) {
+      if (tabs.length >= 20) {
+        alert('Maximum of 20 tabs reached. Please close an existing tab to open a new one.');
+        return;
+      }
+      graphTab = createGraphTab(activeFolderName, { graphViewConfig: null });
+      tabs.push(graphTab);
+    }
+    graphTab.title = activeFolderName || "Graph View";
+    graphTab.folderName = graphTab.title;
+    switchTab(graphTab.id);
+    saveTabsToStorage(tabs);
+  }
+
+  function setGraphViewMode(enabled) {
+    const contentContainer = document.querySelector(".content-container");
+    if (!contentContainer || !graphViewCanvas) return;
+    if (enabled) {
+      contentContainer.classList.add("graph-view-active");
+      if (!graphViewCanvas.parentElement || !graphViewCanvas.closest(".preview-pane")) {
+        const previewPane = document.querySelector(".preview-pane");
+        if (previewPane) previewPane.appendChild(graphViewCanvas);
+      }
+      graphViewCanvas.classList.add("tab-graph-canvas");
+    } else {
+      contentContainer.classList.remove("graph-view-active");
+      graphViewCanvas.classList.remove("tab-graph-canvas");
+      const graphViewContent = document.querySelector("#graph-view-modal .graph-view-content");
+      if (graphViewContent && graphViewCanvas.parentElement !== graphViewContent) {
+        graphViewContent.appendChild(graphViewCanvas);
+      }
+    }
+  }
+
+  async function renderGraphView() {
+    if (!graphViewCanvas) return;
+    graphViewCanvas.innerHTML = "";
+    const activeTab = tabs.find((tab) => tab.id === activeTabId);
+    const graphViewConfig = activeTab && activeTab.type === "graph" ? (activeTab.graphViewConfig || null) : null;
+    const files = folderMarkdownFiles || [];
+    if (!files.length) {
+      graphViewCanvas.innerHTML = '<p class="folder-tree-placeholder">Open a folder first to build the graph view.</p>';
+      return;
+    }
+    const nodes = [];
+    const links = [];
+    const seenEdges = new Set();
+    const nodeIndex = new Map();
+    for (const fileEntry of files) {
+      const path = fileEntry.path || fileEntry.file?.webkitRelativePath || fileEntry.file?.name || "";
+      const id = normalizeGraphNodeName(path);
+      nodeIndex.set(id, path);
+      nodes.push({ id, label: getGraphDisplayLabel(path), fullPath: path });
+    }
+    for (const fileEntry of files) {
+      const srcPath = fileEntry.path || fileEntry.file?.webkitRelativePath || fileEntry.file?.name || "";
+      const source = normalizeGraphNodeName(srcPath);
+      const text = await fileEntry.file.text();
+      extractMarkdownLinks(text).forEach((ref) => {
+        const target = resolveGraphTargetId(ref, srcPath, nodeIndex);
+        if (!target || target === source) return;
+        const edgeKey = `${source}->${target}`;
+        if (seenEdges.has(edgeKey)) return;
+        seenEdges.add(edgeKey);
+        links.push({ source, target });
+      });
+    }
+    if (graphViewConfig && Array.isArray(graphViewConfig.allowedNodeIds) && graphViewConfig.allowedNodeIds.length) {
+      const allowedNodeIds = new Set(graphViewConfig.allowedNodeIds);
+      const allowedNodes = nodes.filter((n) => allowedNodeIds.has(n.id));
+      const allowedLinks = links.filter((l) => allowedNodeIds.has(l.source) && allowedNodeIds.has(l.target));
+      nodes.length = 0;
+      nodes.push(...allowedNodes);
+      links.length = 0;
+      links.push(...allowedLinks);
+    }
+
+    if (graphViewConfig && Array.isArray(graphViewConfig.hiddenNodeIds) && graphViewConfig.hiddenNodeIds.length) {
+      const hiddenNodeIds = new Set(graphViewConfig.hiddenNodeIds);
+      const visibleNodes = nodes.filter((n) => !hiddenNodeIds.has(n.id));
+      const visibleLinks = links.filter((l) => !hiddenNodeIds.has(l.source) && !hiddenNodeIds.has(l.target));
+      nodes.length = 0;
+      nodes.push(...visibleNodes);
+      links.length = 0;
+      links.push(...visibleLinks);
+    }
+
+    if (graphViewConfig && graphViewConfig.mode === "local" && graphViewConfig.focusNodeId) {
+      const focusNodeId = graphViewConfig.focusNodeId;
+      const localNodeIds = new Set([focusNodeId]);
+      links.forEach((l) => {
+        if (l.source === focusNodeId) localNodeIds.add(l.target);
+        if (l.target === focusNodeId) localNodeIds.add(l.source);
+      });
+
+      const filteredNodes = nodes.filter((n) => localNodeIds.has(n.id));
+      const filteredLinks = links.filter((l) => localNodeIds.has(l.source) && localNodeIds.has(l.target));
+      nodes.length = 0;
+      nodes.push(...filteredNodes);
+      links.length = 0;
+      links.push(...filteredLinks);
+    }
+    const adjacency = new Map();
+    const outgoingDegree = new Map();
+    nodes.forEach((n) => adjacency.set(n.id, new Set([n.id])));
+    nodes.forEach((n) => outgoingDegree.set(n.id, 0));
+    links.forEach((l) => {
+      adjacency.get(l.source)?.add(l.target);
+      adjacency.get(l.target)?.add(l.source);
+      outgoingDegree.set(l.source, (outgoingDegree.get(l.source) || 0) + 1);
+    });
+    const maxOutgoing = Math.max(1, ...Array.from(outgoingDegree.values()));
+    const nodeRadius = (nodeId) => {
+      const outCount = outgoingDegree.get(nodeId) || 0;
+      return (6 + (outCount / maxOutgoing) * 12);
+    };
+    const width = graphViewCanvas.clientWidth || 900;
+    const height = graphViewCanvas.clientHeight || 560;
+    const svg = d3.select(graphViewCanvas).append("svg").attr("width", width).attr("height", height);
+    const graphLayer = svg.append("g").attr("class", "graph-layer");
+
+    const zoomBehavior = d3.zoom()
+      .scaleExtent([0.2, 4])
+      .on("zoom", (event) => {
+        graphLayer.attr("transform", event.transform);
+      });
+
+    svg.call(zoomBehavior).on("dblclick.zoom", null);
+
+    const simulation = d3.forceSimulation(nodes);
+    const baseLinkForce = d3.forceLink(links).id((d) => d.id).distance(170).strength(0.4);
+    const baseChargeForce = d3.forceManyBody().strength(-650);
+    const baseCenterForce = d3.forceCenter(width / 2, height / 2);
+    simulation
+      .force("link", baseLinkForce)
+      .force("charge", baseChargeForce)
+      .force("center", baseCenterForce)
+      .force("collision", d3.forceCollide().radius((d) => nodeRadius(d.id) + 30).strength(0.9));
+    const defs = svg.append("defs");
+    defs.append("marker")
+      .attr("id", "graph-arrowhead")
+      .attr("viewBox", "0 -4 9 8")
+      .attr("refX", 13)
+      .attr("refY", 0)
+      .attr("markerWidth", 5)
+      .attr("markerHeight", 5)
+      .attr("orient", "auto")
+      .append("path")
+      .attr("class", "graph-arrowhead")
+      .attr("d", "M0,-4L9,0L0,4");
+
+    const link = graphLayer.append("g").selectAll("line").data(links).enter().append("line")
+      .attr("class", "graph-link")
+      .attr("marker-end", "url(#graph-arrowhead)");
+    const node = graphLayer.append("g").selectAll("circle").data(nodes).enter().append("circle")
+      .attr("r", (d) => nodeRadius(d.id)).attr("class", "graph-node")
+      .call(d3.drag()
+        .on("start", (event, d) => { if (!event.active) simulation.alphaTarget(0.3).restart(); d.fx = d.x; d.fy = d.y; })
+        .on("drag", (event, d) => { d.fx = event.x; d.fy = event.y; })
+        .on("end", (event, d) => { if (!event.active) simulation.alphaTarget(0); d.fx = null; d.fy = null; }));
+    node.append("title").text((d) => d.fullPath || d.label);
+    const label = graphLayer.append("g").selectAll("text").data(nodes).enter().append("text").text((d) => d.label).attr("class", "graph-label");
+
+    const contextMenu = document.createElement("div");
+    contextMenu.className = "graph-context-menu hidden";
+    const magneticToggleBtn = document.createElement("button");
+    magneticToggleBtn.type = "button";
+    magneticToggleBtn.className = "graph-context-menu-item";
+    const hidePointBtn = document.createElement("button");
+    hidePointBtn.type = "button";
+    hidePointBtn.className = "graph-context-menu-item hidden";
+    hidePointBtn.textContent = "Hide this point";
+    const localGraphBtn = document.createElement("button");
+    localGraphBtn.type = "button";
+    localGraphBtn.className = "graph-context-menu-item hidden";
+    localGraphBtn.textContent = "Show local graph";
+    contextMenu.appendChild(magneticToggleBtn);
+    contextMenu.appendChild(hidePointBtn);
+    contextMenu.appendChild(localGraphBtn);
+    graphViewCanvas.appendChild(contextMenu);
+
+    let contextTargetNode = null;
+
+    const applyMagneticSetting = () => {
+      if (graphSettings.magneticEnabled) {
+        simulation
+          .force("link", baseLinkForce)
+          .force("charge", baseChargeForce)
+          .force("center", baseCenterForce)
+          .alpha(0.7)
+          .restart();
+      } else {
+        simulation
+          .force("link", null)
+          .force("charge", null)
+          .force("center", null)
+          .alphaTarget(0);
+      }
+      magneticToggleBtn.textContent = graphSettings.magneticEnabled
+        ? "Turn magnetic forces off"
+        : "Turn magnetic forces on";
+    };
+
+    const hideContextMenu = () => {
+      contextMenu.classList.add("hidden");
+      contextTargetNode = null;
+      hidePointBtn.classList.add("hidden");
+      localGraphBtn.classList.add("hidden");
+    };
+
+    graphViewCanvas.addEventListener("contextmenu", (event) => {
+      event.preventDefault();
+      contextTargetNode = null;
+      hidePointBtn.classList.add("hidden");
+      localGraphBtn.classList.add("hidden");
+      const bounds = graphViewCanvas.getBoundingClientRect();
+      contextMenu.style.left = `${Math.min(event.clientX - bounds.left, bounds.width - 200)}px`;
+      contextMenu.style.top = `${Math.min(event.clientY - bounds.top, bounds.height - 120)}px`;
+      contextMenu.classList.remove("hidden");
+    });
+
+    node.on("contextmenu", (event, d) => {
+      event.preventDefault();
+      event.stopPropagation();
+      contextTargetNode = d;
+      hidePointBtn.classList.remove("hidden");
+      localGraphBtn.classList.remove("hidden");
+      const bounds = graphViewCanvas.getBoundingClientRect();
+      contextMenu.style.left = `${Math.min(event.clientX - bounds.left, bounds.width - 200)}px`;
+      contextMenu.style.top = `${Math.min(event.clientY - bounds.top, bounds.height - 120)}px`;
+      contextMenu.classList.remove("hidden");
+    });
+
+    graphViewCanvas.addEventListener("click", hideContextMenu);
+    window.addEventListener("blur", hideContextMenu);
+
+    magneticToggleBtn.addEventListener("click", () => {
+      graphSettings.magneticEnabled = !graphSettings.magneticEnabled;
+      saveGlobalState({ graphMagneticEnabled: graphSettings.magneticEnabled });
+      applyMagneticSetting();
+      hideContextMenu();
+    });
+
+    hidePointBtn.addEventListener("click", () => {
+      if (!contextTargetNode) return;
+      const nodeId = contextTargetNode.id;
+      simulation.stop();
+      hideContextMenu();
+
+      graphViewCanvas.innerHTML = "";
+      // Re-render by reusing temporary in-memory file graph and hiding this node for this tab view only.
+      const activeGraphTab = tabs.find((tab) => tab.id === activeTabId);
+      if (activeGraphTab) {
+        activeGraphTab.graphViewConfig = {
+          ...(activeGraphTab.graphViewConfig || {}),
+          hiddenNodeIds: Array.from(new Set([...(activeGraphTab.graphViewConfig?.hiddenNodeIds || []), nodeId]))
+        };
+      }
+      renderGraphView();
+    });
+
+    localGraphBtn.addEventListener("click", () => {
+      if (!contextTargetNode) return;
+      const focusNodeId = contextTargetNode.id;
+      if (tabs.length >= 20) {
+        alert('Maximum of 20 tabs reached. Please close an existing tab to open a new one.');
+        return;
+      }
+      const activeGraphTab = tabs.find((tab) => tab.id === activeTabId);
+      const parentConfig = activeGraphTab?.graphViewConfig || {};
+      const localTabTitle = `Local Graph: ${contextTargetNode.label}`;
+      const localGraphTab = createGraphTab(localTabTitle, {
+        graphViewConfig: {
+          mode: "local",
+          focusNodeId,
+          allowedNodeIds: Array.from(new Set([...(parentConfig.allowedNodeIds || []), ...nodes.map((n) => n.id)])),
+          hiddenNodeIds: [...(parentConfig.hiddenNodeIds || [])]
+        }
+      });
+      tabs.push(localGraphTab);
+      saveTabsToStorage(tabs);
+      hideContextMenu();
+      switchTab(localGraphTab.id);
+    });
+
+    function highlightNeighborhood(focusNode) {
+      const connected = adjacency.get(focusNode.id) || new Set([focusNode.id]);
+      node.classed("dimmed", (n) => !connected.has(n.id));
+      label.classed("dimmed", (n) => !connected.has(n.id));
+      link
+        .classed("dimmed", (l) => !(l.source.id === focusNode.id || l.target.id === focusNode.id))
+        .classed("highlighted-direct", (l) => l.source.id === focusNode.id || l.target.id === focusNode.id);
+    }
+
+    function clearNeighborhoodHighlight() {
+      node.classed("dimmed", false);
+      label.classed("dimmed", false);
+      link.classed("dimmed", false).classed("highlighted-direct", false);
+    }
+
+    node
+      .on("mouseenter", (event, d) => highlightNeighborhood(d))
+      .on("mouseleave", clearNeighborhoodHighlight);
+
+    simulation.on("tick", () => {
+      link.attr("x1", (d) => d.source.x).attr("y1", (d) => d.source.y).attr("x2", (d) => d.target.x).attr("y2", (d) => d.target.y);
+      node.attr("cx", (d) => d.x).attr("cy", (d) => d.y);
+      label.attr("x", (d) => d.x + 10).attr("y", (d) => d.y + 4);
+    });
+
+    applyMagneticSetting();
   }
 
   exportMd.addEventListener("click", async function () {
@@ -2154,6 +2748,9 @@ This is a fully client-side application. Your content never leaves your browser 
       alert("Export failed: " + e.message);
     }
   });
+
+  desktopOpenGraphButtons.forEach((button) => button.addEventListener("click", openGraphView));
+  if (mobileOpenGraphView) mobileOpenGraphView.addEventListener("click", openGraphView);
 
   exportHtml.addEventListener("click", function () {
     try {
@@ -2658,7 +3255,7 @@ This is a fully client-side application. Your content never leaves your browser 
   // ============================================
 
   // Minimum scale factor to maintain readability (50%)
-  const MIN_SCALE_FACTOR = 0.5;
+  const MIN_SCALE_FACTOR = 0.6;
 
   /**
    * Task 1 & 2: Calculates scale factor with minimum enforcement
@@ -3087,7 +3684,7 @@ This is a fully client-side application. Your content never leaves your browser 
   });
   closeDropzoneBtn.addEventListener("click", function(e) {
     e.stopPropagation(); 
-    dropzone.style.display = "none";
+    hideSidebarDropzone();
   });
 
   function handleDrop(e) {

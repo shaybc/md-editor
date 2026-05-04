@@ -2535,7 +2535,7 @@ This is a fully client-side application. Your content never leaves your browser 
     const maxOutgoing = Math.max(1, ...Array.from(outgoingDegree.values()));
     const nodeRadius = (nodeId) => {
       const outCount = outgoingDegree.get(nodeId) || 0;
-      return (6 + (outCount / maxOutgoing) * 12) * 0.5;
+      return (6 + (outCount / maxOutgoing) * 12) * 0.8;
     };
     const width = graphViewCanvas.clientWidth || 900;
     const height = graphViewCanvas.clientHeight || 560;
@@ -3255,7 +3255,7 @@ This is a fully client-side application. Your content never leaves your browser 
   // ============================================
 
   // Minimum scale factor to maintain readability (50%)
-  const MIN_SCALE_FACTOR = 0.5;
+  const MIN_SCALE_FACTOR = 0.6;
 
   /**
    * Task 1 & 2: Calculates scale factor with minimum enforcement

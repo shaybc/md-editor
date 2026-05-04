@@ -64,6 +64,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.2.7/vfs_fonts.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pako/2.1.0/pako.min.js" integrity="sha384-rNlaE5fs9dGIjmxWDALQh/RBAaGRYT5ChrzHo6tRfgrZ36iRFAiquP5g41Jsv+0j" crossorigin="anonymous"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/js-yaml/4.1.0/js-yaml.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.9.0/d3.min.js"></script>
 </head>
 <body>
     <div class="app-container">
@@ -107,47 +108,8 @@
                     </button>
                 </div>
 
-                <!-- Right section: Toolbar -->
-                <div class="toolbar d-none d-md-flex header-right">
-                    <button id="toggle-sync" class="tool-button sync-enabled border-primary" title="Toggle Sync Scrolling">
-                        <i class="bi bi-link"></i> Sync Off
-                    </button>
-                    <div class="dropdown">
-                        <button class="tool-button dropdown-toggle" type="button" id="importDropdown" data-bs-toggle="dropdown" aria-expanded="false" title="Import Markdown">
-                            <i class="bi bi-upload"></i> Import
-                        </button>
-                        <ul class="dropdown-menu" aria-labelledby="importDropdown">
-                            <li><a class="dropdown-item" href="#" id="import-from-file">From files</a></li>
-                            <li><a class="dropdown-item" href="#" id="import-from-folder">From folder tree</a></li>
-                            <li><a class="dropdown-item" href="#" id="import-from-github">From GitHub</a></li>
-                        </ul>
-                    </div>
-                    <input type="file" id="file-input" class="file-input" accept=".md,.markdown,text/markdown">
-                    <input type="file" id="folder-input" class="file-input" webkitdirectory directory multiple>
-                    
-                    <div class="dropdown">
-                        <button class="tool-button dropdown-toggle" type="button" id="exportDropdown" data-bs-toggle="dropdown" aria-expanded="false">
-                            <i class="bi bi-download"></i> Export
-                        </button>
-                        <ul class="dropdown-menu" aria-labelledby="exportDropdown">
-                            <li><a class="dropdown-item" href="#" id="export-md">Markdown (.md)</a></li>
-                            <li><a class="dropdown-item" href="#" id="export-html">HTML</a></li>
-                            <li><a class="dropdown-item" href="#" id="export-pdf">PDF</a></li>
-                        </ul>
-                    </div>
-                    
-                    <button id="copy-markdown-button" class="tool-button" title="Copy Markdown">
-                        <i class="bi bi-clipboard"></i> Copy
-                    </button>
-                    
-                    <button id="share-button" class="tool-button" title="Share via URL">
-                        <i class="bi bi-share"></i> Share
-                    </button>
-                    
-                    <button id="theme-toggle" class="tool-button" title="Toggle Dark Mode">
-                        <i class="bi bi-moon"></i>
-                    </button>
-                </div>
+                <input type="file" id="file-input" class="file-input" accept=".md,.markdown,text/markdown">
+                <input type="file" id="folder-input" class="file-input" webkitdirectory directory multiple>
                 
                 <!-- Hamburger menu for mobile -->
                 <div class="mobile-menu d-md-none">
@@ -175,7 +137,7 @@
                                 <!-- Dynamically populated by JavaScript -->
                             </div>
                             <button id="mobile-tab-reset-btn" class="tab-reset-btn mt-2 w-100" title="Reset all files" aria-label="Reset all files">
-                                <i class="bi bi-arrow-counterclockwise"></i> Reset all files
+                                <i class="bi bi-arrow-counterclockwise"></i> Close All
                             </button>
                         </div>
 
@@ -212,8 +174,8 @@
                                 <i class="bi bi-link"></i> Sync Off
                             </button>
                             
-                            <button id="mobile-import-button" class="mobile-menu-item" title="Import from files">
-                                <i class="bi bi-upload me-2"></i> Import from files
+                            <button id="mobile-import-button" class="mobile-menu-item" title="Open file ...">
+                                <i class="bi bi-upload me-2"></i> Open file ...
                             </button>
                             
                             <button id="mobile-import-github-button" class="mobile-menu-item" title="Import from GitHub">
@@ -243,6 +205,10 @@
                             <button id="mobile-theme-toggle" class="mobile-menu-item" title="Toggle Dark Mode">
                                 <i class="bi bi-moon me-2"></i> Dark Mode
                             </button>
+
+                            <button id="mobile-open-graph-view" class="mobile-menu-item" title="Open Graph View">
+                                <i class="bi bi-diagram-3 me-2"></i> Graph View
+                            </button>
                         </div>
                     </div>
                     
@@ -253,19 +219,62 @@
 
         <!-- Tab Bar -->
         <div class="tab-bar" id="tab-bar" role="tablist" aria-label="Document tabs">
+          <div class="tree-action-menu dropdown d-none d-md-flex">
+            <button class="tool-button dropdown-toggle w-100 justify-content-start" type="button" id="desktopActionMenu" data-bs-toggle="dropdown" aria-expanded="false" title="Actions">
+              <i class="bi bi-list"></i>
+            </button>
+            <div class="dropdown-menu action-menu w-100" aria-labelledby="desktopActionMenu">
+              <button id="toggle-sync" class="dropdown-item action-menu-item sync-enabled border-primary" title="Toggle Sync Scrolling">
+                <i class="bi bi-link"></i> Sync Off
+              </button>
+              <hr class="dropdown-divider">
+              <button class="dropdown-item action-menu-item" id="import-from-file" title="Import Markdown from files">
+                <i class="bi bi-upload me-2"></i> Open file ...
+              </button>
+              <button class="dropdown-item action-menu-item" id="import-from-folder" title="Import Markdown from folder">
+                <i class="bi bi-folder2-open me-2"></i> Open folder ...
+              </button>
+              <button class="dropdown-item action-menu-item" id="import-from-github" title="Import Markdown from GitHub">
+                <i class="bi bi-github me-2"></i> Import from GitHub
+              </button>
+              <hr class="dropdown-divider">
+              <button class="dropdown-item action-menu-item" id="export-md" title="Export as Markdown">
+                <i class="bi bi-file-earmark-text me-2"></i> Export as Markdown
+              </button>
+              <button class="dropdown-item action-menu-item" id="export-html" title="Export as HTML">
+                <i class="bi bi-file-earmark-code me-2"></i> Export as HTML
+              </button>
+              <button class="dropdown-item action-menu-item" id="export-pdf" title="Export as PDF">
+                <i class="bi bi-file-earmark-pdf me-2"></i> Export as PDF
+              </button>
+              <hr class="dropdown-divider">
+              <button id="copy-markdown-button" class="dropdown-item action-menu-item" title="Copy Markdown">
+                <i class="bi bi-clipboard me-2"></i> Copy
+              </button>
+              <button id="share-button" class="dropdown-item action-menu-item" title="Share via URL">
+                <i class="bi bi-share me-2"></i> Share
+              </button>
+              <button id="theme-toggle" class="dropdown-item action-menu-item" title="Toggle Dark Mode">
+                <i class="bi bi-moon me-2"></i> Theme
+              </button>
+              <button class="dropdown-item action-menu-item open-graph-view" title="Open Graph View">
+                <i class="bi bi-diagram-3 me-2"></i> Graph View
+              </button>
+            </div>
+          </div>
           <div class="tab-list" id="tab-list"></div>
           <button class="tab-reset-btn" id="tab-reset-btn" title="Reset all files" aria-label="Reset all files">
-            <i class="bi bi-arrow-counterclockwise"></i> Reset
+            <i class="bi bi-arrow-counterclockwise"></i> Close All
           </button>
         </div>
 
         <!-- Reset Confirmation Modal -->
         <div id="reset-confirm-modal" class="reset-modal-overlay" role="dialog" aria-modal="true" aria-labelledby="reset-modal-title" style="display:none;">
           <div class="reset-modal-box">
-            <p id="reset-modal-title" class="reset-modal-message">Are you sure you want to delete all files?</p>
+            <p id="reset-modal-title" class="reset-modal-message">Are you sure you want to close all tabs ?<br>Unsaved changed will be lost, this action cannot be undone.</p>
             <div class="reset-modal-actions">
               <button class="reset-modal-btn reset-modal-cancel" id="reset-modal-cancel">Cancel</button>
-              <button class="reset-modal-btn reset-modal-confirm" id="reset-modal-confirm">Delete All</button>
+              <button class="reset-modal-btn reset-modal-confirm" id="reset-modal-confirm">Close All</button>
             </div>
           </div>
         </div>
@@ -301,21 +310,59 @@
           </div>
         </div>
 
-        <div id="dropzone" class="dropzone container-fluid mt-2">
-            <button id="close-dropzone" class="close-btn" title="Close dropzone">
-                <i class="bi bi-x-lg"></i>
-            </button>
-            <p class="mb-0"><i class="bi bi-cloud-arrow-up me-2"></i>Drop your Markdown file here or click to browse</p>
-        </div>
-
         <div class="content-container">
             <aside class="folder-tree-pane" id="folder-tree-pane">
-                <div class="folder-tree-header">
-                    <span><i class="bi bi-folder2-open me-1"></i>Folder</span>
-                    <button id="pick-folder-button" class="tool-button folder-tree-btn" title="Open folder">Open</button>
+                <div class="tree-action-menu dropdown">
+                    <button class="tool-button dropdown-toggle w-100 justify-content-center" type="button" id="desktopActionMenu" data-bs-toggle="dropdown" aria-expanded="false" title="Actions">
+                        <i class="bi bi-list"></i>
+                    </button>
+                    <div class="dropdown-menu action-menu w-100" aria-labelledby="desktopActionMenu">
+                        <button id="toggle-sync" class="dropdown-item action-menu-item sync-enabled border-primary" title="Toggle Sync Scrolling">
+                            <i class="bi bi-link"></i> Sync Off
+                        </button>
+                        <hr class="dropdown-divider">
+                        <button class="dropdown-item action-menu-item" id="import-from-file" title="Import Markdown from files">
+                            <i class="bi bi-upload me-2"></i> Open file ...
+                        </button>
+                        <button class="dropdown-item action-menu-item" id="import-from-folder" title="Import Markdown from folder">
+                            <i class="bi bi-folder2-open me-2"></i> Open folder ...
+                        </button>
+                        <button class="dropdown-item action-menu-item" id="import-from-github" title="Import Markdown from GitHub">
+                            <i class="bi bi-github me-2"></i> Import from GitHub
+                        </button>
+                        <hr class="dropdown-divider">
+                        <button class="dropdown-item action-menu-item" id="export-md" title="Export as Markdown">
+                            <i class="bi bi-file-earmark-text me-2"></i> Export as Markdown
+                        </button>
+                        <button class="dropdown-item action-menu-item" id="export-html" title="Export as HTML">
+                            <i class="bi bi-file-earmark-code me-2"></i> Export as HTML
+                        </button>
+                        <button class="dropdown-item action-menu-item" id="export-pdf" title="Export as PDF">
+                            <i class="bi bi-file-earmark-pdf me-2"></i> Export as PDF
+                        </button>
+                        <hr class="dropdown-divider">
+                        <button id="copy-markdown-button" class="dropdown-item action-menu-item" title="Copy Markdown">
+                            <i class="bi bi-clipboard me-2"></i> Copy
+                        </button>
+                        <button id="share-button" class="dropdown-item action-menu-item" title="Share via URL">
+                            <i class="bi bi-share me-2"></i> Share
+                        </button>
+                        <button id="theme-toggle" class="dropdown-item action-menu-item" title="Toggle Dark Mode">
+                            <i class="bi bi-moon me-2"></i> Theme
+                        </button>
+                    </div>
                 </div>
                 <div id="folder-tree-root" class="folder-tree-root">
                     <p class="folder-tree-placeholder">Open a folder to browse Markdown files.</p>
+                </div>
+                <div class="sidebar-dropzone-resizer" id="sidebar-dropzone-resizer" role="separator" aria-orientation="horizontal" aria-label="Resize sidebar dropzone" tabindex="0"></div>
+                <div class="sidebar-dropzone-panel">
+                    <div id="dropzone" class="dropzone">
+                        <button id="close-dropzone" class="close-btn" title="Close dropzone">
+                            <i class="bi bi-x-lg"></i>
+                        </button>
+                        <p class="mb-0"><i class="bi bi-cloud-arrow-up me-2"></i>Drop your Markdown file here or click to browse</p>
+                    </div>
                 </div>
             </aside>
             <div class="editor-pane">
@@ -365,6 +412,18 @@
     </div>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.2/js/bootstrap.bundle.min.js"></script>
+    <div id="graph-view-modal" class="graph-view-modal hidden" aria-hidden="true">
+      <div class="graph-view-content">
+        <div class="graph-view-header">
+          <h5><i class="bi bi-diagram-3 me-2"></i>Graph View</h5>
+          <button id="graph-view-close" class="tool-button" title="Close graph view">
+            <i class="bi bi-x-lg"></i>
+          </button>
+        </div>
+        <div id="graph-view-canvas" class="graph-view-canvas"></div>
+      </div>
+    </div>
+
     <script src="/js/neutralino.js"></script>
     <script src="/js/main.js"></script>
     <script src="/js/script.js"></script>
