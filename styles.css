@@ -397,9 +397,9 @@ body {
 }
 
 .graph-link.highlighted-direct {
-  stroke: #b14cff;
+  stroke: #8b5cf6;
   stroke-opacity: 1;
-  stroke-width: 1px;
+  stroke-width: 1.5px;
 }
 
 .graph-node {
