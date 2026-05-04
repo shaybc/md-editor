@@ -16,7 +16,6 @@ document.addEventListener("DOMContentLoaded", function () {
   const importFromFileButton = document.getElementById("import-from-file");
   const importFromGithubButton = document.getElementById("import-from-github");
   const importFromFolderButton = document.getElementById("import-from-folder");
-  const pickFolderButton = document.getElementById("pick-folder-button");
   let folderTreeRoot = document.getElementById("folder-tree-root");
 
   console.error("[FolderTree] init", {
@@ -52,10 +51,6 @@ document.addEventListener("DOMContentLoaded", function () {
     pane.className = "folder-tree-pane";
     pane.id = "folder-tree-pane";
     pane.innerHTML = `
-      <div class="folder-tree-header">
-        <span><i class="bi bi-folder2-open me-1"></i>Folder</span>
-        <button id="pick-folder-button" class="tool-button folder-tree-btn" title="Open folder">Open</button>
-      </div>
       <div class="tree-action-menu dropdown">
         <button class="tool-button dropdown-toggle w-100 justify-content-center" type="button" id="desktopActionMenu" data-bs-toggle="dropdown" aria-expanded="false" title="Actions">
           <i class="bi bi-list"></i>
@@ -2208,10 +2203,6 @@ This is a fully client-side application. Your content never leaves your browser 
       e.preventDefault();
       openFolderTree();
     });
-  }
-
-  if (pickFolderButton) {
-    pickFolderButton.addEventListener("click", openFolderTree);
   }
 
   if (importFromGithubButton) {
