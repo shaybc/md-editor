@@ -410,6 +410,7 @@ body {
 .graph-arrowhead {
   fill: #ffffff;
   opacity: 0.95;
+  transition: opacity 0.15s ease, fill 0.15s ease;
 }
 
 .graph-label {
@@ -426,6 +427,15 @@ body {
 
 .graph-link.dimmed {
   opacity: 0.08;
+}
+
+.graph-arrowhead.dimmed {
+  opacity: 0.08;
+}
+
+.graph-arrowhead.highlighted-direct {
+  fill: #8b5cf6;
+  opacity: 1;
 }
 
 .graph-context-menu {

@@ -2578,30 +2578,24 @@ This is a fully client-side application. Your content never leaves your browser 
       .force("charge", baseChargeForce)
       .force("center", baseCenterForce)
       .force("collision", d3.forceCollide().radius((d) => nodeRadius(d.id) + 30).strength(0.9));
-    const defs = svg.append("defs");
-    defs.append("marker")
-      .attr("id", "graph-arrowhead")
-      .attr("viewBox", "0 -4 9 8")
-      .attr("refX", 9)
-      .attr("refY", 0)
-      .attr("markerWidth", 5)
-      .attr("markerHeight", 5)
-      .attr("orient", "auto")
-      .append("path")
-      .attr("class", "graph-arrowhead")
-      .attr("d", "M0,-4L9,0L0,4");
+    const linkLayer = graphLayer.append("g").attr("class", "graph-links-layer");
+    const arrowheadLayer = graphLayer.append("g").attr("class", "graph-arrowheads-layer");
+    const nodeLayer = graphLayer.append("g").attr("class", "graph-nodes-layer");
+    const labelLayer = graphLayer.append("g").attr("class", "graph-labels-layer");
 
-    const link = graphLayer.append("g").selectAll("line").data(links).enter().append("line")
-      .attr("class", "graph-link")
-      .attr("marker-end", "url(#graph-arrowhead)");
-    const node = graphLayer.append("g").selectAll("circle").data(nodes).enter().append("circle")
+    const link = linkLayer.selectAll("line").data(links).enter().append("line")
+      .attr("class", "graph-link");
+    const arrowheads = arrowheadLayer.selectAll("path").data(links).enter().append("path")
+      .attr("class", "graph-arrowhead")
+      .attr("d", "M0,0L-10,4L-10,-4Z");
+    const node = nodeLayer.selectAll("circle").data(nodes).enter().append("circle")
       .attr("r", (d) => nodeRadius(d.id)).attr("class", "graph-node")
       .call(d3.drag()
         .on("start", (event, d) => { if (!event.active) simulation.alphaTarget(0.3).restart(); d.fx = d.x; d.fy = d.y; })
         .on("drag", (event, d) => { d.fx = event.x; d.fy = event.y; })
         .on("end", (event, d) => { if (!event.active) simulation.alphaTarget(0); d.fx = null; d.fy = null; }));
     node.append("title").text((d) => d.fullPath || d.label);
-    const label = graphLayer.append("g").selectAll("text").data(nodes).enter().append("text").text((d) => d.label).attr("class", "graph-label");
+    const label = labelLayer.selectAll("text").data(nodes).enter().append("text").text((d) => d.label).attr("class", "graph-label");
 
     const contextMenu = document.createElement("div");
     contextMenu.className = "graph-context-menu hidden";
@@ -2732,12 +2726,16 @@ This is a fully client-side application. Your content never leaves your browser 
       link
         .classed("dimmed", (l) => !(l.source.id === focusNode.id || l.target.id === focusNode.id))
         .classed("highlighted-direct", (l) => l.source.id === focusNode.id || l.target.id === focusNode.id);
+      arrowheads
+        .classed("dimmed", (l) => !(l.source.id === focusNode.id || l.target.id === focusNode.id))
+        .classed("highlighted-direct", (l) => l.source.id === focusNode.id || l.target.id === focusNode.id);
     }
 
     function clearNeighborhoodHighlight() {
       node.classed("dimmed", false);
       label.classed("dimmed", false);
       link.classed("dimmed", false).classed("highlighted-direct", false);
+      arrowheads.classed("dimmed", false).classed("highlighted-direct", false);
     }
 
     node
@@ -2752,6 +2750,11 @@ This is a fully client-side application. Your content never leaves your browser 
           .attr("y1", endpoint.y1)
           .attr("x2", endpoint.x2)
           .attr("y2", endpoint.y2);
+      });
+      arrowheads.attr("transform", (d) => {
+        const endpoint = getLinkEndpoint(d);
+        const angle = Math.atan2(endpoint.y2 - endpoint.y1, endpoint.x2 - endpoint.x1) * (180 / Math.PI);
+        return `translate(${endpoint.x2},${endpoint.y2}) rotate(${angle})`;
       });
       node.attr("cx", (d) => d.x).attr("cy", (d) => d.y);
       label.attr("x", (d) => d.x + 10).attr("y", (d) => d.y + 4);
