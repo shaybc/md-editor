@@ -145,6 +145,11 @@ document.addEventListener("DOMContentLoaded", function () {
   const mobileExportPdf     = document.getElementById("mobile-export-pdf");
   const mobileCopyMarkdown  = document.getElementById("mobile-copy-markdown");
   const mobileThemeToggle   = document.getElementById("mobile-theme-toggle");
+  const mobileOpenGraphView = document.getElementById("mobile-open-graph-view");
+  const desktopOpenGraphButtons = document.querySelectorAll(".open-graph-view");
+  const graphViewModal = document.getElementById("graph-view-modal");
+  const graphViewClose = document.getElementById("graph-view-close");
+  const graphViewCanvas = document.getElementById("graph-view-canvas");
   const shareButton         = document.getElementById("share-button");
   const mobileShareButton   = document.getElementById("mobile-share-button");
   const githubImportModal = document.getElementById("github-import-modal");
@@ -555,6 +560,7 @@ This is a fully client-side application. Your content never leaves your browser 
   const UNTITLED_COUNTER_KEY = 'markdownViewerUntitledCounter';
   let tabs = [];
   let activeTabId = null;
+  let folderMarkdownFiles = [];
   let draggedTabId = null;
   let saveTabStateTimeout = null;
   let untitledCounter = 0;
@@ -1163,6 +1169,29 @@ This is a fully client-side application. Your content never leaves your browser 
     return entries;
   }
 
+  async function collectMarkdownFilesFromTree(nodes, parentPath = "") {
+    const files = [];
+    for (const node of (nodes || [])) {
+      const currentPath = parentPath ? `${parentPath}/${node.name}` : node.name;
+      if (node.kind === "directory") {
+        const nestedFiles = await collectMarkdownFilesFromTree(node.children || [], currentPath);
+        files.push(...nestedFiles);
+      } else if (node.kind === "file") {
+        if (node.file) {
+          files.push({ path: currentPath, file: node.file });
+        } else if (node.handle) {
+          try {
+            const file = await node.handle.getFile();
+            files.push({ path: currentPath, file });
+          } catch (error) {
+            console.warn("Failed to read file handle for graph view:", currentPath, error);
+          }
+        }
+      }
+    }
+    return files;
+  }
+
   function renderFolderTreeNode(node) {
     const li = document.createElement("li");
     li.className = "folder-tree-item";
@@ -1243,7 +1272,7 @@ This is a fully client-side application. Your content never leaves your browser 
       relPath.forEach((segment) => {
         cursor = ensureDir(cursor, segment).children;
       });
-      cursor.push({ kind: "file", name: fileName, file });
+      cursor.push({ kind: "file", name: fileName, file, path: (file.webkitRelativePath || file.name) });
     });
 
     const sortNodes = (nodes) => {
@@ -1259,6 +1288,7 @@ This is a fully client-side application. Your content never leaves your browser 
       try {
         const dirHandle = await window.showDirectoryPicker();
         const nodes = await listMarkdownTree(dirHandle);
+        folderMarkdownFiles = await collectMarkdownFilesFromTree(nodes);
         folderTreeRoot.innerHTML = "";
         if (!nodes.length) {
           folderTreeRoot.innerHTML = '<p class="folder-tree-placeholder">No Markdown files found in this folder.</p>';
@@ -2270,6 +2300,9 @@ This is a fully client-side application. Your content never leaves your browser 
   if (folderInput) {
     folderInput.addEventListener("change", function(e) {
       const files = e.target.files;
+      folderMarkdownFiles = Array.from(files || [])
+        .filter((file) => /\.(md|markdown)$/i.test(file.name))
+        .map((file) => ({ path: file.webkitRelativePath || file.name, file }));
       const nodes = buildTreeFromFileList(files || []);
       folderTreeRoot.innerHTML = "";
       if (!nodes.length) {
@@ -2281,6 +2314,169 @@ This is a fully client-side application. Your content never leaves your browser 
         folderTreeRoot.appendChild(ul);
       }
       this.value = "";
+    });
+  }
+
+  function normalizeGraphNodeName(path) {
+    return (path || "")
+      .replace(/\\/g, "/")
+      .replace(/^\/+/, "")
+      .replace(/\.(md|markdown)$/i, "")
+      .replace(/\/+/g, "/")
+      .toLowerCase();
+  }
+
+  function resolveGraphTargetId(reference, sourcePath, nodeIndex) {
+    const ref = (reference || "").trim();
+    if (!ref) return null;
+    if (/^(https?:)?\/\//i.test(ref)) return null;
+
+    const cleanedRef = ref
+      .replace(/^\.\//, "")
+      .replace(/^\/+/, "")
+      .replace(/\\/g, "/");
+
+    const sourceDir = (sourcePath || "").split("/").slice(0, -1).join("/");
+    const relativeCandidate = normalizeGraphNodeName(sourceDir ? `${sourceDir}/${cleanedRef}` : cleanedRef);
+    if (nodeIndex.has(relativeCandidate)) return relativeCandidate;
+
+    const directCandidate = normalizeGraphNodeName(cleanedRef);
+    if (nodeIndex.has(directCandidate)) return directCandidate;
+
+    const basenameCandidate = normalizeGraphNodeName(cleanedRef.split("/").pop() || "");
+    if (!basenameCandidate) return null;
+
+    const suffixMatches = Array.from(nodeIndex.keys()).filter((id) =>
+      id === basenameCandidate || id.endsWith(`/${basenameCandidate}`)
+    );
+
+    if (suffixMatches.length === 1) return suffixMatches[0];
+    return null;
+  }
+
+  function extractMarkdownLinks(markdown) {
+    const links = [];
+    const mdLinkRegex = /\[[^\]]*?\]\(([^)]+)\)/g;
+    const wikiLinkRegex = /\[\[([^\]]+)\]\]/g;
+    let match;
+    while ((match = mdLinkRegex.exec(markdown || "")) !== null) links.push(match[1]);
+    while ((match = wikiLinkRegex.exec(markdown || "")) !== null) links.push(match[1]);
+    return links.map((link) => link.split("#")[0].trim()).filter(Boolean);
+  }
+
+  async function openGraphView() {
+    if (!graphViewModal || !graphViewCanvas) return;
+    graphViewModal.classList.remove("hidden");
+    graphViewModal.setAttribute("aria-hidden", "false");
+    await renderGraphView();
+  }
+
+  function closeGraphView() {
+    if (!graphViewModal) return;
+    graphViewModal.classList.add("hidden");
+    graphViewModal.setAttribute("aria-hidden", "true");
+  }
+
+  async function renderGraphView() {
+    if (!graphViewCanvas) return;
+    graphViewCanvas.innerHTML = "";
+    const files = folderMarkdownFiles || [];
+    if (!files.length) {
+      graphViewCanvas.innerHTML = '<p class="folder-tree-placeholder">Open a folder first to build the graph view.</p>';
+      return;
+    }
+    const nodes = [];
+    const links = [];
+    const seenEdges = new Set();
+    const nodeIndex = new Map();
+    for (const fileEntry of files) {
+      const path = fileEntry.path || fileEntry.file?.webkitRelativePath || fileEntry.file?.name || "";
+      const id = normalizeGraphNodeName(path);
+      nodeIndex.set(id, path);
+      nodes.push({ id, label: path });
+    }
+    for (const fileEntry of files) {
+      const srcPath = fileEntry.path || fileEntry.file?.webkitRelativePath || fileEntry.file?.name || "";
+      const source = normalizeGraphNodeName(srcPath);
+      const text = await fileEntry.file.text();
+      extractMarkdownLinks(text).forEach((ref) => {
+        const target = resolveGraphTargetId(ref, srcPath, nodeIndex);
+        if (!target || target === source) return;
+        const edgeKey = `${source}->${target}`;
+        if (seenEdges.has(edgeKey)) return;
+        seenEdges.add(edgeKey);
+        links.push({ source, target });
+      });
+    }
+    const adjacency = new Map();
+    nodes.forEach((n) => adjacency.set(n.id, new Set([n.id])));
+    links.forEach((l) => {
+      adjacency.get(l.source)?.add(l.target);
+      adjacency.get(l.target)?.add(l.source);
+    });
+    const width = graphViewCanvas.clientWidth || 900;
+    const height = graphViewCanvas.clientHeight || 560;
+    const svg = d3.select(graphViewCanvas).append("svg").attr("width", width).attr("height", height);
+    const graphLayer = svg.append("g").attr("class", "graph-layer");
+
+    const zoomBehavior = d3.zoom()
+      .scaleExtent([0.2, 4])
+      .on("zoom", (event) => {
+        graphLayer.attr("transform", event.transform);
+      });
+
+    svg.call(zoomBehavior).on("dblclick.zoom", null);
+
+    const simulation = d3.forceSimulation(nodes)
+      .force("link", d3.forceLink(links).id((d) => d.id).distance(80))
+      .force("charge", d3.forceManyBody().strength(-240))
+      .force("center", d3.forceCenter(width / 2, height / 2));
+    const defs = svg.append("defs");
+    defs.append("marker")
+      .attr("id", "graph-arrowhead")
+      .attr("viewBox", "0 -5 10 10")
+      .attr("refX", 16)
+      .attr("refY", 0)
+      .attr("markerWidth", 7)
+      .attr("markerHeight", 7)
+      .attr("orient", "auto")
+      .append("path")
+      .attr("class", "graph-arrowhead")
+      .attr("d", "M0,-5L10,0L0,5");
+
+    const link = graphLayer.append("g").selectAll("line").data(links).enter().append("line")
+      .attr("class", "graph-link")
+      .attr("marker-end", "url(#graph-arrowhead)");
+    const node = graphLayer.append("g").selectAll("circle").data(nodes).enter().append("circle")
+      .attr("r", 8).attr("class", "graph-node")
+      .call(d3.drag()
+        .on("start", (event, d) => { if (!event.active) simulation.alphaTarget(0.3).restart(); d.fx = d.x; d.fy = d.y; })
+        .on("drag", (event, d) => { d.fx = event.x; d.fy = event.y; })
+        .on("end", (event, d) => { if (!event.active) simulation.alphaTarget(0); d.fx = null; d.fy = null; }));
+    node.append("title").text((d) => d.label);
+    const label = graphLayer.append("g").selectAll("text").data(nodes).enter().append("text").text((d) => d.label).attr("class", "graph-label");
+
+    function highlightNeighborhood(focusNode) {
+      const connected = adjacency.get(focusNode.id) || new Set([focusNode.id]);
+      node.classed("dimmed", (n) => !connected.has(n.id));
+      label.classed("dimmed", (n) => !connected.has(n.id));
+      link.classed("dimmed", (l) => !(l.source.id === focusNode.id || l.target.id === focusNode.id));
+    }
+
+    function clearNeighborhoodHighlight() {
+      node.classed("dimmed", false);
+      label.classed("dimmed", false);
+      link.classed("dimmed", false);
+    }
+
+    node
+      .on("mouseenter", (event, d) => highlightNeighborhood(d))
+      .on("mouseleave", clearNeighborhoodHighlight);
+
+    simulation.on("tick", () => {
+      link.attr("x1", (d) => d.source.x).attr("y1", (d) => d.source.y).attr("x2", (d) => d.target.x).attr("y2", (d) => d.target.y);
+      node.attr("cx", (d) => d.x).attr("cy", (d) => d.y);
+      label.attr("x", (d) => d.x + 10).attr("y", (d) => d.y + 4);
     });
   }
 
@@ -2298,6 +2494,10 @@ This is a fully client-side application. Your content never leaves your browser 
       alert("Export failed: " + e.message);
     }
   });
+
+  desktopOpenGraphButtons.forEach((button) => button.addEventListener("click", openGraphView));
+  if (mobileOpenGraphView) mobileOpenGraphView.addEventListener("click", openGraphView);
+  if (graphViewClose) graphViewClose.addEventListener("click", closeGraphView);
 
   exportHtml.addEventListener("click", function () {
     try {
