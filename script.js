@@ -117,6 +117,7 @@ document.addEventListener("DOMContentLoaded", function () {
   ensureFolderTreePane();
   folderTreeRoot = document.getElementById("folder-tree-root");
   const folderTreePane = document.getElementById("folder-tree-pane");
+  document.querySelectorAll("#folder-tree-pane .tree-action-menu").forEach((node) => node.remove());
   const sidebarDropzonePanel = document.querySelector(".sidebar-dropzone-panel");
   const sidebarDropzoneResizer = document.getElementById("sidebar-dropzone-resizer");
 
