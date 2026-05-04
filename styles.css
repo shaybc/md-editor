@@ -276,6 +276,34 @@ body {
   gap: 8px;
 }
 
+.tree-action-menu {
+  width: 280px;
+  min-width: 220px;
+  flex: 0 0 280px;
+  margin: 0;
+  padding-right: 4px;
+  border-right: 1px solid var(--border-color);
+}
+
+.tree-action-menu .action-menu {
+  min-width: 100%;
+  background-color: var(--header-bg);
+  border-color: var(--border-color);
+}
+
+.tree-action-menu .action-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  color: var(--text-color);
+}
+
+.tree-action-menu .action-menu-item:hover,
+.tree-action-menu .action-menu-item:focus {
+  background-color: var(--button-hover);
+  color: var(--text-color);
+}
+
 .tool-button {
   background-color: var(--button-bg);
   border: 1px solid var(--border-color);
