@@ -66,10 +66,10 @@ document.addEventListener("DOMContentLoaded", function () {
           </button>
           <hr class="dropdown-divider">
           <button class="dropdown-item action-menu-item" id="import-from-file" title="Import Markdown from files">
-            <i class="bi bi-upload me-2"></i> Import from files
+            <i class="bi bi-upload me-2"></i> Open file ...
           </button>
           <button class="dropdown-item action-menu-item" id="import-from-folder" title="Import Markdown from folder">
-            <i class="bi bi-folder2-open me-2"></i> Import from folder tree
+            <i class="bi bi-folder2-open me-2"></i> Open folder ...
           </button>
           <button class="dropdown-item action-menu-item" id="import-from-github" title="Import Markdown from GitHub">
             <i class="bi bi-github me-2"></i> Import from GitHub
