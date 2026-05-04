@@ -2529,7 +2529,7 @@ This is a fully client-side application. Your content never leaves your browser 
     const maxOutgoing = Math.max(1, ...Array.from(outgoingDegree.values()));
     const nodeRadius = (nodeId) => {
       const outCount = outgoingDegree.get(nodeId) || 0;
-      return 6 + (outCount / maxOutgoing) * 12;
+      return (6 + (outCount / maxOutgoing) * 12) * 0.8;
     };
     const width = graphViewCanvas.clientWidth || 900;
     const height = graphViewCanvas.clientHeight || 560;
@@ -2555,15 +2555,15 @@ This is a fully client-side application. Your content never leaves your browser 
     const defs = svg.append("defs");
     defs.append("marker")
       .attr("id", "graph-arrowhead")
-      .attr("viewBox", "0 -5 10 10")
-      .attr("refX", 16)
+      .attr("viewBox", "0 -4 9 8")
+      .attr("refX", 13)
       .attr("refY", 0)
-      .attr("markerWidth", 7)
-      .attr("markerHeight", 7)
+      .attr("markerWidth", 5)
+      .attr("markerHeight", 5)
       .attr("orient", "auto")
       .append("path")
       .attr("class", "graph-arrowhead")
-      .attr("d", "M0,-5L10,0L0,5");
+      .attr("d", "M0,-4L9,0L0,4");
 
     const link = graphLayer.append("g").selectAll("line").data(links).enter().append("line")
       .attr("class", "graph-link")
