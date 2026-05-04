@@ -147,8 +147,6 @@ document.addEventListener("DOMContentLoaded", function () {
   const mobileThemeToggle   = document.getElementById("mobile-theme-toggle");
   const mobileOpenGraphView = document.getElementById("mobile-open-graph-view");
   const desktopOpenGraphButtons = document.querySelectorAll(".open-graph-view");
-  const graphViewModal = document.getElementById("graph-view-modal");
-  const graphViewClose = document.getElementById("graph-view-close");
   const graphViewCanvas = document.getElementById("graph-view-canvas");
   const shareButton         = document.getElementById("share-button");
   const mobileShareButton   = document.getElementById("mobile-share-button");
@@ -561,6 +559,7 @@ This is a fully client-side application. Your content never leaves your browser 
   let tabs = [];
   let activeTabId = null;
   let folderMarkdownFiles = [];
+  let activeFolderName = "Graph View";
   let draggedTabId = null;
   let saveTabStateTimeout = null;
   let untitledCounter = 0;
@@ -617,8 +616,17 @@ This is a fully client-side application. Your content never leaves your browser 
       isTemporary: false,
       sourceFileName: null,
       sourceFileHandle: null,
-      savedContent: content
+      savedContent: content,
+      type: "markdown",
+      folderName: null
     };
+  }
+
+  function createGraphTab(folderName) {
+    const tab = createTab("", folderName || "Graph View", "preview");
+    tab.type = "graph";
+    tab.folderName = folderName || "Graph View";
+    return tab;
   }
 
   function getTabDisplayName(tab) {
@@ -641,8 +649,12 @@ This is a fully client-side application. Your content never leaves your browser 
       const titleSpan = document.createElement('span');
       titleSpan.className = 'tab-title' + (tab.isTemporary ? ' temporary' : '');
       const displayName = getTabDisplayName(tab);
-      titleSpan.textContent = displayName;
       titleSpan.title = displayName;
+      if (tab.type === "graph") {
+        titleSpan.innerHTML = `<i class="bi bi-diagram-3 me-1"></i>${displayName}`;
+      } else {
+        titleSpan.textContent = displayName;
+      }
 
       // Three-dot menu button
       const menuBtn = document.createElement('button');
@@ -655,8 +667,8 @@ This is a fully client-side application. Your content never leaves your browser 
       const dropdown = document.createElement('div');
       dropdown.className = 'tab-menu-dropdown';
       dropdown.innerHTML =
-        '<button class="tab-menu-item" data-action="rename"><i class="bi bi-pencil"></i> Rename</button>' +
-        '<button class="tab-menu-item" data-action="duplicate"><i class="bi bi-files"></i> Duplicate</button>' +
+        (tab.type === "graph" ? '' : '<button class="tab-menu-item" data-action="rename"><i class="bi bi-pencil"></i> Rename</button>' +
+        '<button class="tab-menu-item" data-action="duplicate"><i class="bi bi-files"></i> Duplicate</button>') +
         '<button class="tab-menu-item tab-menu-item-danger" data-action="close"><i class="bi bi-x-lg"></i> Close</button>';
 
       menuBtn.appendChild(dropdown);
@@ -767,8 +779,12 @@ This is a fully client-side application. Your content never leaves your browser 
       const titleSpan = document.createElement('span');
       titleSpan.className = 'mobile-tab-title' + (tab.isTemporary ? ' temporary' : '');
       const displayName = getTabDisplayName(tab);
-      titleSpan.textContent = displayName;
       titleSpan.title = displayName;
+      if (tab.type === "graph") {
+        titleSpan.innerHTML = `<i class="bi bi-diagram-3 me-1"></i>${displayName}`;
+      } else {
+        titleSpan.textContent = displayName;
+      }
 
       // Three-dot menu button (same as desktop)
       const menuBtn = document.createElement('button');
@@ -781,8 +797,8 @@ This is a fully client-side application. Your content never leaves your browser 
       const dropdown = document.createElement('div');
       dropdown.className = 'tab-menu-dropdown';
       dropdown.innerHTML =
-        '<button class="tab-menu-item" data-action="rename"><i class="bi bi-pencil"></i> Rename</button>' +
-        '<button class="tab-menu-item" data-action="duplicate"><i class="bi bi-files"></i> Duplicate</button>' +
+        (tab.type === "graph" ? '' : '<button class="tab-menu-item" data-action="rename"><i class="bi bi-pencil"></i> Rename</button>' +
+        '<button class="tab-menu-item" data-action="duplicate"><i class="bi bi-files"></i> Duplicate</button>') +
         '<button class="tab-menu-item tab-menu-item-danger" data-action="close"><i class="bi bi-x-lg"></i> Close</button>';
 
       menuBtn.appendChild(dropdown);
@@ -841,6 +857,7 @@ This is a fully client-side application. Your content never leaves your browser 
   function saveCurrentTabState() {
     const tab = tabs.find(function(t) { return t.id === activeTabId; });
     if (!tab) return;
+    if (tab.type === "graph") return;
     tab.content = markdownEditor.value;
     tab.scrollPos = markdownEditor.scrollTop;
     tab.viewMode = currentViewMode || 'split';
@@ -859,6 +876,13 @@ This is a fully client-side application. Your content never leaves your browser 
     saveActiveTabId(activeTabId);
     const tab = tabs.find(function(t) { return t.id === tabId; });
     if (!tab) return;
+    if (tab.type === "graph") {
+      setGraphViewMode(true);
+      renderTabBar(tabs, activeTabId);
+      renderGraphView();
+      return;
+    }
+    setGraphViewMode(false);
     markdownEditor.value = tab.content;
     restoreViewMode(tab.viewMode);
     renderMarkdown();
@@ -963,6 +987,14 @@ This is a fully client-side application. Your content never leaves your browser 
       activeTabId = tabs[newIdx].id;
       saveActiveTabId(activeTabId);
       const newActiveTab = tabs[newIdx];
+      if (newActiveTab.type === 'graph') {
+        setGraphViewMode(true);
+        renderTabBar(tabs, activeTabId);
+        renderGraphView();
+        saveTabsToStorage(tabs);
+        return;
+      }
+      setGraphViewMode(false);
       markdownEditor.value = newActiveTab.content;
       restoreViewMode(newActiveTab.viewMode);
       renderMarkdown();
@@ -1078,6 +1110,7 @@ This is a fully client-side application. Your content never leaves your browser 
     tabs = loadTabsFromStorage();
     tabs.forEach(function(tab) {
       if (typeof tab.savedContent !== 'string') tab.savedContent = tab.content || '';
+      if (!tab.type) tab.type = 'markdown';
     });
     activeTabId = loadActiveTabId();
     if (tabs.length === 0) {
@@ -1091,6 +1124,13 @@ This is a fully client-side application. Your content never leaves your browser 
       saveActiveTabId(activeTabId);
     }
     const activeTab = tabs.find(function(t) { return t.id === activeTabId; });
+    if (activeTab.type === 'graph') {
+      setGraphViewMode(true);
+      renderTabBar(tabs, activeTabId);
+      renderGraphView();
+      return;
+    }
+    setGraphViewMode(false);
     markdownEditor.value = activeTab.content;
     restoreViewMode(activeTab.viewMode);
     renderMarkdown();
@@ -1287,6 +1327,7 @@ This is a fully client-side application. Your content never leaves your browser 
     if (window.showDirectoryPicker) {
       try {
         const dirHandle = await window.showDirectoryPicker();
+        activeFolderName = dirHandle && dirHandle.name ? dirHandle.name : "Graph View";
         const nodes = await listMarkdownTree(dirHandle);
         folderMarkdownFiles = await collectMarkdownFilesFromTree(nodes);
         folderTreeRoot.innerHTML = "";
@@ -2365,16 +2406,35 @@ This is a fully client-side application. Your content never leaves your browser 
   }
 
   async function openGraphView() {
-    if (!graphViewModal || !graphViewCanvas) return;
-    graphViewModal.classList.remove("hidden");
-    graphViewModal.setAttribute("aria-hidden", "false");
-    await renderGraphView();
+    let graphTab = tabs.find((tab) => tab.type === "graph");
+    if (!graphTab) {
+      if (tabs.length >= 20) {
+        alert('Maximum of 20 tabs reached. Please close an existing tab to open a new one.');
+        return;
+      }
+      graphTab = createGraphTab(activeFolderName);
+      tabs.push(graphTab);
+    }
+    graphTab.title = activeFolderName || "Graph View";
+    graphTab.folderName = graphTab.title;
+    switchTab(graphTab.id);
+    saveTabsToStorage(tabs);
   }
 
-  function closeGraphView() {
-    if (!graphViewModal) return;
-    graphViewModal.classList.add("hidden");
-    graphViewModal.setAttribute("aria-hidden", "true");
+  function setGraphViewMode(enabled) {
+    const appBody = document.querySelector(".app-body");
+    if (!appBody || !graphViewCanvas) return;
+    if (enabled) {
+      appBody.classList.add("graph-view-active");
+      if (!graphViewCanvas.parentElement || !graphViewCanvas.closest(".preview-pane")) {
+        const previewPane = document.querySelector(".preview-pane");
+        if (previewPane) previewPane.appendChild(graphViewCanvas);
+      }
+      graphViewCanvas.classList.add("tab-graph-canvas");
+    } else {
+      appBody.classList.remove("graph-view-active");
+      graphViewCanvas.classList.remove("tab-graph-canvas");
+    }
   }
 
   async function renderGraphView() {
@@ -2505,7 +2565,6 @@ This is a fully client-side application. Your content never leaves your browser 
 
   desktopOpenGraphButtons.forEach((button) => button.addEventListener("click", openGraphView));
   if (mobileOpenGraphView) mobileOpenGraphView.addEventListener("click", openGraphView);
-  if (graphViewClose) graphViewClose.addEventListener("click", closeGraphView);
 
   exportHtml.addEventListener("click", function () {
     try {
