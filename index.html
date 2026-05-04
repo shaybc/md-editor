@@ -64,6 +64,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.2.7/vfs_fonts.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pako/2.1.0/pako.min.js" integrity="sha384-rNlaE5fs9dGIjmxWDALQh/RBAaGRYT5ChrzHo6tRfgrZ36iRFAiquP5g41Jsv+0j" crossorigin="anonymous"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/js-yaml/4.1.0/js-yaml.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.9.0/d3.min.js"></script>
 </head>
 <body>
     <div class="app-container">
@@ -201,6 +202,10 @@
                             <button id="mobile-theme-toggle" class="mobile-menu-item" title="Toggle Dark Mode">
                                 <i class="bi bi-moon me-2"></i> Dark Mode
                             </button>
+
+                            <button id="mobile-open-graph-view" class="mobile-menu-item" title="Open Graph View">
+                                <i class="bi bi-diagram-3 me-2"></i> Graph View
+                            </button>
                         </div>
                     </div>
                     
@@ -248,6 +253,9 @@
               </button>
               <button id="theme-toggle" class="dropdown-item action-menu-item" title="Toggle Dark Mode">
                 <i class="bi bi-moon me-2"></i> Theme
+              </button>
+              <button class="dropdown-item action-menu-item open-graph-view" title="Open Graph View">
+                <i class="bi bi-diagram-3 me-2"></i> Graph View
               </button>
             </div>
           </div>
@@ -401,6 +409,18 @@
     </div>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.2/js/bootstrap.bundle.min.js"></script>
+    <div id="graph-view-modal" class="graph-view-modal hidden" aria-hidden="true">
+      <div class="graph-view-content">
+        <div class="graph-view-header">
+          <h5><i class="bi bi-diagram-3 me-2"></i>Graph View</h5>
+          <button id="graph-view-close" class="tool-button" title="Close graph view">
+            <i class="bi bi-x-lg"></i>
+          </button>
+        </div>
+        <div id="graph-view-canvas" class="graph-view-canvas"></div>
+      </div>
+    </div>
+
     <script src="script.js"></script>
 </body>
 </html>
