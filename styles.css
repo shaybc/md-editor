@@ -2093,8 +2093,13 @@ a:focus {
 }
 .folder-tree-list { list-style: none; padding-left: 14px; margin: 0; }
 .folder-tree-item { margin: 2px 0; }
-.folder-tree-label { display: inline-flex; align-items: center; gap: 6px; color: var(--text-color); }
-.folder-tree-file { cursor: pointer; border: 0; background: transparent; color: var(--text-color); padding: 2px 4px; border-radius: 4px; }
+.folder-tree-label { display: inline-flex; align-items: center; gap: 6px; color: var(--text-color); white-space: nowrap; }
+.folder-tree-file { cursor: pointer; border: 0; background: transparent; color: var(--text-color); padding: 2px 4px; border-radius: 4px; white-space: nowrap; word-break: normal; overflow-wrap: normal; }
+.folder-tree-list,
+.folder-tree-item {
+  width: max-content;
+  min-width: 100%;
+}
 .folder-tree-file:hover { background: var(--button-hover); }
 .folder-tree-placeholder { color: #8b949e; margin: 6px 2px; }
 
