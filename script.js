@@ -2726,7 +2726,35 @@ This is a fully client-side application. Your content never leaves your browser 
       .on("mouseleave", clearNeighborhoodHighlight);
 
     simulation.on("tick", () => {
-      link.attr("x1", (d) => d.source.x).attr("y1", (d) => d.source.y).attr("x2", (d) => d.target.x).attr("y2", (d) => d.target.y);
+      link
+        .attr("x1", (d) => {
+          const dx = d.target.x - d.source.x;
+          const dy = d.target.y - d.source.y;
+          const distance = Math.hypot(dx, dy) || 1;
+          const sourceOffset = nodeRadius(d.source.id);
+          return d.source.x + (dx / distance) * sourceOffset;
+        })
+        .attr("y1", (d) => {
+          const dx = d.target.x - d.source.x;
+          const dy = d.target.y - d.source.y;
+          const distance = Math.hypot(dx, dy) || 1;
+          const sourceOffset = nodeRadius(d.source.id);
+          return d.source.y + (dy / distance) * sourceOffset;
+        })
+        .attr("x2", (d) => {
+          const dx = d.target.x - d.source.x;
+          const dy = d.target.y - d.source.y;
+          const distance = Math.hypot(dx, dy) || 1;
+          const targetOffset = nodeRadius(d.target.id) + 4;
+          return d.target.x - (dx / distance) * targetOffset;
+        })
+        .attr("y2", (d) => {
+          const dx = d.target.x - d.source.x;
+          const dy = d.target.y - d.source.y;
+          const distance = Math.hypot(dx, dy) || 1;
+          const targetOffset = nodeRadius(d.target.id) + 4;
+          return d.target.y - (dy / distance) * targetOffset;
+        });
       node.attr("cx", (d) => d.x).attr("cy", (d) => d.y);
       label.attr("x", (d) => d.x + 10).attr("y", (d) => d.y + 4);
     });
