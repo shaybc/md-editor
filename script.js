@@ -880,6 +880,7 @@ This is a fully client-side application. Your content never leaves your browser 
     const tab = tabs.find(function(t) { return t.id === tabId; });
     if (!tab) return;
     if (tab.type === "graph") {
+      setViewMode('preview');
       setGraphViewMode(true);
       renderTabBar(tabs, activeTabId);
       renderGraphView();
@@ -1128,6 +1129,7 @@ This is a fully client-side application. Your content never leaves your browser 
     }
     const activeTab = tabs.find(function(t) { return t.id === activeTabId; });
     if (activeTab.type === 'graph') {
+      setViewMode('preview');
       setGraphViewMode(true);
       renderTabBar(tabs, activeTabId);
       renderGraphView();
