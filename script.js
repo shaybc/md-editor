@@ -1332,7 +1332,9 @@ This is a fully client-side application. Your content never leaves your browser 
   }
 
   async function openFolderTree() {
-    if (window.showDirectoryPicker) {
+    const isDesktopApp = typeof window !== "undefined" && typeof window.Neutralino !== "undefined";
+
+    if (window.showDirectoryPicker && !isDesktopApp) {
       try {
         const dirHandle = await window.showDirectoryPicker();
         activeFolderName = dirHandle && dirHandle.name ? dirHandle.name : "Graph View";
