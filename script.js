@@ -1,4 +1,14 @@
 document.addEventListener("DOMContentLoaded", function () {
+  const startupLog = (step, details = {}) => {
+    const timestamp = new Date().toISOString();
+    console.log(`[Startup][${timestamp}] ${step}`, details);
+  };
+
+  startupLog("DOMContentLoaded fired", {
+    readyState: document.readyState,
+    location: window.location.href,
+    userAgent: navigator.userAgent
+  });
   let markdownRenderTimeout = null;
   const RENDER_DELAY = 100;
   let syncScrollingEnabled = true;
@@ -162,6 +172,14 @@ document.addEventListener("DOMContentLoaded", function () {
   const githubImportCancelBtn = document.getElementById("github-import-cancel");
   const githubImportSubmitBtn = document.getElementById("github-import-submit");
 
+  startupLog("Core DOM references resolved", {
+    markdownEditor: !!markdownEditor,
+    markdownPreview: !!markdownPreview,
+    contentContainer: !!contentContainer,
+    themeToggle: !!themeToggle,
+    dropzone: !!dropzone
+  });
+
   // ========================================
   // GLOBAL STATE (persisted across reloads)
   // ========================================
@@ -210,10 +228,13 @@ document.addEventListener("DOMContentLoaded", function () {
     });
   };
 
+  startupLog("Initializing Mermaid", { theme: initialTheme });
   try {
     initMermaid();
+    startupLog("Mermaid initialized");
   } catch (e) {
     console.warn("Mermaid initialization failed:", e);
+    startupLog("Mermaid initialization failed", { error: String(e) });
   }
 
   const markedOptions = {
@@ -247,6 +268,7 @@ document.addEventListener("DOMContentLoaded", function () {
     ...markedOptions,
     renderer: renderer,
   });
+  startupLog("Marked renderer configured");
 
   const GITHUB_ALERT_META = {
     note: {
@@ -4098,4 +4120,6 @@ This is a fully client-side application. Your content never leaves your browser 
       container.appendChild(toolbar);
     });
   }
+
+  startupLog("Startup script initialization completed");
 });
