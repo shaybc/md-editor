@@ -13,14 +13,7 @@
     "enabled": true,
     "writeToLogFile": true
   },
-  "nativeAllowList": [
-    "app.*",
-    "os.*",
-    "filesystem.readFile",
-    "debug.log",
-    "filesystem.appendFile",
-    "filesystem.writeFile"
-  ],
+  "nativeAllowList": ["app.*", "os.*", "filesystem.readFile", "debug.log"],
   "globalVariables": {},
   "modes": {
     "window": {
@@ -33,7 +26,7 @@
       "fullScreen": false,
       "alwaysOnTop": false,
       "icon": "/resources/assets/icon.jpg",
-      "enableInspector": true,
+      "enableInspector": false,
       "borderless": false,
       "maximize": false,
       "hidden": false,
@@ -42,24 +35,17 @@
     },
     "browser": {
       "globalVariables": {},
-      "nativeBlockList": [
-        "filesystem.*"
-      ]
+      "nativeBlockList": ["filesystem.*"]
     },
     "cloud": {
       "url": "/resources/#cloud",
-      "nativeAllowList": [
-        "app.*"
-      ]
+      "nativeAllowList": ["app.*"]
     },
     "chrome": {
       "width": 800,
       "height": 500,
       "args": "--user-agent=\"Neutralinojs chrome mode\"",
-      "nativeBlockList": [
-        "filesystem.*",
-        "os.*"
-      ]
+      "nativeBlockList": ["filesystem.*", "os.*"]
     }
   },
   "cli": {
