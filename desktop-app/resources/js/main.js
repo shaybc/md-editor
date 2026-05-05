@@ -85,10 +85,24 @@ function onWindowClose() {
   Neutralino.app.exit();
 }
 
+function desktopBootLog(step, details = {}) {
+  const timestamp = new Date().toISOString();
+  const message = `[DesktopBoot][${timestamp}] ${step}`;
+  console.log(message, details);
+
+  if (window.Neutralino?.debug?.log) {
+    const serializedDetails = Object.keys(details).length ? ` ${JSON.stringify(details)}` : "";
+    Neutralino.debug.log(`${message}${serializedDetails}`);
+  }
+}
+
 // Initialize Neutralino
+desktopBootLog("Calling Neutralino.init");
 Neutralino.init();
+desktopBootLog("Neutralino.init called");
 
 // Register event listeners
+desktopBootLog("Registering Neutralino event listeners");
 Neutralino.events.on("trayMenuItemClicked", onTrayMenuItemClicked);
 Neutralino.events.on("windowClose", onWindowClose);
 
@@ -99,6 +113,8 @@ if (NL_OS != "Darwin") {
 }
 
 // Open file passed as command-line argument (e.g. when double-clicking a .md file)
+desktopBootLog("main.js initialization finished");
+
 (async function loadInitialFile() {
   const args = Array.isArray(NL_ARGS) ? NL_ARGS : (() => { try { return JSON.parse(NL_ARGS); } catch(e) { return []; } })();
   const filePath = args.find(a => typeof a === 'string' && /\.(md|markdown)$/i.test(a));
