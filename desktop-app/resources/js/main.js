@@ -85,10 +85,52 @@ function onWindowClose() {
   Neutralino.app.exit();
 }
 
+function desktopBootLog(step, details = {}) {
+  const timestamp = new Date().toISOString();
+  const message = `[DesktopBoot][${timestamp}] ${step}`;
+  const serializedDetails = Object.keys(details).length ? ` ${JSON.stringify(details)}` : "";
+
+  window.__startupTrace = window.__startupTrace || [];
+  window.__startupTrace.push(`${message}${serializedDetails}`);
+
+  console.log(message, details);
+  if (typeof window.__pushBootProbe === "function") {
+    window.__pushBootProbe(`main.js: ${step}`);
+  }
+
+  if (window.Neutralino?.debug?.log) {
+    Neutralino.debug.log(`${message}${serializedDetails}`);
+  }
+
+  if (window.Neutralino?.filesystem?.appendFile) {
+    const logLine = `${message}${serializedDetails}\n`;
+    for (const filePath of ["startup-debug.log", "./startup-debug.log", "/startup-debug.log"]) {
+      Neutralino.filesystem.appendFile(filePath, logLine).catch(() => {});
+    }
+  }
+
+  if (document?.title !== undefined) {
+    document.title = `Markdown Viewer - ${step}`;
+  }
+}
+
+window.__desktopLog = desktopBootLog;
+window.addEventListener("error", (event) => {
+  desktopBootLog("Window error", {
+    message: event?.message,
+    source: event?.filename,
+    line: event?.lineno,
+    column: event?.colno,
+  });
+});
+
 // Initialize Neutralino
+desktopBootLog("Calling Neutralino.init");
 Neutralino.init();
+desktopBootLog("Neutralino.init called");
 
 // Register event listeners
+desktopBootLog("Registering Neutralino event listeners");
 Neutralino.events.on("trayMenuItemClicked", onTrayMenuItemClicked);
 Neutralino.events.on("windowClose", onWindowClose);
 
@@ -99,6 +141,8 @@ if (NL_OS != "Darwin") {
 }
 
 // Open file passed as command-line argument (e.g. when double-clicking a .md file)
+desktopBootLog("main.js initialization finished");
+
 (async function loadInitialFile() {
   const args = Array.isArray(NL_ARGS) ? NL_ARGS : (() => { try { return JSON.parse(NL_ARGS); } catch(e) { return []; } })();
   const filePath = args.find(a => typeof a === 'string' && /\.(md|markdown)$/i.test(a));
