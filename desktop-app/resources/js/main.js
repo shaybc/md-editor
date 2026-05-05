@@ -94,9 +94,6 @@ function desktopBootLog(step, details = {}) {
   window.__startupTrace.push(`${message}${serializedDetails}`);
 
   console.log(message, details);
-  if (typeof window.__pushBootProbe === "function") {
-    window.__pushBootProbe(`main.js: ${step}`);
-  }
 
   if (window.Neutralino?.debug?.log) {
     Neutralino.debug.log(`${message}${serializedDetails}`);

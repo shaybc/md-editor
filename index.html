@@ -28,40 +28,6 @@
     <meta property="twitter:image" content="https://markdownviewer.pages.dev/assets/icon.jpg">
 
     <title>Markdown Viewer</title>
-    <script>
-      (function bootProbe() {
-        const startedAt = Date.now();
-        const pushProbe = (msg) => {
-          const stamp = new Date().toISOString();
-          const line = `[BootProbe][${stamp}] ${msg}`;
-          try {
-            const existing = JSON.parse(localStorage.getItem('bootProbeLogs') || '[]');
-            existing.push(line);
-            localStorage.setItem('bootProbeLogs', JSON.stringify(existing.slice(-200)));
-          } catch (_) {}
-          console.log(line);
-          document.title = `Markdown Viewer - ${msg}`;
-        };
-
-        window.__pushBootProbe = pushProbe;
-        pushProbe('head script started');
-
-        window.addEventListener('error', (event) => {
-          const target = event && event.target;
-          if (target && (target.tagName === 'SCRIPT' || target.tagName === 'LINK')) {
-            pushProbe(`resource failed: ${target.tagName} ${target.src || target.href || 'unknown'}`);
-            return;
-          }
-          pushProbe(`window error: ${event.message || 'unknown'}`);
-        }, true);
-
-        setTimeout(() => {
-          if (document.readyState !== 'complete') {
-            pushProbe(`watchdog: document still ${document.readyState} after ${Date.now() - startedAt}ms`);
-          }
-        }, 15000);
-      })();
-    </script>
     <link href="assets/icon.jpg" rel="icon" type="image/jpg">
     <!-- Updated libraries to latest versions -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.2/css/bootstrap.min.css">
