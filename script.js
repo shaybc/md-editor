@@ -1,7 +1,20 @@
 document.addEventListener("DOMContentLoaded", function () {
   const startupLog = (step, details = {}) => {
     const timestamp = new Date().toISOString();
-    console.log(`[Startup][${timestamp}] ${step}`, details);
+    const message = `[Startup][${timestamp}] ${step}`;
+    console.log(message, details);
+
+    if (window.Neutralino?.debug?.log) {
+      const serializedDetails = Object.keys(details).length ? ` ${JSON.stringify(details)}` : "";
+      Neutralino.debug.log(`${message}${serializedDetails}`);
+
+      if (window.Neutralino?.filesystem?.appendFile) {
+        const logLine = `${message}${serializedDetails}\n`;
+        Neutralino.filesystem.appendFile("/startup-debug.log", logLine).catch(() => {
+          // Ignore logging failures so startup flow is never interrupted.
+        });
+      }
+    }
   };
 
   startupLog("DOMContentLoaded fired", {
