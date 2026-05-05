@@ -1332,7 +1332,7 @@ This is a fully client-side application. Your content never leaves your browser 
   }
 
   async function openFolderTree() {
-    const isDesktopApp = typeof Neutralino !== "undefined" || typeof NL_MODE !== "undefined";
+    const isDesktopApp = typeof window !== "undefined" && typeof window.Neutralino !== "undefined";
 
     if (window.showDirectoryPicker && !isDesktopApp) {
       try {
