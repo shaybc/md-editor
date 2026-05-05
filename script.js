@@ -4,14 +4,16 @@ document.addEventListener("DOMContentLoaded", function () {
     const message = `[Startup][${timestamp}] ${step}`;
     console.log(message, details);
 
-    if (typeof window.__desktopLog === "function") {
-      window.__desktopLog(`Renderer: ${step}`, details);
-      return;
-    }
-
     if (window.Neutralino?.debug?.log) {
       const serializedDetails = Object.keys(details).length ? ` ${JSON.stringify(details)}` : "";
       Neutralino.debug.log(`${message}${serializedDetails}`);
+
+      if (window.Neutralino?.filesystem?.appendFile) {
+        const logLine = `${message}${serializedDetails}\n`;
+        Neutralino.filesystem.appendFile("/startup-debug.log", logLine).catch(() => {
+          // Ignore logging failures so startup flow is never interrupted.
+        });
+      }
     }
   };
 

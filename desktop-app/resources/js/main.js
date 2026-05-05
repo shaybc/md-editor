@@ -88,38 +88,13 @@ function onWindowClose() {
 function desktopBootLog(step, details = {}) {
   const timestamp = new Date().toISOString();
   const message = `[DesktopBoot][${timestamp}] ${step}`;
-  const serializedDetails = Object.keys(details).length ? ` ${JSON.stringify(details)}` : "";
-
-  window.__startupTrace = window.__startupTrace || [];
-  window.__startupTrace.push(`${message}${serializedDetails}`);
-
   console.log(message, details);
 
   if (window.Neutralino?.debug?.log) {
+    const serializedDetails = Object.keys(details).length ? ` ${JSON.stringify(details)}` : "";
     Neutralino.debug.log(`${message}${serializedDetails}`);
   }
-
-  if (window.Neutralino?.filesystem?.appendFile) {
-    const logLine = `${message}${serializedDetails}\n`;
-    for (const filePath of ["startup-debug.log", "./startup-debug.log", "/startup-debug.log"]) {
-      Neutralino.filesystem.appendFile(filePath, logLine).catch(() => {});
-    }
-  }
-
-  if (document?.title !== undefined) {
-    document.title = `Markdown Viewer - ${step}`;
-  }
 }
-
-window.__desktopLog = desktopBootLog;
-window.addEventListener("error", (event) => {
-  desktopBootLog("Window error", {
-    message: event?.message,
-    source: event?.filename,
-    line: event?.lineno,
-    column: event?.colno,
-  });
-});
 
 // Initialize Neutralino
 desktopBootLog("Calling Neutralino.init");
