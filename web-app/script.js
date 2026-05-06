@@ -64,30 +64,304 @@ document.addEventListener("DOMContentLoaded", function () {
 
   const RECENT_FILES_KEY = "markdownViewerRecentFiles";
   const RECENT_FOLDERS_KEY = "markdownViewerRecentFolders";
+  const RECENT_PROFILE_DIR = ".mdviewer";
+  const RECENT_PROFILE_FILE = "recent-items.json";
+  const RECENT_HANDLES_DB = "markdownViewerRecentHandles";
+  const RECENT_HANDLES_STORE = "handles";
   const MAX_RECENT_ITEMS = 10;
   const recentFileHandles = new Map();
   const recentFolderHandles = new Map();
+  const recentItemsCache = {
+    [RECENT_FILES_KEY]: readRecentItemsFromLocalStorage(RECENT_FILES_KEY),
+    [RECENT_FOLDERS_KEY]: readRecentItemsFromLocalStorage(RECENT_FOLDERS_KEY)
+  };
+  let recentProfilePathPromise = null;
+  let recentProfileWriteTimer = null;
+  let recentHandlesDbPromise = null;
 
-  function readRecentItems(storageKey) {
+  function isNeutralinoRuntime() {
+    return typeof NL_VERSION !== "undefined" && typeof Neutralino !== "undefined";
+  }
+
+  function normalizeRecentItems(items) {
+    return Array.isArray(items) ? items.slice(0, MAX_RECENT_ITEMS) : [];
+  }
+
+  function readRecentItemsFromLocalStorage(storageKey) {
     try {
       const items = JSON.parse(localStorage.getItem(storageKey) || "[]");
-      return Array.isArray(items) ? items : [];
+      return normalizeRecentItems(items);
     } catch (error) {
       console.warn("Failed to read recent items:", error);
       return [];
     }
   }
 
-  function writeRecentItems(storageKey, items) {
+  function writeRecentItemsToLocalStorage(storageKey, items) {
     try {
-      localStorage.setItem(storageKey, JSON.stringify(items.slice(0, MAX_RECENT_ITEMS)));
+      localStorage.setItem(storageKey, JSON.stringify(normalizeRecentItems(items)));
     } catch (error) {
       console.warn("Failed to save recent items:", error);
     }
   }
 
+  function readRecentItems(storageKey) {
+    return normalizeRecentItems(recentItemsCache[storageKey] || []);
+  }
+
+  function writeRecentItems(storageKey, items) {
+    recentItemsCache[storageKey] = normalizeRecentItems(items);
+    writeRecentItemsToLocalStorage(storageKey, recentItemsCache[storageKey]);
+    scheduleRecentProfileWrite();
+  }
+
   function getRecentItemKey(item) {
     return String(item && (item.path || item.handleName || item.name || item.label) || "").toLowerCase();
+  }
+
+  function getRecentHandleStore(storageKey) {
+    return storageKey === RECENT_FOLDERS_KEY ? recentFolderHandles : recentFileHandles;
+  }
+
+  function getRecentHandleId(storageKey, key) {
+    return `${storageKey}:${key}`;
+  }
+
+  function openRecentHandlesDatabase() {
+    if (isNeutralinoRuntime() || !window.indexedDB) return Promise.resolve(null);
+
+    if (!recentHandlesDbPromise) {
+      recentHandlesDbPromise = new Promise((resolve) => {
+        const request = window.indexedDB.open(RECENT_HANDLES_DB, 1);
+
+        request.onupgradeneeded = function(event) {
+          const database = event.target.result;
+          if (!database.objectStoreNames.contains(RECENT_HANDLES_STORE)) {
+            database.createObjectStore(RECENT_HANDLES_STORE, { keyPath: "id" });
+          }
+        };
+
+        request.onsuccess = function(event) {
+          resolve(event.target.result);
+        };
+
+        request.onerror = function(event) {
+          console.warn("Failed to open recent handles database:", event.target.error);
+          resolve(null);
+        };
+
+        request.onblocked = function() {
+          console.warn("Opening the recent handles database was blocked by another tab.");
+          resolve(null);
+        };
+      });
+    }
+
+    return recentHandlesDbPromise;
+  }
+
+  async function persistRecentHandle(storageKey, key, handle) {
+    if (!handle || isNeutralinoRuntime()) return;
+
+    const database = await openRecentHandlesDatabase();
+    if (!database) return;
+
+    try {
+      await new Promise((resolve, reject) => {
+        const transaction = database.transaction(RECENT_HANDLES_STORE, "readwrite");
+        const store = transaction.objectStore(RECENT_HANDLES_STORE);
+        store.put({
+          id: getRecentHandleId(storageKey, key),
+          storageKey,
+          key,
+          handle,
+          updatedAt: Date.now()
+        });
+        transaction.oncomplete = resolve;
+        transaction.onerror = function(event) { reject(event.target.error); };
+        transaction.onabort = function(event) { reject(event.target.error); };
+      });
+    } catch (error) {
+      console.warn("Failed to save recent file-system handle:", error);
+    }
+  }
+
+  async function getPersistedRecentHandle(storageKey, key) {
+    const handleStore = getRecentHandleStore(storageKey);
+    const cachedHandle = handleStore.get(key);
+    if (cachedHandle) return cachedHandle;
+
+    const database = await openRecentHandlesDatabase();
+    if (!database) return null;
+
+    try {
+      const record = await new Promise((resolve, reject) => {
+        const transaction = database.transaction(RECENT_HANDLES_STORE, "readonly");
+        const request = transaction.objectStore(RECENT_HANDLES_STORE).get(getRecentHandleId(storageKey, key));
+        request.onsuccess = function(event) { resolve(event.target.result || null); };
+        request.onerror = function(event) { reject(event.target.error); };
+      });
+      if (record && record.handle) {
+        handleStore.set(key, record.handle);
+        return record.handle;
+      }
+    } catch (error) {
+      console.warn("Failed to read recent file-system handle:", error);
+    }
+
+    return null;
+  }
+
+  async function hydrateRecentHandlesFromIndexedDB() {
+    const database = await openRecentHandlesDatabase();
+    if (!database) return;
+
+    try {
+      const records = await new Promise((resolve, reject) => {
+        const transaction = database.transaction(RECENT_HANDLES_STORE, "readonly");
+        const request = transaction.objectStore(RECENT_HANDLES_STORE).getAll();
+        request.onsuccess = function(event) { resolve(event.target.result || []); };
+        request.onerror = function(event) { reject(event.target.error); };
+      });
+
+      records.forEach((record) => {
+        if (!record || !record.storageKey || !record.key || !record.handle) return;
+        getRecentHandleStore(record.storageKey).set(record.key, record.handle);
+      });
+    } catch (error) {
+      console.warn("Failed to hydrate recent file-system handles:", error);
+    }
+  }
+
+  async function ensureFileSystemHandlePermission(handle, mode = "read") {
+    if (!handle || typeof handle.queryPermission !== "function") return true;
+
+    const options = { mode };
+    try {
+      if (await handle.queryPermission(options) === "granted") return true;
+      if (typeof handle.requestPermission !== "function") return false;
+      return await handle.requestPermission(options) === "granted";
+    } catch (error) {
+      console.warn("Failed to verify file-system handle permission:", error);
+      return false;
+    }
+  }
+
+  function mergeRecentItems(...itemGroups) {
+    const mergedByKey = new Map();
+
+    itemGroups.flat().forEach((item) => {
+      const key = getRecentItemKey(item);
+      if (!key) return;
+
+      const existing = mergedByKey.get(key);
+      if (!existing || Number(item.updatedAt || 0) >= Number(existing.updatedAt || 0)) {
+        mergedByKey.set(key, item);
+      }
+    });
+
+    return Array.from(mergedByKey.values())
+      .sort((a, b) => Number(b.updatedAt || 0) - Number(a.updatedAt || 0))
+      .slice(0, MAX_RECENT_ITEMS);
+  }
+
+  function getProfileSeparator(profileDir) {
+    return profileDir.includes("\\") ? "\\" : "/";
+  }
+
+  async function getUserProfileDir() {
+    if (!isNeutralinoRuntime() || !Neutralino.os || !Neutralino.os.getEnv) return null;
+
+    const envVars = NL_OS === "Windows" ? ["USERPROFILE", "HOME"] : ["HOME", "USERPROFILE"];
+    for (const envVar of envVars) {
+      try {
+        const value = await Neutralino.os.getEnv(envVar);
+        if (value) return value;
+      } catch (error) {
+        // Try the next platform-appropriate profile variable.
+      }
+    }
+
+    return null;
+  }
+
+  async function getRecentProfilePath() {
+    if (!isNeutralinoRuntime()) return null;
+
+    if (!recentProfilePathPromise) {
+      recentProfilePathPromise = (async () => {
+        const profileDir = await getUserProfileDir();
+        if (!profileDir) return null;
+
+        const separator = getProfileSeparator(profileDir);
+        const dataDir = `${profileDir}${separator}${RECENT_PROFILE_DIR}`;
+        try {
+          if (Neutralino.filesystem && Neutralino.filesystem.createDirectory) {
+            await Neutralino.filesystem.createDirectory(dataDir);
+          }
+        } catch (error) {
+          // The directory may already exist; reads/writes below will report real failures.
+        }
+
+        return `${dataDir}${separator}${RECENT_PROFILE_FILE}`;
+      })();
+    }
+
+    return recentProfilePathPromise;
+  }
+
+  function getRecentProfilePayload() {
+    return {
+      version: 1,
+      updatedAt: Date.now(),
+      recentFiles: readRecentItems(RECENT_FILES_KEY),
+      recentFolders: readRecentItems(RECENT_FOLDERS_KEY)
+    };
+  }
+
+  async function writeRecentItemsToProfile() {
+    const profilePath = await getRecentProfilePath();
+    if (!profilePath) return;
+
+    try {
+      await Neutralino.filesystem.writeFile(profilePath, JSON.stringify(getRecentProfilePayload(), null, 2));
+    } catch (error) {
+      console.warn("Failed to save recent items to user profile:", error);
+    }
+  }
+
+  function scheduleRecentProfileWrite() {
+    if (!isNeutralinoRuntime()) return;
+
+    clearTimeout(recentProfileWriteTimer);
+    recentProfileWriteTimer = setTimeout(() => {
+      writeRecentItemsToProfile();
+    }, 100);
+  }
+
+  async function hydrateRecentItemsFromProfile() {
+    const profilePath = await getRecentProfilePath();
+    if (!profilePath) return;
+
+    try {
+      const rawProfileData = await Neutralino.filesystem.readFile(profilePath);
+      const profileData = JSON.parse(rawProfileData || "{}");
+      recentItemsCache[RECENT_FILES_KEY] = mergeRecentItems(
+        profileData.recentFiles || [],
+        recentItemsCache[RECENT_FILES_KEY]
+      );
+      recentItemsCache[RECENT_FOLDERS_KEY] = mergeRecentItems(
+        profileData.recentFolders || [],
+        recentItemsCache[RECENT_FOLDERS_KEY]
+      );
+      writeRecentItemsToLocalStorage(RECENT_FILES_KEY, recentItemsCache[RECENT_FILES_KEY]);
+      writeRecentItemsToLocalStorage(RECENT_FOLDERS_KEY, recentItemsCache[RECENT_FOLDERS_KEY]);
+      renderRecentMenus();
+      scheduleRecentProfileWrite();
+    } catch (error) {
+      // First launch is expected to have no profile data file yet. Seed it from localStorage.
+      scheduleRecentProfileWrite();
+    }
   }
 
   function createRecentEntry(entry) {
@@ -111,6 +385,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
     if (entry && entry.handle) {
       handleStore.set(key, entry.handle);
+      persistRecentHandle(storageKey, key, entry.handle);
     }
 
     const items = readRecentItems(storageKey).filter((item) => getRecentItemKey(item) !== key);
@@ -190,7 +465,7 @@ document.addEventListener("DOMContentLoaded", function () {
     const item = readRecentItems(RECENT_FILES_KEY).find((recentItem) => getRecentItemKey(recentItem) === key);
     if (!item) return;
 
-    const handle = recentFileHandles.get(key) || null;
+    const handle = await getPersistedRecentHandle(RECENT_FILES_KEY, key);
     const sourceFile = {
       name: item.name || item.label || (item.path ? getFileName(item.path) : null),
       path: item.path || null,
@@ -206,11 +481,15 @@ document.addEventListener("DOMContentLoaded", function () {
     }
 
     if (!item.path && !handle) {
-      alert("This recent file was opened by the browser and cannot be reopened automatically after the original picker session. Please choose it again with Open file ...");
+      alert("This recent file was opened with a browser picker that did not provide a reusable file handle. Please choose it again with Open file ...");
       return;
     }
 
     try {
+      if (handle && !(await ensureFileSystemHandlePermission(handle))) {
+        alert("Permission is required to reopen this recent file. Please allow access or choose it again with Open file ...");
+        return;
+      }
       await openMarkdownSourceFile(sourceFile);
     } catch (error) {
       console.error("Failed to open recent file:", error);
@@ -222,7 +501,7 @@ document.addEventListener("DOMContentLoaded", function () {
     const item = readRecentItems(RECENT_FOLDERS_KEY).find((recentItem) => getRecentItemKey(recentItem) === key);
     if (!item) return;
 
-    const handle = recentFolderHandles.get(key) || null;
+    const handle = await getPersistedRecentHandle(RECENT_FOLDERS_KEY, key);
     if (typeof NL_VERSION !== "undefined" && item.path) {
       try {
         await openFolderTreeFromNeutralinoPath(item.path);
@@ -235,6 +514,10 @@ document.addEventListener("DOMContentLoaded", function () {
 
     if (handle) {
       try {
+        if (!(await ensureFileSystemHandlePermission(handle))) {
+          alert("Permission is required to reopen this recent folder. Please allow access or choose it again with Open folder ...");
+          return;
+        }
         activeFolderName = handle.name || item.name || "Graph View";
         activeFolderHandle = handle;
         activeFolderPath = null;
@@ -249,7 +532,7 @@ document.addEventListener("DOMContentLoaded", function () {
       return;
     }
 
-    alert("This recent folder was opened by the browser and cannot be reopened automatically after the original picker session. Please choose it again with Open folder ...");
+    alert("This recent folder was opened with a browser picker that did not provide a reusable folder handle. Please choose it again with Open folder ...");
   }
 
   document.addEventListener("click", function(event) {
@@ -352,6 +635,8 @@ document.addEventListener("DOMContentLoaded", function () {
   const folderTreePane = document.getElementById("folder-tree-pane");
   document.querySelectorAll("#folder-tree-pane .tree-action-menu").forEach((node) => node.remove());
   ensureRecentMenuContainers();
+  hydrateRecentItemsFromProfile();
+  hydrateRecentHandlesFromIndexedDB();
   const sidebarDropzonePanel = document.querySelector(".sidebar-dropzone-panel");
   const sidebarDropzoneResizer = document.getElementById("sidebar-dropzone-resizer");
   const toggleDropzonePanelButtons = document.querySelectorAll(".toggle-dropzone-panel");
