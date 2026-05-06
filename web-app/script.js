@@ -602,6 +602,8 @@ This is a fully client-side application. Your content never leaves your browser 
   let activeTabId = null;
   let folderMarkdownFiles = [];
   let activeFolderName = "Graph View";
+  let activeFolderHandle = null;
+  let activeFolderPath = null;
   let isFolderOpen = false;
   let draggedTabId = null;
   let saveTabStateTimeout = null;
@@ -1580,11 +1582,11 @@ This is a fully client-side application. Your content never leaves your browser 
         files.push(...nestedFiles);
       } else if (node.kind === "file") {
         if (node.file) {
-          files.push({ path: currentPath, file: node.file });
+          files.push({ path: currentPath, file: node.file, handle: node.handle || null });
         } else if (node.handle) {
           try {
             const file = await node.handle.getFile();
-            files.push({ path: currentPath, file });
+            files.push({ path: currentPath, file, handle: node.handle });
           } catch (error) {
             console.warn("Failed to read file handle for graph view:", currentPath, error);
           }
@@ -1609,6 +1611,8 @@ This is a fully client-side application. Your content never leaves your browser 
   function closeFolderTree() {
     folderMarkdownFiles = [];
     activeFolderName = "Graph View";
+    activeFolderHandle = null;
+    activeFolderPath = null;
     isFolderOpen = false;
     if (folderTreeRoot) {
       folderTreeRoot.innerHTML = getClosedFolderPlaceholder();
@@ -1632,6 +1636,33 @@ This is a fully client-side application. Your content never leaves your browser 
     updateCloseFolderButtons();
   }
 
+  async function reloadOpenFolderTree() {
+    if (typeof NL_VERSION !== "undefined" && activeFolderPath) {
+      const nodes = await listMarkdownTreeNeutralino(activeFolderPath);
+      folderMarkdownFiles = await collectMarkdownFilesFromTreeNeutralino(nodes);
+      renderFolderTree(nodes);
+      return true;
+    }
+
+    if (activeFolderHandle) {
+      const nodes = await listMarkdownTree(activeFolderHandle);
+      folderMarkdownFiles = await collectMarkdownFilesFromTree(nodes);
+      renderFolderTree(nodes);
+      return true;
+    }
+
+    return false;
+  }
+
+  function isPathInsideFolder(filePath, folderPath) {
+    if (!filePath || !folderPath) return false;
+    const normalize = (path) => String(path).replace(/\\/g, "/").replace(/\/+$/, "");
+    const normalizedFile = normalize(filePath);
+    const normalizedFolder = normalize(folderPath);
+    return normalizedFile === normalizedFolder || normalizedFile.startsWith(normalizedFolder + "/");
+  }
+
+
   function sortFolderTreeNodes(nodes) {
     nodes.sort((a, b) =>
       a.kind === b.kind ? a.name.localeCompare(b.name) : (a.kind === "directory" ? -1 : 1)
@@ -1645,6 +1676,8 @@ This is a fully client-side application. Your content never leaves your browser 
   async function openFolderTreeFromNeutralinoPath(selectedPath) {
     if (!selectedPath) return;
     activeFolderName = selectedPath.split(/[\\/]/).pop() || "Graph View";
+    activeFolderHandle = null;
+    activeFolderPath = selectedPath;
     const nodes = await listMarkdownTreeNeutralino(selectedPath);
     folderMarkdownFiles = await collectMarkdownFilesFromTreeNeutralino(nodes);
     renderFolderTree(nodes);
@@ -1895,6 +1928,8 @@ This is a fully client-side application. Your content never leaves your browser 
     const dirHandle = await getDirectoryHandleFromDrop(dataTransfer, fileSystemHandles);
     if (dirHandle) {
       activeFolderName = dirHandle.name || "Graph View";
+      activeFolderHandle = dirHandle;
+      activeFolderPath = null;
       const nodes = await listMarkdownTree(dirHandle);
       folderMarkdownFiles = await collectMarkdownFilesFromTree(nodes);
       renderFolderTree(nodes);
@@ -1904,6 +1939,8 @@ This is a fully client-side application. Your content never leaves your browser 
     const directoryEntry = getDirectoryEntryFromDrop(dataTransfer);
     if (directoryEntry) {
       activeFolderName = directoryEntry.name || "Graph View";
+      activeFolderHandle = null;
+      activeFolderPath = null;
       const nodes = await listMarkdownTreeFromEntry(directoryEntry);
       folderMarkdownFiles = await collectMarkdownFilesFromTree(nodes);
       renderFolderTree(nodes);
@@ -2115,6 +2152,8 @@ async function openFolderTree() {
     try {
       const dirHandle = await window.showDirectoryPicker();
       activeFolderName = dirHandle && dirHandle.name ? dirHandle.name : "Graph View";
+      activeFolderHandle = dirHandle || null;
+      activeFolderPath = null;
       const nodes = await listMarkdownTree(dirHandle);
       folderMarkdownFiles = await collectMarkdownFilesFromTree(nodes);
       renderFolderTree(nodes);
@@ -2252,6 +2291,116 @@ async function openFolderTree() {
 
   function toggleSidebar() {
     setSidebarVisible(!isSidebarVisible());
+  }
+
+  function isFirefoxBrowser() {
+    return /firefox\//i.test(navigator.userAgent || "");
+  }
+
+  function sanitizeMarkdownFileName(fileName) {
+    const fallback = "document";
+    let cleaned = String(fileName || fallback)
+      .trim()
+      .replace(/[\\/:*?"<>|]+/g, "-")
+      .replace(/\s+/g, " ");
+    cleaned = cleaned.replace(/^\.+$/, "") || fallback;
+    if (!/\.(md|markdown)$/i.test(cleaned)) {
+      cleaned += ".md";
+    }
+    return cleaned;
+  }
+
+  function getSuggestedMarkdownFileName(tab) {
+    return sanitizeMarkdownFileName((tab && tab.title) || "document");
+  }
+
+  function joinPath(dirPath, fileName) {
+    if (!dirPath) return fileName;
+    return dirPath.replace(/[\\/]+$/, "") + "/" + fileName;
+  }
+
+  function updateTabAfterSave(tab, content, metadata) {
+    tab.content = content;
+    tab.savedContent = content;
+    if (metadata) {
+      if (metadata.name) {
+        tab.sourceFileName = metadata.name;
+        tab.title = getMarkdownTitleFromFileName(metadata.name);
+      }
+      if (metadata.handle) tab.sourceFileHandle = metadata.handle;
+      if (metadata.path) tab.sourceFilePath = metadata.path;
+    }
+    saveTabsToStorage(tabs);
+    renderTabBar(tabs, activeTabId);
+    updateSaveCurrentFileButtons();
+  }
+
+  async function saveActiveTabWithSaveDialog() {
+    const tab = getActiveMarkdownTab();
+    if (!tab) return false;
+
+    const content = markdownEditor.value;
+    const suggestedName = getSuggestedMarkdownFileName(tab);
+
+    if (typeof NL_VERSION !== "undefined") {
+      const defaultPath = activeFolderPath ? joinPath(activeFolderPath, suggestedName) : suggestedName;
+      const selectedPath = await Neutralino.os.showSaveDialog("Save Markdown file", {
+        defaultPath,
+        filters: [
+          { name: "Markdown files", extensions: ["md", "markdown"] }
+        ]
+      });
+      if (!selectedPath) return false;
+      const finalPath = /\.(md|markdown)$/i.test(selectedPath) ? selectedPath : selectedPath + ".md";
+      await Neutralino.filesystem.writeFile(finalPath, content);
+      updateTabAfterSave(tab, content, {
+        name: getFileName(finalPath),
+        path: finalPath
+      });
+      if (isPathInsideFolder(finalPath, activeFolderPath)) {
+        await reloadOpenFolderTree();
+      }
+      return true;
+    }
+
+    if (typeof window.showSaveFilePicker === "function" && !isFirefoxBrowser()) {
+      const pickerOptions = {
+        suggestedName,
+        types: [
+          {
+            description: "Markdown files",
+            accept: {
+              "text/markdown": [".md", ".markdown"],
+              "text/plain": [".md", ".markdown"]
+            }
+          }
+        ]
+      };
+      if (activeFolderHandle) {
+        pickerOptions.startIn = activeFolderHandle;
+      }
+      const handle = await window.showSaveFilePicker(pickerOptions);
+      const writable = await handle.createWritable();
+      await writable.write(content);
+      await writable.close();
+      updateTabAfterSave(tab, content, {
+        name: handle.name,
+        handle
+      });
+      if (activeFolderHandle) {
+        await reloadOpenFolderTree();
+      }
+      return true;
+    }
+
+    const blob = new Blob([content], {
+      type: "text/markdown;charset=utf-8",
+    });
+    saveAs(blob, suggestedName);
+    updateTabAfterSave(tab, content, {
+      name: suggestedName
+    });
+    return true;
   }
 
   async function saveActiveTabToSource() {
@@ -3235,6 +3384,8 @@ async function openFolderTree() {
       const files = e.target.files;
       const firstRelativePath = Array.from(files || []).find((file) => file.webkitRelativePath)?.webkitRelativePath || "";
       activeFolderName = firstRelativePath.split("/")[0] || "Graph View";
+      activeFolderHandle = null;
+      activeFolderPath = null;
       folderMarkdownFiles = Array.from(files || [])
         .filter((file) => /\.(md|markdown)$/i.test(file.name))
         .map((file) => ({ path: file.webkitRelativePath || file.name, file }));
@@ -3745,14 +3896,13 @@ async function openFolderTree() {
 
   exportMd.addEventListener("click", async function () {
     try {
+      saveCurrentTabState();
       if (await saveActiveTabToSource()) {
         return;
       }
-      const blob = new Blob([markdownEditor.value], {
-        type: "text/markdown;charset=utf-8",
-      });
-      saveAs(blob, "document.md");
+      await saveActiveTabWithSaveDialog();
     } catch (e) {
+      if (e && e.name === "AbortError") return;
       console.error("Export failed:", e);
       alert("Export failed: " + e.message);
     }
