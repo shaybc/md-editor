@@ -1636,6 +1636,33 @@ This is a fully client-side application. Your content never leaves your browser 
     updateCloseFolderButtons();
   }
 
+  async function reloadOpenFolderTree() {
+    if (typeof NL_VERSION !== "undefined" && activeFolderPath) {
+      const nodes = await listMarkdownTreeNeutralino(activeFolderPath);
+      folderMarkdownFiles = await collectMarkdownFilesFromTreeNeutralino(nodes);
+      renderFolderTree(nodes);
+      return true;
+    }
+
+    if (activeFolderHandle) {
+      const nodes = await listMarkdownTree(activeFolderHandle);
+      folderMarkdownFiles = await collectMarkdownFilesFromTree(nodes);
+      renderFolderTree(nodes);
+      return true;
+    }
+
+    return false;
+  }
+
+  function isPathInsideFolder(filePath, folderPath) {
+    if (!filePath || !folderPath) return false;
+    const normalize = (path) => String(path).replace(/\\/g, "/").replace(/\/+$/, "");
+    const normalizedFile = normalize(filePath);
+    const normalizedFolder = normalize(folderPath);
+    return normalizedFile === normalizedFolder || normalizedFile.startsWith(normalizedFolder + "/");
+  }
+
+
   function sortFolderTreeNodes(nodes) {
     nodes.sort((a, b) =>
       a.kind === b.kind ? a.name.localeCompare(b.name) : (a.kind === "directory" ? -1 : 1)
@@ -2330,6 +2357,9 @@ async function openFolderTree() {
         name: getFileName(finalPath),
         path: finalPath
       });
+      if (isPathInsideFolder(finalPath, activeFolderPath)) {
+        await reloadOpenFolderTree();
+      }
       return true;
     }
 
@@ -2357,6 +2387,9 @@ async function openFolderTree() {
         name: handle.name,
         handle
       });
+      if (activeFolderHandle) {
+        await reloadOpenFolderTree();
+      }
       return true;
     }
 
