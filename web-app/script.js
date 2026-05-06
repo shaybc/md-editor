@@ -1407,7 +1407,6 @@ This is a fully client-side application. Your content never leaves your browser 
       handle,
       path
     });
-    hideSidebarDropzone();
     return tab;
   }
 
