@@ -84,6 +84,9 @@ document.addEventListener("DOMContentLoaded", function () {
           <button class="dropdown-item action-menu-item" id="import-from-folder" title="Import Markdown from folder">
             <i class="bi bi-folder2-open me-2"></i> Open folder ...
           </button>
+          <button class="dropdown-item action-menu-item close-folder-button" type="button" title="Close the currently open folder" disabled>
+            <i class="bi bi-folder-x me-2"></i> Close Folder
+          </button>
           <button class="dropdown-item action-menu-item" id="import-from-github" title="Import Markdown from GitHub">
             <i class="bi bi-github me-2"></i> Import from GitHub
           </button>
@@ -596,6 +599,7 @@ This is a fully client-side application. Your content never leaves your browser 
   let activeTabId = null;
   let folderMarkdownFiles = [];
   let activeFolderName = "Graph View";
+  let isFolderOpen = false;
   let draggedTabId = null;
   let saveTabStateTimeout = null;
   let untitledCounter = 0;
@@ -1431,10 +1435,34 @@ This is a fully client-side application. Your content never leaves your browser 
     return files;
   }
 
+  function getClosedFolderPlaceholder() {
+    return '<p class="folder-tree-placeholder">Open a folder to browse Markdown files.</p>';
+  }
+
+  function updateCloseFolderButtons() {
+    document.querySelectorAll(".close-folder-button").forEach((button) => {
+      button.disabled = !isFolderOpen;
+      button.setAttribute("aria-disabled", isFolderOpen ? "false" : "true");
+      button.title = isFolderOpen ? "Close the currently open folder" : "Open a folder before closing it";
+    });
+  }
+
+  function closeFolderTree() {
+    folderMarkdownFiles = [];
+    activeFolderName = "Graph View";
+    isFolderOpen = false;
+    if (folderTreeRoot) {
+      folderTreeRoot.innerHTML = getClosedFolderPlaceholder();
+    }
+    updateCloseFolderButtons();
+  }
+
   function renderFolderTree(nodes) {
+    isFolderOpen = true;
     folderTreeRoot.innerHTML = "";
     if (!nodes.length) {
       folderTreeRoot.innerHTML = '<p class="folder-tree-placeholder">No Markdown files found in this folder.</p>';
+      updateCloseFolderButtons();
       return;
     }
 
@@ -1442,6 +1470,7 @@ This is a fully client-side application. Your content never leaves your browser 
     ul.className = "folder-tree-list";
     nodes.forEach((node) => ul.appendChild(renderFolderTreeNode(node)));
     folderTreeRoot.appendChild(ul);
+    updateCloseFolderButtons();
   }
 
   function sortFolderTreeNodes(nodes) {
@@ -2969,6 +2998,14 @@ async function openFolderTree() {
       openFolderTree();
     });
   }
+
+  document.querySelectorAll(".close-folder-button").forEach((button) => {
+    button.addEventListener("click", function(e) {
+      e.preventDefault();
+      closeFolderTree();
+    });
+  });
+  updateCloseFolderButtons();
 
   if (importFromGithubButton) {
     importFromGithubButton.addEventListener("click", function (e) {

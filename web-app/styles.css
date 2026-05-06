@@ -959,11 +959,16 @@ a:focus {
   cursor: pointer;
 }
 
-.mobile-menu-item:hover {
+.mobile-menu-item:hover:not(:disabled) {
   background-color: var(--button-hover);
 }
 
-.mobile-menu-item:active {
+.mobile-menu-item:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.mobile-menu-item:active:not(:disabled) {
   background-color: var(--button-active);
 }
 
