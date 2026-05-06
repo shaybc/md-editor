@@ -196,11 +196,13 @@ Markdown-Viewer/
 ├── README.md               # Project overview
 ├── LICENSE                 # Apache 2.0 License
 ├── wiki/                   # GitHub Wiki source pages
+├── start_web.bat           # Windows helper for serving the web app locally
 ├── web-app/                # Browser/static web application
 │   ├── index.html          # Main web app HTML
 │   ├── script.js           # Core JavaScript logic
 │   ├── styles.css          # All styles (light + dark themes)
 │   ├── Dockerfile          # Nginx-based web app container
+│   ├── .dockerignore       # Docker build context exclusions
 │   ├── docker-compose.yml  # Docker Compose configuration
 │   └── assets/             # Screenshots and icons for documentation
 └── desktop-app/            # Neutralinojs desktop app
