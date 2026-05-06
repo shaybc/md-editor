@@ -3223,6 +3223,15 @@ async function openFolderTree() {
       links.push(...visibleLinks);
     }
 
+    const filterGraphToNodeIds = (nodeIds) => {
+      const filteredNodes = nodes.filter((n) => nodeIds.has(n.id));
+      const filteredLinks = links.filter((l) => nodeIds.has(l.source) && nodeIds.has(l.target));
+      nodes.length = 0;
+      nodes.push(...filteredNodes);
+      links.length = 0;
+      links.push(...filteredLinks);
+    };
+
     if (graphViewConfig && graphViewConfig.mode === "local" && graphViewConfig.focusNodeId) {
       const focusNodeId = graphViewConfig.focusNodeId;
       const localNodeIds = new Set([focusNodeId]);
@@ -3231,12 +3240,24 @@ async function openFolderTree() {
         if (l.target === focusNodeId) localNodeIds.add(l.source);
       });
 
-      const filteredNodes = nodes.filter((n) => localNodeIds.has(n.id));
-      const filteredLinks = links.filter((l) => localNodeIds.has(l.source) && localNodeIds.has(l.target));
-      nodes.length = 0;
-      nodes.push(...filteredNodes);
-      links.length = 0;
-      links.push(...filteredLinks);
+      filterGraphToNodeIds(localNodeIds);
+    }
+
+    if (graphViewConfig && graphViewConfig.mode === "full-local" && graphViewConfig.focusNodeId) {
+      const focusNodeId = graphViewConfig.focusNodeId;
+      const fullLocalNodeIds = new Set([focusNodeId]);
+      const nodesToVisit = [focusNodeId];
+
+      while (nodesToVisit.length) {
+        const currentNodeId = nodesToVisit.shift();
+        links.forEach((l) => {
+          if (l.source !== currentNodeId || fullLocalNodeIds.has(l.target)) return;
+          fullLocalNodeIds.add(l.target);
+          nodesToVisit.push(l.target);
+        });
+      }
+
+      filterGraphToNodeIds(fullLocalNodeIds);
     }
     const outgoingAdjacency = new Map();
     const outgoingDegree = new Map();
@@ -3330,10 +3351,15 @@ async function openFolderTree() {
     localGraphBtn.type = "button";
     localGraphBtn.className = "graph-context-menu-item hidden";
     localGraphBtn.textContent = "Show local graph";
+    const fullLocalGraphBtn = document.createElement("button");
+    fullLocalGraphBtn.type = "button";
+    fullLocalGraphBtn.className = "graph-context-menu-item hidden";
+    fullLocalGraphBtn.textContent = "Show full local graph";
     contextMenu.appendChild(magneticToggleBtn);
     contextMenu.appendChild(openFileBtn);
     contextMenu.appendChild(hidePointBtn);
     contextMenu.appendChild(localGraphBtn);
+    contextMenu.appendChild(fullLocalGraphBtn);
     graphViewCanvas.appendChild(contextMenu);
 
     let contextTargetNode = null;
@@ -3364,6 +3390,7 @@ async function openFolderTree() {
       openFileBtn.classList.add("hidden");
       hidePointBtn.classList.add("hidden");
       localGraphBtn.classList.add("hidden");
+      fullLocalGraphBtn.classList.add("hidden");
     };
 
     graphViewCanvas.addEventListener("contextmenu", (event) => {
@@ -3372,6 +3399,7 @@ async function openFolderTree() {
       openFileBtn.classList.add("hidden");
       hidePointBtn.classList.add("hidden");
       localGraphBtn.classList.add("hidden");
+      fullLocalGraphBtn.classList.add("hidden");
       const bounds = graphViewCanvas.getBoundingClientRect();
       contextMenu.style.left = `${Math.min(event.clientX - bounds.left, bounds.width - 200)}px`;
       contextMenu.style.top = `${Math.min(event.clientY - bounds.top, bounds.height - 120)}px`;
@@ -3385,6 +3413,7 @@ async function openFolderTree() {
       openFileBtn.classList.remove("hidden");
       hidePointBtn.classList.remove("hidden");
       localGraphBtn.classList.remove("hidden");
+      fullLocalGraphBtn.classList.remove("hidden");
       const bounds = graphViewCanvas.getBoundingClientRect();
       contextMenu.style.left = `${Math.min(event.clientX - bounds.left, bounds.width - 200)}px`;
       contextMenu.style.top = `${Math.min(event.clientY - bounds.top, bounds.height - 120)}px`;
@@ -3427,7 +3456,7 @@ async function openFolderTree() {
       renderGraphView();
     });
 
-    localGraphBtn.addEventListener("click", () => {
+    const openLocalGraphTab = (mode, titlePrefix) => {
       if (!contextTargetNode) return;
       const focusNodeId = contextTargetNode.id;
       if (tabs.length >= 20) {
@@ -3436,10 +3465,10 @@ async function openFolderTree() {
       }
       const activeGraphTab = tabs.find((tab) => tab.id === activeTabId);
       const parentConfig = activeGraphTab?.graphViewConfig || {};
-      const localTabTitle = `Local Graph: ${contextTargetNode.label}`;
+      const localTabTitle = `${titlePrefix}: ${contextTargetNode.label}`;
       const localGraphTab = createGraphTab(localTabTitle, {
         graphViewConfig: {
-          mode: "local",
+          mode,
           focusNodeId,
           allowedNodeIds: Array.from(new Set([...(parentConfig.allowedNodeIds || []), ...nodes.map((n) => n.id)])),
           hiddenNodeIds: [...(parentConfig.hiddenNodeIds || [])]
@@ -3449,6 +3478,14 @@ async function openFolderTree() {
       saveTabsToStorage(tabs);
       hideContextMenu();
       switchTab(localGraphTab.id);
+    };
+
+    localGraphBtn.addEventListener("click", () => {
+      openLocalGraphTab("local", "Local Graph");
+    });
+
+    fullLocalGraphBtn.addEventListener("click", () => {
+      openLocalGraphTab("full-local", "Full Local Graph");
     });
 
     function highlightNeighborhood(focusNode) {
