@@ -191,17 +191,27 @@ document.addEventListener("DOMContentLoaded", function () {
     if (!item) return;
 
     const handle = recentFileHandles.get(key) || null;
+    const sourceFile = {
+      name: item.name || item.label || (item.path ? getFileName(item.path) : null),
+      path: item.path || null,
+      handle
+    };
+
+    const existingTab = findTabForSourceFile(sourceFile);
+    if (existingTab) {
+      switchTab(existingTab.id);
+      pinTemporaryTab(existingTab.id);
+      rememberRecentFile(sourceFile);
+      return;
+    }
+
     if (!item.path && !handle) {
       alert("This recent file was opened by the browser and cannot be reopened automatically after the original picker session. Please choose it again with Open file ...");
       return;
     }
 
     try {
-      await openMarkdownSourceFile({
-        name: item.name || item.label || (item.path ? getFileName(item.path) : null),
-        path: item.path || null,
-        handle
-      });
+      await openMarkdownSourceFile(sourceFile);
     } catch (error) {
       console.error("Failed to open recent file:", error);
       alert("Unable to open the recent file.");
