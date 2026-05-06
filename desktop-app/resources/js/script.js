@@ -698,6 +698,15 @@ This is a fully client-side application. Your content never leaves your browser 
     return tab.savedContent !== tab.content ? baseName + ' *' : baseName;
   }
 
+  function getTabTooltipText(tab) {
+    if (!tab) return 'Untitled';
+    if (tab.type === "graph") {
+      return `${tab.folderName || tab.title || 'Graph View'} (Graph View)`;
+    }
+
+    return tab.sourceFilePath || tab.sourceFileName || tab.title || 'Untitled';
+  }
+
   function renderTabBar(tabsArr, currentActiveTabId) {
     const tabList = document.getElementById('tab-list');
     if (!tabList) return;
@@ -710,10 +719,14 @@ This is a fully client-side application. Your content never leaves your browser 
       item.setAttribute('aria-selected', tab.id === currentActiveTabId ? 'true' : 'false');
       item.setAttribute('draggable', 'true');
 
+      const displayName = getTabDisplayName(tab);
+      const tooltipText = getTabTooltipText(tab);
+      item.title = tooltipText;
+      item.setAttribute('aria-label', tooltipText);
+
       const titleSpan = document.createElement('span');
       titleSpan.className = 'tab-title' + (tab.isTemporary ? ' temporary' : '');
-      const displayName = getTabDisplayName(tab);
-      titleSpan.title = displayName;
+      titleSpan.title = tooltipText;
       if (tab.type === "graph") {
         titleSpan.innerHTML = `<i class="bi bi-diagram-3 me-1"></i>${displayName}`;
       } else {
@@ -840,10 +853,14 @@ This is a fully client-side application. Your content never leaves your browser 
       item.setAttribute('aria-selected', tab.id === currentActiveTabId ? 'true' : 'false');
       item.setAttribute('data-tab-id', tab.id);
 
+      const displayName = getTabDisplayName(tab);
+      const tooltipText = getTabTooltipText(tab);
+      item.title = tooltipText;
+      item.setAttribute('aria-label', tooltipText);
+
       const titleSpan = document.createElement('span');
       titleSpan.className = 'mobile-tab-title' + (tab.isTemporary ? ' temporary' : '');
-      const displayName = getTabDisplayName(tab);
-      titleSpan.title = displayName;
+      titleSpan.title = tooltipText;
       if (tab.type === "graph") {
         titleSpan.innerHTML = `<i class="bi bi-diagram-3 me-1"></i>${displayName}`;
       } else {
