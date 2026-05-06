@@ -64,30 +64,173 @@ document.addEventListener("DOMContentLoaded", function () {
 
   const RECENT_FILES_KEY = "markdownViewerRecentFiles";
   const RECENT_FOLDERS_KEY = "markdownViewerRecentFolders";
+  const RECENT_PROFILE_DIR = ".mdviewer";
+  const RECENT_PROFILE_FILE = "recent-items.json";
   const MAX_RECENT_ITEMS = 10;
   const recentFileHandles = new Map();
   const recentFolderHandles = new Map();
+  const recentItemsCache = {
+    [RECENT_FILES_KEY]: readRecentItemsFromLocalStorage(RECENT_FILES_KEY),
+    [RECENT_FOLDERS_KEY]: readRecentItemsFromLocalStorage(RECENT_FOLDERS_KEY)
+  };
+  let recentProfilePathPromise = null;
+  let recentProfileWriteTimer = null;
 
-  function readRecentItems(storageKey) {
+  function isNeutralinoRuntime() {
+    return typeof NL_VERSION !== "undefined" && typeof Neutralino !== "undefined";
+  }
+
+  function normalizeRecentItems(items) {
+    return Array.isArray(items) ? items.slice(0, MAX_RECENT_ITEMS) : [];
+  }
+
+  function readRecentItemsFromLocalStorage(storageKey) {
     try {
       const items = JSON.parse(localStorage.getItem(storageKey) || "[]");
-      return Array.isArray(items) ? items : [];
+      return normalizeRecentItems(items);
     } catch (error) {
       console.warn("Failed to read recent items:", error);
       return [];
     }
   }
 
-  function writeRecentItems(storageKey, items) {
+  function writeRecentItemsToLocalStorage(storageKey, items) {
     try {
-      localStorage.setItem(storageKey, JSON.stringify(items.slice(0, MAX_RECENT_ITEMS)));
+      localStorage.setItem(storageKey, JSON.stringify(normalizeRecentItems(items)));
     } catch (error) {
       console.warn("Failed to save recent items:", error);
     }
   }
 
+  function readRecentItems(storageKey) {
+    return normalizeRecentItems(recentItemsCache[storageKey] || []);
+  }
+
+  function writeRecentItems(storageKey, items) {
+    recentItemsCache[storageKey] = normalizeRecentItems(items);
+    writeRecentItemsToLocalStorage(storageKey, recentItemsCache[storageKey]);
+    scheduleRecentProfileWrite();
+  }
+
   function getRecentItemKey(item) {
     return String(item && (item.path || item.handleName || item.name || item.label) || "").toLowerCase();
+  }
+
+  function mergeRecentItems(...itemGroups) {
+    const mergedByKey = new Map();
+
+    itemGroups.flat().forEach((item) => {
+      const key = getRecentItemKey(item);
+      if (!key) return;
+
+      const existing = mergedByKey.get(key);
+      if (!existing || Number(item.updatedAt || 0) >= Number(existing.updatedAt || 0)) {
+        mergedByKey.set(key, item);
+      }
+    });
+
+    return Array.from(mergedByKey.values())
+      .sort((a, b) => Number(b.updatedAt || 0) - Number(a.updatedAt || 0))
+      .slice(0, MAX_RECENT_ITEMS);
+  }
+
+  function getProfileSeparator(profileDir) {
+    return profileDir.includes("\\") ? "\\" : "/";
+  }
+
+  async function getUserProfileDir() {
+    if (!isNeutralinoRuntime() || !Neutralino.os || !Neutralino.os.getEnv) return null;
+
+    const envVars = NL_OS === "Windows" ? ["USERPROFILE", "HOME"] : ["HOME", "USERPROFILE"];
+    for (const envVar of envVars) {
+      try {
+        const value = await Neutralino.os.getEnv(envVar);
+        if (value) return value;
+      } catch (error) {
+        // Try the next platform-appropriate profile variable.
+      }
+    }
+
+    return null;
+  }
+
+  async function getRecentProfilePath() {
+    if (!isNeutralinoRuntime()) return null;
+
+    if (!recentProfilePathPromise) {
+      recentProfilePathPromise = (async () => {
+        const profileDir = await getUserProfileDir();
+        if (!profileDir) return null;
+
+        const separator = getProfileSeparator(profileDir);
+        const dataDir = `${profileDir}${separator}${RECENT_PROFILE_DIR}`;
+        try {
+          if (Neutralino.filesystem && Neutralino.filesystem.createDirectory) {
+            await Neutralino.filesystem.createDirectory(dataDir);
+          }
+        } catch (error) {
+          // The directory may already exist; reads/writes below will report real failures.
+        }
+
+        return `${dataDir}${separator}${RECENT_PROFILE_FILE}`;
+      })();
+    }
+
+    return recentProfilePathPromise;
+  }
+
+  function getRecentProfilePayload() {
+    return {
+      version: 1,
+      updatedAt: Date.now(),
+      recentFiles: readRecentItems(RECENT_FILES_KEY),
+      recentFolders: readRecentItems(RECENT_FOLDERS_KEY)
+    };
+  }
+
+  async function writeRecentItemsToProfile() {
+    const profilePath = await getRecentProfilePath();
+    if (!profilePath) return;
+
+    try {
+      await Neutralino.filesystem.writeFile(profilePath, JSON.stringify(getRecentProfilePayload(), null, 2));
+    } catch (error) {
+      console.warn("Failed to save recent items to user profile:", error);
+    }
+  }
+
+  function scheduleRecentProfileWrite() {
+    if (!isNeutralinoRuntime()) return;
+
+    clearTimeout(recentProfileWriteTimer);
+    recentProfileWriteTimer = setTimeout(() => {
+      writeRecentItemsToProfile();
+    }, 100);
+  }
+
+  async function hydrateRecentItemsFromProfile() {
+    const profilePath = await getRecentProfilePath();
+    if (!profilePath) return;
+
+    try {
+      const rawProfileData = await Neutralino.filesystem.readFile(profilePath);
+      const profileData = JSON.parse(rawProfileData || "{}");
+      recentItemsCache[RECENT_FILES_KEY] = mergeRecentItems(
+        profileData.recentFiles || [],
+        recentItemsCache[RECENT_FILES_KEY]
+      );
+      recentItemsCache[RECENT_FOLDERS_KEY] = mergeRecentItems(
+        profileData.recentFolders || [],
+        recentItemsCache[RECENT_FOLDERS_KEY]
+      );
+      writeRecentItemsToLocalStorage(RECENT_FILES_KEY, recentItemsCache[RECENT_FILES_KEY]);
+      writeRecentItemsToLocalStorage(RECENT_FOLDERS_KEY, recentItemsCache[RECENT_FOLDERS_KEY]);
+      renderRecentMenus();
+      scheduleRecentProfileWrite();
+    } catch (error) {
+      // First launch is expected to have no profile data file yet. Seed it from localStorage.
+      scheduleRecentProfileWrite();
+    }
   }
 
   function createRecentEntry(entry) {
@@ -352,6 +495,7 @@ document.addEventListener("DOMContentLoaded", function () {
   const folderTreePane = document.getElementById("folder-tree-pane");
   document.querySelectorAll("#folder-tree-pane .tree-action-menu").forEach((node) => node.remove());
   ensureRecentMenuContainers();
+  hydrateRecentItemsFromProfile();
   const sidebarDropzonePanel = document.querySelector(".sidebar-dropzone-panel");
   const sidebarDropzoneResizer = document.getElementById("sidebar-dropzone-resizer");
   const toggleDropzonePanelButtons = document.querySelectorAll(".toggle-dropzone-panel");
