@@ -603,6 +603,43 @@ This is a fully client-side application. Your content never leaves your browser 
   let draggedTabId = null;
   let saveTabStateTimeout = null;
   let untitledCounter = 0;
+  const graphRenderCache = new Map();
+
+  function getGraphFileSignature(files) {
+    return (files || []).map((fileEntry) => {
+      const file = fileEntry.file || fileEntry;
+      return {
+        path: fileEntry.path || file?.webkitRelativePath || file?.name || "",
+        name: file?.name || "",
+        size: file?.size || 0,
+        lastModified: file?.lastModified || 0
+      };
+    });
+  }
+
+  function getGraphViewSignature(files, graphViewConfig) {
+    return JSON.stringify({
+      files: getGraphFileSignature(files),
+      config: graphViewConfig || null
+    });
+  }
+
+  function hideInactiveGraphRenders(activeGraphTabId) {
+    graphRenderCache.forEach((entry, tabId) => {
+      if (!entry || !entry.wrapper) return;
+      entry.wrapper.classList.toggle("hidden", tabId !== activeGraphTabId);
+    });
+  }
+
+  function suspendGraphRender(tabId) {
+    const entry = graphRenderCache.get(tabId);
+    if (entry && entry.simulation) entry.simulation.stop();
+  }
+
+  function suspendActiveGraphRender() {
+    const activeTab = tabs.find((tab) => tab.id === activeTabId);
+    if (activeTab && activeTab.type === "graph") suspendGraphRender(activeTab.id);
+  }
 
   function loadTabsFromStorage() {
     try {
@@ -976,6 +1013,7 @@ This is a fully client-side application. Your content never leaves your browser 
 
   function switchTab(tabId) {
     if (tabId === activeTabId) return;
+    suspendActiveGraphRender();
     saveCurrentTabState();
     activeTabId = tabId;
     saveActiveTabId(activeTabId);
@@ -1174,6 +1212,12 @@ This is a fully client-side application. Your content never leaves your browser 
 
     const idx = tabs.findIndex(function(t) { return t.id === tabId; });
     if (idx === -1) return;
+    const cachedGraphRender = graphRenderCache.get(tabId);
+    if (cachedGraphRender) {
+      if (cachedGraphRender.simulation) cachedGraphRender.simulation.stop();
+      if (cachedGraphRender.wrapper) cachedGraphRender.wrapper.remove();
+      graphRenderCache.delete(tabId);
+    }
     tabs.splice(idx, 1);
     if (tabs.length === 0) {
       // Auto-create new "Untitled" when last tab is deleted
@@ -1181,6 +1225,7 @@ This is a fully client-side application. Your content never leaves your browser 
       tabs.push(newT);
       activeTabId = newT.id;
       saveActiveTabId(activeTabId);
+      setGraphViewMode(false);
       markdownEditor.value = '';
       restoreViewMode('split');
       renderMarkdown();
@@ -3173,14 +3218,42 @@ async function openFolderTree() {
 
   async function renderGraphView() {
     if (!graphViewCanvas) return;
-    graphViewCanvas.innerHTML = "";
     const activeTab = tabs.find((tab) => tab.id === activeTabId);
     const graphViewConfig = activeTab && activeTab.type === "graph" ? (activeTab.graphViewConfig || null) : null;
     const files = folderMarkdownFiles || [];
+    hideInactiveGraphRenders(activeTab?.id);
+    graphViewCanvas.querySelectorAll(".folder-tree-placeholder").forEach((node) => node.remove());
+    if (!activeTab || activeTab.type !== "graph") return;
     if (!files.length) {
+      graphRenderCache.forEach((entry) => {
+        if (entry?.simulation) entry.simulation.stop();
+        if (entry?.wrapper) entry.wrapper.remove();
+      });
+      graphRenderCache.clear();
       graphViewCanvas.innerHTML = '<p class="folder-tree-placeholder">Open a folder first to build the graph view.</p>';
       return;
     }
+
+    const graphSignature = getGraphViewSignature(files, graphViewConfig);
+    const cachedRender = graphRenderCache.get(activeTab.id);
+    if (cachedRender && cachedRender.signature === graphSignature && cachedRender.wrapper) {
+      if (cachedRender.wrapper.parentElement !== graphViewCanvas) graphViewCanvas.appendChild(cachedRender.wrapper);
+      cachedRender.wrapper.classList.remove("hidden");
+      hideInactiveGraphRenders(activeTab.id);
+      return;
+    }
+
+    if (cachedRender) {
+      if (cachedRender.simulation) cachedRender.simulation.stop();
+      if (cachedRender.wrapper) cachedRender.wrapper.remove();
+      graphRenderCache.delete(activeTab.id);
+    }
+
+    const graphRenderWrapper = document.createElement("div");
+    graphRenderWrapper.className = "graph-tab-render";
+    graphRenderWrapper.dataset.graphTabId = activeTab.id;
+    graphViewCanvas.appendChild(graphRenderWrapper);
+    hideInactiveGraphRenders(activeTab.id);
     const nodes = [];
     const links = [];
     const seenEdges = new Set();
@@ -3292,9 +3365,9 @@ async function openFolderTree() {
         y2: d.target.y - uy * targetOffset
       };
     };
-    const width = graphViewCanvas.clientWidth || 900;
-    const height = graphViewCanvas.clientHeight || 560;
-    const svg = d3.select(graphViewCanvas).append("svg").attr("width", width).attr("height", height);
+    const width = graphRenderWrapper.clientWidth || graphViewCanvas.clientWidth || 900;
+    const height = graphRenderWrapper.clientHeight || graphViewCanvas.clientHeight || 560;
+    const svg = d3.select(graphRenderWrapper).append("svg").attr("width", width).attr("height", height);
     const graphLayer = svg.append("g").attr("class", "graph-layer");
 
     const zoomBehavior = d3.zoom()
@@ -3361,7 +3434,7 @@ async function openFolderTree() {
     contextMenu.appendChild(hidePointBtn);
     contextMenu.appendChild(localGraphBtn);
     contextMenu.appendChild(fullLocalGraphBtn);
-    graphViewCanvas.appendChild(contextMenu);
+    graphRenderWrapper.appendChild(contextMenu);
 
     let contextTargetNode = null;
 
@@ -3394,7 +3467,7 @@ async function openFolderTree() {
       fullLocalGraphBtn.classList.add("hidden");
     };
 
-    graphViewCanvas.addEventListener("contextmenu", (event) => {
+    graphRenderWrapper.addEventListener("contextmenu", (event) => {
       event.preventDefault();
       contextTargetNode = null;
       openFileBtn.classList.add("hidden");
@@ -3421,7 +3494,7 @@ async function openFolderTree() {
       contextMenu.classList.remove("hidden");
     });
 
-    graphViewCanvas.addEventListener("click", hideContextMenu);
+    graphRenderWrapper.addEventListener("click", hideContextMenu);
     window.addEventListener("blur", hideContextMenu);
 
     magneticToggleBtn.addEventListener("click", () => {
@@ -3445,7 +3518,6 @@ async function openFolderTree() {
       simulation.stop();
       hideContextMenu();
 
-      graphViewCanvas.innerHTML = "";
       // Re-render by reusing temporary in-memory file graph and hiding this node for this tab view only.
       const activeGraphTab = tabs.find((tab) => tab.id === activeTabId);
       if (activeGraphTab) {
@@ -3453,7 +3525,10 @@ async function openFolderTree() {
           ...(activeGraphTab.graphViewConfig || {}),
           hiddenNodeIds: Array.from(new Set([...(activeGraphTab.graphViewConfig?.hiddenNodeIds || []), nodeId]))
         };
+        saveTabsToStorage(tabs);
+        graphRenderCache.delete(activeGraphTab.id);
       }
+      graphRenderWrapper.remove();
       renderGraphView();
     });
 
@@ -3538,6 +3613,12 @@ async function openFolderTree() {
       });
       node.attr("cx", (d) => d.x).attr("cy", (d) => d.y);
       label.attr("x", (d) => d.x + 10).attr("y", (d) => d.y + 4);
+    });
+
+    graphRenderCache.set(activeTab.id, {
+      signature: graphSignature,
+      wrapper: graphRenderWrapper,
+      simulation
     });
 
     applyMagneticSetting();
