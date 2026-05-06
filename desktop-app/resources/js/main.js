@@ -31,6 +31,31 @@ function openTutorial() {
   Neutralino.os.open("https://www.youtube.com/c/CodeZri");
 }
 
+function addDesktopExitMenuButton() {
+  const desktopActionMenu = document.querySelector(
+    "#tab-bar .tree-action-menu .action-menu",
+  );
+
+  if (!desktopActionMenu || document.getElementById("desktop-exit-app-button")) {
+    return;
+  }
+
+  const separator = document.createElement("hr");
+  separator.className = "dropdown-divider";
+  separator.dataset.desktopExitSeparator = "true";
+
+  const exitButton = document.createElement("button");
+  exitButton.id = "desktop-exit-app-button";
+  exitButton.className = "dropdown-item action-menu-item";
+  exitButton.type = "button";
+  exitButton.title = "Close MD-Viewer";
+  exitButton.innerHTML =
+    '<i class="bi bi-box-arrow-right me-2"></i> Exit MD-Viewer';
+  exitButton.addEventListener("click", () => Neutralino.app.exit());
+
+  desktopActionMenu.append(separator, exitButton);
+}
+
 /*
     Function to set up a system tray menu with options specific to the window mode.
     This function checks if the application is running in window mode, and if so,
@@ -87,6 +112,8 @@ function onWindowClose() {
 
 // Initialize Neutralino
 Neutralino.init();
+
+addDesktopExitMenuButton();
 
 // Register event listeners
 Neutralino.events.on("trayMenuItemClicked", onTrayMenuItemClicked);
