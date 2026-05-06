@@ -2231,9 +2231,9 @@ a:focus {
 
 
 
-.content-container.view-editor-only .folder-tree-pane,
-.content-container.view-preview-only .folder-tree-pane,
-.content-container.view-split .folder-tree-pane {
+.content-container.view-editor-only:not(.sidebar-hidden) .folder-tree-pane,
+.content-container.view-preview-only:not(.sidebar-hidden) .folder-tree-pane,
+.content-container.view-split:not(.sidebar-hidden) .folder-tree-pane {
   display: flex !important;
 }
 
