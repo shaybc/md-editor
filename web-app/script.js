@@ -1463,18 +1463,26 @@ This is a fully client-side application. Your content never leaves your browser 
     fileInput.click();
   }
 
-  async function getDirectoryHandleFromDrop(dataTransfer) {
+  async function getFileSystemHandlesFromDrop(dataTransfer) {
     const items = Array.from((dataTransfer && dataTransfer.items) || []);
+    const handles = [];
+
     for (const item of items) {
       if (typeof item.getAsFileSystemHandle !== "function") continue;
       try {
         const handle = await item.getAsFileSystemHandle();
-        if (handle && handle.kind === "directory") return handle;
+        if (handle) handles.push(handle);
       } catch (error) {
-        console.warn("Unable to read dropped folder handle:", error);
+        console.warn("Unable to read dropped file system handle:", error);
       }
     }
-    return null;
+
+    return handles;
+  }
+
+  async function getDirectoryHandleFromDrop(dataTransfer, fileSystemHandles) {
+    const handles = fileSystemHandles || await getFileSystemHandlesFromDrop(dataTransfer);
+    return handles.find((handle) => handle && handle.kind === "directory") || null;
   }
 
   function getDirectoryEntryFromDrop(dataTransfer) {
@@ -1536,18 +1544,9 @@ This is a fully client-side application. Your content never leaves your browser 
     return sortFolderTreeNodes(entries);
   }
 
-  async function getMarkdownFileHandleFromDrop(dataTransfer) {
-    const items = Array.from((dataTransfer && dataTransfer.items) || []);
-    for (const item of items) {
-      if (typeof item.getAsFileSystemHandle !== "function") continue;
-      try {
-        const handle = await item.getAsFileSystemHandle();
-        if (handle && handle.kind === "file" && /\.(md|markdown)$/i.test(handle.name)) return handle;
-      } catch (error) {
-        console.warn("Unable to read dropped file handle:", error);
-      }
-    }
-    return null;
+  async function getMarkdownFileHandleFromDrop(dataTransfer, fileSystemHandles) {
+    const handles = fileSystemHandles || await getFileSystemHandlesFromDrop(dataTransfer);
+    return handles.find((handle) => handle && handle.kind === "file" && isMarkdownPath(handle.name)) || null;
   }
 
   async function getMarkdownFileFromEntryDrop(dataTransfer) {
@@ -1566,7 +1565,7 @@ This is a fully client-side application. Your content never leaves your browser 
     return null;
   }
 
-  async function openDroppedMarkdownFile(dataTransfer) {
+  async function openDroppedMarkdownFile(dataTransfer, fileSystemHandles) {
     const files = Array.from((dataTransfer && dataTransfer.files) || []);
 
     if (typeof NL_VERSION !== "undefined") {
@@ -1580,7 +1579,7 @@ This is a fully client-side application. Your content never leaves your browser 
       }
     }
 
-    const handle = await getMarkdownFileHandleFromDrop(dataTransfer);
+    const handle = await getMarkdownFileHandleFromDrop(dataTransfer, fileSystemHandles);
     if (handle) {
       await openMarkdownSourceFile({
         name: handle.name,
@@ -1607,17 +1606,17 @@ This is a fully client-side application. Your content never leaves your browser 
     return false;
   }
 
-  async function openDroppedFolder(dataTransfer) {
+  async function openDroppedFolder(dataTransfer, fileSystemHandles) {
     if (typeof NL_VERSION !== "undefined") {
       const files = Array.from((dataTransfer && dataTransfer.files) || []);
-      const droppedPath = files.find((file) => file && file.path && !/\.(md|markdown)$/i.test(file.name));
+      const droppedPath = files.find((file) => file && file.path && !isMarkdownPath(file.path || file.name));
       if (droppedPath) {
         await openFolderTreeFromNeutralinoPath(droppedPath.path);
         return true;
       }
     }
 
-    const dirHandle = await getDirectoryHandleFromDrop(dataTransfer);
+    const dirHandle = await getDirectoryHandleFromDrop(dataTransfer, fileSystemHandles);
     if (dirHandle) {
       activeFolderName = dirHandle.name || "Graph View";
       const nodes = await listMarkdownTree(dirHandle);
@@ -4221,10 +4220,13 @@ async function openFolderTree() {
     try {
       // Folder drops can expose their contained files through dataTransfer.files,
       // so check for a dropped directory before falling back to a single Markdown file.
-      if (await openDroppedFolder(dt)) {
+      // Cache File System Access handles because some browsers do not reliably
+      // return the same dropped file handle after a previous directory check.
+      const fileSystemHandles = await getFileSystemHandlesFromDrop(dt);
+      if (await openDroppedFolder(dt, fileSystemHandles)) {
         return;
       }
-      if (await openDroppedMarkdownFile(dt)) {
+      if (await openDroppedMarkdownFile(dt, fileSystemHandles)) {
         return;
       }
     } catch (error) {
