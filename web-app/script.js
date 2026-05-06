@@ -4219,10 +4219,12 @@ async function openFolderTree() {
     const dt = e.dataTransfer;
 
     try {
-      if (await openDroppedMarkdownFile(dt)) {
+      // Folder drops can expose their contained files through dataTransfer.files,
+      // so check for a dropped directory before falling back to a single Markdown file.
+      if (await openDroppedFolder(dt)) {
         return;
       }
-      if (await openDroppedFolder(dt)) {
+      if (await openDroppedMarkdownFile(dt)) {
         return;
       }
     } catch (error) {
