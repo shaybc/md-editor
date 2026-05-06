@@ -1373,6 +1373,96 @@ This is a fully client-side application. Your content never leaves your browser 
     renderFolderTree(nodes);
   }
 
+  function getMarkdownTitleFromFileName(fileName) {
+    return (fileName || "document.md").replace(/\.(md|markdown)$/i, "");
+  }
+
+  async function openMarkdownSourceFile(sourceFile) {
+    if (!sourceFile) return null;
+
+    let content = sourceFile.content;
+    let file = sourceFile.file || null;
+    const handle = sourceFile.handle || null;
+    const path = sourceFile.path || null;
+    let name = sourceFile.name || (path ? getFileName(path) : null);
+
+    if (content === undefined) {
+      if (typeof NL_VERSION !== "undefined" && path) {
+        content = await Neutralino.filesystem.readFile(path);
+      } else {
+        if (!file && handle) {
+          file = await handle.getFile();
+        }
+        if (!file) {
+          throw new Error("No readable Markdown file was provided.");
+        }
+        content = await file.text();
+        name = name || file.name;
+      }
+    }
+
+    name = name || (file && file.name) || "document.md";
+    const tab = openSidebarFileInPermanentTab(content, getMarkdownTitleFromFileName(name), {
+      name,
+      handle,
+      path
+    });
+    hideSidebarDropzone();
+    return tab;
+  }
+
+  async function openMarkdownFileFromPicker() {
+    if (typeof NL_VERSION !== "undefined") {
+      try {
+        const selected = await Neutralino.os.showOpenDialog("Open Markdown file", {
+          filters: [
+            { name: "Markdown files", extensions: ["md", "markdown"] }
+          ]
+        });
+        const selectedPath = Array.isArray(selected) ? selected[0] : selected;
+        if (!selectedPath) return;
+        await openMarkdownSourceFile({
+          name: getFileName(selectedPath),
+          path: selectedPath
+        });
+      } catch (error) {
+        if (error && error.name === "AbortError") return;
+        console.error("Neutralino file picker error:", error);
+      }
+      return;
+    }
+
+    if (typeof window.showOpenFilePicker === "function") {
+      try {
+        const handles = await window.showOpenFilePicker({
+          multiple: false,
+          types: [
+            {
+              description: "Markdown files",
+              accept: {
+                "text/markdown": [".md", ".markdown"],
+                "text/plain": [".md", ".markdown"]
+              }
+            }
+          ]
+        });
+        const handle = handles && handles[0];
+        if (!handle) return;
+        await openMarkdownSourceFile({
+          name: handle.name,
+          handle
+        });
+      } catch (error) {
+        if (error && error.name === "AbortError") return;
+        console.warn("File picker unavailable, using fallback input.", error);
+        fileInput.click();
+      }
+      return;
+    }
+
+    fileInput.click();
+  }
+
   async function getDirectoryHandleFromDrop(dataTransfer) {
     const items = Array.from((dataTransfer && dataTransfer.items) || []);
     for (const item of items) {
@@ -1444,6 +1534,77 @@ This is a fully client-side application. Your content never leaves your browser 
     }
 
     return sortFolderTreeNodes(entries);
+  }
+
+  async function getMarkdownFileHandleFromDrop(dataTransfer) {
+    const items = Array.from((dataTransfer && dataTransfer.items) || []);
+    for (const item of items) {
+      if (typeof item.getAsFileSystemHandle !== "function") continue;
+      try {
+        const handle = await item.getAsFileSystemHandle();
+        if (handle && handle.kind === "file" && /\.(md|markdown)$/i.test(handle.name)) return handle;
+      } catch (error) {
+        console.warn("Unable to read dropped file handle:", error);
+      }
+    }
+    return null;
+  }
+
+  async function getMarkdownFileFromEntryDrop(dataTransfer) {
+    const items = Array.from((dataTransfer && dataTransfer.items) || []);
+    for (const item of items) {
+      if (typeof item.webkitGetAsEntry !== "function") continue;
+      const entry = item.webkitGetAsEntry();
+      if (!entry || !entry.isFile || !/\.(md|markdown)$/i.test(entry.name)) continue;
+      try {
+        const file = await getFileFromEntry(entry);
+        return { file, name: entry.name };
+      } catch (error) {
+        console.warn("Failed to read dropped Markdown file entry:", entry.name, error);
+      }
+    }
+    return null;
+  }
+
+  async function openDroppedMarkdownFile(dataTransfer) {
+    const files = Array.from((dataTransfer && dataTransfer.files) || []);
+
+    if (typeof NL_VERSION !== "undefined") {
+      const droppedPath = files.find((file) => file && file.path && /\.(md|markdown)$/i.test(file.path || file.name));
+      if (droppedPath) {
+        await openMarkdownSourceFile({
+          name: getFileName(droppedPath.path || droppedPath.name),
+          path: droppedPath.path
+        });
+        return true;
+      }
+    }
+
+    const handle = await getMarkdownFileHandleFromDrop(dataTransfer);
+    if (handle) {
+      await openMarkdownSourceFile({
+        name: handle.name,
+        handle
+      });
+      return true;
+    }
+
+    const entryFile = await getMarkdownFileFromEntryDrop(dataTransfer);
+    if (entryFile) {
+      await openMarkdownSourceFile(entryFile);
+      return true;
+    }
+
+    const file = files.find((candidate) => candidate && /\.(md|markdown)$/i.test(candidate.name));
+    if (file) {
+      await openMarkdownSourceFile({
+        name: file.name,
+        file
+      });
+      return true;
+    }
+
+    return false;
   }
 
   async function openDroppedFolder(dataTransfer) {
@@ -1701,13 +1862,16 @@ async function openFolderTree() {
   }
 }
 
-  function importMarkdownFile(file) {
-    const reader = new FileReader();
-    reader.onload = function(e) {
-      newTab(e.target.result, file.name.replace(/\.md$/i, ''));
-      hideSidebarDropzone();
-    };
-    reader.readAsText(file);
+  async function importMarkdownFile(file) {
+    try {
+      await openMarkdownSourceFile({
+        name: file.name,
+        file
+      });
+    } catch (error) {
+      console.error("Failed to open Markdown file:", error);
+      alert("Unable to open selected Markdown file.");
+    }
   }
 
   function hideSidebarDropzone() {
@@ -1728,11 +1892,17 @@ async function openFolderTree() {
 
   async function saveActiveTabToSource() {
     const tab = tabs.find(function(t) { return t.id === activeTabId; });
-    if (!tab || !tab.sourceFileHandle) return false;
+    if (!tab || (!tab.sourceFileHandle && !tab.sourceFilePath)) return false;
     try {
-      const writable = await tab.sourceFileHandle.createWritable();
-      await writable.write(markdownEditor.value);
-      await writable.close();
+      if (tab.sourceFileHandle) {
+        const writable = await tab.sourceFileHandle.createWritable();
+        await writable.write(markdownEditor.value);
+        await writable.close();
+      } else if (typeof NL_VERSION !== "undefined" && tab.sourceFilePath) {
+        await Neutralino.filesystem.writeFile(tab.sourceFilePath, markdownEditor.value);
+      } else {
+        return false;
+      }
       tab.content = markdownEditor.value;
       tab.savedContent = markdownEditor.value;
       saveTabsToStorage(tabs);
@@ -1754,7 +1924,7 @@ async function openFolderTree() {
   let availableGitHubImportPaths = [];
 
   function getFileName(path) {
-    return (path || "").split("/").pop() || "document.md";
+    return (path || "").split(/[\\/]/).pop() || "document.md";
   }
 
   function buildRawGitHubUrl(owner, repo, ref, filePath) {
@@ -2505,7 +2675,7 @@ async function openFolderTree() {
       mobileToggleSync.classList.remove("border-primary");
     }
   });
-  mobileImportBtn.addEventListener("click", () => fileInput.click());
+  mobileImportBtn.addEventListener("click", () => openMarkdownFileFromPicker());
   mobileImportGithubBtn.addEventListener("click", () => {
     closeMobileMenu();
     openGitHubImportModal();
@@ -2613,7 +2783,7 @@ async function openFolderTree() {
   if (importFromFileButton) {
     importFromFileButton.addEventListener("click", function (e) {
       e.preventDefault();
-      fileInput.click();
+      openMarkdownFileFromPicker();
     });
   }
 
@@ -2676,10 +2846,10 @@ async function openFolderTree() {
     });
   }, 0);
 
-  fileInput.addEventListener("change", function (e) {
+  fileInput.addEventListener("change", async function (e) {
     const file = e.target.files[0];
     if (file) {
-      importMarkdownFile(file);
+      await importMarkdownFile(file);
     }
     this.value = "";
   });
@@ -4037,7 +4207,7 @@ async function openFolderTree() {
   dropzone.addEventListener("drop", handleDrop, false);
   dropzone.addEventListener("click", function (e) {
     if (e.target !== closeDropzoneBtn && !closeDropzoneBtn.contains(e.target)) {
-      fileInput.click();
+      openMarkdownFileFromPicker();
     }
   });
   closeDropzoneBtn.addEventListener("click", function(e) {
@@ -4049,27 +4219,21 @@ async function openFolderTree() {
     const dt = e.dataTransfer;
 
     try {
+      if (await openDroppedMarkdownFile(dt)) {
+        return;
+      }
       if (await openDroppedFolder(dt)) {
         return;
       }
     } catch (error) {
-      console.error("Failed to open dropped folder:", error);
-      alert("Unable to open the dropped folder.");
+      console.error("Failed to open dropped item:", error);
+      alert("Unable to open the dropped file or folder.");
       return;
     }
 
     const files = dt.files;
     if (files.length) {
-      const file = files[0];
-      const isMarkdownFile =
-        file.type === "text/markdown" ||
-        file.name.endsWith(".md") ||
-        file.name.endsWith(".markdown");
-      if (isMarkdownFile) {
-        importMarkdownFile(file);
-      } else {
-        alert("Please upload a Markdown file (.md or .markdown), or drop a folder that contains Markdown files.");
-      }
+      alert("Please open a Markdown file (.md or .markdown), or a folder that contains Markdown files.");
     }
   }
 
