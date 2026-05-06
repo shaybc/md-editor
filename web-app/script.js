@@ -91,6 +91,9 @@ document.addEventListener("DOMContentLoaded", function () {
             <i class="bi bi-github me-2"></i> Import from GitHub
           </button>
           <hr class="dropdown-divider">
+          <button class="dropdown-item action-menu-item save-current-file-button" type="button" title="Save changes to current file" disabled>
+            <i class="bi bi-save me-2"></i> Save Changes
+          </button>
           <button class="dropdown-item action-menu-item" id="export-md" title="Export as Markdown">
             <i class="bi bi-file-earmark-text me-2"></i> Export as Markdown
           </button>
@@ -977,6 +980,7 @@ This is a fully client-side application. Your content never leaves your browser 
     requestAnimationFrame(updateTabScrollControls);
 
     renderMobileTabList(tabsArr, currentActiveTabId);
+    updateSaveCurrentFileButtons();
   }
 
   function renderMobileTabList(tabsArr, currentActiveTabId) {
@@ -1076,6 +1080,41 @@ This is a fully client-side application. Your content never leaves your browser 
     tab.scrollPos = markdownEditor.scrollTop;
     tab.viewMode = currentViewMode || 'split';
     saveTabsToStorage(tabs);
+  }
+
+  function getActiveMarkdownTab() {
+    const tab = tabs.find(function(t) { return t.id === activeTabId; });
+    if (!tab || tab.type === "graph") return null;
+    return tab;
+  }
+
+  function activeTabHasUnsavedChanges() {
+    const tab = getActiveMarkdownTab();
+    return !!tab && tab.savedContent !== markdownEditor.value;
+  }
+
+  function updateSaveCurrentFileButtons() {
+    const tab = getActiveMarkdownTab();
+    const hasUnsavedChanges = activeTabHasUnsavedChanges();
+    const hasWritableSource = !!(tab && (tab.sourceFileHandle || tab.sourceFilePath));
+    const title = hasUnsavedChanges
+      ? (hasWritableSource ? "Save changes to current file" : "Save changes as Markdown")
+      : "No changes to save";
+
+    document.querySelectorAll(".save-current-file-button").forEach(function(button) {
+      button.disabled = !hasUnsavedChanges;
+      button.title = title;
+      button.setAttribute("aria-label", title);
+    });
+  }
+
+  function saveCurrentFileIfChanged() {
+    if (!activeTabHasUnsavedChanges()) {
+      updateSaveCurrentFileButtons();
+      return;
+    }
+
+    exportMd.click();
   }
 
   function restoreViewMode(mode) {
@@ -2232,6 +2271,7 @@ async function openFolderTree() {
       tab.savedContent = markdownEditor.value;
       saveTabsToStorage(tabs);
       renderTabBar(tabs, activeTabId);
+      updateSaveCurrentFileButtons();
       return true;
     } catch (error) {
       console.error("Failed to save file to original location:", error);
@@ -3060,6 +3100,7 @@ async function openFolderTree() {
     if (activeTab) {
       activeTab.content = markdownEditor.value;
       renderTabBar(tabs, activeTabId);
+      updateSaveCurrentFileButtons();
     }
     debouncedRender();
     clearTimeout(saveTabStateTimeout);
@@ -3697,6 +3738,10 @@ async function openFolderTree() {
 
     applyMagneticSetting();
   }
+
+  document.querySelectorAll(".save-current-file-button").forEach(function(button) {
+    button.addEventListener("click", saveCurrentFileIfChanged);
+  });
 
   exportMd.addEventListener("click", async function () {
     try {
