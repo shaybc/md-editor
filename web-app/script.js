@@ -638,6 +638,7 @@ This is a fully client-side application. Your content never leaves your browser 
       isTemporary: false,
       sourceFileName: null,
       sourceFileHandle: null,
+      sourceFilePath: null,
       savedContent: content,
       type: "markdown",
       folderName: null
@@ -933,32 +934,13 @@ This is a fully client-side application. Your content never leaves your browser 
     return tabs.find(function(t) { return !!t.isTemporary; }) || null;
   }
 
-  function openSidebarFileInTemporaryTab(content, title, sourceFile) {
-    saveCurrentTabState();
-    let tab = findTemporaryTab();
+  function applySidebarFileMetadata(tab, sourceFile) {
+    tab.sourceFileName = sourceFile && sourceFile.name ? sourceFile.name : null;
+    tab.sourceFileHandle = sourceFile && sourceFile.handle ? sourceFile.handle : null;
+    tab.sourceFilePath = sourceFile && sourceFile.path ? sourceFile.path : null;
+  }
 
-    if (!tab) {
-      if (tabs.length >= 20) {
-        alert('Maximum of 20 tabs reached. Please close an existing tab to open a new one.');
-        return;
-      }
-      tab = createTab(content, title || 'Untitled', currentViewMode || 'split');
-      tab.isTemporary = true;
-      tab.sourceFileName = sourceFile && sourceFile.name ? sourceFile.name : null;
-      tab.sourceFileHandle = sourceFile && sourceFile.handle ? sourceFile.handle : null;
-      tab.savedContent = content || '';
-      tabs.push(tab);
-    } else {
-      tab.title = title || 'Untitled';
-      tab.content = content || '';
-      tab.scrollPos = 0;
-      tab.viewMode = currentViewMode || tab.viewMode || 'split';
-      tab.isTemporary = true;
-      tab.sourceFileName = sourceFile && sourceFile.name ? sourceFile.name : null;
-      tab.sourceFileHandle = sourceFile && sourceFile.handle ? sourceFile.handle : null;
-      tab.savedContent = content || '';
-    }
-
+  function activateSidebarTab(tab) {
     activeTabId = tab.id;
     saveActiveTabId(activeTabId);
     setGraphViewMode(false);
@@ -971,6 +953,45 @@ This is a fully client-side application. Your content never leaves your browser 
     saveTabsToStorage(tabs);
     renderTabBar(tabs, activeTabId);
     markdownEditor.focus();
+  }
+
+  function openSidebarFileInTab(content, title, sourceFile, options) {
+    options = options || {};
+    const isTemporary = options.temporary !== false;
+    saveCurrentTabState();
+
+    let tab = isTemporary ? findTemporaryTab() : null;
+    if (!tab && tabs.length >= 20) {
+      alert('Maximum of 20 tabs reached. Please close an existing tab to open a new one.');
+      return null;
+    }
+
+    if (!tab) {
+      tab = createTab(content, title || 'Untitled', currentViewMode || 'split');
+      tab.isTemporary = isTemporary;
+      applySidebarFileMetadata(tab, sourceFile);
+      tab.savedContent = content || '';
+      tabs.push(tab);
+    } else {
+      tab.title = title || 'Untitled';
+      tab.content = content || '';
+      tab.scrollPos = 0;
+      tab.viewMode = currentViewMode || tab.viewMode || 'split';
+      tab.isTemporary = isTemporary;
+      applySidebarFileMetadata(tab, sourceFile);
+      tab.savedContent = content || '';
+    }
+
+    activateSidebarTab(tab);
+    return tab;
+  }
+
+  function openSidebarFileInTemporaryTab(content, title, sourceFile) {
+    return openSidebarFileInTab(content, title, sourceFile, { temporary: true });
+  }
+
+  function openSidebarFileInPermanentTab(content, title, sourceFile) {
+    return openSidebarFileInTab(content, title, sourceFile, { temporary: false });
   }
 
   function newTab(content, title) {
@@ -1323,35 +1344,69 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
     }
 
     const button = document.createElement("button");
+    let sidebarOpenClickTimer = null;
     button.type = "button";
     button.className = "folder-tree-file";
+    button.title = "Click to preview; double-click to keep open";
     button.innerHTML = `<i class="bi bi-file-earmark-text"></i>${node.name}`;
-	button.addEventListener("click", async () => {
-	  try {
-		let content;
-		if (typeof NL_VERSION !== "undefined" && node.fullPath) {
-		  // Desktop: read file via Neutralino filesystem
-		  content = await Neutralino.filesystem.readFile(node.fullPath);
-		} else {
-		  // Browser: read file via File System Access API
-		  const file = node.file ? node.file : await node.handle.getFile();
-		  content = await file.text();
-		}
-		const existingTab = findTabForSidebarFile(node);
-		if (existingTab) {
-		  switchTab(existingTab.id);
-		  return;
-		}
-		openSidebarFileInTemporaryTab(
-		  content,
-		  node.name.replace(/\.(md|markdown)$/i, ""),
-		  { name: node.name, handle: node.handle || null }
-		);
-	  } catch (error) {
-		console.error("Failed to open Markdown file:", error);
-		alert("Unable to open selected file.");
-	  }
-	});
+
+    async function readSidebarFileContent() {
+      if (typeof NL_VERSION !== "undefined" && node.fullPath) {
+        // Desktop: read file via Neutralino filesystem
+        return Neutralino.filesystem.readFile(node.fullPath);
+      }
+
+      // Browser: read file via File System Access API or upload fallback
+      const file = node.file ? node.file : await node.handle.getFile();
+      return file.text();
+    }
+
+    function getSidebarFileSource() {
+      return {
+        name: node.name,
+        handle: node.handle || null,
+        path: node.fullPath || node.path || null
+      };
+    }
+
+    async function openSidebarFile(options) {
+      try {
+        const existingTab = findTabForSidebarFile(node);
+        if (existingTab) {
+          switchTab(existingTab.id);
+          if (options && options.temporary === false) {
+            pinTemporaryTab(existingTab.id);
+          }
+          return;
+        }
+
+        const content = await readSidebarFileContent();
+        const title = node.name.replace(/\.(md|markdown)$/i, "");
+        const sourceFile = getSidebarFileSource();
+        if (options && options.temporary === false) {
+          openSidebarFileInPermanentTab(content, title, sourceFile);
+        } else {
+          openSidebarFileInTemporaryTab(content, title, sourceFile);
+        }
+      } catch (error) {
+        console.error("Failed to open Markdown file:", error);
+        alert("Unable to open selected file.");
+      }
+    }
+
+    button.addEventListener("click", () => {
+      window.clearTimeout(sidebarOpenClickTimer);
+      sidebarOpenClickTimer = window.setTimeout(() => {
+        openSidebarFile({ temporary: true });
+      }, 200);
+    });
+
+    button.addEventListener("dblclick", (event) => {
+      event.preventDefault();
+      window.clearTimeout(sidebarOpenClickTimer);
+      openSidebarFile({ temporary: false });
+    });
+
     li.appendChild(button);
     return li;
   }
@@ -1364,6 +1419,14 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
         return tab.sourceFileHandle === node.handle;
       });
       if (handleMatch) return handleMatch;
+    }
+
+    const nodePath = node.fullPath || node.path || null;
+    if (nodePath) {
+      const pathMatch = tabs.find(function(tab) {
+        return tab.sourceFilePath === nodePath;
+      });
+      if (pathMatch) return pathMatch;
     }
 
     const title = node.name.replace(/\.(md|markdown)$/i, "");
