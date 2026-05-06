@@ -659,6 +659,65 @@ This is a fully client-side application. Your content never leaves your browser 
     return tab.savedContent !== tab.content ? baseName + ' *' : baseName;
   }
 
+  function updateTabScrollControls() {
+    const tabList = document.getElementById('tab-list');
+    const scrollLeftBtn = document.getElementById('tab-scroll-left');
+    const scrollRightBtn = document.getElementById('tab-scroll-right');
+    if (!tabList || !scrollLeftBtn || !scrollRightBtn) return;
+
+    const hasOverflow = tabList.scrollWidth > tabList.clientWidth + 1;
+    scrollLeftBtn.classList.toggle('visible', hasOverflow);
+    scrollRightBtn.classList.toggle('visible', hasOverflow);
+
+    const maxScrollLeft = Math.max(0, tabList.scrollWidth - tabList.clientWidth);
+    scrollLeftBtn.disabled = !hasOverflow || tabList.scrollLeft <= 1;
+    scrollRightBtn.disabled = !hasOverflow || tabList.scrollLeft >= maxScrollLeft - 1;
+  }
+
+  function scrollTabsBy(delta) {
+    const tabList = document.getElementById('tab-list');
+    if (!tabList) return;
+
+    tabList.scrollBy({ left: delta, behavior: 'smooth' });
+    window.setTimeout(updateTabScrollControls, 180);
+  }
+
+  function setupTabScrolling() {
+    const tabList = document.getElementById('tab-list');
+    const scrollLeftBtn = document.getElementById('tab-scroll-left');
+    const scrollRightBtn = document.getElementById('tab-scroll-right');
+    if (!tabList || !scrollLeftBtn || !scrollRightBtn) return;
+
+    const getScrollAmount = function() {
+      return Math.max(160, Math.floor(tabList.clientWidth * 0.75));
+    };
+
+    scrollLeftBtn.addEventListener('click', function() {
+      scrollTabsBy(-getScrollAmount());
+    });
+
+    scrollRightBtn.addEventListener('click', function() {
+      scrollTabsBy(getScrollAmount());
+    });
+
+    tabList.addEventListener('wheel', function(e) {
+      if (tabList.scrollWidth <= tabList.clientWidth) return;
+
+      const delta = Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY;
+      if (delta === 0) return;
+
+      e.preventDefault();
+      tabList.scrollLeft += delta;
+      updateTabScrollControls();
+    }, { passive: false });
+
+    tabList.addEventListener('scroll', updateTabScrollControls);
+    window.addEventListener('resize', updateTabScrollControls);
+    updateTabScrollControls();
+  }
+
+  setupTabScrolling();
+
   function renderTabBar(tabsArr, currentActiveTabId) {
     const tabList = document.getElementById('tab-list');
     if (!tabList) return;
@@ -786,6 +845,9 @@ This is a fully client-side application. Your content never leaves your browser 
     if (activeItem) {
       activeItem.scrollIntoView({ block: 'nearest', inline: 'nearest' });
     }
+
+    updateTabScrollControls();
+    requestAnimationFrame(updateTabScrollControls);
 
     renderMobileTabList(tabsArr, currentActiveTabId);
   }
