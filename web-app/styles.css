@@ -504,6 +504,32 @@ body {
   color: var(--text-color);
 }
 
+.action-menu-submenu {
+  position: relative;
+}
+
+.action-menu-submenu > .action-submenu {
+  top: 0;
+  left: 100%;
+  margin-top: -1px;
+  min-width: 220px;
+}
+
+.action-menu-submenu:hover > .action-submenu,
+.action-menu-submenu:focus-within > .action-submenu {
+  display: block;
+}
+
+.action-menu-submenu > .dropdown-toggle {
+  display: flex;
+  align-items: center;
+}
+
+.action-menu-submenu > .dropdown-toggle::after {
+  margin-left: auto;
+  transform: rotate(-90deg);
+}
+
 /* Responsive design for mobile */
 @media (max-width: 1080px) {
   .content-container {

@@ -133,6 +133,7 @@ document.addEventListener("DOMContentLoaded", function () {
   document.querySelectorAll("#folder-tree-pane .tree-action-menu").forEach((node) => node.remove());
   const sidebarDropzonePanel = document.querySelector(".sidebar-dropzone-panel");
   const sidebarDropzoneResizer = document.getElementById("sidebar-dropzone-resizer");
+  const toggleDropzonePanelButtons = document.querySelectorAll(".toggle-dropzone-panel");
   updateFolderImportHint();
 
 
@@ -1872,11 +1873,36 @@ async function openFolderTree() {
     }
   }
 
+  function isSidebarDropzoneVisible() {
+    return !!sidebarDropzonePanel && sidebarDropzonePanel.style.display !== "none";
+  }
+
+  function updateDropzoneToggleButtons() {
+    const isVisible = isSidebarDropzoneVisible();
+    const label = isVisible ? "Hide Dropzone Panel" : "Show Dropzone Panel";
+    const title = `${label}`;
+
+    toggleDropzonePanelButtons.forEach(function(button) {
+      const labelElement = button.querySelector(".dropzone-toggle-label");
+      if (labelElement) {
+        labelElement.textContent = label;
+      } else {
+        button.textContent = label;
+      }
+      button.title = title;
+      button.setAttribute("aria-label", title);
+      button.setAttribute("aria-pressed", String(!isVisible));
+    });
+  }
+
   function hideSidebarDropzone() {
     if (dropzone) {
       dropzone.style.display = "none";
     }
     if (sidebarDropzonePanel) {
+      if (sidebarDropzonePanel.style.flex && sidebarDropzonePanel.style.flex !== "0 0 0px") {
+        sidebarDropzonePanel.dataset.previousFlex = sidebarDropzonePanel.style.flex;
+      }
       sidebarDropzonePanel.style.display = "none";
       sidebarDropzonePanel.style.flex = "0 0 0px";
       sidebarDropzonePanel.style.padding = "0";
@@ -1885,6 +1911,32 @@ async function openFolderTree() {
     if (sidebarDropzoneResizer) {
       sidebarDropzoneResizer.style.display = "none";
       sidebarDropzoneResizer.style.flex = "0 0 0px";
+    }
+    updateDropzoneToggleButtons();
+  }
+
+  function showSidebarDropzone() {
+    if (dropzone) {
+      dropzone.style.display = "";
+    }
+    if (sidebarDropzonePanel) {
+      sidebarDropzonePanel.style.display = "";
+      sidebarDropzonePanel.style.flex = sidebarDropzonePanel.dataset.previousFlex || "";
+      sidebarDropzonePanel.style.padding = "";
+      sidebarDropzonePanel.style.minHeight = "";
+    }
+    if (sidebarDropzoneResizer) {
+      sidebarDropzoneResizer.style.display = "";
+      sidebarDropzoneResizer.style.flex = "";
+    }
+    updateDropzoneToggleButtons();
+  }
+
+  function toggleSidebarDropzone() {
+    if (isSidebarDropzoneVisible()) {
+      hideSidebarDropzone();
+    } else {
+      showSidebarDropzone();
     }
   }
 
@@ -4212,6 +4264,14 @@ async function openFolderTree() {
     e.stopPropagation(); 
     hideSidebarDropzone();
   });
+  toggleDropzonePanelButtons.forEach(function(button) {
+    button.addEventListener("click", function(e) {
+      e.preventDefault();
+      e.stopPropagation();
+      toggleSidebarDropzone();
+    });
+  });
+  updateDropzoneToggleButtons();
 
   async function handleDrop(e) {
     const dt = e.dataTransfer;

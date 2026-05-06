@@ -203,6 +203,10 @@
                                 <i class="bi bi-moon me-2"></i> Dark Mode
                             </button>
 
+                            <button class="mobile-menu-item toggle-dropzone-panel" type="button" title="Hide Dropzone Panel">
+                                <i class="bi bi-layout-sidebar-inset me-2"></i><span class="dropzone-toggle-label">Hide Dropzone Panel</span>
+                            </button>
+
                             <button id="mobile-open-graph-view" class="mobile-menu-item" title="Open Graph View">
                                 <i class="bi bi-diagram-3 me-2"></i> Graph View
                             </button>
@@ -254,6 +258,16 @@
               <button id="theme-toggle" class="dropdown-item action-menu-item" title="Toggle Dark Mode">
                 <i class="bi bi-moon me-2"></i> Theme
               </button>
+              <div class="dropdown-submenu action-menu-submenu">
+                <button class="dropdown-item action-menu-item dropdown-toggle" type="button" aria-haspopup="true" aria-expanded="false">
+                  <i class="bi bi-eye me-2"></i> View
+                </button>
+                <div class="dropdown-menu action-submenu" aria-label="View options">
+                  <button class="dropdown-item action-menu-item toggle-dropzone-panel" type="button" title="Hide Dropzone Panel">
+                    <i class="bi bi-layout-sidebar-inset me-2"></i><span class="dropzone-toggle-label">Hide Dropzone Panel</span>
+                  </button>
+                </div>
+              </div>
               <button class="dropdown-item action-menu-item open-graph-view" title="Open Graph View">
                 <i class="bi bi-diagram-3 me-2"></i> Graph View
               </button>
