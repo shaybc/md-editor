@@ -112,6 +112,9 @@ document.addEventListener("DOMContentLoaded", function () {
               <button id="theme-toggle" class="dropdown-item action-menu-item" title="Toggle Dark Mode">
                 <i class="bi bi-moon me-2"></i> Theme
               </button>
+              <button class="dropdown-item action-menu-item toggle-sidebar" type="button" title="Hide Sidebar" aria-controls="folder-tree-pane">
+                <i class="bi bi-layout-sidebar me-2"></i><span class="sidebar-toggle-label">Hide Sidebar</span>
+              </button>
             </div>
           </div>
         </div>
@@ -141,6 +144,7 @@ document.addEventListener("DOMContentLoaded", function () {
   const sidebarDropzonePanel = document.querySelector(".sidebar-dropzone-panel");
   const sidebarDropzoneResizer = document.getElementById("sidebar-dropzone-resizer");
   const toggleDropzonePanelButtons = document.querySelectorAll(".toggle-dropzone-panel");
+  const toggleSidebarButtons = document.querySelectorAll(".toggle-sidebar");
   updateFolderImportHint();
 
 
@@ -196,6 +200,8 @@ document.addEventListener("DOMContentLoaded", function () {
   const graphSettings = {
     magneticEnabled: loadGlobalState().graphMagneticEnabled !== false
   };
+
+  setSidebarVisible(loadGlobalState().sidebarVisible !== false, false);
 
   function loadGlobalState() {
     try { return JSON.parse(localStorage.getItem(GLOBAL_STATE_KEY)) || {}; }
@@ -1945,6 +1951,44 @@ async function openFolderTree() {
     } else {
       showSidebarDropzone();
     }
+  }
+
+  function isSidebarVisible() {
+    return !!folderTreePane && !contentContainer.classList.contains("sidebar-hidden");
+  }
+
+  function updateSidebarToggleButtons() {
+    const isVisible = isSidebarVisible();
+    const label = isVisible ? "Hide Sidebar" : "Show Sidebar";
+
+    toggleSidebarButtons.forEach(function(button) {
+      const labelElement = button.querySelector(".sidebar-toggle-label");
+      if (labelElement) {
+        labelElement.textContent = label;
+      } else {
+        button.textContent = label;
+      }
+      button.title = label;
+      button.setAttribute("aria-label", label);
+      button.setAttribute("aria-pressed", String(!isVisible));
+    });
+  }
+
+  function setSidebarVisible(isVisible, shouldPersist = true) {
+    if (!folderTreePane || !contentContainer) return;
+
+    contentContainer.classList.toggle("sidebar-hidden", !isVisible);
+    folderTreePane.hidden = !isVisible;
+
+    if (shouldPersist) {
+      saveGlobalState({ sidebarVisible: isVisible });
+    }
+
+    updateSidebarToggleButtons();
+  }
+
+  function toggleSidebar() {
+    setSidebarVisible(!isSidebarVisible());
   }
 
   async function saveActiveTabToSource() {
@@ -4278,7 +4322,15 @@ async function openFolderTree() {
       toggleSidebarDropzone();
     });
   });
+  toggleSidebarButtons.forEach(function(button) {
+    button.addEventListener("click", function(e) {
+      e.preventDefault();
+      e.stopPropagation();
+      toggleSidebar();
+    });
+  });
   updateDropzoneToggleButtons();
+  updateSidebarToggleButtons();
 
   async function handleDrop(e) {
     const dt = e.dataTransfer;
