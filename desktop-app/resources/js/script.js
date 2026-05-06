@@ -1092,6 +1092,7 @@ This is a fully client-side application. Your content never leaves your browser 
       activeTabId = welcome.id;
       saveActiveTabId(activeTabId);
       saveTabsToStorage(tabs);
+      setGraphViewMode(false);
       markdownEditor.value = sampleMarkdown;
       restoreViewMode('split');
       renderMarkdown();
