@@ -1444,7 +1444,6 @@ async function openFolderTree() {
     const reader = new FileReader();
     reader.onload = function(e) {
       newTab(e.target.result, file.name.replace(/\.md$/i, ''));
-      hideSidebarDropzone();
     };
     reader.readAsText(file);
   }
