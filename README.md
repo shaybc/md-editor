@@ -1,7 +1,7 @@
 # Markdown Viewer (Forked by SBC)
 
 <div align="center">
-  <img src="assets/icon.jpg" alt="Markdown Viewer Logo" width="140" />
+  <img src="web-app/assets/icon.jpg" alt="Markdown Viewer Logo" width="140" />
 
   <p><strong>Professional GitHub-style Markdown editor and previewer</strong></p>
   <p>Live preview, diagrams, math, export tools, and multi-document workflows — all in your browser.</p>
@@ -96,16 +96,16 @@ Markdown Viewer is a full-featured Markdown editor and preview application that 
 ## Screenshots
 
 ### Code Syntax Highlighting
-![Code Syntax Highlighting](assets/code.png)
+![Code Syntax Highlighting](web-app/assets/code.png)
 
 ### Mathematical Expressions Support
-![Mathematical Expressions](assets/mathexp.png)
+![Mathematical Expressions](web-app/assets/mathexp.png)
 
 ### Mermaid Diagrams
-![Mermaid Diagrams](assets/mermaid.png)
+![Mermaid Diagrams](web-app/assets/mermaid.png)
 
 ### Tables Support
-![Tables Support](assets/table.png)
+![Tables Support](web-app/assets/table.png)
 
 ---
 
@@ -124,14 +124,14 @@ Open **http://localhost:8080**.
 ### Option 2 — Docker Compose
 ```bash
 git clone https://github.com/ThisIs-Developer/Markdown-Viewer.git
-cd Markdown-Viewer
+cd Markdown-Viewer/web-app
 docker compose up -d
 ```
 
 ### Option 3 — Static Web Server
 ```bash
 git clone https://github.com/ThisIs-Developer/Markdown-Viewer.git
-cd Markdown-Viewer
+cd Markdown-Viewer/web-app
 python3 -m http.server 8080
 ```
 

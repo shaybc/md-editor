@@ -31,7 +31,7 @@ The web application has no server-side or build-time configuration. User prefere
 
 ### CDN Library Versions
 
-Library versions are defined inline in `index.html`. To pin or upgrade a library, edit the corresponding `<script>` or `<link>` tag:
+Library versions are defined inline in `web-app/index.html`. To pin or upgrade a library, edit the corresponding `<script>` or `<link>` tag:
 
 ```html
 <!-- Example: upgrading marked.js -->
@@ -51,13 +51,13 @@ Markdown Viewer is a static client-side app. Key data flows to be aware of:
 - **GitHub import**: Public file imports use `api.github.com` and `raw.githubusercontent.com`.
 - **Share links**: Shared documents are encoded into the URL hash and never uploaded.
 
-To eliminate external network requests, replace CDN links in `index.html` with locally hosted files and rebuild the desktop resources with `node prepare.js`.
+To eliminate external network requests, replace CDN links in `web-app/index.html` with locally hosted files and rebuild the desktop resources with `node prepare.js`.
 
 ---
 
 ## Docker / Nginx
 
-The `Dockerfile` builds a production image using `nginx:alpine`. The embedded Nginx configuration can be customized by modifying the `Dockerfile` before building.
+The `web-app/Dockerfile` builds a production image using `nginx:alpine`. The embedded Nginx configuration can be customized by modifying `web-app/Dockerfile` before building.
 
 ### Default Nginx Settings
 
@@ -80,7 +80,7 @@ docker run -p 3000:80 ghcr.io/thisis-developer/markdown-viewer:latest
 
 ### Serving at a Sub-Path
 
-To serve the app at `/app/` instead of `/`, update the Nginx `location` block in the `Dockerfile`:
+To serve the app at `/app/` instead of `/`, update the Nginx `location` block in `web-app/Dockerfile`:
 
 ```nginx
 location /app/ {
@@ -93,7 +93,7 @@ location /app/ {
 
 ## Docker Compose
 
-The `docker-compose.yml` in the repository root:
+The `web-app/docker-compose.yml` file:
 
 ```yaml
 services:

@@ -98,7 +98,7 @@ docker run -p 8080:80 ghcr.io/thisis-developer/markdown-viewer:latest
 
 # With Python:
 git clone https://github.com/ThisIs-Developer/Markdown-Viewer.git
-cd Markdown-Viewer
+cd Markdown-Viewer/web-app
 python3 -m http.server 8080
 ```
 
@@ -106,7 +106,7 @@ See the [Installation](Installation) page for all options.
 
 ### Can I run it without Docker?
 
-Yes. The web app is pure HTML/CSS/JavaScript with no build step. Clone the repository and serve the root directory with any static web server (Python, Node.js `serve`, VS Code Live Server, Apache, Nginx, etc.).
+Yes. The web app is pure HTML/CSS/JavaScript with no build step. Clone the repository and serve the `web-app/` directory with any static web server (Python, Node.js `serve`, VS Code Live Server, Apache, Nginx, etc.).
 
 ### Can I use it offline?
 

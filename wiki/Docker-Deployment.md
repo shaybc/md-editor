@@ -69,23 +69,26 @@ Available tags: `latest`, `main`, and commit SHA tags (e.g., `abc1234`).
 
 ## Docker Compose
 
-The repository includes a ready-to-use `docker-compose.yml`.
+The `web-app/` directory includes a ready-to-use `docker-compose.yml`.
 
 ### Start
 
 ```bash
+cd web-app
 docker compose up -d
 ```
 
 ### Stop
 
 ```bash
+cd web-app
 docker compose down
 ```
 
 ### Rebuild
 
 ```bash
+cd web-app
 docker compose up -d --build
 ```
 
@@ -108,9 +111,9 @@ To change the host port, update the left value in `"8080:80"` to your desired po
 ## Building the Image Locally
 
 ```bash
-# From the repository root
+# From the web app directory
 git clone https://github.com/ThisIs-Developer/Markdown-Viewer.git
-cd Markdown-Viewer
+cd Markdown-Viewer/web-app
 
 docker build -t markdown-viewer:local .
 docker run -p 8080:80 markdown-viewer:local
@@ -118,9 +121,9 @@ docker run -p 8080:80 markdown-viewer:local
 
 ### Dockerfile Summary
 
-The `Dockerfile` is based on `nginx:alpine` and:
+The `web-app/Dockerfile` is based on `nginx:alpine`; `web-app/.dockerignore` keeps non-runtime files out of the web image build context. The Dockerfile:
 
-1. **Copies** all web app files (`index.html`, `script.js`, `styles.css`, `assets/`) into `/usr/share/nginx/html`.
+1. **Copies** all files from `web-app/` (`index.html`, `script.js`, `styles.css`, `assets/`) into `/usr/share/nginx/html`.
 2. **Configures Nginx** for SPA routing (all paths serve `index.html`).
 3. **Sets cache headers** for static assets (1-year max-age).
 4. **Adds security headers**:
@@ -175,7 +178,7 @@ The Docker image is intentionally minimal:
 
 Because the app is purely static, there are no runtime environment variables to configure. All customization is done at build time by modifying the source files.
 
-To serve the app at a **sub-path** (e.g., `/markdown-viewer/`), adjust the Nginx `location` directive in the `Dockerfile` and rebuild the image.
+To serve the app at a **sub-path** (e.g., `/markdown-viewer/`), adjust the Nginx `location` directive in `web-app/Dockerfile` and rebuild the image.
 
 ---
 

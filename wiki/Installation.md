@@ -46,7 +46,7 @@ For a more reproducible local setup, clone the repository and use Docker Compose
 
 ```bash
 git clone https://github.com/ThisIs-Developer/Markdown-Viewer.git
-cd Markdown-Viewer
+cd Markdown-Viewer/web-app
 ```
 
 ### 2. Start the application
@@ -87,7 +87,7 @@ Because the application is 100% client-side, you can serve it from any static we
 
 ```bash
 git clone https://github.com/ThisIs-Developer/Markdown-Viewer.git
-cd Markdown-Viewer
+cd Markdown-Viewer/web-app
 ```
 
 ### Serve with Python (no dependencies)
@@ -106,7 +106,7 @@ npx serve . -p 8080
 
 Open the project folder in VS Code and click **Go Live** in the status bar.
 
-> **Note**: Opening `index.html` directly with `file://` may have limitations with some browser security policies. Using a local server is recommended.
+> **Note**: Opening `web-app/index.html` directly with `file://` may have limitations with some browser security policies. Using a local server is recommended.
 
 ---
 
@@ -114,7 +114,7 @@ Open the project folder in VS Code and click **Go Live** in the status bar.
 
 Markdown Viewer is also available as a cross-platform native desktop application powered by [Neutralinojs](https://neutralino.js.org/).
 
-> **Transparency note**: The desktop app uses the same `index.html` and CDN-hosted libraries as the web app. It can run offline after assets are cached, or if you replace CDN links with local copies and run `node prepare.js`.
+> **Transparency note**: The desktop app uses the same `web-app/index.html` and CDN-hosted libraries as the web app. It can run offline after assets are cached, or if you replace CDN links with local copies and run `node prepare.js`.
 
 ### Download a Pre-Built Binary
 

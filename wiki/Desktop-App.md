@@ -25,15 +25,15 @@ The desktop application wraps the same HTML/CSS/JavaScript that powers the web a
 
 - Runs **without a browser**; by default it loads CDN libraries, so an internet connection is required on first run unless you bundle assets locally.
 - Produces a **single self-contained binary** that can be distributed without installers.
-- Shares **100% of the core code** (`script.js`, `styles.css`, `assets/`) with the web app — no duplication.
+- Shares **100% of the core code** (`web-app/script.js`, `web-app/styles.css`, `web-app/assets/`) with the web app — no duplication.
 
 ---
 
 ## Network Dependencies & Offline Mode
 
-By default, the desktop app uses the same CDN-hosted libraries referenced in `index.html` (cdnjs, jsDelivr). To run fully offline:
+By default, the desktop app uses the same CDN-hosted libraries referenced in `web-app/index.html` (cdnjs, jsDelivr). To run fully offline:
 
-1. Download the CDN assets locally and update the `<script>`/`<link>` tags in `index.html`.
+1. Download the CDN assets locally and update the `<script>`/`<link>` tags in `web-app/index.html`.
 2. Run `node prepare.js` to copy the updated file into `desktop-app/resources/`.
 3. Rebuild the app with `npm run build` or `npm run build:portable`.
 
@@ -48,18 +48,18 @@ desktop-app/
 ├── package.json              # NPM scripts (dev, build, setup)
 ├── neutralino.config.json    # Neutralinojs window and API config
 ├── setup-binaries.js         # Downloads Neutralinojs platform binaries
-├── prepare.js                # Copies shared files from root into resources/
+├── prepare.js                # Copies shared files from web-app into resources/
 └── resources/
-    ├── index.html            # Generated from root index.html
-    ├── styles.css            # Copied from root
+    ├── index.html            # Generated from web-app/index.html
+    ├── styles.css            # Copied from web-app
     ├── js/
     │   ├── main.js           # Neutralinojs lifecycle & tray menu
-    │   ├── script.js         # Copied from root
+    │   ├── script.js         # Copied from web-app
     │   └── neutralino.js     # Neutralinojs client library
-    └── assets/               # Copied from root assets/
+    └── assets/               # Copied from web-app assets/
 ```
 
-The `prepare.js` script handles copying files from the project root into `desktop-app/resources/` before each build so there is a single source of truth.
+The `prepare.js` script handles copying files from `web-app/` into `desktop-app/resources/` before each build so there is a single source of truth.
 
 ---
 

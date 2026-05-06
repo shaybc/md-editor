@@ -63,16 +63,16 @@ If you discover a security issue, please report it responsibly:
 
 ### Web App
 
-No build tools are required. Serve the root directory with any static server:
+No build tools are required. Serve the `web-app/` directory with any static server:
 
 ```bash
 git clone https://github.com/ThisIs-Developer/Markdown-Viewer.git
-cd Markdown-Viewer
+cd Markdown-Viewer/web-app
 python3 -m http.server 8080
 # or: npx serve . -p 8080
 ```
 
-Open **http://localhost:8080** and start editing `index.html`, `script.js`, or `styles.css`.
+Open **http://localhost:8080** and start editing `web-app/index.html`, `web-app/script.js`, or `web-app/styles.css`.
 
 ### Desktop App
 
@@ -193,15 +193,18 @@ chore(deps): update DOMPurify to 3.1.0
 
 ```
 Markdown-Viewer/
-├── index.html              # Main web app HTML
-├── script.js               # Core JavaScript logic
-├── styles.css              # All styles (light + dark themes)
-├── Dockerfile              # Nginx-based web app container
-├── docker-compose.yml      # Docker Compose configuration
 ├── README.md               # Project overview
 ├── LICENSE                 # Apache 2.0 License
-├── assets/                 # Screenshots and icons for documentation
+├── start_web.bat           # Windows helper to serve web-app locally
 ├── wiki/                   # GitHub Wiki source pages
+├── web-app/                # Browser/static web application
+│   ├── index.html          # Main web app HTML
+│   ├── script.js           # Core JavaScript logic
+│   ├── styles.css          # All styles (light + dark themes)
+│   ├── Dockerfile          # Nginx-based web app container
+│   ├── .dockerignore       # Web app Docker build context exclusions
+│   ├── docker-compose.yml  # Docker Compose configuration
+│   └── assets/             # Screenshots and icons for documentation
 └── desktop-app/            # Neutralinojs desktop app
     ├── package.json
     ├── neutralino.config.json

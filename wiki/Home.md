@@ -15,9 +15,9 @@ Markdown Viewer is a **professional, feature-rich, GitHub-style Markdown editor 
 | Platform | Quick Command |
 |----------|--------------|
 | **Docker** | `docker run -p 8080:80 ghcr.io/thisis-developer/markdown-viewer:latest` |
-| **Docker Compose** | `docker compose up -d` |
+| **Docker Compose** | `cd web-app && docker compose up -d` |
 | **Desktop App** | Download the binary from [Releases](https://github.com/ThisIs-Developer/Markdown-Viewer/releases) |
-| **Web (self-hosted)** | Serve the root directory with any static web server |
+| **Web (self-hosted)** | Serve the `web-app/` directory with any static web server |
 
 Then open **http://localhost:8080** in your browser.
 

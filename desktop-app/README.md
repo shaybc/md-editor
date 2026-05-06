@@ -4,7 +4,7 @@ This is a desktop app port of [Markdown Viewer](https://github.com/ThisIs-Develo
 
 ## Architecture
 
-The desktop app **shares** its core files (`script.js`, `styles.css`, `assets/`) with the browser version in the repo root. A build script (`prepare.js`) copies these files into `resources/` and injects Neutralinojs-specific additions into `index.html` at build time.
+The desktop app **shares** its core files (`web-app/script.js`, `web-app/styles.css`, `web-app/assets/`) with the browser version in `../web-app`. A build script (`prepare.js`) copies these files into `resources/` and injects Neutralinojs-specific additions into `web-app/index.html` at build time.
 
 Neutralinojs platform binaries are managed by `setup-binaries.js`, which downloads them on first use and caches them in `bin/` (gitignored). The download is version-locked to `cli.binaryVersion` in `neutralino.config.json` and only re-triggered when that version changes.
 

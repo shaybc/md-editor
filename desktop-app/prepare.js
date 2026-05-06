@@ -4,8 +4,8 @@
  * prepare.js — Build script for the Neutralinojs desktop app.
  *
  * Copies shared browser-version files (script.js, styles.css, assets/)
- * from the repo root into desktop-app/resources/, and generates a
- * Neutralinojs-compatible index.html from the root index.html by
+ * from web-app/ into desktop-app/resources/, and generates a
+ * Neutralinojs-compatible index.html from web-app/index.html by
  * injecting the required Neutralinojs script tags and wrapper elements.
  *
  * Run from the desktop-app/ directory:
@@ -16,6 +16,7 @@ const fs = require("fs");
 const path = require("path");
 
 const ROOT_DIR = path.resolve(__dirname, "..");
+const WEB_APP_DIR = path.join(ROOT_DIR, "web-app");
 const RESOURCES_DIR = path.resolve(__dirname, "resources");
 
 /** @section Copy shared files */
@@ -43,30 +44,30 @@ function copyDirSync(src, dest, exclude = []) {
 const jsDest = path.join(RESOURCES_DIR, "js");
 fs.mkdirSync(jsDest, { recursive: true });
 fs.copyFileSync(
-  path.join(ROOT_DIR, "script.js"),
+  path.join(WEB_APP_DIR, "script.js"),
   path.join(jsDest, "script.js"),
 );
 console.log("✓ Copied script.js → resources/js/script.js");
 
 /** styles.css → resources/styles.css */
 fs.copyFileSync(
-  path.join(ROOT_DIR, "styles.css"),
+  path.join(WEB_APP_DIR, "styles.css"),
   path.join(RESOURCES_DIR, "styles.css"),
 );
 console.log("✓ Copied styles.css → resources/styles.css");
 
 /** assets/ → resources/assets/ */
-copyDirSync(path.join(ROOT_DIR, "assets"), path.join(RESOURCES_DIR, "assets"), ["icon.jpg"]);
+copyDirSync(path.join(WEB_APP_DIR, "assets"), path.join(RESOURCES_DIR, "assets"), ["icon.jpg"]);
 console.log("✓ Copied assets/ → resources/assets/");
 
 /** @section Generate index.html with Neutralinojs injections */
 
-let html = fs.readFileSync(path.join(ROOT_DIR, "index.html"), "utf-8");
+let html = fs.readFileSync(path.join(WEB_APP_DIR, "index.html"), "utf-8");
 
 /** Fix relative asset paths → absolute (Neutralinojs documentRoot is /resources/) */
 html = html.replace(/href="assets\//g, 'href="/assets/');
 html = html.replace(/href="styles\.css"/g, 'href="/styles.css"');
-/** Replace root script.js tag with neutralino.js + main.js + script.js under /js/ */
+/** Replace web-app script.js tag with neutralino.js + main.js + script.js under /js/ */
 html = html.replace(
   /<script src="script\.js"><\/script>/,
   '<script src="/js/neutralino.js"></script>\n    <script src="/js/main.js"></script>\n    <script src="/js/script.js"></script>',
