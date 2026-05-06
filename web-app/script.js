@@ -749,6 +749,18 @@ This is a fully client-side application. Your content never leaves your browser 
     localStorage.setItem(UNTITLED_COUNTER_KEY, String(val));
   }
 
+  function normalizeEditorContent(content) {
+    // Textareas normalize CRLF/CR line endings to LF, so compare and store
+    // tab contents the same way to avoid false unsaved markers after switching tabs.
+    return String(content || '').replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+  }
+
+  function tabHasUnsavedChanges(tab, currentContent) {
+    if (!tab) return false;
+    const contentToCompare = currentContent === undefined ? tab.content : currentContent;
+    return normalizeEditorContent(tab.savedContent) !== normalizeEditorContent(contentToCompare);
+  }
+
   function nextUntitledTitle() {
     untitledCounter += 1;
     saveUntitledCounter(untitledCounter);
@@ -757,6 +769,7 @@ This is a fully client-side application. Your content never leaves your browser 
 
   function createTab(content, title, viewMode) {
     if (content === undefined) content = '';
+    content = normalizeEditorContent(content);
     if (title === undefined) title = null;
     if (viewMode === undefined) viewMode = 'split';
     return {
@@ -788,7 +801,7 @@ This is a fully client-side application. Your content never leaves your browser 
 
   function getTabDisplayName(tab) {
     const baseName = tab.title || 'Untitled';
-    return tab.savedContent !== tab.content ? baseName + ' *' : baseName;
+    return tabHasUnsavedChanges(tab) ? baseName + ' *' : baseName;
   }
 
   function updateTabScrollControls() {
@@ -856,7 +869,7 @@ This is a fully client-side application. Your content never leaves your browser 
     tabList.innerHTML = '';
     tabsArr.forEach(function(tab) {
       const item = document.createElement('div');
-      item.className = 'tab-item' + (tab.id === currentActiveTabId ? ' active' : '') + (tab.savedContent !== tab.content ? ' unsaved' : '');
+      item.className = 'tab-item' + (tab.id === currentActiveTabId ? ' active' : '') + (tabHasUnsavedChanges(tab) ? ' unsaved' : '');
       item.setAttribute('data-tab-id', tab.id);
       item.setAttribute('role', 'tab');
       item.setAttribute('aria-selected', tab.id === currentActiveTabId ? 'true' : 'false');
@@ -991,7 +1004,7 @@ This is a fully client-side application. Your content never leaves your browser 
     mobileTabList.innerHTML = '';
     tabsArr.forEach(function(tab) {
       const item = document.createElement('div');
-      item.className = 'mobile-tab-item' + (tab.id === currentActiveTabId ? ' active' : '') + (tab.savedContent !== tab.content ? ' unsaved' : '');
+      item.className = 'mobile-tab-item' + (tab.id === currentActiveTabId ? ' active' : '') + (tabHasUnsavedChanges(tab) ? ' unsaved' : '');
       item.setAttribute('role', 'tab');
       item.setAttribute('aria-selected', tab.id === currentActiveTabId ? 'true' : 'false');
       item.setAttribute('data-tab-id', tab.id);
@@ -1092,7 +1105,7 @@ This is a fully client-side application. Your content never leaves your browser 
 
   function activeTabHasUnsavedChanges() {
     const tab = getActiveMarkdownTab();
-    return !!tab && tab.savedContent !== markdownEditor.value;
+    return tabHasUnsavedChanges(tab, markdownEditor.value);
   }
 
   function updateSaveCurrentFileButtons() {
@@ -1198,19 +1211,21 @@ This is a fully client-side application. Your content never leaves your browser 
     }
 
     if (!tab) {
-      tab = createTab(content, title || 'Untitled', currentViewMode || 'split');
+      const normalizedContent = normalizeEditorContent(content);
+      tab = createTab(normalizedContent, title || 'Untitled', currentViewMode || 'split');
       tab.isTemporary = isTemporary;
       applySidebarFileMetadata(tab, sourceFile);
-      tab.savedContent = content || '';
+      tab.savedContent = normalizedContent;
       tabs.push(tab);
     } else {
+      const normalizedContent = normalizeEditorContent(content);
       tab.title = title || 'Untitled';
-      tab.content = content || '';
+      tab.content = normalizedContent;
       tab.scrollPos = 0;
       tab.viewMode = currentViewMode || tab.viewMode || 'split';
       tab.isTemporary = isTemporary;
       applySidebarFileMetadata(tab, sourceFile);
-      tab.savedContent = content || '';
+      tab.savedContent = normalizedContent;
     }
 
     activateSidebarTab(tab);
@@ -1319,7 +1334,7 @@ This is a fully client-side application. Your content never leaves your browser 
     if (options === undefined) options = {};
     const tabToClose = tabs.find(function(t) { return t.id === tabId; });
     if (!tabToClose) return;
-    const hasUnsavedChanges = tabToClose.savedContent !== tabToClose.content;
+    const hasUnsavedChanges = tabHasUnsavedChanges(tabToClose);
     if (options.promptForUnsaved && hasUnsavedChanges) {
       const shouldClose = window.confirm('You have unsaved changes. Are you sure you want to close this tab?');
       if (!shouldClose) return;
@@ -1472,7 +1487,9 @@ This is a fully client-side application. Your content never leaves your browser 
     untitledCounter = loadUntitledCounter();
     tabs = loadTabsFromStorage();
     tabs.forEach(function(tab) {
+      tab.content = normalizeEditorContent(tab.content);
       if (typeof tab.savedContent !== 'string') tab.savedContent = tab.content || '';
+      tab.savedContent = normalizeEditorContent(tab.savedContent);
       if (!tab.type) tab.type = 'markdown';
     });
     activeTabId = loadActiveTabId();
@@ -2320,8 +2337,9 @@ async function openFolderTree() {
   }
 
   function updateTabAfterSave(tab, content, metadata) {
-    tab.content = content;
-    tab.savedContent = content;
+    const normalizedContent = normalizeEditorContent(content);
+    tab.content = normalizedContent;
+    tab.savedContent = normalizedContent;
     if (metadata) {
       if (metadata.name) {
         tab.sourceFileName = metadata.name;
