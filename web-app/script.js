@@ -26,6 +26,7 @@ document.addEventListener("DOMContentLoaded", function () {
   });
   const fileInput = document.getElementById("file-input");
   const folderInput = document.getElementById("folder-input");
+  let shownFolderInputFallbackNotice = false;
   const exportMd = document.getElementById("export-md");
   const exportHtml = document.getElementById("export-html");
   const exportPdf = document.getElementById("export-pdf");
@@ -42,6 +43,23 @@ document.addEventListener("DOMContentLoaded", function () {
   // View Mode Elements - Story 1.1
   const contentContainer = document.querySelector(".content-container");
   const viewModeButtons = document.querySelectorAll(".view-mode-btn");
+
+  function supportsNativeDirectoryPicker() {
+    return typeof window.showDirectoryPicker === "function";
+  }
+
+  function getFolderPickerFallbackMessage() {
+    return "Firefox does not support browser write access to selected folders. It will open its upload-style folder picker instead, so files can be read but saving writes a downloaded copy.";
+  }
+
+  function updateFolderImportHint() {
+    if (supportsNativeDirectoryPicker() || typeof NL_VERSION !== "undefined") return;
+
+    document.querySelectorAll("#import-from-folder").forEach(function(button) {
+      button.title = getFolderPickerFallbackMessage();
+      button.setAttribute("aria-label", "Open folder using upload-style picker");
+    });
+  }
 
   function ensureFolderTreePane() {
     let pane = document.getElementById("folder-tree-pane");
@@ -115,6 +133,7 @@ document.addEventListener("DOMContentLoaded", function () {
   document.querySelectorAll("#folder-tree-pane .tree-action-menu").forEach((node) => node.remove());
   const sidebarDropzonePanel = document.querySelector(".sidebar-dropzone-panel");
   const sidebarDropzoneResizer = document.getElementById("sidebar-dropzone-resizer");
+  updateFolderImportHint();
 
 
   // Mobile View Mode Elements - Story 1.4
@@ -1411,7 +1430,7 @@ async function openFolderTree() {
   }
 
   // Browser: use File System Access API (shows permission dialog)
-  if (window.showDirectoryPicker) {
+  if (supportsNativeDirectoryPicker()) {
     try {
       const dirHandle = await window.showDirectoryPicker();
       activeFolderName = dirHandle && dirHandle.name ? dirHandle.name : "Graph View";
@@ -1434,6 +1453,11 @@ async function openFolderTree() {
   }
 
   if (folderInput) {
+    if (!shownFolderInputFallbackNotice) {
+      console.info(getFolderPickerFallbackMessage());
+      alert(getFolderPickerFallbackMessage());
+      shownFolderInputFallbackNotice = true;
+    }
     folderInput.click();
   } else {
     alert("Folder selection is not supported in this environment.");
