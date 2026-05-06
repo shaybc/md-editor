@@ -211,7 +211,7 @@ document.addEventListener("DOMContentLoaded", function () {
   function updateThemeButtonLabels(theme) {
     const nextThemeLabel = theme === "dark" ? "Light" : "Dark";
     const icon = theme === "dark" ? "bi-sun" : "bi-moon";
-    themeToggle.innerHTML = `<i class="bi ${icon} me-2"></i> ${nextThemeLabel}`;
+    themeToggle.innerHTML = `<i class="bi ${icon} me-2"></i> ${nextThemeLabel} Mode`;
     mobileThemeToggle.innerHTML = `<i class="bi ${icon} me-2"></i> ${nextThemeLabel} Mode`;
   }
 
