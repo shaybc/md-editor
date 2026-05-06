@@ -624,6 +624,77 @@ This is a fully client-side application. Your content never leaves your browser 
     });
   }
 
+  async function createGraphSnapshot(files, folderName) {
+    const nodes = [];
+    const links = [];
+    const seenEdges = new Set();
+    const nodeIndex = new Map();
+    const snapshotFiles = [];
+
+    for (const fileEntry of (files || [])) {
+      const path = fileEntry.path || fileEntry.file?.webkitRelativePath || fileEntry.file?.name || "";
+      const name = getFileName(path || fileEntry.file?.name || "document.md");
+      let content = fileEntry.content;
+      if (content === undefined) {
+        if (fileEntry.file) {
+          content = await fileEntry.file.text();
+        } else if (fileEntry.handle) {
+          const file = await fileEntry.handle.getFile();
+          content = await file.text();
+        } else if (typeof NL_VERSION !== "undefined" && fileEntry.fullPath) {
+          content = await Neutralino.filesystem.readFile(fileEntry.fullPath);
+        } else {
+          content = "";
+        }
+      }
+
+      const id = normalizeGraphNodeName(path);
+      nodeIndex.set(id, path);
+      nodes.push({ id, label: getGraphDisplayLabel(path), fullPath: path });
+      snapshotFiles.push({
+        id,
+        path,
+        name,
+        content: content || "",
+        fullPath: fileEntry.fullPath || null
+      });
+    }
+
+    for (const snapshotFile of snapshotFiles) {
+      const source = snapshotFile.id;
+      extractMarkdownLinks(snapshotFile.content).forEach((ref) => {
+        const target = resolveGraphTargetId(ref, snapshotFile.path, nodeIndex);
+        if (!target || target === source) return;
+        const edgeKey = `${source}->${target}`;
+        if (seenEdges.has(edgeKey)) return;
+        seenEdges.add(edgeKey);
+        links.push({ source, target });
+      });
+    }
+
+    return {
+      version: 1,
+      folderName: folderName || "Graph View",
+      createdAt: Date.now(),
+      nodes,
+      links,
+      files: snapshotFiles
+    };
+  }
+
+  function getGraphSnapshotSignature(snapshot, graphViewConfig) {
+    return JSON.stringify({
+      snapshot: {
+        version: snapshot?.version || 0,
+        folderName: snapshot?.folderName || "",
+        createdAt: snapshot?.createdAt || 0,
+        nodes: (snapshot?.nodes || []).map((node) => node.id),
+        links: (snapshot?.links || []).map((link) => `${link.source}->${link.target}`)
+      },
+      config: graphViewConfig || null
+    });
+  }
+
   function hideInactiveGraphRenders(activeGraphTabId) {
     graphRenderCache.forEach((entry, tabId) => {
       if (!entry || !entry.wrapper) return;
@@ -706,6 +777,7 @@ This is a fully client-side application. Your content never leaves your browser 
     tab.type = "graph";
     tab.folderName = folderName || "Graph View";
     tab.graphViewConfig = options.graphViewConfig || null;
+    tab.graphSnapshot = options.graphSnapshot || null;
     return tab;
   }
 
@@ -1138,18 +1210,20 @@ This is a fully client-side application. Your content never leaves your browser 
   async function openGraphNodeFileInPermanentTab(graphNode) {
     if (!graphNode) return null;
 
-    const fileEntry = (folderMarkdownFiles || []).find(function(entry) {
+    const activeGraphTab = tabs.find((tab) => tab.id === activeTabId && tab.type === "graph");
+    const snapshotFile = activeGraphTab?.graphSnapshot?.files?.find((file) => file.id === graphNode.id);
+    const fileEntry = snapshotFile || (folderMarkdownFiles || []).find(function(entry) {
       const entryPath = entry.path || entry.file?.webkitRelativePath || entry.file?.name || "";
       return normalizeGraphNodeName(entryPath) === graphNode.id;
     });
 
     if (!fileEntry) {
-      alert("Unable to find the selected file in the current folder graph.");
+      alert("Unable to find the selected file in this graph snapshot.");
       return null;
     }
 
     const path = fileEntry.path || fileEntry.file?.webkitRelativePath || fileEntry.file?.name || graphNode.fullPath || null;
-    const name = getFileName(path || graphNode.fullPath || graphNode.label || "document.md");
+    const name = fileEntry.name || getFileName(path || graphNode.fullPath || graphNode.label || "document.md");
     const sourceFile = {
       name,
       handle: fileEntry.handle || null,
@@ -3181,17 +3255,22 @@ async function openFolderTree() {
   }
 
   async function openGraphView() {
-    let graphTab = tabs.find((tab) => tab.type === "graph");
-    if (!graphTab) {
-      if (tabs.length >= 20) {
-        alert('Maximum of 20 tabs reached. Please close an existing tab to open a new one.');
-        return;
-      }
-      graphTab = createGraphTab(activeFolderName, { graphViewConfig: null });
-      tabs.push(graphTab);
+    if (!folderMarkdownFiles.length) {
+      alert("Open a folder first to build the graph view.");
+      return;
     }
-    graphTab.title = activeFolderName || "Graph View";
-    graphTab.folderName = graphTab.title;
+    if (tabs.length >= 20) {
+      alert('Maximum of 20 tabs reached. Please close an existing tab to open a new one.');
+      return;
+    }
+
+    const folderName = activeFolderName || "Graph View";
+    const graphSnapshot = await createGraphSnapshot(folderMarkdownFiles, folderName);
+    const graphTab = createGraphTab(folderName, {
+      graphViewConfig: null,
+      graphSnapshot
+    });
+    tabs.push(graphTab);
     switchTab(graphTab.id);
     saveTabsToStorage(tabs);
   }
@@ -3220,21 +3299,28 @@ async function openFolderTree() {
     if (!graphViewCanvas) return;
     const activeTab = tabs.find((tab) => tab.id === activeTabId);
     const graphViewConfig = activeTab && activeTab.type === "graph" ? (activeTab.graphViewConfig || null) : null;
-    const files = folderMarkdownFiles || [];
     hideInactiveGraphRenders(activeTab?.id);
     graphViewCanvas.querySelectorAll(".folder-tree-placeholder").forEach((node) => node.remove());
     if (!activeTab || activeTab.type !== "graph") return;
-    if (!files.length) {
+
+    let graphSnapshot = activeTab.graphSnapshot || null;
+    if (!graphSnapshot && folderMarkdownFiles.length) {
+      graphSnapshot = await createGraphSnapshot(folderMarkdownFiles, activeTab.folderName || activeTab.title);
+      activeTab.graphSnapshot = graphSnapshot;
+      saveTabsToStorage(tabs);
+    }
+
+    if (!graphSnapshot || !graphSnapshot.nodes?.length) {
       graphRenderCache.forEach((entry) => {
         if (entry?.simulation) entry.simulation.stop();
         if (entry?.wrapper) entry.wrapper.remove();
       });
       graphRenderCache.clear();
-      graphViewCanvas.innerHTML = '<p class="folder-tree-placeholder">Open a folder first to build the graph view.</p>';
+      graphViewCanvas.innerHTML = '<p class="folder-tree-placeholder">This graph tab does not have a saved graph snapshot.</p>';
       return;
     }
 
-    const graphSignature = getGraphViewSignature(files, graphViewConfig);
+    const graphSignature = getGraphSnapshotSignature(graphSnapshot, graphViewConfig);
     const cachedRender = graphRenderCache.get(activeTab.id);
     if (cachedRender && cachedRender.signature === graphSignature && cachedRender.wrapper) {
       if (cachedRender.wrapper.parentElement !== graphViewCanvas) graphViewCanvas.appendChild(cachedRender.wrapper);
@@ -3254,29 +3340,8 @@ async function openFolderTree() {
     graphRenderWrapper.dataset.graphTabId = activeTab.id;
     graphViewCanvas.appendChild(graphRenderWrapper);
     hideInactiveGraphRenders(activeTab.id);
-    const nodes = [];
-    const links = [];
-    const seenEdges = new Set();
-    const nodeIndex = new Map();
-    for (const fileEntry of files) {
-      const path = fileEntry.path || fileEntry.file?.webkitRelativePath || fileEntry.file?.name || "";
-      const id = normalizeGraphNodeName(path);
-      nodeIndex.set(id, path);
-      nodes.push({ id, label: getGraphDisplayLabel(path), fullPath: path });
-    }
-    for (const fileEntry of files) {
-      const srcPath = fileEntry.path || fileEntry.file?.webkitRelativePath || fileEntry.file?.name || "";
-      const source = normalizeGraphNodeName(srcPath);
-      const text = await fileEntry.file.text();
-      extractMarkdownLinks(text).forEach((ref) => {
-        const target = resolveGraphTargetId(ref, srcPath, nodeIndex);
-        if (!target || target === source) return;
-        const edgeKey = `${source}->${target}`;
-        if (seenEdges.has(edgeKey)) return;
-        seenEdges.add(edgeKey);
-        links.push({ source, target });
-      });
-    }
+    const nodes = (graphSnapshot.nodes || []).map((node) => ({ ...node }));
+    const links = (graphSnapshot.links || []).map((link) => ({ ...link }));
     if (graphViewConfig && Array.isArray(graphViewConfig.allowedNodeIds) && graphViewConfig.allowedNodeIds.length) {
       const allowedNodeIds = new Set(graphViewConfig.allowedNodeIds);
       const allowedNodes = nodes.filter((n) => allowedNodeIds.has(n.id));
@@ -3543,6 +3608,7 @@ async function openFolderTree() {
       const parentConfig = activeGraphTab?.graphViewConfig || {};
       const localTabTitle = `${titlePrefix}: ${contextTargetNode.label}`;
       const localGraphTab = createGraphTab(localTabTitle, {
+        graphSnapshot: activeGraphTab?.graphSnapshot || null,
         graphViewConfig: {
           mode,
           focusNodeId,
