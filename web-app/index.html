@@ -35,10 +35,10 @@
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/emoji-toolkit@9.0.1/extras/css/joypixels.min.css">
     <link rel="stylesheet" href="styles.css">
-    
+
     <!-- Added mermaid CSS -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/mermaid/10.6.1/mermaid.min.css">
-    
+
     <!-- Loading order optimized - ensure libraries are loaded before they're used -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/9.1.6/marked.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
@@ -59,7 +59,7 @@
     <script src="https://cdn.jsdelivr.net/npm/emoji-toolkit@9.0.1/lib/js/joypixels.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
-    
+
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.2.7/pdfmake.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.2.7/vfs_fonts.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pako/2.1.0/pako.min.js" integrity="sha384-rNlaE5fs9dGIjmxWDALQh/RBAaGRYT5ChrzHo6tRfgrZ36iRFAiquP5g41Jsv+0j" crossorigin="anonymous"></script>
@@ -107,13 +107,13 @@
 
                 <input type="file" id="file-input" class="file-input" accept=".md,.markdown,text/markdown">
                 <input type="file" id="folder-input" class="file-input" webkitdirectory directory multiple>
-                
+
                 <!-- Hamburger menu for mobile -->
                 <div class="mobile-menu d-md-none">
                     <button id="mobile-menu-toggle" class="tool-button" title="Menu">
                         <i class="bi bi-list"></i>
                     </button>
-                    
+
                     <div id="mobile-menu-panel" class="mobile-menu-panel">
                         <div class="mobile-menu-header">
                             <h5>Menu</h5>
@@ -170,11 +170,11 @@
                             <button id="mobile-toggle-sync" class="mobile-menu-item tool-button sync-enabled border-primary" title="Toggle Sync Scrolling">
                                 <i class="bi bi-link"></i> Sync Off
                             </button>
-                            
+
                             <button id="mobile-import-button" class="mobile-menu-item" title="Open file ...">
                                 <i class="bi bi-upload me-2"></i> Open file ...
                             </button>
-                            
+
                             <button id="mobile-import-github-button" class="mobile-menu-item" title="Import from GitHub">
                                 <i class="bi bi-github me-2"></i> Import from GitHub
                             </button>
@@ -182,27 +182,31 @@
                             <button class="mobile-menu-item close-folder-button" type="button" title="Close the currently open folder" disabled>
                                 <i class="bi bi-folder-x me-2"></i> Close Folder
                             </button>
-                            
+
+                            <button class="mobile-menu-item save-current-file-button" type="button" title="Save changes to current file" disabled>
+                                <i class="bi bi-save me-2"></i> Save Changes
+                            </button>
+
                             <button id="mobile-export-md" class="mobile-menu-item" title="Export as Markdown">
                                 <i class="bi bi-file-earmark-text me-2"></i> Export as Markdown
                             </button>
-                            
+
                             <button id="mobile-export-html" class="mobile-menu-item" title="Export as HTML">
                                 <i class="bi bi-file-earmark-code me-2"></i> Export as HTML
                             </button>
-                            
+
                             <button id="mobile-export-pdf" class="mobile-menu-item" title="Export as PDF">
                                 <i class="bi bi-file-earmark-pdf me-2"></i> Export as PDF
                             </button>
-                            
+
                             <button id="mobile-copy-markdown" class="mobile-menu-item" title="Copy Markdown">
                                 <i class="bi bi-clipboard me-2"></i> Copy
                             </button>
-                            
+
                             <button id="mobile-share-button" class="mobile-menu-item" title="Share via URL">
                                 <i class="bi bi-share me-2"></i> Share
                             </button>
-                            
+
                             <button id="mobile-theme-toggle" class="mobile-menu-item" title="Toggle Dark Mode">
                                 <i class="bi bi-moon me-2"></i> Dark Mode
                             </button>
@@ -216,7 +220,7 @@
                             </button>
                         </div>
                     </div>
-                    
+
                     <div id="mobile-menu-overlay"></div>
                 </div>
             </div>
@@ -246,6 +250,9 @@
                 <i class="bi bi-github me-2"></i> Import from GitHub
               </button>
               <hr class="dropdown-divider">
+              <button class="dropdown-item action-menu-item save-current-file-button" type="button" title="Save changes to current file" disabled>
+                <i class="bi bi-save me-2"></i> Save Changes
+              </button>
               <button class="dropdown-item action-menu-item" id="export-md" title="Export as Markdown">
                 <i class="bi bi-file-earmark-text me-2"></i> Export as Markdown
               </button>
@@ -361,6 +368,9 @@
                             <i class="bi bi-github me-2"></i> Import from GitHub
                         </button>
                         <hr class="dropdown-divider">
+                        <button class="dropdown-item action-menu-item save-current-file-button" type="button" title="Save changes to current file" disabled>
+                            <i class="bi bi-save me-2"></i> Save Changes
+                        </button>
                         <button class="dropdown-item action-menu-item" id="export-md" title="Export as Markdown">
                             <i class="bi bi-file-earmark-text me-2"></i> Export as Markdown
                         </button>
