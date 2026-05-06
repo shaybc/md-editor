@@ -1070,6 +1070,81 @@ This is a fully client-side application. Your content never leaves your browser 
     return openSidebarFileInTab(content, title, sourceFile, { temporary: false });
   }
 
+  function findTabForSourceFile(sourceFile) {
+    if (!sourceFile) return null;
+
+    if (sourceFile.handle) {
+      const handleMatch = tabs.find(function(tab) {
+        return tab.type !== "graph" && tab.sourceFileHandle === sourceFile.handle;
+      });
+      if (handleMatch) return handleMatch;
+    }
+
+    if (sourceFile.path) {
+      const pathMatch = tabs.find(function(tab) {
+        return tab.type !== "graph" && tab.sourceFilePath === sourceFile.path;
+      });
+      if (pathMatch) return pathMatch;
+    }
+
+    const title = sourceFile.name ? getMarkdownTitleFromFileName(sourceFile.name) : null;
+    return tabs.find(function(tab) {
+      return tab.type !== "graph" && ((sourceFile.name && tab.sourceFileName === sourceFile.name) || (title && tab.title === title));
+    }) || null;
+  }
+
+  async function openGraphNodeFileInPermanentTab(graphNode) {
+    if (!graphNode) return null;
+
+    const fileEntry = (folderMarkdownFiles || []).find(function(entry) {
+      const entryPath = entry.path || entry.file?.webkitRelativePath || entry.file?.name || "";
+      return normalizeGraphNodeName(entryPath) === graphNode.id;
+    });
+
+    if (!fileEntry) {
+      alert("Unable to find the selected file in the current folder graph.");
+      return null;
+    }
+
+    const path = fileEntry.path || fileEntry.file?.webkitRelativePath || fileEntry.file?.name || graphNode.fullPath || null;
+    const name = getFileName(path || graphNode.fullPath || graphNode.label || "document.md");
+    const sourceFile = {
+      name,
+      handle: fileEntry.handle || null,
+      path
+    };
+
+    const existingTab = findTabForSourceFile(sourceFile);
+    if (existingTab) {
+      switchTab(existingTab.id);
+      pinTemporaryTab(existingTab.id);
+      return existingTab;
+    }
+
+    try {
+      let content = fileEntry.content;
+      if (content === undefined) {
+        if (fileEntry.file) {
+          content = await fileEntry.file.text();
+        } else if (fileEntry.handle) {
+          const file = await fileEntry.handle.getFile();
+          content = await file.text();
+        } else if (typeof NL_VERSION !== "undefined" && fileEntry.fullPath) {
+          content = await Neutralino.filesystem.readFile(fileEntry.fullPath);
+          sourceFile.path = fileEntry.fullPath;
+        } else {
+          throw new Error("No readable Markdown file was provided.");
+        }
+      }
+
+      return openSidebarFileInPermanentTab(content, getMarkdownTitleFromFileName(name), sourceFile);
+    } catch (error) {
+      console.error("Failed to open graph node file:", error);
+      alert("Unable to open selected file.");
+      return null;
+    }
+  }
+
   function newTab(content, title) {
     if (content === undefined) content = '';
     if (tabs.length >= 20) {
@@ -3211,6 +3286,10 @@ async function openFolderTree() {
     const magneticToggleBtn = document.createElement("button");
     magneticToggleBtn.type = "button";
     magneticToggleBtn.className = "graph-context-menu-item";
+    const openFileBtn = document.createElement("button");
+    openFileBtn.type = "button";
+    openFileBtn.className = "graph-context-menu-item hidden";
+    openFileBtn.textContent = "Open File";
     const hidePointBtn = document.createElement("button");
     hidePointBtn.type = "button";
     hidePointBtn.className = "graph-context-menu-item hidden";
@@ -3220,6 +3299,7 @@ async function openFolderTree() {
     localGraphBtn.className = "graph-context-menu-item hidden";
     localGraphBtn.textContent = "Show local graph";
     contextMenu.appendChild(magneticToggleBtn);
+    contextMenu.appendChild(openFileBtn);
     contextMenu.appendChild(hidePointBtn);
     contextMenu.appendChild(localGraphBtn);
     graphViewCanvas.appendChild(contextMenu);
@@ -3249,6 +3329,7 @@ async function openFolderTree() {
     const hideContextMenu = () => {
       contextMenu.classList.add("hidden");
       contextTargetNode = null;
+      openFileBtn.classList.add("hidden");
       hidePointBtn.classList.add("hidden");
       localGraphBtn.classList.add("hidden");
     };
@@ -3256,6 +3337,7 @@ async function openFolderTree() {
     graphViewCanvas.addEventListener("contextmenu", (event) => {
       event.preventDefault();
       contextTargetNode = null;
+      openFileBtn.classList.add("hidden");
       hidePointBtn.classList.add("hidden");
       localGraphBtn.classList.add("hidden");
       const bounds = graphViewCanvas.getBoundingClientRect();
@@ -3268,6 +3350,7 @@ async function openFolderTree() {
       event.preventDefault();
       event.stopPropagation();
       contextTargetNode = d;
+      openFileBtn.classList.remove("hidden");
       hidePointBtn.classList.remove("hidden");
       localGraphBtn.classList.remove("hidden");
       const bounds = graphViewCanvas.getBoundingClientRect();
@@ -3284,6 +3367,14 @@ async function openFolderTree() {
       saveGlobalState({ graphMagneticEnabled: graphSettings.magneticEnabled });
       applyMagneticSetting();
       hideContextMenu();
+    });
+
+    openFileBtn.addEventListener("click", async (event) => {
+      event.stopPropagation();
+      if (!contextTargetNode) return;
+      const targetNode = contextTargetNode;
+      hideContextMenu();
+      await openGraphNodeFileInPermanentTab(targetNode);
     });
 
     hidePointBtn.addEventListener("click", () => {
