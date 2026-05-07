@@ -4987,9 +4987,29 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
       return snapshotFile?.fullPath || snapshotFile?.path || graphNode?.fullPath || graphNode?.label || graphNode?.id || "";
     };
 
+    const isAbsoluteFilesystemPath = (path) => {
+      if (!path) return false;
+      return /^[a-zA-Z]:[\\/]/.test(path) || /^\\\\/.test(path) || path.startsWith("/");
+    };
+
+    const resolveFilesystemPath = (path) => {
+      if (!path || !isNeutralinoRuntime()) return null;
+      if (isAbsoluteFilesystemPath(path)) return path;
+      return activeFolderPath ? joinPath(activeFolderPath, path) : null;
+    };
+
     const getNodeFilesystemPath = (graphNode) => {
       const snapshotFile = getSnapshotFileForNode(graphNode);
-      return snapshotFile?.fullPath || ((isNeutralinoRuntime() && snapshotFile?.path) ? snapshotFile.path : null);
+      const candidatePaths = [
+        snapshotFile?.fullPath,
+        snapshotFile?.path,
+        graphNode?.fullPath
+      ];
+      for (const candidatePath of candidatePaths) {
+        const resolvedPath = resolveFilesystemPath(candidatePath);
+        if (resolvedPath) return resolvedPath;
+      }
+      return null;
     };
 
     const readGraphNodeContent = async (graphNode) => {
@@ -5210,7 +5230,7 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
       }
       try {
         if (typeof NL_OS !== "undefined" && NL_OS === "Windows" && Neutralino.os?.execCommand) {
-          const windowsPath = filePath.replace(/"/g, "");
+          const windowsPath = filePath.replace(/"/g, "").replace(/\//g, "\\");
           await Neutralino.os.execCommand(`explorer.exe /select,"${windowsPath}"`);
         } else if (Neutralino.os?.open) {
           const normalized = filePath.replace(/\\/g, "/");
