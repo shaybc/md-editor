@@ -463,6 +463,22 @@ body {
   display: none;
 }
 
+.graph-context-menu-title {
+  color: var(--text-color);
+  font-weight: 600;
+  padding: 0.45rem 0.6rem 0.35rem;
+  border-bottom: 1px solid var(--border-color);
+  margin-bottom: 0.25rem;
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.graph-context-menu-title.hidden {
+  display: none;
+}
+
 .graph-context-menu-item {
   width: 100%;
   border: none;
