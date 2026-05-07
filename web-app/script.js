@@ -1089,6 +1089,38 @@ document.addEventListener("DOMContentLoaded", function () {
     return index >= 0 ? normalized.slice(0, index) : "";
   }
 
+  function getLinkPathExtension(path) {
+    const fileName = getFileName(splitLinkTarget(path).path);
+    const extensionMatch = fileName.match(/\.([^.]*)$/);
+    return extensionMatch ? extensionMatch[1].toLowerCase() : "";
+  }
+
+  function isMarkdownDocumentLinkPath(path) {
+    const { path: targetPath } = splitLinkTarget(path);
+    if (!targetPath) return false;
+    const extension = getLinkPathExtension(targetPath);
+    return !extension || extension === "md" || extension === "markdown";
+  }
+
+  function ensureMarkdownLinkExtension(path) {
+    if (!path || getLinkPathExtension(path)) return path;
+    return `${path}.md`;
+  }
+
+  function isSameOriginMarkdownUrl(target) {
+    try {
+      const url = new URL(String(target || ""), window.location.href);
+      return url.origin === window.location.origin && isMarkdownDocumentLinkPath(url.pathname);
+    } catch (_) {
+      return false;
+    }
+  }
+
+  function getSameOriginMarkdownUrlPath(target) {
+    const url = new URL(String(target || ""), window.location.href);
+    return `${url.pathname.replace(/^\/+/, "")}${url.search}${url.hash}`;
+  }
+
   function isAbsoluteFilesystemPath(path) {
     const value = String(path || "");
     return /^[a-zA-Z]:[\\/]/.test(value) || /^\\\\/.test(value) || value.startsWith("/");
@@ -1158,9 +1190,10 @@ document.addEventListener("DOMContentLoaded", function () {
   }
 
   function getMarkdownLinkSourceFile(target) {
-    const { path: targetPath } = splitLinkTarget(target);
-    if (!targetPath || !isMarkdownPath(targetPath)) return null;
+    const { path: rawTargetPath } = splitLinkTarget(target);
+    if (!rawTargetPath || !isMarkdownDocumentLinkPath(rawTargetPath)) return null;
 
+    const targetPath = ensureMarkdownLinkExtension(rawTargetPath);
     const activeSourcePath = getActiveMarkdownSourcePath();
     const resolvedPath = resolveMarkdownLinkPath(targetPath, activeSourcePath);
     const folderEntry = findOpenFolderMarkdownEntry(resolvedPath);
@@ -1235,18 +1268,49 @@ document.addEventListener("DOMContentLoaded", function () {
     }
   }
 
+  function annotatePreviewMarkdownLinks(container) {
+    if (!container) return;
+
+    container.querySelectorAll("a[href]").forEach((anchor) => {
+      const rawHref = anchor.getAttribute("href") || "";
+      if (!rawHref || rawHref.startsWith("#")) return;
+
+      let markdownTarget = "";
+      if (!isExternalOrSpecialLinkTarget(rawHref) && isMarkdownDocumentLinkPath(rawHref)) {
+        markdownTarget = rawHref;
+      } else if (isSameOriginMarkdownUrl(rawHref)) {
+        markdownTarget = getSameOriginMarkdownUrlPath(rawHref);
+      }
+
+      if (!markdownTarget) return;
+
+      anchor.dataset.markdownLinkTarget = markdownTarget;
+      anchor.setAttribute("href", "#");
+      anchor.setAttribute("role", "button");
+      anchor.title = anchor.title || `Open Markdown file: ${splitLinkTarget(markdownTarget).path}`;
+    });
+  }
+
   function handlePreviewLinkClick(event) {
-    const anchor = event.target.closest("a[href]");
+    const anchor = event.target.closest("a[href], a[data-markdown-link-target]");
     if (!anchor || !markdownPreview.contains(anchor)) return;
 
-    const rawHref = anchor.getAttribute("href") || "";
-    if (!rawHref || isExternalOrSpecialLinkTarget(rawHref)) return;
+    const markdownTarget = anchor.dataset.markdownLinkTarget || "";
+    const rawHref = markdownTarget || anchor.getAttribute("href") || "";
+    if (!rawHref) return;
 
-    const { path } = splitLinkTarget(rawHref);
-    if (!isMarkdownPath(path)) return;
+    let linkTarget = rawHref;
+    if (!markdownTarget && isSameOriginMarkdownUrl(rawHref)) {
+      linkTarget = getSameOriginMarkdownUrlPath(rawHref);
+    } else if (!markdownTarget && isExternalOrSpecialLinkTarget(rawHref)) {
+      return;
+    }
+
+    if (!isMarkdownDocumentLinkPath(linkTarget)) return;
 
     event.preventDefault();
-    openMarkdownLinkFromPreview(rawHref);
+    event.stopPropagation();
+    openMarkdownLinkFromPreview(linkTarget);
   }
 
   function createWikiLinkAnchor(rawLink) {
@@ -2845,6 +2909,7 @@ This is a fully client-side application. Your content never leaves your browser 
       });
       markdownPreview.innerHTML = sanitizedHtml;
       enhanceWikiLinks(markdownPreview);
+      annotatePreviewMarkdownLinks(markdownPreview);
       enhanceGitHubAlerts(markdownPreview);
 
       processEmojis(markdownPreview);
