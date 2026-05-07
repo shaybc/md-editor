@@ -1194,13 +1194,16 @@ document.addEventListener("DOMContentLoaded", function () {
       .map((path) => normalizeMarkdownLinkPath(path));
   }
 
-  function findOpenFolderMarkdownEntry(resolvedPath) {
+  function findOpenFolderMarkdownEntry(resolvedPath, rawTargetPath) {
     const normalizedResolvedPath = normalizeMarkdownLinkPath(resolvedPath);
+    const normalizedRawTargetPath = normalizeMarkdownLinkPath(ensureMarkdownLinkExtension(rawTargetPath || ""));
+    const rawTargetIsBareFileName = !!normalizedRawTargetPath && !normalizedRawTargetPath.includes("/");
+    const rawTargetFileName = rawTargetIsBareFileName ? getFileName(normalizedRawTargetPath).toLowerCase() : "";
     const resolvedWithoutFolderRoot = activeFolderName && normalizedResolvedPath.startsWith(`${activeFolderName}/`)
       ? normalizedResolvedPath.slice(activeFolderName.length + 1)
       : normalizedResolvedPath;
 
-    return (folderMarkdownFiles || []).find((entry) => {
+    const exactMatch = (folderMarkdownFiles || []).find((entry) => {
       const candidates = getFolderEntryPathCandidates(entry);
       return candidates.some((candidate) => {
         const candidateWithoutFolderRoot = activeFolderName && candidate.startsWith(`${activeFolderName}/`)
@@ -1210,6 +1213,14 @@ document.addEventListener("DOMContentLoaded", function () {
           || candidate === resolvedWithoutFolderRoot
           || candidateWithoutFolderRoot === normalizedResolvedPath
           || candidateWithoutFolderRoot === resolvedWithoutFolderRoot;
+      });
+    });
+
+    if (exactMatch || !rawTargetIsBareFileName) return exactMatch || null;
+
+    return (folderMarkdownFiles || []).find((entry) => {
+      return getFolderEntryPathCandidates(entry).some((candidate) => {
+        return getFileName(candidate).toLowerCase() === rawTargetFileName;
       });
     }) || null;
   }
@@ -1221,7 +1232,7 @@ document.addEventListener("DOMContentLoaded", function () {
     const targetPath = ensureMarkdownLinkExtension(rawTargetPath);
     const activeSourcePath = getActiveMarkdownSourcePath();
     const resolvedPath = resolveMarkdownLinkPath(targetPath, activeSourcePath);
-    const folderEntry = findOpenFolderMarkdownEntry(resolvedPath);
+    const folderEntry = findOpenFolderMarkdownEntry(resolvedPath, rawTargetPath);
 
     if (folderEntry) {
       return {
