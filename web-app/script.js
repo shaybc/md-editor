@@ -11,6 +11,7 @@ document.addEventListener("DOMContentLoaded", function () {
   let currentViewMode = 'split'; // 'editor', 'split', or 'preview'
 
   const markdownEditor = document.getElementById("markdown-editor");
+  const editorLineNumbers = document.getElementById("editor-line-numbers");
   const markdownPreview = document.getElementById("markdown-preview");
   const themeToggle = document.getElementById("theme-toggle");
   const importFromFileButtons = document.querySelectorAll("#import-from-file");
@@ -54,6 +55,41 @@ document.addEventListener("DOMContentLoaded", function () {
 
   function getFolderPickerFallbackMessage() {
     return "Browsers open folders with a read-only folder picker. Files stay on this device, but saving writes a downloaded copy unless you use the desktop app.";
+  }
+
+  function getEditorLineHeight() {
+    const computedStyle = window.getComputedStyle(markdownEditor);
+    const parsedLineHeight = parseFloat(computedStyle.lineHeight);
+    if (!Number.isNaN(parsedLineHeight)) return parsedLineHeight;
+    const parsedFontSize = parseFloat(computedStyle.fontSize);
+    return Number.isNaN(parsedFontSize) ? 21 : parsedFontSize * 1.5;
+  }
+
+  function getCurrentEditorLine() {
+    return markdownEditor.value.slice(0, markdownEditor.selectionStart || 0).split("\n").length;
+  }
+
+  function updateEditorLineNumbers() {
+    if (!editorLineNumbers) return;
+
+    const lineCount = Math.max(1, markdownEditor.value.split("\n").length);
+    const activeLine = getCurrentEditorLine();
+    const lineHeight = getEditorLineHeight();
+    const lineNumbersMarkup = Array.from({ length: lineCount }, (_, index) => {
+      const lineNumber = index + 1;
+      const activeClass = lineNumber === activeLine ? " active" : "";
+      return `<span class="editor-line-number${activeClass}" style="height:${lineHeight}px">${lineNumber}</span>`;
+    }).join("");
+
+    editorLineNumbers.innerHTML = `<div class="editor-line-numbers-inner" style="transform: translateY(-${markdownEditor.scrollTop}px);">${lineNumbersMarkup}</div>`;
+  }
+
+  function syncEditorLineNumberScroll() {
+    if (!editorLineNumbers) return;
+    const inner = editorLineNumbers.querySelector(".editor-line-numbers-inner");
+    if (inner) {
+      inner.style.transform = `translateY(-${markdownEditor.scrollTop}px)`;
+    }
   }
 
   function shouldUseNativeDirectoryPicker(event) {
@@ -2350,6 +2386,7 @@ This is a fully client-side application. Your content never leaves your browser 
   }
 
   function renderMarkdown() {
+    updateEditorLineNumbers();
     try {
       const { frontmatter, body } = parseFrontmatter(markdownEditor.value);
       const tableHtml = frontmatter ? renderFrontmatterTable(frontmatter) : '';
@@ -2988,6 +3025,7 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
       action();
     } finally {
       markdownEditor.value = previousValue;
+      updateEditorLineNumbers();
     }
   }
 
@@ -4940,6 +4978,7 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
   updateSyncToggleButtons();
   updateMobileStats();
   updateStatusLine();
+  updateEditorLineNumbers();
 
   // Initialize resizer - Story 1.3
   initResizer();
@@ -4964,6 +5003,7 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
   });
 
   markdownEditor.addEventListener("input", function() {
+    updateEditorLineNumbers();
     const activeTab = tabs.find(function(t) { return t.id === activeTabId; });
     if (activeTab) {
       activeTab.content = markdownEditor.value;
@@ -4995,9 +5035,15 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
       
       // Trigger input event to update preview
       this.dispatchEvent(new Event('input'));
+      updateEditorLineNumbers();
     }
   });
   
+  ["click", "keyup", "select"].forEach(function(eventName) {
+    markdownEditor.addEventListener(eventName, updateEditorLineNumbers);
+  });
+  markdownEditor.addEventListener("scroll", syncEditorLineNumberScroll);
+
   editorPane.addEventListener("scroll", syncEditorToPreview);
   previewPane.addEventListener("scroll", syncPreviewToEditor);
   syncToggleButtons.forEach((button) => {
