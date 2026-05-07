@@ -3288,6 +3288,182 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
     }
   }
 
+  function stripMarkdownExtension(path) {
+    return String(path || "").replace(/\.(md|markdown)$/i, "");
+  }
+
+  function splitMarkdownLinkSuffix(reference) {
+    const value = String(reference || "");
+    let suffixIndex = -1;
+    ["#", "?"].forEach((marker) => {
+      const index = value.indexOf(marker);
+      if (index >= 0 && (suffixIndex < 0 || index < suffixIndex)) suffixIndex = index;
+    });
+    if (suffixIndex < 0) return { target: value, suffix: "" };
+    return {
+      target: value.slice(0, suffixIndex),
+      suffix: value.slice(suffixIndex)
+    };
+  }
+
+  function getRelativePathBetweenFiles(sourcePath, targetPath) {
+    const sourceParts = String(sourcePath || "").replace(/\\/g, "/").split("/").filter(Boolean);
+    const targetParts = String(targetPath || "").replace(/\\/g, "/").split("/").filter(Boolean);
+    sourceParts.pop();
+    while (sourceParts.length && targetParts.length && sourceParts[0].toLowerCase() === targetParts[0].toLowerCase()) {
+      sourceParts.shift();
+      targetParts.shift();
+    }
+    return [...sourceParts.map(() => ".."), ...targetParts].join("/");
+  }
+
+  function getRenameReferenceTargetPath(referenceTarget, sourcePath, oldPath, newPath, kind, resolvedTargetPath) {
+    const normalizedTarget = String(referenceTarget || "").replace(/\\/g, "/").replace(/^\.\//, "").replace(/^\/+/, "");
+    const targetHasMarkdownExtension = /\.(md|markdown)$/i.test(normalizedTarget);
+    const useExtension = targetHasMarkdownExtension;
+    const isBareReference = !normalizedTarget.includes("/");
+    const oldRelativePath = activeFolderPath ? getPathRelativeToFolder(oldPath, activeFolderPath) : oldPath;
+    const newRelativePath = activeFolderPath ? getPathRelativeToFolder(newPath, activeFolderPath) : newPath;
+    const normalizedOldRelativePath = String(oldRelativePath || oldPath || "").replace(/\\/g, "/");
+    const normalizedNewRelativePath = String(newRelativePath || newPath || "").replace(/\\/g, "/");
+    if (!normalizedOldRelativePath || !normalizedNewRelativePath) return null;
+
+    const renamedPath = kind === "folder"
+      ? stripMarkdownExtension(replacePathPrefix(resolvedTargetPath, normalizedOldRelativePath, normalizedNewRelativePath))
+      : stripMarkdownExtension(normalizedNewRelativePath);
+
+    if (!renamedPath || renamedPath === normalizedTarget) return null;
+
+    const sourceAfterRename = kind === "folder"
+      ? replacePathPrefix(sourcePath, normalizedOldRelativePath, normalizedNewRelativePath)
+      : sourcePath;
+    let replacement = isBareReference
+      ? (renamedPath.split("/").pop() || renamedPath)
+      : getRelativePathBetweenFiles(sourceAfterRename, useExtension ? `${renamedPath}.md` : renamedPath);
+    if (!useExtension) replacement = stripMarkdownExtension(replacement);
+    if (useExtension && !/\.(md|markdown)$/i.test(replacement)) replacement += ".md";
+    if (String(referenceTarget || "").startsWith("./") && !replacement.startsWith(".") && !replacement.startsWith("/")) {
+      replacement = `./${replacement}`;
+    }
+    if (String(referenceTarget || "").startsWith("/") && !replacement.startsWith("/")) {
+      replacement = `/${useExtension ? `${renamedPath}.md` : stripMarkdownExtension(renamedPath)}`;
+    }
+    return replacement;
+  }
+
+  function updateMarkdownRenameLinks(content, sourcePath, nodeIndex, oldPath, newPath, kind) {
+    if (!content || !oldPath || !newPath) return content;
+    const oldRelativePath = activeFolderPath ? getPathRelativeToFolder(oldPath, activeFolderPath) : oldPath;
+    const oldTargetId = normalizeGraphNodeName(oldRelativePath || oldPath);
+    const getResolvedRenameTarget = (reference) => {
+      const target = resolveGraphTargetId(reference, sourcePath, nodeIndex);
+      if (!target) return null;
+      const isMatch = kind === "folder" ? (target === oldTargetId || target.startsWith(oldTargetId + "/")) : target === oldTargetId;
+      return isMatch ? { id: target, path: nodeIndex.get(target) || target } : null;
+    };
+    const renameReference = (reference) => {
+      const { target, suffix } = splitMarkdownLinkSuffix(reference);
+      const resolvedTarget = getResolvedRenameTarget(target);
+      if (!resolvedTarget) return reference;
+      const renamedTarget = getRenameReferenceTargetPath(target, sourcePath, oldPath, newPath, kind, resolvedTarget.path);
+      return renamedTarget ? `${renamedTarget}${suffix}` : reference;
+    };
+
+    return String(content)
+      .replace(/\[\[([^\]]+)\]\]/g, (fullMatch, inner) => {
+        const pipeIndex = String(inner).indexOf("|");
+        const target = pipeIndex >= 0 ? String(inner).slice(0, pipeIndex) : String(inner);
+        const alias = pipeIndex >= 0 ? String(inner).slice(pipeIndex) : "";
+        const renamedTarget = renameReference(target.trim());
+        return renamedTarget === target.trim() ? fullMatch : `[[${renamedTarget}${alias}]]`;
+      })
+      .replace(/(\[[^\]]*?\]\()([^\s)]+)(\))/g, (fullMatch, prefix, url, suffix) => {
+        if (/^(https?:|mailto:|tel:|#)/i.test(url)) return fullMatch;
+        const renamedUrl = renameReference(url);
+        return renamedUrl === url ? fullMatch : `${prefix}${renamedUrl}${suffix}`;
+      });
+  }
+
+  async function writeFolderMarkdownEntryContent(entry, content, oldPath, newPath, kind) {
+    const entryFullPath = entry.fullPath || null;
+    let writePath = entryFullPath;
+    if (kind === "folder") writePath = replacePathPrefix(entryFullPath, oldPath, newPath);
+    if (kind === "file" && entryFullPath === oldPath) writePath = newPath;
+
+    if (isNeutralinoRuntime()) {
+      if (!writePath || !Neutralino.filesystem?.writeFile) throw new Error("No writable filesystem path is available.");
+      await Neutralino.filesystem.writeFile(writePath, content);
+      return writePath;
+    }
+
+    if (entry.handle?.createWritable) {
+      const writable = await entry.handle.createWritable();
+      await writable.write(content);
+      await writable.close();
+      return entry.path;
+    }
+
+    throw new Error("No writable file handle is available.");
+  }
+
+  function getEntryContent(entry) {
+    if (entry.content !== undefined) return Promise.resolve(entry.content);
+    if (entry.file) return entry.file.text();
+    if (entry.handle) return entry.handle.getFile().then((file) => file.text());
+    if (isNeutralinoRuntime() && entry.fullPath) return Neutralino.filesystem.readFile(entry.fullPath);
+    return Promise.reject(new Error("No readable Markdown file is available."));
+  }
+
+  function updateOpenTabsAfterMarkdownLinkRename(changedFiles) {
+    if (!changedFiles || !changedFiles.size) return;
+    let changed = false;
+    tabs.forEach((tab) => {
+      if (tab.type === "graph") return;
+      const pathKey = tab.sourceFilePath || "";
+      const handleEntry = Array.from(changedFiles.values()).find((item) => item.handle && item.handle === tab.sourceFileHandle);
+      const changedEntry = changedFiles.get(pathKey) || handleEntry;
+      if (!changedEntry) return;
+      tab.content = changedEntry.content;
+      if (tab.id === activeTabId) {
+        markdownEditor.value = changedEntry.content;
+        renderMarkdown();
+      }
+      changed = true;
+    });
+    if (changed) saveTabsToStorage(tabs);
+  }
+
+  async function updateOpenFolderLinksAfterSidebarRename(oldPath, newPath, kind) {
+    if (!oldPath || !newPath || !folderMarkdownFiles.length) return 0;
+    const files = folderMarkdownFiles.slice();
+    const nodeIndex = new Map();
+    files.forEach((entry) => {
+      const path = entry.path || entry.file?.webkitRelativePath || entry.file?.name || "";
+      const id = normalizeGraphNodeName(path);
+      if (id) nodeIndex.set(id, path);
+    });
+
+    const changedFiles = new Map();
+    for (const entry of files) {
+      const sourcePath = entry.path || entry.file?.webkitRelativePath || entry.file?.name || "";
+      if (!sourcePath) continue;
+      try {
+        const content = await getEntryContent(entry);
+        const updatedContent = updateMarkdownRenameLinks(content, sourcePath, nodeIndex, oldPath, newPath, kind);
+        if (updatedContent === content) continue;
+        const writePath = await writeFolderMarkdownEntryContent(entry, updatedContent, oldPath, newPath, kind);
+        changedFiles.set(writePath || entry.path || sourcePath, {
+          content: updatedContent,
+          handle: entry.handle || null
+        });
+      } catch (error) {
+        console.warn(`Failed to update Markdown links in ${sourcePath}:`, error);
+      }
+    }
+    updateOpenTabsAfterMarkdownLinkRename(changedFiles);
+    return changedFiles.size;
+  }
+
   function replacePathPrefix(path, oldPrefix, newPrefix) {
     if (!path || !oldPrefix || !newPrefix) return path;
     const originalPath = String(path);
@@ -3472,6 +3648,12 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
     } else {
       alert(`Renaming ${kind}s from the folder tree is available in the desktop app for ${kind}s opened from disk.`);
       return;
+    }
+
+    try {
+      await updateOpenFolderLinksAfterSidebarRename(oldPath || node.path, newPath, kind);
+    } catch (error) {
+      console.warn(`Renamed ${kind}, but failed to update Markdown links:`, error);
     }
 
     if (kind === "folder") {
