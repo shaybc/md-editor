@@ -44,6 +44,13 @@ document.addEventListener("DOMContentLoaded", function () {
   const statusTipElement = document.getElementById("status-tip");
   const graphPointsStatusElement = document.getElementById("graph-points-status");
   const graphPointsCountElement = document.getElementById("graph-points-count");
+  const editorTextpadStatusElement = document.getElementById("editor-textpad-status");
+  const editorTotalLengthElement = document.getElementById("editor-total-length");
+  const editorTotalLinesElement = document.getElementById("editor-total-lines");
+  const editorCursorLineElement = document.getElementById("editor-cursor-line");
+  const editorCursorColumnElement = document.getElementById("editor-cursor-column");
+  const editorPositionLabelElement = document.getElementById("editor-position-label");
+  const editorPositionValueElement = document.getElementById("editor-position-value");
 
   // View Mode Elements - Story 1.1
   const contentContainer = document.querySelector(".content-container");
@@ -2475,6 +2482,49 @@ This is a fully client-side application. Your content never leaves your browser 
     exportMd.click();
   }
 
+  function getEditorLineColumn(text, position) {
+    const safePosition = Math.max(0, Math.min(position, text.length));
+    const beforeCursor = text.slice(0, safePosition);
+    const line = beforeCursor.split("\n").length;
+    const lastLineBreak = beforeCursor.lastIndexOf("\n");
+    const column = safePosition - lastLineBreak;
+
+    return { line, column };
+  }
+
+  function getSelectionLineCount(text, selectionStart, selectionEnd) {
+    if (selectionStart === selectionEnd) return 0;
+    return text.slice(selectionStart, selectionEnd).split("\n").length;
+  }
+
+  function updateEditorTextpadStatus(activeTab) {
+    if (!editorTextpadStatusElement) return;
+
+    const shouldShowEditorStatus = !!activeTab && activeTab.type !== "graph" && document.activeElement === markdownEditor;
+    editorTextpadStatusElement.classList.toggle("hidden", !shouldShowEditorStatus);
+    if (!shouldShowEditorStatus) return;
+
+    const text = markdownEditor.value;
+    const selectionStart = Math.min(markdownEditor.selectionStart || 0, markdownEditor.selectionEnd || 0);
+    const selectionEnd = Math.max(markdownEditor.selectionStart || 0, markdownEditor.selectionEnd || 0);
+    const hasSelection = selectionStart !== selectionEnd;
+    const cursorPosition = hasSelection ? selectionEnd : selectionStart;
+    const cursorLocation = getEditorLineColumn(text, cursorPosition);
+    const totalLines = text.length ? text.split("\n").length : 1;
+
+    if (editorTotalLengthElement) editorTotalLengthElement.textContent = text.length.toLocaleString();
+    if (editorTotalLinesElement) editorTotalLinesElement.textContent = totalLines.toLocaleString();
+    if (editorCursorLineElement) editorCursorLineElement.textContent = cursorLocation.line.toLocaleString();
+    if (editorCursorColumnElement) editorCursorColumnElement.textContent = cursorLocation.column.toLocaleString();
+
+    if (editorPositionLabelElement) editorPositionLabelElement.textContent = hasSelection ? "Sel" : "Pos";
+    if (editorPositionValueElement) {
+      editorPositionValueElement.textContent = hasSelection
+        ? `${(selectionEnd - selectionStart).toLocaleString()} | ${getSelectionLineCount(text, selectionStart, selectionEnd).toLocaleString()}`
+        : (cursorPosition + 1).toLocaleString();
+    }
+  }
+
   function updateStatusLine(options = {}) {
     const activeTab = tabs.find((tab) => tab.id === activeTabId);
     const activeGraphTab = activeTab && activeTab.type === "graph" ? activeTab : null;
@@ -2492,6 +2542,8 @@ This is a fully client-side application. Your content never leaves your browser 
       graphPointsCountElement.textContent = visiblePointCount.toLocaleString();
       graphPointsStatusElement.classList.toggle("hidden", !activeGraphTab);
     }
+
+    updateEditorTextpadStatus(activeTab);
   }
 
   function restoreViewMode(mode) {
@@ -5927,6 +5979,7 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
 
   markdownEditor.addEventListener("input", function() {
     updateEditorLineNumbers();
+    updateStatusLine();
     const activeTab = tabs.find(function(t) { return t.id === activeTabId; });
     if (activeTab) {
       activeTab.content = markdownEditor.value;
@@ -5963,7 +6016,17 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
   });
   
   ["click", "keyup", "select"].forEach(function(eventName) {
-    markdownEditor.addEventListener(eventName, updateEditorLineNumbers);
+    markdownEditor.addEventListener(eventName, function() {
+      updateEditorLineNumbers();
+      updateStatusLine();
+    });
+  });
+  markdownEditor.addEventListener("focus", updateStatusLine);
+  markdownEditor.addEventListener("blur", function() {
+    window.setTimeout(updateStatusLine, 0);
+  });
+  document.addEventListener("selectionchange", function() {
+    if (document.activeElement === markdownEditor) updateStatusLine();
   });
   markdownEditor.addEventListener("scroll", syncEditorLineNumberScroll);
 

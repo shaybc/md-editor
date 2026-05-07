@@ -118,6 +118,15 @@ body {
   white-space: nowrap;
 }
 
+.editor-textpad-status {
+  gap: 1rem;
+}
+
+.editor-textpad-status > span {
+  display: inline-flex;
+  gap: 0.2rem;
+}
+
 .status-item i {
   font-size: 0.75rem;
   opacity: 0.75;
@@ -132,8 +141,9 @@ body {
   color: var(--disabled-text-color);
 }
 
-.graph-points-status.hidden {
-  visibility: hidden;
+.graph-points-status.hidden,
+.editor-textpad-status.hidden {
+  display: none;
 }
 
 @media (max-width: 767px) {
