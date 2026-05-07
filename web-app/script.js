@@ -1376,6 +1376,7 @@ This is a fully client-side application. Your content never leaves your browser 
     const zoom = zoomTransform ? { x: zoomTransform.x, y: zoomTransform.y, k: zoomTransform.k } : getSavedGraphZoomTransform(existingLayout);
     const nextLayout = {
       ...existingLayout,
+      magneticEnabled: graphSettings.magneticEnabled,
       nodes: nextNodes,
       updatedAt: Date.now()
     };
@@ -4269,6 +4270,10 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
       return false;
     }
 
+    const cachedRender = graphRenderCache.get(graphTab.id);
+    if (cachedRender?.nodes) {
+      captureGraphLayout(graphTab, cachedRender.nodes, cachedRender.getZoomTransform?.());
+    }
     syncGraphTabDocument(graphTab);
     const graphDocument = serializeGraphTab(graphTab);
     const content = JSON.stringify(graphDocument, null, 2);
@@ -4550,6 +4555,9 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
     }
 
     applySavedGraphLayout(nodes, activeTab.graphLayout);
+    if (typeof activeTab.graphLayout?.magneticEnabled === "boolean") {
+      graphSettings.magneticEnabled = activeTab.graphLayout.magneticEnabled;
+    }
 
     const outgoingAdjacency = new Map();
     const outgoingDegree = new Map();
@@ -4611,11 +4619,12 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
     const baseLinkForce = d3.forceLink(links).id((d) => d.id).distance(170).strength(0.4);
     const baseChargeForce = d3.forceManyBody().strength(-650);
     const baseCenterForce = d3.forceCenter(width / 2, height / 2);
+    const baseCollisionForce = d3.forceCollide().radius((d) => nodeRadius(d.id) + 30).strength(0.9);
     simulation
       .force("link", baseLinkForce)
       .force("charge", baseChargeForce)
       .force("center", baseCenterForce)
-      .force("collision", d3.forceCollide().radius((d) => nodeRadius(d.id) + 30).strength(0.9));
+      .force("collision", baseCollisionForce);
     // Keep the former marker dimensions: 9x8 viewBox scaled into a 5x5 marker viewport.
     const arrowheadLength = 5;
     const arrowheadHalfHeight = 20 / 9;
@@ -4632,21 +4641,25 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
       .attr("r", (d) => nodeRadius(d.id)).attr("class", "graph-node")
       .call(d3.drag()
         .on("start", (event, d) => {
-          if (!event.active) simulation.alphaTarget(0.3).restart();
+          if (graphSettings.magneticEnabled && !event.active) simulation.alphaTarget(0.3).restart();
           d.fx = d.x;
           d.fy = d.y;
         })
         .on("drag", (event, d) => {
+          d.x = event.x;
+          d.y = event.y;
           d.fx = event.x;
           d.fy = event.y;
+          renderGraphTick();
           captureGraphLayout(activeTab, nodes, currentZoomTransform);
         })
         .on("end", (event, d) => {
-          if (!event.active) simulation.alphaTarget(0);
+          if (graphSettings.magneticEnabled && !event.active) simulation.alphaTarget(0);
           d.x = event.x;
           d.y = event.y;
           d.fx = null;
           d.fy = null;
+          renderGraphTick();
           captureGraphLayout(activeTab, nodes, currentZoomTransform);
           saveTabsToStorage(tabs);
         }));
@@ -4689,6 +4702,7 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
           .force("link", baseLinkForce)
           .force("charge", baseChargeForce)
           .force("center", baseCenterForce)
+          .force("collision", baseCollisionForce)
           .alpha(0.7)
           .restart();
       } else {
@@ -4696,7 +4710,11 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
           .force("link", null)
           .force("charge", null)
           .force("center", null)
-          .alphaTarget(0);
+          .force("collision", null)
+          .alphaTarget(0)
+          .stop();
+        renderGraphTick();
+        captureGraphLayout(activeTab, nodes, currentZoomTransform);
       }
       magneticToggleBtn.textContent = graphSettings.magneticEnabled
         ? "Turn magnetic forces off"
@@ -4835,7 +4853,7 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
       .on("mouseenter", (event, d) => highlightNeighborhood(d))
       .on("mouseleave", clearNeighborhoodHighlight);
 
-    simulation.on("tick", () => {
+    function renderGraphTick() {
       link.each(function(d) {
         const endpoint = getLinkEndpoint(d);
         d.endpoint = endpoint;
@@ -4862,12 +4880,16 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
       label.attr("x", (d) => d.x + 10).attr("y", (d) => d.y + 4);
       captureGraphLayout(activeTab, nodes, currentZoomTransform);
       scheduleGraphLayoutStorageSave();
-    });
+    }
+
+    simulation.on("tick", renderGraphTick);
 
     graphRenderCache.set(activeTab.id, {
       signature: graphSignature,
       wrapper: graphRenderWrapper,
-      simulation
+      simulation,
+      nodes,
+      getZoomTransform: () => currentZoomTransform
     });
 
     applyMagneticSetting();
