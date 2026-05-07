@@ -669,6 +669,8 @@ document.addEventListener("DOMContentLoaded", function () {
     }
   });
 
+  markdownPreview.addEventListener("click", handlePreviewLinkClick);
+
   function ensureFolderTreePane() {
     let pane = document.getElementById("folder-tree-pane");
     if (pane || !contentContainer) return;
@@ -1037,6 +1039,214 @@ document.addEventListener("DOMContentLoaded", function () {
     const suffix = hashIndex >= 0 ? trimmedTarget.slice(hashIndex) : "";
     const pathWithExtension = /\.[^/\\]+$/.test(pathPart) ? pathPart : `${pathPart}.md`;
     return encodeURI(`${pathWithExtension}${suffix}`);
+  }
+
+  function splitLinkTarget(target) {
+    const rawTarget = String(target || "").trim();
+    const hashIndex = rawTarget.indexOf("#");
+    const queryIndex = rawTarget.indexOf("?");
+    const cutIndexes = [hashIndex, queryIndex].filter((index) => index >= 0);
+    const firstCutIndex = cutIndexes.length ? Math.min(...cutIndexes) : -1;
+    const path = firstCutIndex >= 0 ? rawTarget.slice(0, firstCutIndex) : rawTarget;
+    const suffix = firstCutIndex >= 0 ? rawTarget.slice(firstCutIndex) : "";
+    const hash = hashIndex >= 0 ? rawTarget.slice(hashIndex + 1).split("?")[0] : "";
+    return { path, suffix, hash };
+  }
+
+  function safeDecodeLinkPath(path) {
+    try {
+      return decodeURIComponent(String(path || ""));
+    } catch (_) {
+      return String(path || "");
+    }
+  }
+
+  function normalizeMarkdownLinkPath(path) {
+    const normalized = safeDecodeLinkPath(path)
+      .replace(/\\/g, "/")
+      .replace(/^\.\//, "");
+    const segments = [];
+
+    normalized.split("/").forEach((segment) => {
+      if (!segment || segment === ".") return;
+      if (segment === "..") {
+        if (segments.length && segments[segments.length - 1] !== "..") {
+          segments.pop();
+        } else {
+          segments.push(segment);
+        }
+        return;
+      }
+      segments.push(segment);
+    });
+
+    return segments.join("/");
+  }
+
+  function getDirectoryPath(path) {
+    const normalized = String(path || "").replace(/\\/g, "/");
+    const index = normalized.lastIndexOf("/");
+    return index >= 0 ? normalized.slice(0, index) : "";
+  }
+
+  function isAbsoluteFilesystemPath(path) {
+    const value = String(path || "");
+    return /^[a-zA-Z]:[\\/]/.test(value) || /^\\\\/.test(value) || value.startsWith("/");
+  }
+
+  function normalizeFilesystemLinkPath(path) {
+    const rawPath = safeDecodeLinkPath(path).replace(/\\/g, "/");
+    const driveMatch = rawPath.match(/^[a-zA-Z]:\//);
+    const prefix = driveMatch ? driveMatch[0] : (rawPath.startsWith("/") ? "/" : "");
+    const pathWithoutPrefix = prefix ? rawPath.slice(prefix.length) : rawPath;
+    return prefix + normalizeMarkdownLinkPath(pathWithoutPrefix);
+  }
+
+  function resolveMarkdownLinkPath(targetPath, basePath) {
+    const decodedTarget = safeDecodeLinkPath(targetPath).replace(/\\/g, "/");
+    if (!decodedTarget) return "";
+    if (isAbsoluteFilesystemPath(decodedTarget)) {
+      return normalizeFilesystemLinkPath(decodedTarget);
+    }
+
+    const decodedBasePath = safeDecodeLinkPath(basePath || "").replace(/\\/g, "/");
+    if (isAbsoluteFilesystemPath(decodedBasePath)) {
+      const baseDirectory = getDirectoryPath(decodedBasePath);
+      return normalizeFilesystemLinkPath(baseDirectory ? `${baseDirectory}/${decodedTarget}` : decodedTarget);
+    }
+
+    const normalizedBasePath = normalizeMarkdownLinkPath(decodedBasePath);
+    const baseDirectory = getDirectoryPath(normalizedBasePath);
+    return normalizeMarkdownLinkPath(baseDirectory ? `${baseDirectory}/${decodedTarget}` : decodedTarget);
+  }
+
+  function getActiveMarkdownSourcePath() {
+    const activeTab = getActiveMarkdownTab();
+    return activeTab && activeTab.sourceFilePath ? activeTab.sourceFilePath : "";
+  }
+
+  function getFolderEntryPathCandidates(entry) {
+    const candidates = [
+      entry && entry.path,
+      entry && entry.fullPath,
+      entry && entry.file && entry.file.webkitRelativePath,
+      entry && entry.file && entry.file.name
+    ];
+    return candidates
+      .filter(Boolean)
+      .map((path) => normalizeMarkdownLinkPath(path));
+  }
+
+  function findOpenFolderMarkdownEntry(resolvedPath) {
+    const normalizedResolvedPath = normalizeMarkdownLinkPath(resolvedPath);
+    const resolvedWithoutFolderRoot = activeFolderName && normalizedResolvedPath.startsWith(`${activeFolderName}/`)
+      ? normalizedResolvedPath.slice(activeFolderName.length + 1)
+      : normalizedResolvedPath;
+
+    return (folderMarkdownFiles || []).find((entry) => {
+      const candidates = getFolderEntryPathCandidates(entry);
+      return candidates.some((candidate) => {
+        const candidateWithoutFolderRoot = activeFolderName && candidate.startsWith(`${activeFolderName}/`)
+          ? candidate.slice(activeFolderName.length + 1)
+          : candidate;
+        return candidate === normalizedResolvedPath
+          || candidate === resolvedWithoutFolderRoot
+          || candidateWithoutFolderRoot === normalizedResolvedPath
+          || candidateWithoutFolderRoot === resolvedWithoutFolderRoot;
+      });
+    }) || null;
+  }
+
+  function getMarkdownLinkSourceFile(target) {
+    const { path: targetPath } = splitLinkTarget(target);
+    if (!targetPath || !isMarkdownPath(targetPath)) return null;
+
+    const activeSourcePath = getActiveMarkdownSourcePath();
+    const resolvedPath = resolveMarkdownLinkPath(targetPath, activeSourcePath);
+    const folderEntry = findOpenFolderMarkdownEntry(resolvedPath);
+
+    if (folderEntry) {
+      return {
+        name: folderEntry.name || getFileName(folderEntry.path || folderEntry.fullPath || targetPath),
+        file: folderEntry.file || null,
+        handle: folderEntry.handle || null,
+        path: folderEntry.fullPath || folderEntry.path || resolvedPath
+      };
+    }
+
+    if (typeof NL_VERSION !== "undefined") {
+      if (isAbsoluteFilesystemPath(resolvedPath)) {
+        return {
+          name: getFileName(resolvedPath),
+          path: resolvedPath
+        };
+      }
+      if (activeFolderPath) {
+        const folderRelativePath = normalizeMarkdownLinkPath(resolvedPath).replace(new RegExp(`^${activeFolderName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}/`), "");
+        const fullPath = joinPath(activeFolderPath, folderRelativePath);
+        return {
+          name: getFileName(fullPath),
+          path: fullPath
+        };
+      }
+    }
+
+    return null;
+  }
+
+  function scrollMarkdownPreviewToHash(hash) {
+    if (!hash) return;
+    requestAnimationFrame(() => {
+      const decodedHash = safeDecodeLinkPath(hash);
+      const target = document.getElementById(decodedHash)
+        || markdownPreview.querySelector(`[name="${CSS.escape(decodedHash)}"]`);
+      if (target && typeof target.scrollIntoView === "function") {
+        target.scrollIntoView({ behavior: "smooth", block: "start" });
+      }
+    });
+  }
+
+  async function openMarkdownLinkFromPreview(rawTarget) {
+    const { hash } = splitLinkTarget(rawTarget);
+    const sourceFile = getMarkdownLinkSourceFile(rawTarget);
+
+    if (!sourceFile) {
+      alert("Unable to open this Markdown link. Open the containing folder or use the desktop app so Markdown Viewer can read linked local files.");
+      return;
+    }
+
+    const existingTab = findTabForSourceFile(sourceFile);
+    if (existingTab) {
+      switchTab(existingTab.id);
+      pinTemporaryTab(existingTab.id);
+      scrollMarkdownPreviewToHash(hash);
+      return;
+    }
+
+    try {
+      const openedTab = await openDocumentSourceFile(sourceFile);
+      if (openedTab) {
+        pinTemporaryTab(openedTab.id);
+        scrollMarkdownPreviewToHash(hash);
+      }
+    } catch (error) {
+      console.error("Failed to open linked Markdown file:", error);
+      alert("Unable to open linked Markdown file.");
+    }
+  }
+
+  function handlePreviewLinkClick(event) {
+    const anchor = event.target.closest("a[href]");
+    if (!anchor || !markdownPreview.contains(anchor)) return;
+
+    const rawHref = anchor.getAttribute("href") || "";
+    if (!rawHref || isExternalOrSpecialLinkTarget(rawHref)) return;
+
+    const { path } = splitLinkTarget(rawHref);
+    if (!isMarkdownPath(path)) return;
+
+    event.preventDefault();
+    openMarkdownLinkFromPreview(rawHref);
   }
 
   function createWikiLinkAnchor(rawLink) {
