@@ -622,7 +622,7 @@ document.addEventListener("DOMContentLoaded", function () {
         </div>
       </div>
       <div id="folder-tree-root" class="folder-tree-root">
-        <p class="folder-tree-placeholder">Open a folder to browse Markdown files.</p>
+        <p class="folder-tree-placeholder">Open a folder to browse Markdown and graph files.</p>
       </div>
       <div class="sidebar-dropzone-resizer" id="sidebar-dropzone-resizer" role="separator" aria-orientation="horizontal" aria-label="Resize sidebar dropzone" tabindex="0"></div>
       <div class="sidebar-dropzone-panel">
@@ -2381,7 +2381,7 @@ This is a fully client-side application. Your content never leaves your browser 
         if (children.length) {
           entries.push({ kind: "directory", name: entry.name, children });
         }
-      } else if (entry.kind === "file" && /\.(md|markdown)$/i.test(entry.name)) {
+      } else if (entry.kind === "file" && isSidebarDocumentPath(entry.name)) {
         entries.push({ kind: "file", name: entry.name, handle: entry });
       }
     }
@@ -2396,7 +2396,7 @@ This is a fully client-side application. Your content never leaves your browser 
       if (node.kind === "directory") {
         const nestedFiles = await collectMarkdownFilesFromTree(node.children || [], currentPath);
         files.push(...nestedFiles);
-      } else if (node.kind === "file") {
+      } else if (node.kind === "file" && isMarkdownPath(node.name)) {
         if (node.file) {
           files.push({ path: currentPath, file: node.file, handle: node.handle || null });
         } else if (node.handle) {
@@ -2413,7 +2413,7 @@ This is a fully client-side application. Your content never leaves your browser 
   }
 
   function getClosedFolderPlaceholder() {
-    return '<p class="folder-tree-placeholder">Open a folder to browse Markdown files.</p>';
+    return '<p class="folder-tree-placeholder">Open a folder to browse Markdown and graph files.</p>';
   }
 
   function updateCloseFolderButtons() {
@@ -2440,7 +2440,7 @@ This is a fully client-side application. Your content never leaves your browser 
     isFolderOpen = true;
     folderTreeRoot.innerHTML = "";
     if (!nodes.length) {
-      folderTreeRoot.innerHTML = '<p class="folder-tree-placeholder">No Markdown files found in this folder.</p>';
+      folderTreeRoot.innerHTML = '<p class="folder-tree-placeholder">No Markdown or graph files found in this folder.</p>';
       updateCloseFolderButtons();
       return;
     }
@@ -2546,6 +2546,10 @@ This is a fully client-side application. Your content never leaves your browser 
 
   function isGraphFilePath(path) {
     return /\.(mdviewer-graph\.json|mdgraph\.json|json)$/i.test(path || "");
+  }
+
+  function isSidebarDocumentPath(path) {
+    return isMarkdownPath(path) || isGraphFilePath(path);
   }
 
   function looksLikeGraphDocument(document) {
@@ -2727,12 +2731,12 @@ This is a fully client-side application. Your content never leaves your browser 
         if (children.length) {
           entries.push({ kind: "directory", name: entry.name, children });
         }
-      } else if (entry.isFile && /\.(md|markdown)$/i.test(entry.name)) {
+      } else if (entry.isFile && isSidebarDocumentPath(entry.name)) {
         try {
           const file = await getFileFromEntry(entry);
           entries.push({ kind: "file", name: entry.name, file, path: entry.fullPath || entry.name });
         } catch (error) {
-          console.warn("Failed to read dropped Markdown file:", entry.name, error);
+          console.warn("Failed to read dropped document file:", entry.name, error);
         }
       }
     }
@@ -2851,7 +2855,7 @@ async function listMarkdownTreeNeutralino(dirPath) {
         if (children.length) {
           entries.push({ kind: "directory", name: item.entry, children, fullPath });
         }
-      } else if (item.type === "FILE" && /\.(md|markdown)$/i.test(item.entry)) {
+      } else if (item.type === "FILE" && isSidebarDocumentPath(item.entry)) {
         entries.push({ kind: "file", name: item.entry, fullPath });
       }
     }
@@ -2871,7 +2875,7 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
     if (node.kind === "directory") {
       const nestedFiles = await collectMarkdownFilesFromTreeNeutralino(node.children || [], currentPath);
       files.push(...nestedFiles);
-    } else if (node.kind === "file") {
+    } else if (node.kind === "file" && isMarkdownPath(node.name)) {
       try {
         const content = await Neutralino.filesystem.readFile(node.fullPath);
         const file = new File([content], node.name, { type: "text/markdown" });
@@ -2904,10 +2908,11 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
 
     const button = document.createElement("button");
     let sidebarOpenClickTimer = null;
+    const isGraphFile = isGraphFilePath(node.name);
     button.type = "button";
-    button.className = "folder-tree-file";
-    button.title = "Click to preview; double-click to keep open";
-    button.innerHTML = `<i class="bi bi-file-earmark-text"></i>${node.name}`;
+    button.className = "folder-tree-file" + (isGraphFile ? " folder-tree-graph-file" : "");
+    button.title = isGraphFile ? "Click to open graph" : "Click to preview; double-click to keep open";
+    button.innerHTML = `<i class="bi ${isGraphFile ? "bi-diagram-3" : "bi-file-earmark-text"}"></i>${node.name}`;
 
     async function readSidebarFileContent() {
       if (typeof NL_VERSION !== "undefined" && node.fullPath) {
@@ -2941,16 +2946,20 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
         }
 
         const content = await readSidebarFileContent();
-        const title = node.name.replace(/\.(md|markdown)$/i, "");
         const sourceFile = getSidebarFileSource();
-        if (options && options.temporary === false) {
-          openSidebarFileInPermanentTab(content, title, sourceFile);
+        if (isGraphFile) {
+          await openSavedGraphDocument({ ...sourceFile, content });
         } else {
-          openSidebarFileInTemporaryTab(content, title, sourceFile);
+          const title = getMarkdownTitleFromFileName(node.name);
+          if (options && options.temporary === false) {
+            openSidebarFileInPermanentTab(content, title, sourceFile);
+          } else {
+            openSidebarFileInTemporaryTab(content, title, sourceFile);
+          }
         }
         rememberRecentFile(sourceFile);
       } catch (error) {
-        console.error("Failed to open Markdown file:", error);
+        console.error("Failed to open sidebar file:", error);
         alert("Unable to open selected file.");
       }
     }
@@ -2990,7 +2999,7 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
       if (pathMatch) return pathMatch;
     }
 
-    const title = node.name.replace(/\.(md|markdown)$/i, "");
+    const title = isGraphFilePath(node.name) ? getGraphTitleFromFileName(node.name) : getMarkdownTitleFromFileName(node.name);
     return tabs.find(function(tab) {
       return tab.sourceFileName === node.name || tab.title === title;
     }) || null;
@@ -3008,7 +3017,7 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
     };
 
     Array.from(fileList).forEach((file) => {
-      if (!/\.(md|markdown)$/i.test(file.name)) return;
+      if (!isSidebarDocumentPath(file.name)) return;
       const relPath = (file.webkitRelativePath || file.name).split("/");
       const fileName = relPath.pop();
       let cursor = root;
@@ -4281,7 +4290,7 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
       activeFolderHandle = null;
       activeFolderPath = null;
       folderMarkdownFiles = Array.from(files || [])
-        .filter((file) => /\.(md|markdown)$/i.test(file.name))
+        .filter((file) => isMarkdownPath(file.name))
         .map((file) => ({ path: file.webkitRelativePath || file.name, file }));
       const nodes = buildTreeFromFileList(files || []);
       renderFolderTree(nodes);

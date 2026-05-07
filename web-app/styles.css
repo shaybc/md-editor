@@ -2257,6 +2257,8 @@ a:focus {
   min-width: 100%;
 }
 .folder-tree-file:hover { background: var(--button-hover); }
+.folder-tree-graph-file i { color: #8250df; }
+[data-theme="dark"] .folder-tree-graph-file i { color: #ab7df8; }
 .folder-tree-placeholder { color: #8b949e; margin: 6px 2px; }
 
 
