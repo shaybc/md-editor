@@ -2202,7 +2202,10 @@ This is a fully client-side application. Your content never leaves your browser 
     const input = document.getElementById('rename-modal-input');
     const confirmBtn = document.getElementById('rename-modal-confirm');
     const cancelBtn = document.getElementById('rename-modal-cancel');
+    const title = document.getElementById('rename-modal-title');
     if (!modal || !input) return;
+    if (title) title.textContent = 'Rename file';
+    input.placeholder = 'File name';
     input.value = tab.title;
     modal.style.display = 'flex';
     input.focus();
@@ -2405,7 +2408,7 @@ This is a fully client-side application. Your content never leaves your browser 
       if (entry.kind === "directory") {
         const children = await listMarkdownTree(entry);
         if (children.length) {
-          entries.push({ kind: "directory", name: entry.name, children });
+          entries.push({ kind: "directory", name: entry.name, children, handle: entry });
         }
       } else if (entry.kind === "file" && isSidebarDocumentPath(entry.name)) {
         entries.push({ kind: "file", name: entry.name, handle: entry });
@@ -2770,7 +2773,7 @@ This is a fully client-side application. Your content never leaves your browser 
       if (entry.isDirectory) {
         const children = await listMarkdownTreeFromEntry(entry);
         if (children.length) {
-          entries.push({ kind: "directory", name: entry.name, children });
+          entries.push({ kind: "directory", name: entry.name, children, handle: entry });
         }
       } else if (entry.isFile && isSidebarDocumentPath(entry.name)) {
         try {
@@ -3045,11 +3048,156 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
   }
 
   function positionSidebarFileContextMenu(event) {
-    positionSidebarContextMenu(sidebarFileContextMenu, event, 280);
+    positionSidebarContextMenu(sidebarFileContextMenu, event, 320);
   }
 
   function positionSidebarFolderContextMenu(event) {
-    positionSidebarContextMenu(sidebarFolderContextMenu, event, 210);
+    positionSidebarContextMenu(sidebarFolderContextMenu, event, 250);
+  }
+
+  function getPathDirectory(path) {
+    if (!path) return "";
+    const normalized = String(path);
+    const lastSlash = Math.max(normalized.lastIndexOf("/"), normalized.lastIndexOf("\\"));
+    return lastSlash >= 0 ? normalized.slice(0, lastSlash) : "";
+  }
+
+  function getRenamedSiblingPath(path, newName) {
+    const directory = getPathDirectory(path);
+    return directory ? joinPath(directory, newName) : newName;
+  }
+
+  function validateSidebarRenameName(name, kind) {
+    const value = String(name || "").trim();
+    if (!value) return "Enter a name before renaming.";
+    if (/[\\/]/.test(value)) return "Enter a name only, without folder separators.";
+    if (/^\.+$/.test(value)) return "Enter a name that is not only dots.";
+    if (kind === "file" && !isSidebarDocumentPath(value)) {
+      return "File names must end in .md, .markdown, .mdviewer-graph.json, .mdgraph.json, or .json.";
+    }
+    return "";
+  }
+
+  function promptSidebarRename(node, kind) {
+    return new Promise((resolve) => {
+      const modal = document.getElementById('rename-modal');
+      const title = document.getElementById('rename-modal-title');
+      const input = document.getElementById('rename-modal-input');
+      const confirmBtn = document.getElementById('rename-modal-confirm');
+      const cancelBtn = document.getElementById('rename-modal-cancel');
+      if (!modal || !input || !confirmBtn || !cancelBtn) {
+        resolve(null);
+        return;
+      }
+
+      if (title) title.textContent = kind === "folder" ? "Rename folder" : "Rename file";
+      input.value = node?.name || "";
+      input.placeholder = kind === "folder" ? "Folder name" : "File name";
+      confirmBtn.textContent = "Rename";
+      modal.style.display = 'flex';
+      input.focus();
+      input.select();
+
+      function cleanup(result) {
+        confirmBtn.removeEventListener('click', onConfirm);
+        cancelBtn.removeEventListener('click', onCancel);
+        input.removeEventListener('keydown', onKey);
+        modal.style.display = 'none';
+        resolve(result);
+      }
+
+      function onConfirm() {
+        const newName = input.value.trim();
+        const validationMessage = validateSidebarRenameName(newName, kind);
+        if (validationMessage) {
+          alert(validationMessage);
+          input.focus();
+          return;
+        }
+        cleanup(newName);
+      }
+
+      function onCancel() {
+        cleanup(null);
+      }
+
+      function onKey(event) {
+        if (event.key === 'Enter') onConfirm();
+        else if (event.key === 'Escape') onCancel();
+      }
+
+      confirmBtn.addEventListener('click', onConfirm);
+      cancelBtn.addEventListener('click', onCancel);
+      input.addEventListener('keydown', onKey);
+    });
+  }
+
+  function updateTabsAfterSidebarFileRename(target, oldPath, newPath, newName) {
+    let changed = false;
+    tabs.forEach((tab) => {
+      const matchesPath = oldPath && tab.sourceFilePath === oldPath;
+      const matchesHandle = target?.handle && tab.sourceFileHandle === target.handle;
+      if (!matchesPath && !matchesHandle) return;
+      tab.sourceFileName = newName;
+      if (newPath) tab.sourceFilePath = newPath;
+      if (tab.type !== "graph") {
+        tab.title = isGraphFilePath(newName) ? getGraphTitleFromFileName(newName) : getMarkdownTitleFromFileName(newName);
+      }
+      changed = true;
+    });
+    if (changed) {
+      saveTabsToStorage(tabs);
+      renderTabBar(tabs, activeTabId);
+      updateSaveCurrentFileButtons();
+    }
+  }
+
+  function updateTabsAfterSidebarFolderRename(oldPath, newPath) {
+    if (!oldPath || !newPath) return;
+    const normalizedOldPath = oldPath.replace(/\\/g, "/").replace(/\/+$/, "");
+    let changed = false;
+    tabs.forEach((tab) => {
+      if (!tab.sourceFilePath) return;
+      const normalizedTabPath = tab.sourceFilePath.replace(/\\/g, "/");
+      if (normalizedTabPath !== normalizedOldPath && !normalizedTabPath.startsWith(normalizedOldPath + "/")) return;
+      tab.sourceFilePath = newPath + tab.sourceFilePath.slice(oldPath.length);
+      changed = true;
+    });
+    if (changed) {
+      saveTabsToStorage(tabs);
+      renderTabBar(tabs, activeTabId);
+      updateSaveCurrentFileButtons();
+    }
+  }
+
+  async function renameSidebarNodeOnDisk(node, kind) {
+    if (!node) return;
+    const oldName = node.name || "";
+    const newName = await promptSidebarRename(node, kind);
+    if (!newName || newName === oldName) return;
+
+    const oldPath = kind === "folder" ? getSidebarFolderFilesystemPath(node) : getSidebarNodeFilesystemPath(node);
+    const newPath = oldPath ? getRenamedSiblingPath(oldPath, newName) : (node.path ? getRenamedSiblingPath(node.path, newName) : newName);
+
+    if (isNeutralinoRuntime()) {
+      if (!oldPath || !Neutralino.filesystem?.move) {
+        alert(`Renaming ${kind}s is available only in the desktop app for ${kind}s opened from disk.`);
+        return;
+      }
+      await Neutralino.filesystem.move(oldPath, newPath);
+    } else if (node.handle && typeof node.handle.move === "function") {
+      await node.handle.move(newName);
+    } else {
+      alert(`Renaming ${kind}s from the folder tree is available in the desktop app for ${kind}s opened from disk.`);
+      return;
+    }
+
+    if (kind === "folder") {
+      updateTabsAfterSidebarFolderRename(oldPath || node.path, newPath);
+    } else {
+      updateTabsAfterSidebarFileRename(node, oldPath || node.path, newPath, newName);
+    }
+    await reloadOpenFolderTree();
   }
 
   function ensureSidebarFileContextMenu() {
@@ -3077,6 +3225,11 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
       "Reveal in file explorer",
       "bi bi-folder2-open",
       "Open the file's folder in the system file explorer and select this file when supported."
+    );
+    const renameFileBtn = createFileContextMenuButton(
+      "Rename",
+      "bi bi-pencil",
+      "Rename this file on disk and refresh the folder tree."
     );
 
     const copySubmenu = document.createElement("div");
@@ -3153,6 +3306,7 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
       openFileBtn,
       openDefaultAppBtn,
       revealFileBtn,
+      renameFileBtn,
       copySubmenu,
       shareFileBtn,
       deleteFileTopSeparator,
@@ -3218,6 +3372,18 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
       } catch (error) {
         console.error("Failed to reveal sidebar file:", error);
         alert("Unable to reveal this file in the file explorer.");
+      }
+    });
+
+    renameFileBtn.addEventListener("click", async (event) => {
+      event.stopPropagation();
+      const target = sidebarContextTarget;
+      hideSidebarFileContextMenu();
+      try {
+        await renameSidebarNodeOnDisk(target, "file");
+      } catch (error) {
+        console.error("Failed to rename sidebar file:", error);
+        alert("Unable to rename this file.");
       }
     });
 
@@ -3418,6 +3584,11 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
       "bi bi-folder2-open",
       "Open this folder in the system file explorer."
     );
+    const renameFolderBtn = createFileContextMenuButton(
+      "Rename",
+      "bi bi-pencil",
+      "Rename this folder on disk and refresh the folder tree."
+    );
     const copyPathBtn = createFileContextMenuButton(
       "Copy path",
       "bi bi-clipboard",
@@ -3430,7 +3601,7 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
     );
     deleteFolderBtn.classList.add("graph-context-menu-item-danger");
 
-    [title, separator, showGraphBtn, revealFolderBtn, copyPathBtn, deleteFolderBtn].forEach((item) => menu.appendChild(item));
+    [title, separator, showGraphBtn, revealFolderBtn, renameFolderBtn, copyPathBtn, deleteFolderBtn].forEach((item) => menu.appendChild(item));
     document.body.appendChild(menu);
 
     showGraphBtn.addEventListener("click", async (event) => {
@@ -3454,6 +3625,18 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
       } catch (error) {
         console.error("Failed to reveal sidebar folder:", error);
         alert("Unable to reveal this folder in the file explorer.");
+      }
+    });
+
+    renameFolderBtn.addEventListener("click", async (event) => {
+      event.stopPropagation();
+      const target = sidebarContextTarget;
+      hideSidebarFolderContextMenu();
+      try {
+        await renameSidebarNodeOnDisk(target, "folder");
+      } catch (error) {
+        console.error("Failed to rename sidebar folder:", error);
+        alert("Unable to rename this folder.");
       }
     });
 
