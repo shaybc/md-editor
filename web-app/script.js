@@ -591,22 +591,6 @@ document.addEventListener("DOMContentLoaded", function () {
           <button class="dropdown-item action-menu-item save-current-file-button" type="button" title="Save changes to current file" disabled>
             <i class="bi bi-save me-2"></i> Save Changes
           </button>
-          <button class="dropdown-item action-menu-item" id="export-md" title="Export as Markdown">
-            <i class="bi bi-file-earmark-text me-2"></i> Export as Markdown
-          </button>
-          <button class="dropdown-item action-menu-item" id="export-html" title="Export as HTML">
-            <i class="bi bi-file-earmark-code me-2"></i> Export as HTML
-          </button>
-          <button class="dropdown-item action-menu-item" id="export-pdf" title="Export as PDF">
-            <i class="bi bi-file-earmark-pdf me-2"></i> Export as PDF
-          </button>
-          <hr class="dropdown-divider">
-          <button id="copy-markdown-button" class="dropdown-item action-menu-item" title="Copy Markdown">
-            <i class="bi bi-clipboard me-2"></i> Copy
-          </button>
-          <button id="share-button" class="dropdown-item action-menu-item" title="Share via URL">
-            <i class="bi bi-share me-2"></i> Share
-          </button>
           <div class="dropdown-submenu action-menu-submenu">
             <button class="dropdown-item action-menu-item dropdown-toggle" type="button" aria-haspopup="true" aria-expanded="false">
               <i class="bi bi-eye me-2"></i> View
@@ -2975,6 +2959,29 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
     throw new Error("No readable file was provided.");
   }
 
+  function runWithTemporaryEditorContent(content, action) {
+    const previousValue = markdownEditor.value;
+    markdownEditor.value = content || "";
+    try {
+      action();
+    } finally {
+      markdownEditor.value = previousValue;
+    }
+  }
+
+  function exportMarkdownContent(content, name) {
+    const suggestedName = sanitizeMarkdownFileName(name || "document");
+    saveAs(new Blob([content || ""], { type: "text/markdown;charset=utf-8" }), suggestedName);
+  }
+
+  function exportHtmlContent(content) {
+    runWithTemporaryEditorContent(content, () => exportHtml.click());
+  }
+
+  function exportPdfContent(content) {
+    runWithTemporaryEditorContent(content, () => exportPdf.click());
+  }
+
   function getSidebarNodeFilesystemPath(node) {
     if (!node || !isNeutralinoRuntime()) return null;
     if (node.fullPath) return node.fullPath;
@@ -3000,7 +3007,7 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
   function positionSidebarFileContextMenu(event) {
     if (!sidebarFileContextMenu) return;
     const menuWidth = sidebarFileContextMenu.offsetWidth || 230;
-    const menuHeight = sidebarFileContextMenu.offsetHeight || 180;
+    const menuHeight = sidebarFileContextMenu.offsetHeight || 280;
     const left = Math.max(0, Math.min(event.clientX, window.innerWidth - menuWidth - 8));
     const top = Math.max(0, Math.min(event.clientY, window.innerHeight - menuHeight - 8));
     sidebarFileContextMenu.style.left = `${left}px`;
@@ -3063,12 +3070,40 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
     copySubmenu.appendChild(copySubmenuBtn);
     copySubmenu.appendChild(copySubmenuPanel);
 
+    const shareFileBtn = createFileContextMenuButton(
+      "Share",
+      "bi bi-share",
+      "Copy a shareable URL containing this file's Markdown content."
+    );
+
     const deleteFileBtn = createFileContextMenuButton(
       "Delete file",
       "bi bi-trash3",
       "Delete this file from disk after confirmation."
     );
     deleteFileBtn.classList.add("graph-context-menu-item-danger");
+
+    const exportSubmenu = document.createElement("div");
+    exportSubmenu.className = "graph-context-menu-submenu";
+    const exportSubmenuBtn = createFileContextMenuButton(
+      "Export",
+      "bi bi-download",
+      "Open export actions for this file."
+    );
+    exportSubmenuBtn.setAttribute("aria-haspopup", "true");
+    const exportSubmenuArrow = document.createElement("span");
+    exportSubmenuArrow.className = "graph-context-menu-submenu-arrow";
+    exportSubmenuArrow.textContent = "›";
+    exportSubmenuBtn.appendChild(exportSubmenuArrow);
+    const exportSubmenuPanel = document.createElement("div");
+    exportSubmenuPanel.className = "graph-context-menu-submenu-panel";
+    const exportMarkdownBtn = createFileContextMenuButton("Export as Markdown", "bi bi-file-earmark-text", "Download this file as Markdown.");
+    const exportHtmlBtn = createFileContextMenuButton("Export as HTML", "bi bi-file-earmark-code", "Download this file as HTML.");
+    const exportPdfBtn = createFileContextMenuButton("Export as PDF", "bi bi-file-earmark-pdf", "Download this file as PDF.");
+    [exportMarkdownBtn, exportHtmlBtn, exportPdfBtn].forEach((button) => exportSubmenuPanel.appendChild(button));
+    exportSubmenu.appendChild(exportSubmenuBtn);
+    exportSubmenu.appendChild(exportSubmenuPanel);
+
     const deleteFileTopSeparator = document.createElement("div");
     deleteFileTopSeparator.className = "graph-context-menu-separator";
     const deleteFileBottomSeparator = document.createElement("div");
@@ -3081,8 +3116,10 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
       openDefaultAppBtn,
       revealFileBtn,
       copySubmenu,
+      shareFileBtn,
       deleteFileTopSeparator,
       deleteFileBtn,
+      exportSubmenu,
       deleteFileBottomSeparator
     ].forEach((item) => {
       menu.appendChild(item);
@@ -3169,6 +3206,58 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
       } catch (error) {
         console.error("Failed to copy sidebar file content:", error);
         alert("Unable to copy this file content.");
+      }
+    });
+
+    shareFileBtn.addEventListener("click", async (event) => {
+      event.stopPropagation();
+      const target = sidebarContextTarget;
+      hideSidebarFileContextMenu();
+      if (!target) return;
+      try {
+        copyShareUrlFromText(await readSidebarNodeContent(target), shareFileBtn);
+      } catch (error) {
+        console.error("Failed to share sidebar file:", error);
+        alert("Unable to share this file.");
+      }
+    });
+
+    exportMarkdownBtn.addEventListener("click", async (event) => {
+      event.stopPropagation();
+      const target = sidebarContextTarget;
+      hideSidebarFileContextMenu();
+      if (!target) return;
+      try {
+        exportMarkdownContent(await readSidebarNodeContent(target), target.name);
+      } catch (error) {
+        console.error("Failed to export sidebar file as Markdown:", error);
+        alert("Unable to export this file as Markdown.");
+      }
+    });
+
+    exportHtmlBtn.addEventListener("click", async (event) => {
+      event.stopPropagation();
+      const target = sidebarContextTarget;
+      hideSidebarFileContextMenu();
+      if (!target) return;
+      try {
+        exportHtmlContent(await readSidebarNodeContent(target));
+      } catch (error) {
+        console.error("Failed to export sidebar file as HTML:", error);
+        alert("Unable to export this file as HTML.");
+      }
+    });
+
+    exportPdfBtn.addEventListener("click", async (event) => {
+      event.stopPropagation();
+      const target = sidebarContextTarget;
+      hideSidebarFileContextMenu();
+      if (!target) return;
+      try {
+        exportPdfContent(await readSidebarNodeContent(target));
+      } catch (error) {
+        console.error("Failed to export sidebar file as PDF:", error);
+        alert("Unable to export this file as PDF.");
       }
     });
 
@@ -5197,6 +5286,12 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
       "Delete this Markdown file after confirmation and remove its point from the graph."
     );
     deleteFileBtn.classList.add("hidden", "graph-context-menu-item-danger");
+    const sharePointBtn = createContextMenuButton(
+      "Share",
+      "bi bi-share",
+      "Copy a shareable URL containing this point's Markdown content."
+    );
+    sharePointBtn.classList.add("hidden");
     const contextMenuDeleteSeparator = document.createElement("div");
     contextMenuDeleteSeparator.className = "graph-context-menu-separator hidden";
 
@@ -5245,17 +5340,40 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
     copySubmenu.appendChild(copySubmenuBtn);
     copySubmenu.appendChild(copySubmenuPanel);
 
+    const exportSubmenu = document.createElement("div");
+    exportSubmenu.className = "graph-context-menu-submenu hidden";
+    const exportSubmenuBtn = createContextMenuButton(
+      "Export",
+      "bi bi-download",
+      "Open export actions for this point."
+    );
+    exportSubmenuBtn.setAttribute("aria-haspopup", "true");
+    const exportSubmenuArrow = document.createElement("span");
+    exportSubmenuArrow.className = "graph-context-menu-submenu-arrow";
+    exportSubmenuArrow.textContent = "›";
+    exportSubmenuBtn.appendChild(exportSubmenuArrow);
+    const exportSubmenuPanel = document.createElement("div");
+    exportSubmenuPanel.className = "graph-context-menu-submenu-panel";
+    const exportMarkdownBtn = createContextMenuButton("Export as Markdown", "bi bi-file-earmark-text", "Download this point as Markdown.");
+    const exportHtmlBtn = createContextMenuButton("Export as HTML", "bi bi-file-earmark-code", "Download this point as HTML.");
+    const exportPdfBtn = createContextMenuButton("Export as PDF", "bi bi-file-earmark-pdf", "Download this point as PDF.");
+    [exportMarkdownBtn, exportHtmlBtn, exportPdfBtn].forEach((button) => exportSubmenuPanel.appendChild(button));
+    exportSubmenu.appendChild(exportSubmenuBtn);
+    exportSubmenu.appendChild(exportSubmenuPanel);
+
     contextMenu.appendChild(contextMenuTitle);
     contextMenu.appendChild(contextMenuTitleSeparator);
     contextMenu.appendChild(openFileBtn);
     contextMenu.appendChild(openDefaultAppBtn);
     contextMenu.appendChild(revealFileBtn);
     contextMenu.appendChild(copySubmenu);
+    contextMenu.appendChild(sharePointBtn);
     contextMenu.appendChild(hidePointBtn);
     contextMenu.appendChild(localGraphBtn);
     contextMenu.appendChild(fullLocalGraphBtn);
     contextMenu.appendChild(contextMenuDeleteSeparator);
     contextMenu.appendChild(deleteFileBtn);
+    contextMenu.appendChild(exportSubmenu);
     contextMenu.appendChild(contextMenuActionSeparator);
     contextMenu.appendChild(magneticToggleBtn);
     graphRenderWrapper.appendChild(contextMenu);
@@ -5430,11 +5548,13 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
       openDefaultAppBtn,
       revealFileBtn,
       copySubmenu,
+      sharePointBtn,
       hidePointBtn,
       localGraphBtn,
       fullLocalGraphBtn,
       contextMenuDeleteSeparator,
-      deleteFileBtn
+      deleteFileBtn,
+      exportSubmenu
     ];
 
     const setNodeContextItemsHidden = (hidden) => {
@@ -5444,7 +5564,7 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
     const positionContextMenu = (event) => {
       const bounds = graphViewCanvas.getBoundingClientRect();
       contextMenu.style.left = `${Math.max(0, Math.min(event.clientX - bounds.left, bounds.width - 230))}px`;
-      contextMenu.style.top = `${Math.max(0, Math.min(event.clientY - bounds.top, bounds.height - 180))}px`;
+      contextMenu.style.top = `${Math.max(0, Math.min(event.clientY - bounds.top, bounds.height - 280))}px`;
     };
 
     const hideContextMenu = () => {
@@ -5568,6 +5688,58 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
       } catch (error) {
         console.error("Failed to copy content:", error);
         alert("Unable to copy this file content.");
+      }
+    });
+
+    sharePointBtn.addEventListener("click", async (event) => {
+      event.stopPropagation();
+      if (!contextTargetNode) return;
+      const targetNode = contextTargetNode;
+      hideContextMenu();
+      try {
+        copyShareUrlFromText(await readGraphNodeContent(targetNode), sharePointBtn);
+      } catch (error) {
+        console.error("Failed to share point:", error);
+        alert("Unable to share this point.");
+      }
+    });
+
+    exportMarkdownBtn.addEventListener("click", async (event) => {
+      event.stopPropagation();
+      if (!contextTargetNode) return;
+      const targetNode = contextTargetNode;
+      hideContextMenu();
+      try {
+        exportMarkdownContent(await readGraphNodeContent(targetNode), getNodeFileName(targetNode.id));
+      } catch (error) {
+        console.error("Failed to export point as Markdown:", error);
+        alert("Unable to export this point as Markdown.");
+      }
+    });
+
+    exportHtmlBtn.addEventListener("click", async (event) => {
+      event.stopPropagation();
+      if (!contextTargetNode) return;
+      const targetNode = contextTargetNode;
+      hideContextMenu();
+      try {
+        exportHtmlContent(await readGraphNodeContent(targetNode));
+      } catch (error) {
+        console.error("Failed to export point as HTML:", error);
+        alert("Unable to export this point as HTML.");
+      }
+    });
+
+    exportPdfBtn.addEventListener("click", async (event) => {
+      event.stopPropagation();
+      if (!contextTargetNode) return;
+      const targetNode = contextTargetNode;
+      hideContextMenu();
+      try {
+        exportPdfContent(await readGraphNodeContent(targetNode));
+      } catch (error) {
+        console.error("Failed to export point as PDF:", error);
+        alert("Unable to export this point as PDF.");
       }
     });
 
@@ -6652,11 +6824,10 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
     return new TextDecoder().decode(pako.inflate(bytes));
   }
 
-  function copyShareUrl(btn) {
-    const markdownText = markdownEditor.value;
+  function copyShareUrlFromText(markdownText, btn) {
     let encoded;
     try {
-      encoded = encodeMarkdownForShare(markdownText);
+      encoded = encodeMarkdownForShare(markdownText || "");
     } catch (e) {
       console.error("Share encoding failed:", e);
       alert("Failed to encode content for sharing: " + e.message);
@@ -6694,6 +6865,10 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
         // copy failed silently
       }
     }
+  }
+
+  function copyShareUrl(btn) {
+    copyShareUrlFromText(markdownEditor.value, btn);
   }
 
   shareButton.addEventListener("click", function () { copyShareUrl(shareButton); });
