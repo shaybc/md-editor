@@ -3279,10 +3279,12 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
       }
       changed = true;
     });
+    changed = updateGraphTabsAfterPathRename(getSidebarRenamePathMappings(oldPath || target?.path, newPath, "file")) || changed;
     if (changed) {
       saveTabsToStorage(tabs);
       renderTabBar(tabs, activeTabId);
       updateSaveCurrentFileButtons();
+      if (getActiveGraphTab()) renderGraphView();
     }
   }
 
@@ -3298,6 +3300,140 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
     return String(newPrefix).replace(/\/+$/, "") + normalizedPath.slice(normalizedOldPrefix.length);
   }
 
+  function getPathRelativeToFolder(path, folderPath) {
+    if (!path || !folderPath || !isPathInsideFolder(path, folderPath)) return "";
+    const normalize = (value) => String(value).replace(/\\/g, "/").replace(/\/+$/, "");
+    const normalizedFolder = normalize(folderPath);
+    const normalizedPath = String(path).replace(/\\/g, "/");
+    return normalizedPath === normalizedFolder ? "" : normalizedPath.slice(normalizedFolder.length + 1);
+  }
+
+  function renameGraphSnapshotPathReferences(snapshot, pathMappings) {
+    if (!snapshot || !Array.isArray(pathMappings) || !pathMappings.length) return false;
+    let changed = false;
+    const idMappings = new Map();
+    const getRenamedPath = (path) => {
+      for (const mapping of pathMappings) {
+        const renamed = mapping.isPrefix
+          ? replacePathPrefix(path, mapping.oldPath, mapping.newPath)
+          : (path === mapping.oldPath ? mapping.newPath : path);
+        if (renamed !== path) return renamed;
+      }
+      return path;
+    };
+
+    (snapshot.nodes || []).forEach((node) => {
+      const oldId = node.id;
+      const oldPath = node.fullPath || oldId;
+      const newPath = getRenamedPath(oldPath);
+      if (newPath === oldPath) return;
+      const newId = normalizeGraphNodeName(newPath);
+      if (oldId && newId && oldId !== newId) idMappings.set(oldId, newId);
+      node.id = newId || oldId;
+      node.label = getGraphDisplayLabel(newPath);
+      node.fullPath = newPath;
+      changed = true;
+    });
+
+    (snapshot.files || []).forEach((file) => {
+      const oldId = file.id;
+      const oldPath = file.path || oldId;
+      const oldFullPath = file.fullPath || "";
+      const newPath = getRenamedPath(oldPath);
+      const newFullPath = getRenamedPath(oldFullPath);
+      if (newPath === oldPath && newFullPath === oldFullPath) return;
+      const idPath = newPath !== oldPath ? newPath : (newFullPath || oldPath);
+      const newId = normalizeGraphNodeName(idPath);
+      if (oldId && newId && oldId !== newId) idMappings.set(oldId, newId);
+      file.id = newId || oldId;
+      file.path = newPath;
+      file.name = getFileName(newPath || newFullPath || file.name);
+      if (file.fullPath !== undefined) file.fullPath = newFullPath || file.fullPath;
+      changed = true;
+    });
+
+    if (idMappings.size) {
+      (snapshot.links || []).forEach((link) => {
+        const newSource = idMappings.get(link.source);
+        const newTarget = idMappings.get(link.target);
+        if (newSource) {
+          link.source = newSource;
+          changed = true;
+        }
+        if (newTarget) {
+          link.target = newTarget;
+          changed = true;
+        }
+      });
+    }
+
+    return { changed, idMappings };
+  }
+
+  function updateGraphTabConfigAfterNodeRename(tab, idMappings) {
+    if (!tab || !idMappings || !idMappings.size) return false;
+    let changed = false;
+    const renameId = (id) => idMappings.get(id) || id;
+    const renameIds = (ids) => Array.isArray(ids) ? ids.map(renameId) : ids;
+
+    if (tab.graphViewConfig) {
+      if (tab.graphViewConfig.focusNodeId && idMappings.has(tab.graphViewConfig.focusNodeId)) {
+        tab.graphViewConfig.focusNodeId = renameId(tab.graphViewConfig.focusNodeId);
+        changed = true;
+      }
+      ["allowedNodeIds", "hiddenNodeIds"].forEach((key) => {
+        const renamedIds = renameIds(tab.graphViewConfig[key]);
+        if (renamedIds && renamedIds !== tab.graphViewConfig[key]) {
+          tab.graphViewConfig[key] = renamedIds;
+          changed = true;
+        }
+      });
+    }
+
+    if (tab.graphLayout?.nodes && typeof tab.graphLayout.nodes === "object") {
+      idMappings.forEach((newId, oldId) => {
+        if (!Object.prototype.hasOwnProperty.call(tab.graphLayout.nodes, oldId)) return;
+        tab.graphLayout.nodes[newId] = tab.graphLayout.nodes[oldId];
+        delete tab.graphLayout.nodes[oldId];
+        changed = true;
+      });
+    }
+
+    return changed;
+  }
+
+  function updateGraphTabsAfterPathRename(pathMappings) {
+    if (!Array.isArray(pathMappings) || !pathMappings.length) return false;
+    let changed = false;
+    tabs.forEach((tab) => {
+      if (tab.type !== "graph" || !tab.graphSnapshot) return;
+      const result = renameGraphSnapshotPathReferences(tab.graphSnapshot, pathMappings);
+      if (!result?.changed) return;
+      updateGraphTabConfigAfterNodeRename(tab, result.idMappings);
+      const cachedRender = graphRenderCache.get(tab.id);
+      if (cachedRender?.simulation) cachedRender.simulation.stop();
+      if (cachedRender?.wrapper) cachedRender.wrapper.remove();
+      graphRenderCache.delete(tab.id);
+      changed = true;
+    });
+    return changed;
+  }
+
+  function getSidebarRenamePathMappings(oldPath, newPath, kind) {
+    const mappings = [];
+    if (oldPath && newPath) {
+      mappings.push({ oldPath, newPath, isPrefix: kind === "folder" });
+    }
+    if (activeFolderPath && oldPath && newPath) {
+      const oldRelativePath = getPathRelativeToFolder(oldPath, activeFolderPath);
+      const newRelativePath = getPathRelativeToFolder(newPath, activeFolderPath);
+      if (oldRelativePath && newRelativePath) {
+        mappings.push({ oldPath: oldRelativePath, newPath: newRelativePath, isPrefix: kind === "folder" });
+      }
+    }
+    return mappings;
+  }
+
   function updateTabsAfterSidebarFolderRename(oldPath, newPath) {
     if (!oldPath || !newPath) return;
     let changed = false;
@@ -3307,10 +3443,12 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
       tab.sourceFilePath = renamedPath;
       changed = true;
     });
+    changed = updateGraphTabsAfterPathRename(getSidebarRenamePathMappings(oldPath, newPath, "folder")) || changed;
     if (changed) {
       saveTabsToStorage(tabs);
       renderTabBar(tabs, activeTabId);
       updateSaveCurrentFileButtons();
+      if (getActiveGraphTab()) renderGraphView();
     }
   }
 
@@ -5794,7 +5932,8 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
           markGraphTabAsChanged(activeTab);
           saveTabsToStorage(tabs);
         }));
-    node.append("title").text((d) => d.fullPath || d.label);
+    const graphTooltipPathsById = new Map((graphSnapshot.files || []).map((file) => [file.id, file.fullPath || file.path]));
+    node.append("title").text((d) => graphTooltipPathsById.get(d.id) || d.fullPath || d.label);
     const label = labelLayer.selectAll("text").data(nodes).enter().append("text").text((d) => d.label).attr("class", "graph-label");
 
     const contextMenu = document.createElement("div");
@@ -5850,6 +5989,12 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
       "Open the file's folder in the system file explorer and select this file when supported."
     );
     revealFileBtn.classList.add("hidden");
+    const renameFileBtn = createContextMenuButton(
+      "Rename",
+      "bi bi-pencil",
+      "Rename this Markdown file on disk and update open graph views that include it."
+    );
+    renameFileBtn.classList.add("hidden");
     const hidePointBtn = createContextMenuButton(
       "Remove this point",
       "bi bi-eye-slash",
@@ -5954,6 +6099,7 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
     contextMenu.appendChild(openFileBtn);
     contextMenu.appendChild(openDefaultAppBtn);
     contextMenu.appendChild(revealFileBtn);
+    contextMenu.appendChild(renameFileBtn);
     contextMenu.appendChild(copySubmenu);
     contextMenu.appendChild(sharePointBtn);
     contextMenu.appendChild(hidePointBtn);
@@ -5970,14 +6116,19 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
 
     const getActiveGraphTab = () => tabs.find((tab) => tab.id === activeTabId && tab.type === "graph") || null;
 
+    const getFolderMarkdownEntryForNode = (graphNode) => {
+      if (!graphNode) return null;
+      return (folderMarkdownFiles || []).find((entry) => {
+        const entryPath = entry.path || entry.fullPath || entry.file?.webkitRelativePath || entry.file?.name || "";
+        return normalizeGraphNodeName(entryPath) === graphNode.id;
+      }) || null;
+    };
+
     const getSnapshotFileForNode = (graphNode) => {
       if (!graphNode) return null;
       const activeGraphTab = getActiveGraphTab();
       const snapshotFile = activeGraphTab?.graphSnapshot?.files?.find((file) => file.id === graphNode.id);
-      return snapshotFile || (folderMarkdownFiles || []).find((entry) => {
-        const entryPath = entry.path || entry.fullPath || entry.file?.webkitRelativePath || entry.file?.name || "";
-        return normalizeGraphNodeName(entryPath) === graphNode.id;
-      }) || null;
+      return snapshotFile || getFolderMarkdownEntryForNode(graphNode);
     };
 
     const getNodeFileName = (nodeId) => {
@@ -6135,6 +6286,7 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
       openFileBtn,
       openDefaultAppBtn,
       revealFileBtn,
+      renameFileBtn,
       copySubmenu,
       sharePointBtn,
       hidePointBtn,
@@ -6250,6 +6402,29 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
       } catch (error) {
         console.error("Failed to reveal file:", error);
         alert("Unable to reveal this file in the file explorer.");
+      }
+    });
+
+    renameFileBtn.addEventListener("click", async (event) => {
+      event.stopPropagation();
+      if (!contextTargetNode) return;
+      const targetNode = contextTargetNode;
+      const snapshotFile = getSnapshotFileForNode(targetNode);
+      const folderEntry = getFolderMarkdownEntryForNode(targetNode);
+      const filePath = getNodeFilesystemPath(targetNode);
+      hideContextMenu();
+      try {
+        await renameSidebarNodeOnDisk({
+          kind: "file",
+          name: getFileName(snapshotFile?.path || snapshotFile?.fullPath || targetNode.fullPath || targetNode.label || targetNode.id),
+          file: folderEntry?.file || snapshotFile?.file || null,
+          handle: folderEntry?.handle || snapshotFile?.handle || null,
+          fullPath: filePath || snapshotFile?.fullPath || null,
+          path: snapshotFile?.path || folderEntry?.path || targetNode.fullPath || null
+        }, "file");
+      } catch (error) {
+        console.error("Failed to rename graph file:", error);
+        alert("Unable to rename this file.");
       }
     });
 
