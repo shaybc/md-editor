@@ -4682,32 +4682,36 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
       links.push(...filteredLinks);
     };
 
+    const getLinkSourceId = (link) => link?.source?.id || link?.source;
+    const getLinkTargetId = (link) => link?.target?.id || link?.target;
+
+    const getDirectOutgoingNodeIds = (nodeId) => links
+      .filter((link) => getLinkSourceId(link) === nodeId)
+      .map(getLinkTargetId)
+      .filter(Boolean);
+
+    const getFullOutgoingNodeIds = (nodeId) => {
+      const outgoingNodeIds = new Set();
+      const nodesToVisit = [...getDirectOutgoingNodeIds(nodeId)];
+
+      while (nodesToVisit.length) {
+        const currentNodeId = nodesToVisit.shift();
+        if (!currentNodeId || currentNodeId === nodeId || outgoingNodeIds.has(currentNodeId)) continue;
+        outgoingNodeIds.add(currentNodeId);
+        nodesToVisit.push(...getDirectOutgoingNodeIds(currentNodeId));
+      }
+
+      return outgoingNodeIds;
+    };
+
     if (graphViewConfig && graphViewConfig.mode === "local" && graphViewConfig.focusNodeId) {
       const focusNodeId = graphViewConfig.focusNodeId;
-      const localNodeIds = new Set([focusNodeId]);
-      links.forEach((l) => {
-        if (l.source === focusNodeId) localNodeIds.add(l.target);
-        if (l.target === focusNodeId) localNodeIds.add(l.source);
-      });
-
-      filterGraphToNodeIds(localNodeIds);
+      filterGraphToNodeIds(new Set([focusNodeId, ...getDirectOutgoingNodeIds(focusNodeId)]));
     }
 
     if (graphViewConfig && graphViewConfig.mode === "full-local" && graphViewConfig.focusNodeId) {
       const focusNodeId = graphViewConfig.focusNodeId;
-      const fullLocalNodeIds = new Set([focusNodeId]);
-      const nodesToVisit = [focusNodeId];
-
-      while (nodesToVisit.length) {
-        const currentNodeId = nodesToVisit.shift();
-        links.forEach((l) => {
-          if (l.source !== currentNodeId || fullLocalNodeIds.has(l.target)) return;
-          fullLocalNodeIds.add(l.target);
-          nodesToVisit.push(l.target);
-        });
-      }
-
-      filterGraphToNodeIds(fullLocalNodeIds);
+      filterGraphToNodeIds(new Set([focusNodeId, ...getFullOutgoingNodeIds(focusNodeId)]));
     }
 
     applySavedGraphLayout(nodes, activeTab.graphLayout);
@@ -4886,7 +4890,7 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
     const localGraphBtn = createContextMenuButton(
       "Show local graph",
       "bi bi-diagram-2",
-      "Open a graph focused on this point and the points directly connected to it."
+      "Open a graph focused on this point and the points it directly links to."
     );
     localGraphBtn.classList.add("hidden");
     const fullLocalGraphBtn = createContextMenuButton(
@@ -5343,7 +5347,6 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
         graphViewConfig: {
           mode,
           focusNodeId,
-          allowedNodeIds: Array.from(new Set([...(parentConfig.allowedNodeIds || []), ...nodes.map((n) => n.id)])),
           hiddenNodeIds: [...(parentConfig.hiddenNodeIds || [])]
         },
         graphLayout: activeGraphTab?.graphLayout || null
