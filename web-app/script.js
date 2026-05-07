@@ -1011,6 +1011,86 @@ document.addEventListener("DOMContentLoaded", function () {
       .replace(/"/g, '&quot;');
   }
 
+  function getWikiLinkParts(rawLink) {
+    const value = String(rawLink || "").trim();
+    const pipeIndex = value.indexOf("|");
+    const target = (pipeIndex >= 0 ? value.slice(0, pipeIndex) : value).trim();
+    const label = (pipeIndex >= 0 ? value.slice(pipeIndex + 1) : target).trim() || target;
+    return { target, label };
+  }
+
+  function isExternalOrSpecialLinkTarget(target) {
+    return /^(?:[a-z][a-z0-9+.-]*:|#|\/\/)/i.test(String(target || "").trim());
+  }
+
+  function getWikiLinkHref(target) {
+    const trimmedTarget = String(target || "").trim();
+    if (!trimmedTarget) return "#";
+    if (trimmedTarget.startsWith("#")) return trimmedTarget;
+    if (isExternalOrSpecialLinkTarget(trimmedTarget)) return "#";
+
+    const hashIndex = trimmedTarget.indexOf("#");
+    const pathPart = hashIndex >= 0 ? trimmedTarget.slice(0, hashIndex) : trimmedTarget;
+    const suffix = hashIndex >= 0 ? trimmedTarget.slice(hashIndex) : "";
+    const pathWithExtension = /\.[^/\\]+$/.test(pathPart) ? pathPart : `${pathPart}.md`;
+    return encodeURI(`${pathWithExtension}${suffix}`);
+  }
+
+  function createWikiLinkAnchor(rawLink) {
+    const { target, label } = getWikiLinkParts(rawLink);
+    const anchor = document.createElement("a");
+    anchor.className = "wiki-link";
+    anchor.href = getWikiLinkHref(target);
+    anchor.textContent = label;
+    anchor.title = `Wiki link: ${target}`;
+    anchor.dataset.wikiTarget = target;
+    return anchor;
+  }
+
+  function shouldSkipWikiLinkTextNode(node) {
+    const parent = node && node.parentElement;
+    return !parent || !!parent.closest("a, code, pre, script, style, textarea");
+  }
+
+  function enhanceWikiLinks(container) {
+    if (!container) return;
+
+    const textNodes = [];
+    const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT, {
+      acceptNode(node) {
+        if (shouldSkipWikiLinkTextNode(node) || !/\[\[[^\]\n]+\]\]/.test(node.nodeValue || "")) {
+          return NodeFilter.FILTER_REJECT;
+        }
+        return NodeFilter.FILTER_ACCEPT;
+      }
+    });
+
+    let node;
+    while ((node = walker.nextNode())) textNodes.push(node);
+
+    textNodes.forEach((textNode) => {
+      const fragment = document.createDocumentFragment();
+      const text = textNode.nodeValue || "";
+      const wikiLinkRegex = /\[\[([^\]\n]+)\]\]/g;
+      let lastIndex = 0;
+      let match;
+
+      while ((match = wikiLinkRegex.exec(text)) !== null) {
+        if (match.index > lastIndex) {
+          fragment.appendChild(document.createTextNode(text.slice(lastIndex, match.index)));
+        }
+        fragment.appendChild(createWikiLinkAnchor(match[1]));
+        lastIndex = wikiLinkRegex.lastIndex;
+      }
+
+      if (lastIndex < text.length) {
+        fragment.appendChild(document.createTextNode(text.slice(lastIndex)));
+      }
+
+      textNode.parentNode.replaceChild(fragment, textNode);
+    });
+  }
+
   const sampleMarkdown = `---
 title: Welcome to Markdown Viewer
 description: A GitHub-style Markdown renderer with live preview, math, diagrams, and export support.
@@ -2490,6 +2570,7 @@ This is a fully client-side application. Your content never leaves your browser 
         ADD_ATTR: ['id', 'class', 'style']
       });
       markdownPreview.innerHTML = sanitizedHtml;
+      enhanceWikiLinks(markdownPreview);
       enhanceGitHubAlerts(markdownPreview);
 
       processEmojis(markdownPreview);
@@ -5667,14 +5748,53 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
     return null;
   }
 
+  function stripMarkdownCodeForLinkExtraction(markdown) {
+    return String(markdown || "")
+      .replace(/```[\s\S]*?```/g, "")
+      .replace(/~~~[\s\S]*?~~~/g, "")
+      .replace(/`[^`\n]*`/g, "");
+  }
+
+  function getMarkdownLinkTarget(rawDestination) {
+    const destination = String(rawDestination || "").trim();
+    if (!destination) return "";
+
+    const angleMatch = destination.match(/^<([^>]+)>/);
+    if (angleMatch) return angleMatch[1].trim();
+
+    const titleSeparatorMatch = destination.match(/^(\S+)(?:\s+["'(].*)?$/);
+    return (titleSeparatorMatch ? titleSeparatorMatch[1] : destination).trim();
+  }
+
+  function normalizeExtractedLinkTarget(link) {
+    const target = String(link || "").split("#")[0].split("?")[0].trim();
+    if (!target || isExternalOrSpecialLinkTarget(target)) return "";
+
+    try {
+      return decodeURIComponent(target);
+    } catch (_error) {
+      return target;
+    }
+  }
+
   function extractMarkdownLinks(markdown) {
     const links = [];
-    const mdLinkRegex = /\[[^\]]*?\]\(([^)]+)\)/g;
-    const wikiLinkRegex = /\[\[([^\]]+)\]\]/g;
+    const searchableMarkdown = stripMarkdownCodeForLinkExtraction(markdown);
+    const mdLinkRegex = /\[[^\]\n]*?\]\(([^)]+)\)/g;
+    const wikiLinkRegex = /\[\[([^\]\n]+)\]\]/g;
     let match;
-    while ((match = mdLinkRegex.exec(markdown || "")) !== null) links.push(match[1]);
-    while ((match = wikiLinkRegex.exec(markdown || "")) !== null) links.push(match[1]);
-    return links.map((link) => link.split("#")[0].trim()).filter(Boolean);
+
+    while ((match = mdLinkRegex.exec(searchableMarkdown)) !== null) {
+      if (searchableMarkdown[match.index - 1] !== "!") {
+        links.push(getMarkdownLinkTarget(match[1]));
+      }
+    }
+
+    while ((match = wikiLinkRegex.exec(searchableMarkdown)) !== null) {
+      links.push(getWikiLinkParts(match[1]).target);
+    }
+
+    return links.map(normalizeExtractedLinkTarget).filter(Boolean);
   }
 
   async function openGraphView() {
