@@ -1385,6 +1385,17 @@ a:focus {
   justify-content: flex-end;
 }
 
+.header-sync-toggle {
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+@media (max-width: 420px) {
+  .header-sync-toggle span {
+    display: none;
+  }
+}
+
 /* View Mode Button Group */
 .view-mode-group {
   display: flex;

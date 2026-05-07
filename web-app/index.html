@@ -97,13 +97,19 @@
                 <input type="file" id="file-input" class="file-input" accept=".md,.markdown,.mdviewer-graph.json,.mdgraph.json,.json,text/markdown,application/json">
                 <input type="file" id="folder-input" class="file-input" webkitdirectory directory multiple>
 
-                <!-- Hamburger menu for mobile -->
-                <div class="mobile-menu d-md-none">
-                    <button id="mobile-menu-toggle" class="tool-button" title="Menu">
-                        <i class="bi bi-list"></i>
+                <!-- Right section: Sync toggle and mobile menu -->
+                <div class="header-right d-flex align-items-center gap-2">
+                    <button id="toggle-sync" class="tool-button header-sync-toggle sync-toggle-button sync-enabled border-primary" type="button" title="Toggle Sync Scrolling" aria-label="Toggle sync scrolling">
+                        <i class="bi bi-link"></i> <span>Sync Off</span>
                     </button>
 
-                    <div id="mobile-menu-panel" class="mobile-menu-panel">
+                    <!-- Hamburger menu for mobile -->
+                    <div class="mobile-menu d-md-none">
+                        <button id="mobile-menu-toggle" class="tool-button" title="Menu">
+                            <i class="bi bi-list"></i>
+                        </button>
+
+                        <div id="mobile-menu-panel" class="mobile-menu-panel">
                         <div class="mobile-menu-header">
                             <h5>Menu</h5>
                             <button id="close-mobile-menu" class="tool-button">
@@ -146,10 +152,6 @@
                         <div class="mobile-menu-items">
                             <button class="mobile-menu-item new-document-button" type="button" title="New document">
                                 <i class="bi bi-file-earmark-plus me-2"></i> New document
-                            </button>
-
-                            <button id="mobile-toggle-sync" class="mobile-menu-item tool-button sync-enabled border-primary" title="Toggle Sync Scrolling">
-                                <i class="bi bi-link"></i> Sync Off
                             </button>
 
                             <button id="mobile-import-button" class="mobile-menu-item" title="Open Markdown or graph file">
@@ -202,7 +204,8 @@
                         </div>
                     </div>
 
-                    <div id="mobile-menu-overlay"></div>
+                        <div id="mobile-menu-overlay"></div>
+                    </div>
                 </div>
             </div>
         </header>
@@ -216,10 +219,6 @@
             <div class="dropdown-menu action-menu w-100" aria-labelledby="desktopActionMenu">
               <button class="dropdown-item action-menu-item new-document-button" type="button" title="New document">
                 <i class="bi bi-file-earmark-plus me-2"></i> New document
-              </button>
-              <hr class="dropdown-divider">
-              <button id="toggle-sync" class="dropdown-item action-menu-item sync-enabled border-primary" title="Toggle Sync Scrolling">
-                <i class="bi bi-link"></i> Sync Off
               </button>
               <hr class="dropdown-divider">
               <button class="dropdown-item action-menu-item" id="import-from-file" title="Open Markdown or graph file">
@@ -328,10 +327,6 @@
                         <i class="bi bi-list"></i>
                     </button>
                     <div class="dropdown-menu action-menu w-100" aria-labelledby="desktopActionMenu">
-                        <button id="toggle-sync" class="dropdown-item action-menu-item sync-enabled border-primary" title="Toggle Sync Scrolling">
-                            <i class="bi bi-link"></i> Sync Off
-                        </button>
-                        <hr class="dropdown-divider">
                         <button class="dropdown-item action-menu-item" id="import-from-file" title="Open Markdown or graph file">
                             <i class="bi bi-upload me-2"></i> Open file ...
                         </button>
