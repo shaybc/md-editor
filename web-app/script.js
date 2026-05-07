@@ -683,7 +683,6 @@ document.addEventListener("DOMContentLoaded", function () {
   const mobileThemeToggle   = document.getElementById("mobile-theme-toggle");
   const mobileOpenGraphView = document.getElementById("mobile-open-graph-view");
   const desktopOpenGraphButtons = document.querySelectorAll(".open-graph-view");
-  const saveGraphButtons = document.querySelectorAll(".save-graph-button");
   const openSavedGraphButtons = document.querySelectorAll(".open-saved-graph-button");
   const graphViewCanvas = document.getElementById("graph-view-canvas");
   const shareButton         = document.getElementById("share-button");
@@ -1207,15 +1206,6 @@ This is a fully client-side application. Your content never leaves your browser 
   }
 
   function updateGraphActionButtons() {
-    const hasActiveGraph = !!getActiveGraphTab();
-    const saveTitle = hasActiveGraph ? "Save Graph..." : "Open a graph tab before saving a graph";
-
-    saveGraphButtons.forEach((button) => {
-      button.disabled = !hasActiveGraph;
-      button.title = saveTitle;
-      button.setAttribute("aria-label", saveTitle);
-    });
-
     openSavedGraphButtons.forEach((button) => {
       button.disabled = false;
       button.title = "Open Saved Graph...";
@@ -1859,22 +1849,31 @@ This is a fully client-side application. Your content never leaves your browser 
   window.markdownViewerConfirmDiscardUnsavedBeforeExit = confirmDiscardUnsavedChangesBeforeExit;
 
   function updateSaveCurrentFileButtons() {
+    const graphTab = getActiveGraphTab();
     const tab = getActiveMarkdownTab();
     const hasUnsavedChanges = activeTabHasUnsavedChanges();
     const hasWritableSource = !!(tab && (tab.sourceFileHandle || (isNeutralinoRuntime() && tab.sourceFilePath)));
-    const title = hasUnsavedChanges
-      ? (hasWritableSource ? "Save changes to current file" : "Save changes as Markdown")
-      : "No changes to save";
+    const title = graphTab
+      ? "Save graph changes"
+      : (hasUnsavedChanges
+        ? (hasWritableSource ? "Save changes to current file" : "Save changes as Markdown")
+        : "No changes to save");
 
     document.querySelectorAll(".save-current-file-button").forEach(function(button) {
-      button.disabled = !hasUnsavedChanges;
+      button.disabled = !graphTab && !hasUnsavedChanges;
       button.title = title;
       button.setAttribute("aria-label", title);
     });
     updateGraphActionButtons();
   }
 
-  function saveCurrentFileIfChanged() {
+  async function saveCurrentFileIfChanged() {
+    if (getActiveGraphTab()) {
+      await saveActiveGraphWithSaveDialog();
+      updateSaveCurrentFileButtons();
+      return;
+    }
+
     if (!activeTabHasUnsavedChanges()) {
       updateSaveCurrentFileButtons();
       return;
@@ -4915,7 +4914,6 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
 
   desktopOpenGraphButtons.forEach((button) => button.addEventListener("click", openGraphView));
   if (mobileOpenGraphView) mobileOpenGraphView.addEventListener("click", openGraphView);
-  saveGraphButtons.forEach((button) => button.addEventListener("click", saveActiveGraphWithSaveDialog));
   openSavedGraphButtons.forEach((button) => button.addEventListener("click", openSavedGraphFromPicker));
   updateGraphActionButtons();
 
@@ -5900,7 +5898,7 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
   document.addEventListener("keydown", function (e) {
     if ((e.ctrlKey || e.metaKey) && e.key === "s") {
       e.preventDefault();
-      exportMd.click();
+      saveCurrentFileIfChanged();
     }
     if ((e.ctrlKey || e.metaKey) && e.key === "c") {
       const activeEl = document.activeElement;
