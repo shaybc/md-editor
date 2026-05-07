@@ -57,12 +57,72 @@ document.addEventListener("DOMContentLoaded", function () {
     return "Browsers open folders with a read-only folder picker. Files stay on this device, but saving writes a downloaded copy unless you use the desktop app.";
   }
 
-  function getEditorLineHeight() {
-    const computedStyle = window.getComputedStyle(markdownEditor);
-    const parsedLineHeight = parseFloat(computedStyle.lineHeight);
+  let editorLineMeasure = null;
+  let editorLineNumberResizeFrame = null;
+
+  function getEditorLineHeight(computedStyle) {
+    const style = computedStyle || window.getComputedStyle(markdownEditor);
+    const parsedLineHeight = parseFloat(style.lineHeight);
     if (!Number.isNaN(parsedLineHeight)) return parsedLineHeight;
-    const parsedFontSize = parseFloat(computedStyle.fontSize);
+    const parsedFontSize = parseFloat(style.fontSize);
     return Number.isNaN(parsedFontSize) ? 21 : parsedFontSize * 1.5;
+  }
+
+  function getEditorLineMeasure() {
+    if (!editorLineMeasure) {
+      editorLineMeasure = document.createElement("textarea");
+      editorLineMeasure.className = "editor-line-measure";
+      editorLineMeasure.setAttribute("aria-hidden", "true");
+      editorLineMeasure.setAttribute("tabindex", "-1");
+      editorLineMeasure.setAttribute("wrap", "soft");
+      document.body.appendChild(editorLineMeasure);
+    }
+
+    return editorLineMeasure;
+  }
+
+  function syncEditorLineMeasureStyles(measure, computedStyle) {
+    const stylesToCopy = [
+      "fontFamily",
+      "fontSize",
+      "fontWeight",
+      "fontStyle",
+      "lineHeight",
+      "letterSpacing",
+      "textTransform",
+      "textIndent",
+      "textRendering",
+      "wordSpacing",
+      "paddingTop",
+      "paddingRight",
+      "paddingBottom",
+      "paddingLeft",
+      "borderTopWidth",
+      "borderRightWidth",
+      "borderBottomWidth",
+      "borderLeftWidth",
+      "boxSizing",
+      "tabSize"
+    ];
+
+    stylesToCopy.forEach(function(property) {
+      measure.style[property] = computedStyle[property];
+    });
+    measure.style.width = `${markdownEditor.clientWidth}px`;
+  }
+
+  function getEditorWrappedLineHeights(lines, computedStyle, lineHeight) {
+    const measure = getEditorLineMeasure();
+    const paddingTop = parseFloat(computedStyle.paddingTop) || 0;
+    const paddingBottom = parseFloat(computedStyle.paddingBottom) || 0;
+    const verticalPadding = paddingTop + paddingBottom;
+
+    syncEditorLineMeasureStyles(measure, computedStyle);
+
+    return lines.map(function(line) {
+      measure.value = line || " ";
+      return Math.max(lineHeight, Math.ceil(measure.scrollHeight - verticalPadding));
+    });
   }
 
   function getCurrentEditorLine() {
@@ -72,16 +132,27 @@ document.addEventListener("DOMContentLoaded", function () {
   function updateEditorLineNumbers() {
     if (!editorLineNumbers) return;
 
-    const lineCount = Math.max(1, markdownEditor.value.split("\n").length);
+    const lines = markdownEditor.value.split("\n");
     const activeLine = getCurrentEditorLine();
-    const lineHeight = getEditorLineHeight();
-    const lineNumbersMarkup = Array.from({ length: lineCount }, (_, index) => {
+    const computedStyle = window.getComputedStyle(markdownEditor);
+    const lineHeight = getEditorLineHeight(computedStyle);
+    const wrappedLineHeights = getEditorWrappedLineHeights(lines, computedStyle, lineHeight);
+    const lineNumbersMarkup = lines.map(function(_line, index) {
       const lineNumber = index + 1;
       const activeClass = lineNumber === activeLine ? " active" : "";
-      return `<span class="editor-line-number${activeClass}" style="height:${lineHeight}px">${lineNumber}</span>`;
+      return `<span class="editor-line-number${activeClass}" style="height:${wrappedLineHeights[index]}px">${lineNumber}</span>`;
     }).join("");
 
     editorLineNumbers.innerHTML = `<div class="editor-line-numbers-inner" style="transform: translateY(-${markdownEditor.scrollTop}px);">${lineNumbersMarkup}</div>`;
+  }
+
+  function scheduleEditorLineNumbersUpdate() {
+    if (editorLineNumberResizeFrame) return;
+
+    editorLineNumberResizeFrame = window.requestAnimationFrame(function() {
+      editorLineNumberResizeFrame = null;
+      updateEditorLineNumbers();
+    });
   }
 
   function syncEditorLineNumberScroll() {
@@ -4796,6 +4867,8 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
     // Re-render markdown when switching to a view that includes preview
     if (mode === 'split' || mode === 'preview') {
       renderMarkdown();
+    } else {
+      scheduleEditorLineNumbersUpdate();
     }
   }
 
@@ -4883,6 +4956,7 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
 
     editorWidthPercent = newEditorPercent;
     applyPaneWidths();
+    scheduleEditorLineNumbersUpdate();
   }
 
   function handleResizeTouch(e) {
@@ -4897,6 +4971,7 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
 
     editorWidthPercent = newEditorPercent;
     applyPaneWidths();
+    scheduleEditorLineNumbersUpdate();
   }
 
   function stopResize() {
@@ -4912,11 +4987,13 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
     const previewPercent = 100 - editorWidthPercent;
     editorPaneElement.style.flex = `0 0 calc(${editorWidthPercent}% - 4px)`;
     previewPaneElement.style.flex = `0 0 calc(${previewPercent}% - 4px)`;
+    scheduleEditorLineNumbersUpdate();
   }
 
   function resetPaneWidths() {
     editorPaneElement.style.flex = '';
     previewPaneElement.style.flex = '';
+    scheduleEditorLineNumbersUpdate();
   }
 
   function openMobileMenu() {
@@ -5043,6 +5120,13 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
     markdownEditor.addEventListener(eventName, updateEditorLineNumbers);
   });
   markdownEditor.addEventListener("scroll", syncEditorLineNumberScroll);
+
+  if (typeof ResizeObserver !== "undefined") {
+    const editorLineNumberResizeObserver = new ResizeObserver(scheduleEditorLineNumbersUpdate);
+    editorLineNumberResizeObserver.observe(markdownEditor);
+  } else {
+    window.addEventListener("resize", scheduleEditorLineNumbersUpdate);
+  }
 
   editorPane.addEventListener("scroll", syncEditorToPreview);
   previewPane.addEventListener("scroll", syncPreviewToEditor);
