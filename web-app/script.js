@@ -39,6 +39,9 @@ document.addEventListener("DOMContentLoaded", function () {
   const readingTimeElement = document.getElementById("reading-time");
   const wordCountElement = document.getElementById("word-count");
   const charCountElement = document.getElementById("char-count");
+  const statusTipElement = document.getElementById("status-tip");
+  const graphPointsStatusElement = document.getElementById("graph-points-status");
+  const graphPointsCountElement = document.getElementById("graph-points-count");
 
   // View Mode Elements - Story 1.1
   const contentContainer = document.querySelector(".content-container");
@@ -1917,6 +1920,25 @@ This is a fully client-side application. Your content never leaves your browser 
     }
 
     exportMd.click();
+  }
+
+  function updateStatusLine(options = {}) {
+    const activeTab = tabs.find((tab) => tab.id === activeTabId);
+    const activeGraphTab = activeTab && activeTab.type === "graph" ? activeTab : null;
+    const visiblePointCount = typeof options.visiblePointCount === "number"
+      ? options.visiblePointCount
+      : (typeof activeGraphTab?.visiblePointCount === "number" ? activeGraphTab.visiblePointCount : 0);
+
+    if (statusTipElement) {
+      statusTipElement.textContent = activeGraphTab
+        ? "Tip: hold ctrl / shift to see out / back links"
+        : "Tip: drag in Markdown files, use split preview, or open a folder to build a graph.";
+    }
+
+    if (graphPointsStatusElement && graphPointsCountElement) {
+      graphPointsCountElement.textContent = visiblePointCount.toLocaleString();
+      graphPointsStatusElement.classList.toggle("hidden", !activeGraphTab);
+    }
   }
 
   function restoreViewMode(mode) {
@@ -4398,15 +4420,16 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
   mobileMenuOverlay.addEventListener("click", closeMobileMenu);
 
   function updateMobileStats() {
-    mobileCharCount.textContent   = charCountElement.textContent;
-    mobileWordCount.textContent   = wordCountElement.textContent;
-    mobileReadingTime.textContent = readingTimeElement.textContent;
+    if (mobileCharCount) mobileCharCount.textContent = charCountElement.textContent;
+    if (mobileWordCount) mobileWordCount.textContent = wordCountElement.textContent;
+    if (mobileReadingTime) mobileReadingTime.textContent = readingTimeElement.textContent;
   }
 
   const origUpdateStats = updateDocumentStats;
   updateDocumentStats = function() {
     origUpdateStats();
     updateMobileStats();
+    updateStatusLine();
   };
 
   mobileToggleSync.addEventListener("click", () => {
@@ -4455,6 +4478,7 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
   initTabs();
   if (loadGlobalState().syncScrollingEnabled === false) toggleSyncScrolling();
   updateMobileStats();
+  updateStatusLine();
 
   // Initialize resizer - Story 1.3
   initResizer();
@@ -4894,7 +4918,10 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
     const graphViewConfig = activeTab && activeTab.type === "graph" ? (activeTab.graphViewConfig || null) : null;
     hideInactiveGraphRenders(activeTab?.id);
     graphViewCanvas.querySelectorAll(".folder-tree-placeholder").forEach((node) => node.remove());
-    if (!activeTab || activeTab.type !== "graph") return;
+    if (!activeTab || activeTab.type !== "graph") {
+      updateStatusLine({ visiblePointCount: 0 });
+      return;
+    }
 
     let graphSnapshot = activeTab.graphSnapshot || null;
     if (!graphSnapshot && folderMarkdownFiles.length) {
@@ -4919,6 +4946,8 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
         if (entry?.wrapper) entry.wrapper.remove();
       });
       graphRenderCache.clear();
+      activeTab.visiblePointCount = 0;
+      updateStatusLine({ visiblePointCount: 0 });
       graphViewCanvas.innerHTML = '<p class="folder-tree-placeholder">This graph tab does not have a saved graph snapshot.</p>';
       return;
     }
@@ -4929,6 +4958,8 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
       if (cachedRender.wrapper.parentElement !== graphViewCanvas) graphViewCanvas.appendChild(cachedRender.wrapper);
       cachedRender.wrapper.classList.remove("hidden");
       hideInactiveGraphRenders(activeTab.id);
+      activeTab.visiblePointCount = cachedRender.visiblePointCount || 0;
+      updateStatusLine({ visiblePointCount: activeTab.visiblePointCount });
       return;
     }
 
@@ -5005,6 +5036,9 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
       const focusNodeId = graphViewConfig.focusNodeId;
       filterGraphToNodeIds(new Set([focusNodeId, ...getFullOutgoingNodeIds(focusNodeId)]));
     }
+
+    activeTab.visiblePointCount = nodes.length;
+    updateStatusLine({ visiblePointCount: nodes.length });
 
     applySavedGraphLayout(nodes, activeTab.graphLayout);
     if (typeof activeTab.graphLayout?.magneticEnabled === "boolean") {
@@ -5795,6 +5829,7 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
       wrapper: graphRenderWrapper,
       simulation,
       nodes,
+      visiblePointCount: nodes.length,
       getZoomTransform: () => currentZoomTransform
     });
 

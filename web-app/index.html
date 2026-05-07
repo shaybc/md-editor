@@ -76,17 +76,6 @@
                     <a href="https://github.com/ThisIs-Developer/Markdown-Viewer/" class="github-link" title="View on GitHub" target="_blank" rel="noopener noreferrer">
                         <i class="bi bi-github"></i>
                     </a>
-                    <div id="stats-container" class="stats-container d-flex align-items-center d-none d-lg-flex">
-                        <div class="stat-item me-3">
-                            <i class="bi bi-clock me-1"></i> <span id="reading-time">0</span> Min Read
-                        </div>
-                        <div class="stat-item me-3">
-                            <i class="bi bi-text-paragraph me-1"></i> <span id="word-count">0</span> Words
-                        </div>
-                        <div class="stat-item">
-                            <i class="bi bi-fonts me-1"></i> <span id="char-count">0</span> Chars
-                        </div>
-                    </div>
                 </div>
 
                 <!-- Center section: View Mode Buttons -->
@@ -152,18 +141,6 @@
                                 <i class="bi bi-eye"></i>
                                 <span>Preview</span>
                             </button>
-                        </div>
-
-                        <div class="mobile-stats-container mb-3">
-                            <div class="stat-item mb-2">
-                                <i class="bi bi-clock me-1"></i> <span id="mobile-reading-time">0</span> Min Read
-                            </div>
-                            <div class="stat-item mb-2">
-                                <i class="bi bi-text-paragraph me-1"></i> <span id="mobile-word-count">0</span> Words
-                            </div>
-                            <div class="stat-item">
-                                <i class="bi bi-fonts me-1"></i> <span id="mobile-char-count">0</span> Chars
-                            </div>
                         </div>
 
                         <div class="mobile-menu-items">
@@ -460,6 +437,18 @@
             </div>
         </div>
     </div>
+
+        <footer class="app-status-line" aria-label="Document status">
+            <div class="status-section status-left">
+                <span class="status-item"><i class="bi bi-clock" aria-hidden="true"></i> <span id="reading-time">0</span> Min Read</span>
+                <span class="status-item"><i class="bi bi-text-paragraph" aria-hidden="true"></i> <span id="word-count">0</span> Words</span>
+                <span class="status-item"><i class="bi bi-fonts" aria-hidden="true"></i> <span id="char-count">0</span> Chars</span>
+            </div>
+            <div id="status-tip" class="status-tip">Drop a Markdown file or open a folder to start.</div>
+            <div class="status-section status-right">
+                <span id="graph-points-status" class="status-item graph-points-status hidden"># of points: <span id="graph-points-count">0</span></span>
+            </div>
+        </footer>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.2/js/bootstrap.bundle.min.js"></script>
     <div id="graph-view-modal" class="graph-view-modal hidden" aria-hidden="true">
