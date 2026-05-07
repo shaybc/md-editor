@@ -2927,6 +2927,278 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
   return files;
 }
 
+
+  let sidebarFileContextMenu = null;
+  let sidebarContextTarget = null;
+
+  function createFileContextMenuButton(labelText, iconClass, tooltipText) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "graph-context-menu-item graph-context-menu-tooltip";
+    button.dataset.tooltip = tooltipText;
+    const icon = document.createElement("i");
+    icon.className = iconClass;
+    icon.setAttribute("aria-hidden", "true");
+    const label = document.createElement("span");
+    label.className = "graph-context-menu-item-label";
+    label.textContent = labelText;
+    button.appendChild(icon);
+    button.appendChild(label);
+    return button;
+  }
+
+  function getSidebarNodeSource(node) {
+    if (!node) return null;
+    return {
+      name: node.name,
+      file: node.file || null,
+      handle: node.handle || null,
+      path: node.fullPath || node.path || null
+    };
+  }
+
+  function getSidebarNodeClipboardPath(node) {
+    if (!node) return "";
+    return node.fullPath || node.path || node.name || "";
+  }
+
+  async function readSidebarNodeContent(node) {
+    if (!node) throw new Error("No sidebar file was selected.");
+    if (isNeutralinoRuntime() && node.fullPath) {
+      return Neutralino.filesystem.readFile(node.fullPath);
+    }
+    if (node.file) return node.file.text();
+    if (node.handle) {
+      const file = await node.handle.getFile();
+      return file.text();
+    }
+    throw new Error("No readable file was provided.");
+  }
+
+  function getSidebarNodeFilesystemPath(node) {
+    if (!node || !isNeutralinoRuntime()) return null;
+    if (node.fullPath) return node.fullPath;
+    if (activeFolderPath && node.path) return joinPath(activeFolderPath, node.path);
+    return null;
+  }
+
+  async function copySidebarContextText(text) {
+    if (isNeutralinoRuntime() && Neutralino.clipboard?.writeText) {
+      await Neutralino.clipboard.writeText(text || "");
+      showCopiedMessage();
+      return;
+    }
+    await copyToClipboard(text || "");
+  }
+
+  function hideSidebarFileContextMenu() {
+    if (!sidebarFileContextMenu) return;
+    sidebarFileContextMenu.classList.add("hidden");
+    sidebarContextTarget = null;
+  }
+
+  function positionSidebarFileContextMenu(event) {
+    if (!sidebarFileContextMenu) return;
+    const menuWidth = sidebarFileContextMenu.offsetWidth || 230;
+    const menuHeight = sidebarFileContextMenu.offsetHeight || 180;
+    const left = Math.max(0, Math.min(event.clientX, window.innerWidth - menuWidth - 8));
+    const top = Math.max(0, Math.min(event.clientY, window.innerHeight - menuHeight - 8));
+    sidebarFileContextMenu.style.left = `${left}px`;
+    sidebarFileContextMenu.style.top = `${top}px`;
+  }
+
+  function ensureSidebarFileContextMenu() {
+    if (sidebarFileContextMenu) return sidebarFileContextMenu;
+
+    const menu = document.createElement("div");
+    menu.className = "graph-context-menu sidebar-file-context-menu hidden";
+
+    const title = document.createElement("div");
+    title.className = "graph-context-menu-title";
+    const separator = document.createElement("div");
+    separator.className = "graph-context-menu-separator";
+
+    const openFileBtn = createFileContextMenuButton(
+      "Open in a new tab",
+      "bi bi-box-arrow-up-right",
+      "Open this file in a dedicated tab from the sidebar tree."
+    );
+    const openDefaultAppBtn = createFileContextMenuButton(
+      "Open with default app",
+      "bi bi-window",
+      "Ask the operating system to open this file with its configured default application."
+    );
+    const revealFileBtn = createFileContextMenuButton(
+      "Reveal in file explorer",
+      "bi bi-folder2-open",
+      "Open the file's folder in the system file explorer and select this file when supported."
+    );
+
+    const copySubmenu = document.createElement("div");
+    copySubmenu.className = "graph-context-menu-submenu";
+    const copySubmenuBtn = createFileContextMenuButton(
+      "Copy",
+      "bi bi-clipboard",
+      "Open copy actions for this file, including its path and content."
+    );
+    copySubmenuBtn.setAttribute("aria-haspopup", "true");
+    const copySubmenuArrow = document.createElement("span");
+    copySubmenuArrow.className = "graph-context-menu-submenu-arrow";
+    copySubmenuArrow.textContent = "›";
+    copySubmenuBtn.appendChild(copySubmenuArrow);
+    const copySubmenuPanel = document.createElement("div");
+    copySubmenuPanel.className = "graph-context-menu-submenu-panel";
+    const copyPathBtn = createFileContextMenuButton(
+      "Copy path",
+      "bi bi-file-earmark-text",
+      "Copy this file's path and file name to the clipboard."
+    );
+    const copyContentBtn = createFileContextMenuButton(
+      "Copy content",
+      "bi bi-file-text",
+      "Copy the entire content of this file to the clipboard."
+    );
+    copySubmenuPanel.appendChild(copyPathBtn);
+    copySubmenuPanel.appendChild(copyContentBtn);
+    copySubmenu.appendChild(copySubmenuBtn);
+    copySubmenu.appendChild(copySubmenuPanel);
+
+    const deleteFileBtn = createFileContextMenuButton(
+      "Delete file",
+      "bi bi-trash3",
+      "Delete this file from disk after confirmation."
+    );
+
+    [title, separator, openFileBtn, openDefaultAppBtn, revealFileBtn, copySubmenu, deleteFileBtn].forEach((item) => {
+      menu.appendChild(item);
+    });
+    document.body.appendChild(menu);
+
+    openFileBtn.addEventListener("click", async (event) => {
+      event.stopPropagation();
+      const target = sidebarContextTarget;
+      hideSidebarFileContextMenu();
+      if (!target) return;
+      try {
+        await openDocumentSourceFile({ ...getSidebarNodeSource(target), content: await readSidebarNodeContent(target) });
+        rememberRecentFile(getSidebarNodeSource(target));
+      } catch (error) {
+        console.error("Failed to open sidebar context file:", error);
+        alert("Unable to open selected file.");
+      }
+    });
+
+    openDefaultAppBtn.addEventListener("click", async (event) => {
+      event.stopPropagation();
+      const target = sidebarContextTarget;
+      const filePath = getSidebarNodeFilesystemPath(target);
+      hideSidebarFileContextMenu();
+      if (!filePath || !isNeutralinoRuntime() || !Neutralino.os?.open) {
+        alert("Opening with the default app is available only in the desktop app for files opened from disk.");
+        return;
+      }
+      try {
+        await Neutralino.os.open(filePath);
+      } catch (error) {
+        console.error("Failed to open sidebar file with default app:", error);
+        alert("Unable to open this file with the default app.");
+      }
+    });
+
+    revealFileBtn.addEventListener("click", async (event) => {
+      event.stopPropagation();
+      const target = sidebarContextTarget;
+      const filePath = getSidebarNodeFilesystemPath(target);
+      hideSidebarFileContextMenu();
+      if (!filePath || !isNeutralinoRuntime()) {
+        alert("Revealing files is available only in the desktop app for files opened from disk.");
+        return;
+      }
+      try {
+        if (typeof NL_OS !== "undefined" && NL_OS === "Windows" && Neutralino.os?.execCommand) {
+          const windowsPath = filePath.replace(/"/g, "").replace(/\//g, "\\");
+          await Neutralino.os.execCommand(`explorer.exe /select,"${windowsPath}"`);
+        } else if (Neutralino.os?.open) {
+          const normalized = filePath.replace(/\\/g, "/");
+          const folderPath = normalized.includes("/") ? normalized.slice(0, normalized.lastIndexOf("/")) : normalized;
+          await Neutralino.os.open(folderPath);
+        } else {
+          throw new Error("No supported reveal command is available.");
+        }
+      } catch (error) {
+        console.error("Failed to reveal sidebar file:", error);
+        alert("Unable to reveal this file in the file explorer.");
+      }
+    });
+
+    copyPathBtn.addEventListener("click", async (event) => {
+      event.stopPropagation();
+      const target = sidebarContextTarget;
+      hideSidebarFileContextMenu();
+      if (!target) return;
+      try {
+        await copySidebarContextText(getSidebarNodeClipboardPath(target));
+      } catch (error) {
+        console.error("Failed to copy sidebar file path:", error);
+        alert("Unable to copy this file path.");
+      }
+    });
+
+    copyContentBtn.addEventListener("click", async (event) => {
+      event.stopPropagation();
+      const target = sidebarContextTarget;
+      hideSidebarFileContextMenu();
+      if (!target) return;
+      try {
+        await copySidebarContextText(await readSidebarNodeContent(target));
+      } catch (error) {
+        console.error("Failed to copy sidebar file content:", error);
+        alert("Unable to copy this file content.");
+      }
+    });
+
+    deleteFileBtn.addEventListener("click", async (event) => {
+      event.stopPropagation();
+      const target = sidebarContextTarget;
+      const filePath = getSidebarNodeFilesystemPath(target);
+      hideSidebarFileContextMenu();
+      if (!filePath || !isNeutralinoRuntime() || !Neutralino.filesystem?.remove) {
+        alert("Deleting files is available only in the desktop app for files opened from disk.");
+        return;
+      }
+      const confirmed = window.confirm(`Delete "${target.name}" from disk? This action cannot be undone.`);
+      if (!confirmed) return;
+      try {
+        await Neutralino.filesystem.remove(filePath);
+        await refreshOpenFolderTreeAfterFileDelete(filePath);
+      } catch (error) {
+        console.error("Failed to delete sidebar file:", error);
+        alert("Unable to delete this file.");
+      }
+    });
+
+    document.addEventListener("click", hideSidebarFileContextMenu);
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "Escape") hideSidebarFileContextMenu();
+    });
+    window.addEventListener("blur", hideSidebarFileContextMenu);
+
+    sidebarFileContextMenu = menu;
+    return sidebarFileContextMenu;
+  }
+
+  function showSidebarFileContextMenu(event, node) {
+    if (!node || node.kind !== "file") return;
+    event.preventDefault();
+    event.stopPropagation();
+    sidebarContextTarget = node;
+    const menu = ensureSidebarFileContextMenu();
+    const title = menu.querySelector(".graph-context-menu-title");
+    if (title) title.textContent = node.name || "File";
+    menu.classList.remove("hidden");
+    positionSidebarFileContextMenu(event);
+  }
+
   function renderFolderTreeNode(node) {
     const li = document.createElement("li");
     li.className = "folder-tree-item";
@@ -3014,6 +3286,11 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
       event.preventDefault();
       window.clearTimeout(sidebarOpenClickTimer);
       openSidebarFile({ temporary: false });
+    });
+
+    button.addEventListener("contextmenu", (event) => {
+      window.clearTimeout(sidebarOpenClickTimer);
+      showSidebarFileContextMenu(event, node);
     });
 
     li.appendChild(button);
