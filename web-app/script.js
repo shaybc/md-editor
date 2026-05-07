@@ -837,6 +837,7 @@ document.addEventListener("DOMContentLoaded", function () {
   const previewPaneElement = document.querySelector(".preview-pane");
   let isResizing = false;
   let isSidebarDropzoneResizing = false;
+  let resizePointerOffset = 0;
   let editorWidthPercent = 50; // Default 50%
   const MIN_PANE_PERCENT = 20; // Minimum 20% width
   const MIN_SIDEBAR_PANEL_HEIGHT = 120;
@@ -5113,6 +5114,10 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
     }
 
     updateSidebarToggleButtons();
+
+    if (currentViewMode === 'split') {
+      requestAnimationFrame(applyPaneWidths);
+    }
   }
 
   function toggleSidebar() {
@@ -5896,6 +5901,7 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
     resizeDivider.addEventListener('mousedown', startResize);
     document.addEventListener('mousemove', handleResize);
     document.addEventListener('mouseup', stopResize);
+    window.addEventListener('resize', applyPaneWidths);
 
     // Touch support for tablets (though disabled via CSS, keeping for future)
     resizeDivider.addEventListener('touchstart', startResizeTouch);
@@ -5936,29 +5942,44 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
     if (currentViewMode !== 'split') return;
     e.preventDefault();
     isResizing = true;
+    resizePointerOffset = getResizePointerOffset(e.clientX);
     resizeDivider.classList.add('dragging');
     document.body.classList.add('resizing');
   }
 
   function startResizeTouch(e) {
-    if (currentViewMode !== 'split') return;
+    if (currentViewMode !== 'split' || !e.touches[0]) return;
     e.preventDefault();
     isResizing = true;
+    resizePointerOffset = getResizePointerOffset(e.touches[0].clientX);
     resizeDivider.classList.add('dragging');
     document.body.classList.add('resizing');
   }
 
-  function handleResize(e) {
-    if (!isResizing) return;
+  function getResizePointerOffset(clientX) {
+    const dividerRect = resizeDivider.getBoundingClientRect();
+    return clientX - dividerRect.left;
+  }
 
+  function getSplitResizeMetrics() {
+    const editorRect = editorPaneElement.getBoundingClientRect();
     const containerRect = contentContainer.getBoundingClientRect();
-    const containerWidth = containerRect.width;
-    const mouseX = e.clientX - containerRect.left;
+    const dividerWidth = resizeDivider.getBoundingClientRect().width;
 
-    // Calculate percentage
-    let newEditorPercent = (mouseX / containerWidth) * 100;
+    return {
+      left: editorRect.left,
+      width: containerRect.right - editorRect.left,
+      dividerWidth,
+      dividerMidpoint: dividerWidth / 2,
+    };
+  }
 
-    // Enforce minimum pane widths
+  function updateResizePosition(clientX) {
+    const resizeMetrics = getSplitResizeMetrics();
+    if (resizeMetrics.width <= 0) return;
+
+    const dividerLeft = clientX - resizePointerOffset - resizeMetrics.left;
+    let newEditorPercent = ((dividerLeft + resizeMetrics.dividerMidpoint) / resizeMetrics.width) * 100;
     newEditorPercent = Math.max(MIN_PANE_PERCENT, Math.min(100 - MIN_PANE_PERCENT, newEditorPercent));
 
     editorWidthPercent = newEditorPercent;
@@ -5966,19 +5987,14 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
     scheduleEditorLineNumbersUpdate();
   }
 
+  function handleResize(e) {
+    if (!isResizing) return;
+    updateResizePosition(e.clientX);
+  }
+
   function handleResizeTouch(e) {
     if (!isResizing || !e.touches[0]) return;
-
-    const containerRect = contentContainer.getBoundingClientRect();
-    const containerWidth = containerRect.width;
-    const touchX = e.touches[0].clientX - containerRect.left;
-
-    let newEditorPercent = (touchX / containerWidth) * 100;
-    newEditorPercent = Math.max(MIN_PANE_PERCENT, Math.min(100 - MIN_PANE_PERCENT, newEditorPercent));
-
-    editorWidthPercent = newEditorPercent;
-    applyPaneWidths();
-    scheduleEditorLineNumbersUpdate();
+    updateResizePosition(e.touches[0].clientX);
   }
 
   function stopResize() {
@@ -5991,9 +6007,14 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
   function applyPaneWidths() {
     if (currentViewMode !== 'split') return;
 
-    const previewPercent = 100 - editorWidthPercent;
-    editorPaneElement.style.flex = `0 0 calc(${editorWidthPercent}% - 4px)`;
-    previewPaneElement.style.flex = `0 0 calc(${previewPercent}% - 4px)`;
+    const resizeMetrics = getSplitResizeMetrics();
+    if (resizeMetrics.width <= resizeMetrics.dividerWidth) return;
+
+    const editorBasis = (resizeMetrics.width * editorWidthPercent / 100) - resizeMetrics.dividerMidpoint;
+    const previewBasis = resizeMetrics.width - resizeMetrics.dividerWidth - editorBasis;
+
+    editorPaneElement.style.flex = `0 0 ${editorBasis}px`;
+    previewPaneElement.style.flex = `0 0 ${previewBasis}px`;
     scheduleEditorLineNumbersUpdate();
   }
 
