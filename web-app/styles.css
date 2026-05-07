@@ -420,6 +420,12 @@ body {
   stroke-width: 1px;
 }
 
+.graph-link.highlighted-backlink {
+  stroke: #f97316;
+  stroke-opacity: 1;
+  stroke-width: 1px;
+}
+
 .graph-node {
   fill: var(--accent-color);
   transition: opacity 0.15s ease;
@@ -429,6 +435,10 @@ body {
   fill: #ffffff;
   opacity: 0.95;
   pointer-events: none;
+}
+
+.graph-arrowhead.highlighted-backlink {
+  fill: #f97316;
 }
 
 .graph-label {

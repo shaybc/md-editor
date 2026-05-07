@@ -4990,29 +4990,103 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
       openLocalGraphTab("full-local", "Full Local Graph");
     });
 
-    function highlightNeighborhood(focusNode) {
-      const outgoingTargets = outgoingAdjacency.get(focusNode.id) || new Set([focusNode.id]);
-      const isOutgoingFromFocus = (l) => l.source.id === focusNode.id;
-      node.classed("dimmed", (n) => !outgoingTargets.has(n.id));
-      label.classed("dimmed", (n) => !outgoingTargets.has(n.id));
+    let hoveredGraphNode = null;
+    let hoveredGraphModifiers = { shiftKey: false, ctrlKey: false };
+
+    const getGraphLinkSourceId = (linkData) => linkData?.source?.id || linkData?.source;
+    const getGraphLinkTargetId = (linkData) => linkData?.target?.id || linkData?.target;
+
+    const getRecursiveOutgoingHighlight = (focusNodeId) => {
+      const highlightedNodes = new Set([focusNodeId]);
+      const highlightedLinks = new Set();
+      const visitedNodeIds = new Set([focusNodeId]);
+      const nodesToVisit = [focusNodeId];
+
+      while (nodesToVisit.length) {
+        const currentNodeId = nodesToVisit.shift();
+        links.forEach((linkData) => {
+          if (getGraphLinkSourceId(linkData) !== currentNodeId) return;
+          highlightedLinks.add(linkData);
+          const targetNodeId = getGraphLinkTargetId(linkData);
+          if (!targetNodeId) return;
+          highlightedNodes.add(targetNodeId);
+          if (!visitedNodeIds.has(targetNodeId)) {
+            visitedNodeIds.add(targetNodeId);
+            nodesToVisit.push(targetNodeId);
+          }
+        });
+      }
+
+      return { highlightedNodes, highlightedLinks };
+    };
+
+    const getBacklinkHighlight = (focusNodeId) => {
+      const highlightedNodes = new Set([focusNodeId]);
+      const highlightedLinks = new Set();
+
+      links.forEach((linkData) => {
+        if (getGraphLinkTargetId(linkData) !== focusNodeId) return;
+        highlightedLinks.add(linkData);
+        const sourceNodeId = getGraphLinkSourceId(linkData);
+        if (sourceNodeId) highlightedNodes.add(sourceNodeId);
+      });
+
+      return { highlightedNodes, highlightedLinks };
+    };
+
+    function highlightNeighborhood(focusNode, modifiers = hoveredGraphModifiers) {
+      if (!focusNode) return;
+      const focusNodeId = focusNode.id;
+      const isBacklinkHighlight = Boolean(modifiers.ctrlKey);
+      const highlight = isBacklinkHighlight
+        ? getBacklinkHighlight(focusNodeId)
+        : (modifiers.shiftKey
+          ? getRecursiveOutgoingHighlight(focusNodeId)
+          : {
+            highlightedNodes: outgoingAdjacency.get(focusNodeId) || new Set([focusNodeId]),
+            highlightedLinks: new Set(links.filter((l) => getGraphLinkSourceId(l) === focusNodeId))
+          });
+      const isHighlightedLink = (l) => highlight.highlightedLinks.has(l);
+
+      node.classed("dimmed", (n) => !highlight.highlightedNodes.has(n.id));
+      label.classed("dimmed", (n) => !highlight.highlightedNodes.has(n.id));
       link
-        .classed("dimmed", (l) => !isOutgoingFromFocus(l))
-        .classed("highlighted-direct", isOutgoingFromFocus);
+        .classed("dimmed", (l) => !isHighlightedLink(l))
+        .classed("highlighted-direct", (l) => !isBacklinkHighlight && isHighlightedLink(l))
+        .classed("highlighted-backlink", (l) => isBacklinkHighlight && isHighlightedLink(l));
       arrowhead
-        .classed("dimmed", (l) => !isOutgoingFromFocus(l))
-        .classed("highlighted-direct", isOutgoingFromFocus);
+        .classed("dimmed", (l) => !isHighlightedLink(l))
+        .classed("highlighted-direct", (l) => !isBacklinkHighlight && isHighlightedLink(l))
+        .classed("highlighted-backlink", (l) => isBacklinkHighlight && isHighlightedLink(l));
     }
 
     function clearNeighborhoodHighlight() {
       node.classed("dimmed", false);
       label.classed("dimmed", false);
-      link.classed("dimmed", false).classed("highlighted-direct", false);
-      arrowhead.classed("dimmed", false).classed("highlighted-direct", false);
+      link.classed("dimmed", false).classed("highlighted-direct", false).classed("highlighted-backlink", false);
+      arrowhead.classed("dimmed", false).classed("highlighted-direct", false).classed("highlighted-backlink", false);
     }
 
+    const updateHoveredGraphHighlight = (event) => {
+      hoveredGraphModifiers = {
+        shiftKey: Boolean(event?.shiftKey),
+        ctrlKey: Boolean(event?.ctrlKey)
+      };
+      if (hoveredGraphNode) highlightNeighborhood(hoveredGraphNode, hoveredGraphModifiers);
+    };
+
     node
-      .on("mouseenter", (event, d) => highlightNeighborhood(d))
-      .on("mouseleave", clearNeighborhoodHighlight);
+      .on("mouseenter", (event, d) => {
+        hoveredGraphNode = d;
+        updateHoveredGraphHighlight(event);
+      })
+      .on("mouseleave", () => {
+        hoveredGraphNode = null;
+        clearNeighborhoodHighlight();
+      });
+
+    window.addEventListener("keydown", updateHoveredGraphHighlight);
+    window.addEventListener("keyup", updateHoveredGraphHighlight);
 
     function renderGraphTick() {
       link.each(function(d) {
