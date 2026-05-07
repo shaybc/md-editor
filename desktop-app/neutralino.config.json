@@ -22,6 +22,7 @@
     "filesystem.createDirectory",
     "debug.log",
     "filesystem.remove",
+    "filesystem.move",
     "clipboard.writeText",
     "os.execCommand"
   ],

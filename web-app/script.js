@@ -2510,16 +2510,18 @@ This is a fully client-side application. Your content never leaves your browser 
 
 
 
-  async function listMarkdownTree(dirHandle) {
+  async function listMarkdownTree(dirHandle, parentPath = "") {
     const entries = [];
     for await (const entry of dirHandle.values()) {
       if (entry.kind === "directory") {
-        const children = await listMarkdownTree(entry);
+        const currentPath = parentPath ? `${parentPath}/${entry.name}` : entry.name;
+        const children = await listMarkdownTree(entry, currentPath);
         if (children.length) {
-          entries.push({ kind: "directory", name: entry.name, children, handle: entry });
+          entries.push({ kind: "directory", name: entry.name, path: currentPath, children, handle: entry });
         }
       } else if (entry.kind === "file" && isSidebarDocumentPath(entry.name)) {
-        entries.push({ kind: "file", name: entry.name, handle: entry });
+        const currentPath = parentPath ? `${parentPath}/${entry.name}` : entry.name;
+        entries.push({ kind: "file", name: entry.name, path: currentPath, handle: entry });
       }
     }
     entries.sort((a,b) => a.kind === b.kind ? a.name.localeCompare(b.name) : (a.kind === "directory" ? -1 : 1));
@@ -3261,15 +3263,25 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
     }
   }
 
+  function replacePathPrefix(path, oldPrefix, newPrefix) {
+    if (!path || !oldPrefix || !newPrefix) return path;
+    const originalPath = String(path);
+    const normalize = (value) => String(value).replace(/\\/g, "/").replace(/\/+$/, "");
+    const normalizedPath = originalPath.replace(/\\/g, "/");
+    const normalizedOldPrefix = normalize(oldPrefix);
+    if (normalizedPath !== normalizedOldPrefix && !normalizedPath.startsWith(normalizedOldPrefix + "/")) {
+      return path;
+    }
+    return String(newPrefix).replace(/\/+$/, "") + normalizedPath.slice(normalizedOldPrefix.length);
+  }
+
   function updateTabsAfterSidebarFolderRename(oldPath, newPath) {
     if (!oldPath || !newPath) return;
-    const normalizedOldPath = oldPath.replace(/\\/g, "/").replace(/\/+$/, "");
     let changed = false;
     tabs.forEach((tab) => {
-      if (!tab.sourceFilePath) return;
-      const normalizedTabPath = tab.sourceFilePath.replace(/\\/g, "/");
-      if (normalizedTabPath !== normalizedOldPath && !normalizedTabPath.startsWith(normalizedOldPath + "/")) return;
-      tab.sourceFilePath = newPath + tab.sourceFilePath.slice(oldPath.length);
+      const renamedPath = replacePathPrefix(tab.sourceFilePath, oldPath, newPath);
+      if (renamedPath === tab.sourceFilePath) return;
+      tab.sourceFilePath = renamedPath;
       changed = true;
     });
     if (changed) {
@@ -3290,7 +3302,7 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
 
     if (isNeutralinoRuntime()) {
       if (!oldPath || !Neutralino.filesystem?.move) {
-        alert(`Renaming ${kind}s is available only in the desktop app for ${kind}s opened from disk.`);
+        alert(`Renaming ${kind}s requires filesystem.move permission in the desktop app for ${kind}s opened from disk.`);
         return;
       }
       await Neutralino.filesystem.move(oldPath, newPath);
@@ -3306,7 +3318,12 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
     } else {
       updateTabsAfterSidebarFileRename(node, oldPath || node.path, newPath, newName);
     }
-    await reloadOpenFolderTree();
+
+    try {
+      await reloadOpenFolderTree();
+    } catch (error) {
+      console.warn(`Renamed ${kind}, but failed to refresh the folder tree:`, error);
+    }
   }
 
   function ensureSidebarFileContextMenu() {
