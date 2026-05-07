@@ -481,7 +481,8 @@ document.addEventListener("DOMContentLoaded", function () {
       handle
     };
 
-    const existingTab = findTabForSourceFile(sourceFile);
+    const isGraphFile = isGraphFilePath(sourceFile.path || sourceFile.name);
+    const existingTab = isGraphFile ? findGraphTabForSourceFile(sourceFile) : findTabForSourceFile(sourceFile);
     if (existingTab) {
       switchTab(existingTab.id);
       pinTemporaryTab(existingTab.id);
@@ -499,7 +500,7 @@ document.addEventListener("DOMContentLoaded", function () {
         alert("Permission is required to reopen this recent file. Please allow access or choose it again with Open file ...");
         return;
       }
-      await openMarkdownSourceFile(sourceFile);
+      await openDocumentSourceFile(sourceFile);
     } catch (error) {
       console.error("Failed to open recent file:", error);
       alert("Unable to open the recent file.");
@@ -2046,6 +2047,29 @@ This is a fully client-side application. Your content never leaves your browser 
     const title = sourceFile.name ? getMarkdownTitleFromFileName(sourceFile.name) : null;
     return tabs.find(function(tab) {
       return tab.type !== "graph" && ((sourceFile.name && tab.sourceFileName === sourceFile.name) || (title && tab.title === title));
+    }) || null;
+  }
+
+  function findGraphTabForSourceFile(sourceFile) {
+    if (!sourceFile) return null;
+
+    if (sourceFile.handle) {
+      const handleMatch = tabs.find(function(tab) {
+        return tab.type === "graph" && tab.sourceFileHandle === sourceFile.handle;
+      });
+      if (handleMatch) return handleMatch;
+    }
+
+    if (sourceFile.path) {
+      const pathMatch = tabs.find(function(tab) {
+        return tab.type === "graph" && tab.sourceFilePath === sourceFile.path;
+      });
+      if (pathMatch) return pathMatch;
+    }
+
+    const title = sourceFile.name ? getGraphTitleFromFileName(sourceFile.name) : null;
+    return tabs.find(function(tab) {
+      return tab.type === "graph" && ((sourceFile.name && tab.sourceFileName === sourceFile.name) || (title && tab.title === title));
     }) || null;
   }
 
