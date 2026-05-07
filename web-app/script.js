@@ -2093,7 +2093,7 @@ This is a fully client-side application. Your content never leaves your browser 
     const sourceFile = {
       name,
       handle: fileEntry.handle || null,
-      path
+      path: fileEntry.fullPath || path
     };
 
     const existingTab = findTabForSourceFile(sourceFile);
@@ -2903,7 +2903,7 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
       try {
         const content = await Neutralino.filesystem.readFile(node.fullPath);
         const file = new File([content], node.name, { type: "text/markdown" });
-        files.push({ path: currentPath, file });
+        files.push({ path: currentPath, fullPath: node.fullPath, file });
       } catch (error) {
         console.warn("Failed to read file:", currentPath, error);
       }
@@ -4813,40 +4813,257 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
     contextMenu.className = "graph-context-menu hidden";
     const contextMenuTitle = document.createElement("div");
     contextMenuTitle.className = "graph-context-menu-title hidden";
-    const magneticToggleBtn = document.createElement("button");
-    magneticToggleBtn.type = "button";
-    magneticToggleBtn.className = "graph-context-menu-item";
+
+    const createContextMenuButton = (labelText, iconClass, tooltipText) => {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "graph-context-menu-item graph-context-menu-tooltip";
+      button.dataset.tooltip = tooltipText;
+      const icon = document.createElement("i");
+      icon.className = iconClass;
+      icon.setAttribute("aria-hidden", "true");
+      const label = document.createElement("span");
+      label.className = "graph-context-menu-item-label";
+      label.textContent = labelText;
+      button.appendChild(icon);
+      button.appendChild(label);
+      return button;
+    };
+
+    const setContextMenuButtonLabel = (button, labelText) => {
+      const label = button.querySelector(".graph-context-menu-item-label");
+      if (label) label.textContent = labelText;
+    };
+
+    const magneticToggleBtn = createContextMenuButton(
+      "Turn magnetic forces off",
+      "bi bi-magnet",
+      "Toggle whether graph nodes continue to pull and push each other after you move them."
+    );
     const contextMenuTitleSeparator = document.createElement("div");
     contextMenuTitleSeparator.className = "graph-context-menu-separator hidden";
     const contextMenuActionSeparator = document.createElement("div");
     contextMenuActionSeparator.className = "graph-context-menu-separator hidden";
-    const openFileBtn = document.createElement("button");
-    openFileBtn.type = "button";
-    openFileBtn.className = "graph-context-menu-item hidden";
-    openFileBtn.textContent = "Open File";
-    const hidePointBtn = document.createElement("button");
-    hidePointBtn.type = "button";
-    hidePointBtn.className = "graph-context-menu-item hidden";
-    hidePointBtn.textContent = "Hide this point";
-    const localGraphBtn = document.createElement("button");
-    localGraphBtn.type = "button";
-    localGraphBtn.className = "graph-context-menu-item hidden";
-    localGraphBtn.textContent = "Show local graph";
-    const fullLocalGraphBtn = document.createElement("button");
-    fullLocalGraphBtn.type = "button";
-    fullLocalGraphBtn.className = "graph-context-menu-item hidden";
-    fullLocalGraphBtn.textContent = "Show full local graph";
+    const openFileBtn = createContextMenuButton(
+      "Open in a new tab",
+      "bi bi-box-arrow-up-right",
+      "Open this Markdown file in a dedicated editor tab without changing the graph tab."
+    );
+    openFileBtn.classList.add("hidden");
+    const openDefaultAppBtn = createContextMenuButton(
+      "Open with default app",
+      "bi bi-window",
+      "Ask the operating system to open this file with its configured default application."
+    );
+    openDefaultAppBtn.classList.add("hidden");
+    const revealFileBtn = createContextMenuButton(
+      "Reveal in file explorer",
+      "bi bi-folder2-open",
+      "Open the file's folder in the system file explorer and select this file when supported."
+    );
+    revealFileBtn.classList.add("hidden");
+    const hidePointBtn = createContextMenuButton(
+      "Remove this point",
+      "bi bi-eye-slash",
+      "Remove this point from the current graph view while keeping the original file on disk."
+    );
+    hidePointBtn.classList.add("hidden");
+    const localGraphBtn = createContextMenuButton(
+      "Show local graph",
+      "bi bi-diagram-2",
+      "Open a graph focused on this point and the points directly connected to it."
+    );
+    localGraphBtn.classList.add("hidden");
+    const fullLocalGraphBtn = createContextMenuButton(
+      "Show full local graph",
+      "bi bi-diagram-3",
+      "Open a graph that follows every outgoing dependency reachable from this point."
+    );
+    fullLocalGraphBtn.classList.add("hidden");
+    const deleteFileBtn = createContextMenuButton(
+      "Delete file",
+      "bi bi-trash3",
+      "Delete this Markdown file after confirmation and remove its point from the graph."
+    );
+    deleteFileBtn.classList.add("hidden");
+
+    const copySubmenu = document.createElement("div");
+    copySubmenu.className = "graph-context-menu-submenu hidden";
+    const copySubmenuBtn = createContextMenuButton(
+      "Copy",
+      "bi bi-clipboard",
+      "Open copy actions for this point, including its path, content, dependencies, and backlinks."
+    );
+    copySubmenuBtn.setAttribute("aria-haspopup", "true");
+    const copySubmenuArrow = document.createElement("span");
+    copySubmenuArrow.className = "graph-context-menu-submenu-arrow";
+    copySubmenuArrow.textContent = "›";
+    copySubmenuBtn.appendChild(copySubmenuArrow);
+    const copySubmenuPanel = document.createElement("div");
+    copySubmenuPanel.className = "graph-context-menu-submenu-panel";
+    const copyPathBtn = createContextMenuButton(
+      "Copy path",
+      "bi bi-file-earmark-text",
+      "Copy this file's full path and file name to the clipboard."
+    );
+    const copyContentBtn = createContextMenuButton(
+      "Copy content",
+      "bi bi-file-text",
+      "Copy the entire Markdown content of this file to the clipboard."
+    );
+    const copyDependenciesBtn = createContextMenuButton(
+      "Copy dependencies",
+      "bi bi-list-ul",
+      "Copy direct outgoing linked file names, one file name per line."
+    );
+    const copyFullDependenciesBtn = createContextMenuButton(
+      "Copy full dependencies",
+      "bi bi-bezier2",
+      "Copy all direct and indirect outgoing linked file names, one file name per line."
+    );
+    const copyBacklinksBtn = createContextMenuButton(
+      "Copy backlinks",
+      "bi bi-arrow-left-circle",
+      "Copy file names that directly link to this point, one file name per line."
+    );
+    [copyPathBtn, copyContentBtn, copyDependenciesBtn, copyFullDependenciesBtn, copyBacklinksBtn].forEach((button) => {
+      copySubmenuPanel.appendChild(button);
+    });
+    copySubmenu.appendChild(copySubmenuBtn);
+    copySubmenu.appendChild(copySubmenuPanel);
+
     contextMenu.appendChild(contextMenuTitle);
     contextMenu.appendChild(contextMenuTitleSeparator);
     contextMenu.appendChild(openFileBtn);
+    contextMenu.appendChild(openDefaultAppBtn);
+    contextMenu.appendChild(revealFileBtn);
+    contextMenu.appendChild(copySubmenu);
     contextMenu.appendChild(hidePointBtn);
     contextMenu.appendChild(localGraphBtn);
     contextMenu.appendChild(fullLocalGraphBtn);
+    contextMenu.appendChild(deleteFileBtn);
     contextMenu.appendChild(contextMenuActionSeparator);
     contextMenu.appendChild(magneticToggleBtn);
     graphRenderWrapper.appendChild(contextMenu);
 
     let contextTargetNode = null;
+
+    const getActiveGraphTab = () => tabs.find((tab) => tab.id === activeTabId && tab.type === "graph") || null;
+
+    const getSnapshotFileForNode = (graphNode) => {
+      if (!graphNode) return null;
+      const activeGraphTab = getActiveGraphTab();
+      const snapshotFile = activeGraphTab?.graphSnapshot?.files?.find((file) => file.id === graphNode.id);
+      return snapshotFile || (folderMarkdownFiles || []).find((entry) => {
+        const entryPath = entry.path || entry.fullPath || entry.file?.webkitRelativePath || entry.file?.name || "";
+        return normalizeGraphNodeName(entryPath) === graphNode.id;
+      }) || null;
+    };
+
+    const getNodeFileName = (nodeId) => {
+      const graphNode = nodes.find((n) => n.id === nodeId);
+      const snapshotFile = graphNode ? getSnapshotFileForNode(graphNode) : null;
+      const sourcePath = snapshotFile?.path || snapshotFile?.fullPath || graphNode?.fullPath || graphNode?.label || nodeId;
+      return getFileName(sourcePath || nodeId);
+    };
+
+    const getNodeClipboardPath = (graphNode) => {
+      const snapshotFile = getSnapshotFileForNode(graphNode);
+      return snapshotFile?.fullPath || snapshotFile?.path || graphNode?.fullPath || graphNode?.label || graphNode?.id || "";
+    };
+
+    const getNodeFilesystemPath = (graphNode) => {
+      const snapshotFile = getSnapshotFileForNode(graphNode);
+      return snapshotFile?.fullPath || ((isNeutralinoRuntime() && snapshotFile?.path) ? snapshotFile.path : null);
+    };
+
+    const readGraphNodeContent = async (graphNode) => {
+      const snapshotFile = getSnapshotFileForNode(graphNode);
+      if (!snapshotFile) throw new Error("Unable to find the selected file in this graph snapshot.");
+      if (snapshotFile.content !== undefined) return snapshotFile.content || "";
+      if (snapshotFile.file) return snapshotFile.file.text();
+      if (snapshotFile.handle) {
+        const file = await snapshotFile.handle.getFile();
+        return file.text();
+      }
+      if (isNeutralinoRuntime() && snapshotFile.fullPath) return Neutralino.filesystem.readFile(snapshotFile.fullPath);
+      throw new Error("No readable Markdown file was provided.");
+    };
+
+    const copyGraphText = async (text) => {
+      if (isNeutralinoRuntime() && Neutralino.clipboard?.writeText) {
+        await Neutralino.clipboard.writeText(text || "");
+        showCopiedMessage();
+        return;
+      }
+      await copyToClipboard(text || "");
+    };
+
+    const getDirectOutgoingDependencyIds = (nodeId) => links
+      .filter((l) => l.source?.id === nodeId || l.source === nodeId)
+      .map((l) => l.target?.id || l.target)
+      .filter(Boolean);
+
+    const getFullOutgoingDependencyIds = (nodeId) => {
+      const dependencyIds = new Set();
+      const nodesToVisit = [...getDirectOutgoingDependencyIds(nodeId)];
+      while (nodesToVisit.length) {
+        const currentNodeId = nodesToVisit.shift();
+        if (!currentNodeId || currentNodeId === nodeId || dependencyIds.has(currentNodeId)) continue;
+        dependencyIds.add(currentNodeId);
+        nodesToVisit.push(...getDirectOutgoingDependencyIds(currentNodeId));
+      }
+      return Array.from(dependencyIds);
+    };
+
+    const getBacklinkIds = (nodeId) => links
+      .filter((l) => (l.target?.id || l.target) === nodeId)
+      .map((l) => l.source?.id || l.source)
+      .filter(Boolean);
+
+    const copyNodeFileNameList = async (nodeIds) => {
+      await copyGraphText(Array.from(new Set(nodeIds)).map(getNodeFileName).join("\n"));
+    };
+
+    const hideGraphPoint = (nodeId) => {
+      simulation.stop();
+
+      // Re-render by reusing temporary in-memory file graph and hiding this node for this tab view only.
+      const activeGraphTab = getActiveGraphTab();
+      if (activeGraphTab) {
+        activeGraphTab.graphViewConfig = {
+          ...(activeGraphTab.graphViewConfig || {}),
+          hiddenNodeIds: Array.from(new Set([...(activeGraphTab.graphViewConfig?.hiddenNodeIds || []), nodeId]))
+        };
+        markGraphTabAsChanged(activeGraphTab);
+        saveTabsToStorage(tabs);
+        graphRenderCache.delete(activeGraphTab.id);
+      }
+      graphRenderWrapper.remove();
+      renderGraphView();
+    };
+
+    const removeGraphPointFromSnapshot = (nodeId) => {
+      const activeGraphTab = getActiveGraphTab();
+      if (!activeGraphTab?.graphSnapshot) return;
+      activeGraphTab.graphSnapshot = {
+        ...activeGraphTab.graphSnapshot,
+        nodes: (activeGraphTab.graphSnapshot.nodes || []).filter((n) => n.id !== nodeId),
+        links: (activeGraphTab.graphSnapshot.links || []).filter((l) => l.source !== nodeId && l.target !== nodeId),
+        files: (activeGraphTab.graphSnapshot.files || []).filter((file) => file.id !== nodeId)
+      };
+      activeGraphTab.graphViewConfig = {
+        ...(activeGraphTab.graphViewConfig || {}),
+        hiddenNodeIds: (activeGraphTab.graphViewConfig?.hiddenNodeIds || []).filter((id) => id !== nodeId)
+      };
+      folderMarkdownFiles = (folderMarkdownFiles || []).filter((entry) => {
+        const entryPath = entry.path || entry.fullPath || entry.file?.webkitRelativePath || entry.file?.name || "";
+        return normalizeGraphNodeName(entryPath) !== nodeId;
+      });
+      markGraphTabAsChanged(activeGraphTab);
+      saveTabsToStorage(tabs);
+      graphRenderCache.delete(activeGraphTab.id);
+    };
 
     const applyMagneticSetting = () => {
       if (graphSettings.magneticEnabled) {
@@ -4868,9 +5085,31 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
         renderGraphTick();
         captureGraphLayout(activeTab, nodes, currentZoomTransform);
       }
-      magneticToggleBtn.textContent = graphSettings.magneticEnabled
-        ? "Turn magnetic forces off"
-        : "Turn magnetic forces on";
+      setContextMenuButtonLabel(
+        magneticToggleBtn,
+        graphSettings.magneticEnabled ? "Turn magnetic forces off" : "Turn magnetic forces on"
+      );
+    };
+
+    const nodeContextMenuItems = [
+      openFileBtn,
+      openDefaultAppBtn,
+      revealFileBtn,
+      copySubmenu,
+      hidePointBtn,
+      localGraphBtn,
+      fullLocalGraphBtn,
+      deleteFileBtn
+    ];
+
+    const setNodeContextItemsHidden = (hidden) => {
+      nodeContextMenuItems.forEach((item) => item.classList.toggle("hidden", hidden));
+    };
+
+    const positionContextMenu = (event) => {
+      const bounds = graphViewCanvas.getBoundingClientRect();
+      contextMenu.style.left = `${Math.max(0, Math.min(event.clientX - bounds.left, bounds.width - 230))}px`;
+      contextMenu.style.top = `${Math.max(0, Math.min(event.clientY - bounds.top, bounds.height - 180))}px`;
     };
 
     const hideContextMenu = () => {
@@ -4880,10 +5119,7 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
       contextMenuTitle.textContent = "";
       contextMenuTitleSeparator.classList.add("hidden");
       contextMenuActionSeparator.classList.add("hidden");
-      openFileBtn.classList.add("hidden");
-      hidePointBtn.classList.add("hidden");
-      localGraphBtn.classList.add("hidden");
-      fullLocalGraphBtn.classList.add("hidden");
+      setNodeContextItemsHidden(true);
     };
 
     graphRenderWrapper.addEventListener("contextmenu", (event) => {
@@ -4893,13 +5129,8 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
       contextMenuTitle.textContent = "";
       contextMenuTitleSeparator.classList.add("hidden");
       contextMenuActionSeparator.classList.add("hidden");
-      openFileBtn.classList.add("hidden");
-      hidePointBtn.classList.add("hidden");
-      localGraphBtn.classList.add("hidden");
-      fullLocalGraphBtn.classList.add("hidden");
-      const bounds = graphViewCanvas.getBoundingClientRect();
-      contextMenu.style.left = `${Math.min(event.clientX - bounds.left, bounds.width - 200)}px`;
-      contextMenu.style.top = `${Math.min(event.clientY - bounds.top, bounds.height - 120)}px`;
+      setNodeContextItemsHidden(true);
+      positionContextMenu(event);
       contextMenu.classList.remove("hidden");
     });
 
@@ -4911,13 +5142,8 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
       contextMenuTitle.classList.remove("hidden");
       contextMenuTitleSeparator.classList.remove("hidden");
       contextMenuActionSeparator.classList.remove("hidden");
-      openFileBtn.classList.remove("hidden");
-      hidePointBtn.classList.remove("hidden");
-      localGraphBtn.classList.remove("hidden");
-      fullLocalGraphBtn.classList.remove("hidden");
-      const bounds = graphViewCanvas.getBoundingClientRect();
-      contextMenu.style.left = `${Math.min(event.clientX - bounds.left, bounds.width - 200)}px`;
-      contextMenu.style.top = `${Math.min(event.clientY - bounds.top, bounds.height - 120)}px`;
+      setNodeContextItemsHidden(false);
+      positionContextMenu(event);
       contextMenu.classList.remove("hidden");
     });
 
@@ -4941,25 +5167,129 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
       await openGraphNodeFileInPermanentTab(targetNode);
     });
 
+    openDefaultAppBtn.addEventListener("click", async (event) => {
+      event.stopPropagation();
+      if (!contextTargetNode) return;
+      const filePath = getNodeFilesystemPath(contextTargetNode);
+      hideContextMenu();
+      if (!filePath || !isNeutralinoRuntime() || !Neutralino.os?.open) {
+        alert("Opening with the default app is available only in the desktop app for files opened from disk.");
+        return;
+      }
+      try {
+        await Neutralino.os.open(filePath);
+      } catch (error) {
+        console.error("Failed to open file with default app:", error);
+        alert("Unable to open this file with the default app.");
+      }
+    });
+
+    revealFileBtn.addEventListener("click", async (event) => {
+      event.stopPropagation();
+      if (!contextTargetNode) return;
+      const filePath = getNodeFilesystemPath(contextTargetNode);
+      hideContextMenu();
+      if (!filePath || !isNeutralinoRuntime()) {
+        alert("Revealing files is available only in the desktop app for files opened from disk.");
+        return;
+      }
+      try {
+        if (typeof NL_OS !== "undefined" && NL_OS === "Windows" && Neutralino.os?.execCommand) {
+          const windowsPath = filePath.replace(/"/g, "");
+          await Neutralino.os.execCommand(`explorer.exe /select,"${windowsPath}"`);
+        } else if (Neutralino.os?.open) {
+          const normalized = filePath.replace(/\\/g, "/");
+          const folderPath = normalized.includes("/") ? normalized.slice(0, normalized.lastIndexOf("/")) : normalized;
+          await Neutralino.os.open(folderPath);
+        } else {
+          throw new Error("No supported reveal command is available.");
+        }
+      } catch (error) {
+        console.error("Failed to reveal file:", error);
+        alert("Unable to reveal this file in the file explorer.");
+      }
+    });
+
+    copyPathBtn.addEventListener("click", async (event) => {
+      event.stopPropagation();
+      if (!contextTargetNode) return;
+      const targetNode = contextTargetNode;
+      hideContextMenu();
+      try {
+        await copyGraphText(getNodeClipboardPath(targetNode));
+      } catch (error) {
+        console.error("Failed to copy path:", error);
+        alert("Unable to copy this file path.");
+      }
+    });
+
+    copyContentBtn.addEventListener("click", async (event) => {
+      event.stopPropagation();
+      if (!contextTargetNode) return;
+      const targetNode = contextTargetNode;
+      hideContextMenu();
+      try {
+        await copyGraphText(await readGraphNodeContent(targetNode));
+      } catch (error) {
+        console.error("Failed to copy content:", error);
+        alert("Unable to copy this file content.");
+      }
+    });
+
+    copyDependenciesBtn.addEventListener("click", async (event) => {
+      event.stopPropagation();
+      if (!contextTargetNode) return;
+      const nodeId = contextTargetNode.id;
+      hideContextMenu();
+      await copyNodeFileNameList(getDirectOutgoingDependencyIds(nodeId));
+    });
+
+    copyFullDependenciesBtn.addEventListener("click", async (event) => {
+      event.stopPropagation();
+      if (!contextTargetNode) return;
+      const nodeId = contextTargetNode.id;
+      hideContextMenu();
+      await copyNodeFileNameList(getFullOutgoingDependencyIds(nodeId));
+    });
+
+    copyBacklinksBtn.addEventListener("click", async (event) => {
+      event.stopPropagation();
+      if (!contextTargetNode) return;
+      const nodeId = contextTargetNode.id;
+      hideContextMenu();
+      await copyNodeFileNameList(getBacklinkIds(nodeId));
+    });
+
     hidePointBtn.addEventListener("click", () => {
       if (!contextTargetNode) return;
       const nodeId = contextTargetNode.id;
-      simulation.stop();
       hideContextMenu();
+      hideGraphPoint(nodeId);
+    });
 
-      // Re-render by reusing temporary in-memory file graph and hiding this node for this tab view only.
-      const activeGraphTab = tabs.find((tab) => tab.id === activeTabId);
-      if (activeGraphTab) {
-        activeGraphTab.graphViewConfig = {
-          ...(activeGraphTab.graphViewConfig || {}),
-          hiddenNodeIds: Array.from(new Set([...(activeGraphTab.graphViewConfig?.hiddenNodeIds || []), nodeId]))
-        };
-        markGraphTabAsChanged(activeGraphTab);
-        saveTabsToStorage(tabs);
-        graphRenderCache.delete(activeGraphTab.id);
+    deleteFileBtn.addEventListener("click", async (event) => {
+      event.stopPropagation();
+      if (!contextTargetNode) return;
+      const targetNode = contextTargetNode;
+      const nodeId = targetNode.id;
+      const filePath = getNodeFilesystemPath(targetNode);
+      hideContextMenu();
+      if (!filePath || !isNeutralinoRuntime() || !Neutralino.filesystem?.remove) {
+        alert("Deleting files is available only in the desktop app for files opened from disk.");
+        return;
       }
-      graphRenderWrapper.remove();
-      renderGraphView();
+      const confirmed = window.confirm(`Delete "${getNodeFileName(nodeId)}" from disk? This action cannot be undone.`);
+      if (!confirmed) return;
+      try {
+        await Neutralino.filesystem.remove(filePath);
+        simulation.stop();
+        removeGraphPointFromSnapshot(nodeId);
+        graphRenderWrapper.remove();
+        renderGraphView();
+      } catch (error) {
+        console.error("Failed to delete file:", error);
+        alert("Unable to delete this file.");
+      }
     });
 
     const openLocalGraphTab = (mode, titlePrefix) => {
