@@ -13,6 +13,7 @@
   --scrollbar-thumb: #c1c1c1;
   --scrollbar-track: #f1f1f1;
   --accent-color: #0366d6;
+  --disabled-text-color: #6e7781;
   --table-bg: #ffffff; /* Table background for light mode */
   --code-bg: #f6f8fa; /* Code block background for light mode */
 }
@@ -32,6 +33,7 @@
   --scrollbar-thumb: #484f58;
   --scrollbar-track: #21262d;
   --accent-color: #58a6ff;
+  --disabled-text-color: #8b949e;
   --table-bg: #161b22; /* Table background for dark mode */
   --code-bg: #161b22; /* Code block background for dark mode */
 }
@@ -298,10 +300,16 @@ body {
   color: var(--text-color);
 }
 
-.tree-action-menu .action-menu-item:hover,
-.tree-action-menu .action-menu-item:focus {
+.tree-action-menu .action-menu-item:hover:not(:disabled):not([aria-disabled="true"]),
+.tree-action-menu .action-menu-item:focus:not(:disabled):not([aria-disabled="true"]) {
   background-color: var(--button-hover);
   color: var(--text-color);
+}
+
+.tree-action-menu .action-menu-item:disabled,
+.tree-action-menu .action-menu-item[aria-disabled="true"] {
+  color: var(--disabled-text-color);
+  background-color: transparent;
 }
 
 .tool-button {
@@ -511,9 +519,17 @@ body {
   color: var(--text-color);
 }
 
-.dropdown-item:hover, .dropdown-item:focus {
+.dropdown-item:hover:not(:disabled):not(.disabled):not([aria-disabled="true"]),
+.dropdown-item:focus:not(:disabled):not(.disabled):not([aria-disabled="true"]) {
   background-color: var(--button-hover);
   color: var(--text-color);
+}
+
+.dropdown-item:disabled,
+.dropdown-item.disabled,
+.dropdown-item[aria-disabled="true"] {
+  color: var(--disabled-text-color);
+  background-color: transparent;
 }
 
 .action-menu-submenu {
@@ -988,9 +1004,11 @@ a:focus {
   background-color: var(--button-hover);
 }
 
-.mobile-menu-item:disabled {
+.mobile-menu-item:disabled,
+.mobile-menu-item[aria-disabled="true"] {
+  color: var(--disabled-text-color);
   cursor: not-allowed;
-  opacity: 0.55;
+  opacity: 1;
 }
 
 .mobile-menu-item:active:not(:disabled) {
@@ -1863,8 +1881,14 @@ a:focus {
   white-space: nowrap;
 }
 
-.tab-menu-item:hover {
+.tab-menu-item:hover:not(:disabled):not([aria-disabled="true"]) {
   background-color: var(--button-hover);
+}
+
+.tab-menu-item:disabled,
+.tab-menu-item[aria-disabled="true"] {
+  color: var(--disabled-text-color);
+  cursor: not-allowed;
 }
 
 .tab-menu-item-danger {
