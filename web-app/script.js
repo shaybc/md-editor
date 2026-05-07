@@ -4043,14 +4043,20 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
       const handleEntry = Array.from(changedFiles.values()).find((item) => item.handle && item.handle === tab.sourceFileHandle);
       const changedEntry = changedFiles.get(pathKey) || handleEntry;
       if (!changedEntry) return;
-      tab.content = changedEntry.content;
+      const normalizedContent = normalizeEditorContent(changedEntry.content);
+      tab.content = normalizedContent;
+      tab.savedContent = normalizedContent;
       if (tab.id === activeTabId) {
-        markdownEditor.value = changedEntry.content;
+        markdownEditor.value = normalizedContent;
         renderMarkdown();
       }
       changed = true;
     });
-    if (changed) saveTabsToStorage(tabs);
+    if (changed) {
+      saveTabsToStorage(tabs);
+      renderTabBar(tabs, activeTabId);
+      updateSaveCurrentFileButtons();
+    }
   }
 
   async function updateOpenFolderLinksAfterSidebarRename(oldPath, newPath, kind) {
@@ -4072,10 +4078,13 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
         const updatedContent = updateMarkdownRenameLinks(content, sourcePath, nodeIndex, oldPath, newPath, kind);
         if (updatedContent === content) continue;
         const writePath = await writeFolderMarkdownEntryContent(entry, updatedContent, oldPath, newPath, kind);
-        changedFiles.set(writePath || entry.path || sourcePath, {
+        const changedEntry = {
           content: updatedContent,
           handle: entry.handle || null
-        });
+        };
+        [writePath, entry.fullPath, entry.path, sourcePath]
+          .filter(Boolean)
+          .forEach((pathKey) => changedFiles.set(pathKey, changedEntry));
       } catch (error) {
         console.warn(`Failed to update Markdown links in ${sourcePath}:`, error);
       }
