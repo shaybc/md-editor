@@ -1213,6 +1213,23 @@ This is a fully client-side application. Your content never leaves your browser 
     });
   }
 
+  function isFileBackedGraphTab(tab) {
+    return !!(tab && tab.type === "graph" && (tab.sourceFileHandle || tab.sourceFilePath || tab.sourceFileName));
+  }
+
+  function markGraphTabAsChanged(tab) {
+    if (!isFileBackedGraphTab(tab)) return;
+    tab.graphHasUnsavedChanges = true;
+    saveTabsToStorage(tabs);
+    renderTabBar(tabs, activeTabId);
+    updateSaveCurrentFileButtons();
+  }
+
+  function clearGraphTabUnsavedChanges(tab) {
+    if (!tab || tab.type !== "graph") return;
+    tab.graphHasUnsavedChanges = false;
+  }
+
   function getGraphFileSignature(files) {
     return (files || []).map((fileEntry) => {
       const file = fileEntry.file || fileEntry;
@@ -1446,6 +1463,9 @@ This is a fully client-side application. Your content never leaves your browser 
 
   function tabHasUnsavedChanges(tab, currentContent) {
     if (!tab) return false;
+    if (tab.type === "graph") {
+      return isFileBackedGraphTab(tab) && tab.graphHasUnsavedChanges === true;
+    }
     const contentToCompare = currentContent === undefined ? tab.content : currentContent;
     return normalizeEditorContent(tab.savedContent) !== normalizeEditorContent(contentToCompare);
   }
@@ -1498,8 +1518,22 @@ This is a fully client-side application. Your content never leaves your browser 
     return tab;
   }
 
+  function getGraphTitleFromFileName(fileName) {
+    return (fileName || "Saved Graph")
+      .replace(/\.mdviewer-graph\.json$/i, "")
+      .replace(/\.mdgraph\.json$/i, "")
+      .replace(/\.json$/i, "");
+  }
+
+  function getGraphTabTitle(tab) {
+    if (!tab || tab.type !== "graph") return tab?.title || 'Untitled';
+    if (tab.sourceFileName) return getGraphTitleFromFileName(tab.sourceFileName) || "Saved Graph";
+    if (tab.sourceFilePath) return getGraphTitleFromFileName(getFileName(tab.sourceFilePath)) || "Saved Graph";
+    return tab.title || tab.folderName || "Graph View";
+  }
+
   function getTabDisplayName(tab) {
-    const baseName = tab.title || 'Untitled';
+    const baseName = tab && tab.type === "graph" ? getGraphTabTitle(tab) : (tab.title || 'Untitled');
     return tabHasUnsavedChanges(tab) ? baseName + ' *' : baseName;
   }
 
@@ -1588,7 +1622,10 @@ This is a fully client-side application. Your content never leaves your browser 
       titleSpan.className = 'tab-title' + (tab.isTemporary ? ' temporary' : '');
       titleSpan.title = tooltipText;
       if (tab.type === "graph") {
-        titleSpan.innerHTML = `<i class="bi bi-diagram-3 me-1"></i>${displayName}`;
+        const graphIcon = document.createElement("i");
+        graphIcon.className = "bi bi-diagram-3 me-1";
+        titleSpan.appendChild(graphIcon);
+        titleSpan.append(document.createTextNode(displayName));
       } else {
         titleSpan.textContent = displayName;
       }
@@ -1726,7 +1763,10 @@ This is a fully client-side application. Your content never leaves your browser 
       titleSpan.className = 'mobile-tab-title' + (tab.isTemporary ? ' temporary' : '');
       titleSpan.title = tooltipText;
       if (tab.type === "graph") {
-        titleSpan.innerHTML = `<i class="bi bi-diagram-3 me-1"></i>${displayName}`;
+        const graphIcon = document.createElement("i");
+        graphIcon.className = "bi bi-diagram-3 me-1";
+        titleSpan.appendChild(graphIcon);
+        titleSpan.append(document.createTextNode(displayName));
       } else {
         titleSpan.textContent = displayName;
       }
@@ -1820,16 +1860,17 @@ This is a fully client-side application. Your content never leaves your browser 
     return tabHasUnsavedChanges(tab, markdownEditor.value);
   }
 
-  function getUnsavedMarkdownTabs() {
+  function getUnsavedTabs() {
     return tabs.filter(function(tab) {
-      if (!tab || tab.type === "graph") return false;
+      if (!tab) return false;
+      if (tab.type === "graph") return tabHasUnsavedChanges(tab);
       const currentContent = tab.id === activeTabId ? markdownEditor.value : tab.content;
       return tabHasUnsavedChanges(tab, currentContent);
     });
   }
 
   function confirmDiscardUnsavedChangesBeforeExit() {
-    const unsavedTabs = getUnsavedMarkdownTabs();
+    const unsavedTabs = getUnsavedTabs();
     if (!unsavedTabs.length) return true;
 
     const pluralSuffix = unsavedTabs.length === 1 ? "" : "s";
@@ -1840,7 +1881,7 @@ This is a fully client-side application. Your content never leaves your browser 
   }
 
   window.markdownViewerHasUnsavedChanges = function() {
-    return getUnsavedMarkdownTabs().length > 0;
+    return getUnsavedTabs().length > 0;
   };
   window.markdownViewerConfirmDiscardUnsavedBeforeExit = confirmDiscardUnsavedChangesBeforeExit;
 
@@ -1848,15 +1889,17 @@ This is a fully client-side application. Your content never leaves your browser 
     const graphTab = getActiveGraphTab();
     const tab = getActiveMarkdownTab();
     const hasUnsavedChanges = activeTabHasUnsavedChanges();
+    const graphHasUnsavedChanges = tabHasUnsavedChanges(graphTab);
+    const graphNeedsSave = !!(graphTab && (!isFileBackedGraphTab(graphTab) || graphHasUnsavedChanges));
     const hasWritableSource = !!(tab && (tab.sourceFileHandle || (isNeutralinoRuntime() && tab.sourceFilePath)));
     const title = graphTab
-      ? "Save graph changes"
+      ? (graphNeedsSave ? "Save graph changes" : "No graph changes to save")
       : (hasUnsavedChanges
         ? (hasWritableSource ? "Save changes to current file" : "Save changes as Markdown")
         : "No changes to save");
 
     document.querySelectorAll(".save-current-file-button").forEach(function(button) {
-      button.disabled = !graphTab && !hasUnsavedChanges;
+      button.disabled = graphTab ? !graphNeedsSave : !hasUnsavedChanges;
       button.title = title;
       button.setAttribute("aria-label", title);
     });
@@ -1864,7 +1907,12 @@ This is a fully client-side application. Your content never leaves your browser 
   }
 
   async function saveCurrentFileIfChanged() {
-    if (getActiveGraphTab()) {
+    const activeGraphTab = getActiveGraphTab();
+    if (activeGraphTab) {
+      if (isFileBackedGraphTab(activeGraphTab) && !tabHasUnsavedChanges(activeGraphTab)) {
+        updateSaveCurrentFileButtons();
+        return;
+      }
       if (!(await saveActiveGraphToSource())) {
         await saveActiveGraphWithSaveDialog();
       }
@@ -4275,12 +4323,13 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
     if (metadata) {
       if (metadata.name) {
         tab.sourceFileName = metadata.name;
-        tab.title = metadata.name;
+        tab.title = getGraphTitleFromFileName(metadata.name) || metadata.name;
       }
       if (metadata.handle) tab.sourceFileHandle = metadata.handle;
       if (metadata.path) tab.sourceFilePath = metadata.path;
     }
     syncGraphTabDocument(tab);
+    clearGraphTabUnsavedChanges(tab);
     saveTabsToStorage(tabs);
     renderTabBar(tabs, activeTabId);
     updateSaveCurrentFileButtons();
@@ -4403,12 +4452,13 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
     }
 
     const graphData = deserializeGraphDocument(graphDocument);
-    const fallbackName = name.replace(/\.mdviewer-graph\.json$/i, "").replace(/\.mdgraph\.json$/i, "").replace(/\.json$/i, "") || "Saved Graph";
+    const fallbackName = getGraphTitleFromFileName(name) || "Saved Graph";
     const graphTab = createGraphTab(graphData.folderName || fallbackName, { graphDocument });
     graphTab.sourceFileName = name;
-    graphTab.title = name;
+    graphTab.title = fallbackName;
     if (source.handle) graphTab.sourceFileHandle = source.handle;
     if (source.path) graphTab.sourceFilePath = source.path;
+    clearGraphTabUnsavedChanges(graphTab);
     tabs.push(graphTab);
     saveTabsToStorage(tabs);
     switchTab(graphTab.id);
@@ -4661,6 +4711,7 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
         graphLayer.attr("transform", currentZoomTransform);
         captureGraphLayout(activeTab, nodes, currentZoomTransform);
         scheduleGraphLayoutStorageSave();
+        if (event.sourceEvent) markGraphTabAsChanged(activeTab);
       });
 
     svg.call(zoomBehavior).on("dblclick.zoom", null);
@@ -4718,6 +4769,7 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
           d.fy = null;
           renderGraphTick();
           captureGraphLayout(activeTab, nodes, currentZoomTransform);
+          markGraphTabAsChanged(activeTab);
           saveTabsToStorage(tabs);
         }));
     node.append("title").text((d) => d.fullPath || d.label);
@@ -4821,6 +4873,8 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
       graphSettings.magneticEnabled = !graphSettings.magneticEnabled;
       saveGlobalState({ graphMagneticEnabled: graphSettings.magneticEnabled });
       applyMagneticSetting();
+      captureGraphLayout(activeTab, nodes, currentZoomTransform);
+      markGraphTabAsChanged(activeTab);
       hideContextMenu();
     });
 
@@ -4845,6 +4899,7 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
           ...(activeGraphTab.graphViewConfig || {}),
           hiddenNodeIds: Array.from(new Set([...(activeGraphTab.graphViewConfig?.hiddenNodeIds || []), nodeId]))
         };
+        markGraphTabAsChanged(activeGraphTab);
         saveTabsToStorage(tabs);
         graphRenderCache.delete(activeGraphTab.id);
       }
