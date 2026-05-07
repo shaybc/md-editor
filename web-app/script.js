@@ -2936,6 +2936,7 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
 
 
   let sidebarFileContextMenu = null;
+  let sidebarFolderContextMenu = null;
   let sidebarContextTarget = null;
 
   function createFileContextMenuButton(labelText, iconClass, tooltipText) {
@@ -3027,14 +3028,33 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
     sidebarContextTarget = null;
   }
 
-  function positionSidebarFileContextMenu(event) {
-    if (!sidebarFileContextMenu) return;
-    const menuWidth = sidebarFileContextMenu.offsetWidth || 230;
-    const menuHeight = sidebarFileContextMenu.offsetHeight || 280;
+  function hideSidebarFolderContextMenu() {
+    if (!sidebarFolderContextMenu) return;
+    sidebarFolderContextMenu.classList.add("hidden");
+    sidebarContextTarget = null;
+  }
+
+  function hideSidebarContextMenus() {
+    hideSidebarFileContextMenu();
+    hideSidebarFolderContextMenu();
+  }
+
+  function positionSidebarContextMenu(menu, event, fallbackHeight) {
+    if (!menu) return;
+    const menuWidth = menu.offsetWidth || 230;
+    const menuHeight = menu.offsetHeight || fallbackHeight || 280;
     const left = Math.max(0, Math.min(event.clientX, window.innerWidth - menuWidth - 8));
     const top = Math.max(0, Math.min(event.clientY, window.innerHeight - menuHeight - 8));
-    sidebarFileContextMenu.style.left = `${left}px`;
-    sidebarFileContextMenu.style.top = `${top}px`;
+    menu.style.left = `${left}px`;
+    menu.style.top = `${top}px`;
+  }
+
+  function positionSidebarFileContextMenu(event) {
+    positionSidebarContextMenu(sidebarFileContextMenu, event, 280);
+  }
+
+  function positionSidebarFolderContextMenu(event) {
+    positionSidebarContextMenu(sidebarFolderContextMenu, event, 210);
   }
 
   function ensureSidebarFileContextMenu() {
@@ -3304,20 +3324,184 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
       }
     });
 
-    document.addEventListener("click", hideSidebarFileContextMenu);
+    document.addEventListener("click", hideSidebarContextMenus);
     document.addEventListener("keydown", (event) => {
-      if (event.key === "Escape") hideSidebarFileContextMenu();
+      if (event.key === "Escape") hideSidebarContextMenus();
     });
-    window.addEventListener("blur", hideSidebarFileContextMenu);
+    window.addEventListener("blur", hideSidebarContextMenus);
 
     sidebarFileContextMenu = menu;
     return sidebarFileContextMenu;
+  }
+
+  function getSidebarFolderClipboardPath(node) {
+    if (!node) return "";
+    return node.fullPath || node.path || node.name || "";
+  }
+
+  function getSidebarFolderFilesystemPath(node) {
+    if (!node || !isNeutralinoRuntime()) return null;
+    if (node.fullPath) return node.fullPath;
+    if (activeFolderPath && node.path) return joinPath(activeFolderPath, node.path);
+    return null;
+  }
+
+  function getSidebarFolderGraphTitle(node) {
+    const folderPath = getSidebarFolderClipboardPath(node);
+    return folderPath ? `Graph View: ${folderPath}` : `Graph View: ${node?.name || "Folder"}`;
+  }
+
+  async function collectMarkdownFilesForSidebarFolder(node) {
+    if (!node || node.kind !== "directory") return [];
+    const parentPath = node.path || node.name || "";
+    if (isNeutralinoRuntime()) {
+      return collectMarkdownFilesFromTreeNeutralino(node.children || [], parentPath);
+    }
+    return collectMarkdownFilesFromTree(node.children || [], parentPath);
+  }
+
+  async function openSidebarFolderGraphView(node) {
+    if (!node || node.kind !== "directory") return;
+    if (tabs.length >= 20) {
+      alert('Maximum of 20 tabs reached. Please close an existing tab to open a new one.');
+      return;
+    }
+
+    const folderFiles = await collectMarkdownFilesForSidebarFolder(node);
+    if (!folderFiles.length) {
+      alert("This folder does not contain Markdown files to graph.");
+      return;
+    }
+
+    const folderName = getSidebarFolderGraphTitle(node);
+    const graphSnapshot = await createGraphSnapshot(folderFiles, folderName);
+    const graphTab = createGraphTab(folderName, { graphSnapshot, graphViewConfig: null });
+    tabs.push(graphTab);
+    switchTab(graphTab.id);
+    saveTabsToStorage(tabs);
+  }
+
+  async function revealSidebarFolder(node) {
+    const folderPath = getSidebarFolderFilesystemPath(node);
+    if (!folderPath || !isNeutralinoRuntime() || !Neutralino.os?.open) {
+      alert("Revealing folders is available only in the desktop app for folders opened from disk.");
+      return;
+    }
+    await Neutralino.os.open(folderPath);
+  }
+
+  async function deleteSidebarFolder(node) {
+    const folderPath = getSidebarFolderFilesystemPath(node);
+    if (!folderPath || !isNeutralinoRuntime() || !Neutralino.filesystem?.remove) {
+      alert("Deleting folders is available only in the desktop app for folders opened from disk.");
+      return;
+    }
+    const confirmed = window.confirm(`Delete folder "${node.name}" and its contents from disk? This action cannot be undone.`);
+    if (!confirmed) return;
+    await Neutralino.filesystem.remove(folderPath);
+    await reloadOpenFolderTree();
+  }
+
+  function ensureSidebarFolderContextMenu() {
+    if (sidebarFolderContextMenu) return sidebarFolderContextMenu;
+
+    const menu = document.createElement("div");
+    menu.className = "graph-context-menu sidebar-folder-context-menu hidden";
+
+    const title = document.createElement("div");
+    title.className = "graph-context-menu-title";
+    const separator = document.createElement("div");
+    separator.className = "graph-context-menu-separator";
+
+    const showGraphBtn = createFileContextMenuButton(
+      "Show graph view",
+      "bi bi-diagram-3",
+      "Open a graph view containing only Markdown files in this folder and its sub-folders."
+    );
+    const revealFolderBtn = createFileContextMenuButton(
+      "Reveal in file explorer",
+      "bi bi-folder2-open",
+      "Open this folder in the system file explorer."
+    );
+    const copyPathBtn = createFileContextMenuButton(
+      "Copy path",
+      "bi bi-clipboard",
+      "Copy this folder path to the clipboard."
+    );
+    const deleteFolderBtn = createFileContextMenuButton(
+      "Delete folder",
+      "bi bi-trash3",
+      "Delete this folder and its contents from disk after confirmation."
+    );
+    deleteFolderBtn.classList.add("graph-context-menu-item-danger");
+
+    [title, separator, showGraphBtn, revealFolderBtn, copyPathBtn, deleteFolderBtn].forEach((item) => menu.appendChild(item));
+    document.body.appendChild(menu);
+
+    showGraphBtn.addEventListener("click", async (event) => {
+      event.stopPropagation();
+      const target = sidebarContextTarget;
+      hideSidebarFolderContextMenu();
+      try {
+        await openSidebarFolderGraphView(target);
+      } catch (error) {
+        console.error("Failed to open sidebar folder graph view:", error);
+        alert("Unable to open a graph view for this folder.");
+      }
+    });
+
+    revealFolderBtn.addEventListener("click", async (event) => {
+      event.stopPropagation();
+      const target = sidebarContextTarget;
+      hideSidebarFolderContextMenu();
+      try {
+        await revealSidebarFolder(target);
+      } catch (error) {
+        console.error("Failed to reveal sidebar folder:", error);
+        alert("Unable to reveal this folder in the file explorer.");
+      }
+    });
+
+    copyPathBtn.addEventListener("click", async (event) => {
+      event.stopPropagation();
+      const target = sidebarContextTarget;
+      hideSidebarFolderContextMenu();
+      if (!target) return;
+      try {
+        await copySidebarContextText(getSidebarFolderClipboardPath(target));
+      } catch (error) {
+        console.error("Failed to copy sidebar folder path:", error);
+        alert("Unable to copy this folder path.");
+      }
+    });
+
+    deleteFolderBtn.addEventListener("click", async (event) => {
+      event.stopPropagation();
+      const target = sidebarContextTarget;
+      hideSidebarFolderContextMenu();
+      try {
+        await deleteSidebarFolder(target);
+      } catch (error) {
+        console.error("Failed to delete sidebar folder:", error);
+        alert("Unable to delete this folder.");
+      }
+    });
+
+    document.addEventListener("click", hideSidebarContextMenus);
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "Escape") hideSidebarContextMenus();
+    });
+    window.addEventListener("blur", hideSidebarContextMenus);
+
+    sidebarFolderContextMenu = menu;
+    return sidebarFolderContextMenu;
   }
 
   function showSidebarFileContextMenu(event, node) {
     if (!node || node.kind !== "file") return;
     event.preventDefault();
     event.stopPropagation();
+    hideSidebarFolderContextMenu();
     sidebarContextTarget = node;
     const menu = ensureSidebarFileContextMenu();
     const title = menu.querySelector(".graph-context-menu-title");
@@ -3326,19 +3510,40 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
     positionSidebarFileContextMenu(event);
   }
 
-  function renderFolderTreeNode(node) {
+  function showSidebarFolderContextMenu(event, node) {
+    if (!node || node.kind !== "directory") return;
+    event.preventDefault();
+    event.stopPropagation();
+    hideSidebarFileContextMenu();
+    sidebarContextTarget = node;
+    const menu = ensureSidebarFolderContextMenu();
+    const title = menu.querySelector(".graph-context-menu-title");
+    if (title) title.textContent = node.name || "Folder";
+    menu.classList.remove("hidden");
+    positionSidebarFolderContextMenu(event);
+  }
+
+  function renderFolderTreeNode(node, parentPath = "") {
     const li = document.createElement("li");
     li.className = "folder-tree-item";
     if (node.kind === "directory") {
+      const currentPath = node.path || (parentPath ? `${parentPath}/${node.name}` : node.name);
+      node.path = currentPath;
       const details = document.createElement("details");
       details.open = true;
       const summary = document.createElement("summary");
       summary.className = "folder-tree-label";
-      summary.innerHTML = `<i class="bi bi-folder"></i>${node.name}`;
+      const icon = document.createElement("i");
+      icon.className = "bi bi-folder";
+      const label = document.createElement("span");
+      label.textContent = node.name;
+      summary.appendChild(icon);
+      summary.appendChild(label);
+      summary.addEventListener("contextmenu", (event) => showSidebarFolderContextMenu(event, node));
       details.appendChild(summary);
       const ul = document.createElement("ul");
       ul.className = "folder-tree-list";
-      node.children.forEach((child) => ul.appendChild(renderFolderTreeNode(child)));
+      node.children.forEach((child) => ul.appendChild(renderFolderTreeNode(child, currentPath)));
       details.appendChild(ul);
       li.appendChild(details);
       return li;
