@@ -1518,8 +1518,22 @@ This is a fully client-side application. Your content never leaves your browser 
     return tab;
   }
 
+  function getGraphTitleFromFileName(fileName) {
+    return (fileName || "Saved Graph")
+      .replace(/\.mdviewer-graph\.json$/i, "")
+      .replace(/\.mdgraph\.json$/i, "")
+      .replace(/\.json$/i, "");
+  }
+
+  function getGraphTabTitle(tab) {
+    if (!tab || tab.type !== "graph") return tab?.title || 'Untitled';
+    if (tab.sourceFileName) return getGraphTitleFromFileName(tab.sourceFileName) || "Saved Graph";
+    if (tab.sourceFilePath) return getGraphTitleFromFileName(getFileName(tab.sourceFilePath)) || "Saved Graph";
+    return tab.title || tab.folderName || "Graph View";
+  }
+
   function getTabDisplayName(tab) {
-    const baseName = tab.title || 'Untitled';
+    const baseName = tab && tab.type === "graph" ? getGraphTabTitle(tab) : (tab.title || 'Untitled');
     return tabHasUnsavedChanges(tab) ? baseName + ' *' : baseName;
   }
 
@@ -1608,7 +1622,10 @@ This is a fully client-side application. Your content never leaves your browser 
       titleSpan.className = 'tab-title' + (tab.isTemporary ? ' temporary' : '');
       titleSpan.title = tooltipText;
       if (tab.type === "graph") {
-        titleSpan.innerHTML = `<i class="bi bi-diagram-3 me-1"></i>${displayName}`;
+        const graphIcon = document.createElement("i");
+        graphIcon.className = "bi bi-diagram-3 me-1";
+        titleSpan.appendChild(graphIcon);
+        titleSpan.append(document.createTextNode(displayName));
       } else {
         titleSpan.textContent = displayName;
       }
@@ -1746,7 +1763,10 @@ This is a fully client-side application. Your content never leaves your browser 
       titleSpan.className = 'mobile-tab-title' + (tab.isTemporary ? ' temporary' : '');
       titleSpan.title = tooltipText;
       if (tab.type === "graph") {
-        titleSpan.innerHTML = `<i class="bi bi-diagram-3 me-1"></i>${displayName}`;
+        const graphIcon = document.createElement("i");
+        graphIcon.className = "bi bi-diagram-3 me-1";
+        titleSpan.appendChild(graphIcon);
+        titleSpan.append(document.createTextNode(displayName));
       } else {
         titleSpan.textContent = displayName;
       }
@@ -4303,7 +4323,7 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
     if (metadata) {
       if (metadata.name) {
         tab.sourceFileName = metadata.name;
-        tab.title = metadata.name;
+        tab.title = getGraphTitleFromFileName(metadata.name) || metadata.name;
       }
       if (metadata.handle) tab.sourceFileHandle = metadata.handle;
       if (metadata.path) tab.sourceFilePath = metadata.path;
@@ -4432,10 +4452,10 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
     }
 
     const graphData = deserializeGraphDocument(graphDocument);
-    const fallbackName = name.replace(/\.mdviewer-graph\.json$/i, "").replace(/\.mdgraph\.json$/i, "").replace(/\.json$/i, "") || "Saved Graph";
+    const fallbackName = getGraphTitleFromFileName(name) || "Saved Graph";
     const graphTab = createGraphTab(graphData.folderName || fallbackName, { graphDocument });
     graphTab.sourceFileName = name;
-    graphTab.title = name;
+    graphTab.title = fallbackName;
     if (source.handle) graphTab.sourceFileHandle = source.handle;
     if (source.path) graphTab.sourceFilePath = source.path;
     clearGraphTabUnsavedChanges(graphTab);
