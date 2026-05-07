@@ -467,7 +467,7 @@ body {
 }
 
 .graph-context-menu-title {
-  color: #f1ead7;
+  color: var(--accent-color);
   font-weight: 600;
   padding: 0.45rem 0.6rem 0.35rem;
   min-width: 100%;

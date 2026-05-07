@@ -4835,11 +4835,11 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
     fullLocalGraphBtn.className = "graph-context-menu-item hidden";
     fullLocalGraphBtn.textContent = "Show full local graph";
     contextMenu.appendChild(contextMenuTitle);
+    contextMenu.appendChild(contextMenuSeparator);
     contextMenu.appendChild(openFileBtn);
     contextMenu.appendChild(hidePointBtn);
     contextMenu.appendChild(localGraphBtn);
     contextMenu.appendChild(fullLocalGraphBtn);
-    contextMenu.appendChild(contextMenuSeparator);
     contextMenu.appendChild(magneticToggleBtn);
     graphRenderWrapper.appendChild(contextMenu);
 
