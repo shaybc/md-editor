@@ -1108,6 +1108,90 @@ This is a fully client-side application. Your content never leaves your browser 
   let saveTabStateTimeout = null;
   let untitledCounter = 0;
   const graphRenderCache = new Map();
+  const GRAPH_DOCUMENT_SCHEMA_VERSION = 1;
+
+  function cloneGraphPersistenceValue(value) {
+    if (value === undefined) return undefined;
+    if (value === null) return null;
+    try {
+      return JSON.parse(JSON.stringify(value));
+    } catch (e) {
+      console.warn("Failed to clone graph persistence value:", e);
+      return null;
+    }
+  }
+
+  function normalizeGraphTimestamp(value, fallback) {
+    const timestamp = typeof value === "string" ? Date.parse(value) : Number(value);
+    return Number.isFinite(timestamp) && timestamp > 0 ? timestamp : fallback;
+  }
+
+  function normalizeGraphDocument(document) {
+    const source = document && typeof document === "object" ? document : {};
+    const snapshot = cloneGraphPersistenceValue(source.snapshot || source.graphSnapshot || null);
+    const hasViewConfig = Object.prototype.hasOwnProperty.call(source, "viewConfig");
+    const viewConfig = cloneGraphPersistenceValue(hasViewConfig ? source.viewConfig : (source.graphViewConfig || null));
+    const layoutSource = source.layout !== undefined ? source.layout : (
+      source.layoutData !== undefined ? source.layoutData : (
+        source.graphLayout !== undefined ? source.graphLayout : source.graphLayoutData
+      )
+    );
+    const createdAt = normalizeGraphTimestamp(source.createdAt || snapshot?.createdAt, Date.now());
+    const normalized = {
+      schemaVersion: source.schemaVersion || GRAPH_DOCUMENT_SCHEMA_VERSION,
+      folderName: source.folderName || snapshot?.folderName || source.title || "Graph View",
+      createdAt,
+      updatedAt: normalizeGraphTimestamp(source.updatedAt, createdAt),
+      snapshot,
+      viewConfig
+    };
+
+    if (layoutSource !== undefined && layoutSource !== null) {
+      normalized.layout = cloneGraphPersistenceValue(layoutSource);
+    }
+
+    return normalized;
+  }
+
+  function serializeGraphTab(tab) {
+    const existingDocument = tab?.graphDocument && typeof tab.graphDocument === "object" ? tab.graphDocument : {};
+    return normalizeGraphDocument({
+      ...existingDocument,
+      folderName: tab?.folderName || tab?.title || existingDocument.folderName || "Graph View",
+      createdAt: existingDocument.createdAt || tab?.createdAt,
+      updatedAt: Date.now(),
+      snapshot: tab?.graphSnapshot !== undefined ? tab.graphSnapshot : existingDocument.snapshot,
+      viewConfig: tab?.graphViewConfig !== undefined ? tab.graphViewConfig : existingDocument.viewConfig,
+      layout: tab?.graphLayout !== undefined ? tab.graphLayout : existingDocument.layout
+    });
+  }
+
+  function deserializeGraphDocument(document) {
+    const normalizedDocument = normalizeGraphDocument(document);
+    const graphData = {
+      folderName: normalizedDocument.folderName,
+      graphSnapshot: normalizedDocument.snapshot,
+      graphViewConfig: normalizedDocument.viewConfig,
+      graphDocument: normalizedDocument
+    };
+
+    if (Object.prototype.hasOwnProperty.call(normalizedDocument, "layout")) {
+      graphData.graphLayout = normalizedDocument.layout;
+    }
+
+    return graphData;
+  }
+
+  function syncGraphTabDocument(tab) {
+    if (!tab || tab.type !== "graph") return tab;
+    const graphDocument = serializeGraphTab(tab);
+    tab.folderName = graphDocument.folderName;
+    tab.graphSnapshot = graphDocument.snapshot;
+    tab.graphViewConfig = graphDocument.viewConfig;
+    tab.graphDocument = graphDocument;
+    if (Object.prototype.hasOwnProperty.call(graphDocument, "layout")) tab.graphLayout = graphDocument.layout;
+    return tab;
+  }
 
   function getGraphFileSignature(files) {
     return (files || []).map((fileEntry) => {
@@ -1226,6 +1310,7 @@ This is a fully client-side application. Your content never leaves your browser 
 
   function saveTabsToStorage(tabsArr) {
     try {
+      (tabsArr || []).forEach((tab) => syncGraphTabDocument(tab));
       localStorage.setItem(STORAGE_KEY, JSON.stringify(tabsArr));
     } catch (e) {
       console.warn('Failed to save tabs to localStorage:', e);
@@ -1290,11 +1375,21 @@ This is a fully client-side application. Your content never leaves your browser 
 
   function createGraphTab(folderName, options) {
     if (options === undefined) options = {};
-    const tab = createTab("", folderName || "Graph View", "preview");
+    const graphDocument = normalizeGraphDocument({
+      ...(options.graphDocument || {}),
+      folderName: folderName || options.folderName || "Graph View",
+      snapshot: options.graphSnapshot !== undefined ? options.graphSnapshot : options.graphDocument?.snapshot,
+      viewConfig: options.graphViewConfig !== undefined ? options.graphViewConfig : options.graphDocument?.viewConfig,
+      layout: options.graphLayout !== undefined ? options.graphLayout : options.graphDocument?.layout
+    });
+    const graphData = deserializeGraphDocument(graphDocument);
+    const tab = createTab("", graphData.folderName, "preview");
     tab.type = "graph";
-    tab.folderName = folderName || "Graph View";
-    tab.graphViewConfig = options.graphViewConfig || null;
-    tab.graphSnapshot = options.graphSnapshot || null;
+    tab.folderName = graphData.folderName;
+    tab.graphViewConfig = graphData.graphViewConfig;
+    tab.graphSnapshot = graphData.graphSnapshot;
+    tab.graphDocument = graphData.graphDocument;
+    if (Object.prototype.hasOwnProperty.call(graphData, "graphLayout")) tab.graphLayout = graphData.graphLayout;
     return tab;
   }
 
@@ -2031,6 +2126,14 @@ This is a fully client-side application. Your content never leaves your browser 
       if (typeof tab.savedContent !== 'string') tab.savedContent = tab.content || '';
       tab.savedContent = normalizeEditorContent(tab.savedContent);
       if (!tab.type) tab.type = 'markdown';
+      if (tab.type === 'graph') {
+        const graphData = deserializeGraphDocument(tab.graphDocument || tab);
+        tab.folderName = graphData.folderName;
+        tab.graphSnapshot = graphData.graphSnapshot;
+        tab.graphViewConfig = graphData.graphViewConfig;
+        tab.graphDocument = graphData.graphDocument;
+        if (Object.prototype.hasOwnProperty.call(graphData, "graphLayout")) tab.graphLayout = graphData.graphLayout;
+      }
     });
     activeTabId = loadActiveTabId();
     if (tabs.length === 0) {
