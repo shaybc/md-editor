@@ -13,7 +13,7 @@ document.addEventListener("DOMContentLoaded", function () {
   const markdownEditor = document.getElementById("markdown-editor");
   const markdownPreview = document.getElementById("markdown-preview");
   const themeToggle = document.getElementById("theme-toggle");
-  const importFromFileButton = document.getElementById("import-from-file");
+  const importFromFileButtons = document.querySelectorAll("#import-from-file");
   const importFromGithubButton = document.getElementById("import-from-github");
   const importFromFolderButton = document.getElementById("import-from-folder");
   let folderTreeRoot = document.getElementById("folder-tree-root");
@@ -574,7 +574,7 @@ document.addEventListener("DOMContentLoaded", function () {
             <i class="bi bi-link"></i> Sync Off
           </button>
           <hr class="dropdown-divider">
-          <button class="dropdown-item action-menu-item" id="import-from-file" title="Import Markdown from files">
+          <button class="dropdown-item action-menu-item" id="import-from-file" title="Open Markdown or graph file">
             <i class="bi bi-upload me-2"></i> Open file ...
           </button>
           <button class="dropdown-item action-menu-item" id="import-from-folder" title="Import Markdown from folder">
@@ -630,7 +630,7 @@ document.addEventListener("DOMContentLoaded", function () {
           <button id="close-dropzone" class="close-btn" title="Close dropzone">
             <i class="bi bi-x-lg"></i>
           </button>
-          <p class="mb-0"><i class="bi bi-cloud-arrow-up me-2"></i>Drop a Markdown file or folder here, or click to browse</p>
+          <p class="mb-0"><i class="bi bi-cloud-arrow-up me-2"></i>Drop a Markdown file, graph file, or folder here, or click to browse</p>
         </div>
       </div>
     `;
@@ -683,7 +683,6 @@ document.addEventListener("DOMContentLoaded", function () {
   const mobileThemeToggle   = document.getElementById("mobile-theme-toggle");
   const mobileOpenGraphView = document.getElementById("mobile-open-graph-view");
   const desktopOpenGraphButtons = document.querySelectorAll(".open-graph-view");
-  const openSavedGraphButtons = document.querySelectorAll(".open-saved-graph-button");
   const graphViewCanvas = document.getElementById("graph-view-canvas");
   const shareButton         = document.getElementById("share-button");
   const mobileShareButton   = document.getElementById("mobile-share-button");
@@ -1203,14 +1202,6 @@ This is a fully client-side application. Your content never leaves your browser 
     const rawName = (tab?.folderName || tab?.title || "graph-view").trim() || "graph-view";
     const safeName = rawName.replace(/[\/:*?"<>|]+/g, "-").replace(/\s+/g, " ").trim() || "graph-view";
     return /\.mdviewer-graph\.json$/i.test(safeName) ? safeName : `${safeName}.mdviewer-graph.json`;
-  }
-
-  function updateGraphActionButtons() {
-    openSavedGraphButtons.forEach((button) => {
-      button.disabled = false;
-      button.title = "Open Saved Graph...";
-      button.setAttribute("aria-label", "Open Saved Graph...");
-    });
   }
 
   function isFileBackedGraphTab(tab) {
@@ -1903,7 +1894,6 @@ This is a fully client-side application. Your content never leaves your browser 
       button.title = title;
       button.setAttribute("aria-label", title);
     });
-    updateGraphActionButtons();
   }
 
   async function saveCurrentFileIfChanged() {
@@ -2554,51 +2544,114 @@ This is a fully client-side application. Your content never leaves your browser 
     return tab;
   }
 
-  async function openMarkdownFileFromPicker() {
+  function isGraphFilePath(path) {
+    return /\.(mdviewer-graph\.json|mdgraph\.json|json)$/i.test(path || "");
+  }
+
+  function looksLikeGraphDocument(document) {
+    if (!document || typeof document !== "object" || Array.isArray(document)) return false;
+    return Object.prototype.hasOwnProperty.call(document, "snapshot")
+      || Object.prototype.hasOwnProperty.call(document, "graphSnapshot")
+      || Object.prototype.hasOwnProperty.call(document, "viewConfig")
+      || Object.prototype.hasOwnProperty.call(document, "graphViewConfig")
+      || Object.prototype.hasOwnProperty.call(document, "graphLayout")
+      || Object.prototype.hasOwnProperty.call(document, "layout")
+      || (Object.prototype.hasOwnProperty.call(document, "schemaVersion") && Object.prototype.hasOwnProperty.call(document, "folderName"));
+  }
+
+  async function readOpenFileSourceContent(sourceFile) {
+    if (sourceFile.content !== undefined) return sourceFile.content;
+    if (typeof NL_VERSION !== "undefined" && sourceFile.path) {
+      return Neutralino.filesystem.readFile(sourceFile.path);
+    }
+    let file = sourceFile.file || null;
+    if (!file && sourceFile.handle) file = await sourceFile.handle.getFile();
+    if (!file) throw new Error("No readable file was provided.");
+    return file.text();
+  }
+
+  async function openDocumentSourceFile(sourceFile) {
+    if (!sourceFile) return null;
+    const path = sourceFile.path || null;
+    const name = sourceFile.name || (path ? getFileName(path) : sourceFile.file?.name || sourceFile.handle?.name || "document.md");
+    const filePath = path || name;
+
+    if (isGraphFilePath(filePath)) {
+      return openSavedGraphDocument({ ...sourceFile, name });
+    }
+
+    if (isMarkdownPath(filePath)) {
+      return openMarkdownSourceFile({ ...sourceFile, name });
+    }
+
+    const content = await readOpenFileSourceContent(sourceFile);
+    try {
+      const parsed = JSON.parse(content);
+      if (looksLikeGraphDocument(parsed)) {
+        return openSavedGraphDocument({ ...sourceFile, name, content });
+      }
+    } catch (_) {
+      // Non-JSON files without a known extension are treated as Markdown.
+    }
+
+    return openMarkdownSourceFile({ ...sourceFile, name, content });
+  }
+
+  async function openDocumentFileFromPicker() {
     if (typeof NL_VERSION !== "undefined") {
       try {
-        const selected = await Neutralino.os.showOpenDialog("Open Markdown file", {
+        const selected = await Neutralino.os.showOpenDialog("Open file", {
           filters: [
-            { name: "Markdown files", extensions: ["md", "markdown"] }
+            { name: "Markdown and graph files", extensions: ["md", "markdown", "mdviewer-graph.json", "mdgraph.json", "json"] }
           ]
         });
         const selectedPath = Array.isArray(selected) ? selected[0] : selected;
         if (!selectedPath) return;
-        await openMarkdownSourceFile({
+        await openDocumentSourceFile({
           name: getFileName(selectedPath),
           path: selectedPath
         });
       } catch (error) {
         if (error && error.name === "AbortError") return;
         console.error("Neutralino file picker error:", error);
+        alert("Unable to open selected file: " + error.message);
       }
       return;
     }
 
     if (typeof window.showOpenFilePicker === "function") {
+      let handle = null;
       try {
         const handles = await window.showOpenFilePicker({
           multiple: false,
           types: [
             {
-              description: "Markdown files",
+              description: "Markdown and graph files",
               accept: {
                 "text/markdown": [".md", ".markdown"],
-                "text/plain": [".md", ".markdown"]
+                "text/plain": [".md", ".markdown"],
+                "application/json": [".json"]
               }
             }
           ]
         });
-        const handle = handles && handles[0];
-        if (!handle) return;
-        await openMarkdownSourceFile({
-          name: handle.name,
-          handle
-        });
+        handle = handles && handles[0];
       } catch (error) {
         if (error && error.name === "AbortError") return;
         console.warn("File picker unavailable, using fallback input.", error);
         fileInput.click();
+        return;
+      }
+
+      if (!handle) return;
+      try {
+        await openDocumentSourceFile({
+          name: handle.name,
+          handle
+        });
+      } catch (error) {
+        console.error("Failed to open selected file:", error);
+        alert("Unable to open selected file: " + error.message);
       }
       return;
     }
@@ -2687,34 +2740,34 @@ This is a fully client-side application. Your content never leaves your browser 
     return sortFolderTreeNodes(entries);
   }
 
-  async function getMarkdownFileHandleFromDrop(dataTransfer, fileSystemHandles) {
+  async function getDocumentFileHandleFromDrop(dataTransfer, fileSystemHandles) {
     const handles = fileSystemHandles || await getFileSystemHandlesFromDrop(dataTransfer);
-    return handles.find((handle) => handle && handle.kind === "file" && isMarkdownPath(handle.name)) || null;
+    return handles.find((handle) => handle && handle.kind === "file" && (isMarkdownPath(handle.name) || isGraphFilePath(handle.name))) || null;
   }
 
-  async function getMarkdownFileFromEntryDrop(dataTransfer) {
+  async function getDocumentFileFromEntryDrop(dataTransfer) {
     const items = Array.from((dataTransfer && dataTransfer.items) || []);
     for (const item of items) {
       if (typeof item.webkitGetAsEntry !== "function") continue;
       const entry = item.webkitGetAsEntry();
-      if (!entry || !entry.isFile || !/\.(md|markdown)$/i.test(entry.name)) continue;
+      if (!entry || !entry.isFile || (!isMarkdownPath(entry.name) && !isGraphFilePath(entry.name))) continue;
       try {
         const file = await getFileFromEntry(entry);
         return { file, name: entry.name };
       } catch (error) {
-        console.warn("Failed to read dropped Markdown file entry:", entry.name, error);
+        console.warn("Failed to read dropped file entry:", entry.name, error);
       }
     }
     return null;
   }
 
-  async function openDroppedMarkdownFile(dataTransfer, fileSystemHandles) {
+  async function openDroppedDocumentFile(dataTransfer, fileSystemHandles) {
     const files = Array.from((dataTransfer && dataTransfer.files) || []);
 
     if (typeof NL_VERSION !== "undefined") {
-      const droppedPath = files.find((file) => file && file.path && /\.(md|markdown)$/i.test(file.path || file.name));
+      const droppedPath = files.find((file) => file && file.path && (isMarkdownPath(file.path || file.name) || isGraphFilePath(file.path || file.name)));
       if (droppedPath) {
-        await openMarkdownSourceFile({
+        await openDocumentSourceFile({
           name: getFileName(droppedPath.path || droppedPath.name),
           path: droppedPath.path
         });
@@ -2722,24 +2775,24 @@ This is a fully client-side application. Your content never leaves your browser 
       }
     }
 
-    const handle = await getMarkdownFileHandleFromDrop(dataTransfer, fileSystemHandles);
+    const handle = await getDocumentFileHandleFromDrop(dataTransfer, fileSystemHandles);
     if (handle) {
-      await openMarkdownSourceFile({
+      await openDocumentSourceFile({
         name: handle.name,
         handle
       });
       return true;
     }
 
-    const entryFile = await getMarkdownFileFromEntryDrop(dataTransfer);
+    const entryFile = await getDocumentFileFromEntryDrop(dataTransfer);
     if (entryFile) {
-      await openMarkdownSourceFile(entryFile);
+      await openDocumentSourceFile(entryFile);
       return true;
     }
 
-    const file = files.find((candidate) => candidate && /\.(md|markdown)$/i.test(candidate.name));
+    const file = files.find((candidate) => candidate && (isMarkdownPath(candidate.name) || isGraphFilePath(candidate.name)));
     if (file) {
-      await openMarkdownSourceFile({
+      await openDocumentSourceFile({
         name: file.name,
         file
       });
@@ -2752,7 +2805,7 @@ This is a fully client-side application. Your content never leaves your browser 
   async function openDroppedFolder(dataTransfer, fileSystemHandles) {
     if (typeof NL_VERSION !== "undefined") {
       const files = Array.from((dataTransfer && dataTransfer.files) || []);
-      const droppedPath = files.find((file) => file && file.path && !isMarkdownPath(file.path || file.name));
+      const droppedPath = files.find((file) => file && file.path && !isMarkdownPath(file.path || file.name) && !isGraphFilePath(file.path || file.name));
       if (droppedPath) {
         await openFolderTreeFromNeutralinoPath(droppedPath.path);
         return true;
@@ -3016,15 +3069,15 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
   }
 }
 
-  async function importMarkdownFile(file) {
+  async function importDocumentFile(file) {
     try {
-      await openMarkdownSourceFile({
+      await openDocumentSourceFile({
         name: file.name,
         file
       });
     } catch (error) {
-      console.error("Failed to open Markdown file:", error);
-      alert("Unable to open selected Markdown file.");
+      console.error("Failed to open file:", error);
+      alert("Unable to open selected file: " + error.message);
     }
   }
 
@@ -4030,7 +4083,7 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
       mobileToggleSync.classList.remove("border-primary");
     }
   });
-  mobileImportBtn.addEventListener("click", () => openMarkdownFileFromPicker());
+  mobileImportBtn.addEventListener("click", () => openDocumentFileFromPicker());
   mobileImportGithubBtn.addEventListener("click", () => {
     closeMobileMenu();
     openGitHubImportModal();
@@ -4136,12 +4189,12 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
     renderMarkdown();
   });
 
-  if (importFromFileButton) {
-    importFromFileButton.addEventListener("click", function (e) {
+  importFromFileButtons.forEach(function(button) {
+    button.addEventListener("click", function (e) {
       e.preventDefault();
-      openMarkdownFileFromPicker();
+      openDocumentFileFromPicker();
     });
-  }
+  });
 
   document.querySelectorAll("#import-from-folder").forEach(function(button) {
     button.addEventListener("click", function (e) {
@@ -4213,7 +4266,7 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
   fileInput.addEventListener("change", async function (e) {
     const file = e.target.files[0];
     if (file) {
-      await importMarkdownFile(file);
+      await importDocumentFile(file);
     }
     this.value = "";
   });
@@ -4365,7 +4418,6 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
   async function saveActiveGraphWithSaveDialog() {
     const graphTab = getActiveGraphTab();
     if (!graphTab) {
-      updateGraphActionButtons();
       return false;
     }
 
@@ -4397,7 +4449,7 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
           types: [
             {
               description: "Markdown Viewer graph files",
-              accept: { "application/json": [".mdviewer-graph.json", ".mdgraph.json", ".json"] }
+              accept: { "application/json": [".json"] }
             }
           ]
         });
@@ -4451,6 +4503,10 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
       throw new Error("The selected graph file is not valid JSON.");
     }
 
+    if (!looksLikeGraphDocument(graphDocument)) {
+      throw new Error("The selected JSON file is not a Markdown Viewer graph file.");
+    }
+
     const graphData = deserializeGraphDocument(graphDocument);
     const fallbackName = getGraphTitleFromFileName(name) || "Saved Graph";
     const graphTab = createGraphTab(graphData.folderName || fallbackName, { graphDocument });
@@ -4463,68 +4519,6 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
     saveTabsToStorage(tabs);
     switchTab(graphTab.id);
     return graphTab;
-  }
-
-  function openSavedGraphWithFallbackInput() {
-    const input = document.createElement("input");
-    input.type = "file";
-    input.accept = ".mdviewer-graph.json,.mdgraph.json,.json,application/json";
-    input.addEventListener("change", async () => {
-      const file = input.files && input.files[0];
-      if (!file) return;
-      try {
-        await openSavedGraphDocument({ file });
-      } catch (error) {
-        console.error("Failed to open saved graph:", error);
-        alert("Failed to open saved graph: " + error.message);
-      }
-    }, { once: true });
-    input.click();
-  }
-
-  async function openSavedGraphFromPicker() {
-    try {
-      if (typeof NL_VERSION !== "undefined") {
-        const selected = await Neutralino.os.showOpenDialog("Open Saved Graph", {
-          filters: [
-            { name: "Markdown Viewer graph files", extensions: ["mdviewer-graph.json", "mdgraph.json", "json"] }
-          ]
-        });
-        const selectedPath = Array.isArray(selected) ? selected[0] : selected;
-        if (!selectedPath) return null;
-        return openSavedGraphDocument({ path: selectedPath });
-      }
-
-      if (typeof window.showOpenFilePicker === "function") {
-        try {
-          const handles = await window.showOpenFilePicker({
-            multiple: false,
-            types: [
-              {
-                description: "Markdown Viewer graph files",
-                accept: { "application/json": [".mdviewer-graph.json", ".mdgraph.json", ".json"] }
-              }
-            ]
-          });
-          const handle = handles && handles[0];
-          if (!handle) return null;
-          return openSavedGraphDocument({ handle, name: handle.name });
-        } catch (error) {
-          if (error && error.name === "AbortError") return null;
-          console.warn("Graph file picker unavailable, using fallback input.", error);
-          openSavedGraphWithFallbackInput();
-          return null;
-        }
-      }
-
-      openSavedGraphWithFallbackInput();
-      return null;
-    } catch (error) {
-      if (error && error.name === "AbortError") return null;
-      console.error("Failed to open saved graph:", error);
-      alert("Failed to open saved graph: " + error.message);
-      return null;
-    }
   }
 
   function setGraphViewMode(enabled) {
@@ -5027,8 +5021,6 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
 
   desktopOpenGraphButtons.forEach((button) => button.addEventListener("click", openGraphView));
   if (mobileOpenGraphView) mobileOpenGraphView.addEventListener("click", openGraphView);
-  openSavedGraphButtons.forEach((button) => button.addEventListener("click", openSavedGraphFromPicker));
-  updateGraphActionButtons();
 
   exportHtml.addEventListener("click", function () {
     try {
@@ -5957,7 +5949,7 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
   dropzone.addEventListener("drop", handleDrop, false);
   dropzone.addEventListener("click", function (e) {
     if (e.target !== closeDropzoneBtn && !closeDropzoneBtn.contains(e.target)) {
-      openMarkdownFileFromPicker();
+      openDocumentFileFromPicker();
     }
   });
   closeDropzoneBtn.addEventListener("click", function(e) {
@@ -5986,14 +5978,14 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
 
     try {
       // Folder drops can expose their contained files through dataTransfer.files,
-      // so check for a dropped directory before falling back to a single Markdown file.
+      // so check for a dropped directory before falling back to a single document file.
       // Cache File System Access handles because some browsers do not reliably
       // return the same dropped file handle after a previous directory check.
       const fileSystemHandles = await getFileSystemHandlesFromDrop(dt);
       if (await openDroppedFolder(dt, fileSystemHandles)) {
         return;
       }
-      if (await openDroppedMarkdownFile(dt, fileSystemHandles)) {
+      if (await openDroppedDocumentFile(dt, fileSystemHandles)) {
         return;
       }
     } catch (error) {
@@ -6004,7 +5996,7 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
 
     const files = dt.files;
     if (files.length) {
-      alert("Please open a Markdown file (.md or .markdown), or a folder that contains Markdown files.");
+      alert("Please open a Markdown file (.md or .markdown), a graph file (.mdviewer-graph.json, .mdgraph.json, or .json), or a folder that contains Markdown files.");
     }
   }
 

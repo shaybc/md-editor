@@ -105,7 +105,7 @@
                     </button>
                 </div>
 
-                <input type="file" id="file-input" class="file-input" accept=".md,.markdown,text/markdown">
+                <input type="file" id="file-input" class="file-input" accept=".md,.markdown,.mdviewer-graph.json,.mdgraph.json,.json,text/markdown,application/json">
                 <input type="file" id="folder-input" class="file-input" webkitdirectory directory multiple>
 
                 <!-- Hamburger menu for mobile -->
@@ -171,7 +171,7 @@
                                 <i class="bi bi-link"></i> Sync Off
                             </button>
 
-                            <button id="mobile-import-button" class="mobile-menu-item" title="Open file ...">
+                            <button id="mobile-import-button" class="mobile-menu-item" title="Open Markdown or graph file">
                                 <i class="bi bi-upload me-2"></i> Open file ...
                             </button>
 
@@ -218,10 +218,6 @@
                             <button id="mobile-open-graph-view" class="mobile-menu-item" title="Open Graph View">
                                 <i class="bi bi-diagram-3 me-2"></i> Graph View
                             </button>
-
-                            <button id="mobile-open-saved-graph" class="mobile-menu-item open-saved-graph-button" type="button" title="Open Saved Graph...">
-                                <i class="bi bi-folder-symlink me-2"></i> Open Saved Graph...
-                            </button>
                         </div>
                     </div>
 
@@ -241,7 +237,7 @@
                 <i class="bi bi-link"></i> Sync Off
               </button>
               <hr class="dropdown-divider">
-              <button class="dropdown-item action-menu-item" id="import-from-file" title="Import Markdown from files">
+              <button class="dropdown-item action-menu-item" id="import-from-file" title="Open Markdown or graph file">
                 <i class="bi bi-upload me-2"></i> Open file ...
               </button>
               <button class="dropdown-item action-menu-item" id="import-from-folder" title="Import Markdown from folder">
@@ -291,9 +287,6 @@
               </div>
               <button class="dropdown-item action-menu-item open-graph-view" title="Open Graph View">
                 <i class="bi bi-diagram-3 me-2"></i> Graph View
-              </button>
-              <button class="dropdown-item action-menu-item open-saved-graph-button" type="button" title="Open Saved Graph...">
-                <i class="bi bi-folder-symlink me-2"></i> Open Saved Graph...
               </button>
             </div>
           </div>
@@ -362,7 +355,7 @@
                             <i class="bi bi-link"></i> Sync Off
                         </button>
                         <hr class="dropdown-divider">
-                        <button class="dropdown-item action-menu-item" id="import-from-file" title="Import Markdown from files">
+                        <button class="dropdown-item action-menu-item" id="import-from-file" title="Open Markdown or graph file">
                             <i class="bi bi-upload me-2"></i> Open file ...
                         </button>
                         <button class="dropdown-item action-menu-item" id="import-from-folder" title="Import Markdown from folder">
@@ -418,7 +411,7 @@
                         <button id="close-dropzone" class="close-btn" title="Close dropzone">
                             <i class="bi bi-x-lg"></i>
                         </button>
-                        <p class="mb-0"><i class="bi bi-cloud-arrow-up me-2"></i>Drop a Markdown file or folder here, or click to browse</p>
+                        <p class="mb-0"><i class="bi bi-cloud-arrow-up me-2"></i>Drop a Markdown file, graph file, or folder here, or click to browse</p>
                     </div>
                 </div>
             </aside>
