@@ -13,6 +13,7 @@
   --scrollbar-thumb: #c1c1c1;
   --scrollbar-track: #f1f1f1;
   --accent-color: #0366d6;
+  --disabled-text-color: #6e7781;
   --table-bg: #ffffff; /* Table background for light mode */
   --code-bg: #f6f8fa; /* Code block background for light mode */
 }
@@ -32,6 +33,7 @@
   --scrollbar-thumb: #484f58;
   --scrollbar-track: #21262d;
   --accent-color: #58a6ff;
+  --disabled-text-color: #8b949e;
   --table-bg: #161b22; /* Table background for dark mode */
   --code-bg: #161b22; /* Code block background for dark mode */
 }
@@ -298,10 +300,16 @@ body {
   color: var(--text-color);
 }
 
-.tree-action-menu .action-menu-item:hover,
-.tree-action-menu .action-menu-item:focus {
+.tree-action-menu .action-menu-item:hover:not(:disabled):not([aria-disabled="true"]),
+.tree-action-menu .action-menu-item:focus:not(:disabled):not([aria-disabled="true"]) {
   background-color: var(--button-hover);
   color: var(--text-color);
+}
+
+.tree-action-menu .action-menu-item:disabled,
+.tree-action-menu .action-menu-item[aria-disabled="true"] {
+  color: var(--disabled-text-color);
+  background-color: transparent;
 }
 
 .tool-button {
@@ -368,6 +376,16 @@ body {
   min-height: 560px;
 }
 
+.graph-tab-render {
+  width: 100%;
+  height: 100%;
+  min-height: inherit;
+}
+
+.graph-tab-render.hidden {
+  display: none;
+}
+
 .graph-view-canvas svg {
   width: 100%;
   height: 100%;
@@ -410,6 +428,7 @@ body {
 .graph-arrowhead {
   fill: #ffffff;
   opacity: 0.95;
+  pointer-events: none;
 }
 
 .graph-label {
@@ -424,7 +443,8 @@ body {
   opacity: 0.2;
 }
 
-.graph-link.dimmed {
+.graph-link.dimmed,
+.graph-arrowhead.dimmed {
   opacity: 0.08;
 }
 
@@ -447,7 +467,7 @@ body {
 }
 
 .graph-context-menu-title {
-  color: #f1ead7;
+  color: var(--accent-color);
   font-weight: 600;
   padding: 0.45rem 0.6rem 0.35rem;
   min-width: 100%;
@@ -527,9 +547,56 @@ body {
   color: var(--text-color);
 }
 
-.dropdown-item:hover, .dropdown-item:focus {
+.dropdown-item:hover:not(:disabled):not(.disabled):not([aria-disabled="true"]),
+.dropdown-item:focus:not(:disabled):not(.disabled):not([aria-disabled="true"]) {
   background-color: var(--button-hover);
   color: var(--text-color);
+}
+
+.dropdown-item:disabled,
+.dropdown-item.disabled,
+.dropdown-item[aria-disabled="true"] {
+  color: var(--disabled-text-color);
+  background-color: transparent;
+}
+
+.action-menu-submenu {
+  position: relative;
+}
+
+.action-menu-submenu > .action-submenu {
+  top: 0;
+  left: 100%;
+  margin-top: -1px;
+  min-width: 220px;
+}
+
+.action-menu-submenu:hover > .action-submenu,
+.action-menu-submenu:focus-within > .action-submenu {
+  display: block;
+}
+
+.action-menu-submenu > .dropdown-toggle {
+  display: flex;
+  align-items: center;
+}
+
+.action-menu-submenu > .dropdown-toggle::after {
+  margin-left: auto;
+  transform: rotate(-90deg);
+}
+
+
+.recent-menu-item .recent-menu-label {
+  display: block;
+  max-width: 240px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.recent-empty-item {
+  opacity: 0.65;
 }
 
 /* Responsive design for mobile */
@@ -961,11 +1028,18 @@ a:focus {
   cursor: pointer;
 }
 
-.mobile-menu-item:hover {
+.mobile-menu-item:hover:not(:disabled) {
   background-color: var(--button-hover);
 }
 
-.mobile-menu-item:active {
+.mobile-menu-item:disabled,
+.mobile-menu-item[aria-disabled="true"] {
+  color: var(--disabled-text-color);
+  cursor: not-allowed;
+  opacity: 1;
+}
+
+.mobile-menu-item:active:not(:disabled) {
   background-color: var(--button-active);
 }
 
@@ -1561,7 +1635,7 @@ a:focus {
   background-color: var(--header-bg);
   border-bottom: 1px solid var(--border-color);
   height: 36px;
-  overflow: visible;  /* ← was: overflow: hidden */
+  overflow: visible;
   flex-shrink: 0;
   padding: 0 4px;
   gap: 0;
@@ -1574,15 +1648,55 @@ a:focus {
   display: flex;
   align-items: flex-end;
   overflow-x: auto;
-  overflow-y: visible;  /* ← was: overflow-y: hidden */
+  overflow-y: hidden;
   flex: 1;
   height: 100%;
-  scrollbar-width: none;
-  -ms-overflow-style: none;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-color) transparent;
+  scroll-behavior: smooth;
 }
 
 .tab-list::-webkit-scrollbar {
+  height: 6px;
+}
+
+.tab-list::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.tab-list::-webkit-scrollbar-thumb {
+  background-color: var(--border-color);
+  border-radius: 999px;
+}
+
+.tab-scroll-btn {
   display: none;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 5px;
+  background: none;
+  border: 1px solid transparent;
+  color: var(--text-color);
+  cursor: pointer;
+  font-size: 14px;
+  flex-shrink: 0;
+  transition: background-color 0.15s ease, border-color 0.15s ease, opacity 0.15s ease;
+}
+
+.tab-scroll-btn.visible {
+  display: flex;
+}
+
+.tab-scroll-btn:hover:not(:disabled) {
+  background-color: var(--button-hover);
+  border-color: var(--border-color);
+}
+
+.tab-scroll-btn:disabled {
+  cursor: default;
+  opacity: 0.35;
 }
 
 .tab-item {
@@ -1795,8 +1909,14 @@ a:focus {
   white-space: nowrap;
 }
 
-.tab-menu-item:hover {
+.tab-menu-item:hover:not(:disabled):not([aria-disabled="true"]) {
   background-color: var(--button-hover);
+}
+
+.tab-menu-item:disabled,
+.tab-menu-item[aria-disabled="true"] {
+  color: var(--disabled-text-color);
+  cursor: not-allowed;
 }
 
 .tab-menu-item-danger {
@@ -2139,6 +2259,10 @@ a:focus {
   overflow: hidden;
 }
 
+.content-container.sidebar-hidden .folder-tree-pane {
+  display: none;
+}
+
 .folder-tree-root { overflow: auto; padding: 8px 10px 16px; font-size: 14px; flex: 1 1 auto; min-height: 0; }
 .sidebar-dropzone-panel {
   flex: 0 0 25%;
@@ -2185,13 +2309,15 @@ a:focus {
   min-width: 100%;
 }
 .folder-tree-file:hover { background: var(--button-hover); }
+.folder-tree-graph-file i { color: #8250df; }
+[data-theme="dark"] .folder-tree-graph-file i { color: #ab7df8; }
 .folder-tree-placeholder { color: #8b949e; margin: 6px 2px; }
 
 
 
-.content-container.view-editor-only .folder-tree-pane,
-.content-container.view-preview-only .folder-tree-pane,
-.content-container.view-split .folder-tree-pane {
+.content-container.view-editor-only:not(.sidebar-hidden) .folder-tree-pane,
+.content-container.view-preview-only:not(.sidebar-hidden) .folder-tree-pane,
+.content-container.view-split:not(.sidebar-hidden) .folder-tree-pane {
   display: flex !important;
 }
 

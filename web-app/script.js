@@ -4840,6 +4840,7 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
     contextMenu.appendChild(hidePointBtn);
     contextMenu.appendChild(localGraphBtn);
     contextMenu.appendChild(fullLocalGraphBtn);
+    contextMenu.appendChild(contextMenuSeparator);
     contextMenu.appendChild(magneticToggleBtn);
     graphRenderWrapper.appendChild(contextMenu);
 
