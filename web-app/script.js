@@ -34,7 +34,7 @@ document.addEventListener("DOMContentLoaded", function () {
   const copyMarkdownButton = document.getElementById("copy-markdown-button");
   const dropzone = document.getElementById("dropzone");
   const closeDropzoneBtn = document.getElementById("close-dropzone");
-  const toggleSyncButton = document.getElementById("toggle-sync");
+  const syncToggleButtons = document.querySelectorAll(".sync-toggle-button");
   const editorPane = document.getElementById("markdown-editor");
   const previewPane = document.querySelector(".preview-pane");
   const readingTimeElement = document.getElementById("reading-time");
@@ -575,10 +575,6 @@ document.addEventListener("DOMContentLoaded", function () {
           <i class="bi bi-list"></i>
         </button>
         <div class="dropdown-menu action-menu w-100" aria-labelledby="desktopActionMenu">
-          <button id="toggle-sync" class="dropdown-item action-menu-item sync-enabled border-primary" title="Toggle Sync Scrolling">
-            <i class="bi bi-link"></i> Sync Off
-          </button>
-          <hr class="dropdown-divider">
           <button class="dropdown-item action-menu-item" id="import-from-file" title="Open Markdown or graph file">
             <i class="bi bi-upload me-2"></i> Open file ...
           </button>
@@ -662,7 +658,6 @@ document.addEventListener("DOMContentLoaded", function () {
   const mobileReadingTime   = document.getElementById("mobile-reading-time");
   const mobileWordCount     = document.getElementById("mobile-word-count");
   const mobileCharCount     = document.getElementById("mobile-char-count");
-  const mobileToggleSync    = document.getElementById("mobile-toggle-sync");
   const mobileImportBtn     = document.getElementById("mobile-import-button");
   const mobileImportGithubBtn = document.getElementById("mobile-import-github-button");
   const mobileExportMd      = document.getElementById("mobile-export-md");
@@ -4506,19 +4501,27 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
     }, SCROLL_SYNC_DELAY);
   }
 
+  function updateSyncToggleButtons() {
+    syncToggleButtons.forEach((button) => {
+      if (syncScrollingEnabled) {
+        button.innerHTML = '<i class="bi bi-link-45deg"></i> <span>Sync Off</span>';
+        button.classList.add("sync-disabled");
+        button.classList.remove("sync-enabled");
+        button.classList.add("border-primary");
+        button.setAttribute("aria-label", "Turn sync scrolling off");
+      } else {
+        button.innerHTML = '<i class="bi bi-link"></i> <span>Sync On</span>';
+        button.classList.add("sync-enabled");
+        button.classList.remove("sync-disabled");
+        button.classList.remove("border-primary");
+        button.setAttribute("aria-label", "Turn sync scrolling on");
+      }
+    });
+  }
+
   function toggleSyncScrolling() {
     syncScrollingEnabled = !syncScrollingEnabled;
-    if (syncScrollingEnabled) {
-      toggleSyncButton.innerHTML = '<i class="bi bi-link-45deg"></i> Sync Off';
-      toggleSyncButton.classList.add("sync-disabled");
-      toggleSyncButton.classList.remove("sync-enabled");
-      toggleSyncButton.classList.add("border-primary");
-    } else {
-      toggleSyncButton.innerHTML = '<i class="bi bi-link"></i> Sync On';
-      toggleSyncButton.classList.add("sync-enabled");
-      toggleSyncButton.classList.remove("sync-disabled");
-      toggleSyncButton.classList.remove("border-primary");
-    }
+    updateSyncToggleButtons();
     saveGlobalState({ syncScrollingEnabled });
   }
 
@@ -4579,17 +4582,10 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
   function updateSyncToggleVisibility(mode) {
     const isSplitView = mode === 'split';
 
-    // Desktop sync toggle
-    if (toggleSyncButton) {
-      toggleSyncButton.style.display = isSplitView ? '' : 'none';
-      toggleSyncButton.setAttribute('aria-hidden', !isSplitView);
-    }
-
-    // Mobile sync toggle
-    if (mobileToggleSync) {
-      mobileToggleSync.style.display = isSplitView ? '' : 'none';
-      mobileToggleSync.setAttribute('aria-hidden', !isSplitView);
-    }
+    syncToggleButtons.forEach((button) => {
+      button.style.display = isSplitView ? '' : 'none';
+      button.setAttribute('aria-hidden', !isSplitView);
+    });
   }
 
   // Story 1.3: Resize Divider Functions
@@ -4727,20 +4723,6 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
     updateStatusLine();
   };
 
-  mobileToggleSync.addEventListener("click", () => {
-    toggleSyncScrolling();
-    if (syncScrollingEnabled) {
-      mobileToggleSync.innerHTML = '<i class="bi bi-link-45deg me-2"></i> Sync Off';
-      mobileToggleSync.classList.add("sync-disabled");
-      mobileToggleSync.classList.remove("sync-enabled");
-      mobileToggleSync.classList.add("border-primary");
-    } else {
-      mobileToggleSync.innerHTML = '<i class="bi bi-link me-2"></i> Sync On';
-      mobileToggleSync.classList.add("sync-enabled");
-      mobileToggleSync.classList.remove("sync-disabled");
-      mobileToggleSync.classList.remove("border-primary");
-    }
-  });
   mobileImportBtn.addEventListener("click", () => openDocumentFileFromPicker());
   mobileImportGithubBtn.addEventListener("click", () => {
     closeMobileMenu();
@@ -4772,6 +4754,7 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
   
   initTabs();
   if (loadGlobalState().syncScrollingEnabled === false) toggleSyncScrolling();
+  updateSyncToggleButtons();
   updateMobileStats();
   updateStatusLine();
 
@@ -4834,7 +4817,9 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
   
   editorPane.addEventListener("scroll", syncEditorToPreview);
   previewPane.addEventListener("scroll", syncPreviewToEditor);
-  toggleSyncButton.addEventListener("click", toggleSyncScrolling);
+  syncToggleButtons.forEach((button) => {
+    button.addEventListener("click", toggleSyncScrolling);
+  });
   themeToggle.addEventListener("click", function () {
     const theme =
       document.documentElement.getAttribute("data-theme") === "dark"
