@@ -14,6 +14,7 @@ document.addEventListener("DOMContentLoaded", function () {
   const markdownPreview = document.getElementById("markdown-preview");
   const themeToggle = document.getElementById("theme-toggle");
   const importFromFileButtons = document.querySelectorAll("#import-from-file");
+  const newDocumentButtons = document.querySelectorAll(".new-document-button");
   const importFromGithubButton = document.getElementById("import-from-github");
   const importFromFolderButton = document.getElementById("import-from-folder");
   let folderTreeRoot = document.getElementById("folder-tree-root");
@@ -4646,6 +4647,16 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
     button.addEventListener("click", function (e) {
       e.preventDefault();
       openDocumentFileFromPicker();
+    });
+  });
+
+  newDocumentButtons.forEach(function(button) {
+    button.addEventListener("click", function(e) {
+      e.preventDefault();
+      newTab();
+      if (button.classList.contains("mobile-menu-item")) {
+        closeMobileMenu();
+      }
     });
   });
 
