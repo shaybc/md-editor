@@ -12,6 +12,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
   const markdownEditor = document.getElementById("markdown-editor");
   const editorLineNumbers = document.getElementById("editor-line-numbers");
+  const editorCurrentLine = document.getElementById("editor-current-line");
   const markdownPreview = document.getElementById("markdown-preview");
   const themeToggle = document.getElementById("theme-toggle");
   const importFromFileButtons = document.querySelectorAll("#import-from-file");
@@ -66,6 +67,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
   let editorLineMeasure = null;
   let editorLineNumberResizeFrame = null;
+  const editorCurrentLineMetrics = { top: 0, height: 0 };
 
   function getEditorLineHeight(computedStyle) {
     const style = computedStyle || window.getComputedStyle(markdownEditor);
@@ -136,21 +138,41 @@ document.addEventListener("DOMContentLoaded", function () {
     return markdownEditor.value.slice(0, markdownEditor.selectionStart || 0).split("\n").length;
   }
 
-  function updateEditorLineNumbers() {
-    if (!editorLineNumbers) return;
+  function updateEditorCurrentLineHighlight(activeLine, wrappedLineHeights, computedStyle) {
+    if (!editorCurrentLine) return;
 
+    const paddingTop = parseFloat(computedStyle.paddingTop) || 0;
+    const activeLineIndex = Math.max(0, activeLine - 1);
+    const top = paddingTop + wrappedLineHeights.slice(0, activeLineIndex).reduce(function(total, height) {
+      return total + height;
+    }, 0);
+    const height = wrappedLineHeights[activeLineIndex] || getEditorLineHeight(computedStyle);
+
+    editorCurrentLineMetrics.top = top;
+    editorCurrentLineMetrics.height = height;
+    editorCurrentLine.style.height = `${height}px`;
+    editorCurrentLine.classList.add("visible");
+    syncEditorCurrentLineScroll();
+  }
+
+  function updateEditorLineNumbers() {
     const lines = markdownEditor.value.split("\n");
     const activeLine = getCurrentEditorLine();
     const computedStyle = window.getComputedStyle(markdownEditor);
     const lineHeight = getEditorLineHeight(computedStyle);
     const wrappedLineHeights = getEditorWrappedLineHeights(lines, computedStyle, lineHeight);
-    const lineNumbersMarkup = lines.map(function(_line, index) {
-      const lineNumber = index + 1;
-      const activeClass = lineNumber === activeLine ? " active" : "";
-      return `<span class="editor-line-number${activeClass}" style="height:${wrappedLineHeights[index]}px">${lineNumber}</span>`;
-    }).join("");
 
-    editorLineNumbers.innerHTML = `<div class="editor-line-numbers-inner" style="transform: translateY(-${markdownEditor.scrollTop}px);">${lineNumbersMarkup}</div>`;
+    if (editorLineNumbers) {
+      const lineNumbersMarkup = lines.map(function(_line, index) {
+        const lineNumber = index + 1;
+        const activeClass = lineNumber === activeLine ? " active" : "";
+        return `<span class="editor-line-number${activeClass}" style="height:${wrappedLineHeights[index]}px">${lineNumber}</span>`;
+      }).join("");
+
+      editorLineNumbers.innerHTML = `<div class="editor-line-numbers-inner" style="transform: translateY(-${markdownEditor.scrollTop}px);">${lineNumbersMarkup}</div>`;
+    }
+
+    updateEditorCurrentLineHighlight(activeLine, wrappedLineHeights, computedStyle);
   }
 
   function scheduleEditorLineNumbersUpdate() {
@@ -162,12 +184,19 @@ document.addEventListener("DOMContentLoaded", function () {
     });
   }
 
+  function syncEditorCurrentLineScroll() {
+    if (!editorCurrentLine) return;
+    editorCurrentLine.style.transform = `translateY(${editorCurrentLineMetrics.top - markdownEditor.scrollTop}px)`;
+  }
+
   function syncEditorLineNumberScroll() {
-    if (!editorLineNumbers) return;
-    const inner = editorLineNumbers.querySelector(".editor-line-numbers-inner");
-    if (inner) {
-      inner.style.transform = `translateY(-${markdownEditor.scrollTop}px)`;
+    if (editorLineNumbers) {
+      const inner = editorLineNumbers.querySelector(".editor-line-numbers-inner");
+      if (inner) {
+        inner.style.transform = `translateY(-${markdownEditor.scrollTop}px)`;
+      }
     }
+    syncEditorCurrentLineScroll();
   }
 
   function shouldUseNativeDirectoryPicker(event) {
@@ -6021,12 +6050,18 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
       updateStatusLine();
     });
   });
-  markdownEditor.addEventListener("focus", updateStatusLine);
+  markdownEditor.addEventListener("focus", function() {
+    updateEditorLineNumbers();
+    updateStatusLine();
+  });
   markdownEditor.addEventListener("blur", function() {
     window.setTimeout(updateStatusLine, 0);
   });
   document.addEventListener("selectionchange", function() {
-    if (document.activeElement === markdownEditor) updateStatusLine();
+    if (document.activeElement === markdownEditor) {
+      updateEditorLineNumbers();
+      updateStatusLine();
+    }
   });
   markdownEditor.addEventListener("scroll", syncEditorLineNumberScroll);
 

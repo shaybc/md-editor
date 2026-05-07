@@ -381,7 +381,10 @@
             <div class="editor-pane">
                 <div class="editor-shell">
                     <div id="editor-line-numbers" class="editor-line-numbers" aria-hidden="true"></div>
-                    <textarea id="markdown-editor" placeholder="Type or paste your Markdown here..." spellcheck="false"></textarea>
+                    <div class="editor-input-wrap">
+                        <div id="editor-current-line" class="editor-current-line" aria-hidden="true"></div>
+                        <textarea id="markdown-editor" placeholder="Type or paste your Markdown here..." spellcheck="false"></textarea>
+                    </div>
                 </div>
             </div>
             <!-- Resize Divider - Story 1.3 -->
