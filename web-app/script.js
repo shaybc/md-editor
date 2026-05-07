@@ -1028,6 +1028,31 @@ document.addEventListener("DOMContentLoaded", function () {
     return /^(?:[a-z][a-z0-9+.-]*:|#|\/\/)/i.test(String(target || "").trim());
   }
 
+  function isExternalWebLinkTarget(target) {
+    return /^(?:https?:\/\/|\/\/)/i.test(String(target || "").trim());
+  }
+
+  function normalizeExternalWebLinkTarget(target) {
+    const trimmedTarget = String(target || "").trim();
+    return trimmedTarget.startsWith("//") ? `${window.location.protocol}${trimmedTarget}` : trimmedTarget;
+  }
+
+  async function openExternalWebLink(target) {
+    const url = normalizeExternalWebLinkTarget(target);
+    if (!url) return;
+
+    try {
+      if (typeof Neutralino !== "undefined" && Neutralino.os && typeof Neutralino.os.open === "function") {
+        await Neutralino.os.open(url);
+        return;
+      }
+    } catch (error) {
+      console.error("Failed to open external link with the OS:", error);
+    }
+
+    window.open(url, "_blank", "noopener,noreferrer");
+  }
+
   function getWikiLinkHref(target) {
     const trimmedTarget = String(target || "").trim();
     if (!trimmedTarget) return "#";
@@ -1302,6 +1327,11 @@ document.addEventListener("DOMContentLoaded", function () {
     let linkTarget = rawHref;
     if (!markdownTarget && isSameOriginMarkdownUrl(rawHref)) {
       linkTarget = getSameOriginMarkdownUrlPath(rawHref);
+    } else if (!markdownTarget && isExternalWebLinkTarget(rawHref)) {
+      event.preventDefault();
+      event.stopPropagation();
+      openExternalWebLink(rawHref);
+      return;
     } else if (!markdownTarget && isExternalOrSpecialLinkTarget(rawHref)) {
       return;
     }
