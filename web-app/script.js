@@ -1462,12 +1462,23 @@ document.addEventListener("DOMContentLoaded", function () {
     });
   });
 
-  document.addEventListener("click", function(event) {
-    const button = event.target?.closest?.(".toggle-unsupported-files");
-    if (!button) return;
+  function getClosestUnsupportedFileToggleButton(target) {
+    const element = target?.nodeType === 1 ? target : target?.parentElement;
+    return element?.closest?.(".toggle-unsupported-files") || null;
+  }
+
+  function handleUnsupportedFileToggleClick(event) {
+    const button = getClosestUnsupportedFileToggleButton(event.target);
+    if (!button || event.unsupportedFilesToggleHandled) return;
+    event.unsupportedFilesToggleHandled = true;
     event.preventDefault();
     setShowUnsupportedFolderFiles(!showUnsupportedFolderFiles);
+  }
+
+  getUnsupportedFileToggleButtons().forEach(function(button) {
+    button.addEventListener("click", handleUnsupportedFileToggleClick);
   });
+  document.addEventListener("click", handleUnsupportedFileToggleClick, true);
 
 
   // Mobile View Mode Elements - Story 1.4
