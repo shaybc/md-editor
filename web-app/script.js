@@ -1384,7 +1384,7 @@ document.addEventListener("DOMContentLoaded", function () {
         </div>
       </div>
       <div id="folder-tree-root" class="folder-tree-root">
-        <p class="folder-tree-placeholder">Open a folder to browse text and graph files.</p>
+        ${getClosedFolderPlaceholder()}
       </div>
       <div class="sidebar-dropzone-resizer" id="sidebar-dropzone-resizer" role="separator" aria-orientation="horizontal" aria-label="Resize sidebar dropzone" tabindex="0"></div>
       <div class="sidebar-dropzone-panel">
@@ -4255,7 +4255,13 @@ This is a fully client-side application. Your content never leaves your browser 
   }
 
   function getClosedFolderPlaceholder() {
-    return '<p class="folder-tree-placeholder">Open a folder to browse text and graph files.</p>';
+    return `
+      <div class="folder-tree-empty-state">
+        <button class="folder-tree-open-folder-button" type="button" title="Open a folder to browse text and graph files" aria-label="Open a folder to browse text and graph files">
+          <i class="bi bi-folder2-open" aria-hidden="true"></i>
+          <span>Open a folder to<br>browse Markdown<br>and graph files.</span>
+        </button>
+      </div>`;
   }
 
   function updateCloseFolderButtons() {
@@ -6448,12 +6454,20 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
   function handleFolderTreeRootContextMenu(event) {
     if (!folderTreeRoot) return;
     if (!isFolderOpen) {
-      showSidebarClosedFolderContextMenu(event);
+      hideSidebarClosedFolderContextMenu();
       return;
     }
     const targetElement = event.target instanceof Element ? event.target : event.target?.parentElement;
     if (targetElement?.closest(".folder-tree-label, .folder-tree-file")) return;
     showSidebarFolderContextMenu(event, getOpenFolderRootContextNode());
+  }
+
+  async function handleFolderTreeRootClick(event) {
+    const targetElement = event.target instanceof Element ? event.target : event.target?.parentElement;
+    const openFolderButton = targetElement?.closest(".folder-tree-open-folder-button");
+    if (!openFolderButton || isFolderOpen) return;
+    event.preventDefault();
+    await openFolderTree(event);
   }
 
   const folderTreeAnimationTimers = new WeakMap();
@@ -8179,6 +8193,7 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
   updateCloseFolderButtons();
   if (folderTreeRoot) {
     folderTreeRoot.addEventListener("contextmenu", handleFolderTreeRootContextMenu);
+    folderTreeRoot.addEventListener("click", handleFolderTreeRootClick);
   }
 
   if (importFromGithubButton) {

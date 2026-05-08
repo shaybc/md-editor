@@ -369,7 +369,12 @@
                     </div>
                 </div>
                 <div id="folder-tree-root" class="folder-tree-root">
-                    <p class="folder-tree-placeholder">Open a folder to browse text and graph files.</p>
+                    <div class="folder-tree-empty-state">
+                        <button class="folder-tree-open-folder-button" type="button" title="Open a folder to browse text and graph files" aria-label="Open a folder to browse text and graph files">
+                            <i class="bi bi-folder2-open" aria-hidden="true"></i>
+                            <span>Open a folder to<br>browse Markdown<br>and graph files.</span>
+                        </button>
+                    </div>
                 </div>
                 <div class="sidebar-dropzone-resizer" id="sidebar-dropzone-resizer" role="separator" aria-orientation="horizontal" aria-label="Resize sidebar dropzone" tabindex="0"></div>
                 <div class="sidebar-dropzone-panel">
