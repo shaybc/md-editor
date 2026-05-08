@@ -8956,6 +8956,10 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
     );
     const contextMenuTitleSeparator = document.createElement("div");
     contextMenuTitleSeparator.className = "graph-context-menu-separator hidden";
+    const contextMenuGraphSeparator = document.createElement("div");
+    contextMenuGraphSeparator.className = "graph-context-menu-separator hidden";
+    const contextMenuDeleteEndSeparator = document.createElement("div");
+    contextMenuDeleteEndSeparator.className = "graph-context-menu-separator hidden";
     const contextMenuActionSeparator = document.createElement("div");
     contextMenuActionSeparator.className = "graph-context-menu-separator hidden";
     const openFileBtn = createContextMenuButton(
@@ -9089,11 +9093,13 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
     contextMenu.appendChild(renameFileBtn);
     contextMenu.appendChild(copySubmenu);
     contextMenu.appendChild(sharePointBtn);
+    contextMenu.appendChild(contextMenuGraphSeparator);
     contextMenu.appendChild(hidePointBtn);
     contextMenu.appendChild(localGraphBtn);
     contextMenu.appendChild(fullLocalGraphBtn);
     contextMenu.appendChild(contextMenuDeleteSeparator);
     contextMenu.appendChild(deleteFileBtn);
+    contextMenu.appendChild(contextMenuDeleteEndSeparator);
     contextMenu.appendChild(exportSubmenu);
     contextMenu.appendChild(contextMenuActionSeparator);
     contextMenu.appendChild(magneticToggleBtn);
@@ -9276,11 +9282,13 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
       renameFileBtn,
       copySubmenu,
       sharePointBtn,
+      contextMenuGraphSeparator,
       hidePointBtn,
       localGraphBtn,
       fullLocalGraphBtn,
       contextMenuDeleteSeparator,
       deleteFileBtn,
+      contextMenuDeleteEndSeparator,
       exportSubmenu
     ];
 
