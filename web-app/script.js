@@ -341,13 +341,27 @@ document.addEventListener("DOMContentLoaded", function () {
   let editorContextMenu = null;
   let editorContextMenuSelection = null;
   const editorContextMenuUndoStack = [];
+  const editorContextMenuRedoStack = [];
   const editorContextMenuUndoStackLimit = 50;
 
   function rememberEditorContextMenuConversion(undoState) {
     editorContextMenuUndoStack.push(undoState);
+    editorContextMenuRedoStack.length = 0;
     if (editorContextMenuUndoStack.length > editorContextMenuUndoStackLimit) {
       editorContextMenuUndoStack.shift();
     }
+  }
+
+  function applyEditorContextMenuHistoryState(value, selectionStart, selectionEnd) {
+    markdownEditor.value = value;
+    markdownEditor.selectionStart = selectionStart;
+    markdownEditor.selectionEnd = selectionEnd;
+    markdownEditor.focus();
+    markdownEditor.dispatchEvent(new Event("input"));
+    updateEditorLineNumbers();
+    updateEditorSelectionHighlights();
+    updateStatusLine();
+    hideEditorContextMenu();
   }
 
   function undoEditorContextMenuConversion() {
@@ -356,16 +370,58 @@ document.addEventListener("DOMContentLoaded", function () {
     if (undoState.tabId !== activeTabId || markdownEditor.value !== undoState.afterValue) return false;
 
     editorContextMenuUndoStack.pop();
-    markdownEditor.value = undoState.beforeValue;
-    markdownEditor.selectionStart = undoState.selectionStart;
-    markdownEditor.selectionEnd = undoState.selectionEnd;
-    markdownEditor.focus();
-    markdownEditor.dispatchEvent(new Event("input"));
-    updateEditorLineNumbers();
-    updateEditorSelectionHighlights();
-    updateStatusLine();
-    hideEditorContextMenu();
+    editorContextMenuRedoStack.push(undoState);
+    applyEditorContextMenuHistoryState(undoState.beforeValue, undoState.selectionStart, undoState.selectionEnd);
     return true;
+  }
+
+  function redoEditorContextMenuConversion() {
+    const redoState = editorContextMenuRedoStack[editorContextMenuRedoStack.length - 1];
+    if (!redoState) return false;
+    if (redoState.tabId !== activeTabId || markdownEditor.value !== redoState.beforeValue) return false;
+
+    editorContextMenuRedoStack.pop();
+    editorContextMenuUndoStack.push(redoState);
+    applyEditorContextMenuHistoryState(redoState.afterValue, redoState.replacementStart, redoState.replacementEnd);
+    return true;
+  }
+
+  function replaceEditorSelectionPreservingUndo(start, end, replacement) {
+    const value = markdownEditor.value;
+    const nextValue = value.slice(0, start) + replacement + value.slice(end);
+    const replacementEnd = start + replacement.length;
+
+    markdownEditor.focus();
+    markdownEditor.selectionStart = start;
+    markdownEditor.selectionEnd = end;
+
+    if (document.queryCommandSupported && document.queryCommandSupported("insertText")) {
+      const inputCount = editorInputEventCount;
+      const inserted = document.execCommand("insertText", false, replacement);
+      if (inserted && markdownEditor.value === nextValue) {
+        markdownEditor.selectionStart = start;
+        markdownEditor.selectionEnd = replacementEnd;
+        if (editorInputEventCount === inputCount) {
+          markdownEditor.dispatchEvent(new Event("input"));
+        }
+        return true;
+      }
+    }
+
+    markdownEditor.value = nextValue;
+    markdownEditor.selectionStart = start;
+    markdownEditor.selectionEnd = replacementEnd;
+    rememberEditorContextMenuConversion({
+      tabId: activeTabId,
+      beforeValue: value,
+      afterValue: nextValue,
+      selectionStart: start,
+      selectionEnd: end,
+      replacementStart: start,
+      replacementEnd
+    });
+    markdownEditor.dispatchEvent(new Event("input"));
+    return false;
   }
 
   const editorMarkdownActions = [
@@ -506,20 +562,7 @@ document.addEventListener("DOMContentLoaded", function () {
     const selectedText = value.slice(start, end);
     const replacement = convertSelectionToMarkdown(type, selectedText);
 
-    const nextValue = value.slice(0, start) + replacement + value.slice(end);
-
-    markdownEditor.value = nextValue;
-    markdownEditor.selectionStart = start;
-    markdownEditor.selectionEnd = start + replacement.length;
-    rememberEditorContextMenuConversion({
-      tabId: activeTabId,
-      beforeValue: value,
-      afterValue: nextValue,
-      selectionStart: start,
-      selectionEnd: end
-    });
-    markdownEditor.focus();
-    markdownEditor.dispatchEvent(new Event("input"));
+    replaceEditorSelectionPreservingUndo(start, end, replacement);
     hideEditorContextMenu();
   }
 
@@ -7834,7 +7877,10 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
     });
   });
 
+  let editorInputEventCount = 0;
+
   markdownEditor.addEventListener("input", function() {
+    editorInputEventCount += 1;
     renderLinkAutocomplete();
     renderEditorSyntaxHighlights();
     updateEditorLineNumbers();
@@ -7855,6 +7901,10 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
   markdownEditor.addEventListener("keydown", function(e) {
     if (handleLinkAutocompleteKeydown(e)) return;
     if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && e.key.toLowerCase() === "z" && undoEditorContextMenuConversion()) {
+      e.preventDefault();
+      return;
+    }
+    if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && e.key.toLowerCase() === "y" && redoEditorContextMenuConversion()) {
       e.preventDefault();
       return;
     }
