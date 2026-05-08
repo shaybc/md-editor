@@ -2628,14 +2628,32 @@ a:focus {
 }
 .folder-tree-list { list-style: none; padding-left: 14px; margin: 0; }
 .folder-tree-item { margin: 2px 0; }
-.folder-tree-item > details > .folder-tree-list { margin-left: 7px; padding-left: 20px; }
-.folder-tree-item > details[open] > .folder-tree-list { border-left: 1px solid var(--border-color); }
-.folder-tree-label { display: inline-flex; align-items: center; gap: 6px; color: var(--text-color); white-space: nowrap; }
+.folder-tree-item > details > .folder-tree-children {
+  margin-left: 7px;
+  overflow: hidden;
+  transform-origin: top;
+  transition: height 0.2s ease, opacity 0.18s ease;
+}
+.folder-tree-item > details > .folder-tree-children > .folder-tree-list { padding-left: 20px; }
+.folder-tree-item > details[open] > .folder-tree-children { border-left: 1px solid var(--border-color); }
+.folder-tree-item > details:not([open]) > .folder-tree-children { height: 0; opacity: 0; }
+.folder-tree-label { display: inline-flex; align-items: center; gap: 6px; color: var(--text-color); white-space: nowrap; cursor: pointer; user-select: none; }
+.folder-tree-label i { transition: transform 0.2s ease; }
+.folder-tree-item > details.is-expanding > .folder-tree-label i,
+.folder-tree-item > details[open]:not(.is-collapsing) > .folder-tree-label i { transform: scale(1.05); }
 .folder-tree-file { cursor: pointer; border: 0; background: transparent; color: var(--text-color); padding: 2px 4px; border-radius: 4px; white-space: nowrap; word-break: normal; overflow-wrap: normal; }
 .folder-tree-list,
-.folder-tree-item {
+.folder-tree-item,
+.folder-tree-children {
   width: max-content;
   min-width: 100%;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .folder-tree-item > details > .folder-tree-children,
+  .folder-tree-label i {
+    transition: none;
+  }
 }
 .folder-tree-file:hover { background: var(--button-hover); }
 .folder-tree-graph-file i { color: #8250df; }

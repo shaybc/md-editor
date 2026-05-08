@@ -5186,6 +5186,79 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
     showSidebarFolderContextMenu(event, getOpenFolderRootContextNode());
   }
 
+  const folderTreeAnimationTimers = new WeakMap();
+
+  function getFolderTreeChildrenContainer(details) {
+    return details.querySelector(":scope > .folder-tree-children");
+  }
+
+  function resetFolderTreeAnimation(details, childrenContainer) {
+    const existingTimer = folderTreeAnimationTimers.get(details);
+    if (existingTimer) {
+      window.clearTimeout(existingTimer);
+      folderTreeAnimationTimers.delete(details);
+    }
+
+    details.classList.remove("is-expanding", "is-collapsing");
+    if (childrenContainer) {
+      childrenContainer.style.height = "";
+      childrenContainer.style.opacity = "";
+    }
+  }
+
+  function finishFolderTreeAnimation(details, childrenContainer, shouldOpen) {
+    details.open = shouldOpen;
+    resetFolderTreeAnimation(details, childrenContainer);
+  }
+
+  function prefersReducedFolderTreeMotion() {
+    return window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  }
+
+  function toggleFolderTreeDetails(details) {
+    const childrenContainer = getFolderTreeChildrenContainer(details);
+    if (!childrenContainer || prefersReducedFolderTreeMotion()) {
+      resetFolderTreeAnimation(details, childrenContainer);
+      details.open = !details.open;
+      return;
+    }
+
+    const shouldExpand = !details.open || details.classList.contains("is-collapsing");
+    resetFolderTreeAnimation(details, childrenContainer);
+
+    if (shouldExpand) {
+      details.open = true;
+      details.classList.add("is-expanding");
+      childrenContainer.style.height = "0px";
+      childrenContainer.style.opacity = "0";
+
+      window.requestAnimationFrame(() => {
+        childrenContainer.style.height = `${childrenContainer.scrollHeight}px`;
+        childrenContainer.style.opacity = "1";
+      });
+
+      const timer = window.setTimeout(() => {
+        finishFolderTreeAnimation(details, childrenContainer, true);
+      }, 220);
+      folderTreeAnimationTimers.set(details, timer);
+      return;
+    }
+
+    details.classList.add("is-collapsing");
+    childrenContainer.style.height = `${childrenContainer.scrollHeight}px`;
+    childrenContainer.style.opacity = "1";
+
+    window.requestAnimationFrame(() => {
+      childrenContainer.style.height = "0px";
+      childrenContainer.style.opacity = "0";
+    });
+
+    const timer = window.setTimeout(() => {
+      finishFolderTreeAnimation(details, childrenContainer, false);
+    }, 220);
+    folderTreeAnimationTimers.set(details, timer);
+  }
+
   function renderFolderTreeNode(node, parentPath = "") {
     const li = document.createElement("li");
     li.className = "folder-tree-item";
@@ -5202,12 +5275,20 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
       label.textContent = node.name;
       summary.appendChild(icon);
       summary.appendChild(label);
+      summary.addEventListener("click", (event) => {
+        event.preventDefault();
+        toggleFolderTreeDetails(details);
+      });
       summary.addEventListener("contextmenu", (event) => showSidebarFolderContextMenu(event, node));
       details.appendChild(summary);
+
+      const childrenContainer = document.createElement("div");
+      childrenContainer.className = "folder-tree-children";
       const ul = document.createElement("ul");
       ul.className = "folder-tree-list";
       node.children.forEach((child) => ul.appendChild(renderFolderTreeNode(child, currentPath)));
-      details.appendChild(ul);
+      childrenContainer.appendChild(ul);
+      details.appendChild(childrenContainer);
       li.appendChild(details);
       return li;
     }
