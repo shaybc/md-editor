@@ -3219,7 +3219,6 @@ a:focus {
 .folder-tree-unsupported-file { color: var(--disabled-text-color, #8b949e); }
 .folder-tree-unsupported-file i { color: var(--disabled-text-color, #8b949e); opacity: 0.6; }
 .folder-tree-unsupported-file span { opacity: 0.66; }
-.folder-tree-unsupported-file:hover { background: transparent; }
 .folder-tree-placeholder { color: #8b949e; margin: 6px 2px; }
 
 
