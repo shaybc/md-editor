@@ -111,7 +111,8 @@ document.addEventListener("DOMContentLoaded", function () {
         type: "markdown",
         query: "",
         replaceStart: cursor - 1,
-        replaceEnd: cursor - 1
+        replaceEnd: cursor - 1,
+        needsClosingSyntax: false
       };
     }
 
@@ -133,11 +134,16 @@ document.addEventListener("DOMContentLoaded", function () {
       const query = lineBefore.slice(markdownStart + 2);
       const labelOpen = lineBefore.lastIndexOf("[", markdownStart);
       if (labelOpen !== -1 && !query.includes(")")) {
+        const lineEnd = value.indexOf("\n", cursor);
+        const lineAfter = value.slice(cursor, lineEnd === -1 ? value.length : lineEnd);
+        const closingParenOffset = lineAfter.indexOf(")");
+        const hasClosingSyntax = closingParenOffset !== -1;
         return {
           type: "markdown",
           query,
           replaceStart: lineStart + markdownStart + 2,
-          replaceEnd: cursor
+          replaceEnd: hasClosingSyntax ? cursor + closingParenOffset : cursor,
+          needsClosingSyntax: !hasClosingSyntax
         };
       }
     }
@@ -303,10 +309,15 @@ document.addEventListener("DOMContentLoaded", function () {
     if (!linkAutocompleteState || !linkAutocompleteState.items.length) return false;
     const state = linkAutocompleteState;
     const item = state.items[index] || state.items[0];
-    const insertText = getLinkAutocompleteInsertText(item, state.type);
+    const baseInsertText = getLinkAutocompleteInsertText(item, state.type);
+    const insertText = state.type === "markdown" && state.needsClosingSyntax ? `${baseInsertText})` : baseInsertText;
     const value = markdownEditor.value;
+    const closingSyntaxLength = state.type === "markdown"
+      && (state.needsClosingSyntax || value[state.replaceEnd] === ")")
+      ? 1
+      : 0;
     markdownEditor.value = value.slice(0, state.replaceStart) + insertText + value.slice(state.replaceEnd);
-    const nextPosition = state.replaceStart + insertText.length;
+    const nextPosition = state.replaceStart + baseInsertText.length + closingSyntaxLength;
     markdownEditor.selectionStart = markdownEditor.selectionEnd = nextPosition;
     hideLinkAutocomplete();
     markdownEditor.focus();
