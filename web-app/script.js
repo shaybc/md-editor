@@ -2753,9 +2753,30 @@ This is a fully client-side application. Your content never leaves your browser 
     return Number.isFinite(timestamp) && timestamp > 0 ? timestamp : fallback;
   }
 
+  function normalizeGraphSnapshot(snapshot) {
+    const normalizedSnapshot = cloneGraphPersistenceValue(snapshot || null);
+    if (!normalizedSnapshot || typeof normalizedSnapshot !== "object") return normalizedSnapshot;
+
+    if (Array.isArray(normalizedSnapshot.nodes)) {
+      normalizedSnapshot.nodes = normalizedSnapshot.nodes.map((node) => ({
+        ...node,
+        type: node?.type || "file"
+      }));
+    }
+
+    if (Array.isArray(normalizedSnapshot.links)) {
+      normalizedSnapshot.links = normalizedSnapshot.links.map((link) => ({
+        ...link,
+        type: link?.type || "link"
+      }));
+    }
+
+    return normalizedSnapshot;
+  }
+
   function normalizeGraphDocument(document) {
     const source = document && typeof document === "object" ? document : {};
-    const snapshot = cloneGraphPersistenceValue(source.snapshot || source.graphSnapshot || null);
+    const snapshot = normalizeGraphSnapshot(source.snapshot || source.graphSnapshot || null);
     const hasViewConfig = Object.prototype.hasOwnProperty.call(source, "viewConfig");
     const viewConfig = cloneGraphPersistenceValue(hasViewConfig ? source.viewConfig : (source.graphViewConfig || null));
     const layoutSource = source.graphLayout !== undefined ? source.graphLayout : (
@@ -2905,15 +2926,39 @@ This is a fully client-side application. Your content never leaves your browser 
       });
     }
 
+    const tagIndex = new Map();
+
+    for (const snapshotFile of snapshotFiles) {
+      const source = snapshotFile.id;
+      (snapshotFile.tags || []).forEach((tag) => {
+        const normalizedTag = normalizeTagName(tag);
+        if (!normalizedTag) return;
+        const tagNodeId = `tag:${normalizedTag}`;
+        if (!tagIndex.has(tagNodeId)) {
+          tagIndex.set(tagNodeId, normalizedTag);
+          nodes.push({
+            id: tagNodeId,
+            label: `#${normalizedTag}`,
+            type: "tag",
+            tag: normalizedTag
+          });
+        }
+        const edgeKey = `${source}->${tagNodeId}:tag`;
+        if (seenEdges.has(edgeKey)) return;
+        seenEdges.add(edgeKey);
+        links.push({ source, target: tagNodeId, type: "tag" });
+      });
+    }
+
     for (const snapshotFile of snapshotFiles) {
       const source = snapshotFile.id;
       extractMarkdownLinks(snapshotFile.content).forEach((ref) => {
         const target = resolveGraphTargetId(ref, snapshotFile.path, nodeIndex);
         if (!target || target === source) return;
-        const edgeKey = `${source}->${target}`;
+        const edgeKey = `${source}->${target}:link`;
         if (seenEdges.has(edgeKey)) return;
         seenEdges.add(edgeKey);
-        links.push({ source, target });
+        links.push({ source, target, type: "link" });
       });
     }
 
@@ -2934,7 +2979,7 @@ This is a fully client-side application. Your content never leaves your browser 
         folderName: snapshot?.folderName || "",
         createdAt: snapshot?.createdAt || 0,
         nodes: (snapshot?.nodes || []).map((node) => node.id),
-        links: (snapshot?.links || []).map((link) => `${link.source}->${link.target}`)
+        links: (snapshot?.links || []).map((link) => `${link.source}->${link.target}:${link.type || "link"}`)
       },
       config: graphViewConfig || null
     });
@@ -8829,8 +8874,14 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
     graphRenderWrapper.dataset.graphTabId = activeTab.id;
     graphViewCanvas.appendChild(graphRenderWrapper);
     hideInactiveGraphRenders(activeTab.id);
-    const nodes = (graphSnapshot.nodes || []).map((node) => ({ ...node }));
-    const links = (graphSnapshot.links || []).map((link) => ({ ...link }));
+    const nodes = (graphSnapshot.nodes || []).map((node) => ({
+      ...node,
+      type: node?.type || "file"
+    }));
+    const links = (graphSnapshot.links || []).map((link) => ({
+      ...link,
+      type: link?.type || "link"
+    }));
     if (graphViewConfig && Array.isArray(graphViewConfig.allowedNodeIds) && graphViewConfig.allowedNodeIds.length) {
       const allowedNodeIds = new Set(graphViewConfig.allowedNodeIds);
       const allowedNodes = nodes.filter((n) => allowedNodeIds.has(n.id));
