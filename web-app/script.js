@@ -1064,6 +1064,7 @@ document.addEventListener("DOMContentLoaded", function () {
     pane.className = "folder-tree-pane";
     pane.id = "folder-tree-pane";
     pane.innerHTML = `
+      <div class="sidebar-width-resizer" id="sidebar-width-resizer" role="separator" aria-orientation="vertical" aria-label="Resize sidebar" tabindex="0"></div>
       <div class="folder-tree-topbar">
         <div class="folder-tree-toolbar" role="toolbar" aria-label="Folder tree tools">
           <button class="folder-tree-tool-button toggle-folder-tree-expanded" type="button" title="Open a folder to expand or collapse folders" aria-label="Expand or collapse all folders" disabled aria-disabled="true">
@@ -1135,6 +1136,7 @@ document.addEventListener("DOMContentLoaded", function () {
   hydrateRecentHandlesFromIndexedDB();
   const sidebarDropzonePanel = document.querySelector(".sidebar-dropzone-panel");
   const sidebarDropzoneResizer = document.getElementById("sidebar-dropzone-resizer");
+  const sidebarWidthResizer = document.getElementById("sidebar-width-resizer");
   const toggleDropzonePanelButtons = document.querySelectorAll(".toggle-dropzone-panel");
   const toggleSidebarButtons = document.querySelectorAll(".toggle-sidebar");
   const toggleAutoSelectFileButtons = document.querySelectorAll(".toggle-auto-select-file");
@@ -1198,10 +1200,14 @@ document.addEventListener("DOMContentLoaded", function () {
   const previewPaneElement = document.querySelector(".preview-pane");
   let isResizing = false;
   let isSidebarDropzoneResizing = false;
+  let isSidebarWidthResizing = false;
   let resizePointerOffset = 0;
   let editorWidthPercent = 50; // Default 50%
   const MIN_PANE_PERCENT = 20; // Minimum 20% width
   const MIN_SIDEBAR_PANEL_HEIGHT = 120;
+  const DEFAULT_SIDEBAR_WIDTH = 280;
+  const MIN_SIDEBAR_WIDTH = 160;
+  const MIN_EDITOR_WORKSPACE_WIDTH = 320;
   const SIDEBAR_VISIBILITY_ANIMATION_MS = 240;
   let sidebarVisibilityAnimationTimer = null;
 
@@ -1246,6 +1252,7 @@ document.addEventListener("DOMContentLoaded", function () {
   };
   autoSelectFileEnabled = loadGlobalState().autoSelectFileEnabled !== false;
   updateAutoSelectFileButtons();
+  applySidebarWidth(loadGlobalState().sidebarWidth, false);
 
   setSidebarVisible(loadGlobalState().sidebarVisible !== false, false);
 
@@ -7131,7 +7138,10 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
     resizeDivider.addEventListener('mousedown', startResize);
     document.addEventListener('mousemove', handleResize);
     document.addEventListener('mouseup', stopResize);
-    window.addEventListener('resize', applyPaneWidths);
+    window.addEventListener('resize', function() {
+      clampSidebarWidthToViewport();
+      applyPaneWidths();
+    });
 
     // Touch support for tablets (though disabled via CSS, keeping for future)
     resizeDivider.addEventListener('touchstart', startResizeTouch);
@@ -7143,6 +7153,102 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
       document.addEventListener('mousemove', handleSidebarDropzoneResize);
       document.addEventListener('mouseup', stopSidebarDropzoneResize);
     }
+
+    if (sidebarWidthResizer) {
+      sidebarWidthResizer.addEventListener('mousedown', startSidebarWidthResize);
+      document.addEventListener('mousemove', handleSidebarWidthResize);
+      document.addEventListener('mouseup', stopSidebarWidthResize);
+      sidebarWidthResizer.addEventListener('touchstart', startSidebarWidthResizeTouch);
+      document.addEventListener('touchmove', handleSidebarWidthResizeTouch);
+      document.addEventListener('touchend', stopSidebarWidthResize);
+      sidebarWidthResizer.addEventListener('keydown', handleSidebarWidthResizeKeydown);
+    }
+  }
+
+  function startSidebarWidthResize(e) {
+    if (!folderTreePane || !isSidebarVisible()) return;
+    e.preventDefault();
+    isSidebarWidthResizing = true;
+    folderTreePane.classList.add('sidebar-width-resizing');
+    document.body.classList.add('resizing');
+  }
+
+  function startSidebarWidthResizeTouch(e) {
+    if (!e.touches[0]) return;
+    startSidebarWidthResize(e);
+  }
+
+  function getMaxSidebarWidth() {
+    const containerWidth = contentContainer ? contentContainer.getBoundingClientRect().width : window.innerWidth;
+    return Math.max(MIN_SIDEBAR_WIDTH, containerWidth - MIN_EDITOR_WORKSPACE_WIDTH);
+  }
+
+  function getClampedSidebarWidth(width) {
+    const numericWidth = Number.parseFloat(width);
+    const fallbackWidth = Number.isFinite(numericWidth) ? numericWidth : DEFAULT_SIDEBAR_WIDTH;
+    return Math.max(MIN_SIDEBAR_WIDTH, Math.min(getMaxSidebarWidth(), fallbackWidth));
+  }
+
+  function applySidebarWidth(width, shouldPersist = true) {
+    if (!folderTreePane) return;
+    const sidebarWidth = getClampedSidebarWidth(width);
+    folderTreePane.style.setProperty('--sidebar-width', `${sidebarWidth}px`);
+    updateSidebarWidthResizerAccessibility(sidebarWidth);
+    if (shouldPersist) {
+      saveGlobalState({ sidebarWidth });
+    }
+    if (currentViewMode === 'split') {
+      requestAnimationFrame(applyPaneWidths);
+    }
+  }
+
+  function updateSidebarWidthResizerAccessibility(sidebarWidth) {
+    if (!sidebarWidthResizer) return;
+    sidebarWidthResizer.setAttribute('aria-valuemin', String(MIN_SIDEBAR_WIDTH));
+    sidebarWidthResizer.setAttribute('aria-valuemax', String(Math.round(getMaxSidebarWidth())));
+    sidebarWidthResizer.setAttribute('aria-valuenow', String(Math.round(sidebarWidth)));
+  }
+
+  function updateSidebarWidthFromClientX(clientX, shouldPersist = false) {
+    if (!folderTreePane || !contentContainer) return;
+    const containerRect = contentContainer.getBoundingClientRect();
+    applySidebarWidth(clientX - containerRect.left, shouldPersist);
+    scheduleEditorLineNumbersUpdate();
+  }
+
+  function handleSidebarWidthResizeKeydown(e) {
+    if (!folderTreePane || !['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(e.key)) return;
+    e.preventDefault();
+    const currentWidth = folderTreePane.getBoundingClientRect().width;
+    const step = e.shiftKey ? 40 : 10;
+    if (e.key === 'Home') applySidebarWidth(MIN_SIDEBAR_WIDTH);
+    if (e.key === 'End') applySidebarWidth(getMaxSidebarWidth());
+    if (e.key === 'ArrowLeft') applySidebarWidth(currentWidth - step);
+    if (e.key === 'ArrowRight') applySidebarWidth(currentWidth + step);
+    scheduleEditorLineNumbersUpdate();
+  }
+
+  function handleSidebarWidthResize(e) {
+    if (!isSidebarWidthResizing) return;
+    updateSidebarWidthFromClientX(e.clientX);
+  }
+
+  function handleSidebarWidthResizeTouch(e) {
+    if (!isSidebarWidthResizing || !e.touches[0]) return;
+    updateSidebarWidthFromClientX(e.touches[0].clientX);
+  }
+
+  function stopSidebarWidthResize() {
+    if (!isSidebarWidthResizing) return;
+    isSidebarWidthResizing = false;
+    folderTreePane.classList.remove('sidebar-width-resizing');
+    document.body.classList.remove('resizing');
+    applySidebarWidth(folderTreePane.getBoundingClientRect().width);
+  }
+
+  function clampSidebarWidthToViewport() {
+    if (!folderTreePane) return;
+    applySidebarWidth(folderTreePane.getBoundingClientRect().width);
   }
 
   function startSidebarDropzoneResize(e) {
