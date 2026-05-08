@@ -843,6 +843,8 @@ body {
   height: min(700px, 85vh);
   display: flex;
   flex-direction: column;
+  position: relative;
+  overflow: hidden;
 }
 
 .graph-view-header {
@@ -859,11 +861,137 @@ body {
 }
 
 .graph-view-toolbar {
+  position: absolute;
+  top: 4.25rem;
+  right: 1rem;
+  z-index: 6;
+  display: flex;
+  flex-direction: column;
+  width: min(280px, calc(100% - 2rem));
+  max-height: calc(100% - 5.25rem);
+  overflow: hidden;
+  background: var(--header-bg);
+  background: color-mix(in srgb, var(--header-bg) 92%, transparent);
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.22);
+  backdrop-filter: blur(10px);
+}
+
+.graph-filter-panel-heading {
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 0.5rem;
-  flex-wrap: wrap;
-  justify-content: flex-end;
+  padding: 0.65rem 0.75rem;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.graph-filter-panel-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  font-weight: 600;
+  color: var(--text-color);
+}
+
+.graph-filter-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  min-width: 2rem;
+  min-height: 2rem;
+  padding: 0.35rem;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--text-color);
+  cursor: pointer;
+  transition: background-color 0.2s ease, border-color 0.2s ease, transform 0.2s ease;
+}
+
+.graph-filter-toggle:hover {
+  background: var(--button-hover);
+  border-color: var(--border-color);
+}
+
+.graph-filter-toggle span,
+.graph-filter-collapsed-icon {
+  display: none;
+}
+
+.graph-filter-panel-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+  padding: 0.75rem;
+  overflow-y: auto;
+}
+
+.graph-filter-section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.graph-filter-section + .graph-filter-section {
+  padding-top: 0.85rem;
+  border-top: 1px solid var(--border-color);
+}
+
+.graph-filter-section-label {
+  color: var(--text-color);
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
+.graph-filter-button-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.5rem;
+}
+
+.graph-view-toolbar .tool-button {
+  justify-content: center;
+  min-height: 2.25rem;
+}
+
+.graph-view-toolbar.collapsed {
+  top: 1rem;
+  width: auto;
+  max-height: none;
+  border-radius: 999px;
+}
+
+.graph-view-toolbar.collapsed .graph-filter-panel-heading {
+  padding: 0;
+  border-bottom: 0;
+}
+
+.graph-view-toolbar.collapsed .graph-filter-panel-title,
+.graph-view-toolbar.collapsed .graph-filter-panel-body {
+  display: none;
+}
+
+.graph-view-toolbar.collapsed .graph-filter-toggle {
+  min-width: auto;
+  min-height: 2.5rem;
+  padding: 0 0.85rem;
+  border-radius: 999px;
+  border-color: var(--border-color);
+  background: var(--button-bg);
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.2);
+}
+
+.graph-view-toolbar.collapsed .graph-filter-toggle span,
+.graph-view-toolbar.collapsed .graph-filter-collapsed-icon {
+  display: inline;
+  font-weight: 600;
+}
+
+.graph-view-toolbar.collapsed .graph-filter-expanded-icon {
+  display: none;
 }
 
 .graph-tag-filter-select {
@@ -900,6 +1028,25 @@ body {
   height: 100%;
 }
 
+@media (max-width: 700px) {
+  .graph-view-toolbar {
+    top: 3.75rem;
+    right: 0.75rem;
+    width: min(260px, calc(100% - 1.5rem));
+    max-height: calc(100% - 4.5rem);
+  }
+
+  .graph-tab-toolbar,
+  .graph-view-toolbar.collapsed {
+    top: 0.75rem;
+    right: 0.75rem;
+  }
+
+  .graph-filter-button-row {
+    grid-template-columns: 1fr;
+  }
+}
+
 .content-container.graph-view-active .editor-pane,
 .content-container.graph-view-active .resize-divider,
 .content-container.graph-view-active #markdown-preview {
@@ -910,16 +1057,15 @@ body {
   flex: 1 1 auto;
   display: flex;
   flex-direction: column;
+  position: relative;
   padding: 0;
   overflow: hidden;
 }
 
 .graph-tab-toolbar {
-  flex: 0 0 auto;
-  justify-content: flex-start;
-  padding: 0.5rem 0.75rem;
-  border-bottom: 1px solid var(--border-color);
-  background: var(--header-bg);
+  top: 1rem;
+  right: 1rem;
+  max-height: calc(100% - 2rem);
 }
 
 .graph-tab-toolbar #graph-view-close {

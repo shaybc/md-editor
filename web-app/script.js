@@ -1749,6 +1749,7 @@ document.addEventListener("DOMContentLoaded", function () {
   const desktopOpenGraphButtons = document.querySelectorAll(".open-graph-view");
   const graphViewCanvas = document.getElementById("graph-view-canvas");
   const graphViewToolbar = document.querySelector(".graph-view-toolbar");
+  const graphFilterPanelToggle = document.getElementById("graph-filter-panel-toggle");
   const graphShowTagsButton = document.getElementById("graph-show-tags");
   const graphHideTagsButton = document.getElementById("graph-hide-tags");
   const graphSelectedTagFilter = document.getElementById("graph-selected-tag-filter");
@@ -9841,6 +9842,14 @@ ${body}`;
     return graphTab;
   }
 
+  function setGraphFilterPanelCollapsed(collapsed) {
+    if (!graphViewToolbar || !graphFilterPanelToggle) return;
+    graphViewToolbar.classList.toggle("collapsed", collapsed);
+    graphFilterPanelToggle.setAttribute("aria-expanded", collapsed ? "false" : "true");
+    graphFilterPanelToggle.setAttribute("aria-label", collapsed ? "Expand graph filters" : "Collapse graph filters");
+    graphFilterPanelToggle.setAttribute("title", collapsed ? "Expand filters" : "Collapse filters");
+  }
+
   function setGraphViewMode(enabled) {
     const contentContainer = document.querySelector(".content-container");
     if (!contentContainer || !graphViewCanvas) return;
@@ -11336,6 +11345,11 @@ ${body}`;
     graphSelectedTagFilter.addEventListener("change", () => {
       const selectedTagId = normalizeGraphTagNodeId(graphSelectedTagFilter.value);
       updateActiveGraphViewConfig({ selectedTagIds: selectedTagId ? [selectedTagId] : [] });
+    });
+  }
+  if (graphFilterPanelToggle) {
+    graphFilterPanelToggle.addEventListener("click", () => {
+      setGraphFilterPanelCollapsed(!graphViewToolbar?.classList.contains("collapsed"));
     });
   }
   if (graphOnlySelectedTagButton) {
