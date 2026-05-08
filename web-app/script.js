@@ -9151,6 +9151,17 @@ ${body}`;
       ...link,
       type: link?.type || "link"
     }));
+    const getGraphNodeType = (nodeData) => nodeData?.type || "file";
+    const getGraphLinkType = (linkData) => linkData?.type || "link";
+    const isTagNode = (nodeData) => getGraphNodeType(nodeData) === "tag";
+    const isTagLink = (linkData) => getGraphLinkType(linkData) === "tag";
+    const isMarkdownLink = (linkData) => !isTagLink(linkData);
+    const getGraphNodeLabel = (nodeData) => {
+      const labelText = nodeData?.label || nodeData?.id || "";
+      if (!isTagNode(nodeData)) return labelText;
+      const tagName = nodeData?.tag || String(labelText).replace(/^#/, "");
+      return `#${tagName}`;
+    };
     if (graphViewConfig && Array.isArray(graphViewConfig.allowedNodeIds) && graphViewConfig.allowedNodeIds.length) {
       const allowedNodeIds = new Set(graphViewConfig.allowedNodeIds);
       const allowedNodes = nodes.filter((n) => allowedNodeIds.has(n.id));
@@ -9184,7 +9195,7 @@ ${body}`;
     const getLinkTargetId = (link) => link?.target?.id || link?.target;
 
     const getDirectOutgoingNodeIds = (nodeId) => links
-      .filter((link) => getLinkSourceId(link) === nodeId)
+      .filter((link) => isMarkdownLink(link) && getLinkSourceId(link) === nodeId)
       .map(getLinkTargetId)
       .filter(Boolean);
 
@@ -9224,7 +9235,7 @@ ${body}`;
     const outgoingDegree = new Map();
     nodes.forEach((n) => outgoingAdjacency.set(n.id, new Set([n.id])));
     nodes.forEach((n) => outgoingDegree.set(n.id, 0));
-    links.forEach((l) => {
+    links.filter(isMarkdownLink).forEach((l) => {
       outgoingAdjacency.get(l.source)?.add(l.target);
       outgoingDegree.set(l.source, (outgoingDegree.get(l.source) || 0) + 1);
     });
@@ -9296,11 +9307,11 @@ ${body}`;
     const labelLayer = graphLayer.append("g").attr("class", "graph-label-layer");
 
     const link = lineLayer.selectAll("line").data(links).enter().append("line")
-      .attr("class", "graph-link");
-    const arrowhead = arrowheadLayer.selectAll("path").data(links).enter().append("path")
+      .attr("class", (d) => `graph-link graph-link-${getGraphLinkType(d)}`);
+    const arrowhead = arrowheadLayer.selectAll("path").data(links.filter(isMarkdownLink)).enter().append("path")
       .attr("class", "graph-arrowhead");
     const node = nodeLayer.selectAll("circle").data(nodes).enter().append("circle")
-      .attr("r", (d) => nodeRadius(d.id)).attr("class", "graph-node")
+      .attr("r", (d) => nodeRadius(d.id)).attr("class", (d) => `graph-node graph-node-${getGraphNodeType(d)}`)
       .call(d3.drag()
         .on("start", (event, d) => {
           if (graphSettings.magneticEnabled && !event.active) simulation.alphaTarget(0.3).restart();
@@ -9327,8 +9338,10 @@ ${body}`;
           saveTabsToStorage(tabs);
         }));
     const graphTooltipPathsById = new Map((graphSnapshot.files || []).map((file) => [file.id, file.fullPath || file.path]));
-    node.append("title").text((d) => graphTooltipPathsById.get(d.id) || d.fullPath || d.label);
-    const label = labelLayer.selectAll("text").data(nodes).enter().append("text").text((d) => d.label).attr("class", "graph-label");
+    node.append("title").text((d) => graphTooltipPathsById.get(d.id) || d.fullPath || getGraphNodeLabel(d));
+    const label = labelLayer.selectAll("text").data(nodes).enter().append("text")
+      .text(getGraphNodeLabel)
+      .attr("class", (d) => `graph-label graph-label-${getGraphNodeType(d)}`);
 
     const contextMenu = document.createElement("div");
     contextMenu.className = "graph-context-menu hidden";
@@ -9612,7 +9625,7 @@ ${body}`;
     };
 
     const getDirectOutgoingDependencyIds = (nodeId) => links
-      .filter((l) => l.source?.id === nodeId || l.source === nodeId)
+      .filter((l) => isMarkdownLink(l) && (l.source?.id === nodeId || l.source === nodeId))
       .map((l) => l.target?.id || l.target)
       .filter(Boolean);
 
@@ -9629,7 +9642,7 @@ ${body}`;
     };
 
     const getBacklinkIds = (nodeId) => links
-      .filter((l) => (l.target?.id || l.target) === nodeId)
+      .filter((l) => isMarkdownLink(l) && (l.target?.id || l.target) === nodeId)
       .map((l) => l.source?.id || l.source)
       .filter(Boolean);
 
@@ -10168,12 +10181,16 @@ ${body}`;
     });
 
     let hoveredGraphNode = null;
-    let hoveredGraphModifiers = { shiftKey: false, ctrlKey: false };
+    let hoveredGraphModifiers = { shiftKey: false, ctrlKey: false, altKey: false };
 
     const getGraphLinkSourceId = (linkData) => linkData?.source?.id || linkData?.source;
     const getGraphLinkTargetId = (linkData) => linkData?.target?.id || linkData?.target;
 
-    const getRecursiveOutgoingHighlight = (focusNodeId) => {
+    const shouldIncludeLinkInHoverHighlight = (linkData, includeTagRelationships = false) => (
+      includeTagRelationships || isMarkdownLink(linkData)
+    );
+
+    const getRecursiveOutgoingHighlight = (focusNodeId, includeTagRelationships = false) => {
       const highlightedNodes = new Set([focusNodeId]);
       const highlightedLinks = new Set();
       const visitedNodeIds = new Set([focusNodeId]);
@@ -10182,6 +10199,7 @@ ${body}`;
       while (nodesToVisit.length) {
         const currentNodeId = nodesToVisit.shift();
         links.forEach((linkData) => {
+          if (!shouldIncludeLinkInHoverHighlight(linkData, includeTagRelationships)) return;
           if (getGraphLinkSourceId(linkData) !== currentNodeId) return;
           highlightedLinks.add(linkData);
           const targetNodeId = getGraphLinkTargetId(linkData);
@@ -10197,11 +10215,12 @@ ${body}`;
       return { highlightedNodes, highlightedLinks };
     };
 
-    const getBacklinkHighlight = (focusNodeId) => {
+    const getBacklinkHighlight = (focusNodeId, includeTagRelationships = false) => {
       const highlightedNodes = new Set([focusNodeId]);
       const highlightedLinks = new Set();
 
       links.forEach((linkData) => {
+        if (!shouldIncludeLinkInHoverHighlight(linkData, includeTagRelationships)) return;
         if (getGraphLinkTargetId(linkData) !== focusNodeId) return;
         highlightedLinks.add(linkData);
         const sourceNodeId = getGraphLinkSourceId(linkData);
@@ -10215,14 +10234,22 @@ ${body}`;
       if (!focusNode) return;
       const focusNodeId = focusNode.id;
       const isBacklinkHighlight = Boolean(modifiers.ctrlKey);
+      // Alt is the explicit opt-in for including tag relationships in hover highlights.
+      const includeTagRelationships = Boolean(modifiers.altKey);
       const highlight = isBacklinkHighlight
-        ? getBacklinkHighlight(focusNodeId)
+        ? getBacklinkHighlight(focusNodeId, includeTagRelationships)
         : (modifiers.shiftKey
-          ? getRecursiveOutgoingHighlight(focusNodeId)
+          ? getRecursiveOutgoingHighlight(focusNodeId, includeTagRelationships)
           : {
             highlightedNodes: outgoingAdjacency.get(focusNodeId) || new Set([focusNodeId]),
-            highlightedLinks: new Set(links.filter((l) => getGraphLinkSourceId(l) === focusNodeId))
+            highlightedLinks: new Set(links.filter((l) => shouldIncludeLinkInHoverHighlight(l, includeTagRelationships) && getGraphLinkSourceId(l) === focusNodeId))
           });
+      if (includeTagRelationships) {
+        highlight.highlightedLinks.forEach((linkData) => {
+          const targetNodeId = getGraphLinkTargetId(linkData);
+          if (targetNodeId) highlight.highlightedNodes.add(targetNodeId);
+        });
+      }
       const isHighlightedLink = (l) => highlight.highlightedLinks.has(l);
 
       node.classed("dimmed", (n) => !highlight.highlightedNodes.has(n.id));
@@ -10247,7 +10274,8 @@ ${body}`;
     const updateHoveredGraphHighlight = (event) => {
       hoveredGraphModifiers = {
         shiftKey: Boolean(event?.shiftKey),
-        ctrlKey: Boolean(event?.ctrlKey)
+        ctrlKey: Boolean(event?.ctrlKey),
+        altKey: Boolean(event?.altKey)
       };
       if (hoveredGraphNode) highlightNeighborhood(hoveredGraphNode, hoveredGraphModifiers);
     };

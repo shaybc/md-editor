@@ -896,10 +896,23 @@ body {
   transition: opacity 0.15s ease, stroke-opacity 0.15s ease, stroke 0.15s ease, stroke-width 0.15s ease;
 }
 
+.graph-link-tag {
+  stroke: #6e7781;
+  stroke-dasharray: 4 5;
+  stroke-linecap: round;
+  stroke-opacity: 0.45;
+  stroke-width: 1px;
+}
+
 .graph-link.highlighted-direct {
   stroke: #8b5cf6;
   stroke-opacity: 1;
   stroke-width: 1px;
+}
+
+.graph-link-tag.highlighted-direct {
+  stroke: #14b8a6;
+  stroke-opacity: 0.85;
 }
 
 .graph-link.highlighted-backlink {
@@ -911,6 +924,12 @@ body {
 .graph-node {
   fill: var(--accent-color);
   transition: opacity 0.15s ease;
+}
+
+.graph-node-tag {
+  fill: #14b8a6;
+  stroke: var(--preview-bg);
+  stroke-width: 1.5px;
 }
 
 .graph-arrowhead {
@@ -928,6 +947,15 @@ body {
   font-size: 12px;
   pointer-events: none;
   transition: opacity 0.15s ease;
+}
+
+.graph-label-tag {
+  fill: #0f766e;
+  font-weight: 600;
+}
+
+[data-theme="dark"] .graph-label-tag {
+  fill: #5eead4;
 }
 
 .graph-node.dimmed,
