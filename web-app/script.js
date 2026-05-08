@@ -30,7 +30,6 @@ document.addEventListener("DOMContentLoaded", function () {
   const folderTreeFilterInput = document.getElementById("folder-tree-filter-input");
   const folderTreeFilterToggleButtons = document.querySelectorAll(".toggle-folder-tree-filter");
   const folderTreeExpandToggleButtons = document.querySelectorAll(".toggle-folder-tree-expanded");
-  const toggleUnsupportedFileButtons = document.querySelectorAll(".toggle-unsupported-files");
   let folderTreeRoot = document.getElementById("folder-tree-root");
 
   console.error("[FolderTree] init", {
@@ -1463,10 +1462,11 @@ document.addEventListener("DOMContentLoaded", function () {
     });
   });
 
-  toggleUnsupportedFileButtons.forEach(function(button) {
-    button.addEventListener("click", function() {
-      setShowUnsupportedFolderFiles(!showUnsupportedFolderFiles);
-    });
+  document.addEventListener("click", function(event) {
+    const button = event.target?.closest?.(".toggle-unsupported-files");
+    if (!button) return;
+    event.preventDefault();
+    setShowUnsupportedFolderFiles(!showUnsupportedFolderFiles);
   });
 
 
@@ -1613,10 +1613,17 @@ document.addEventListener("DOMContentLoaded", function () {
     updateFolderTreeExpandToggleButtons();
   }
 
+  function getUnsupportedFileToggleButtons() {
+    return document.querySelectorAll(".toggle-unsupported-files");
+  }
+
   function getVisibleFolderTreeNodes(nodes) {
     return (nodes || []).reduce(function(visibleNodes, node) {
       if (node.kind === "directory") {
-        visibleNodes.push({ ...node, children: getVisibleFolderTreeNodes(node.children || []) });
+        const visibleChildren = getVisibleFolderTreeNodes(node.children || []);
+        if (showUnsupportedFolderFiles || visibleChildren.length) {
+          visibleNodes.push({ ...node, children: visibleChildren });
+        }
         return visibleNodes;
       }
 
@@ -1713,7 +1720,7 @@ document.addEventListener("DOMContentLoaded", function () {
     const label = showUnsupportedFolderFiles ? "Hide unsupported file types" : "Show unsupported file types";
     const title = `${label} in the folder view`;
 
-    toggleUnsupportedFileButtons.forEach(function(button) {
+    getUnsupportedFileToggleButtons().forEach(function(button) {
       const labelElement = button.querySelector(".unsupported-files-toggle-label");
       if (labelElement) {
         labelElement.textContent = label;
