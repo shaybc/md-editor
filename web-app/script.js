@@ -1632,9 +1632,7 @@ document.addEventListener("DOMContentLoaded", function () {
     return (nodes || []).reduce(function(visibleNodes, node) {
       if (node.kind === "directory") {
         const visibleChildren = getVisibleFolderTreeNodes(node.children || []);
-        if (showUnsupportedFolderFiles || visibleChildren.length) {
-          visibleNodes.push({ ...node, children: visibleChildren });
-        }
+        visibleNodes.push({ ...node, children: visibleChildren });
         return visibleNodes;
       }
 
