@@ -340,6 +340,33 @@ document.addEventListener("DOMContentLoaded", function () {
 
   let editorContextMenu = null;
   let editorContextMenuSelection = null;
+  const editorContextMenuUndoStack = [];
+  const editorContextMenuUndoStackLimit = 50;
+
+  function rememberEditorContextMenuConversion(undoState) {
+    editorContextMenuUndoStack.push(undoState);
+    if (editorContextMenuUndoStack.length > editorContextMenuUndoStackLimit) {
+      editorContextMenuUndoStack.shift();
+    }
+  }
+
+  function undoEditorContextMenuConversion() {
+    const undoState = editorContextMenuUndoStack[editorContextMenuUndoStack.length - 1];
+    if (!undoState) return false;
+    if (undoState.tabId !== activeTabId || markdownEditor.value !== undoState.afterValue) return false;
+
+    editorContextMenuUndoStack.pop();
+    markdownEditor.value = undoState.beforeValue;
+    markdownEditor.selectionStart = undoState.selectionStart;
+    markdownEditor.selectionEnd = undoState.selectionEnd;
+    markdownEditor.focus();
+    markdownEditor.dispatchEvent(new Event("input"));
+    updateEditorLineNumbers();
+    updateEditorSelectionHighlights();
+    updateStatusLine();
+    hideEditorContextMenu();
+    return true;
+  }
 
   const editorMarkdownActions = [
     { type: "heading-1", label: "Heading 1", icon: "bi-type-h1" },
@@ -479,9 +506,18 @@ document.addEventListener("DOMContentLoaded", function () {
     const selectedText = value.slice(start, end);
     const replacement = convertSelectionToMarkdown(type, selectedText);
 
-    markdownEditor.value = value.slice(0, start) + replacement + value.slice(end);
+    const nextValue = value.slice(0, start) + replacement + value.slice(end);
+
+    markdownEditor.value = nextValue;
     markdownEditor.selectionStart = start;
     markdownEditor.selectionEnd = start + replacement.length;
+    rememberEditorContextMenuConversion({
+      tabId: activeTabId,
+      beforeValue: value,
+      afterValue: nextValue,
+      selectionStart: start,
+      selectionEnd: end
+    });
     markdownEditor.focus();
     markdownEditor.dispatchEvent(new Event("input"));
     hideEditorContextMenu();
@@ -7818,6 +7854,10 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
   // Tab key handler to insert indentation instead of moving focus
   markdownEditor.addEventListener("keydown", function(e) {
     if (handleLinkAutocompleteKeydown(e)) return;
+    if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && e.key.toLowerCase() === "z" && undoEditorContextMenuConversion()) {
+      e.preventDefault();
+      return;
+    }
     if (e.key === 'Tab') {
       e.preventDefault();
       
