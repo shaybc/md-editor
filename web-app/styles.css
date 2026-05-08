@@ -1016,8 +1016,46 @@ body {
 }
 
 
-.graph-filter-control-section {
+.graph-filter-control-section,
+.graph-collapsible-content {
   gap: 0.75rem;
+}
+
+.graph-collapsible-section {
+  display: block;
+}
+
+.graph-collapsible-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  cursor: pointer;
+  list-style: none;
+}
+
+.graph-collapsible-summary::-webkit-details-marker {
+  display: none;
+}
+
+.graph-collapsible-summary i {
+  transition: transform 0.2s ease;
+}
+
+.graph-collapsible-section:not([open]) .graph-collapsible-summary i {
+  transform: rotate(-90deg);
+}
+
+.graph-collapsible-summary:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--accent-color) 45%, transparent);
+  outline-offset: 3px;
+  border-radius: 4px;
+}
+
+.graph-collapsible-content {
+  display: flex;
+  flex-direction: column;
+  padding-top: 0.65rem;
 }
 
 .graph-toggle-row,
@@ -1087,16 +1125,6 @@ body {
   width: 100%;
   accent-color: var(--accent-color);
   cursor: pointer;
-}
-
-.graph-primary-button {
-  background: var(--accent-color);
-  color: #fff;
-  border-color: var(--accent-color);
-}
-
-.graph-primary-button:hover {
-  filter: brightness(1.05);
 }
 
 .graph-view-toolbar .tool-button.active {

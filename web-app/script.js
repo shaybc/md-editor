@@ -1759,7 +1759,6 @@ document.addEventListener("DOMContentLoaded", function () {
   const graphTextFadeThreshold = document.getElementById("graph-text-fade-threshold");
   const graphNodeSize = document.getElementById("graph-node-size");
   const graphLinkThickness = document.getElementById("graph-link-thickness");
-  const graphAnimateButton = document.getElementById("graph-animate");
   const graphCenterForce = document.getElementById("graph-center-force");
   const graphRepelForce = document.getElementById("graph-repel-force");
   const graphLinkForce = document.getElementById("graph-link-force");
@@ -9987,7 +9986,6 @@ ${body}`;
     if (graphRepelForce) graphRepelForce.value = graphViewConfig.repelForce;
     if (graphLinkForce) graphLinkForce.value = graphViewConfig.linkForce;
     if (graphLinkDistance) graphLinkDistance.value = graphViewConfig.linkDistance;
-    if (graphAnimateButton) graphAnimateButton.disabled = !isGraphTab;
   }
 
   function updateActiveGraphViewConfig(patch) {
@@ -11514,7 +11512,6 @@ ${body}`;
   bindGraphRangeControl(graphRepelForce, "repelForce");
   bindGraphRangeControl(graphLinkForce, "linkForce");
   bindGraphRangeControl(graphLinkDistance, "linkDistance");
-  if (graphAnimateButton) graphAnimateButton.addEventListener("click", animateActiveGraphView);
 
   exportHtml.addEventListener("click", function () {
     try {
