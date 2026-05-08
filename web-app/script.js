@@ -12,6 +12,7 @@ document.addEventListener("DOMContentLoaded", function () {
   let autoSelectFileEnabled = true;
   let currentFolderTreeNodes = [];
   let folderTreeFilterText = "";
+  let currentFolderSortMode = "name-asc";
   let isFolderOpen = false;
 
   const markdownEditor = document.getElementById("markdown-editor");
@@ -773,6 +774,36 @@ document.addEventListener("DOMContentLoaded", function () {
             <i class="bi bi-crosshair" aria-hidden="true"></i>
             <span class="auto-select-file-label visually-hidden">Auto select file Off</span>
           </button>
+          <button class="folder-tree-tool-button open-graph-view" type="button" title="Open Graph View" aria-label="Open Graph View">
+            <i class="bi bi-diagram-3" aria-hidden="true"></i>
+          </button>
+          <div class="folder-tree-sort-menu dropdown">
+            <button class="folder-tree-tool-button folder-tree-sort-menu-button dropdown-toggle" type="button" id="folderTreeSortMenu" data-bs-toggle="dropdown" aria-expanded="false" title="Open a folder to sort files and folders" aria-label="Sort files and folders" disabled aria-disabled="true">
+              <i class="bi bi-sort-alpha-down" aria-hidden="true"></i>
+            </button>
+            <div class="dropdown-menu action-menu folder-tree-sort-options" aria-labelledby="folderTreeSortMenu">
+              <button class="dropdown-item action-menu-item folder-tree-sort-option" type="button" data-folder-sort="name-asc">
+                <span>File name (A to Z)</span><i class="bi bi-check-lg ms-auto folder-tree-sort-check" aria-hidden="true"></i>
+              </button>
+              <button class="dropdown-item action-menu-item folder-tree-sort-option" type="button" data-folder-sort="name-desc">
+                <span>File name (Z to A)</span><i class="bi bi-check-lg ms-auto folder-tree-sort-check" aria-hidden="true"></i>
+              </button>
+              <hr class="dropdown-divider">
+              <button class="dropdown-item action-menu-item folder-tree-sort-option" type="button" data-folder-sort="modified-desc">
+                <span>Modified time (new to old)</span><i class="bi bi-check-lg ms-auto folder-tree-sort-check" aria-hidden="true"></i>
+              </button>
+              <button class="dropdown-item action-menu-item folder-tree-sort-option" type="button" data-folder-sort="modified-asc">
+                <span>Modified time (old to new)</span><i class="bi bi-check-lg ms-auto folder-tree-sort-check" aria-hidden="true"></i>
+              </button>
+              <hr class="dropdown-divider">
+              <button class="dropdown-item action-menu-item folder-tree-sort-option" type="button" data-folder-sort="created-desc">
+                <span>Created time (new to old)</span><i class="bi bi-check-lg ms-auto folder-tree-sort-check" aria-hidden="true"></i>
+              </button>
+              <button class="dropdown-item action-menu-item folder-tree-sort-option" type="button" data-folder-sort="created-asc">
+                <span>Created time (old to new)</span><i class="bi bi-check-lg ms-auto folder-tree-sort-check" aria-hidden="true"></i>
+              </button>
+            </div>
+          </div>
           <button class="folder-tree-tool-button toggle-folder-tree-filter" type="button" title="Open a folder to filter files and folders" aria-label="Filter files and folders" aria-expanded="false" disabled aria-disabled="true">
             <i class="bi bi-funnel" aria-hidden="true"></i>
           </button>
@@ -808,6 +839,8 @@ document.addEventListener("DOMContentLoaded", function () {
   const toggleDropzonePanelButtons = document.querySelectorAll(".toggle-dropzone-panel");
   const toggleSidebarButtons = document.querySelectorAll(".toggle-sidebar");
   const toggleAutoSelectFileButtons = document.querySelectorAll(".toggle-auto-select-file");
+  const folderTreeSortMenuButtons = document.querySelectorAll(".folder-tree-sort-menu-button");
+  const folderTreeSortOptionButtons = document.querySelectorAll(".folder-tree-sort-option");
   updateFolderImportHint();
   updateFolderTreeToolbarState();
   toggleAutoSelectFileButtons.forEach(function(button) {
@@ -848,6 +881,13 @@ document.addEventListener("DOMContentLoaded", function () {
       updateFolderTreeFilterControls();
     });
   }
+
+  folderTreeSortOptionButtons.forEach(function(button) {
+    button.addEventListener("click", function() {
+      if (!isFolderOpen) return;
+      applyFolderSortMode(button.dataset.folderSort || "name-asc");
+    });
+  });
 
 
   // Mobile View Mode Elements - Story 1.4
@@ -901,6 +941,7 @@ document.addEventListener("DOMContentLoaded", function () {
   // GLOBAL STATE (persisted across reloads)
   // ========================================
   const GLOBAL_STATE_KEY = 'markdownViewerGlobalState';
+  currentFolderSortMode = getValidFolderSortMode(loadGlobalState().folderSortMode || currentFolderSortMode);
   const graphSettings = {
     magneticEnabled: loadGlobalState().graphMagneticEnabled !== false
   };
@@ -1036,10 +1077,42 @@ document.addEventListener("DOMContentLoaded", function () {
     }
   }
 
+  function getFolderSortLabel(mode) {
+    const labels = {
+      "name-asc": "File name (A to Z)",
+      "name-desc": "File name (Z to A)",
+      "modified-desc": "Modified time (new to old)",
+      "modified-asc": "Modified time (old to new)",
+      "created-desc": "Created time (new to old)",
+      "created-asc": "Created time (old to new)"
+    };
+    return labels[getValidFolderSortMode(mode)];
+  }
+
+  function updateFolderTreeSortControls() {
+    const hasFolder = !!isFolderOpen;
+    const activeLabel = getFolderSortLabel(currentFolderSortMode);
+    const title = hasFolder ? `Sort files and folders: ${activeLabel}` : "Open a folder to sort files and folders";
+
+    folderTreeSortMenuButtons.forEach(function(button) {
+      button.disabled = !hasFolder;
+      button.title = title;
+      button.setAttribute("aria-label", title);
+      button.setAttribute("aria-disabled", hasFolder ? "false" : "true");
+    });
+
+    folderTreeSortOptionButtons.forEach(function(button) {
+      const isActive = button.dataset.folderSort === currentFolderSortMode;
+      button.classList.toggle("active", isActive);
+      button.setAttribute("aria-checked", String(isActive));
+    });
+  }
+
   function updateFolderTreeToolbarState() {
     updateAutoSelectFileButtons();
     updateFolderTreeExpandToggleButtons();
     updateFolderTreeFilterControls();
+    updateFolderTreeSortControls();
   }
 
   function setAutoSelectFileEnabled(enabled) {
@@ -3362,11 +3435,17 @@ This is a fully client-side application. Your content never leaves your browser 
         entries.push({ kind: "directory", name: entry.name, path: currentPath, children, handle: entry });
       } else if (entry.kind === "file" && isSidebarDocumentPath(entry.name)) {
         const currentPath = parentPath ? `${parentPath}/${entry.name}` : entry.name;
-        entries.push({ kind: "file", name: entry.name, path: currentPath, handle: entry });
+        let file = null;
+        try {
+          file = await entry.getFile();
+        } catch (error) {
+          console.warn("Failed to read file metadata:", currentPath, error);
+        }
+        const modifiedAt = Number(file?.lastModified || 0) || 0;
+        entries.push({ kind: "file", name: entry.name, path: currentPath, handle: entry, modifiedAt, createdAt: modifiedAt });
       }
     }
-    entries.sort((a,b) => a.kind === b.kind ? a.name.localeCompare(b.name) : (a.kind === "directory" ? -1 : 1));
-    return entries;
+    return sortFolderTreeNodes(entries);
   }
 
   async function collectMarkdownFilesFromTree(nodes, parentPath = "") {
@@ -3556,14 +3635,58 @@ This is a fully client-side application. Your content never leaves your browser 
   }
 
 
+  function getValidFolderSortMode(mode) {
+    return ["name-asc", "name-desc", "modified-desc", "modified-asc", "created-desc", "created-asc"].includes(mode)
+      ? mode
+      : "name-asc";
+  }
+
+  function getNodeTimestamp(node, field) {
+    const value = Number(node?.[field] || 0);
+    if (value > 0) return value;
+    return Number(node?.modifiedAt || node?.file?.lastModified || 0) || 0;
+  }
+
+  function compareFolderTreeNodes(a, b) {
+    if (a.kind !== b.kind) return a.kind === "directory" ? -1 : 1;
+
+    const mode = getValidFolderSortMode(currentFolderSortMode);
+    if (mode === "name-desc") return String(b.name || "").localeCompare(String(a.name || ""));
+    if (mode === "modified-desc" || mode === "modified-asc") {
+      const diff = getNodeTimestamp(a, "modifiedAt") - getNodeTimestamp(b, "modifiedAt");
+      if (diff !== 0) return mode === "modified-desc" ? -diff : diff;
+    }
+    if (mode === "created-desc" || mode === "created-asc") {
+      const diff = getNodeTimestamp(a, "createdAt") - getNodeTimestamp(b, "createdAt");
+      if (diff !== 0) return mode === "created-desc" ? -diff : diff;
+    }
+
+    return String(a.name || "").localeCompare(String(b.name || ""));
+  }
+
   function sortFolderTreeNodes(nodes) {
-    nodes.sort((a, b) =>
-      a.kind === b.kind ? a.name.localeCompare(b.name) : (a.kind === "directory" ? -1 : 1)
-    );
+    nodes.sort(compareFolderTreeNodes);
     nodes.forEach((node) => {
       if (node.kind === "directory") sortFolderTreeNodes(node.children || []);
     });
     return nodes;
+  }
+
+  async function updateFolderMarkdownFileOrderFromTree() {
+    if (typeof NL_VERSION !== "undefined" && activeFolderPath) {
+      folderMarkdownFiles = await collectMarkdownFilesFromTreeNeutralino(currentFolderTreeNodes);
+      return;
+    }
+    folderMarkdownFiles = await collectMarkdownFilesFromTree(currentFolderTreeNodes);
+  }
+
+  async function applyFolderSortMode(mode) {
+    currentFolderSortMode = getValidFolderSortMode(mode);
+    saveGlobalState({ folderSortMode: currentFolderSortMode });
+    sortFolderTreeNodes(currentFolderTreeNodes);
+    await updateFolderMarkdownFileOrderFromTree();
+    updateFolderTreeSortControls();
+    renderFilteredFolderTree();
   }
 
   async function openFolderTreeFromNeutralinoPath(selectedPath) {
@@ -3808,7 +3931,8 @@ This is a fully client-side application. Your content never leaves your browser 
       } else if (entry.isFile && isSidebarDocumentPath(entry.name)) {
         try {
           const file = await getFileFromEntry(entry);
-          entries.push({ kind: "file", name: entry.name, file, path: entry.fullPath || entry.name });
+          const modifiedAt = Number(file?.lastModified || 0) || 0;
+          entries.push({ kind: "file", name: entry.name, file, path: entry.fullPath || entry.name, modifiedAt, createdAt: modifiedAt });
         } catch (error) {
           console.warn("Failed to read dropped document file:", entry.name, error);
         }
@@ -3924,20 +4048,23 @@ async function listMarkdownTreeNeutralino(dirPath) {
     for (const item of items) {
       if (item.entry === "." || item.entry === "..") continue;
       const fullPath = `${dirPath}/${item.entry}`;
+      let stats = null;
+      try {
+        stats = await Neutralino.filesystem.getStats(fullPath);
+      } catch (error) {
+        console.warn("Failed to read file metadata:", fullPath, error);
+      }
       if (item.type === "DIRECTORY") {
         const children = await listMarkdownTreeNeutralino(fullPath);
-        entries.push({ kind: "directory", name: item.entry, children, fullPath });
+        entries.push({ kind: "directory", name: item.entry, children, fullPath, createdAt: Number(stats?.createdAt || 0), modifiedAt: Number(stats?.modifiedAt || 0) });
       } else if (item.type === "FILE" && isSidebarDocumentPath(item.entry)) {
-        entries.push({ kind: "file", name: item.entry, fullPath });
+        entries.push({ kind: "file", name: item.entry, fullPath, createdAt: Number(stats?.createdAt || stats?.modifiedAt || 0), modifiedAt: Number(stats?.modifiedAt || 0) });
       }
     }
   } catch (error) {
     console.warn("Failed to read directory:", dirPath, error);
   }
-  entries.sort((a, b) =>
-    a.kind === b.kind ? a.name.localeCompare(b.name) : (a.kind === "directory" ? -1 : 1)
-  );
-  return entries;
+  return sortFolderTreeNodes(entries);
 }
 
 async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
@@ -5724,15 +5851,11 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
       relPath.forEach((segment) => {
         cursor = ensureDir(cursor, segment).children;
       });
-      cursor.push({ kind: "file", name: fileName, file, path: (file.webkitRelativePath || file.name) });
+      const modifiedAt = Number(file?.lastModified || 0) || 0;
+      cursor.push({ kind: "file", name: fileName, file, path: (file.webkitRelativePath || file.name), modifiedAt, createdAt: modifiedAt });
     });
 
-    const sortNodes = (nodes) => {
-      nodes.sort((a,b) => a.kind === b.kind ? a.name.localeCompare(b.name) : (a.kind === "directory" ? -1 : 1));
-      nodes.forEach((n) => n.kind === "directory" && sortNodes(n.children));
-    };
-    sortNodes(root);
-    return root;
+    return sortFolderTreeNodes(root);
   }
   async function openFolderTree(event) {
   // Desktop app: use Neutralino native folder picker (no permission dialog)
@@ -7106,16 +7229,14 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
 
 
   if (folderInput) {
-    folderInput.addEventListener("change", function(e) {
+    folderInput.addEventListener("change", async function(e) {
       const files = e.target.files;
       const firstRelativePath = Array.from(files || []).find((file) => file.webkitRelativePath)?.webkitRelativePath || "";
       activeFolderName = firstRelativePath.split("/")[0] || "Graph View";
       activeFolderHandle = null;
       activeFolderPath = null;
-      folderMarkdownFiles = Array.from(files || [])
-        .filter((file) => isMarkdownPath(file.name))
-        .map((file) => ({ path: file.webkitRelativePath || file.name, file }));
       const nodes = buildTreeFromFileList(files || []);
+      folderMarkdownFiles = await collectMarkdownFilesFromTree(nodes);
       renderFolderTree(nodes);
       rememberRecentFolder({ name: activeFolderName, label: activeFolderName });
       this.value = "";

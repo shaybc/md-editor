@@ -2066,6 +2066,34 @@ a:focus {
   min-width: 260px;
 }
 
+.folder-tree-sort-menu {
+  position: relative;
+  flex: 0 0 auto;
+}
+
+.folder-tree-sort-menu .dropdown-toggle::after {
+  display: none;
+}
+
+.folder-tree-sort-menu .folder-tree-sort-options {
+  width: 240px;
+  min-width: 240px;
+}
+
+.folder-tree-sort-option .folder-tree-sort-check {
+  visibility: hidden;
+}
+
+.folder-tree-sort-option.active .folder-tree-sort-check,
+.folder-tree-sort-option[aria-checked="true"] .folder-tree-sort-check {
+  visibility: visible;
+}
+
+.folder-tree-sort-option.active {
+  background-color: transparent;
+  color: var(--text-color);
+}
+
 .folder-action-menu-button.dropdown-toggle::after {
   display: none;
 }
