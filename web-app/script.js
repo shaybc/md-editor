@@ -1638,7 +1638,7 @@ document.addEventListener("DOMContentLoaded", function () {
         return visibleNodes;
       }
 
-      if (showUnsupportedFolderFiles || isSidebarDocumentNode(node)) {
+      if (showUnsupportedFolderFiles || isSupportedFolderTreeDocumentNode(node)) {
         visibleNodes.push(node);
       }
       return visibleNodes;
@@ -4243,7 +4243,8 @@ This is a fully client-side application. Your content never leaves your browser 
           console.warn("Failed to read file metadata:", currentPath, error);
         }
         const modifiedAt = Number(file?.lastModified || 0) || 0;
-        entries.push({ kind: "file", name: entry.name, path: currentPath, handle: entry, modifiedAt, createdAt: modifiedAt });
+        const isGraphDocumentFile = await fileContainsGraphDocument(file);
+        entries.push({ kind: "file", name: entry.name, path: currentPath, handle: entry, modifiedAt, createdAt: modifiedAt, isGraphDocumentFile });
       }
     }
     return sortFolderTreeNodes(entries);
@@ -4329,7 +4330,7 @@ This is a fully client-side application. Your content never leaves your browser 
     if (!displayNodes.length) {
       folderTreeRoot.innerHTML = folderTreeFilterText
         ? '<p class="folder-tree-placeholder">No files or folders match this filter.</p>'
-        : '<p class="folder-tree-placeholder">No text-based or graph files found in this folder.</p>';
+        : '<p class="folder-tree-placeholder">No Markdown or graph files found in this folder.</p>';
       updateCloseFolderButtons();
       updateFolderTreeToolbarState();
       return;
@@ -4608,6 +4609,35 @@ This is a fully client-side application. Your content never leaves your browser 
     return !!(node && (isSidebarDocumentPath(node.name || node.path || node.fullPath) || isTextFileLike(node.file)));
   }
 
+  function isSupportedFolderTreeDocumentPath(path) {
+    return isMarkdownPath(path) || isGraphFilePath(path);
+  }
+
+  function isSupportedFolderTreeDocumentNode(node) {
+    return !!(node && node.kind === "file" && (
+      isSupportedFolderTreeDocumentPath(node.name || node.path || node.fullPath)
+      || node.isGraphDocumentFile === true
+    ));
+  }
+
+  async function fileContainsGraphDocument(file) {
+    if (!file || !isJsonPath(file.name || file.path)) return false;
+    try {
+      return looksLikeGraphDocument(JSON.parse(await file.text()));
+    } catch (_) {
+      return false;
+    }
+  }
+
+  async function neutralinoPathContainsGraphDocument(filePath) {
+    if (!isJsonPath(filePath)) return false;
+    try {
+      return looksLikeGraphDocument(JSON.parse(await Neutralino.filesystem.readFile(filePath)));
+    } catch (_) {
+      return false;
+    }
+  }
+
   function looksLikeGraphDocument(document) {
     if (!document || typeof document !== "object" || Array.isArray(document)) return false;
     return Object.prototype.hasOwnProperty.call(document, "snapshot")
@@ -4791,7 +4821,8 @@ This is a fully client-side application. Your content never leaves your browser 
         try {
           const file = await getFileFromEntry(entry);
           const modifiedAt = Number(file?.lastModified || 0) || 0;
-          entries.push({ kind: "file", name: entry.name, file, path: entry.fullPath || entry.name, modifiedAt, createdAt: modifiedAt });
+          const isGraphDocumentFile = await fileContainsGraphDocument(file);
+          entries.push({ kind: "file", name: entry.name, file, path: entry.fullPath || entry.name, modifiedAt, createdAt: modifiedAt, isGraphDocumentFile });
         } catch (error) {
           console.warn("Failed to read dropped document file:", entry.name, error);
         }
@@ -4917,7 +4948,8 @@ async function listMarkdownTreeNeutralino(dirPath) {
         const children = await listMarkdownTreeNeutralino(fullPath);
         entries.push({ kind: "directory", name: item.entry, children, fullPath, createdAt: Number(stats?.createdAt || 0), modifiedAt: Number(stats?.modifiedAt || 0) });
       } else if (item.type === "FILE") {
-        entries.push({ kind: "file", name: item.entry, fullPath, createdAt: Number(stats?.createdAt || stats?.modifiedAt || 0), modifiedAt: Number(stats?.modifiedAt || 0) });
+        const isGraphDocumentFile = await neutralinoPathContainsGraphDocument(fullPath);
+        entries.push({ kind: "file", name: item.entry, fullPath, createdAt: Number(stats?.createdAt || stats?.modifiedAt || 0), modifiedAt: Number(stats?.modifiedAt || 0), isGraphDocumentFile });
       }
     }
   } catch (error) {
@@ -6631,15 +6663,15 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
 
     const button = document.createElement("button");
     let sidebarOpenClickTimer = null;
-    const isGraphFile = isGraphFilePath(node.name);
+    const isGraphFile = isGraphFilePath(node.name) || node.isGraphDocumentFile === true;
     const isJsonFile = isJsonPath(node.name);
-    const isUnsupportedFile = !isSidebarDocumentNode(node);
+    const isUnsupportedFile = !isSupportedFolderTreeDocumentNode(node);
     button.type = "button";
     button.className = "folder-tree-file"
       + (isGraphFile ? " folder-tree-graph-file" : "")
       + (isUnsupportedFile ? " folder-tree-unsupported-file" : "");
     button.title = isUnsupportedFile
-      ? "Unsupported binary or unknown file type"
+      ? "Unsupported files are hidden by default and shown here only because unsupported files are enabled"
       : (isGraphFile ? "Click to open graph" : "Click to preview in the text editor; double-click to keep open");
     button.dataset.name = node.name || "";
     button.dataset.path = node.path || "";
@@ -6748,7 +6780,7 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
     }) || null;
   }
 
-  function buildTreeFromFileList(fileList) {
+  async function buildTreeFromFileList(fileList) {
     const root = [];
     const ensureDir = (nodes, name) => {
       let dir = nodes.find((n) => n.kind === "directory" && n.name === name);
@@ -6759,7 +6791,7 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
       return dir;
     };
 
-    Array.from(fileList).forEach((file) => {
+    for (const file of Array.from(fileList)) {
       const relPath = (file.webkitRelativePath || file.name).split("/");
       const fileName = relPath.pop();
       let cursor = root;
@@ -6767,8 +6799,9 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
         cursor = ensureDir(cursor, segment).children;
       });
       const modifiedAt = Number(file?.lastModified || 0) || 0;
-      cursor.push({ kind: "file", name: fileName, file, path: (file.webkitRelativePath || file.name), modifiedAt, createdAt: modifiedAt });
-    });
+      const isGraphDocumentFile = await fileContainsGraphDocument(file);
+      cursor.push({ kind: "file", name: fileName, file, path: (file.webkitRelativePath || file.name), modifiedAt, createdAt: modifiedAt, isGraphDocumentFile });
+    }
 
     return sortFolderTreeNodes(root);
   }
@@ -8283,7 +8316,7 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
       activeFolderName = firstRelativePath.split("/")[0] || "Graph View";
       activeFolderHandle = null;
       activeFolderPath = null;
-      const nodes = buildTreeFromFileList(files || []);
+      const nodes = await buildTreeFromFileList(files || []);
       folderMarkdownFiles = await collectMarkdownFilesFromTree(nodes);
       renderFolderTree(nodes);
       rememberRecentFolder({ name: activeFolderName, label: activeFolderName });
