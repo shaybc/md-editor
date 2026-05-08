@@ -65,7 +65,6 @@ document.addEventListener("DOMContentLoaded", function () {
 
   let linkAutocompleteLayer = null;
   let linkAutocompleteState = null;
-  const LINK_AUTOCOMPLETE_MAX_ITEMS = 8;
 
   function getLinkAutocompleteLayer() {
     if (!linkAutocompleteLayer) {
@@ -181,7 +180,7 @@ document.addEventListener("DOMContentLoaded", function () {
   function getFilteredLinkAutocompleteItems(context) {
     const query = String(context.query || "").trim().toLowerCase();
     const entries = getMarkdownLinkAutocompleteEntries();
-    const filtered = query
+    return query
       ? entries.filter((item) => {
           const nameWithoutExtension = item.name.replace(/\.(md|markdown)$/i, "").toLowerCase();
           return item.name.toLowerCase().includes(query)
@@ -189,7 +188,6 @@ document.addEventListener("DOMContentLoaded", function () {
             || nameWithoutExtension.includes(query);
         })
       : entries;
-    return filtered.slice(0, LINK_AUTOCOMPLETE_MAX_ITEMS);
   }
 
   function getTextareaCaretClientPosition(textarea, position) {
