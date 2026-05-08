@@ -134,7 +134,105 @@ document.addEventListener("DOMContentLoaded", function () {
     return !!openInlineFence;
   }
 
+  function getFrontmatterBoundsForCursor(value, cursor) {
+    const source = String(value || "");
+    if (!source.startsWith("---")) return null;
+
+    const openingMatch = source.match(/^---[ \t]*(?:\r?\n|$)/);
+    if (!openingMatch) return null;
+
+    const contentStart = openingMatch[0].length;
+    const closingRegex = /^---[ \t]*(?:\r?\n|$)/gm;
+    closingRegex.lastIndex = contentStart;
+    const closingMatch = closingRegex.exec(source);
+    if (!closingMatch || cursor < contentStart || cursor > closingMatch.index) return null;
+
+    return {
+      contentStart,
+      contentEnd: closingMatch.index
+    };
+  }
+
+  function isCursorInFrontmatterTagsList(frontmatterText, relativeCursor) {
+    const beforeCursor = frontmatterText.slice(0, relativeCursor);
+    const lines = beforeCursor.split(/\r?\n/);
+
+    for (let index = lines.length - 2; index >= 0; index -= 1) {
+      const line = lines[index];
+      if (!line.trim() || /^\s*#/.test(line)) continue;
+
+      const tagsMatch = line.match(/^(\s*)tags\s*:\s*(?:#.*)?$/i);
+      if (tagsMatch) {
+        const tagsIndent = tagsMatch[1].length;
+        const currentLine = lines[lines.length - 1] || "";
+        const currentLineIndent = (currentLine.match(/^\s*/) || [""])[0].length;
+        return currentLineIndent >= tagsIndent;
+      }
+
+      if (/^\s*[\w.-]+\s*:/.test(line)) return false;
+    }
+
+    return false;
+  }
+
+  function getFrontmatterTagAutocompleteContext(value, cursor, lineStart, lineBefore) {
+    const frontmatterBounds = getFrontmatterBoundsForCursor(value, cursor);
+    if (!frontmatterBounds) return null;
+
+    const frontmatterText = String(value || "").slice(frontmatterBounds.contentStart, frontmatterBounds.contentEnd);
+    const relativeCursor = cursor - frontmatterBounds.contentStart;
+    const nextCharacter = String(value || "").charAt(cursor);
+    if (nextCharacter && /[\p{L}\p{N}_\/-]/u.test(nextCharacter)) return null;
+
+    const listItemMatch = lineBefore.match(/^(\s*-\s*)([\p{L}\p{N}_\/-]*)$/u);
+    if (listItemMatch && isCursorInFrontmatterTagsList(frontmatterText, relativeCursor)) {
+      const query = listItemMatch[2] || "";
+      if (!query) return null;
+      return {
+        type: "frontmatter-tag",
+        query,
+        replaceStart: lineStart + listItemMatch[1].length,
+        replaceEnd: cursor,
+        needsClosingSyntax: false
+      };
+    }
+
+    const inlineTagsMatch = lineBefore.match(/^(\s*tags\s*:\s*\[[^\]]*)([\p{L}\p{N}_\/-]*)$/iu);
+    if (inlineTagsMatch) {
+      const prefix = inlineTagsMatch[1];
+      const previousSeparator = Math.max(prefix.lastIndexOf(","), prefix.lastIndexOf("["));
+      const queryStartOffset = previousSeparator + 1 + prefix.slice(previousSeparator + 1).match(/^\s*/)[0].length;
+      const query = lineBefore.slice(queryStartOffset);
+      if (!query) return null;
+      return {
+        type: "frontmatter-tag",
+        query,
+        replaceStart: lineStart + queryStartOffset,
+        replaceEnd: cursor,
+        needsClosingSyntax: false
+      };
+    }
+
+    const scalarTagsMatch = lineBefore.match(/^(\s*tags\s*:\s*)([\p{L}\p{N}_\/-]*)$/iu);
+    if (scalarTagsMatch) {
+      const query = scalarTagsMatch[2] || "";
+      if (!query) return null;
+      return {
+        type: "frontmatter-tag",
+        query,
+        replaceStart: lineStart + scalarTagsMatch[1].length,
+        replaceEnd: cursor,
+        needsClosingSyntax: false
+      };
+    }
+
+    return null;
+  }
+
   function getTagAutocompleteContext(value, cursor, lineStart, lineBefore) {
+    const frontmatterTagContext = getFrontmatterTagAutocompleteContext(value, cursor, lineStart, lineBefore);
+    if (frontmatterTagContext) return frontmatterTagContext;
+
     if (isCursorInsideMarkdownCode(value, cursor, lineBefore)) return null;
 
     const tagMatch = lineBefore.match(/(^|[^\p{L}\p{N}_\/-])#([\p{L}\p{N}][\p{L}\p{N}_\/-]*)$/u);
@@ -293,13 +391,14 @@ document.addEventListener("DOMContentLoaded", function () {
 
   function getLinkAutocompleteInsertText(item) {
     if (linkAutocompleteState?.type === "tag") return `#${item.tag}`;
+    if (linkAutocompleteState?.type === "frontmatter-tag") return item.tag;
     return getRootRelativeMarkdownLinkTarget(item.path);
   }
 
   function getFilteredLinkAutocompleteItems(context) {
     const query = String(context.query || "").trim().toLowerCase();
 
-    if (context.type === "tag") {
+    if (context.type === "tag" || context.type === "frontmatter-tag") {
       const entries = getTagAutocompleteEntries();
       return query
         ? entries.filter((item) => item.tag.toLowerCase().includes(query))
@@ -399,9 +498,9 @@ document.addEventListener("DOMContentLoaded", function () {
     const selectedIndex = Math.min(Math.max(linkAutocompleteState?.selectedIndex || 0, 0), Math.max(items.length - 1, 0));
     linkAutocompleteState = { ...context, items, selectedIndex };
     layer.innerHTML = "";
-    layer.setAttribute("aria-label", context.type === "tag" ? "Tag suggestions" : "Link suggestions");
+    layer.setAttribute("aria-label", context.type === "tag" || context.type === "frontmatter-tag" ? "Tag suggestions" : "Link suggestions");
 
-    if (context.type !== "tag" && (!isFolderOpen || !folderMarkdownFiles.length)) {
+    if (context.type !== "tag" && context.type !== "frontmatter-tag" && (!isFolderOpen || !folderMarkdownFiles.length)) {
       const empty = document.createElement("div");
       empty.className = "link-autocomplete-empty";
       empty.textContent = "Open a folder to link documents.";
@@ -409,7 +508,7 @@ document.addEventListener("DOMContentLoaded", function () {
     } else if (!items.length) {
       const empty = document.createElement("div");
       empty.className = "link-autocomplete-empty";
-      empty.textContent = context.type === "tag" ? "No matching tags." : "No matching Markdown documents.";
+      empty.textContent = context.type === "tag" || context.type === "frontmatter-tag" ? "No matching tags." : "No matching Markdown documents.";
       layer.appendChild(empty);
     } else {
       items.forEach((item, index) => {
@@ -419,7 +518,7 @@ document.addEventListener("DOMContentLoaded", function () {
         option.className = "link-autocomplete-option" + (index === selectedIndex ? " active" : "");
         option.setAttribute("role", "option");
         option.setAttribute("aria-selected", index === selectedIndex ? "true" : "false");
-        option.innerHTML = context.type === "tag"
+        option.innerHTML = context.type === "tag" || context.type === "frontmatter-tag"
           ? `<span class="link-autocomplete-name">${escapeHtml(item.name)}</span><span class="link-autocomplete-path">Tag</span>`
           : `<span class="link-autocomplete-name">${escapeHtml(item.name.replace(/\.(md|markdown)$/i, ""))}</span><span class="link-autocomplete-path">${escapeHtml(item.path)}</span>`;
         option.addEventListener("mousedown", (event) => {
