@@ -1267,6 +1267,27 @@ a:focus {
   z-index: 1001;
 }
 
+.header-action-menu.tree-action-menu {
+  width: auto;
+  min-width: 0;
+  flex: 0 0 auto;
+  margin-right: 0.5rem;
+  padding-right: 0;
+  border-right: 0;
+}
+
+.header-action-menu .action-menu {
+  width: 260px;
+  min-width: 260px;
+}
+
+.header-action-menu .folder-action-menu-button.tool-button {
+  width: 36px;
+  height: 32px;
+  padding: 0;
+  border-radius: 4px;
+}
+
 .header-left .mobile-menu {
   flex-shrink: 0;
   margin-right: 0.5rem;

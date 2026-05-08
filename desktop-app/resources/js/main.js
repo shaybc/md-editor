@@ -47,7 +47,7 @@ function exitDesktopApp() {
 
 function addDesktopExitMenuButton() {
   const desktopActionMenu = document.querySelector(
-    "#tab-bar .tree-action-menu .action-menu",
+    ".header-action-menu .action-menu",
   );
 
   if (!desktopActionMenu || document.getElementById("desktop-exit-app-button")) {
