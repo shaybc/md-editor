@@ -4459,7 +4459,6 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
       return;
     }
 
-    let sourceFile = null;
     if (isNeutralinoRuntime()) {
       const parentPath = getSidebarFolderFilesystemPath(node);
       if (!parentPath || !Neutralino.filesystem?.writeFile) {
@@ -4468,7 +4467,6 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
       }
       const filePath = joinPath(parentPath, fileName);
       await Neutralino.filesystem.writeFile(filePath, "");
-      sourceFile = { name: fileName, path: filePath };
     } else if (node.handle && typeof node.handle.getFileHandle === "function") {
       const fileHandle = await node.handle.getFileHandle(fileName, { create: true });
       if (!fileHandle || typeof fileHandle.createWritable !== "function") {
@@ -4478,18 +4476,12 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
       const writable = await fileHandle.createWritable();
       await writable.write("");
       await writable.close();
-      sourceFile = {
-        name: fileName,
-        handle: fileHandle,
-        path: node.path ? `${node.path}/${fileName}` : fileName
-      };
     } else {
       alert("Creating files from the folder tree is available in the desktop app or in browsers when the folder was opened with write access.");
       return;
     }
 
     await reloadOpenFolderTree();
-    openSidebarFileInPermanentTab("", getMarkdownTitleFromFileName(fileName), sourceFile);
   }
 
   async function createSidebarFolderOnDisk(node) {
