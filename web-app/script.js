@@ -2683,8 +2683,43 @@ This is a fully client-side application. Your content never leaves your browser 
     tab.graphViewConfig = graphData.graphViewConfig;
     tab.graphSnapshot = graphData.graphSnapshot;
     tab.graphDocument = graphData.graphDocument;
+    if (options.graphScopeKey) tab.graphScopeKey = options.graphScopeKey;
     if (Object.prototype.hasOwnProperty.call(graphData, "graphLayout")) tab.graphLayout = graphData.graphLayout;
     return tab;
+  }
+
+  function normalizeGraphScopePath(value) {
+    return String(value || "")
+      .replace(/\\/g, "/")
+      .replace(/\/+/g, "/")
+      .replace(/\/+$|^\s+|\s+$/g, "")
+      .toLowerCase();
+  }
+
+  function createFolderGraphScopeKey(scope, value) {
+    const normalizedPath = normalizeGraphScopePath(value);
+    return normalizedPath ? `${scope}:${normalizedPath}` : "";
+  }
+
+  function getRootFolderGraphScopeKey() {
+    return createFolderGraphScopeKey("root-folder", activeFolderPath || activeFolderName || "Graph View");
+  }
+
+  function findExistingFolderGraphTab(scopeKey, fallbackTitle) {
+    if (!scopeKey && !fallbackTitle) return null;
+    return tabs.find((tab) => {
+      if (!tab || tab.type !== "graph" || isFileBackedGraphTab(tab)) return false;
+      if (scopeKey && tab.graphScopeKey === scopeKey) return true;
+      return !!(fallbackTitle && !tab.graphScopeKey && getGraphTabTitle(tab) === fallbackTitle);
+    }) || null;
+  }
+
+  function focusExistingFolderGraphTab(scopeKey, fallbackTitle) {
+    const existingGraphTab = findExistingFolderGraphTab(scopeKey, fallbackTitle);
+    if (!existingGraphTab) return false;
+    switchTab(existingGraphTab.id);
+    saveActiveTabId(existingGraphTab.id);
+    return true;
   }
 
   function getGraphTitleFromFileName(fileName) {
@@ -5605,6 +5640,11 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
       await openGraphView();
       return;
     }
+
+    const folderName = getSidebarFolderGraphTitle(node);
+    const graphScopeKey = createFolderGraphScopeKey("sidebar-folder", getSidebarFolderClipboardPath(node) || folderName);
+    if (focusExistingFolderGraphTab(graphScopeKey, folderName)) return;
+
     if (tabs.length >= 20) {
       alert('Maximum of 20 tabs reached. Please close an existing tab to open a new one.');
       return;
@@ -5616,9 +5656,8 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
       return;
     }
 
-    const folderName = getSidebarFolderGraphTitle(node);
     const graphSnapshot = await createGraphSnapshot(folderFiles, folderName);
-    const graphTab = createGraphTab(folderName, { graphSnapshot, graphViewConfig: null });
+    const graphTab = createGraphTab(folderName, { graphSnapshot, graphViewConfig: null, graphScopeKey });
     tabs.push(graphTab);
     switchTab(graphTab.id);
     saveTabsToStorage(tabs);
@@ -7761,13 +7800,17 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
       alert("Open a folder first to build the graph view.");
       return;
     }
+
+    const folderName = activeFolderName || "Graph View";
+    const graphScopeKey = getRootFolderGraphScopeKey();
+    if (focusExistingFolderGraphTab(graphScopeKey, folderName)) return;
+
     if (tabs.length >= 20) {
       alert('Maximum of 20 tabs reached. Please close an existing tab to open a new one.');
       return;
     }
 
-    const folderName = activeFolderName || "Graph View";
-    const graphTab = createGraphTab(folderName, { graphViewConfig: null });
+    const graphTab = createGraphTab(folderName, { graphViewConfig: null, graphScopeKey });
     tabs.push(graphTab);
     switchTab(graphTab.id);
     saveTabsToStorage(tabs);
