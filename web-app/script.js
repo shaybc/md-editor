@@ -5985,8 +5985,8 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
       shareFileBtn,
       deleteFileTopSeparator,
       deleteFileBtn,
-      exportSubmenu,
-      deleteFileBottomSeparator
+      deleteFileBottomSeparator,
+      exportSubmenu
     ].forEach((item) => {
       menu.appendChild(item);
     });
