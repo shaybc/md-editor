@@ -4900,6 +4900,11 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
       "bi bi-diagram-3",
       "Open a graph view containing only Markdown files in this folder and its sub-folders."
     );
+    const refreshFolderTreeBtn = createFileContextMenuButton(
+      "Refresh",
+      "bi bi-arrow-clockwise",
+      "Reload the open folder tree from disk to show file system changes."
+    );
     const revealFolderBtn = createFileContextMenuButton(
       "Reveal in File Explorer",
       "bi bi-folder2-open",
@@ -4934,8 +4939,22 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
     deleteFolderBtn.dataset.sidebarFolderAction = "delete";
     deleteFolderBtn.classList.add("graph-context-menu-item-danger");
 
-    [title, separator, showGraphBtn, revealFolderBtn, copyPathBtn, newFileBtn, newFolderBtn, renameFolderBtn, deleteFolderBtn].forEach((item) => menu.appendChild(item));
+    [title, separator, showGraphBtn, refreshFolderTreeBtn, revealFolderBtn, copyPathBtn, newFileBtn, newFolderBtn, renameFolderBtn, deleteFolderBtn].forEach((item) => menu.appendChild(item));
     document.body.appendChild(menu);
+
+    refreshFolderTreeBtn.addEventListener("click", async (event) => {
+      event.stopPropagation();
+      hideSidebarFolderContextMenu();
+      try {
+        const refreshed = await reloadOpenFolderTree();
+        if (!refreshed) {
+          alert("Unable to refresh the folder tree because no reusable folder source is available. Please reopen the folder.");
+        }
+      } catch (error) {
+        console.error("Failed to refresh folder tree:", error);
+        alert("Unable to refresh the folder tree.");
+      }
+    });
 
     showGraphBtn.addEventListener("click", async (event) => {
       event.stopPropagation();
