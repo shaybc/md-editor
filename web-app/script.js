@@ -1806,6 +1806,90 @@ document.addEventListener("DOMContentLoaded", function () {
     });
   }
 
+  function removeTagsFromCountMap(counts, tags) {
+    normalizeFileTagList(tags).forEach((tag) => {
+      const nextCount = (counts.get(tag) || 0) - 1;
+      if (nextCount > 0) {
+        counts.set(tag, nextCount);
+      } else {
+        counts.delete(tag);
+      }
+    });
+  }
+
+  function areTagListsEqual(firstTags, secondTags) {
+    const first = normalizeFileTagList(firstTags).sort();
+    const second = normalizeFileTagList(secondTags).sort();
+    return first.length === second.length && first.every((tag, index) => tag === second[index]);
+  }
+
+  function getComparableFolderEntryPath(entry) {
+    return getComparableFilePath(entry?.fullPath || entry?.path || entry?.file?.webkitRelativePath || entry?.file?.name || entry?.name || "");
+  }
+
+  function getFolderMarkdownEntryForTab(tab) {
+    if (!tab || tab.type === "graph") return null;
+
+    if (tab.sourceFileHandle) {
+      const handleMatch = (folderMarkdownFiles || []).find((entry) => entry.handle && entry.handle === tab.sourceFileHandle);
+      if (handleMatch) return handleMatch;
+    }
+
+    const tabPathKey = getComparableFilePath(tab.sourceFilePath || "");
+    if (tabPathKey) {
+      const pathMatch = (folderMarkdownFiles || []).find((entry) => getComparableFolderEntryPath(entry) === tabPathKey);
+      if (pathMatch) return pathMatch;
+    }
+
+    const tabName = tab.sourceFileName || (tab.sourceFilePath ? getFileName(tab.sourceFilePath) : "");
+    if (!tabName) return null;
+
+    return (folderMarkdownFiles || []).find((entry) => {
+      const entryName = entry.name || entry.file?.name || (entry.path ? getFileName(entry.path) : "") || (entry.fullPath ? getFileName(entry.fullPath) : "");
+      return entryName === tabName;
+    }) || null;
+  }
+
+  function updateFolderTreeNodeTagsForEntry(fileEntry, tags) {
+    const entryPathKey = getComparableFolderEntryPath(fileEntry);
+    if (!entryPathKey) return;
+
+    const updateNodes = (nodes) => {
+      (nodes || []).forEach((node) => {
+        if (node.kind === "directory") {
+          updateNodes(node.children || []);
+          return;
+        }
+
+        if (getFolderTreeNodePathKey(node) === entryPathKey) {
+          node.tags = normalizeFileTagList(tags);
+        }
+      });
+    };
+
+    updateNodes(currentFolderTreeNodes);
+  }
+
+  function syncMarkdownTabTagsToFolderState(tab, content) {
+    const fileEntry = getFolderMarkdownEntryForTab(tab);
+    if (!fileEntry) return;
+
+    const previousTags = normalizeFileTagList(fileEntry.tags || []);
+    const nextTags = getFileTagsFromContent(content);
+    fileEntry.content = normalizeEditorContent(content);
+    if (areTagListsEqual(previousTags, nextTags)) return;
+
+    fileEntry.tags = nextTags;
+    removeTagsFromCountMap(folderTagCounts, previousTags);
+    addTagsToCountMap(folderTagCounts, nextTags);
+    updateFolderTreeNodeTagsForEntry(fileEntry, nextTags);
+    renderTagManagementList();
+    renderLinkAutocomplete();
+    if (selectedFolderTreeTags.size) {
+      renderFilteredFolderTree();
+    }
+  }
+
   function getActiveGraphSnapshotTagCounts() {
     const counts = new Map();
     const activeGraphTab = getActiveGraphTab();
@@ -7720,6 +7804,7 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
       if (metadata.handle) tab.sourceFileHandle = metadata.handle;
       if (metadata.path) tab.sourceFilePath = metadata.path;
     }
+    syncMarkdownTabTagsToFolderState(tab, normalizedContent);
     saveTabsToStorage(tabs);
     renderTabBar(tabs, activeTabId);
     updateSaveCurrentFileButtons();
@@ -8792,6 +8877,7 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
     const activeTab = tabs.find(function(t) { return t.id === activeTabId; });
     if (activeTab) {
       activeTab.content = markdownEditor.value;
+      syncMarkdownTabTagsToFolderState(activeTab, markdownEditor.value);
       renderTabBar(tabs, activeTabId);
       updateSaveCurrentFileButtons();
     }
