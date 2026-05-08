@@ -59,6 +59,8 @@ document.addEventListener("DOMContentLoaded", function () {
   const wordCountElement = document.getElementById("word-count");
   const charCountElement = document.getElementById("char-count");
   const statusTipElement = document.getElementById("status-tip");
+  const graphZoomStatusElement = document.getElementById("graph-zoom-status");
+  const graphZoomPercentElement = document.getElementById("graph-zoom-percent");
   const graphPointsStatusElement = document.getElementById("graph-points-status");
   const graphPointsCountElement = document.getElementById("graph-points-count");
   const editorTextpadStatusElement = document.getElementById("editor-textpad-status");
@@ -3895,6 +3897,15 @@ This is a fully client-side application. Your content never leaves your browser 
     return Number.isFinite(numberValue) ? numberValue : null;
   }
 
+  function formatGraphZoomPercent(zoomScale) {
+    const scale = Number.isFinite(Number(zoomScale)) && Number(zoomScale) > 0 ? Number(zoomScale) : 1;
+    return `${Math.round(scale * 100)}%`;
+  }
+
+  function getGraphZoomScaleFromLayout(graphLayout) {
+    return getSavedGraphZoomTransform(graphLayout)?.k || 1;
+  }
+
   function getSavedGraphNodeLayout(graphLayout, nodeId) {
     if (!graphLayout || !nodeId) return null;
     if (graphLayout.nodes && typeof graphLayout.nodes === "object") return graphLayout.nodes[nodeId] || null;
@@ -4661,11 +4672,21 @@ This is a fully client-side application. Your content never leaves your browser 
     const visiblePointCount = typeof options.visiblePointCount === "number"
       ? options.visiblePointCount
       : (typeof activeGraphTab?.visiblePointCount === "number" ? activeGraphTab.visiblePointCount : 0);
+    const graphZoomScale = typeof options.graphZoomScale === "number"
+      ? options.graphZoomScale
+      : (typeof activeGraphTab?.graphZoomScale === "number"
+        ? activeGraphTab.graphZoomScale
+        : getGraphZoomScaleFromLayout(activeGraphTab?.graphLayout));
 
     if (statusTipElement) {
       statusTipElement.textContent = previewHoveredLinkUrl || (activeGraphTab
         ? "Tip: hold ctrl / shift to see out / back links"
         : "Tip: drag in text files, use split preview, or open a folder to build a graph.");
+    }
+
+    if (graphZoomStatusElement && graphZoomPercentElement) {
+      graphZoomPercentElement.textContent = formatGraphZoomPercent(graphZoomScale);
+      graphZoomStatusElement.classList.toggle("hidden", !activeGraphTab);
     }
 
     if (graphPointsStatusElement && graphPointsCountElement) {
@@ -10564,7 +10585,8 @@ ${body}`;
       cachedRender.wrapper.classList.remove("hidden");
       hideInactiveGraphRenders(activeTab.id);
       activeTab.visiblePointCount = cachedRender.visiblePointCount || 0;
-      updateStatusLine({ visiblePointCount: activeTab.visiblePointCount });
+      activeTab.graphZoomScale = cachedRender.zoomScale || getGraphZoomScaleFromLayout(activeTab.graphLayout);
+      updateStatusLine({ visiblePointCount: activeTab.visiblePointCount, graphZoomScale: activeTab.graphZoomScale });
       return;
     }
 
@@ -10811,13 +10833,19 @@ ${body}`;
     const graphLayer = svg.append("g").attr("class", "graph-layer");
 
     let currentZoomTransform = d3.zoomIdentity;
+    activeTab.graphZoomScale = currentZoomTransform.k;
     let label = null;
+    let maxNodeRadius = 1;
     const zoomBehavior = d3.zoom()
       .scaleExtent([0.2, 4])
       .on("zoom", (event) => {
         currentZoomTransform = event.transform;
+        activeTab.graphZoomScale = currentZoomTransform.k;
+        const cachedGraphRender = graphRenderCache.get(activeTab.id);
+        if (cachedGraphRender) cachedGraphRender.zoomScale = currentZoomTransform.k;
         graphLayer.attr("transform", currentZoomTransform);
         updateLabelVisibility();
+        updateStatusLine({ visiblePointCount: activeTab.visiblePointCount || nodes.length, graphZoomScale: currentZoomTransform.k });
         captureGraphLayout(activeTab, nodes, currentZoomTransform);
         scheduleGraphLayoutStorageSave();
         if (event.sourceEvent) markGraphTabAsChanged(activeTab);
@@ -10831,16 +10859,24 @@ ${body}`;
         .scale(savedZoomTransform.k);
       svg.call(zoomBehavior.transform, currentZoomTransform);
     }
+    activeTab.graphZoomScale = currentZoomTransform.k;
+    updateStatusLine({ visiblePointCount: activeTab.visiblePointCount || nodes.length, graphZoomScale: currentZoomTransform.k });
 
     const simulation = d3.forceSimulation(nodes);
     const baseLinkForce = d3.forceLink(links).id((d) => d.id).distance(graphViewConfig.linkDistance).strength(graphViewConfig.linkForce);
     const baseChargeForce = d3.forceManyBody().strength(-graphViewConfig.repelForce);
-    const baseCenterForce = d3.forceCenter(width / 2, height / 2).strength(graphViewConfig.centerForce);
+    const centerForceStrength = Math.max(0, graphViewConfig.centerForce);
+    const baseCenterForce = d3.forceCenter(width / 2, height / 2);
+    if (typeof baseCenterForce.strength === "function") baseCenterForce.strength(Math.min(1, centerForceStrength));
+    const baseCenterPullX = d3.forceX(width / 2).strength(centerForceStrength * 0.08);
+    const baseCenterPullY = d3.forceY(height / 2).strength(centerForceStrength * 0.08);
     const baseCollisionForce = d3.forceCollide().radius((d) => nodeRadius(d.id) + 30).strength(0.9);
     simulation
       .force("link", baseLinkForce)
       .force("charge", baseChargeForce)
       .force("center", baseCenterForce)
+      .force("centerX", baseCenterPullX)
+      .force("centerY", baseCenterPullY)
       .force("collision", baseCollisionForce);
     // Keep the former marker dimensions: 9x8 viewBox scaled into a 5x5 marker viewport.
     const arrowheadLength = 5;
@@ -10887,6 +10923,7 @@ ${body}`;
           markGraphTabAsChanged(activeTab);
           saveTabsToStorage(tabs);
         }));
+    maxNodeRadius = Math.max(1, ...nodes.map((d) => nodeRadius(d.id)));
     const graphTooltipPathsById = new Map((graphSnapshot.files || []).map((file) => [file.id, file.fullPath || file.path]));
     node.append("title").text((d) => graphTooltipPathsById.get(d.id) || d.fullPath || getGraphNodeLabel(d));
     label = labelLayer.selectAll("text").data(nodes).enter().append("text")
@@ -11366,6 +11403,8 @@ ${body}`;
           .force("link", baseLinkForce)
           .force("charge", baseChargeForce)
           .force("center", baseCenterForce)
+          .force("centerX", baseCenterPullX)
+          .force("centerY", baseCenterPullY)
           .force("collision", baseCollisionForce)
           .alpha(0.7)
           .restart();
@@ -11374,6 +11413,8 @@ ${body}`;
           .force("link", null)
           .force("charge", null)
           .force("center", null)
+          .force("centerX", null)
+          .force("centerY", null)
           .force("collision", null)
           .alphaTarget(0)
           .stop();
@@ -11899,8 +11940,16 @@ ${body}`;
       if (!label) return;
       const threshold = graphViewConfig.textFadeThreshold;
       const zoomScale = currentZoomTransform?.k || 1;
-      const opacity = threshold <= 0 || zoomScale >= threshold ? 1 : Math.max(0, zoomScale / threshold);
-      label.attr("opacity", opacity);
+      const fullyHiddenZoom = 0.25 + threshold * 0.57;
+      const fadeDistance = 0.35;
+      const smallNodePenalty = 0.25;
+      label.attr("opacity", (d) => {
+        const nodeImportance = maxNodeRadius > 0 ? Math.min(1, nodeRadius(d.id) / maxNodeRadius) : 1;
+        const nodeFadeStart = fullyHiddenZoom + (1 - nodeImportance) * smallNodePenalty;
+        if (zoomScale <= nodeFadeStart) return 0;
+        if (zoomScale >= nodeFadeStart + fadeDistance) return 1;
+        return Math.max(0, Math.min(1, (zoomScale - nodeFadeStart) / fadeDistance));
+      });
     }
 
     updateLabelVisibility();
@@ -11942,6 +11991,7 @@ ${body}`;
       simulation,
       nodes,
       visiblePointCount: nodes.length,
+      zoomScale: currentZoomTransform.k,
       getZoomTransform: () => currentZoomTransform,
       animate: () => {
         graphSettings.magneticEnabled = true;
@@ -12035,6 +12085,106 @@ ${body}`;
   bindGraphRangeControl(graphRepelForce, "repelForce");
   bindGraphRangeControl(graphLinkForce, "linkForce");
   bindGraphRangeControl(graphLinkDistance, "linkDistance");
+
+  function initializeGraphFilterTooltips() {
+    if (!graphViewToolbar) return;
+    const tooltipTextBySelector = [
+      ["#graph-file-search-filter", "Filter graph points by file name, path, tag, or text without changing the files on disk."],
+      ["#graph-show-tags", "Show tag points and the connections between tags and files."],
+      ["#graph-hide-tags", "Hide tag points so only file points and Markdown links are drawn."],
+      ["#graph-selected-tag-filter", "Choose a tag to focus the graph on files that contain that tag."],
+      ["#graph-only-selected-tag", "Limit the graph to files with the selected tag and their connected tag points."],
+      ["#graph-add-group", "Add a color group. Groups use queries like path:, file:, tag:, text:, and line: to color matching files."],
+      ["#graph-display-arrows", "Toggle arrowheads on Markdown links to show link direction."],
+      ["#graph-text-fade-threshold", "Control how aggressively labels disappear while zooming out. At the default, labels are gone near 45% zoom and only larger points keep faded labels around 65%."],
+      ["#graph-node-size", "Scale every graph point. Larger points are easier to hit and keep labels visible slightly longer while zoomed out."],
+      ["#graph-link-thickness", "Adjust the stroke width of Markdown links between file points."],
+      ["#graph-center-force", "Pull points toward the middle of the graph. Higher values make the layout cluster closer to center."],
+      ["#graph-repel-force", "Push points away from each other. Higher values spread the graph out more."],
+      ["#graph-link-force", "Control how strongly linked points pull toward their target link distance."],
+      ["#graph-link-distance", "Set the preferred distance between connected points."],
+      ["#graph-view-close", "Close graph view and return to the document view."],
+      [".graph-collapsible-summary", "Expand or collapse this section of graph filters."],
+      [".graph-group-query-input", "Type a group query. Use prefixes such as path:, file:, tag:, text:, or line:."],
+      [".graph-group-enabled-input", "Enable or disable this group color without deleting it."],
+      [".graph-group-color-input", "Pick the color used for files that match this group query."],
+      [".graph-group-delete-button", "Delete this color group from the graph filter settings."]
+    ];
+
+    tooltipTextBySelector.forEach(([selector, text]) => {
+      graphViewToolbar.querySelectorAll(selector).forEach((element) => {
+        const target = element.closest("label, button, summary, p, div") || element;
+        if (!target.dataset.graphTooltip) target.dataset.graphTooltip = text;
+      });
+    });
+
+    const tooltip = document.createElement("div");
+    tooltip.className = "graph-filter-tooltip hidden";
+    tooltip.setAttribute("role", "tooltip");
+    document.body.appendChild(tooltip);
+
+    let tooltipTimer = null;
+    let tooltipTarget = null;
+
+    const hideTooltip = () => {
+      window.clearTimeout(tooltipTimer);
+      tooltipTimer = null;
+      tooltipTarget = null;
+      tooltip.classList.add("hidden");
+    };
+
+    const positionTooltip = (target) => {
+      const rect = target.getBoundingClientRect();
+      tooltip.style.left = `${Math.min(window.innerWidth - tooltip.offsetWidth - 12, Math.max(12, rect.left))}px`;
+      tooltip.style.top = `${Math.min(window.innerHeight - tooltip.offsetHeight - 12, rect.bottom + 8)}px`;
+    };
+
+    const getTooltipTarget = (source) => {
+      const directTarget = source?.closest?.("[data-graph-tooltip]");
+      if (directTarget && graphViewToolbar.contains(directTarget)) return directTarget;
+      const controlTarget = source?.closest?.("label, button, summary, input, select, p, div");
+      if (!controlTarget || !graphViewToolbar.contains(controlTarget)) return null;
+      const matchedTooltip = tooltipTextBySelector.find(([selector]) => {
+        if (controlTarget.matches(selector)) return true;
+        return !!controlTarget.querySelector?.(selector);
+      });
+      if (!matchedTooltip) return null;
+      controlTarget.dataset.graphTooltip = matchedTooltip[1];
+      return controlTarget;
+    };
+
+    const scheduleTooltip = (target) => {
+      const tooltipText = target?.dataset?.graphTooltip;
+      if (!tooltipText) return;
+      hideTooltip();
+      tooltipTarget = target;
+      tooltipTimer = window.setTimeout(() => {
+        if (tooltipTarget !== target) return;
+        tooltip.textContent = tooltipText;
+        tooltip.classList.remove("hidden");
+        positionTooltip(target);
+      }, 3000);
+    };
+
+    graphViewToolbar.addEventListener("mouseover", (event) => {
+      const target = getTooltipTarget(event.target);
+      if (target) scheduleTooltip(target);
+    });
+    graphViewToolbar.addEventListener("focusin", (event) => {
+      const target = getTooltipTarget(event.target);
+      if (target) scheduleTooltip(target);
+    });
+    graphViewToolbar.addEventListener("mouseout", (event) => {
+      if (tooltipTarget && !tooltipTarget.contains(event.relatedTarget)) hideTooltip();
+    });
+    graphViewToolbar.addEventListener("focusout", hideTooltip);
+    graphViewToolbar.addEventListener("input", hideTooltip);
+    graphViewToolbar.addEventListener("click", hideTooltip);
+    window.addEventListener("scroll", hideTooltip, true);
+    window.addEventListener("resize", hideTooltip);
+  }
+
+  initializeGraphFilterTooltips();
 
   exportHtml.addEventListener("click", function () {
     try {
