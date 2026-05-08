@@ -63,6 +63,281 @@ document.addEventListener("DOMContentLoaded", function () {
   const editorPositionValueElement = document.getElementById("editor-position-value");
   let previewHoveredLinkUrl = "";
 
+  let linkAutocompleteLayer = null;
+  let linkAutocompleteState = null;
+  const LINK_AUTOCOMPLETE_MAX_ITEMS = 8;
+
+  function getLinkAutocompleteLayer() {
+    if (!linkAutocompleteLayer) {
+      linkAutocompleteLayer = document.createElement("div");
+      linkAutocompleteLayer.id = "link-autocomplete-layer";
+      linkAutocompleteLayer.className = "link-autocomplete-layer hidden";
+      linkAutocompleteLayer.setAttribute("role", "listbox");
+      linkAutocompleteLayer.setAttribute("aria-label", "Link suggestions");
+      document.body.appendChild(linkAutocompleteLayer);
+    }
+    return linkAutocompleteLayer;
+  }
+
+  function hideLinkAutocomplete() {
+    if (linkAutocompleteLayer) {
+      linkAutocompleteLayer.classList.add("hidden");
+      linkAutocompleteLayer.innerHTML = "";
+    }
+    linkAutocompleteState = null;
+    markdownEditor.removeAttribute("aria-activedescendant");
+  }
+
+  function getLinkAutocompleteContext() {
+    if (document.activeElement !== markdownEditor) return null;
+    if (markdownEditor.selectionStart !== markdownEditor.selectionEnd) return null;
+
+    const cursor = markdownEditor.selectionStart;
+    const value = markdownEditor.value;
+    const lineStart = value.lastIndexOf("\n", cursor - 1) + 1;
+    const lineBefore = value.slice(lineStart, cursor);
+
+    if (lineBefore.endsWith("[[]]")) {
+      return {
+        type: "wiki",
+        query: "",
+        replaceStart: cursor - 2,
+        replaceEnd: cursor - 2
+      };
+    }
+
+    if (lineBefore.endsWith("[]()")) {
+      return {
+        type: "markdown",
+        query: "",
+        replaceStart: cursor - 1,
+        replaceEnd: cursor - 1
+      };
+    }
+
+    const wikiStart = lineBefore.lastIndexOf("[[");
+    if (wikiStart !== -1) {
+      const query = lineBefore.slice(wikiStart + 2);
+      if (!query.includes("]]")) {
+        return {
+          type: "wiki",
+          query,
+          replaceStart: lineStart + wikiStart + 2,
+          replaceEnd: cursor
+        };
+      }
+    }
+
+    const markdownStart = lineBefore.lastIndexOf("](");
+    if (markdownStart !== -1) {
+      const query = lineBefore.slice(markdownStart + 2);
+      const labelOpen = lineBefore.lastIndexOf("[", markdownStart);
+      if (labelOpen !== -1 && !query.includes(")")) {
+        return {
+          type: "markdown",
+          query,
+          replaceStart: lineStart + markdownStart + 2,
+          replaceEnd: cursor
+        };
+      }
+    }
+
+    return null;
+  }
+
+  function getMarkdownLinkAutocompleteEntries() {
+    return (folderMarkdownFiles || [])
+      .map((entry) => {
+        const path = normalizeMarkdownLinkPath(entry.path || entry.fullPath || entry.file?.webkitRelativePath || entry.file?.name || entry.name || "");
+        if (!path || !isMarkdownPath(path)) return null;
+        const name = entry.name || getFileName(path);
+        return { entry, name, path };
+      })
+      .filter(Boolean)
+      .sort((a, b) => a.path.localeCompare(b.path, undefined, { sensitivity: "base" }));
+  }
+
+  function getRelativeMarkdownLinkTarget(targetPath) {
+    const normalizedTarget = normalizeMarkdownLinkPath(targetPath);
+    const sourcePath = normalizeMarkdownLinkPath(getActiveMarkdownSourcePath());
+    const sourceDirectory = getDirectoryPath(sourcePath);
+    if (!sourceDirectory) return normalizedTarget;
+
+    const fromParts = sourceDirectory.split("/").filter(Boolean);
+    const toParts = normalizedTarget.split("/").filter(Boolean);
+    while (fromParts.length && toParts.length && fromParts[0].toLowerCase() === toParts[0].toLowerCase()) {
+      fromParts.shift();
+      toParts.shift();
+    }
+    const relativeParts = fromParts.map(() => "..").concat(toParts);
+    return relativeParts.join("/") || getFileName(normalizedTarget);
+  }
+
+  function getLinkAutocompleteInsertText(item, type) {
+    const relativeTarget = getRelativeMarkdownLinkTarget(item.path);
+    return type === "wiki" ? relativeTarget.replace(/\.(md|markdown)$/i, "") : relativeTarget;
+  }
+
+  function getFilteredLinkAutocompleteItems(context) {
+    const query = String(context.query || "").trim().toLowerCase();
+    const entries = getMarkdownLinkAutocompleteEntries();
+    const filtered = query
+      ? entries.filter((item) => {
+          const nameWithoutExtension = item.name.replace(/\.(md|markdown)$/i, "").toLowerCase();
+          return item.name.toLowerCase().includes(query)
+            || item.path.toLowerCase().includes(query)
+            || nameWithoutExtension.includes(query);
+        })
+      : entries;
+    return filtered.slice(0, LINK_AUTOCOMPLETE_MAX_ITEMS);
+  }
+
+  function getTextareaCaretClientPosition(textarea, position) {
+    const computedStyle = window.getComputedStyle(textarea);
+    const mirror = document.createElement("div");
+    mirror.className = "textarea-caret-mirror";
+    const properties = [
+      "boxSizing", "width", "height", "fontFamily", "fontSize", "fontWeight", "fontStyle",
+      "letterSpacing", "textTransform", "wordSpacing", "textIndent", "lineHeight", "paddingTop",
+      "paddingRight", "paddingBottom", "paddingLeft", "borderTopWidth", "borderRightWidth",
+      "borderBottomWidth", "borderLeftWidth", "whiteSpace", "overflowWrap", "tabSize"
+    ];
+    properties.forEach((property) => { mirror.style[property] = computedStyle[property]; });
+    mirror.style.position = "absolute";
+    mirror.style.visibility = "hidden";
+    mirror.style.overflow = "hidden";
+    mirror.style.top = "0";
+    mirror.style.left = "-9999px";
+    mirror.style.whiteSpace = "pre-wrap";
+    mirror.style.overflowWrap = "break-word";
+    mirror.textContent = textarea.value.slice(0, position);
+    const marker = document.createElement("span");
+    marker.textContent = textarea.value.slice(position, position + 1) || "\u200b";
+    mirror.appendChild(marker);
+    document.body.appendChild(mirror);
+
+    const textareaRect = textarea.getBoundingClientRect();
+    const markerRect = marker.getBoundingClientRect();
+    const mirrorRect = mirror.getBoundingClientRect();
+    const top = textareaRect.top + (markerRect.top - mirrorRect.top) - textarea.scrollTop;
+    const left = textareaRect.left + (markerRect.left - mirrorRect.left) - textarea.scrollLeft;
+    mirror.remove();
+    return { top, left };
+  }
+
+  function positionLinkAutocompleteLayer() {
+    if (!linkAutocompleteState || !linkAutocompleteLayer || linkAutocompleteLayer.classList.contains("hidden")) return;
+    const caret = getTextareaCaretClientPosition(markdownEditor, markdownEditor.selectionStart);
+    const editorRect = markdownEditor.getBoundingClientRect();
+    const layerRect = linkAutocompleteLayer.getBoundingClientRect();
+    const lineHeight = getEditorLineHeight();
+    const viewportPadding = 8;
+    let top = caret.top + lineHeight + 4;
+    let left = caret.left;
+
+    if (top + layerRect.height > window.innerHeight - viewportPadding) {
+      top = Math.max(viewportPadding, caret.top - layerRect.height - 4);
+    }
+    left = Math.max(viewportPadding, Math.min(left, window.innerWidth - layerRect.width - viewportPadding));
+    top = Math.max(viewportPadding, Math.min(top, window.innerHeight - layerRect.height - viewportPadding));
+
+    linkAutocompleteLayer.style.top = `${top}px`;
+    linkAutocompleteLayer.style.left = `${Math.max(editorRect.left, left)}px`;
+  }
+
+  function renderLinkAutocomplete() {
+    const context = getLinkAutocompleteContext();
+    if (!context) {
+      hideLinkAutocomplete();
+      return;
+    }
+
+    const items = getFilteredLinkAutocompleteItems(context);
+    const layer = getLinkAutocompleteLayer();
+    const selectedIndex = Math.min(Math.max(linkAutocompleteState?.selectedIndex || 0, 0), Math.max(items.length - 1, 0));
+    linkAutocompleteState = { ...context, items, selectedIndex };
+    layer.innerHTML = "";
+
+    if (!isFolderOpen || !folderMarkdownFiles.length) {
+      const empty = document.createElement("div");
+      empty.className = "link-autocomplete-empty";
+      empty.textContent = "Open a folder to link documents.";
+      layer.appendChild(empty);
+    } else if (!items.length) {
+      const empty = document.createElement("div");
+      empty.className = "link-autocomplete-empty";
+      empty.textContent = "No matching Markdown documents.";
+      layer.appendChild(empty);
+    } else {
+      items.forEach((item, index) => {
+        const option = document.createElement("button");
+        option.type = "button";
+        option.id = `link-autocomplete-option-${index}`;
+        option.className = "link-autocomplete-option" + (index === selectedIndex ? " active" : "");
+        option.setAttribute("role", "option");
+        option.setAttribute("aria-selected", index === selectedIndex ? "true" : "false");
+        option.innerHTML = `<span class="link-autocomplete-name">${escapeHtml(item.name.replace(/\.(md|markdown)$/i, ""))}</span><span class="link-autocomplete-path">${escapeHtml(item.path)}</span>`;
+        option.addEventListener("mousedown", (event) => {
+          event.preventDefault();
+          acceptLinkAutocomplete(index);
+        });
+        layer.appendChild(option);
+      });
+      markdownEditor.setAttribute("aria-activedescendant", `link-autocomplete-option-${selectedIndex}`);
+    }
+
+    layer.classList.remove("hidden");
+    requestAnimationFrame(positionLinkAutocompleteLayer);
+  }
+
+  function acceptLinkAutocomplete(index = linkAutocompleteState?.selectedIndex || 0) {
+    if (!linkAutocompleteState || !linkAutocompleteState.items.length) return false;
+    const state = linkAutocompleteState;
+    const item = state.items[index] || state.items[0];
+    const insertText = getLinkAutocompleteInsertText(item, state.type);
+    const value = markdownEditor.value;
+    markdownEditor.value = value.slice(0, state.replaceStart) + insertText + value.slice(state.replaceEnd);
+    const nextPosition = state.replaceStart + insertText.length;
+    markdownEditor.selectionStart = markdownEditor.selectionEnd = nextPosition;
+    hideLinkAutocomplete();
+    markdownEditor.focus();
+    markdownEditor.dispatchEvent(new Event("input"));
+    return true;
+  }
+
+  function moveLinkAutocompleteSelection(delta) {
+    if (!linkAutocompleteState || !linkAutocompleteState.items.length) return false;
+    const itemCount = linkAutocompleteState.items.length;
+    linkAutocompleteState.selectedIndex = (linkAutocompleteState.selectedIndex + delta + itemCount) % itemCount;
+    renderLinkAutocomplete();
+    return true;
+  }
+
+  function handleLinkAutocompleteKeydown(event) {
+    if (!linkAutocompleteState || !linkAutocompleteLayer || linkAutocompleteLayer.classList.contains("hidden")) return false;
+    if (event.key === "ArrowDown") {
+      event.preventDefault();
+      return moveLinkAutocompleteSelection(1);
+    }
+    if (event.key === "ArrowUp") {
+      event.preventDefault();
+      return moveLinkAutocompleteSelection(-1);
+    }
+    if (event.key === "Enter" || event.key === "Tab") {
+      if (linkAutocompleteState.items.length) {
+        event.preventDefault();
+        return acceptLinkAutocomplete();
+      }
+    }
+    if (event.key === "Escape") {
+      event.preventDefault();
+      hideLinkAutocomplete();
+      return true;
+    }
+    return false;
+  }
+
+
   // View Mode Elements - Story 1.1
   const contentContainer = document.querySelector(".content-container");
   const viewModeButtons = document.querySelectorAll(".view-mode-btn");
@@ -3484,6 +3759,7 @@ This is a fully client-side application. Your content never leaves your browser 
   }
 
   function closeFolderTree() {
+    hideLinkAutocomplete();
     folderMarkdownFiles = [];
     currentFolderTreeNodes = [];
     folderTreeFilterText = "";
@@ -3533,6 +3809,7 @@ This is a fully client-side application. Your content never leaves your browser 
     updateCloseFolderButtons();
     updateFolderTreeToolbarState();
     syncFolderTreeSelectionToActiveTab({ scroll: false });
+    renderLinkAutocomplete();
   }
 
   async function reloadOpenFolderTree() {
@@ -7037,6 +7314,7 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
   });
 
   markdownEditor.addEventListener("input", function() {
+    renderLinkAutocomplete();
     updateEditorLineNumbers();
     updateEditorSelectionHighlights();
     updateStatusLine();
@@ -7053,6 +7331,7 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
   
   // Tab key handler to insert indentation instead of moving focus
   markdownEditor.addEventListener("keydown", function(e) {
+    if (handleLinkAutocompleteKeydown(e)) return;
     if (e.key === 'Tab') {
       e.preventDefault();
       
@@ -7078,18 +7357,21 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
   
   ["click", "keyup", "select"].forEach(function(eventName) {
     markdownEditor.addEventListener(eventName, function() {
+      renderLinkAutocomplete();
       updateEditorLineNumbers();
       updateEditorSelectionHighlights();
       updateStatusLine();
     });
   });
   markdownEditor.addEventListener("focus", function() {
+    renderLinkAutocomplete();
     updateEditorLineNumbers();
     updateEditorSelectionHighlights();
     updateStatusLine();
   });
   markdownEditor.addEventListener("blur", function() {
     window.setTimeout(function() {
+      if (!linkAutocompleteLayer || !linkAutocompleteLayer.matches(":hover")) hideLinkAutocomplete();
       updateEditorSelectionHighlights();
       updateStatusLine();
     }, 0);
@@ -7102,9 +7384,11 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
     }
   });
   markdownEditor.addEventListener("scroll", function() {
+    positionLinkAutocompleteLayer();
     syncEditorLineNumberScroll();
     syncEditorSelectionHighlightsScroll();
   });
+  window.addEventListener("resize", positionLinkAutocompleteLayer);
 
   if (typeof ResizeObserver !== "undefined") {
     const editorLineNumberResizeObserver = new ResizeObserver(scheduleEditorLineNumbersUpdate);
