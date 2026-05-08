@@ -3782,7 +3782,9 @@ This is a fully client-side application. Your content never leaves your browser 
   }
 
   function getAllowedViewModeForActiveTab(mode) {
-    return isUnsupportedFileTab(getActiveTab()) ? 'editor' : (mode || 'split');
+    const activeTab = getActiveTab();
+    if (activeTab && activeTab.type === "graph") return 'preview';
+    return isUnsupportedFileTab(activeTab) ? 'editor' : (mode || 'split');
   }
 
   function activateSidebarTab(tab) {
@@ -3994,6 +3996,7 @@ This is a fully client-side application. Your content never leaves your browser 
       saveActiveTabId(activeTabId);
       const newActiveTab = tabs[newIdx];
       if (newActiveTab.type === 'graph') {
+        setViewMode('preview');
         setGraphViewMode(true);
         renderTabBar(tabs, activeTabId);
         syncFolderTreeSelectionToActiveTab();
@@ -7736,18 +7739,24 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
 
   // View Mode Functions - Story 1.1 & 1.2
   function updateViewModeButtons(mode) {
-    const unsupportedActiveTab = isUnsupportedFileTab(getActiveTab());
+    const activeTab = getActiveTab();
+    const graphActiveTab = !!(activeTab && activeTab.type === "graph");
+    const unsupportedActiveTab = isUnsupportedFileTab(activeTab);
 
     function updateButton(btn) {
       const btnMode = btn.getAttribute('data-mode');
       const isActive = btnMode === mode;
-      const isDisabled = unsupportedActiveTab && btnMode !== 'editor';
+      const isDisabled = graphActiveTab ? btnMode !== 'preview' : (unsupportedActiveTab && btnMode !== 'editor');
       btn.classList.toggle('active', isActive);
       btn.setAttribute('aria-pressed', isActive ? 'true' : 'false');
       btn.disabled = isDisabled;
       btn.setAttribute('aria-disabled', isDisabled ? 'true' : 'false');
       if (isDisabled) {
-        btn.title = `${btnMode === 'split' ? 'Split view' : 'Preview only'} is unavailable for unsupported files`;
+        if (graphActiveTab) {
+          btn.title = `${btnMode === 'editor' ? 'Editor only' : 'Split view'} is unavailable for graph tabs`;
+        } else {
+          btn.title = `${btnMode === 'split' ? 'Split view' : 'Preview only'} is unavailable for unsupported files`;
+        }
       } else if (btnMode === 'editor') {
         btn.title = unsupportedActiveTab ? 'Editor only (required for unsupported files)' : 'Editor only';
       } else if (btnMode === 'split') {
