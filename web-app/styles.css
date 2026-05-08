@@ -1142,6 +1142,16 @@ body {
   display: inline-flex;
 }
 
+.graph-context-menu-empty {
+  color: var(--secondary-text);
+  padding: 0.28rem 0.45rem;
+  white-space: nowrap;
+}
+
+.tags-context-menu-item[aria-checked="true"] i {
+  color: var(--accent-color);
+}
+
 .graph-context-menu-tooltip::after {
   content: attr(data-tooltip);
   position: absolute;
