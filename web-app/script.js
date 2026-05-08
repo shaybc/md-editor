@@ -102,7 +102,8 @@ document.addEventListener("DOMContentLoaded", function () {
         type: "wiki",
         query: "",
         replaceStart: cursor - 2,
-        replaceEnd: cursor - 2
+        replaceEnd: cursor - 2,
+        needsClosingSyntax: false
       };
     }
 
@@ -120,11 +121,16 @@ document.addEventListener("DOMContentLoaded", function () {
     if (wikiStart !== -1) {
       const query = lineBefore.slice(wikiStart + 2);
       if (!query.includes("]]")) {
+        const lineEnd = value.indexOf("\n", cursor);
+        const lineAfter = value.slice(cursor, lineEnd === -1 ? value.length : lineEnd);
+        const closingWikiOffset = lineAfter.indexOf("]]");
+        const hasClosingSyntax = closingWikiOffset !== -1;
         return {
           type: "wiki",
           query,
           replaceStart: lineStart + wikiStart + 2,
-          replaceEnd: cursor
+          replaceEnd: hasClosingSyntax ? cursor + closingWikiOffset : cursor,
+          needsClosingSyntax: !hasClosingSyntax
         };
       }
     }
@@ -168,9 +174,8 @@ document.addEventListener("DOMContentLoaded", function () {
     return normalizedTarget ? `/${normalizedTarget}` : "";
   }
 
-  function getLinkAutocompleteInsertText(item, type) {
-    const rootRelativeTarget = getRootRelativeMarkdownLinkTarget(item.path);
-    return type === "wiki" ? rootRelativeTarget.replace(/\.(md|markdown)$/i, "") : rootRelativeTarget;
+  function getLinkAutocompleteInsertText(item) {
+    return getRootRelativeMarkdownLinkTarget(item.path);
   }
 
   function getFilteredLinkAutocompleteItems(context) {
@@ -309,12 +314,13 @@ document.addEventListener("DOMContentLoaded", function () {
     if (!linkAutocompleteState || !linkAutocompleteState.items.length) return false;
     const state = linkAutocompleteState;
     const item = state.items[index] || state.items[0];
-    const baseInsertText = getLinkAutocompleteInsertText(item, state.type);
-    const insertText = state.type === "markdown" && state.needsClosingSyntax ? `${baseInsertText})` : baseInsertText;
+    const baseInsertText = getLinkAutocompleteInsertText(item);
+    const closingSyntax = state.type === "wiki" ? "]]" : state.type === "markdown" ? ")" : "";
+    const insertText = state.needsClosingSyntax && closingSyntax ? `${baseInsertText}${closingSyntax}` : baseInsertText;
     const value = markdownEditor.value;
-    const closingSyntaxLength = state.type === "markdown"
-      && (state.needsClosingSyntax || value[state.replaceEnd] === ")")
-      ? 1
+    const closingSyntaxLength = closingSyntax
+      && (state.needsClosingSyntax || value.slice(state.replaceEnd, state.replaceEnd + closingSyntax.length) === closingSyntax)
+      ? closingSyntax.length
       : 0;
     markdownEditor.value = value.slice(0, state.replaceStart) + insertText + value.slice(state.replaceEnd);
     const nextPosition = state.replaceStart + baseInsertText.length + closingSyntaxLength;
