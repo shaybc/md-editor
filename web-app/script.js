@@ -3790,6 +3790,10 @@ This is a fully client-side application. Your content never leaves your browser 
     return isUnsupportedFileTab(activeTab) ? 'editor' : (mode || 'split');
   }
 
+  function getDefaultViewModeForOpenedFile(sourceFile) {
+    return isUnsupportedSourceFile(sourceFile) ? 'editor' : 'split';
+  }
+
   function activateSidebarTab(tab) {
     activeTabId = tab.id;
     saveActiveTabId(activeTabId);
@@ -3821,7 +3825,7 @@ This is a fully client-side application. Your content never leaves your browser 
 
     if (!tab) {
       const normalizedContent = normalizeEditorContent(content);
-      const requestedViewMode = isUnsupportedSourceFile(sourceFile) ? 'editor' : (currentViewMode || 'split');
+      const requestedViewMode = getDefaultViewModeForOpenedFile(sourceFile);
       tab = createTab(normalizedContent, title || 'Untitled', requestedViewMode);
       tab.isTemporary = isTemporary;
       applySidebarFileMetadata(tab, sourceFile);
@@ -3832,7 +3836,7 @@ This is a fully client-side application. Your content never leaves your browser 
       tab.title = title || 'Untitled';
       tab.content = normalizedContent;
       tab.scrollPos = 0;
-      tab.viewMode = isUnsupportedSourceFile(sourceFile) ? 'editor' : (currentViewMode || tab.viewMode || 'split');
+      tab.viewMode = getDefaultViewModeForOpenedFile(sourceFile);
       tab.isTemporary = isTemporary;
       applySidebarFileMetadata(tab, sourceFile);
       tab.savedContent = normalizedContent;

@@ -167,6 +167,10 @@ Neutralino.events.on("ready", () => {
 	}
 });
 
+function isInitialMarkdownFilePath(filePath) {
+  return /\.(md|markdown)$/i.test(filePath || "");
+}
+
 function isInitialTextFilePath(filePath) {
   return /\.(md|markdown|mdviewer-graph\.json|mdgraph\.json|json|txt|text|java|css|js|ts|html|htm|xml|csv|ya?ml|toml|ini|log|properties|conf|sh|bash|py|rb|php|sql)$/i.test(filePath || "")
     || /(^|[\/])(dockerfile|makefile|license|readme|changelog)$/i.test(filePath || "");
@@ -188,6 +192,12 @@ function isInitialTextFilePath(filePath) {
       if (!editor) return;
       editor.value = content;
       editor.dispatchEvent(new Event('input'));
+      if (isInitialMarkdownFilePath(filePath)) {
+        setTimeout(() => {
+          const splitButton = document.querySelector('.view-mode-btn[data-mode="split"], .mobile-view-mode-btn[data-mode="split"]');
+          if (splitButton) splitButton.click();
+        }, 0);
+      }
       if (dropzone) dropzone.style.display = 'none';
     }
 
