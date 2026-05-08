@@ -3278,6 +3278,63 @@ This is a fully client-side application. Your content never leaves your browser 
     return normalizedFile === normalizedFolder || normalizedFile.startsWith(normalizedFolder + "/");
   }
 
+  function normalizeDeletedPathComparison(path) {
+    return String(path || "").replace(/\\/g, "/").replace(/\/+$/, "").toLowerCase();
+  }
+
+  function getDeletedPathCandidates(path) {
+    const candidates = new Set();
+    if (!path) return candidates;
+
+    const addCandidate = (candidate) => {
+      const normalized = normalizeDeletedPathComparison(candidate);
+      if (normalized) candidates.add(normalized);
+    };
+
+    addCandidate(path);
+    if (activeFolderPath) {
+      const relativePath = getPathRelativeToFolder(path, activeFolderPath);
+      addCandidate(relativePath);
+      if (!isPathInsideFolder(path, activeFolderPath)) {
+        addCandidate(joinPath(activeFolderPath, path));
+      }
+    }
+
+    return candidates;
+  }
+
+  function tabMatchesDeletedPath(tab, deletedPath, options = {}) {
+    if (!tab || !deletedPath) return false;
+    if (options.targetHandle && tab.sourceFileHandle === options.targetHandle) return true;
+
+    const tabCandidates = getDeletedPathCandidates(tab.sourceFilePath);
+    const deletedCandidates = getDeletedPathCandidates(deletedPath);
+    if (!tabCandidates.size || !deletedCandidates.size) return false;
+
+    for (const tabPath of tabCandidates) {
+      for (const deletedPathCandidate of deletedCandidates) {
+        if (options.kind === "folder") {
+          if (tabPath === deletedPathCandidate || tabPath.startsWith(deletedPathCandidate + "/")) {
+            return true;
+          }
+        } else if (tabPath === deletedPathCandidate) {
+          return true;
+        }
+      }
+    }
+
+    return false;
+  }
+
+  function closeTabsForDeletedPath(deletedPath, options = {}) {
+    const tabIdsToClose = tabs
+      .filter((tab) => tabMatchesDeletedPath(tab, deletedPath, options))
+      .map((tab) => tab.id);
+
+    tabIdsToClose.forEach((tabId) => closeTab(tabId, { promptForUnsaved: false }));
+    return tabIdsToClose.length;
+  }
+
 
   function sortFolderTreeNodes(nodes) {
     nodes.sort((a, b) =>
@@ -4776,6 +4833,7 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
       if (!confirmed) return;
       try {
         await Neutralino.filesystem.remove(filePath);
+        closeTabsForDeletedPath(filePath, { kind: "file", targetHandle: target.handle || null });
         await refreshOpenFolderTreeAfterFileDelete(filePath);
       } catch (error) {
         console.error("Failed to delete sidebar file:", error);
@@ -4881,7 +4939,12 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
     const confirmed = window.confirm(`Delete folder "${node.name}" and its contents from disk? This action cannot be undone.`);
     if (!confirmed) return;
     await Neutralino.filesystem.remove(folderPath);
-    await reloadOpenFolderTree();
+    closeTabsForDeletedPath(folderPath, { kind: "folder" });
+    if (isOpenFolderRootContextNode(node)) {
+      closeFolderTree();
+    } else {
+      await reloadOpenFolderTree();
+    }
   }
 
   function ensureSidebarFolderContextMenu() {
@@ -7762,7 +7825,9 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
       const confirmed = window.confirm(`Delete "${getNodeFileName(nodeId)}" from disk? This action cannot be undone.`);
       if (!confirmed) return;
       try {
+        const snapshotFile = getSnapshotFileForNode(targetNode);
         await Neutralino.filesystem.remove(filePath);
+        closeTabsForDeletedPath(filePath, { kind: "file", targetHandle: snapshotFile?.handle || null });
         simulation.stop();
         removeGraphPointFromSnapshot(nodeId);
         await refreshOpenFolderTreeAfterFileDelete(filePath);
