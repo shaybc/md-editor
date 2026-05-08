@@ -2912,7 +2912,7 @@ This is a fully client-side application. Your content never leaves your browser 
       }
 
       const fileContent = content || "";
-      const tags = extractMarkdownTags(fileContent);
+      const tags = getFileTagsFromContent(fileContent);
       const id = normalizeGraphNodeName(path);
       nodeIndex.set(id, path);
       nodes.push({ id, label: getGraphDisplayLabel(path), fullPath: path, type: "file", tags });
@@ -5089,6 +5089,8 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
     removePoint: { label: "Remove this point", icon: "bi bi-eye-slash" },
     showLocalGraph: { label: "Show local graph", icon: "bi bi-diagram-2" },
     showFullLocalGraph: { label: "Show full local graph", icon: "bi bi-diagram-3" },
+    addTag: { label: "Add tag…", icon: "bi bi-tag" },
+    removeTag: { label: "Remove tag…", icon: "bi bi-tag-fill" },
     turnMagneticForcesOff: { label: "Turn magnetic forces off", icon: "bi bi-magnet" },
     copyDependencies: { label: "Copy dependencies", icon: "bi bi-list-ul" },
     copyFullDependencies: { label: "Copy full dependencies", icon: "bi bi-bezier2" },
@@ -8563,6 +8565,77 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
     return Array.from(tags);
   }
 
+
+  function getFileTagsFromContent(content) {
+    const source = String(content || "");
+    const frontmatterMatch = getMarkdownFrontmatterMatch(source);
+    if (!frontmatterMatch) return [];
+    return extractYamlFrontmatterTags(frontmatterMatch[1]);
+  }
+
+  function normalizeFileTagList(tags) {
+    const normalizedTags = [];
+    const seenTags = new Set();
+
+    (Array.isArray(tags) ? tags : [tags]).forEach((tag) => {
+      const normalizedTag = normalizeTagName(tag);
+      if (!normalizedTag || seenTags.has(normalizedTag)) return;
+      seenTags.add(normalizedTag);
+      normalizedTags.push(normalizedTag);
+    });
+
+    return normalizedTags;
+  }
+
+  function setFileTagsInContent(content, tags) {
+    const source = String(content || "");
+    const normalizedTags = normalizeFileTagList(tags);
+    const frontmatterMatch = getMarkdownFrontmatterMatch(source);
+    let frontmatterData = {};
+    let body = source;
+
+    if (frontmatterMatch) {
+      body = source.slice(frontmatterMatch[0].length);
+      if (typeof jsyaml !== "undefined" && jsyaml?.load) {
+        try {
+          const parsedFrontmatter = jsyaml.load(frontmatterMatch[1]);
+          if (parsedFrontmatter && typeof parsedFrontmatter === "object" && !Array.isArray(parsedFrontmatter)) {
+            frontmatterData = parsedFrontmatter;
+          }
+        } catch (error) {
+          console.warn("Frontmatter tags YAML parse error:", error);
+        }
+      }
+    }
+
+    frontmatterData.tags = normalizedTags;
+
+    const yaml = typeof jsyaml !== "undefined" && jsyaml?.dump
+      ? jsyaml.dump(frontmatterData, { lineWidth: -1, noRefs: true }).trimEnd()
+      : `tags:
+${normalizedTags.map((tag) => `  - ${tag}`).join("\n")}`;
+
+    return `---
+${yaml}
+---
+${body}`;
+  }
+
+  function addTagToContent(content, tag) {
+    const normalizedTag = normalizeTagName(tag);
+    if (!normalizedTag) return String(content || "");
+    return setFileTagsInContent(content, [...getFileTagsFromContent(content), normalizedTag]);
+  }
+
+  function removeTagFromContent(content, tag) {
+    const normalizedTag = normalizeTagName(tag);
+    if (!normalizedTag) return String(content || "");
+    return setFileTagsInContent(
+      content,
+      getFileTagsFromContent(content).filter((existingTag) => existingTag !== normalizedTag)
+    );
+  }
+
   function extractMarkdownTags(markdown) {
     const tags = new Set();
     const source = String(markdown || "");
@@ -9142,6 +9215,18 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
       "Open a graph that follows every outgoing dependency reachable from this point."
     );
     fullLocalGraphBtn.classList.add("hidden");
+    const addTagBtn = createContextMenuButton(
+      CONTEXT_MENU_ACTIONS.addTag.label,
+      CONTEXT_MENU_ACTIONS.addTag.icon,
+      "Add a YAML frontmatter tag to this Markdown file."
+    );
+    addTagBtn.classList.add("hidden");
+    const removeTagBtn = createContextMenuButton(
+      CONTEXT_MENU_ACTIONS.removeTag.label,
+      CONTEXT_MENU_ACTIONS.removeTag.icon,
+      "Remove a YAML frontmatter tag from this Markdown file."
+    );
+    removeTagBtn.classList.add("hidden");
     const deleteFileBtn = createContextMenuButton(
       CONTEXT_MENU_ACTIONS.deleteFile.label,
       CONTEXT_MENU_ACTIONS.deleteFile.icon,
@@ -9235,6 +9320,8 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
     contextMenu.appendChild(hidePointBtn);
     contextMenu.appendChild(localGraphBtn);
     contextMenu.appendChild(fullLocalGraphBtn);
+    contextMenu.appendChild(addTagBtn);
+    contextMenu.appendChild(removeTagBtn);
     contextMenu.appendChild(contextMenuDeleteSeparator);
     contextMenu.appendChild(deleteFileBtn);
     contextMenu.appendChild(contextMenuDeleteEndSeparator);
@@ -9387,6 +9474,86 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
       graphRenderCache.delete(activeGraphTab.id);
     };
 
+    const findOpenMarkdownTabForSnapshotFile = (snapshotFile, graphNode) => {
+      if (!snapshotFile && !graphNode) return null;
+      const candidatePaths = new Set([
+        snapshotFile?.fullPath,
+        snapshotFile?.path,
+        graphNode?.fullPath
+      ].filter(Boolean));
+      const candidateNames = new Set([
+        snapshotFile?.name,
+        snapshotFile?.path ? getFileName(snapshotFile.path) : null,
+        snapshotFile?.fullPath ? getFileName(snapshotFile.fullPath) : null,
+        graphNode?.label
+      ].filter(Boolean));
+
+      return tabs.find((tab) => {
+        if (!tab || tab.type === "graph") return false;
+        if (snapshotFile?.handle && tab.sourceFileHandle === snapshotFile.handle) return true;
+        if (tab.sourceFilePath && candidatePaths.has(tab.sourceFilePath)) return true;
+        if (tab.sourceFileName && candidateNames.has(tab.sourceFileName)) return true;
+        return tab.title && candidateNames.has(tab.title);
+      }) || null;
+    };
+
+    const rebuildActiveGraphSnapshotAfterTagChange = async (activeGraphTab) => {
+      if (!activeGraphTab?.graphSnapshot) return;
+      const currentSnapshot = activeGraphTab.graphSnapshot;
+      activeGraphTab.graphSnapshot = await createGraphSnapshot(currentSnapshot.files || [], currentSnapshot.folderName || activeGraphTab.folderName || activeGraphTab.title);
+      if (currentSnapshot.createdAt) activeGraphTab.graphSnapshot.createdAt = currentSnapshot.createdAt;
+      graphRenderCache.delete(activeGraphTab.id);
+    };
+
+    const updateGraphNodeTagContent = async (graphNode, tag, action) => {
+      if (!graphNode || graphNode.type === "tag") return;
+      const activeGraphTab = getActiveGraphTab();
+      const snapshotFile = getSnapshotFileForNode(graphNode);
+      if (!activeGraphTab || !snapshotFile) {
+        alert("Unable to find the selected file in this graph snapshot.");
+        return;
+      }
+
+      const currentContent = await readGraphNodeContent(graphNode);
+      const currentTags = getFileTagsFromContent(currentContent);
+      const normalizedTag = normalizeTagName(tag);
+      if (action === "add" && currentTags.includes(normalizedTag)) return;
+      if (action === "remove" && !currentTags.includes(normalizedTag)) return;
+
+      const nextContent = action === "remove"
+        ? removeTagFromContent(currentContent, normalizedTag)
+        : addTagToContent(currentContent, normalizedTag);
+
+      if (nextContent === currentContent) return;
+
+      snapshotFile.content = nextContent;
+      snapshotFile.tags = getFileTagsFromContent(nextContent);
+
+      const folderEntry = getFolderMarkdownEntryForNode(graphNode);
+      if (folderEntry) folderEntry.content = nextContent;
+
+      const openMarkdownTab = findOpenMarkdownTabForSnapshotFile(snapshotFile, graphNode);
+      if (openMarkdownTab) {
+        const normalizedContent = normalizeEditorContent(nextContent);
+        openMarkdownTab.content = normalizedContent;
+        if (openMarkdownTab.id === activeTabId) {
+          markdownEditor.value = normalizedContent;
+          renderEditorSyntaxHighlights();
+          updateEditorLineNumbers();
+          renderMarkdown();
+        }
+      }
+
+      await rebuildActiveGraphSnapshotAfterTagChange(activeGraphTab);
+      markGraphTabAsChanged(activeGraphTab);
+      saveTabsToStorage(tabs);
+      renderTabBar(tabs, activeTabId);
+      updateSaveCurrentFileButtons();
+      simulation.stop();
+      graphRenderWrapper.remove();
+      renderGraphView();
+    };
+
     const applyMagneticSetting = () => {
       if (graphSettings.magneticEnabled) {
         simulation
@@ -9424,6 +9591,8 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
       hidePointBtn,
       localGraphBtn,
       fullLocalGraphBtn,
+      addTagBtn,
+      removeTagBtn,
       contextMenuDeleteSeparator,
       deleteFileBtn,
       contextMenuDeleteEndSeparator,
@@ -9471,6 +9640,9 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
       contextMenuTitleSeparator.classList.remove("hidden");
       contextMenuActionSeparator.classList.remove("hidden");
       setNodeContextItemsHidden(false);
+      const isFileNode = (d.type || "file") !== "tag";
+      addTagBtn.classList.toggle("hidden", !isFileNode);
+      removeTagBtn.classList.toggle("hidden", !isFileNode);
       positionContextMenu(event);
       contextMenu.classList.remove("hidden");
     });
@@ -9668,6 +9840,48 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
       const nodeId = contextTargetNode.id;
       hideContextMenu();
       hideGraphPoint(nodeId);
+    });
+
+    addTagBtn.addEventListener("click", async (event) => {
+      event.stopPropagation();
+      if (!contextTargetNode || contextTargetNode.type === "tag") return;
+      const targetNode = contextTargetNode;
+      hideContextMenu();
+      const tag = window.prompt("Tag to add:");
+      const normalizedTag = normalizeTagName(tag);
+      if (!normalizedTag) return;
+      try {
+        if (getFileTagsFromContent(await readGraphNodeContent(targetNode)).includes(normalizedTag)) return;
+        await updateGraphNodeTagContent(targetNode, normalizedTag, "add");
+      } catch (error) {
+        console.error("Failed to add tag:", error);
+        alert("Unable to add this tag.");
+      }
+    });
+
+    removeTagBtn.addEventListener("click", async (event) => {
+      event.stopPropagation();
+      if (!contextTargetNode || contextTargetNode.type === "tag") return;
+      const targetNode = contextTargetNode;
+      hideContextMenu();
+      try {
+        const currentTags = getFileTagsFromContent(await readGraphNodeContent(targetNode));
+        if (!currentTags.length) {
+          alert("This file does not have any YAML frontmatter tags to remove.");
+          return;
+        }
+        const tag = window.prompt(`Tag to remove:\n${currentTags.join(", ")}`);
+        const normalizedTag = normalizeTagName(tag);
+        if (!normalizedTag) return;
+        if (!currentTags.includes(normalizedTag)) {
+          alert("This file does not have that YAML frontmatter tag.");
+          return;
+        }
+        await updateGraphNodeTagContent(targetNode, normalizedTag, "remove");
+      } catch (error) {
+        console.error("Failed to remove tag:", error);
+        alert("Unable to remove this tag.");
+      }
     });
 
     deleteFileBtn.addEventListener("click", async (event) => {
