@@ -1573,10 +1573,10 @@ document.addEventListener("DOMContentLoaded", function () {
             <i class="bi bi-crosshair" aria-hidden="true"></i>
             <span class="auto-select-file-label visually-hidden">Auto select file Off</span>
           </button>
-          <button class="folder-tree-tool-button open-graph-view" type="button" title="Open Graph View" aria-label="Open Graph View">
+          <button class="folder-tree-tool-button open-graph-view" type="button" title="Open a folder to open Graph View" aria-label="Open Graph View" disabled aria-disabled="true">
             <i class="bi bi-diagram-3" aria-hidden="true"></i>
           </button>
-          <button class="folder-tree-tool-button toggle-unsupported-files" type="button" title="Show unsupported file types in the folder view" aria-label="Show unsupported file types in the folder view" aria-pressed="false">
+          <button class="folder-tree-tool-button toggle-unsupported-files" type="button" title="Open a folder to show unsupported file types" aria-label="Show unsupported file types in the folder view" aria-pressed="false" disabled aria-disabled="true">
             <i class="bi bi-file-earmark-x" aria-hidden="true"></i>
           </button>
           <div class="folder-tree-sort-menu dropdown">
@@ -1702,6 +1702,7 @@ document.addEventListener("DOMContentLoaded", function () {
     if (!button || event.unsupportedFilesToggleHandled) return;
     event.unsupportedFilesToggleHandled = true;
     event.preventDefault();
+    if (button.classList.contains("folder-tree-tool-button") && !isFolderOpen) return;
     setShowUnsupportedFolderFiles(!showUnsupportedFolderFiles);
   }
 
@@ -2314,6 +2315,14 @@ document.addEventListener("DOMContentLoaded", function () {
     return document.querySelectorAll(".toggle-unsupported-files");
   }
 
+  function getFolderTreeGraphViewButtons() {
+    return document.querySelectorAll(".folder-tree-tool-button.open-graph-view");
+  }
+
+  function getTagManagementMenuButtons() {
+    return document.querySelectorAll(".tag-management-menu-button");
+  }
+
   function getVisibleFolderTreeNodes(nodes) {
     return (nodes || []).reduce(function(visibleNodes, node) {
       if (node.kind === "directory") {
@@ -2463,17 +2472,49 @@ document.addEventListener("DOMContentLoaded", function () {
   }
 
   function updateUnsupportedFileToggleButtons() {
+    const hasFolder = !!isFolderOpen;
     const label = showUnsupportedFolderFiles ? "Hide unsupported file types" : "Show unsupported file types";
-    const title = `${label} in the folder view`;
+    const title = hasFolder ? `${label} in the folder view` : "Open a folder to show unsupported file types";
 
     getUnsupportedFileToggleButtons().forEach(function(button) {
       const labelElement = button.querySelector(".unsupported-files-toggle-label");
       if (labelElement) {
         labelElement.textContent = label;
       }
+      if (button.classList.contains("folder-tree-tool-button")) {
+        button.disabled = !hasFolder;
+        button.setAttribute("aria-disabled", hasFolder ? "false" : "true");
+      }
       button.title = title;
       button.setAttribute("aria-label", title);
-      button.setAttribute("aria-pressed", String(showUnsupportedFolderFiles));
+      button.setAttribute("aria-pressed", String(hasFolder && showUnsupportedFolderFiles));
+    });
+  }
+
+  function updateFolderTreeGraphViewButtons() {
+    const hasFolder = !!isFolderOpen;
+    const title = hasFolder ? "Open Graph View" : "Open a folder to open Graph View";
+    getFolderTreeGraphViewButtons().forEach(function(button) {
+      button.disabled = !hasFolder;
+      button.title = title;
+      button.setAttribute("aria-label", title);
+      button.setAttribute("aria-disabled", hasFolder ? "false" : "true");
+    });
+  }
+
+  function updateTagManagementMenuButtons() {
+    const hasFolder = !!isFolderOpen;
+    const title = hasFolder ? "Manage tags" : "Open a folder to manage tags";
+    getTagManagementMenuButtons().forEach(function(button) {
+      button.disabled = !hasFolder;
+      button.title = title;
+      button.setAttribute("aria-label", title);
+      button.setAttribute("aria-disabled", hasFolder ? "false" : "true");
+    });
+    [createTagButton, deleteTagButton, tagManagementSearch].forEach(function(control) {
+      if (!control) return;
+      control.disabled = !hasFolder;
+      control.setAttribute("aria-disabled", hasFolder ? "false" : "true");
     });
   }
 
@@ -2486,6 +2527,8 @@ document.addEventListener("DOMContentLoaded", function () {
 
   function updateFolderTreeToolbarState() {
     updateAutoSelectFileButtons();
+    updateFolderTreeGraphViewButtons();
+    updateTagManagementMenuButtons();
     updateUnsupportedFileToggleButtons();
     updateFolderTreeExpandToggleButtons();
     updateFolderTreeFilterControls();
