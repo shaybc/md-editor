@@ -178,6 +178,23 @@ body {
 .content-container {
   display: flex;
   flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.editor-workspace {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.editor-content-row {
+  display: flex;
+  flex: 1 1 auto;
+  min-height: 0;
   overflow: hidden;
 }
 
@@ -928,7 +945,7 @@ body {
 
 /* Responsive design for mobile */
 @media (max-width: 1080px) {
-  .content-container {
+  .editor-content-row {
       flex-direction: column;
   }
   
