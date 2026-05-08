@@ -10081,6 +10081,211 @@ ${body}`;
     updateActiveGraphViewConfig({ groups: graphViewConfig.groups.filter((group) => group.id !== groupId) });
   }
 
+  const GRAPH_GROUP_QUERY_PREFIX_HELP = [
+    { prefix: "path", label: "path:", description: "Match folders, path segments, or full paths." },
+    { prefix: "file", label: "file:", description: "Match Markdown file names." },
+    { prefix: "tag", label: "tag:", description: "Match normalized frontmatter tags." }
+  ];
+  const GRAPH_GROUP_QUERY_SUGGESTION_LIMIT = 8;
+  let activeGraphGroupSuggestionClose = null;
+
+  function getGraphGroupQueryContext(input) {
+    const value = String(input?.value || "");
+    const cursor = typeof input?.selectionStart === "number" ? input.selectionStart : value.length;
+    const beforeCursor = value.slice(0, cursor);
+    const prefixMatch = beforeCursor.match(/(^|\s)(path|file|tag):([^\s]*)$/i);
+    if (!prefixMatch) {
+      return { prefix: "", query: "", replaceStart: cursor, replaceEnd: cursor };
+    }
+
+    return {
+      prefix: prefixMatch[2].toLowerCase(),
+      query: prefixMatch[3] || "",
+      replaceStart: cursor - (prefixMatch[3] || "").length,
+      replaceEnd: cursor
+    };
+  }
+
+  function getGraphGroupSuggestionEntries(graphSnapshot, prefix, query) {
+    const normalizedQuery = String(query || "").toLowerCase();
+    const entryMap = new Map();
+    const addEntry = (value, type, detail) => {
+      const normalizedValue = String(value || "").trim();
+      if (!normalizedValue) return;
+      if (normalizedQuery && !normalizedValue.toLowerCase().includes(normalizedQuery)) return;
+      const key = `${type}:${normalizedValue.toLowerCase()}`;
+      if (!entryMap.has(key)) entryMap.set(key, { value: normalizedValue, type, detail: detail || "" });
+    };
+
+    if (prefix === "path") {
+      (graphSnapshot?.files || []).forEach((snapshotFile) => {
+        const path = String(snapshotFile.fullPath || snapshotFile.path || "").replace(/\\/g, "/");
+        if (!path) return;
+        addEntry(path, "path", "Full path");
+        path.split("/").filter(Boolean).forEach((segment) => addEntry(segment, "path", path));
+      });
+    } else if (prefix === "file") {
+      (graphSnapshot?.files || []).forEach((snapshotFile) => {
+        const path = String(snapshotFile.fullPath || snapshotFile.path || "");
+        addEntry(snapshotFile.name || getFileName(path), "file", path || "File name");
+      });
+    } else if (prefix === "tag") {
+      (graphSnapshot?.files || []).forEach((snapshotFile) => {
+        normalizeFileTagList(snapshotFile.tags || []).forEach((tag) => addEntry(tag, "tag", "File tag"));
+        extractMarkdownTags(snapshotFile.content || "").forEach((tag) => addEntry(tag, "tag", "Markdown tag"));
+      });
+      (graphSnapshot?.nodes || []).forEach((node) => {
+        if ((node?.type || "file") !== "tag") return;
+        const tag = normalizeTagName(node.tag || node.label || String(node.id || "").replace(/^tag:/, ""));
+        addEntry(tag, "tag", "Tag node");
+      });
+    }
+
+    return Array.from(entryMap.values())
+      .sort((a, b) => a.value.localeCompare(b.value, undefined, { sensitivity: "base" }))
+      .slice(0, GRAPH_GROUP_QUERY_SUGGESTION_LIMIT);
+  }
+
+  function attachGraphGroupQuerySuggestions(row, queryInput, group, sourceTab) {
+    const popover = document.createElement("div");
+    popover.className = "graph-group-query-suggestions hidden";
+    popover.setAttribute("role", "listbox");
+    popover.setAttribute("aria-label", "Graph group query suggestions");
+    row.appendChild(popover);
+
+    let selectedIndex = 0;
+    let isPointerSelectingSuggestion = false;
+
+    const closePopover = () => {
+      popover.classList.add("hidden");
+      popover.innerHTML = "";
+      queryInput.removeAttribute("aria-activedescendant");
+      if (activeGraphGroupSuggestionClose === closePopover) activeGraphGroupSuggestionClose = null;
+      document.removeEventListener("mousedown", handleOutsideMouseDown, true);
+    };
+
+    function handleOutsideMouseDown(event) {
+      if (row.contains(event.target)) return;
+      closePopover();
+    }
+
+    const insertSuggestion = (suggestion) => {
+      if (!suggestion) return;
+      const context = getGraphGroupQueryContext(queryInput);
+      const replacement = context.prefix ? suggestion.value : `${suggestion.prefix}:`;
+      const value = String(queryInput.value || "");
+      const nextValue = `${value.slice(0, context.replaceStart)}${replacement}${value.slice(context.replaceEnd)}`;
+      const cursor = context.replaceStart + replacement.length;
+      queryInput.value = nextValue;
+      queryInput.focus();
+      queryInput.setSelectionRange(cursor, cursor);
+      closePopover();
+      updateGraphGroup(group.id, { query: nextValue });
+    };
+
+    const renderPopover = () => {
+      if (queryInput.disabled) return;
+      const context = getGraphGroupQueryContext(queryInput);
+      const activeGraphTab = getActiveGraphTab();
+      const graphSnapshot = activeGraphTab?.graphSnapshot || sourceTab?.graphSnapshot || null;
+      let suggestions = [];
+
+      if (context.prefix) {
+        suggestions = getGraphGroupSuggestionEntries(graphSnapshot, context.prefix, context.query);
+      } else {
+        suggestions = GRAPH_GROUP_QUERY_PREFIX_HELP.map((item) => ({ ...item, value: item.label }));
+      }
+
+      popover.innerHTML = "";
+      selectedIndex = Math.min(selectedIndex, Math.max(suggestions.length - 1, 0));
+
+      if (!suggestions.length) {
+        const empty = document.createElement("div");
+        empty.className = "graph-group-query-suggestion-empty";
+        empty.textContent = `No ${context.prefix}: suggestions.`;
+        popover.appendChild(empty);
+      } else {
+        suggestions.forEach((suggestion, index) => {
+          const button = document.createElement("button");
+          button.type = "button";
+          button.id = `graph-group-query-suggestion-${group.id}-${index}`;
+          button.className = `graph-group-query-suggestion${index === selectedIndex ? " active" : ""}`;
+          button.setAttribute("role", "option");
+          button.setAttribute("aria-selected", index === selectedIndex ? "true" : "false");
+          button.dataset.index = String(index);
+          const title = document.createElement("span");
+          title.className = "graph-group-query-suggestion-title";
+          title.textContent = context.prefix ? suggestion.value : suggestion.label;
+          const detail = document.createElement("span");
+          detail.className = "graph-group-query-suggestion-detail";
+          detail.textContent = context.prefix ? suggestion.detail : suggestion.description;
+          button.append(title, detail);
+          button.addEventListener("mousedown", (event) => {
+            event.preventDefault();
+            isPointerSelectingSuggestion = true;
+          });
+          button.addEventListener("mouseenter", () => {
+            selectedIndex = index;
+            renderPopover();
+          });
+          button.addEventListener("click", () => {
+            isPointerSelectingSuggestion = false;
+            insertSuggestion(suggestion);
+          });
+          popover.appendChild(button);
+        });
+        queryInput.setAttribute("aria-activedescendant", `graph-group-query-suggestion-${group.id}-${selectedIndex}`);
+      }
+
+      if (activeGraphGroupSuggestionClose && activeGraphGroupSuggestionClose !== closePopover) activeGraphGroupSuggestionClose();
+      activeGraphGroupSuggestionClose = closePopover;
+      popover.classList.remove("hidden");
+      document.addEventListener("mousedown", handleOutsideMouseDown, true);
+    };
+
+    queryInput.addEventListener("focus", renderPopover);
+    queryInput.addEventListener("click", renderPopover);
+    queryInput.addEventListener("keyup", (event) => {
+      if (["ArrowDown", "ArrowUp", "Enter", "Escape"].includes(event.key)) return;
+      renderPopover();
+    });
+    queryInput.addEventListener("blur", () => {
+      window.setTimeout(() => {
+        if (!isPointerSelectingSuggestion) closePopover();
+        isPointerSelectingSuggestion = false;
+      }, 120);
+    });
+    queryInput.addEventListener("keydown", (event) => {
+      if (popover.classList.contains("hidden")) {
+        if (event.key !== "Escape") renderPopover();
+        return;
+      }
+
+      const options = Array.from(popover.querySelectorAll(".graph-group-query-suggestion"));
+      if (event.key === "Escape") {
+        event.preventDefault();
+        closePopover();
+      } else if (event.key === "ArrowDown" && options.length) {
+        event.preventDefault();
+        selectedIndex = (selectedIndex + 1) % options.length;
+        renderPopover();
+      } else if (event.key === "ArrowUp" && options.length) {
+        event.preventDefault();
+        selectedIndex = (selectedIndex - 1 + options.length) % options.length;
+        renderPopover();
+      } else if (event.key === "Enter" && options.length) {
+        event.preventDefault();
+        const context = getGraphGroupQueryContext(queryInput);
+        const activeGraphTab = getActiveGraphTab();
+        const graphSnapshot = activeGraphTab?.graphSnapshot || sourceTab?.graphSnapshot || null;
+        const suggestions = context.prefix
+          ? getGraphGroupSuggestionEntries(graphSnapshot, context.prefix, context.query)
+          : GRAPH_GROUP_QUERY_PREFIX_HELP.map((item) => ({ ...item, value: item.label }));
+        insertSuggestion(suggestions[selectedIndex]);
+      }
+    });
+  }
+
   function renderGraphGroupsToolbar(tab) {
     if (!graphGroupsList) return;
     const graphViewConfig = normalizeGraphViewConfig(tab?.graphViewConfig);
@@ -10122,7 +10327,9 @@ ${body}`;
       queryInput.placeholder = "tag:project or path:docs";
       queryInput.value = group.query || "";
       queryInput.disabled = !isGraphTab;
+      queryInput.autocomplete = "off";
       queryInput.setAttribute("aria-label", `Graph group ${index + 1} query`);
+      queryInput.setAttribute("aria-haspopup", "listbox");
       let queryUpdateTimeout = null;
       const updateGroupQuery = () => {
         window.clearTimeout(queryUpdateTimeout);
@@ -10135,7 +10342,7 @@ ${body}`;
       });
       queryInput.addEventListener("change", updateGroupQuery);
       queryInput.addEventListener("keydown", (event) => {
-        if (event.key === "Enter") {
+        if (event.key === "Enter" && !queryInput.getAttribute("aria-activedescendant")) {
           event.preventDefault();
           queryInput.blur();
         }
@@ -10159,6 +10366,7 @@ ${body}`;
       deleteButton.addEventListener("click", () => deleteGraphGroup(group.id));
 
       row.append(enabledLabel, queryInput, colorInput, deleteButton);
+      attachGraphGroupQuerySuggestions(row, queryInput, group, tab);
       graphGroupsList.appendChild(row);
     });
 
