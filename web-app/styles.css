@@ -2727,7 +2727,9 @@ a:focus {
   background: var(--bg-color);
   display: flex;
   flex-direction: column;
-  overflow: hidden;
+  overflow: visible;
+  position: relative;
+  z-index: 200;
   opacity: 1;
   transform: translateX(0);
   transition: width 0.24s ease, min-width 0.24s ease, flex-basis 0.24s ease, opacity 0.18s ease, transform 0.24s ease, border-color 0.24s ease;
@@ -2737,6 +2739,7 @@ a:focus {
   width: 0;
   min-width: 0;
   flex-basis: 0;
+  overflow: hidden;
   border-right-color: transparent;
   opacity: 0;
   pointer-events: none;
