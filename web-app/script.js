@@ -10006,6 +10006,22 @@ ${body}`;
     renderGraphView();
   }
 
+  function animateActiveGraphView() {
+    const activeGraphTab = getActiveGraphTab();
+    if (!activeGraphTab) return;
+    const cachedRender = graphRenderCache.get(activeGraphTab.id);
+    if (cachedRender?.simulation) {
+      graphSettings.magneticEnabled = true;
+      if (activeGraphTab.graphLayout) activeGraphTab.graphLayout.magneticEnabled = true;
+      if (typeof cachedRender.animate === "function") cachedRender.animate();
+      else cachedRender.simulation.alpha(0.9).restart();
+      saveGlobalState({ graphMagneticEnabled: graphSettings.magneticEnabled });
+      saveTabsToStorage(tabs);
+    } else {
+      renderGraphView();
+    }
+  }
+
   async function renderGraphView() {
     if (!graphViewCanvas) return;
     const renderRequestId = ++graphRenderRequestId;
@@ -11417,7 +11433,11 @@ ${body}`;
       simulation,
       nodes,
       visiblePointCount: nodes.length,
-      getZoomTransform: () => currentZoomTransform
+      getZoomTransform: () => currentZoomTransform,
+      animate: () => {
+        graphSettings.magneticEnabled = true;
+        applyMagneticSetting();
+      }
     });
 
     applyMagneticSetting();
