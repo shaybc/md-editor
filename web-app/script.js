@@ -157,25 +157,14 @@ document.addEventListener("DOMContentLoaded", function () {
       .sort((a, b) => a.path.localeCompare(b.path, undefined, { sensitivity: "base" }));
   }
 
-  function getRelativeMarkdownLinkTarget(targetPath) {
+  function getRootRelativeMarkdownLinkTarget(targetPath) {
     const normalizedTarget = normalizeMarkdownLinkPath(targetPath);
-    const sourcePath = normalizeMarkdownLinkPath(getActiveMarkdownSourcePath());
-    const sourceDirectory = getDirectoryPath(sourcePath);
-    if (!sourceDirectory) return normalizedTarget;
-
-    const fromParts = sourceDirectory.split("/").filter(Boolean);
-    const toParts = normalizedTarget.split("/").filter(Boolean);
-    while (fromParts.length && toParts.length && fromParts[0].toLowerCase() === toParts[0].toLowerCase()) {
-      fromParts.shift();
-      toParts.shift();
-    }
-    const relativeParts = fromParts.map(() => "..").concat(toParts);
-    return relativeParts.join("/") || getFileName(normalizedTarget);
+    return normalizedTarget ? `/${normalizedTarget}` : "";
   }
 
   function getLinkAutocompleteInsertText(item, type) {
-    const relativeTarget = getRelativeMarkdownLinkTarget(item.path);
-    return type === "wiki" ? relativeTarget.replace(/\.(md|markdown)$/i, "") : relativeTarget;
+    const rootRelativeTarget = getRootRelativeMarkdownLinkTarget(item.path);
+    return type === "wiki" ? rootRelativeTarget.replace(/\.(md|markdown)$/i, "") : rootRelativeTarget;
   }
 
   function getFilteredLinkAutocompleteItems(context) {
