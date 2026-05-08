@@ -6331,13 +6331,13 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
     [
       title,
       separator,
-      showGraphBtn,
-      refreshFolderTreeBtn,
       revealFolderBtn,
       renameFolderBtn,
       copyPathBtn,
       newFileBtn,
       newFolderBtn,
+      showGraphBtn,
+      refreshFolderTreeBtn,
       deleteFolderSeparator,
       deleteFolderBtn
     ].forEach((item) => menu.appendChild(item));
