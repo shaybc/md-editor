@@ -245,6 +245,23 @@ document.addEventListener("DOMContentLoaded", function () {
     linkAutocompleteLayer.style.left = `${Math.max(editorRect.left, left)}px`;
   }
 
+  function scrollLinkAutocompleteSelectionIntoView() {
+    if (!linkAutocompleteLayer || !linkAutocompleteState?.items.length) return;
+    const activeOption = linkAutocompleteLayer.querySelector(".link-autocomplete-option.active");
+    if (!activeOption) return;
+
+    const optionTop = activeOption.offsetTop;
+    const optionBottom = optionTop + activeOption.offsetHeight;
+    const visibleTop = linkAutocompleteLayer.scrollTop;
+    const visibleBottom = visibleTop + linkAutocompleteLayer.clientHeight;
+
+    if (optionTop < visibleTop) {
+      linkAutocompleteLayer.scrollTop = optionTop;
+    } else if (optionBottom > visibleBottom) {
+      linkAutocompleteLayer.scrollTop = optionBottom - linkAutocompleteLayer.clientHeight;
+    }
+  }
+
   function renderLinkAutocomplete() {
     const context = getLinkAutocompleteContext();
     if (!context) {
@@ -287,7 +304,10 @@ document.addEventListener("DOMContentLoaded", function () {
     }
 
     layer.classList.remove("hidden");
-    requestAnimationFrame(positionLinkAutocompleteLayer);
+    requestAnimationFrame(() => {
+      positionLinkAutocompleteLayer();
+      scrollLinkAutocompleteSelectionIntoView();
+    });
   }
 
   function acceptLinkAutocomplete(index = linkAutocompleteState?.selectedIndex || 0) {
