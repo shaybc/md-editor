@@ -93,6 +93,70 @@ document.addEventListener("DOMContentLoaded", function () {
     markdownEditor.removeAttribute("aria-activedescendant");
   }
 
+  function isCursorInsideMarkdownCode(value, cursor, lineBefore) {
+    const beforeCursor = String(value || "").slice(0, cursor);
+    const fenceRegex = /^ {0,3}(```+|~~~+)/gm;
+    let fenceMatch;
+    let activeFence = null;
+
+    while ((fenceMatch = fenceRegex.exec(beforeCursor)) !== null) {
+      const marker = fenceMatch[1];
+      const markerChar = marker[0];
+      const markerLength = marker.length;
+
+      if (!activeFence) {
+        activeFence = { markerChar, markerLength };
+        continue;
+      }
+
+      if (markerChar === activeFence.markerChar && markerLength >= activeFence.markerLength) {
+        activeFence = null;
+      }
+    }
+
+    if (activeFence) return true;
+
+    const inlinePrefix = String(lineBefore || "");
+    const inlineCodeRegex = /`+/g;
+    let inlineMatch;
+    let openInlineFence = null;
+
+    while ((inlineMatch = inlineCodeRegex.exec(inlinePrefix)) !== null) {
+      const tickLength = inlineMatch[0].length;
+      if (openInlineFence === tickLength) {
+        openInlineFence = null;
+      } else if (!openInlineFence) {
+        openInlineFence = tickLength;
+      }
+    }
+
+    return !!openInlineFence;
+  }
+
+  function getTagAutocompleteContext(value, cursor, lineStart, lineBefore) {
+    if (isCursorInsideMarkdownCode(value, cursor, lineBefore)) return null;
+
+    const tagMatch = lineBefore.match(/(^|[^\p{L}\p{N}_\/-])#([\p{L}\p{N}][\p{L}\p{N}_\/-]*)$/u);
+    if (!tagMatch) return null;
+
+    const query = tagMatch[2] || "";
+    if (!query) return null;
+
+    const hashIndex = lineBefore.length - query.length - 1;
+    const replaceStart = lineStart + hashIndex;
+    const nextCharacter = String(value || "").charAt(cursor);
+
+    if (nextCharacter && /[\p{L}\p{N}_\/-]/u.test(nextCharacter)) return null;
+
+    return {
+      type: "tag",
+      query,
+      replaceStart,
+      replaceEnd: cursor,
+      needsClosingSyntax: false
+    };
+  }
+
   function getLinkAutocompleteContext() {
     if (document.activeElement !== markdownEditor) return null;
     if (markdownEditor.selectionStart !== markdownEditor.selectionEnd) return null;
@@ -159,7 +223,7 @@ document.addEventListener("DOMContentLoaded", function () {
       }
     }
 
-    return null;
+    return getTagAutocompleteContext(value, cursor, lineStart, lineBefore);
   }
 
   function getMarkdownLinkAutocompleteEntries() {
@@ -179,12 +243,67 @@ document.addEventListener("DOMContentLoaded", function () {
     return normalizedTarget ? `/${normalizedTarget}` : "";
   }
 
+  function getActiveFolderGraphSnapshots() {
+    const activeGraphTab = getActiveGraphTab();
+    if (activeGraphTab?.graphSnapshot) return [activeGraphTab.graphSnapshot];
+
+    const activeFolderKey = String(activeFolderName || "").trim();
+    const matchingSnapshots = (tabs || [])
+      .filter((tab) => tab?.type === "graph" && tab.graphSnapshot)
+      .filter((tab) => !activeFolderKey || tab.folderName === activeFolderKey || tab.graphSnapshot?.folderName === activeFolderKey || tab.title === activeFolderKey)
+      .map((tab) => tab.graphSnapshot);
+
+    if (matchingSnapshots.length) return matchingSnapshots;
+
+    return (tabs || [])
+      .filter((tab) => tab?.type === "graph" && tab.graphSnapshot)
+      .map((tab) => tab.graphSnapshot);
+  }
+
+  function getGraphSnapshotAutocompleteTags() {
+    const tagSet = new Set();
+
+    getActiveFolderGraphSnapshots().forEach((graphSnapshot) => {
+      (graphSnapshot?.files || []).forEach((snapshotFile) => {
+        normalizeFileTagList(snapshotFile.tags || []).forEach((tag) => tagSet.add(tag));
+        extractMarkdownTags(snapshotFile.content || "").forEach((tag) => tagSet.add(tag));
+      });
+
+      (graphSnapshot?.nodes || []).forEach((node) => {
+        if ((node?.type || "file") !== "tag") return;
+        const normalizedTag = normalizeTagName(node.tag || node.label || String(node.id || "").replace(/^tag:/, ""));
+        if (normalizedTag) tagSet.add(normalizedTag);
+      });
+    });
+
+    return Array.from(tagSet);
+  }
+
+  function getTagAutocompleteEntries() {
+    return Array.from(new Set([
+      ...getGraphSnapshotAutocompleteTags(),
+      ...getKnownTags()
+    ]))
+      .filter(Boolean)
+      .map((tag) => ({ tag, name: `#${tag}` }))
+      .sort((a, b) => a.tag.localeCompare(b.tag, undefined, { sensitivity: "base" }));
+  }
+
   function getLinkAutocompleteInsertText(item) {
+    if (linkAutocompleteState?.type === "tag") return `#${item.tag}`;
     return getRootRelativeMarkdownLinkTarget(item.path);
   }
 
   function getFilteredLinkAutocompleteItems(context) {
     const query = String(context.query || "").trim().toLowerCase();
+
+    if (context.type === "tag") {
+      const entries = getTagAutocompleteEntries();
+      return query
+        ? entries.filter((item) => item.tag.toLowerCase().includes(query))
+        : entries;
+    }
+
     const entries = getMarkdownLinkAutocompleteEntries();
     return query
       ? entries.filter((item) => {
@@ -278,8 +397,9 @@ document.addEventListener("DOMContentLoaded", function () {
     const selectedIndex = Math.min(Math.max(linkAutocompleteState?.selectedIndex || 0, 0), Math.max(items.length - 1, 0));
     linkAutocompleteState = { ...context, items, selectedIndex };
     layer.innerHTML = "";
+    layer.setAttribute("aria-label", context.type === "tag" ? "Tag suggestions" : "Link suggestions");
 
-    if (!isFolderOpen || !folderMarkdownFiles.length) {
+    if (context.type !== "tag" && (!isFolderOpen || !folderMarkdownFiles.length)) {
       const empty = document.createElement("div");
       empty.className = "link-autocomplete-empty";
       empty.textContent = "Open a folder to link documents.";
@@ -287,7 +407,7 @@ document.addEventListener("DOMContentLoaded", function () {
     } else if (!items.length) {
       const empty = document.createElement("div");
       empty.className = "link-autocomplete-empty";
-      empty.textContent = "No matching Markdown documents.";
+      empty.textContent = context.type === "tag" ? "No matching tags." : "No matching Markdown documents.";
       layer.appendChild(empty);
     } else {
       items.forEach((item, index) => {
@@ -297,7 +417,9 @@ document.addEventListener("DOMContentLoaded", function () {
         option.className = "link-autocomplete-option" + (index === selectedIndex ? " active" : "");
         option.setAttribute("role", "option");
         option.setAttribute("aria-selected", index === selectedIndex ? "true" : "false");
-        option.innerHTML = `<span class="link-autocomplete-name">${escapeHtml(item.name.replace(/\.(md|markdown)$/i, ""))}</span><span class="link-autocomplete-path">${escapeHtml(item.path)}</span>`;
+        option.innerHTML = context.type === "tag"
+          ? `<span class="link-autocomplete-name">${escapeHtml(item.name)}</span><span class="link-autocomplete-path">Tag</span>`
+          : `<span class="link-autocomplete-name">${escapeHtml(item.name.replace(/\.(md|markdown)$/i, ""))}</span><span class="link-autocomplete-path">${escapeHtml(item.path)}</span>`;
         option.addEventListener("mousedown", (event) => {
           event.preventDefault();
           acceptLinkAutocomplete(index);
