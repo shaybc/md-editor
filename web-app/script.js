@@ -794,7 +794,7 @@ document.addEventListener("DOMContentLoaded", function () {
                 <i class="bi bi-layout-sidebar me-2"></i><span class="sidebar-toggle-label">Hide Sidebar</span>
               </button>
               <button class="dropdown-item action-menu-item toggle-auto-select-file" type="button" title="Disable Auto select file" aria-pressed="true">
-                <i class="bi bi-crosshair me-2"></i><span class="auto-select-file-label">Auto select file</span>
+                <i class="bi bi-crosshair me-2"></i><span class="auto-select-file-label">Auto select file on</span>
               </button>
             </div>
           </div>
@@ -919,7 +919,7 @@ document.addEventListener("DOMContentLoaded", function () {
   }
 
   function updateAutoSelectFileButtons() {
-    const label = autoSelectFileEnabled ? "Auto select file" : "Auto select file off";
+    const label = autoSelectFileEnabled ? "Auto select file on" : "Auto select file off";
     const title = autoSelectFileEnabled ? "Disable Auto select file" : "Enable Auto select file";
 
     toggleAutoSelectFileButtons.forEach(function(button) {
@@ -932,7 +932,6 @@ document.addEventListener("DOMContentLoaded", function () {
       button.title = title;
       button.setAttribute("aria-label", title);
       button.setAttribute("aria-pressed", String(autoSelectFileEnabled));
-      button.classList.toggle("active", autoSelectFileEnabled);
     });
   }
 
