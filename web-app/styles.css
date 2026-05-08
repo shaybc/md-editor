@@ -1012,7 +1012,10 @@ body {
 
 .graph-file-search-filter:focus,
 .graph-tag-filter-select:focus,
-.graph-group-query-input:focus {
+.graph-group-query-input:focus,
+.graph-group-color-input:focus,
+.graph-group-delete-button:focus-visible,
+.graph-group-query-suggestion:focus-visible {
   border-color: var(--accent-color);
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent-color) 20%, transparent);
   outline: none;
@@ -1027,7 +1030,13 @@ body {
 }
 
 .graph-groups-help code {
+  display: inline-block;
+  padding: 0.05rem 0.25rem;
+  border: 1px solid color-mix(in srgb, var(--border-color) 70%, transparent);
+  border-radius: 4px;
+  background: var(--code-bg);
   color: var(--text-color);
+  font-size: 0.74rem;
 }
 
 .graph-groups-list {
@@ -1038,18 +1047,50 @@ body {
 
 .graph-group-row {
   display: grid;
-  grid-template-columns: 1fr auto auto;
-  gap: 0.5rem;
+  grid-template-columns: minmax(0, 1fr) 2.4rem 2.25rem;
+  gap: 0.45rem;
   align-items: center;
+  padding: 0.45rem;
+  border: 1px solid color-mix(in srgb, var(--border-color) 70%, transparent);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--button-bg) 72%, transparent);
+  transition: background-color 0.2s ease, border-color 0.2s ease, opacity 0.2s ease;
+}
+
+.graph-group-row:focus-within {
+  border-color: color-mix(in srgb, var(--accent-color) 60%, var(--border-color));
+  background: color-mix(in srgb, var(--button-bg) 88%, var(--accent-color));
+}
+
+.graph-group-row:has(.graph-switch-input:not(:checked)) {
+  opacity: 0.68;
+}
+
+.graph-group-row:has(.graph-switch-input:not(:checked)):focus-within,
+.graph-group-row:has(.graph-switch-input:not(:checked)):hover {
+  opacity: 0.9;
+}
+
+.graph-group-row:has(.graph-switch-input:not(:checked)) .graph-group-enabled {
+  color: var(--text-color);
 }
 
 .graph-group-enabled {
   grid-column: 1 / -1;
+  min-width: 0;
   margin: 0;
+  font-weight: 600;
+}
+
+.graph-group-enabled span:first-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .graph-group-query-input {
   min-width: 0;
+  width: 100%;
 }
 
 .graph-group-color-input {
@@ -1063,8 +1104,14 @@ body {
   cursor: pointer;
 }
 
+.graph-group-color-input:disabled {
+  cursor: not-allowed;
+  opacity: 0.65;
+}
+
 .graph-group-delete-button {
   min-width: 2.25rem;
+  min-height: 2.25rem;
   padding: 0.35rem;
 }
 
@@ -1072,10 +1119,12 @@ body {
   grid-column: 1 / -1;
   max-height: 13rem;
   overflow-y: auto;
+  min-width: 0;
   padding: 0.35rem;
   border: 1px solid var(--border-color);
   border-radius: 8px;
   background: var(--preview-bg);
+  color: var(--preview-text-color);
   box-shadow: 0 10px 24px rgba(27, 31, 35, 0.16);
 }
 
@@ -1099,7 +1148,8 @@ body {
 }
 
 .graph-group-query-suggestion:hover,
-.graph-group-query-suggestion.active {
+.graph-group-query-suggestion.active,
+.graph-group-query-suggestion:focus-visible {
   background: var(--button-hover);
 }
 
@@ -1279,6 +1329,23 @@ body {
 
   .graph-filter-button-row {
     grid-template-columns: 1fr;
+  }
+
+  .graph-group-row {
+    grid-template-columns: minmax(0, 1fr) 2.25rem;
+  }
+
+  .graph-group-query-input,
+  .graph-group-query-suggestions {
+    grid-column: 1 / -1;
+  }
+
+  .graph-group-color-input {
+    justify-self: start;
+  }
+
+  .graph-group-delete-button {
+    justify-self: end;
   }
 }
 
