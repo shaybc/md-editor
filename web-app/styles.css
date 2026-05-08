@@ -22,6 +22,16 @@
   --editor-current-line-bg: rgba(208, 215, 222, 0.45);
   --editor-selection-match-bg: rgba(105, 189, 119, 0.55);
   --editor-gutter-bg: var(--editor-bg);
+  --editor-syntax-muted: #6a737d;
+  --editor-syntax-heading: #005cc5;
+  --editor-syntax-strong: #24292f;
+  --editor-syntax-emphasis: #6f42c1;
+  --editor-syntax-code: #d73a49;
+  --editor-syntax-link: #032f62;
+  --editor-syntax-url: #22863a;
+  --editor-syntax-quote: #22863a;
+  --editor-syntax-list: #e36209;
+  --editor-syntax-table: #735c0f;
 }
 
 [data-theme="dark"] {
@@ -48,6 +58,16 @@
   --editor-current-line-bg: rgba(139, 148, 158, 0.2);
   --editor-selection-match-bg: rgba(105, 189, 119, 0.6);
   --editor-gutter-bg: var(--editor-bg);
+  --editor-syntax-muted: #8b949e;
+  --editor-syntax-heading: #79c0ff;
+  --editor-syntax-strong: #f0f6fc;
+  --editor-syntax-emphasis: #d2a8ff;
+  --editor-syntax-code: #ff7b72;
+  --editor-syntax-link: #a5d6ff;
+  --editor-syntax-url: #7ee787;
+  --editor-syntax-quote: #7ee787;
+  --editor-syntax-list: #ffa657;
+  --editor-syntax-table: #d29922;
 }
 
 * {
@@ -334,7 +354,7 @@ body {
 
 #markdown-editor {
   position: relative;
-  z-index: 1;
+  z-index: 3;
   width: 100%;
   height: 100%;
   border: none;
@@ -351,6 +371,89 @@ body {
 
 #markdown-editor:focus {
   outline: none;
+}
+
+.editor-syntax-highlight {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  margin: 0;
+  border: none;
+  background: transparent;
+  color: var(--text-color);
+  font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+  font-size: 14px;
+  line-height: 1.5;
+  padding: 10px 10px 10px 18px;
+  white-space: pre-wrap;
+  overflow: hidden;
+  overflow-wrap: break-word;
+  pointer-events: none;
+  transition: color 0.3s ease;
+}
+
+.editor-syntax-highlight-inner {
+  min-height: 100%;
+}
+
+.editor-md-marker,
+.editor-md-hr {
+  color: var(--editor-syntax-muted);
+}
+
+.editor-md-heading {
+  color: var(--editor-syntax-heading);
+  font-weight: 700;
+}
+
+.editor-md-strong {
+  color: var(--editor-syntax-strong);
+  font-weight: 700;
+}
+
+.editor-md-emphasis {
+  color: var(--editor-syntax-emphasis);
+  font-style: italic;
+}
+
+.editor-md-code {
+  color: var(--editor-syntax-code);
+}
+
+.editor-md-link {
+  color: var(--editor-syntax-link);
+}
+
+.editor-md-url {
+  color: var(--editor-syntax-url);
+  text-decoration: underline;
+}
+
+.editor-md-quote {
+  color: var(--editor-syntax-quote);
+}
+
+.editor-md-list,
+.editor-md-task {
+  color: var(--editor-syntax-list);
+}
+
+.editor-md-table {
+  color: var(--editor-syntax-table);
+}
+
+#markdown-editor.syntax-highlight-enabled {
+  color: transparent;
+  caret-color: var(--text-color);
+}
+
+#markdown-editor.syntax-highlight-enabled::selection {
+  color: transparent;
+  background-color: rgba(3, 102, 214, 0.25);
+}
+
+[data-theme="dark"] #markdown-editor.syntax-highlight-enabled::selection {
+  background-color: rgba(88, 166, 255, 0.35);
 }
 
 .link-autocomplete-layer {
