@@ -9975,6 +9975,70 @@ ${body}`;
     return `#${String(tagNodeId || "").replace(/^tag:/, "")}`;
   }
 
+  function parseGraphGroupQuery(query) {
+    const rawQuery = String(query || "").trim();
+    const prefixMatch = rawQuery.match(/^([a-z]+)\s*:\s*(.*)$/i);
+    const supportedPrefixes = new Set(["path", "file", "name", "tag", "text", "line"]);
+    const prefix = prefixMatch ? prefixMatch[1].toLowerCase() : "";
+    const type = supportedPrefixes.has(prefix) ? prefix : "";
+    const value = (type ? prefixMatch[2] : rawQuery).trim();
+    const terms = value
+      .toLowerCase()
+      .split(/\s+/)
+      .map((term) => term.trim())
+      .filter(Boolean);
+    return {
+      type,
+      value,
+      terms
+    };
+  }
+
+  function graphFileMatchesGroupQuery(nodeData, snapshotFile, parsedQuery) {
+    if ((nodeData?.type || "file") !== "file") return false;
+    if (!snapshotFile || !parsedQuery || !parsedQuery.terms?.length) return false;
+
+    const path = String(snapshotFile.path || "").toLowerCase();
+    const name = String(snapshotFile.name || "").toLowerCase();
+    const fullPath = String(snapshotFile.fullPath || "").toLowerCase();
+    const content = String(snapshotFile.content || "").toLowerCase();
+    const tags = (Array.isArray(snapshotFile.tags) ? snapshotFile.tags : [])
+      .map((tag) => String(tag || "").toLowerCase())
+      .filter(Boolean);
+    const tagText = tags.join(" ");
+    const terms = parsedQuery.terms;
+    const allTermsMatchText = (text) => terms.every((term) => text.includes(term));
+
+    switch (parsedQuery.type) {
+      case "path":
+        return allTermsMatchText([path, fullPath].filter(Boolean).join(" "));
+      case "file":
+        return allTermsMatchText([name, path, fullPath].filter(Boolean).join(" "));
+      case "name":
+        return allTermsMatchText(name);
+      case "tag":
+        return allTermsMatchText(tagText);
+      case "text":
+        return allTermsMatchText(content);
+      case "line":
+        return content
+          .split(/\r?\n/)
+          .some((line) => terms.every((term) => line.includes(term)));
+      default:
+        return allTermsMatchText([path, name, fullPath, content, tagText].filter(Boolean).join(" "));
+    }
+  }
+
+  function getGraphGroupMatch(nodeData, snapshotFile, graphViewConfig) {
+    const groups = Array.isArray(graphViewConfig?.groups) ? graphViewConfig.groups : [];
+    for (const group of groups) {
+      if (!group || group.enabled === false) continue;
+      const parsedQuery = parseGraphGroupQuery(group.query);
+      if (graphFileMatchesGroupQuery(nodeData, snapshotFile, parsedQuery)) return group;
+    }
+    return null;
+  }
+
   function updateGraphTagToolbar(tab, graphSnapshot) {
     const graphViewConfig = normalizeGraphViewConfig(tab?.graphViewConfig);
     const isGraphTab = !!(tab && tab.type === "graph");
@@ -10397,7 +10461,9 @@ ${body}`;
     const arrowhead = arrowheadLayer.selectAll("path").data(graphViewConfig.showArrows ? links.filter(isMarkdownLink) : []).enter().append("path")
       .attr("class", "graph-arrowhead");
     const node = nodeLayer.selectAll("circle").data(nodes).enter().append("circle")
-      .attr("r", (d) => nodeRadius(d.id)).attr("class", (d) => `graph-node graph-node-${getGraphNodeType(d)}`)
+      .attr("r", (d) => nodeRadius(d.id))
+      .attr("class", (d) => `graph-node graph-node-${getGraphNodeType(d)}`)
+      .style("fill", (d) => getGraphGroupMatch(d, snapshotFilesById.get(d.id), graphViewConfig)?.color || null)
       .call(d3.drag()
         .on("start", (event, d) => {
           if (graphSettings.magneticEnabled && !event.active) simulation.alphaTarget(0.3).restart();
