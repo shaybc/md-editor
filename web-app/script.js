@@ -3306,6 +3306,7 @@ This is a fully client-side application. Your content never leaves your browser 
     isFolderOpen = false;
     if (folderTreeRoot) {
       folderTreeRoot.removeEventListener("contextmenu", handleFolderTreeRootContextMenu);
+      folderTreeRoot.addEventListener("contextmenu", handleFolderTreeRootContextMenu);
       folderTreeRoot.innerHTML = getClosedFolderPlaceholder();
     }
     updateCloseFolderButtons();
@@ -3313,6 +3314,7 @@ This is a fully client-side application. Your content never leaves your browser 
 
   function renderFolderTree(nodes) {
     isFolderOpen = true;
+    hideSidebarClosedFolderContextMenu();
     folderTreeRoot.removeEventListener("contextmenu", handleFolderTreeRootContextMenu);
     folderTreeRoot.addEventListener("contextmenu", handleFolderTreeRootContextMenu);
     folderTreeRoot.innerHTML = "";
@@ -3837,6 +3839,7 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
 
   let sidebarFileContextMenu = null;
   let sidebarFolderContextMenu = null;
+  let sidebarClosedFolderContextMenu = null;
   let sidebarContextTarget = null;
 
   const CONTEXT_MENU_ACTIONS = Object.freeze({
@@ -3864,7 +3867,8 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
     turnMagneticForcesOff: { label: "Turn magnetic forces off", icon: "bi bi-magnet" },
     copyDependencies: { label: "Copy dependencies", icon: "bi bi-list-ul" },
     copyFullDependencies: { label: "Copy full dependencies", icon: "bi bi-bezier2" },
-    copyBacklinks: { label: "Copy backlinks", icon: "bi bi-arrow-left-circle" }
+    copyBacklinks: { label: "Copy backlinks", icon: "bi bi-arrow-left-circle" },
+    openFolder: { label: "Open folder", icon: "bi bi-folder2-open" }
   });
 
   function createFileContextMenuButton(labelText, iconClass, tooltipText) {
@@ -3963,9 +3967,16 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
     sidebarContextTarget = null;
   }
 
+  function hideSidebarClosedFolderContextMenu() {
+    if (!sidebarClosedFolderContextMenu) return;
+    sidebarClosedFolderContextMenu.classList.add("hidden");
+    sidebarContextTarget = null;
+  }
+
   function hideSidebarContextMenus() {
     hideSidebarFileContextMenu();
     hideSidebarFolderContextMenu();
+    hideSidebarClosedFolderContextMenu();
   }
 
   function positionSidebarContextMenu(menu, event, fallbackHeight) {
@@ -3984,6 +3995,25 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
 
   function positionSidebarFolderContextMenu(event) {
     positionSidebarContextMenu(sidebarFolderContextMenu, event, 250);
+  }
+
+  function positionSidebarClosedFolderContextMenu(event) {
+    positionSidebarContextMenu(sidebarClosedFolderContextMenu, event, 80);
+  }
+
+  function getOpenFolderMainMenuButton() {
+    return document.querySelector("#import-from-folder");
+  }
+
+  function getOpenFolderActionLabel() {
+    const button = getOpenFolderMainMenuButton();
+    const buttonLabel = button ? button.textContent.replace(/\s+/g, " ").trim() : "";
+    return buttonLabel ? buttonLabel.replace(/\s*\.\.\.$/, "") : CONTEXT_MENU_ACTIONS.openFolder.label;
+  }
+
+  function getOpenFolderActionTitle() {
+    const button = getOpenFolderMainMenuButton();
+    return (button && button.title) || "Open a folder to browse Markdown and graph files.";
   }
 
   function getPathDirectory(path) {
@@ -5273,8 +5303,62 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
     positionSidebarFolderContextMenu(event);
   }
 
+  function ensureSidebarClosedFolderContextMenu() {
+    if (sidebarClosedFolderContextMenu) return sidebarClosedFolderContextMenu;
+
+    const menu = document.createElement("div");
+    menu.className = "graph-context-menu sidebar-closed-folder-context-menu hidden";
+
+    const openFolderBtn = createFileContextMenuButton(
+      getOpenFolderActionLabel(),
+      CONTEXT_MENU_ACTIONS.openFolder.icon,
+      getOpenFolderActionTitle()
+    );
+    openFolderBtn.dataset.sidebarClosedFolderAction = "open-folder";
+
+    menu.appendChild(openFolderBtn);
+    document.body.appendChild(menu);
+
+    openFolderBtn.addEventListener("click", async (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      hideSidebarClosedFolderContextMenu();
+      await openFolderTree(event);
+    });
+
+    document.addEventListener("click", hideSidebarContextMenus);
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "Escape") hideSidebarContextMenus();
+    });
+    window.addEventListener("blur", hideSidebarContextMenus);
+
+    sidebarClosedFolderContextMenu = menu;
+    return sidebarClosedFolderContextMenu;
+  }
+
+  function showSidebarClosedFolderContextMenu(event) {
+    if (isFolderOpen) return;
+    event.preventDefault();
+    event.stopPropagation();
+    hideSidebarFileContextMenu();
+    hideSidebarFolderContextMenu();
+    const menu = ensureSidebarClosedFolderContextMenu();
+    const openFolderBtn = menu.querySelector('[data-sidebar-closed-folder-action="open-folder"]');
+    if (openFolderBtn) {
+      const label = openFolderBtn.querySelector(".graph-context-menu-item-label");
+      if (label) label.textContent = getOpenFolderActionLabel();
+      openFolderBtn.dataset.tooltip = getOpenFolderActionTitle();
+    }
+    menu.classList.remove("hidden");
+    positionSidebarClosedFolderContextMenu(event);
+  }
+
   function handleFolderTreeRootContextMenu(event) {
-    if (!isFolderOpen || !folderTreeRoot) return;
+    if (!folderTreeRoot) return;
+    if (!isFolderOpen) {
+      showSidebarClosedFolderContextMenu(event);
+      return;
+    }
     const targetElement = event.target instanceof Element ? event.target : event.target?.parentElement;
     if (targetElement?.closest(".folder-tree-label, .folder-tree-file")) return;
     showSidebarFolderContextMenu(event, getOpenFolderRootContextNode());
@@ -6828,6 +6912,9 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
     });
   });
   updateCloseFolderButtons();
+  if (folderTreeRoot) {
+    folderTreeRoot.addEventListener("contextmenu", handleFolderTreeRootContextMenu);
+  }
 
   if (importFromGithubButton) {
     importFromGithubButton.addEventListener("click", function (e) {

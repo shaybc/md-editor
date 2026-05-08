@@ -692,7 +692,9 @@ body {
   display: none;
 }
 
-.sidebar-file-context-menu {
+.sidebar-file-context-menu,
+.sidebar-folder-context-menu,
+.sidebar-closed-folder-context-menu {
   position: fixed;
   z-index: 1050;
 }
