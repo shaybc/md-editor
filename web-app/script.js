@@ -2040,15 +2040,87 @@ document.addEventListener("DOMContentLoaded", function () {
       const entryPath = entry.path || entry.fullPath || entry.file?.webkitRelativePath || entry.file?.name || "";
       return normalizeGraphNodeName(entryPath) === snapshotNodeId;
     });
-    if (folderEntry) folderEntry.content = snapshotFile.content || "";
+    if (folderEntry) {
+      folderEntry.content = snapshotFile.content || "";
+      folderEntry.tags = getFileTagsFromContent(folderEntry.content);
+      updateFolderTreeNodeTagsForEntry(folderEntry, folderEntry.tags);
+    }
   }
 
-  async function rebuildActiveGraphTagNodesAndEdges(activeGraphTab) {
-    if (!activeGraphTab?.graphSnapshot) return;
-    const currentSnapshot = activeGraphTab.graphSnapshot;
-    activeGraphTab.graphSnapshot = await createGraphSnapshot(currentSnapshot.files || [], currentSnapshot.folderName || activeGraphTab.folderName || activeGraphTab.title);
-    if (currentSnapshot.createdAt) activeGraphTab.graphSnapshot.createdAt = currentSnapshot.createdAt;
-    graphRenderCache.delete(activeGraphTab.id);
+  function getTagDeletionEntryKey(entry) {
+    return getComparableFilePath(entry?.fullPath || entry?.path || entry?.file?.webkitRelativePath || entry?.file?.name || entry?.name || "");
+  }
+
+  function getActiveGraphSnapshotFileDeletionTargets(tagName, existingKeys) {
+    const activeGraphTab = getActiveGraphTab();
+    if (!activeGraphTab?.graphSnapshot?.files) return [];
+
+    return activeGraphTab.graphSnapshot.files
+      .filter((snapshotFile) => !existingKeys.has(getTagDeletionEntryKey(snapshotFile)))
+      .filter((snapshotFile) => getFileTagsFromContent(snapshotFile.content || "").includes(tagName))
+      .map((snapshotFile) => ({
+        id: snapshotFile.id,
+        name: snapshotFile.name || (snapshotFile.path ? getFileName(snapshotFile.path) : "document.md"),
+        path: snapshotFile.path || snapshotFile.fullPath || snapshotFile.name || "",
+        fullPath: snapshotFile.fullPath || null,
+        content: snapshotFile.content || "",
+        tags: snapshotFile.tags || []
+      }));
+  }
+
+  function getNeutralinoTagDeletionWritePath(entry) {
+    if (!isNeutralinoRuntime()) return null;
+    if (entry.fullPath) return entry.fullPath;
+    if (!entry.path) return null;
+    const entryPath = String(entry.path);
+    const isAbsolutePath = /^[a-zA-Z]:[\\/]/.test(entryPath) || /^\\\\/.test(entryPath) || entryPath.startsWith("/");
+    return isAbsolutePath ? entryPath : (activeFolderPath ? joinPath(activeFolderPath, entryPath) : null);
+  }
+
+  async function writeTagDeletionTargetContent(entry, content) {
+    const neutralinoWritePath = getNeutralinoTagDeletionWritePath(entry);
+    if (neutralinoWritePath) {
+      if (!Neutralino.filesystem?.writeFile) throw new Error("No writable filesystem path is available.");
+      await Neutralino.filesystem.writeFile(neutralinoWritePath, content);
+      return;
+    }
+
+    if (entry.handle?.createWritable) {
+      const writable = await entry.handle.createWritable();
+      await writable.write(content);
+      await writable.close();
+      return;
+    }
+
+    throw new Error("No writable file handle is available.");
+  }
+
+  async function updateOpenGraphSnapshotsForChangedTagFiles(changedEntries) {
+    if (!changedEntries.length) return false;
+    let changedActiveGraph = false;
+
+    for (const tab of tabs) {
+      if (tab?.type !== "graph" || !tab.graphSnapshot?.files) continue;
+
+      let graphChanged = false;
+      tab.graphSnapshot.files.forEach((snapshotFile) => {
+        const changedEntry = changedEntries.find((entry) => sidebarNodeMatchesSnapshotFile(entry, snapshotFile));
+        if (!changedEntry) return;
+        snapshotFile.content = changedEntry.content || "";
+        snapshotFile.tags = getFileTagsFromContent(snapshotFile.content);
+        graphChanged = true;
+      });
+
+      if (!graphChanged) continue;
+      const currentSnapshot = tab.graphSnapshot;
+      tab.graphSnapshot = await createGraphSnapshot(currentSnapshot.files || [], currentSnapshot.folderName || tab.folderName || tab.title);
+      if (currentSnapshot.createdAt) tab.graphSnapshot.createdAt = currentSnapshot.createdAt;
+      graphRenderCache.delete(tab.id);
+      markGraphTabAsChanged(tab);
+      changedActiveGraph = changedActiveGraph || tab.id === activeTabId;
+    }
+
+    return changedActiveGraph;
   }
 
   async function deleteTag(tagName) {
@@ -2058,47 +2130,79 @@ document.addEventListener("DOMContentLoaded", function () {
       return false;
     }
 
-    const confirmed = window.confirm(`Delete tag "#${normalizedTag}"? This removes it from every file in the active graph snapshot.`);
+    const confirmed = window.confirm(`Delete tag "#${normalizedTag}"? This removes it from every file that has the tag and saves those files.`);
     if (!confirmed) return false;
 
-    const activeGraphTab = getActiveGraphTab();
-    let changedFiles = 0;
-    if (activeGraphTab?.graphSnapshot?.files) {
-      activeGraphTab.graphSnapshot.files.forEach((snapshotFile) => {
-        const currentContent = snapshotFile.content || "";
+    const folderTargets = [];
+    const targetKeys = new Set();
+    for (const fileEntry of (folderMarkdownFiles || [])) {
+      try {
+        const currentContent = await readFolderMarkdownFileContent(fileEntry);
         const currentTags = getFileTagsFromContent(currentContent);
-        if (!currentTags.includes(normalizedTag)) return;
-        const nextContent = removeTagFromContent(currentContent, normalizedTag);
-        snapshotFile.content = nextContent;
-        snapshotFile.tags = getFileTagsFromContent(nextContent);
-        updateFolderMarkdownEntryForSnapshotFile(snapshotFile);
-        updateOpenMarkdownTabsForSnapshotFile(snapshotFile);
-        changedFiles += 1;
-      });
-
-      await rebuildActiveGraphTagNodesAndEdges(activeGraphTab);
-      markGraphTabAsChanged(activeGraphTab);
+        fileEntry.content = currentContent || "";
+        fileEntry.tags = currentTags;
+        updateFolderTreeNodeTagsForEntry(fileEntry, currentTags);
+        if (!currentTags.includes(normalizedTag)) continue;
+        folderTargets.push(fileEntry);
+        const targetKey = getTagDeletionEntryKey(fileEntry);
+        if (targetKey) targetKeys.add(targetKey);
+      } catch (error) {
+        console.warn("Failed to read folder file tags before deleting tag:", fileEntry.path || fileEntry.fullPath || fileEntry.name, error);
+      }
     }
+
+    const targets = [
+      ...folderTargets,
+      ...getActiveGraphSnapshotFileDeletionTargets(normalizedTag, targetKeys)
+    ];
+
+    const changedEntries = [];
+    const failedEntries = [];
+    for (const entry of targets) {
+      try {
+        const currentContent = typeof entry.content === "string" ? entry.content : await readFolderMarkdownFileContent(entry);
+        const nextContent = removeTagFromContent(currentContent, normalizedTag);
+        if (nextContent === currentContent) continue;
+
+        await writeTagDeletionTargetContent(entry, nextContent);
+        entry.content = nextContent;
+        entry.tags = getFileTagsFromContent(nextContent);
+        updateFolderTreeNodeTagsForEntry(entry, entry.tags);
+        updateOpenMarkdownTabsForSidebarNode(entry, nextContent);
+        changedEntries.push(entry);
+      } catch (error) {
+        failedEntries.push(entry);
+        console.error("Failed to delete tag from file:", entry.path || entry.fullPath || entry.name, error);
+      }
+    }
+
+    const activeGraphChanged = await updateOpenGraphSnapshotsForChangedTagFiles(changedEntries);
 
     if (selectedFolderTreeTags.has(normalizedTag)) {
       selectedFolderTreeTags = new Set(selectedFolderTreeTags);
       selectedFolderTreeTags.delete(normalizedTag);
-      renderFilteredFolderTree();
     }
+
     await refreshFolderTagCounts();
-    saveKnownTags(getKnownTags().filter((tag) => tag !== normalizedTag));
+    if (!failedEntries.length) {
+      saveKnownTags(getKnownTags().filter((tag) => tag !== normalizedTag));
+    }
     saveTabsToStorage(tabs);
     renderTabBar(tabs, activeTabId);
     updateSaveCurrentFileButtons();
+    renderFilteredFolderTree();
     renderTagManagementList();
+    renderLinkAutocomplete();
 
-    if (activeGraphTab && activeTabId === activeGraphTab.id) {
+    if (activeGraphChanged || (getActiveGraphTab() && activeTabId === getActiveGraphTab().id)) {
       renderGraphView();
     }
 
-    if (!changedFiles && !getKnownTags().includes(normalizedTag)) {
-      console.info(`Deleted metadata-only tag #${normalizedTag}.`);
+    if (failedEntries.length) {
+      alert(`Unable to delete #${normalizedTag} from ${failedEntries.length} file${failedEntries.length === 1 ? "" : "s"}. Files opened without write permission cannot be saved.`);
+      return false;
     }
+
     return true;
   }
 
@@ -10257,7 +10361,7 @@ ${body}`;
     const deleteTagBtn = createContextMenuButton(
       CONTEXT_MENU_ACTIONS.deleteTag.label,
       CONTEXT_MENU_ACTIONS.deleteTag.icon,
-      "Remove this tag from every file in the active graph snapshot."
+      "Remove this tag from every file that has it and save those files."
     );
     deleteTagBtn.classList.add("hidden", "graph-context-menu-item-danger");
     const deleteFileBtn = createContextMenuButton(
