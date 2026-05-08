@@ -3160,9 +3160,7 @@ This is a fully client-side application. Your content never leaves your browser 
       if (entry.kind === "directory") {
         const currentPath = parentPath ? `${parentPath}/${entry.name}` : entry.name;
         const children = await listMarkdownTree(entry, currentPath);
-        if (children.length) {
-          entries.push({ kind: "directory", name: entry.name, path: currentPath, children, handle: entry });
-        }
+        entries.push({ kind: "directory", name: entry.name, path: currentPath, children, handle: entry });
       } else if (entry.kind === "file" && isSidebarDocumentPath(entry.name)) {
         const currentPath = parentPath ? `${parentPath}/${entry.name}` : entry.name;
         entries.push({ kind: "file", name: entry.name, path: currentPath, handle: entry });
@@ -3526,9 +3524,7 @@ This is a fully client-side application. Your content never leaves your browser 
     for (const entry of childEntries) {
       if (entry.isDirectory) {
         const children = await listMarkdownTreeFromEntry(entry);
-        if (children.length) {
-          entries.push({ kind: "directory", name: entry.name, children, handle: entry });
-        }
+        entries.push({ kind: "directory", name: entry.name, children, handle: entry });
       } else if (entry.isFile && isSidebarDocumentPath(entry.name)) {
         try {
           const file = await getFileFromEntry(entry);
@@ -3650,9 +3646,7 @@ async function listMarkdownTreeNeutralino(dirPath) {
       const fullPath = `${dirPath}/${item.entry}`;
       if (item.type === "DIRECTORY") {
         const children = await listMarkdownTreeNeutralino(fullPath);
-        if (children.length) {
-          entries.push({ kind: "directory", name: item.entry, children, fullPath });
-        }
+        entries.push({ kind: "directory", name: item.entry, children, fullPath });
       } else if (item.type === "FILE" && isSidebarDocumentPath(item.entry)) {
         entries.push({ kind: "file", name: item.entry, fullPath });
       }
@@ -3870,6 +3864,65 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
           return;
         }
         cleanup(newName);
+      }
+
+      function onCancel() {
+        cleanup(null);
+      }
+
+      function onKey(event) {
+        if (event.key === 'Enter') onConfirm();
+        else if (event.key === 'Escape') onCancel();
+      }
+
+      confirmBtn.addEventListener('click', onConfirm);
+      cancelBtn.addEventListener('click', onCancel);
+      input.addEventListener('keydown', onKey);
+    });
+  }
+
+  function promptSidebarNewFolderName(parentNode) {
+    return new Promise((resolve) => {
+      const modal = document.getElementById('rename-modal');
+      const title = document.getElementById('rename-modal-title');
+      const input = document.getElementById('rename-modal-input');
+      const confirmBtn = document.getElementById('rename-modal-confirm');
+      const cancelBtn = document.getElementById('rename-modal-cancel');
+      if (!modal || !input || !confirmBtn || !cancelBtn) {
+        resolve(null);
+        return;
+      }
+
+      if (title) title.textContent = `New folder in ${parentNode?.name || "folder"}`;
+      input.value = "";
+      input.placeholder = "Folder name";
+      confirmBtn.textContent = "Create";
+      modal.style.display = 'flex';
+      input.focus();
+
+      function cleanup(result) {
+        confirmBtn.removeEventListener('click', onConfirm);
+        cancelBtn.removeEventListener('click', onCancel);
+        input.removeEventListener('keydown', onKey);
+        modal.style.display = 'none';
+        confirmBtn.textContent = "Rename";
+        resolve(result);
+      }
+
+      function onConfirm() {
+        const folderName = input.value.trim();
+        const validationMessage = validateSidebarRenameName(folderName, "folder");
+        if (validationMessage) {
+          alert(validationMessage);
+          input.focus();
+          return;
+        }
+        if ((parentNode?.children || []).some((child) => child.kind === "directory" && child.name.toLowerCase() === folderName.toLowerCase())) {
+          alert("A folder with this name already exists here.");
+          input.focus();
+          return;
+        }
+        cleanup(folderName);
       }
 
       function onCancel() {
@@ -4256,6 +4309,28 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
       updateSaveCurrentFileButtons();
       if (getActiveGraphTab()) renderGraphView();
     }
+  }
+
+  async function createSidebarFolderOnDisk(node) {
+    if (!node || node.kind !== "directory") return;
+    const folderName = await promptSidebarNewFolderName(node);
+    if (!folderName) return;
+
+    if (isNeutralinoRuntime()) {
+      const parentPath = getSidebarFolderFilesystemPath(node);
+      if (!parentPath || !Neutralino.filesystem?.createDirectory) {
+        alert("Creating folders is available only in the desktop app for folders opened from disk.");
+        return;
+      }
+      await Neutralino.filesystem.createDirectory(joinPath(parentPath, folderName));
+    } else if (node.handle && typeof node.handle.getDirectoryHandle === "function") {
+      await node.handle.getDirectoryHandle(folderName, { create: true });
+    } else {
+      alert("Creating folders from the folder tree is available in the desktop app or in browsers when the folder was opened with write access.");
+      return;
+    }
+
+    await reloadOpenFolderTree();
   }
 
   async function renameSidebarNodeOnDisk(node, kind) {
@@ -4678,6 +4753,11 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
       "bi bi-diagram-3",
       "Open a graph view containing only Markdown files in this folder and its sub-folders."
     );
+    const newFolderBtn = createFileContextMenuButton(
+      "New Folder ...",
+      "bi bi-folder-plus",
+      "Create a new folder under this folder."
+    );
     const revealFolderBtn = createFileContextMenuButton(
       "Reveal in file explorer",
       "bi bi-folder2-open",
@@ -4700,7 +4780,7 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
     );
     deleteFolderBtn.classList.add("graph-context-menu-item-danger");
 
-    [title, separator, showGraphBtn, revealFolderBtn, renameFolderBtn, copyPathBtn, deleteFolderBtn].forEach((item) => menu.appendChild(item));
+    [title, separator, showGraphBtn, newFolderBtn, revealFolderBtn, renameFolderBtn, copyPathBtn, deleteFolderBtn].forEach((item) => menu.appendChild(item));
     document.body.appendChild(menu);
 
     showGraphBtn.addEventListener("click", async (event) => {
@@ -4712,6 +4792,18 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
       } catch (error) {
         console.error("Failed to open sidebar folder graph view:", error);
         alert("Unable to open a graph view for this folder.");
+      }
+    });
+
+    newFolderBtn.addEventListener("click", async (event) => {
+      event.stopPropagation();
+      const target = sidebarContextTarget;
+      hideSidebarFolderContextMenu();
+      try {
+        await createSidebarFolderOnDisk(target);
+      } catch (error) {
+        console.error("Failed to create sidebar folder:", error);
+        alert("Unable to create a new folder here.");
       }
     });
 
