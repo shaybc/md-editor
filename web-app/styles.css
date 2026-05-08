@@ -995,7 +995,8 @@ body {
 }
 
 .graph-file-search-filter,
-.graph-tag-filter-select {
+.graph-tag-filter-select,
+.graph-group-query-input {
   background-color: var(--button-bg);
   border: 1px solid var(--border-color);
   color: var(--text-color);
@@ -1004,17 +1005,68 @@ body {
   font-size: 14px;
 }
 
-.graph-file-search-filter::placeholder {
+.graph-file-search-filter::placeholder,
+.graph-group-query-input::placeholder {
   color: var(--secondary-text);
 }
 
 .graph-file-search-filter:focus,
-.graph-tag-filter-select:focus {
+.graph-tag-filter-select:focus,
+.graph-group-query-input:focus {
   border-color: var(--accent-color);
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent-color) 20%, transparent);
   outline: none;
 }
 
+.graph-groups-help,
+.graph-groups-empty {
+  margin: 0;
+  color: var(--secondary-text);
+  font-size: 0.78rem;
+  line-height: 1.35;
+}
+
+.graph-groups-help code {
+  color: var(--text-color);
+}
+
+.graph-groups-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+
+.graph-group-row {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.graph-group-enabled {
+  grid-column: 1 / -1;
+  margin: 0;
+}
+
+.graph-group-query-input {
+  min-width: 0;
+}
+
+.graph-group-color-input {
+  width: 2.4rem;
+  min-width: 2.4rem;
+  height: 2.25rem;
+  padding: 0.15rem;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  background: var(--button-bg);
+  cursor: pointer;
+}
+
+.graph-group-delete-button {
+  min-width: 2.25rem;
+  padding: 0.35rem;
+}
 
 .graph-filter-control-section,
 .graph-collapsible-content {

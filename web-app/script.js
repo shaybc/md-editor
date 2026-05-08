@@ -1754,6 +1754,8 @@ document.addEventListener("DOMContentLoaded", function () {
   const graphHideTagsButton = document.getElementById("graph-hide-tags");
   const graphSelectedTagFilter = document.getElementById("graph-selected-tag-filter");
   const graphOnlySelectedTagButton = document.getElementById("graph-only-selected-tag");
+  const graphGroupsList = document.getElementById("graph-groups-list");
+  const graphAddGroupButton = document.getElementById("graph-add-group");
   const graphFileSearchFilter = document.getElementById("graph-file-search-filter");
   const graphDisplayArrows = document.getElementById("graph-display-arrows");
   const graphTextFadeThreshold = document.getElementById("graph-text-fade-threshold");
@@ -3525,6 +3527,15 @@ This is a fully client-side application. Your content never leaves your browser 
     if (/^#(?:[0-9a-f]{3}|[0-9a-f]{4}|[0-9a-f]{6}|[0-9a-f]{8})$/i.test(rawValue)) return rawValue;
     if (typeof CSS !== "undefined" && typeof CSS.supports === "function" && CSS.supports("color", rawValue)) return rawValue;
     return fallbackColor;
+  }
+
+  function getGraphColorInputValue(value) {
+    const color = normalizeGraphGroupColor(value, "#7c3aed");
+    if (/^#[0-9a-f]{6}$/i.test(color)) return color;
+    if (/^#[0-9a-f]{3}$/i.test(color)) {
+      return `#${color.slice(1).split("").map((digit) => digit + digit).join("")}`;
+    }
+    return "#7c3aed";
   }
 
   function normalizeGraphGroups(groups) {
@@ -10039,9 +10050,99 @@ ${body}`;
     return null;
   }
 
+  function updateGraphGroup(groupId, patch) {
+    const activeGraphTab = getActiveGraphTab();
+    if (!activeGraphTab) return;
+    const graphViewConfig = normalizeGraphViewConfig(activeGraphTab.graphViewConfig);
+    const groups = graphViewConfig.groups.map((group) => (group.id === groupId ? { ...group, ...patch } : group));
+    updateActiveGraphViewConfig({ groups });
+  }
+
+  function deleteGraphGroup(groupId) {
+    const activeGraphTab = getActiveGraphTab();
+    if (!activeGraphTab) return;
+    const graphViewConfig = normalizeGraphViewConfig(activeGraphTab.graphViewConfig);
+    updateActiveGraphViewConfig({ groups: graphViewConfig.groups.filter((group) => group.id !== groupId) });
+  }
+
+  function renderGraphGroupsToolbar(tab) {
+    if (!graphGroupsList) return;
+    const graphViewConfig = normalizeGraphViewConfig(tab?.graphViewConfig);
+    const isGraphTab = !!(tab && tab.type === "graph");
+    graphGroupsList.innerHTML = "";
+
+    if (!graphViewConfig.groups.length) {
+      const emptyMessage = document.createElement("p");
+      emptyMessage.className = "graph-groups-empty";
+      emptyMessage.textContent = "No groups yet.";
+      graphGroupsList.appendChild(emptyMessage);
+    }
+
+    graphViewConfig.groups.forEach((group, index) => {
+      const row = document.createElement("div");
+      row.className = "graph-group-row";
+
+      const enabledLabel = document.createElement("label");
+      enabledLabel.className = "graph-group-enabled graph-toggle-row";
+      enabledLabel.title = "Enable or disable this graph group";
+
+      const enabledText = document.createElement("span");
+      enabledText.textContent = `Group ${index + 1}`;
+      const enabledInput = document.createElement("input");
+      enabledInput.className = "graph-switch-input";
+      enabledInput.type = "checkbox";
+      enabledInput.checked = group.enabled !== false;
+      enabledInput.disabled = !isGraphTab;
+      enabledInput.setAttribute("aria-label", `Enable graph group ${index + 1}`);
+      enabledInput.addEventListener("change", () => updateGraphGroup(group.id, { enabled: enabledInput.checked }));
+      const enabledSwitch = document.createElement("span");
+      enabledSwitch.className = "graph-switch";
+      enabledSwitch.setAttribute("aria-hidden", "true");
+      enabledLabel.append(enabledText, enabledInput, enabledSwitch);
+
+      const queryInput = document.createElement("input");
+      queryInput.className = "graph-group-query-input";
+      queryInput.type = "text";
+      queryInput.placeholder = "tag:project or path:docs";
+      queryInput.value = group.query || "";
+      queryInput.disabled = !isGraphTab;
+      queryInput.setAttribute("aria-label", `Graph group ${index + 1} query`);
+      queryInput.addEventListener("change", () => updateGraphGroup(group.id, { query: queryInput.value }));
+      queryInput.addEventListener("keydown", (event) => {
+        if (event.key === "Enter") {
+          event.preventDefault();
+          queryInput.blur();
+        }
+      });
+
+      const colorInput = document.createElement("input");
+      colorInput.className = "graph-group-color-input";
+      colorInput.type = "color";
+      colorInput.value = getGraphColorInputValue(group.color);
+      colorInput.disabled = !isGraphTab;
+      colorInput.setAttribute("aria-label", `Graph group ${index + 1} color`);
+      colorInput.addEventListener("change", () => updateGraphGroup(group.id, { color: colorInput.value }));
+
+      const deleteButton = document.createElement("button");
+      deleteButton.className = "tool-button graph-group-delete-button";
+      deleteButton.type = "button";
+      deleteButton.title = "Delete graph group";
+      deleteButton.disabled = !isGraphTab;
+      deleteButton.setAttribute("aria-label", `Delete graph group ${index + 1}`);
+      deleteButton.innerHTML = '<i class="bi bi-trash"></i>';
+      deleteButton.addEventListener("click", () => deleteGraphGroup(group.id));
+
+      row.append(enabledLabel, queryInput, colorInput, deleteButton);
+      graphGroupsList.appendChild(row);
+    });
+
+    if (graphAddGroupButton) graphAddGroupButton.disabled = !isGraphTab;
+  }
+
   function updateGraphTagToolbar(tab, graphSnapshot) {
     const graphViewConfig = normalizeGraphViewConfig(tab?.graphViewConfig);
     const isGraphTab = !!(tab && tab.type === "graph");
+    renderGraphGroupsToolbar(tab);
     if (graphShowTagsButton) {
       graphShowTagsButton.disabled = !isGraphTab;
       graphShowTagsButton.classList.toggle("active", isGraphTab && graphViewConfig.showTags);
@@ -11629,6 +11730,19 @@ ${body}`;
         return;
       }
       updateActiveGraphViewConfig({ selectedTagIds: [selectedTagId], showTags: true });
+    });
+  }
+  if (graphAddGroupButton) {
+    graphAddGroupButton.addEventListener("click", () => {
+      const currentConfig = normalizeGraphViewConfig(getActiveGraphTab()?.graphViewConfig);
+      const nextIndex = currentConfig.groups.length + 1;
+      const group = normalizeGraphGroups([{
+        id: createGraphGroupId(`group:${Date.now()}:${nextIndex}`),
+        query: "",
+        color: "#7c3aed",
+        enabled: true
+      }])[0];
+      updateActiveGraphViewConfig({ groups: [...currentConfig.groups, group] });
     });
   }
   if (graphDisplayArrows) graphDisplayArrows.addEventListener("change", () => updateActiveGraphViewConfig({ showArrows: graphDisplayArrows.checked }));
