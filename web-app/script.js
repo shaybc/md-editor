@@ -1647,6 +1647,7 @@ document.addEventListener("DOMContentLoaded", function () {
   const mobileOpenGraphView = document.getElementById("mobile-open-graph-view");
   const desktopOpenGraphButtons = document.querySelectorAll(".open-graph-view");
   const graphViewCanvas = document.getElementById("graph-view-canvas");
+  const graphViewToolbar = document.querySelector(".graph-view-toolbar");
   const graphShowTagsButton = document.getElementById("graph-show-tags");
   const graphHideTagsButton = document.getElementById("graph-hide-tags");
   const graphSelectedTagFilter = document.getElementById("graph-selected-tag-filter");
@@ -9217,17 +9218,32 @@ ${body}`;
   function setGraphViewMode(enabled) {
     const contentContainer = document.querySelector(".content-container");
     if (!contentContainer || !graphViewCanvas) return;
+    const previewPane = document.querySelector(".preview-pane");
+    const graphViewHeader = document.querySelector("#graph-view-modal .graph-view-header");
+    const graphViewContent = document.querySelector("#graph-view-modal .graph-view-content");
     if (enabled) {
       contentContainer.classList.add("graph-view-active");
-      if (!graphViewCanvas.parentElement || !graphViewCanvas.closest(".preview-pane")) {
-        const previewPane = document.querySelector(".preview-pane");
-        if (previewPane) previewPane.appendChild(graphViewCanvas);
+      if (previewPane) {
+        if (graphViewToolbar && graphViewToolbar.parentElement !== previewPane) {
+          previewPane.insertBefore(graphViewToolbar, previewPane.firstChild);
+        }
+        if (!graphViewCanvas.parentElement || !graphViewCanvas.closest(".preview-pane")) {
+          previewPane.appendChild(graphViewCanvas);
+        } else if (graphViewToolbar && graphViewCanvas.previousElementSibling !== graphViewToolbar) {
+          previewPane.insertBefore(graphViewToolbar, graphViewCanvas);
+        }
       }
+      if (graphViewToolbar) graphViewToolbar.classList.add("graph-tab-toolbar");
       graphViewCanvas.classList.add("tab-graph-canvas");
     } else {
       contentContainer.classList.remove("graph-view-active");
+      if (graphViewToolbar) {
+        graphViewToolbar.classList.remove("graph-tab-toolbar");
+        if (graphViewHeader && graphViewToolbar.parentElement !== graphViewHeader) {
+          graphViewHeader.appendChild(graphViewToolbar);
+        }
+      }
       graphViewCanvas.classList.remove("tab-graph-canvas");
-      const graphViewContent = document.querySelector("#graph-view-modal .graph-view-content");
       if (graphViewContent && graphViewCanvas.parentElement !== graphViewContent) {
         graphViewContent.appendChild(graphViewCanvas);
       }
