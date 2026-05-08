@@ -3745,6 +3745,34 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
   let sidebarFolderContextMenu = null;
   let sidebarContextTarget = null;
 
+  const CONTEXT_MENU_ACTIONS = Object.freeze({
+    openInNewTab: { label: "Open in a new tab", icon: "bi bi-box-arrow-up-right" },
+    openWithDefaultApp: { label: "Open with default app", icon: "bi bi-window" },
+    revealInFileExplorer: { label: "Reveal in file explorer", icon: "bi bi-folder2-open" },
+    rename: { label: "Rename", icon: "bi bi-pencil" },
+    copy: { label: "Copy", icon: "bi bi-clipboard" },
+    copyPath: { label: "Copy path", icon: "bi bi-file-earmark-text" },
+    copyContent: { label: "Copy content", icon: "bi bi-file-text" },
+    share: { label: "Share", icon: "bi bi-share" },
+    deleteFile: { label: "Delete file", icon: "bi bi-trash3" },
+    deleteFolder: { label: "Delete folder", icon: "bi bi-trash3" },
+    export: { label: "Export", icon: "bi bi-download" },
+    exportMarkdown: { label: "Export as Markdown", icon: "bi bi-file-earmark-text" },
+    exportHtml: { label: "Export as HTML", icon: "bi bi-file-earmark-code" },
+    exportPdf: { label: "Export as PDF", icon: "bi bi-file-earmark-pdf" },
+    showGraphView: { label: "Show graph view", icon: "bi bi-diagram-3" },
+    refresh: { label: "Refresh", icon: "bi bi-arrow-clockwise" },
+    newFile: { label: "New file ...", icon: "bi bi-file-earmark-plus" },
+    newFolder: { label: "New folder ...", icon: "bi bi-folder-plus" },
+    removePoint: { label: "Remove this point", icon: "bi bi-eye-slash" },
+    showLocalGraph: { label: "Show local graph", icon: "bi bi-diagram-2" },
+    showFullLocalGraph: { label: "Show full local graph", icon: "bi bi-diagram-3" },
+    turnMagneticForcesOff: { label: "Turn magnetic forces off", icon: "bi bi-magnet" },
+    copyDependencies: { label: "Copy dependencies", icon: "bi bi-list-ul" },
+    copyFullDependencies: { label: "Copy full dependencies", icon: "bi bi-bezier2" },
+    copyBacklinks: { label: "Copy backlinks", icon: "bi bi-arrow-left-circle" }
+  });
+
   function createFileContextMenuButton(labelText, iconClass, tooltipText) {
     const button = document.createElement("button");
     button.type = "button";
@@ -4559,31 +4587,31 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
     separator.className = "graph-context-menu-separator";
 
     const openFileBtn = createFileContextMenuButton(
-      "Open in a new tab",
-      "bi bi-box-arrow-up-right",
+      CONTEXT_MENU_ACTIONS.openInNewTab.label,
+      CONTEXT_MENU_ACTIONS.openInNewTab.icon,
       "Open this file in a dedicated tab from the sidebar tree."
     );
     const openDefaultAppBtn = createFileContextMenuButton(
-      "Open with default app",
-      "bi bi-window",
+      CONTEXT_MENU_ACTIONS.openWithDefaultApp.label,
+      CONTEXT_MENU_ACTIONS.openWithDefaultApp.icon,
       "Ask the operating system to open this file with its configured default application."
     );
     const revealFileBtn = createFileContextMenuButton(
-      "Reveal in file explorer",
-      "bi bi-folder2-open",
+      CONTEXT_MENU_ACTIONS.revealInFileExplorer.label,
+      CONTEXT_MENU_ACTIONS.revealInFileExplorer.icon,
       "Open the file's folder in the system file explorer and select this file when supported."
     );
     const renameFileBtn = createFileContextMenuButton(
-      "Rename",
-      "bi bi-pencil",
+      CONTEXT_MENU_ACTIONS.rename.label,
+      CONTEXT_MENU_ACTIONS.rename.icon,
       "Rename this file on disk and refresh the folder tree."
     );
 
     const copySubmenu = document.createElement("div");
     copySubmenu.className = "graph-context-menu-submenu";
     const copySubmenuBtn = createFileContextMenuButton(
-      "Copy",
-      "bi bi-clipboard",
+      CONTEXT_MENU_ACTIONS.copy.label,
+      CONTEXT_MENU_ACTIONS.copy.icon,
       "Open copy actions for this file, including its path and content."
     );
     copySubmenuBtn.setAttribute("aria-haspopup", "true");
@@ -4594,13 +4622,13 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
     const copySubmenuPanel = document.createElement("div");
     copySubmenuPanel.className = "graph-context-menu-submenu-panel";
     const copyPathBtn = createFileContextMenuButton(
-      "Copy path",
-      "bi bi-file-earmark-text",
+      CONTEXT_MENU_ACTIONS.copyPath.label,
+      CONTEXT_MENU_ACTIONS.copyPath.icon,
       "Copy this file's path and file name to the clipboard."
     );
     const copyContentBtn = createFileContextMenuButton(
-      "Copy content",
-      "bi bi-file-text",
+      CONTEXT_MENU_ACTIONS.copyContent.label,
+      CONTEXT_MENU_ACTIONS.copyContent.icon,
       "Copy the entire content of this file to the clipboard."
     );
     copySubmenuPanel.appendChild(copyPathBtn);
@@ -4609,14 +4637,14 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
     copySubmenu.appendChild(copySubmenuPanel);
 
     const shareFileBtn = createFileContextMenuButton(
-      "Share",
-      "bi bi-share",
+      CONTEXT_MENU_ACTIONS.share.label,
+      CONTEXT_MENU_ACTIONS.share.icon,
       "Copy a shareable URL containing this file's Markdown content."
     );
 
     const deleteFileBtn = createFileContextMenuButton(
-      "Delete file",
-      "bi bi-trash3",
+      CONTEXT_MENU_ACTIONS.deleteFile.label,
+      CONTEXT_MENU_ACTIONS.deleteFile.icon,
       "Delete this file from disk after confirmation."
     );
     deleteFileBtn.classList.add("graph-context-menu-item-danger");
@@ -4624,8 +4652,8 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
     const exportSubmenu = document.createElement("div");
     exportSubmenu.className = "graph-context-menu-submenu";
     const exportSubmenuBtn = createFileContextMenuButton(
-      "Export",
-      "bi bi-download",
+      CONTEXT_MENU_ACTIONS.export.label,
+      CONTEXT_MENU_ACTIONS.export.icon,
       "Open export actions for this file."
     );
     exportSubmenuBtn.setAttribute("aria-haspopup", "true");
@@ -4635,9 +4663,9 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
     exportSubmenuBtn.appendChild(exportSubmenuArrow);
     const exportSubmenuPanel = document.createElement("div");
     exportSubmenuPanel.className = "graph-context-menu-submenu-panel";
-    const exportMarkdownBtn = createFileContextMenuButton("Export as Markdown", "bi bi-file-earmark-text", "Download this file as Markdown.");
-    const exportHtmlBtn = createFileContextMenuButton("Export as HTML", "bi bi-file-earmark-code", "Download this file as HTML.");
-    const exportPdfBtn = createFileContextMenuButton("Export as PDF", "bi bi-file-earmark-pdf", "Download this file as PDF.");
+    const exportMarkdownBtn = createFileContextMenuButton(CONTEXT_MENU_ACTIONS.exportMarkdown.label, CONTEXT_MENU_ACTIONS.exportMarkdown.icon, "Download this file as Markdown.");
+    const exportHtmlBtn = createFileContextMenuButton(CONTEXT_MENU_ACTIONS.exportHtml.label, CONTEXT_MENU_ACTIONS.exportHtml.icon, "Download this file as HTML.");
+    const exportPdfBtn = createFileContextMenuButton(CONTEXT_MENU_ACTIONS.exportPdf.label, CONTEXT_MENU_ACTIONS.exportPdf.icon, "Download this file as PDF.");
     [exportMarkdownBtn, exportHtmlBtn, exportPdfBtn].forEach((button) => exportSubmenuPanel.appendChild(button));
     exportSubmenu.appendChild(exportSubmenuBtn);
     exportSubmenu.appendChild(exportSubmenuPanel);
@@ -4951,50 +4979,65 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
     separator.className = "graph-context-menu-separator";
 
     const showGraphBtn = createFileContextMenuButton(
-      "Show graph view",
-      "bi bi-diagram-3",
+      CONTEXT_MENU_ACTIONS.showGraphView.label,
+      CONTEXT_MENU_ACTIONS.showGraphView.icon,
       "Open a graph view containing only Markdown files in this folder and its sub-folders."
     );
     const refreshFolderTreeBtn = createFileContextMenuButton(
-      "Refresh",
-      "bi bi-arrow-clockwise",
+      CONTEXT_MENU_ACTIONS.refresh.label,
+      CONTEXT_MENU_ACTIONS.refresh.icon,
       "Reload the open folder tree from disk to show file system changes."
     );
     const revealFolderBtn = createFileContextMenuButton(
-      "Reveal in File Explorer",
-      "bi bi-folder2-open",
+      CONTEXT_MENU_ACTIONS.revealInFileExplorer.label,
+      CONTEXT_MENU_ACTIONS.revealInFileExplorer.icon,
       "Open this folder in the system file explorer."
     );
     const copyPathBtn = createFileContextMenuButton(
-      "Copy path",
-      "bi bi-clipboard",
+      CONTEXT_MENU_ACTIONS.copyPath.label,
+      CONTEXT_MENU_ACTIONS.copyPath.icon,
       "Copy this folder path to the clipboard."
     );
     const newFileBtn = createFileContextMenuButton(
-      "New file ...",
-      "bi bi-file-earmark-plus",
+      CONTEXT_MENU_ACTIONS.newFile.label,
+      CONTEXT_MENU_ACTIONS.newFile.icon,
       "Create a new empty text file under this folder."
     );
     const newFolderBtn = createFileContextMenuButton(
-      "New folder ...",
-      "bi bi-folder-plus",
+      CONTEXT_MENU_ACTIONS.newFolder.label,
+      CONTEXT_MENU_ACTIONS.newFolder.icon,
       "Create a new folder under this folder."
     );
     const renameFolderBtn = createFileContextMenuButton(
-      "Rename",
-      "bi bi-pencil",
+      CONTEXT_MENU_ACTIONS.rename.label,
+      CONTEXT_MENU_ACTIONS.rename.icon,
       "Rename this folder on disk and refresh the folder tree."
     );
     const deleteFolderBtn = createFileContextMenuButton(
-      "Delete folder",
-      "bi bi-trash3",
+      CONTEXT_MENU_ACTIONS.deleteFolder.label,
+      CONTEXT_MENU_ACTIONS.deleteFolder.icon,
       "Delete this folder and its contents from disk after confirmation."
     );
+    const deleteFolderSeparator = document.createElement("div");
+    deleteFolderSeparator.className = "graph-context-menu-separator";
     renameFolderBtn.dataset.sidebarFolderAction = "rename";
     deleteFolderBtn.dataset.sidebarFolderAction = "delete";
+    deleteFolderSeparator.dataset.sidebarFolderAction = "delete";
     deleteFolderBtn.classList.add("graph-context-menu-item-danger");
 
-    [title, separator, showGraphBtn, refreshFolderTreeBtn, revealFolderBtn, copyPathBtn, newFileBtn, newFolderBtn, renameFolderBtn, deleteFolderBtn].forEach((item) => menu.appendChild(item));
+    [
+      title,
+      separator,
+      showGraphBtn,
+      refreshFolderTreeBtn,
+      revealFolderBtn,
+      renameFolderBtn,
+      copyPathBtn,
+      newFileBtn,
+      newFolderBtn,
+      deleteFolderSeparator,
+      deleteFolderBtn
+    ].forEach((item) => menu.appendChild(item));
     document.body.appendChild(menu);
 
     refreshFolderTreeBtn.addEventListener("click", async (event) => {
@@ -7229,8 +7272,8 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
     };
 
     const magneticToggleBtn = createContextMenuButton(
-      "Turn magnetic forces off",
-      "bi bi-magnet",
+      CONTEXT_MENU_ACTIONS.turnMagneticForcesOff.label,
+      CONTEXT_MENU_ACTIONS.turnMagneticForcesOff.icon,
       "Toggle whether graph nodes continue to pull and push each other after you move them."
     );
     const contextMenuTitleSeparator = document.createElement("div");
@@ -7238,56 +7281,56 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
     const contextMenuActionSeparator = document.createElement("div");
     contextMenuActionSeparator.className = "graph-context-menu-separator hidden";
     const openFileBtn = createContextMenuButton(
-      "Open in a new tab",
-      "bi bi-box-arrow-up-right",
+      CONTEXT_MENU_ACTIONS.openInNewTab.label,
+      CONTEXT_MENU_ACTIONS.openInNewTab.icon,
       "Open this Markdown file in a dedicated editor tab without changing the graph tab."
     );
     openFileBtn.classList.add("hidden");
     const openDefaultAppBtn = createContextMenuButton(
-      "Open with default app",
-      "bi bi-window",
+      CONTEXT_MENU_ACTIONS.openWithDefaultApp.label,
+      CONTEXT_MENU_ACTIONS.openWithDefaultApp.icon,
       "Ask the operating system to open this file with its configured default application."
     );
     openDefaultAppBtn.classList.add("hidden");
     const revealFileBtn = createContextMenuButton(
-      "Reveal in file explorer",
-      "bi bi-folder2-open",
+      CONTEXT_MENU_ACTIONS.revealInFileExplorer.label,
+      CONTEXT_MENU_ACTIONS.revealInFileExplorer.icon,
       "Open the file's folder in the system file explorer and select this file when supported."
     );
     revealFileBtn.classList.add("hidden");
     const renameFileBtn = createContextMenuButton(
-      "Rename",
-      "bi bi-pencil",
+      CONTEXT_MENU_ACTIONS.rename.label,
+      CONTEXT_MENU_ACTIONS.rename.icon,
       "Rename this Markdown file on disk and update open graph views that include it."
     );
     renameFileBtn.classList.add("hidden");
     const hidePointBtn = createContextMenuButton(
-      "Remove this point",
-      "bi bi-eye-slash",
+      CONTEXT_MENU_ACTIONS.removePoint.label,
+      CONTEXT_MENU_ACTIONS.removePoint.icon,
       "Remove this point from the current graph view while keeping the original file on disk."
     );
     hidePointBtn.classList.add("hidden");
     const localGraphBtn = createContextMenuButton(
-      "Show local graph",
-      "bi bi-diagram-2",
+      CONTEXT_MENU_ACTIONS.showLocalGraph.label,
+      CONTEXT_MENU_ACTIONS.showLocalGraph.icon,
       "Open a graph focused on this point and the points it directly links to."
     );
     localGraphBtn.classList.add("hidden");
     const fullLocalGraphBtn = createContextMenuButton(
-      "Show full local graph",
-      "bi bi-diagram-3",
+      CONTEXT_MENU_ACTIONS.showFullLocalGraph.label,
+      CONTEXT_MENU_ACTIONS.showFullLocalGraph.icon,
       "Open a graph that follows every outgoing dependency reachable from this point."
     );
     fullLocalGraphBtn.classList.add("hidden");
     const deleteFileBtn = createContextMenuButton(
-      "Delete file",
-      "bi bi-trash3",
+      CONTEXT_MENU_ACTIONS.deleteFile.label,
+      CONTEXT_MENU_ACTIONS.deleteFile.icon,
       "Delete this Markdown file after confirmation and remove its point from the graph."
     );
     deleteFileBtn.classList.add("hidden", "graph-context-menu-item-danger");
     const sharePointBtn = createContextMenuButton(
-      "Share",
-      "bi bi-share",
+      CONTEXT_MENU_ACTIONS.share.label,
+      CONTEXT_MENU_ACTIONS.share.icon,
       "Copy a shareable URL containing this point's Markdown content."
     );
     sharePointBtn.classList.add("hidden");
@@ -7297,8 +7340,8 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
     const copySubmenu = document.createElement("div");
     copySubmenu.className = "graph-context-menu-submenu hidden";
     const copySubmenuBtn = createContextMenuButton(
-      "Copy",
-      "bi bi-clipboard",
+      CONTEXT_MENU_ACTIONS.copy.label,
+      CONTEXT_MENU_ACTIONS.copy.icon,
       "Open copy actions for this point, including its path, content, dependencies, and backlinks."
     );
     copySubmenuBtn.setAttribute("aria-haspopup", "true");
@@ -7309,28 +7352,28 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
     const copySubmenuPanel = document.createElement("div");
     copySubmenuPanel.className = "graph-context-menu-submenu-panel";
     const copyPathBtn = createContextMenuButton(
-      "Copy path",
-      "bi bi-file-earmark-text",
+      CONTEXT_MENU_ACTIONS.copyPath.label,
+      CONTEXT_MENU_ACTIONS.copyPath.icon,
       "Copy this file's full path and file name to the clipboard."
     );
     const copyContentBtn = createContextMenuButton(
-      "Copy content",
-      "bi bi-file-text",
+      CONTEXT_MENU_ACTIONS.copyContent.label,
+      CONTEXT_MENU_ACTIONS.copyContent.icon,
       "Copy the entire Markdown content of this file to the clipboard."
     );
     const copyDependenciesBtn = createContextMenuButton(
-      "Copy dependencies",
-      "bi bi-list-ul",
+      CONTEXT_MENU_ACTIONS.copyDependencies.label,
+      CONTEXT_MENU_ACTIONS.copyDependencies.icon,
       "Copy direct outgoing linked file names, one file name per line."
     );
     const copyFullDependenciesBtn = createContextMenuButton(
-      "Copy full dependencies",
-      "bi bi-bezier2",
+      CONTEXT_MENU_ACTIONS.copyFullDependencies.label,
+      CONTEXT_MENU_ACTIONS.copyFullDependencies.icon,
       "Copy all direct and indirect outgoing linked file names, one file name per line."
     );
     const copyBacklinksBtn = createContextMenuButton(
-      "Copy backlinks",
-      "bi bi-arrow-left-circle",
+      CONTEXT_MENU_ACTIONS.copyBacklinks.label,
+      CONTEXT_MENU_ACTIONS.copyBacklinks.icon,
       "Copy file names that directly link to this point, one file name per line."
     );
     [copyPathBtn, copyContentBtn, copyDependenciesBtn, copyFullDependenciesBtn, copyBacklinksBtn].forEach((button) => {
@@ -7342,8 +7385,8 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
     const exportSubmenu = document.createElement("div");
     exportSubmenu.className = "graph-context-menu-submenu hidden";
     const exportSubmenuBtn = createContextMenuButton(
-      "Export",
-      "bi bi-download",
+      CONTEXT_MENU_ACTIONS.export.label,
+      CONTEXT_MENU_ACTIONS.export.icon,
       "Open export actions for this point."
     );
     exportSubmenuBtn.setAttribute("aria-haspopup", "true");
@@ -7353,9 +7396,9 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
     exportSubmenuBtn.appendChild(exportSubmenuArrow);
     const exportSubmenuPanel = document.createElement("div");
     exportSubmenuPanel.className = "graph-context-menu-submenu-panel";
-    const exportMarkdownBtn = createContextMenuButton("Export as Markdown", "bi bi-file-earmark-text", "Download this point as Markdown.");
-    const exportHtmlBtn = createContextMenuButton("Export as HTML", "bi bi-file-earmark-code", "Download this point as HTML.");
-    const exportPdfBtn = createContextMenuButton("Export as PDF", "bi bi-file-earmark-pdf", "Download this point as PDF.");
+    const exportMarkdownBtn = createContextMenuButton(CONTEXT_MENU_ACTIONS.exportMarkdown.label, CONTEXT_MENU_ACTIONS.exportMarkdown.icon, "Download this point as Markdown.");
+    const exportHtmlBtn = createContextMenuButton(CONTEXT_MENU_ACTIONS.exportHtml.label, CONTEXT_MENU_ACTIONS.exportHtml.icon, "Download this point as HTML.");
+    const exportPdfBtn = createContextMenuButton(CONTEXT_MENU_ACTIONS.exportPdf.label, CONTEXT_MENU_ACTIONS.exportPdf.icon, "Download this point as PDF.");
     [exportMarkdownBtn, exportHtmlBtn, exportPdfBtn].forEach((button) => exportSubmenuPanel.appendChild(button));
     exportSubmenu.appendChild(exportSubmenuBtn);
     exportSubmenu.appendChild(exportSubmenuPanel);
