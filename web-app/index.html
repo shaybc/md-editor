@@ -537,6 +537,48 @@
                   <i class="bi bi-funnel"></i> Only files with selected tag
                 </button>
               </div>
+              <div class="graph-filter-section graph-filter-control-section" aria-label="Graph display settings">
+                <span class="graph-filter-section-label">Display</span>
+                <label class="graph-toggle-row" for="graph-display-arrows">
+                  <span>Arrows</span>
+                  <input id="graph-display-arrows" class="graph-switch-input" type="checkbox" aria-label="Show graph link arrows">
+                  <span class="graph-switch" aria-hidden="true"></span>
+                </label>
+                <label class="graph-slider-control" for="graph-text-fade-threshold">
+                  <span>Text fade threshold</span>
+                  <input id="graph-text-fade-threshold" type="range" min="0" max="1" step="0.05" aria-label="Text fade threshold">
+                </label>
+                <label class="graph-slider-control" for="graph-node-size">
+                  <span>Node size</span>
+                  <input id="graph-node-size" type="range" min="0.4" max="1.8" step="0.05" aria-label="Node size">
+                </label>
+                <label class="graph-slider-control" for="graph-link-thickness">
+                  <span>Link thickness</span>
+                  <input id="graph-link-thickness" type="range" min="0.5" max="4" step="0.1" aria-label="Link thickness">
+                </label>
+                <button id="graph-animate" class="tool-button graph-primary-button" type="button" title="Restart the graph animation">
+                  Animate
+                </button>
+              </div>
+              <div class="graph-filter-section graph-filter-control-section" aria-label="Graph force settings">
+                <span class="graph-filter-section-label">Forces</span>
+                <label class="graph-slider-control" for="graph-center-force">
+                  <span>Center force</span>
+                  <input id="graph-center-force" type="range" min="0" max="2" step="0.05" aria-label="Center force">
+                </label>
+                <label class="graph-slider-control" for="graph-repel-force">
+                  <span>Repel force</span>
+                  <input id="graph-repel-force" type="range" min="0" max="1200" step="25" aria-label="Repel force">
+                </label>
+                <label class="graph-slider-control" for="graph-link-force">
+                  <span>Link force</span>
+                  <input id="graph-link-force" type="range" min="0" max="1" step="0.05" aria-label="Link force">
+                </label>
+                <label class="graph-slider-control" for="graph-link-distance">
+                  <span>Link distance</span>
+                  <input id="graph-link-distance" type="range" min="40" max="320" step="5" aria-label="Link distance">
+                </label>
+              </div>
               <button id="graph-view-close" class="tool-button graph-view-close-button" title="Close graph view">
                 <i class="bi bi-x-lg"></i> Close graph view
               </button>

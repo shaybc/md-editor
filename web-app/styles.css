@@ -1015,6 +1015,90 @@ body {
   outline: none;
 }
 
+
+.graph-filter-control-section {
+  gap: 0.75rem;
+}
+
+.graph-toggle-row,
+.graph-slider-control {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  color: var(--text-color);
+  font-size: 0.86rem;
+}
+
+.graph-toggle-row {
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.graph-switch-input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.graph-switch {
+  position: relative;
+  flex: 0 0 auto;
+  width: 34px;
+  height: 20px;
+  border-radius: 999px;
+  background: var(--button-bg);
+  border: 1px solid var(--border-color);
+  transition: background-color 0.2s ease, border-color 0.2s ease;
+}
+
+.graph-switch::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 3px;
+  width: 14px;
+  height: 14px;
+  transform: translateY(-50%);
+  border-radius: 50%;
+  background: var(--text-color);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
+  transition: left 0.2s ease, background-color 0.2s ease;
+}
+
+.graph-switch-input:checked + .graph-switch {
+  background: var(--accent-color);
+  border-color: var(--accent-color);
+}
+
+.graph-switch-input:checked + .graph-switch::after {
+  left: 15px;
+  background: #fff;
+}
+
+.graph-switch-input:focus-visible + .graph-switch,
+.graph-slider-control input[type="range"]:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--accent-color) 45%, transparent);
+  outline-offset: 2px;
+}
+
+.graph-slider-control input[type="range"] {
+  width: 100%;
+  accent-color: var(--accent-color);
+  cursor: pointer;
+}
+
+.graph-primary-button {
+  background: var(--accent-color);
+  color: #fff;
+  border-color: var(--accent-color);
+}
+
+.graph-primary-button:hover {
+  filter: brightness(1.05);
+}
+
 .graph-view-toolbar .tool-button.active {
   background-color: var(--button-active);
   border-color: var(--accent-color);

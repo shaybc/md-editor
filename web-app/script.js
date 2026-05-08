@@ -1755,6 +1755,15 @@ document.addEventListener("DOMContentLoaded", function () {
   const graphSelectedTagFilter = document.getElementById("graph-selected-tag-filter");
   const graphOnlySelectedTagButton = document.getElementById("graph-only-selected-tag");
   const graphFileSearchFilter = document.getElementById("graph-file-search-filter");
+  const graphDisplayArrows = document.getElementById("graph-display-arrows");
+  const graphTextFadeThreshold = document.getElementById("graph-text-fade-threshold");
+  const graphNodeSize = document.getElementById("graph-node-size");
+  const graphLinkThickness = document.getElementById("graph-link-thickness");
+  const graphAnimateButton = document.getElementById("graph-animate");
+  const graphCenterForce = document.getElementById("graph-center-force");
+  const graphRepelForce = document.getElementById("graph-repel-force");
+  const graphLinkForce = document.getElementById("graph-link-force");
+  const graphLinkDistance = document.getElementById("graph-link-distance");
   const shareButton         = document.getElementById("share-button");
   const mobileShareButton   = document.getElementById("mobile-share-button");
   const githubImportModal = document.getElementById("github-import-modal");
@@ -3467,7 +3476,15 @@ This is a fully client-side application. Your content never leaves your browser 
     showTags: true,
     hiddenTagIds: [],
     selectedTagIds: [],
-    searchQuery: ""
+    searchQuery: "",
+    showArrows: true,
+    textFadeThreshold: 0.35,
+    nodeSize: 0.8,
+    linkThickness: 1,
+    centerForce: 1,
+    repelForce: 650,
+    linkForce: 0.4,
+    linkDistance: 170
   });
 
   renderTagManagementList();
@@ -3485,6 +3502,12 @@ This is a fully client-side application. Your content never leaves your browser 
       .filter((tagId) => tagId && tagId !== "tag:")));
   }
 
+  function clampGraphNumber(value, fallback, min, max) {
+    const numericValue = Number(value);
+    if (!Number.isFinite(numericValue)) return fallback;
+    return Math.min(max, Math.max(min, numericValue));
+  }
+
   function normalizeGraphViewConfig(config) {
     const source = config && typeof config === "object" ? config : {};
     return {
@@ -3493,7 +3516,15 @@ This is a fully client-side application. Your content never leaves your browser 
       showTags: source.showTags !== false,
       hiddenTagIds: normalizeGraphTagNodeIds(source.hiddenTagIds),
       selectedTagIds: normalizeGraphTagNodeIds(source.selectedTagIds),
-      searchQuery: String(source.searchQuery || "").trim().toLowerCase()
+      searchQuery: String(source.searchQuery || "").trim().toLowerCase(),
+      showArrows: source.showArrows !== false,
+      textFadeThreshold: clampGraphNumber(source.textFadeThreshold, DEFAULT_GRAPH_VIEW_CONFIG.textFadeThreshold, 0, 1),
+      nodeSize: clampGraphNumber(source.nodeSize, DEFAULT_GRAPH_VIEW_CONFIG.nodeSize, 0.4, 1.8),
+      linkThickness: clampGraphNumber(source.linkThickness, DEFAULT_GRAPH_VIEW_CONFIG.linkThickness, 0.5, 4),
+      centerForce: clampGraphNumber(source.centerForce, DEFAULT_GRAPH_VIEW_CONFIG.centerForce, 0, 2),
+      repelForce: clampGraphNumber(source.repelForce, DEFAULT_GRAPH_VIEW_CONFIG.repelForce, 0, 1200),
+      linkForce: clampGraphNumber(source.linkForce, DEFAULT_GRAPH_VIEW_CONFIG.linkForce, 0, 1),
+      linkDistance: clampGraphNumber(source.linkDistance, DEFAULT_GRAPH_VIEW_CONFIG.linkDistance, 40, 320)
     };
   }
 
@@ -9937,6 +9968,26 @@ ${body}`;
       graphOnlySelectedTagButton.classList.toggle("active", isGraphTab && graphViewConfig.selectedTagIds.length > 0);
       graphOnlySelectedTagButton.setAttribute("aria-pressed", isGraphTab && graphViewConfig.selectedTagIds.length > 0 ? "true" : "false");
     }
+    const graphControlInputs = [
+      graphDisplayArrows,
+      graphTextFadeThreshold,
+      graphNodeSize,
+      graphLinkThickness,
+      graphCenterForce,
+      graphRepelForce,
+      graphLinkForce,
+      graphLinkDistance
+    ].filter(Boolean);
+    graphControlInputs.forEach((input) => { input.disabled = !isGraphTab; });
+    if (graphDisplayArrows) graphDisplayArrows.checked = graphViewConfig.showArrows;
+    if (graphTextFadeThreshold) graphTextFadeThreshold.value = graphViewConfig.textFadeThreshold;
+    if (graphNodeSize) graphNodeSize.value = graphViewConfig.nodeSize;
+    if (graphLinkThickness) graphLinkThickness.value = graphViewConfig.linkThickness;
+    if (graphCenterForce) graphCenterForce.value = graphViewConfig.centerForce;
+    if (graphRepelForce) graphRepelForce.value = graphViewConfig.repelForce;
+    if (graphLinkForce) graphLinkForce.value = graphViewConfig.linkForce;
+    if (graphLinkDistance) graphLinkDistance.value = graphViewConfig.linkDistance;
+    if (graphAnimateButton) graphAnimateButton.disabled = !isGraphTab;
   }
 
   function updateActiveGraphViewConfig(patch) {
@@ -9955,6 +10006,22 @@ ${body}`;
     markGraphTabAsChanged(activeGraphTab);
     saveTabsToStorage(tabs);
     renderGraphView();
+  }
+
+  function animateActiveGraphView() {
+    const activeGraphTab = getActiveGraphTab();
+    if (!activeGraphTab) return;
+    const cachedRender = graphRenderCache.get(activeGraphTab.id);
+    if (cachedRender?.simulation) {
+      graphSettings.magneticEnabled = true;
+      if (activeGraphTab.graphLayout) activeGraphTab.graphLayout.magneticEnabled = true;
+      if (typeof cachedRender.animate === "function") cachedRender.animate();
+      else cachedRender.simulation.alpha(0.9).restart();
+      saveGlobalState({ graphMagneticEnabled: graphSettings.magneticEnabled });
+      saveTabsToStorage(tabs);
+    } else {
+      renderGraphView();
+    }
   }
 
   async function renderGraphView() {
@@ -10213,7 +10280,7 @@ ${body}`;
       outgoingDegree.set(l.source, (outgoingDegree.get(l.source) || 0) + 1);
     });
     const maxOutgoing = Math.max(1, ...Array.from(outgoingDegree.values()));
-    const GRAPH_NODE_RADIUS_SCALE = 0.8;
+    const GRAPH_NODE_RADIUS_SCALE = graphViewConfig.nodeSize;
     const graphBaseNodeRadius = (nodeId) => {
       const outCount = outgoingDegree.get(nodeId) || 0;
       return 6 + (outCount / maxOutgoing) * 12;
@@ -10247,6 +10314,7 @@ ${body}`;
       .on("zoom", (event) => {
         currentZoomTransform = event.transform;
         graphLayer.attr("transform", currentZoomTransform);
+        updateLabelVisibility();
         captureGraphLayout(activeTab, nodes, currentZoomTransform);
         scheduleGraphLayoutStorageSave();
         if (event.sourceEvent) markGraphTabAsChanged(activeTab);
@@ -10262,9 +10330,9 @@ ${body}`;
     }
 
     const simulation = d3.forceSimulation(nodes);
-    const baseLinkForce = d3.forceLink(links).id((d) => d.id).distance(170).strength(0.4);
-    const baseChargeForce = d3.forceManyBody().strength(-650);
-    const baseCenterForce = d3.forceCenter(width / 2, height / 2);
+    const baseLinkForce = d3.forceLink(links).id((d) => d.id).distance(graphViewConfig.linkDistance).strength(graphViewConfig.linkForce);
+    const baseChargeForce = d3.forceManyBody().strength(-graphViewConfig.repelForce);
+    const baseCenterForce = d3.forceCenter(width / 2, height / 2).strength(graphViewConfig.centerForce);
     const baseCollisionForce = d3.forceCollide().radius((d) => nodeRadius(d.id) + 30).strength(0.9);
     simulation
       .force("link", baseLinkForce)
@@ -10280,8 +10348,9 @@ ${body}`;
     const labelLayer = graphLayer.append("g").attr("class", "graph-label-layer");
 
     const link = lineLayer.selectAll("line").data(links).enter().append("line")
-      .attr("class", (d) => `graph-link graph-link-${getGraphLinkType(d)}`);
-    const arrowhead = arrowheadLayer.selectAll("path").data(links.filter(isMarkdownLink)).enter().append("path")
+      .attr("class", (d) => `graph-link graph-link-${getGraphLinkType(d)}`)
+      .style("stroke-width", (d) => `${(isTagLink(d) ? 1 : graphViewConfig.linkThickness)}px`);
+    const arrowhead = arrowheadLayer.selectAll("path").data(graphViewConfig.showArrows ? links.filter(isMarkdownLink) : []).enter().append("path")
       .attr("class", "graph-arrowhead");
     const node = nodeLayer.selectAll("circle").data(nodes).enter().append("circle")
       .attr("r", (d) => nodeRadius(d.id)).attr("class", (d) => `graph-node graph-node-${getGraphNodeType(d)}`)
@@ -11318,6 +11387,15 @@ ${body}`;
     window.addEventListener("keydown", updateHoveredGraphHighlight);
     window.addEventListener("keyup", updateHoveredGraphHighlight);
 
+    function updateLabelVisibility() {
+      const threshold = graphViewConfig.textFadeThreshold;
+      const zoomScale = currentZoomTransform?.k || 1;
+      const opacity = threshold <= 0 || zoomScale >= threshold ? 1 : Math.max(0, zoomScale / threshold);
+      label.attr("opacity", opacity);
+    }
+
+    updateLabelVisibility();
+
     function renderGraphTick() {
       link.each(function(d) {
         const endpoint = getLinkEndpoint(d);
@@ -11355,7 +11433,11 @@ ${body}`;
       simulation,
       nodes,
       visiblePointCount: nodes.length,
-      getZoomTransform: () => currentZoomTransform
+      getZoomTransform: () => currentZoomTransform,
+      animate: () => {
+        graphSettings.magneticEnabled = true;
+        applyMagneticSetting();
+      }
     });
 
     applyMagneticSetting();
@@ -11418,6 +11500,19 @@ ${body}`;
       updateActiveGraphViewConfig({ selectedTagIds: [selectedTagId], showTags: true });
     });
   }
+  if (graphDisplayArrows) graphDisplayArrows.addEventListener("change", () => updateActiveGraphViewConfig({ showArrows: graphDisplayArrows.checked }));
+  const bindGraphRangeControl = (input, configKey) => {
+    if (!input) return;
+    input.addEventListener("input", () => updateActiveGraphViewConfig({ [configKey]: Number(input.value) }));
+  };
+  bindGraphRangeControl(graphTextFadeThreshold, "textFadeThreshold");
+  bindGraphRangeControl(graphNodeSize, "nodeSize");
+  bindGraphRangeControl(graphLinkThickness, "linkThickness");
+  bindGraphRangeControl(graphCenterForce, "centerForce");
+  bindGraphRangeControl(graphRepelForce, "repelForce");
+  bindGraphRangeControl(graphLinkForce, "linkForce");
+  bindGraphRangeControl(graphLinkDistance, "linkDistance");
+  if (graphAnimateButton) graphAnimateButton.addEventListener("click", animateActiveGraphView);
 
   exportHtml.addEventListener("click", function () {
     try {
