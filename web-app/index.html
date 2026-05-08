@@ -214,20 +214,6 @@
             </div>
         </header>
 
-        <!-- Tab Bar -->
-        <div class="tab-bar" id="tab-bar" role="tablist" aria-label="Document tabs">
-          <button class="tab-scroll-btn tab-scroll-left" id="tab-scroll-left" type="button" title="Scroll tabs left" aria-label="Scroll tabs left">
-            <i class="bi bi-chevron-left"></i>
-          </button>
-          <div class="tab-list" id="tab-list"></div>
-          <button class="tab-scroll-btn tab-scroll-right" id="tab-scroll-right" type="button" title="Scroll tabs right" aria-label="Scroll tabs right">
-            <i class="bi bi-chevron-right"></i>
-          </button>
-          <button class="tab-reset-btn" id="tab-reset-btn" title="Reset all files" aria-label="Reset all files">
-            <i class="bi bi-arrow-counterclockwise"></i> Close All
-          </button>
-        </div>
-
         <div class="visually-hidden" aria-hidden="true">
           <button id="export-md" type="button" tabindex="-1">Export as Markdown</button>
           <button id="export-html" type="button" tabindex="-1">Export as HTML</button>
@@ -360,23 +346,40 @@
                     </div>
                 </div>
             </aside>
-            <div class="editor-pane">
-                <div class="editor-shell">
-                    <div id="editor-line-numbers" class="editor-line-numbers" aria-hidden="true"></div>
-                    <div class="editor-input-wrap">
-                        <div id="editor-current-line" class="editor-current-line" aria-hidden="true"></div>
-                        <div id="editor-selection-highlights" class="editor-selection-highlights" aria-hidden="true"></div>
-                        <textarea id="markdown-editor" placeholder="Type or paste your Markdown here..." spellcheck="false"></textarea>
+            <main class="editor-workspace">
+                <!-- Tab Bar -->
+                <div class="tab-bar" id="tab-bar" role="tablist" aria-label="Document tabs">
+                  <button class="tab-scroll-btn tab-scroll-left" id="tab-scroll-left" type="button" title="Scroll tabs left" aria-label="Scroll tabs left">
+                    <i class="bi bi-chevron-left"></i>
+                  </button>
+                  <div class="tab-list" id="tab-list"></div>
+                  <button class="tab-scroll-btn tab-scroll-right" id="tab-scroll-right" type="button" title="Scroll tabs right" aria-label="Scroll tabs right">
+                    <i class="bi bi-chevron-right"></i>
+                  </button>
+                  <button class="tab-reset-btn" id="tab-reset-btn" title="Reset all files" aria-label="Reset all files">
+                    <i class="bi bi-arrow-counterclockwise"></i> Close All
+                  </button>
+                </div>
+                <div class="editor-content-row">
+                    <div class="editor-pane">
+                        <div class="editor-shell">
+                            <div id="editor-line-numbers" class="editor-line-numbers" aria-hidden="true"></div>
+                            <div class="editor-input-wrap">
+                                <div id="editor-current-line" class="editor-current-line" aria-hidden="true"></div>
+                                <div id="editor-selection-highlights" class="editor-selection-highlights" aria-hidden="true"></div>
+                                <textarea id="markdown-editor" placeholder="Type or paste your Markdown here..." spellcheck="false"></textarea>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- Resize Divider - Story 1.3 -->
+                    <div class="resize-divider" role="separator" aria-orientation="vertical" aria-label="Resize panes" tabindex="0">
+                        <div class="resize-divider-handle"></div>
+                    </div>
+                    <div class="preview-pane">
+                        <div id="markdown-preview" class="markdown-body"></div>
                     </div>
                 </div>
-            </div>
-            <!-- Resize Divider - Story 1.3 -->
-            <div class="resize-divider" role="separator" aria-orientation="vertical" aria-label="Resize panes" tabindex="0">
-                <div class="resize-divider-handle"></div>
-            </div>
-            <div class="preview-pane">
-                <div id="markdown-preview" class="markdown-body"></div>
-            </div>
+            </main>
         </div>
     </div>
 
