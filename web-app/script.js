@@ -841,6 +841,8 @@ document.addEventListener("DOMContentLoaded", function () {
   let editorWidthPercent = 50; // Default 50%
   const MIN_PANE_PERCENT = 20; // Minimum 20% width
   const MIN_SIDEBAR_PANEL_HEIGHT = 120;
+  const SIDEBAR_VISIBILITY_ANIMATION_MS = 240;
+  let sidebarVisibilityAnimationTimer = null;
 
   const mobileMenuToggle    = document.getElementById("mobile-menu-toggle");
   const mobileMenuPanel     = document.getElementById("mobile-menu-panel");
@@ -5570,11 +5572,42 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
     });
   }
 
-  function setSidebarVisible(isVisible, shouldPersist = true) {
+  function setSidebarVisible(isVisible, shouldPersist = true, shouldAnimate = shouldPersist) {
     if (!folderTreePane || !contentContainer) return;
 
-    contentContainer.classList.toggle("sidebar-hidden", !isVisible);
-    folderTreePane.hidden = !isVisible;
+    if (sidebarVisibilityAnimationTimer) {
+      window.clearTimeout(sidebarVisibilityAnimationTimer);
+      sidebarVisibilityAnimationTimer = null;
+    }
+
+    const shouldUseAnimation = shouldAnimate && !prefersReducedFolderTreeMotion();
+    folderTreePane.hidden = false;
+
+    if (isVisible) {
+      if (shouldUseAnimation) {
+        contentContainer.classList.add("sidebar-animating");
+        window.requestAnimationFrame(() => {
+          contentContainer.classList.remove("sidebar-hidden");
+        });
+        sidebarVisibilityAnimationTimer = window.setTimeout(() => {
+          contentContainer.classList.remove("sidebar-animating");
+          sidebarVisibilityAnimationTimer = null;
+        }, SIDEBAR_VISIBILITY_ANIMATION_MS);
+      } else {
+        contentContainer.classList.remove("sidebar-hidden", "sidebar-animating");
+      }
+    } else if (shouldUseAnimation) {
+      contentContainer.classList.add("sidebar-animating", "sidebar-hidden");
+      sidebarVisibilityAnimationTimer = window.setTimeout(() => {
+        folderTreePane.hidden = true;
+        contentContainer.classList.remove("sidebar-animating");
+        sidebarVisibilityAnimationTimer = null;
+      }, SIDEBAR_VISIBILITY_ANIMATION_MS);
+    } else {
+      contentContainer.classList.add("sidebar-hidden");
+      contentContainer.classList.remove("sidebar-animating");
+      folderTreePane.hidden = true;
+    }
 
     if (shouldPersist) {
       saveGlobalState({ sidebarVisible: isVisible });
