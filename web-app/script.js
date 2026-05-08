@@ -6666,12 +6666,15 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
     const isGraphFile = isGraphFilePath(node.name) || node.isGraphDocumentFile === true;
     const isJsonFile = isJsonPath(node.name);
     const isUnsupportedFile = !isSupportedFolderTreeDocumentNode(node);
+    const canOpenAsTextFile = isSidebarDocumentNode(node);
     button.type = "button";
     button.className = "folder-tree-file"
       + (isGraphFile ? " folder-tree-graph-file" : "")
       + (isUnsupportedFile ? " folder-tree-unsupported-file" : "");
     button.title = isUnsupportedFile
-      ? "Unsupported files are hidden by default and shown here only because unsupported files are enabled"
+      ? (canOpenAsTextFile
+        ? "Click to preview this text file; double-click to keep open"
+        : "Unsupported files are hidden by default and shown here only because unsupported files are enabled")
       : (isGraphFile ? "Click to open graph" : "Click to preview in the text editor; double-click to keep open");
     button.dataset.name = node.name || "";
     button.dataset.path = node.path || "";
@@ -6732,7 +6735,7 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
       }
     }
 
-    if (!isUnsupportedFile) {
+    if (canOpenAsTextFile) {
       button.addEventListener("click", () => {
         window.clearTimeout(sidebarOpenClickTimer);
         sidebarOpenClickTimer = window.setTimeout(() => {
