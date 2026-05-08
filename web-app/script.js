@@ -1754,6 +1754,7 @@ document.addEventListener("DOMContentLoaded", function () {
   const graphHideTagsButton = document.getElementById("graph-hide-tags");
   const graphSelectedTagFilter = document.getElementById("graph-selected-tag-filter");
   const graphOnlySelectedTagButton = document.getElementById("graph-only-selected-tag");
+  const graphFileSearchFilter = document.getElementById("graph-file-search-filter");
   const shareButton         = document.getElementById("share-button");
   const mobileShareButton   = document.getElementById("mobile-share-button");
   const githubImportModal = document.getElementById("github-import-modal");
@@ -3465,7 +3466,8 @@ This is a fully client-side application. Your content never leaves your browser 
   const DEFAULT_GRAPH_VIEW_CONFIG = Object.freeze({
     showTags: true,
     hiddenTagIds: [],
-    selectedTagIds: []
+    selectedTagIds: [],
+    searchQuery: ""
   });
 
   renderTagManagementList();
@@ -3490,7 +3492,8 @@ This is a fully client-side application. Your content never leaves your browser 
       ...source,
       showTags: source.showTags !== false,
       hiddenTagIds: normalizeGraphTagNodeIds(source.hiddenTagIds),
-      selectedTagIds: normalizeGraphTagNodeIds(source.selectedTagIds)
+      selectedTagIds: normalizeGraphTagNodeIds(source.selectedTagIds),
+      searchQuery: String(source.searchQuery || "").trim().toLowerCase()
     };
   }
 
@@ -9910,6 +9913,12 @@ ${body}`;
       graphHideTagsButton.classList.toggle("active", isGraphTab && !graphViewConfig.showTags);
       graphHideTagsButton.setAttribute("aria-pressed", isGraphTab && !graphViewConfig.showTags ? "true" : "false");
     }
+    if (graphFileSearchFilter) {
+      graphFileSearchFilter.disabled = !isGraphTab;
+      if (document.activeElement !== graphFileSearchFilter) {
+        graphFileSearchFilter.value = graphViewConfig.searchQuery || "";
+      }
+    }
     if (graphSelectedTagFilter) {
       const selectedTagId = graphViewConfig.selectedTagIds[0] || "";
       const tagIds = getGraphSnapshotTagNodeIds(graphSnapshot);
@@ -10042,6 +10051,43 @@ ${body}`;
     };
     const getLinkSourceId = (link) => link?.source?.id || link?.source;
     const getLinkTargetId = (link) => link?.target?.id || link?.target;
+    const snapshotFilesById = new Map((graphSnapshot.files || []).map((file) => [file.id, file]));
+    const fileMatchesGraphSearchQuery = (nodeData, searchQuery) => {
+      if (!searchQuery || isTagNode(nodeData)) return !searchQuery;
+      const snapshotFile = snapshotFilesById.get(nodeData.id) || {};
+      const searchableText = [
+        nodeData.id,
+        nodeData.label,
+        nodeData.fullPath,
+        nodeData.path,
+        nodeData.name,
+        snapshotFile.id,
+        snapshotFile.name,
+        snapshotFile.path,
+        snapshotFile.fullPath
+      ].filter(Boolean).join(" ").toLowerCase();
+      return searchableText.includes(searchQuery);
+    };
+
+    if (graphViewConfig && graphViewConfig.searchQuery) {
+      const matchingFileIds = new Set(nodes
+        .filter((node) => fileMatchesGraphSearchQuery(node, graphViewConfig.searchQuery))
+        .map((node) => node.id));
+      const connectedTagIds = new Set();
+      links.filter(isTagLink).forEach((link) => {
+        const sourceId = getLinkSourceId(link);
+        const targetId = getLinkTargetId(link);
+        if (matchingFileIds.has(sourceId) && String(targetId || "").startsWith("tag:")) connectedTagIds.add(targetId);
+        if (matchingFileIds.has(targetId) && String(sourceId || "").startsWith("tag:")) connectedTagIds.add(sourceId);
+      });
+      const searchableNodeIds = new Set([...matchingFileIds, ...connectedTagIds]);
+      const searchNodes = nodes.filter((node) => searchableNodeIds.has(node.id));
+      const searchLinks = links.filter((link) => searchableNodeIds.has(getLinkSourceId(link)) && searchableNodeIds.has(getLinkTargetId(link)));
+      nodes.length = 0;
+      nodes.push(...searchNodes);
+      links.length = 0;
+      links.push(...searchLinks);
+    }
 
     if (graphViewConfig && Array.isArray(graphViewConfig.allowedNodeIds) && graphViewConfig.allowedNodeIds.length) {
       const allowedNodeIds = new Set(graphViewConfig.allowedNodeIds);
@@ -11341,6 +11387,11 @@ ${body}`;
   if (mobileOpenGraphView) mobileOpenGraphView.addEventListener("click", openGraphView);
   if (graphShowTagsButton) graphShowTagsButton.addEventListener("click", () => updateActiveGraphViewConfig({ showTags: true }));
   if (graphHideTagsButton) graphHideTagsButton.addEventListener("click", () => updateActiveGraphViewConfig({ showTags: false }));
+  if (graphFileSearchFilter) {
+    graphFileSearchFilter.addEventListener("input", () => {
+      updateActiveGraphViewConfig({ searchQuery: graphFileSearchFilter.value });
+    });
+  }
   if (graphSelectedTagFilter) {
     graphSelectedTagFilter.addEventListener("change", () => {
       const selectedTagId = normalizeGraphTagNodeId(graphSelectedTagFilter.value);

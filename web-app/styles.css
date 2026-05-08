@@ -994,6 +994,7 @@ body {
   display: none;
 }
 
+.graph-file-search-filter,
 .graph-tag-filter-select {
   background-color: var(--button-bg);
   border: 1px solid var(--border-color);
@@ -1001,6 +1002,17 @@ body {
   border-radius: 6px;
   padding: 6px 10px;
   font-size: 14px;
+}
+
+.graph-file-search-filter::placeholder {
+  color: var(--secondary-text);
+}
+
+.graph-file-search-filter:focus,
+.graph-tag-filter-select:focus {
+  border-color: var(--accent-color);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent-color) 20%, transparent);
+  outline: none;
 }
 
 .graph-view-toolbar .tool-button.active {
