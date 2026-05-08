@@ -517,26 +517,78 @@
                 <label class="graph-filter-section-label" for="graph-file-search-filter">Search files</label>
                 <input id="graph-file-search-filter" class="graph-file-search-filter" type="search" placeholder="Search file names..." aria-label="Search graph files by name or path">
               </div>
-              <div class="graph-filter-section">
-                <span class="graph-filter-section-label">Tags</span>
-                <div class="graph-filter-button-row">
-                  <button id="graph-show-tags" class="tool-button" type="button" title="Show tag nodes and tag links">
-                    <i class="bi bi-tags"></i> Show tags
-                  </button>
-                  <button id="graph-hide-tags" class="tool-button" type="button" title="Hide tag nodes and tag links">
-                    <i class="bi bi-tags-fill"></i> Hide tags
+              <details class="graph-filter-section graph-collapsible-section" open>
+                <summary class="graph-filter-section-label graph-collapsible-summary">
+                  <span>Tags</span>
+                  <i class="bi bi-chevron-down" aria-hidden="true"></i>
+                </summary>
+                <div class="graph-collapsible-content">
+                  <div class="graph-filter-button-row">
+                    <button id="graph-show-tags" class="tool-button" type="button" title="Show tag nodes and tag links">
+                      <i class="bi bi-tags"></i> Show tags
+                    </button>
+                    <button id="graph-hide-tags" class="tool-button" type="button" title="Hide tag nodes and tag links">
+                      <i class="bi bi-tags-fill"></i> Hide tags
+                    </button>
+                  </div>
+                  <label class="graph-filter-section-label" for="graph-selected-tag-filter">Selected tag</label>
+                  <select id="graph-selected-tag-filter" class="graph-tag-filter-select" aria-label="Selected tag filter">
+                    <option value="">All files</option>
+                  </select>
+                  <button id="graph-only-selected-tag" class="tool-button" type="button" title="Only show files with the selected tag">
+                    <i class="bi bi-funnel"></i> Only files with selected tag
                   </button>
                 </div>
-              </div>
-              <div class="graph-filter-section">
-                <label class="graph-filter-section-label" for="graph-selected-tag-filter">Selected tag</label>
-                <select id="graph-selected-tag-filter" class="graph-tag-filter-select" aria-label="Selected tag filter">
-                  <option value="">All files</option>
-                </select>
-                <button id="graph-only-selected-tag" class="tool-button" type="button" title="Only show files with the selected tag">
-                  <i class="bi bi-funnel"></i> Only files with selected tag
-                </button>
-              </div>
+              </details>
+              <details class="graph-filter-section graph-filter-control-section graph-collapsible-section" aria-label="Graph display settings" open>
+                <summary class="graph-filter-section-label graph-collapsible-summary">
+                  <span>Display</span>
+                  <i class="bi bi-chevron-down" aria-hidden="true"></i>
+                </summary>
+                <div class="graph-collapsible-content">
+                  <label class="graph-toggle-row" for="graph-display-arrows">
+                    <span>Arrows</span>
+                    <input id="graph-display-arrows" class="graph-switch-input" type="checkbox" aria-label="Show graph link arrows">
+                    <span class="graph-switch" aria-hidden="true"></span>
+                  </label>
+                  <label class="graph-slider-control" for="graph-text-fade-threshold">
+                    <span>Text fade threshold</span>
+                    <input id="graph-text-fade-threshold" type="range" min="0" max="1" step="0.05" aria-label="Text fade threshold">
+                  </label>
+                  <label class="graph-slider-control" for="graph-node-size">
+                    <span>Node size</span>
+                    <input id="graph-node-size" type="range" min="0.4" max="1.8" step="0.05" aria-label="Node size">
+                  </label>
+                  <label class="graph-slider-control" for="graph-link-thickness">
+                    <span>Link thickness</span>
+                    <input id="graph-link-thickness" type="range" min="0.5" max="4" step="0.1" aria-label="Link thickness">
+                  </label>
+                </div>
+              </details>
+              <details class="graph-filter-section graph-filter-control-section graph-collapsible-section" aria-label="Graph force settings" open>
+                <summary class="graph-filter-section-label graph-collapsible-summary">
+                  <span>Forces</span>
+                  <i class="bi bi-chevron-down" aria-hidden="true"></i>
+                </summary>
+                <div class="graph-collapsible-content">
+                  <label class="graph-slider-control" for="graph-center-force">
+                    <span>Center force</span>
+                    <input id="graph-center-force" type="range" min="0" max="2" step="0.05" aria-label="Center force">
+                  </label>
+                  <label class="graph-slider-control" for="graph-repel-force">
+                    <span>Repel force</span>
+                    <input id="graph-repel-force" type="range" min="0" max="1200" step="25" aria-label="Repel force">
+                  </label>
+                  <label class="graph-slider-control" for="graph-link-force">
+                    <span>Link force</span>
+                    <input id="graph-link-force" type="range" min="0" max="1" step="0.05" aria-label="Link force">
+                  </label>
+                  <label class="graph-slider-control" for="graph-link-distance">
+                    <span>Link distance</span>
+                    <input id="graph-link-distance" type="range" min="40" max="320" step="5" aria-label="Link distance">
+                  </label>
+                </div>
+              </details>
               <button id="graph-view-close" class="tool-button graph-view-close-button" title="Close graph view">
                 <i class="bi bi-x-lg"></i> Close graph view
               </button>
