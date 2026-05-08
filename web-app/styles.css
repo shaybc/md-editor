@@ -9,6 +9,7 @@
   --button-bg: #f6f8fa;
   --button-hover: #e1e4e8;
   --button-active: #d1d5da;
+  --tree-selection-bg: #d1d5da;
   --dropzone-bg: rgba(255, 255, 255, 0.8);
   --scrollbar-thumb: #c1c1c1;
   --scrollbar-track: #f1f1f1;
@@ -34,6 +35,7 @@
   --button-bg: #21262d;
   --button-hover: #30363d;
   --button-active: #3b434b;
+  --tree-selection-bg: #30363d;
   --dropzone-bg: rgba(13, 17, 23, 0.8);
   --scrollbar-thumb: #484f58;
   --scrollbar-track: #21262d;
@@ -2647,11 +2649,26 @@ a:focus {
 .folder-tree-item > details > .folder-tree-children > .folder-tree-list { padding-left: 20px; }
 .folder-tree-item > details[open] > .folder-tree-children { border-left: 1px solid var(--border-color); }
 .folder-tree-item > details:not([open]) > .folder-tree-children { height: 0; opacity: 0; }
-.folder-tree-label { display: inline-flex; align-items: center; gap: 6px; color: var(--text-color); white-space: nowrap; cursor: pointer; user-select: none; }
+.folder-tree-label,
+.folder-tree-file {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: calc(100% - 4px);
+  margin-right: 4px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  color: var(--text-color);
+  white-space: nowrap;
+  user-select: none;
+}
+.folder-tree-label { cursor: pointer; }
+.folder-tree-label::marker,
+.folder-tree-label::-webkit-details-marker { display: none; content: ""; }
 .folder-tree-label i { transition: transform 0.2s ease; }
 .folder-tree-item > details.is-expanding > .folder-tree-label i,
 .folder-tree-item > details[open]:not(.is-collapsing) > .folder-tree-label i { transform: scale(1.05); }
-.folder-tree-file { cursor: pointer; border: 0; background: transparent; color: var(--text-color); padding: 2px 4px; border-radius: 4px; white-space: nowrap; word-break: normal; overflow-wrap: normal; }
+.folder-tree-file { cursor: pointer; border: 0; background: transparent; text-align: left; word-break: normal; overflow-wrap: normal; }
 .folder-tree-list,
 .folder-tree-item,
 .folder-tree-children {
@@ -2668,7 +2685,9 @@ a:focus {
     transition: none;
   }
 }
-.folder-tree-file:hover { background: var(--button-hover); }
+.folder-tree-label:hover,
+.folder-tree-file:hover,
+.folder-tree-file.auto-selected { background: var(--tree-selection-bg, var(--button-hover)); }
 .folder-tree-graph-file i { color: #8250df; }
 [data-theme="dark"] .folder-tree-graph-file i { color: #ab7df8; }
 .folder-tree-placeholder { color: #8b949e; margin: 6px 2px; }

@@ -9,6 +9,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
   // View Mode State - Story 1.1
   let currentViewMode = 'split'; // 'editor', 'split', or 'preview'
+  let autoSelectFileEnabled = true;
 
   const markdownEditor = document.getElementById("markdown-editor");
   const editorLineNumbers = document.getElementById("editor-line-numbers");
@@ -792,6 +793,9 @@ document.addEventListener("DOMContentLoaded", function () {
               <button class="dropdown-item action-menu-item toggle-sidebar" type="button" title="Hide Sidebar" aria-controls="folder-tree-pane">
                 <i class="bi bi-layout-sidebar me-2"></i><span class="sidebar-toggle-label">Hide Sidebar</span>
               </button>
+              <button class="dropdown-item action-menu-item toggle-auto-select-file" type="button" title="Disable Auto select file" aria-pressed="true">
+                <i class="bi bi-crosshair me-2"></i><span class="auto-select-file-label">Auto select file</span>
+              </button>
             </div>
           </div>
         </div>
@@ -825,7 +829,14 @@ document.addEventListener("DOMContentLoaded", function () {
   const sidebarDropzoneResizer = document.getElementById("sidebar-dropzone-resizer");
   const toggleDropzonePanelButtons = document.querySelectorAll(".toggle-dropzone-panel");
   const toggleSidebarButtons = document.querySelectorAll(".toggle-sidebar");
+  const toggleAutoSelectFileButtons = document.querySelectorAll(".toggle-auto-select-file");
   updateFolderImportHint();
+  updateAutoSelectFileButtons();
+  toggleAutoSelectFileButtons.forEach(function(button) {
+    button.addEventListener("click", function() {
+      setAutoSelectFileEnabled(!autoSelectFileEnabled);
+    });
+  });
 
 
   // Mobile View Mode Elements - Story 1.4
@@ -882,6 +893,8 @@ document.addEventListener("DOMContentLoaded", function () {
   const graphSettings = {
     magneticEnabled: loadGlobalState().graphMagneticEnabled !== false
   };
+  autoSelectFileEnabled = loadGlobalState().autoSelectFileEnabled !== false;
+  updateAutoSelectFileButtons();
 
   setSidebarVisible(loadGlobalState().sidebarVisible !== false, false);
 
@@ -892,6 +905,81 @@ document.addEventListener("DOMContentLoaded", function () {
 
   function saveGlobalState(patch) {
     localStorage.setItem(GLOBAL_STATE_KEY, JSON.stringify({ ...loadGlobalState(), ...patch }));
+  }
+
+  function getComparableFilePath(path) {
+    return String(path || "").replace(/\\/g, "/").replace(/\/+/g, "/").toLowerCase();
+  }
+
+  function getTabTreeFileCandidates(tab) {
+    if (!tab || tab.type === "graph") return [];
+    return [tab.sourceFilePath, tab.sourceFileName, tab.title]
+      .filter(Boolean)
+      .map(getComparableFilePath);
+  }
+
+  function updateAutoSelectFileButtons() {
+    const label = autoSelectFileEnabled ? "Auto select file" : "Auto select file off";
+    const title = autoSelectFileEnabled ? "Disable Auto select file" : "Enable Auto select file";
+
+    toggleAutoSelectFileButtons.forEach(function(button) {
+      const labelElement = button.querySelector(".auto-select-file-label");
+      if (labelElement) {
+        labelElement.textContent = label;
+      } else {
+        button.textContent = label;
+      }
+      button.title = title;
+      button.setAttribute("aria-label", title);
+      button.setAttribute("aria-pressed", String(autoSelectFileEnabled));
+      button.classList.toggle("active", autoSelectFileEnabled);
+    });
+  }
+
+  function setAutoSelectFileEnabled(enabled) {
+    autoSelectFileEnabled = !!enabled;
+    saveGlobalState({ autoSelectFileEnabled });
+    updateAutoSelectFileButtons();
+    syncFolderTreeSelectionToActiveTab({ scroll: autoSelectFileEnabled });
+  }
+
+  function findFolderTreeFileButtonForTab(tab) {
+    if (!folderTreeRoot) return null;
+    const candidates = getTabTreeFileCandidates(tab);
+    if (!candidates.length) return null;
+
+    return Array.from(folderTreeRoot.querySelectorAll(".folder-tree-file")).find(function(button) {
+      const buttonCandidates = [button.dataset.fullPath, button.dataset.path, button.dataset.name, button.textContent]
+        .filter(Boolean)
+        .map(getComparableFilePath);
+
+      return candidates.some(function(candidate) {
+        return buttonCandidates.some(function(buttonCandidate) {
+          return buttonCandidate === candidate || buttonCandidate.endsWith(`/${candidate}`) || candidate.endsWith(`/${buttonCandidate}`);
+        });
+      });
+    }) || null;
+  }
+
+  function syncFolderTreeSelectionToActiveTab(options = {}) {
+    if (!folderTreeRoot) return;
+    folderTreeRoot.querySelectorAll(".folder-tree-file.auto-selected").forEach(function(button) {
+      button.classList.remove("auto-selected");
+      button.removeAttribute("aria-current");
+    });
+
+    if (!autoSelectFileEnabled) return;
+
+    const activeTab = tabs.find(function(tab) { return tab.id === activeTabId; });
+    const selectedButton = findFolderTreeFileButtonForTab(activeTab);
+    if (!selectedButton) return;
+
+    selectedButton.classList.add("auto-selected");
+    selectedButton.setAttribute("aria-current", "page");
+
+    if (options.scroll !== false) {
+      selectedButton.scrollIntoView({ block: "nearest", inline: "nearest", behavior: "smooth" });
+    }
   }
 
   // Check dark mode preference first for proper initialization
@@ -2666,6 +2754,7 @@ This is a fully client-side application. Your content never leaves your browser 
       setViewMode('preview');
       setGraphViewMode(true);
       renderTabBar(tabs, activeTabId);
+      syncFolderTreeSelectionToActiveTab();
       renderGraphView();
       return;
     }
@@ -2677,6 +2766,7 @@ This is a fully client-side application. Your content never leaves your browser 
       markdownEditor.scrollTop = tab.scrollPos || 0;
     });
     renderTabBar(tabs, activeTabId);
+    syncFolderTreeSelectionToActiveTab();
   }
 
 
@@ -2713,6 +2803,7 @@ This is a fully client-side application. Your content never leaves your browser 
     });
     saveTabsToStorage(tabs);
     renderTabBar(tabs, activeTabId);
+    syncFolderTreeSelectionToActiveTab();
     markdownEditor.focus();
   }
 
@@ -2907,6 +2998,7 @@ This is a fully client-side application. Your content never leaves your browser 
       if (newActiveTab.type === 'graph') {
         setGraphViewMode(true);
         renderTabBar(tabs, activeTabId);
+        syncFolderTreeSelectionToActiveTab();
         renderGraphView();
         saveTabsToStorage(tabs);
         return;
@@ -3236,6 +3328,7 @@ This is a fully client-side application. Your content never leaves your browser 
     nodes.forEach((node) => ul.appendChild(renderFolderTreeNode(node)));
     folderTreeRoot.appendChild(ul);
     updateCloseFolderButtons();
+    syncFolderTreeSelectionToActiveTab({ scroll: false });
   }
 
   async function reloadOpenFolderTree() {
@@ -5301,7 +5394,10 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
     button.type = "button";
     button.className = "folder-tree-file" + (isGraphFile ? " folder-tree-graph-file" : "");
     button.title = isGraphFile ? "Click to open graph" : "Click to preview; double-click to keep open";
-    button.innerHTML = `<i class="bi ${isGraphFile ? "bi-diagram-3" : "bi-file-earmark-text"}"></i>${node.name}`;
+    button.dataset.name = node.name || "";
+    button.dataset.path = node.path || "";
+    button.dataset.fullPath = node.fullPath || "";
+    button.innerHTML = `<i class="bi ${isGraphFile ? "bi-diagram-3" : "bi-file-earmark-text"}"></i><span>${node.name}</span>`;
 
     async function readSidebarFileContent() {
       if (typeof NL_VERSION !== "undefined" && node.fullPath) {
