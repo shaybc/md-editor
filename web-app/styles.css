@@ -2483,6 +2483,16 @@ a:focus {
   outline: none;
 }
 
+.tag-management-list-item.selected {
+  background-color: var(--button-hover);
+  color: var(--accent-color);
+  font-weight: 600;
+}
+
+.tag-management-list-item.selected .tag-management-list-item-count {
+  color: var(--accent-color);
+}
+
 .tag-management-list-item-count {
   margin-left: auto;
   color: var(--disabled-text-color);

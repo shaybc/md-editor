@@ -12,6 +12,7 @@ document.addEventListener("DOMContentLoaded", function () {
   let autoSelectFileEnabled = true;
   let currentFolderTreeNodes = [];
   let folderTreeFilterText = "";
+  let selectedFolderTreeTags = new Set();
   let currentFolderSortMode = "name-asc";
   let showUnsupportedFolderFiles = false;
   let isFolderOpen = false;
@@ -1763,6 +1764,9 @@ document.addEventListener("DOMContentLoaded", function () {
     folderTagCounts = counts;
     renderTagManagementList();
     renderLinkAutocomplete();
+    if (selectedFolderTreeTags.size) {
+      renderFilteredFolderTree();
+    }
   }
 
   function clearFolderTagCounts() {
@@ -1773,6 +1777,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
   function renderTagManagementList() {
     if (!tagManagementList) return;
+    tagManagementList.setAttribute("aria-multiselectable", "true");
     const query = String(tagManagementSearch?.value || "").trim().toLowerCase();
     const counts = getReferencedTagCounts();
     const tags = getAllKnownAndReferencedTags().filter((tag) => !query || tag.includes(query));
@@ -1788,13 +1793,16 @@ document.addEventListener("DOMContentLoaded", function () {
 
     tags.forEach((tag) => {
       const button = document.createElement("button");
+      const isSelected = selectedFolderTreeTags.has(tag);
       button.type = "button";
-      button.className = "tag-management-list-item";
+      button.className = "tag-management-list-item" + (isSelected ? " selected" : "");
       button.dataset.tagName = tag;
       button.setAttribute("role", "option");
-      button.innerHTML = `<i class="bi bi-tag" aria-hidden="true"></i><span>#${escapeHtml(tag)}</span><span class="tag-management-list-item-count">${counts.get(tag) || 0}</span>`;
+      button.setAttribute("aria-selected", isSelected ? "true" : "false");
+      button.title = isSelected ? `Remove #${tag} from the folder tree tag filter` : `Show files tagged #${tag} in the folder tree`;
+      button.innerHTML = `<i class="bi ${isSelected ? "bi-tag-fill" : "bi-tag"}" aria-hidden="true"></i><span>#${escapeHtml(tag)}</span><span class="tag-management-list-item-count">${counts.get(tag) || 0}</span>`;
       button.addEventListener("click", () => {
-        if (tagManagementSearch) tagManagementSearch.value = tag;
+        toggleFolderTreeTagFilter(tag);
       });
       tagManagementList.appendChild(button);
     });
@@ -1889,6 +1897,11 @@ document.addEventListener("DOMContentLoaded", function () {
       markGraphTabAsChanged(activeGraphTab);
     }
 
+    if (selectedFolderTreeTags.has(normalizedTag)) {
+      selectedFolderTreeTags = new Set(selectedFolderTreeTags);
+      selectedFolderTreeTags.delete(normalizedTag);
+      renderFilteredFolderTree();
+    }
     await refreshFolderTagCounts();
     saveKnownTags(getKnownTags().filter((tag) => tag !== normalizedTag));
     saveTabsToStorage(tabs);
@@ -2017,6 +2030,55 @@ document.addEventListener("DOMContentLoaded", function () {
     }, []);
   }
 
+  function getFolderTreeNodePathKey(node) {
+    return getComparableFilePath(node?.fullPath || node?.path || node?.file?.webkitRelativePath || node?.file?.name || node?.name || "");
+  }
+
+  function getFolderTreeNodeTags(node) {
+    if (!node || node.kind !== "file") return [];
+    if (Array.isArray(node.tags)) return normalizeFileTagList(node.tags);
+    const nodePathKey = getFolderTreeNodePathKey(node);
+    const matchingEntry = (folderMarkdownFiles || []).find((entry) => {
+      const entryPathKey = getComparableFilePath(entry.fullPath || entry.path || entry.file?.webkitRelativePath || entry.file?.name || entry.name || "");
+      return entryPathKey && nodePathKey && entryPathKey === nodePathKey;
+    });
+    return normalizeFileTagList(matchingEntry?.tags || []);
+  }
+
+  function getTagFilteredFolderTreeNodes(nodes) {
+    const selectedTags = Array.from(selectedFolderTreeTags || []);
+    if (!selectedTags.length) return nodes;
+
+    return (nodes || []).reduce(function(matches, node) {
+      if (node.kind === "directory") {
+        const filteredChildren = getTagFilteredFolderTreeNodes(node.children || []);
+        if (filteredChildren.length) {
+          matches.push({ ...node, children: filteredChildren });
+        }
+        return matches;
+      }
+
+      const nodeTags = getFolderTreeNodeTags(node);
+      if (selectedTags.some((tag) => nodeTags.includes(tag))) {
+        matches.push(node);
+      }
+      return matches;
+    }, []);
+  }
+
+  function toggleFolderTreeTagFilter(tagName) {
+    const normalizedTag = normalizeTagName(tagName);
+    if (!normalizedTag) return;
+    selectedFolderTreeTags = new Set(selectedFolderTreeTags);
+    if (selectedFolderTreeTags.has(normalizedTag)) {
+      selectedFolderTreeTags.delete(normalizedTag);
+    } else {
+      selectedFolderTreeTags.add(normalizedTag);
+    }
+    renderTagManagementList();
+    renderFilteredFolderTree();
+  }
+
   function getFilteredFolderTreeNodes(nodes, filterText) {
     const normalizedFilter = String(filterText || "").trim().toLowerCase();
     if (!normalizedFilter) return nodes;
@@ -2041,9 +2103,11 @@ document.addEventListener("DOMContentLoaded", function () {
 
   function renderFilteredFolderTree() {
     if (!folderTreeRoot || !isFolderOpen) return;
-    const nodes = getFilteredFolderTreeNodes(getVisibleFolderTreeNodes(currentFolderTreeNodes), folderTreeFilterText);
-    renderFolderTree(nodes, { preserveNodes: true });
-    if (folderTreeFilterText) {
+    const visibleNodes = getVisibleFolderTreeNodes(currentFolderTreeNodes);
+    const tagFilteredNodes = getTagFilteredFolderTreeNodes(visibleNodes);
+    const nodes = getFilteredFolderTreeNodes(tagFilteredNodes, folderTreeFilterText);
+    renderFolderTree(nodes, { preserveNodes: true, skipTagRefresh: true });
+    if (folderTreeFilterText || selectedFolderTreeTags.size) {
       setAllFolderTreeDetails(true);
     }
   }
@@ -4798,6 +4862,7 @@ This is a fully client-side application. Your content never leaves your browser 
     hideLinkAutocomplete();
     folderMarkdownFiles = [];
     clearFolderTagCounts();
+    selectedFolderTreeTags = new Set();
     currentFolderTreeNodes = [];
     folderTreeFilterText = "";
     activeFolderName = "Graph View";
@@ -4813,6 +4878,7 @@ This is a fully client-side application. Your content never leaves your browser 
       folderTreeRoot.addEventListener("contextmenu", handleFolderTreeRootContextMenu);
       folderTreeRoot.innerHTML = getClosedFolderPlaceholder();
     }
+    renderTagManagementList();
     updateCloseFolderButtons();
     updateFolderTreeToolbarState();
   }
@@ -4832,9 +4898,12 @@ This is a fully client-side application. Your content never leaves your browser 
     const displayNodes = getVisibleFolderTreeNodes(nodes || []);
     folderTreeRoot.innerHTML = "";
     if (!displayNodes.length) {
+      const hasSelectedTagFilter = selectedFolderTreeTags.size > 0;
       folderTreeRoot.innerHTML = folderTreeFilterText
         ? '<p class="folder-tree-placeholder">No files or folders match this filter.</p>'
-        : '<p class="folder-tree-placeholder">No Markdown or graph files found in this folder.</p>';
+        : hasSelectedTagFilter
+          ? '<p class="folder-tree-placeholder">No Markdown files match the selected tag filter.</p>'
+          : '<p class="folder-tree-placeholder">No Markdown or graph files found in this folder.</p>';
       updateCloseFolderButtons();
       updateFolderTreeToolbarState();
       return;
@@ -4848,7 +4917,9 @@ This is a fully client-side application. Your content never leaves your browser 
     updateFolderTreeToolbarState();
     syncFolderTreeSelectionToActiveTab({ scroll: false });
     renderLinkAutocomplete();
-    refreshFolderTagCounts();
+    if (!options.skipTagRefresh) {
+      refreshFolderTagCounts();
+    }
   }
 
   async function reloadOpenFolderTree() {
