@@ -5482,12 +5482,15 @@ Markdown content is processed client-side in your browser and sanitized before p
       '<button class="graph-context-menu-item tab-context-menu-action" type="button" role="menuitem" data-action="rename"><i class="bi bi-pencil" aria-hidden="true"></i><span class="graph-context-menu-item-label">Rename</span></button>' +
       '<button class="graph-context-menu-item tab-context-menu-action" type="button" role="menuitem" data-action="duplicate"><i class="bi bi-files" aria-hidden="true"></i><span class="graph-context-menu-item-label">Duplicate</span></button>' +
       '<div class="graph-context-menu-separator" aria-hidden="true"></div>' +
-      '<button class="graph-context-menu-item graph-context-menu-item-danger tab-context-menu-action" type="button" role="menuitem" data-action="close"><i class="bi bi-x-lg" aria-hidden="true"></i><span class="graph-context-menu-item-label">Close</span></button>';
+      '<button class="graph-context-menu-item graph-context-menu-item-danger tab-context-menu-action" type="button" role="menuitem" data-action="close"><i class="bi bi-x-lg" aria-hidden="true"></i><span class="graph-context-menu-item-label">Close</span></button>' +
+      '<button class="graph-context-menu-item graph-context-menu-item-danger tab-context-menu-action" type="button" role="menuitem" data-action="close-others"><i class="bi bi-x-lg" aria-hidden="true"></i><span class="graph-context-menu-item-label">Close others</span></button>' +
+      '<button class="graph-context-menu-item graph-context-menu-item-danger tab-context-menu-action" type="button" role="menuitem" data-action="close-all"><i class="bi bi-x-lg" aria-hidden="true"></i><span class="graph-context-menu-item-label">Close all</span></button>';
 
     tabContextMenu.addEventListener('click', function(e) {
       e.stopPropagation();
       const actionBtn = e.target.closest('.tab-context-menu-action');
       if (!actionBtn || !tabContextTargetId) return;
+      if (actionBtn.disabled) return;
       const action = actionBtn.getAttribute('data-action');
       const targetTab = tabs.find(function(tab) { return tab.id === tabContextTargetId; });
       const shouldCloseMobileMenu = tabContextCloseMobileMenuOnAction;
@@ -5496,6 +5499,8 @@ Markdown content is processed client-side in your browser and sanitized before p
       if (action === 'rename') renameTab(targetTab.id);
       else if (action === 'duplicate') duplicateTab(targetTab.id);
       else if (action === 'close') closeTab(targetTab.id, { promptForUnsaved: true });
+      else if (action === 'close-others') closeOtherTabs(targetTab.id);
+      else if (action === 'close-all') closeAllTabs();
       if (shouldCloseMobileMenu) closeMobileMenu();
     });
 
@@ -5520,6 +5525,21 @@ Markdown content is processed client-side in your browser and sanitized before p
     menu.style.top = top + 'px';
   }
 
+  function setTabContextMenuActionEnabled(menu, action, enabled) {
+    const button = menu.querySelector('[data-action="' + action + '"]');
+    if (!button) return;
+    button.disabled = !enabled;
+    button.setAttribute('aria-disabled', enabled ? 'false' : 'true');
+    button.classList.toggle('disabled', !enabled);
+  }
+
+  function updateTabContextMenuActionStates(menu, tab) {
+    const hasTargetTab = !!tab && tabs.some(function(openTab) { return openTab.id === tab.id; });
+    setTabContextMenuActionEnabled(menu, 'close', hasTargetTab);
+    setTabContextMenuActionEnabled(menu, 'close-others', hasTargetTab && tabs.length > 1);
+    setTabContextMenuActionEnabled(menu, 'close-all', tabs.length > 0);
+  }
+
   function showTabContextMenu(event, tab, options) {
     if (!tab) return;
     event.preventDefault();
@@ -5536,6 +5556,7 @@ Markdown content is processed client-side in your browser and sanitized before p
     });
     const separator = menu.querySelector('.graph-context-menu-separator');
     if (separator) separator.classList.toggle('hidden', isGraphTab);
+    updateTabContextMenuActionStates(menu, tab);
     menu.classList.remove('hidden');
     positionTabContextMenu(menu, event);
   }
@@ -6308,6 +6329,44 @@ Markdown content is processed client-side in your browser and sanitized before p
     const idx = tabs.findIndex(function(t) { return t.id === tabId; });
     tabs.splice(idx + 1, 0, dup);
     switchTab(dup.id);
+  }
+
+  function confirmCloseTabsIfNeeded(tabsToClose) {
+    const unsavedTabsToClose = tabsToClose.filter(function(tab) {
+      return tabHasUnsavedChanges(tab);
+    });
+    if (unsavedTabsToClose.length === 0) return true;
+    if (unsavedTabsToClose.length === 1) {
+      return window.confirm('You have unsaved changes. Are you sure you want to close this tab?');
+    }
+    return window.confirm('You have unsaved changes in ' + unsavedTabsToClose.length + ' tabs. Are you sure you want to close them?');
+  }
+
+  function closeTabsByIds(tabIds) {
+    const idsToClose = Array.from(new Set(tabIds));
+    const tabsToClose = idsToClose
+      .map(function(tabId) { return tabs.find(function(tab) { return tab.id === tabId; }); })
+      .filter(Boolean);
+    if (tabsToClose.length === 0 || !confirmCloseTabsIfNeeded(tabsToClose)) return;
+    idsToClose.forEach(function(tabId) {
+      closeTab(tabId, { promptForUnsaved: false });
+    });
+  }
+
+  function closeOtherTabs(tabId) {
+    const targetTab = tabs.find(function(tab) { return tab.id === tabId; });
+    if (!targetTab || tabs.length <= 1) return;
+    closeTabsByIds(tabs
+      .filter(function(tab) { return tab.id !== tabId; })
+      .map(function(tab) { return tab.id; }));
+    if (tabs.some(function(tab) { return tab.id === tabId; }) && activeTabId !== tabId) {
+      switchTab(tabId);
+    }
+  }
+
+  function closeAllTabs() {
+    if (tabs.length === 0) return;
+    closeTabsByIds(tabs.map(function(tab) { return tab.id; }));
   }
 
   function resetAllTabs() {

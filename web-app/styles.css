@@ -1988,6 +1988,23 @@ body {
   background: var(--hover-bg);
 }
 
+.graph-context-menu-item:disabled,
+.graph-context-menu-item.disabled {
+  color: var(--secondary-text);
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.graph-context-menu-item:disabled i,
+.graph-context-menu-item.disabled i {
+  color: var(--secondary-text);
+}
+
+.graph-context-menu-item:disabled:hover,
+.graph-context-menu-item.disabled:hover {
+  background: transparent;
+}
+
 .graph-context-menu-submenu {
   position: relative;
 }
