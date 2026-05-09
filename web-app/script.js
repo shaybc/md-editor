@@ -1070,6 +1070,7 @@ document.addEventListener("DOMContentLoaded", function () {
   const RECENT_FOLDERS_KEY = "markdownViewerRecentFolders";
   const RECENT_PROFILE_DIR = ".mdviewer";
   const RECENT_PROFILE_FILE = "recent-items.json";
+  const GLOBAL_PROFILE_FILE = "preferences.json";
   const RECENT_HANDLES_DB = "markdownViewerRecentHandles";
   const RECENT_HANDLES_STORE = "handles";
   const MAX_RECENT_ITEMS = 10;
@@ -1081,6 +1082,8 @@ document.addEventListener("DOMContentLoaded", function () {
   };
   let recentProfilePathPromise = null;
   let recentProfileWriteTimer = null;
+  let globalProfilePathPromise = null;
+  let globalProfileWriteTimer = null;
   let recentHandlesDbPromise = null;
 
   function isNeutralinoRuntime() {
@@ -1289,11 +1292,11 @@ document.addEventListener("DOMContentLoaded", function () {
     return null;
   }
 
-  async function getRecentProfilePath() {
+  async function getProfileFilePath(fileName, cacheKey) {
     if (!isNeutralinoRuntime()) return null;
 
-    if (!recentProfilePathPromise) {
-      recentProfilePathPromise = (async () => {
+    if (!cacheKey.promise) {
+      cacheKey.promise = (async () => {
         const profileDir = await getUserProfileDir();
         if (!profileDir) return null;
 
@@ -1307,11 +1310,25 @@ document.addEventListener("DOMContentLoaded", function () {
           // The directory may already exist; reads/writes below will report real failures.
         }
 
-        return `${dataDir}${separator}${RECENT_PROFILE_FILE}`;
+        return `${dataDir}${separator}${fileName}`;
       })();
     }
 
-    return recentProfilePathPromise;
+    return cacheKey.promise;
+  }
+
+  async function getRecentProfilePath() {
+    return getProfileFilePath(RECENT_PROFILE_FILE, {
+      get promise() { return recentProfilePathPromise; },
+      set promise(value) { recentProfilePathPromise = value; }
+    });
+  }
+
+  async function getGlobalProfilePath() {
+    return getProfileFilePath(GLOBAL_PROFILE_FILE, {
+      get promise() { return globalProfilePathPromise; },
+      set promise(value) { globalProfilePathPromise = value; }
+    });
   }
 
   function getRecentProfilePayload() {
@@ -1365,6 +1382,52 @@ document.addEventListener("DOMContentLoaded", function () {
     } catch (error) {
       // First launch is expected to have no profile data file yet. Seed it from localStorage.
       scheduleRecentProfileWrite();
+    }
+  }
+
+  function getGlobalProfilePayload() {
+    return {
+      version: 1,
+      updatedAt: Date.now(),
+      state: loadGlobalState()
+    };
+  }
+
+  async function writeGlobalStateToProfile() {
+    const profilePath = await getGlobalProfilePath();
+    if (!profilePath) return;
+
+    try {
+      await Neutralino.filesystem.writeFile(profilePath, JSON.stringify(getGlobalProfilePayload(), null, 2));
+    } catch (error) {
+      console.warn("Failed to save preferences to user profile:", error);
+    }
+  }
+
+  function scheduleGlobalProfileWrite() {
+    if (!isNeutralinoRuntime()) return;
+
+    clearTimeout(globalProfileWriteTimer);
+    globalProfileWriteTimer = setTimeout(() => {
+      writeGlobalStateToProfile();
+    }, 100);
+  }
+
+  async function hydrateGlobalStateFromProfile() {
+    const profilePath = await getGlobalProfilePath();
+    if (!profilePath) return;
+
+    try {
+      const rawProfileData = await Neutralino.filesystem.readFile(profilePath);
+      const profileData = JSON.parse(rawProfileData || "{}");
+      if (profileData && profileData.state && typeof profileData.state === "object") {
+        localStorage.setItem(GLOBAL_STATE_KEY, JSON.stringify({ ...loadGlobalState(), ...profileData.state }));
+        applyGlobalPreferences(loadGlobalState());
+      }
+      scheduleGlobalProfileWrite();
+    } catch (error) {
+      // First launch is expected to have no profile data file yet. Seed it from localStorage.
+      scheduleGlobalProfileWrite();
     }
   }
 
@@ -1640,6 +1703,7 @@ document.addEventListener("DOMContentLoaded", function () {
   const folderTreePane = document.getElementById("folder-tree-pane");
   ensureRecentMenuContainers();
   hydrateRecentItemsFromProfile();
+  hydrateGlobalStateFromProfile();
   hydrateRecentHandlesFromIndexedDB();
   const sidebarDropzonePanel = document.querySelector(".sidebar-dropzone-panel");
   const sidebarDropzoneResizer = document.getElementById("sidebar-dropzone-resizer");
@@ -1805,6 +1869,7 @@ document.addEventListener("DOMContentLoaded", function () {
   // ========================================
   const GLOBAL_STATE_KEY = 'markdownViewerGlobalState';
   currentFolderSortMode = getValidFolderSortMode(loadGlobalState().folderSortMode || currentFolderSortMode);
+  editorWidthPercent = getClampedEditorWidthPercent(loadGlobalState().editorWidthPercent);
   const graphSettings = {
     magneticEnabled: loadGlobalState().graphMagneticEnabled !== false
   };
@@ -1812,9 +1877,7 @@ document.addEventListener("DOMContentLoaded", function () {
   showUnsupportedFolderFiles = loadGlobalState().showUnsupportedFolderFiles === true;
   updateAutoSelectFileButtons();
   updateUnsupportedFileToggleButtons();
-  applySidebarWidth(loadGlobalState().sidebarWidth, false);
-
-  setSidebarVisible(loadGlobalState().sidebarVisible !== false, false);
+  applySavedLayoutPreferences(loadGlobalState());
 
   function loadGlobalState() {
     try { return JSON.parse(localStorage.getItem(GLOBAL_STATE_KEY)) || {}; }
@@ -1822,7 +1885,42 @@ document.addEventListener("DOMContentLoaded", function () {
   }
 
   function saveGlobalState(patch) {
-    localStorage.setItem(GLOBAL_STATE_KEY, JSON.stringify({ ...loadGlobalState(), ...patch }));
+    try {
+      localStorage.setItem(GLOBAL_STATE_KEY, JSON.stringify({ ...loadGlobalState(), ...patch }));
+      scheduleGlobalProfileWrite();
+    } catch (error) {
+      console.warn("Failed to save preferences:", error);
+    }
+  }
+
+  function applyGlobalPreferences(state = loadGlobalState()) {
+    currentFolderSortMode = getValidFolderSortMode(state.folderSortMode || currentFolderSortMode);
+    editorWidthPercent = getClampedEditorWidthPercent(state.editorWidthPercent);
+    graphSettings.magneticEnabled = state.graphMagneticEnabled !== false;
+    autoSelectFileEnabled = state.autoSelectFileEnabled !== false;
+    showUnsupportedFolderFiles = state.showUnsupportedFolderFiles === true;
+    syncScrollingEnabled = state.syncScrollingEnabled !== false;
+    if (state.theme === "dark" || state.theme === "light") {
+      document.documentElement.setAttribute("data-theme", state.theme);
+      updateThemeButtonLabels(state.theme);
+      renderMarkdown();
+    }
+    updateSyncToggleButtons();
+    updateAutoSelectFileButtons();
+    updateUnsupportedFileToggleButtons();
+    updateFolderTreeSortControls();
+    applySavedLayoutPreferences(state);
+  }
+
+  function applySavedLayoutPreferences(state = loadGlobalState()) {
+    applySidebarWidth(state.sidebarWidth, false);
+    applySidebarDropzoneHeight(state.sidebarDropzoneHeight, false);
+    if (state.sidebarDropzoneVisible === false) {
+      hideSidebarDropzone(false);
+    } else {
+      showSidebarDropzone(false);
+    }
+    setSidebarVisible(state.sidebarVisible !== false, false);
   }
 
   function getKnownTags() {
@@ -5010,7 +5108,7 @@ This is a fully client-side application. Your content never leaves your browser 
     if (content === undefined) content = '';
     content = normalizeEditorContent(content);
     if (title === undefined) title = null;
-    if (viewMode === undefined) viewMode = 'split';
+    if (viewMode === undefined) viewMode = loadGlobalState().viewMode || 'split';
     return {
       id: 'tab_' + Date.now() + '_' + Math.random().toString(36).substring(2, 8),
       title: title || 'Untitled',
@@ -5638,7 +5736,7 @@ This is a fully client-side application. Your content never leaves your browser 
 
   function restoreViewMode(mode) {
     currentViewMode = null;
-    setViewMode(getAllowedViewModeForActiveTab(mode || 'split'));
+    setViewMode(getAllowedViewModeForActiveTab(mode || loadGlobalState().viewMode || 'split'), false);
   }
 
   function switchTab(tabId) {
@@ -9207,7 +9305,7 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
     });
   }
 
-  function hideSidebarDropzone() {
+  function hideSidebarDropzone(shouldPersist = true) {
     if (dropzone) {
       dropzone.style.display = "none";
     }
@@ -9224,10 +9322,13 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
       sidebarDropzoneResizer.style.display = "none";
       sidebarDropzoneResizer.style.flex = "0 0 0px";
     }
+    if (shouldPersist) {
+      saveGlobalState({ sidebarDropzoneVisible: false });
+    }
     updateDropzoneToggleButtons();
   }
 
-  function showSidebarDropzone() {
+  function showSidebarDropzone(shouldPersist = true) {
     if (dropzone) {
       dropzone.style.display = "";
     }
@@ -9236,10 +9337,14 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
       sidebarDropzonePanel.style.flex = sidebarDropzonePanel.dataset.previousFlex || "";
       sidebarDropzonePanel.style.padding = "";
       sidebarDropzonePanel.style.minHeight = "";
+      applySidebarDropzoneHeight(loadGlobalState().sidebarDropzoneHeight, false);
     }
     if (sidebarDropzoneResizer) {
       sidebarDropzoneResizer.style.display = "";
       sidebarDropzoneResizer.style.flex = "";
+    }
+    if (shouldPersist) {
+      saveGlobalState({ sidebarDropzoneVisible: true });
     }
     updateDropzoneToggleButtons();
   }
@@ -10064,7 +10169,7 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
     mobileViewModeButtons.forEach(updateButton);
   }
 
-  function setViewMode(mode) {
+  function setViewMode(mode, shouldPersist = true) {
     mode = getAllowedViewModeForActiveTab(mode);
     if (mode === currentViewMode) {
       updateViewModeButtons(mode);
@@ -10074,6 +10179,9 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
 
     const previousMode = currentViewMode;
     currentViewMode = mode;
+    if (shouldPersist) {
+      saveGlobalState({ viewMode: mode });
+    }
 
     // Update content container class
     contentContainer.classList.remove('view-editor-only', 'view-preview-only', 'view-split');
@@ -10169,6 +10277,30 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
     return Math.max(MIN_SIDEBAR_WIDTH, Math.min(getMaxSidebarWidth(), fallbackWidth));
   }
 
+  function getMaxSidebarDropzoneHeight() {
+    if (!folderTreePane) return MIN_SIDEBAR_PANEL_HEIGHT;
+    const resizerHeight = sidebarDropzoneResizer ? sidebarDropzoneResizer.offsetHeight : 0;
+    return Math.max(MIN_SIDEBAR_PANEL_HEIGHT, folderTreePane.getBoundingClientRect().height - MIN_SIDEBAR_PANEL_HEIGHT - resizerHeight);
+  }
+
+  function getClampedSidebarDropzoneHeight(height) {
+    const numericHeight = Number.parseFloat(height);
+    if (!Number.isFinite(numericHeight)) return null;
+    return Math.max(MIN_SIDEBAR_PANEL_HEIGHT, Math.min(getMaxSidebarDropzoneHeight(), numericHeight));
+  }
+
+  function applySidebarDropzoneHeight(height, shouldPersist = true) {
+    if (!sidebarDropzonePanel) return;
+    const sidebarDropzoneHeight = getClampedSidebarDropzoneHeight(height);
+    if (sidebarDropzoneHeight === null) return;
+    const flexValue = `0 0 ${sidebarDropzoneHeight}px`;
+    sidebarDropzonePanel.style.flex = flexValue;
+    sidebarDropzonePanel.dataset.previousFlex = flexValue;
+    if (shouldPersist) {
+      saveGlobalState({ sidebarDropzoneHeight });
+    }
+  }
+
   function applySidebarWidth(width, shouldPersist = true) {
     if (!folderTreePane) return;
     const sidebarWidth = getClampedSidebarWidth(width);
@@ -10245,13 +10377,14 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
     const newDropzoneHeight = paneRect.bottom - e.clientY;
     const maxDropzoneHeight = paneRect.height - MIN_SIDEBAR_PANEL_HEIGHT - resizerHeight;
     const clampedHeight = Math.max(MIN_SIDEBAR_PANEL_HEIGHT, Math.min(maxDropzoneHeight, newDropzoneHeight));
-    sidebarDropzonePanel.style.flex = `0 0 ${clampedHeight}px`;
+    applySidebarDropzoneHeight(clampedHeight, false);
   }
 
   function stopSidebarDropzoneResize() {
     if (!isSidebarDropzoneResizing) return;
     isSidebarDropzoneResizing = false;
     document.body.classList.remove('resizing');
+    applySidebarDropzoneHeight(sidebarDropzonePanel.getBoundingClientRect().height);
   }
 
   function startResize(e) {
@@ -10290,15 +10423,20 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
     };
   }
 
+  function getClampedEditorWidthPercent(percent) {
+    const numericPercent = Number.parseFloat(percent);
+    const fallbackPercent = Number.isFinite(numericPercent) ? numericPercent : 50;
+    return Math.max(MIN_PANE_PERCENT, Math.min(100 - MIN_PANE_PERCENT, fallbackPercent));
+  }
+
   function updateResizePosition(clientX) {
     const resizeMetrics = getSplitResizeMetrics();
     if (resizeMetrics.width <= 0) return;
 
     const dividerLeft = clientX - resizePointerOffset - resizeMetrics.left;
-    let newEditorPercent = ((dividerLeft + resizeMetrics.dividerMidpoint) / resizeMetrics.width) * 100;
-    newEditorPercent = Math.max(MIN_PANE_PERCENT, Math.min(100 - MIN_PANE_PERCENT, newEditorPercent));
+    const newEditorPercent = ((dividerLeft + resizeMetrics.dividerMidpoint) / resizeMetrics.width) * 100;
 
-    editorWidthPercent = newEditorPercent;
+    editorWidthPercent = getClampedEditorWidthPercent(newEditorPercent);
     applyPaneWidths();
     scheduleEditorLineNumbersUpdate();
   }
@@ -10318,6 +10456,7 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
     isResizing = false;
     resizeDivider.classList.remove('dragging');
     document.body.classList.remove('resizing');
+    saveGlobalState({ editorWidthPercent });
   }
 
   function applyPaneWidths() {
