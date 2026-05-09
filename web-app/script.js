@@ -3649,6 +3649,7 @@ This is a fully client-side application. Your content never leaves your browser 
   const GRAPH_DOCUMENT_TYPE_VIEW = "graph-view";
   const GRAPH_DOCUMENT_TYPE_EXPORT = "graph-export";
   const GRAPH_DOCUMENT_TYPES = new Set([GRAPH_DOCUMENT_TYPE_VIEW, GRAPH_DOCUMENT_TYPE_EXPORT]);
+  const LIGHTWEIGHT_SAVED_GRAPH_TEXT_SEARCH_MESSAGE = "Text search is unavailable because this saved graph view does not contain file contents. Use Update Graph to search current files, or open a full folder export.";
   const DEFAULT_GRAPH_VIEW_CONFIG = Object.freeze({
     showTags: false,
     hiddenTagIds: [],
@@ -11144,7 +11145,7 @@ ${body}`;
   function parseGraphGroupQuery(query) {
     const rawQuery = String(query || "").trim();
     const prefixMatch = rawQuery.match(/^([a-z]+)\s*:\s*(.*)$/i);
-    const supportedPrefixes = new Set(["path", "file", "name", "tag", "text", "line"]);
+    const supportedPrefixes = new Set(["path", "file", "name", "tag", "link", "text", "line"]);
     const prefix = prefixMatch ? prefixMatch[1].toLowerCase() : "";
     const type = supportedPrefixes.has(prefix) ? prefix : "";
     const value = (type ? prefixMatch[2] : rawQuery).trim();
@@ -11160,24 +11161,71 @@ ${body}`;
     };
   }
 
+  function graphQueryRequiresFileContent(query) {
+    const parsedQuery = parseGraphGroupQuery(query);
+    return parsedQuery.type === "text" || parsedQuery.type === "line";
+  }
+
+  function isLightweightSavedGraphView(tab, graphSnapshot) {
+    return !!(isKeepSavedGraphMode(tab) && !graphSnapshotHasEmbeddedFileContent(graphSnapshot || tab?.graphSnapshot));
+  }
+
+  function showLightweightSavedGraphTextSearchUnavailable() {
+    showGraphBanner(LIGHTWEIGHT_SAVED_GRAPH_TEXT_SEARCH_MESSAGE);
+  }
+
   function getGraphSnapshotFileCachedContent(snapshotFile) {
     if (typeof snapshotFile?.content === "string") return snapshotFile.content;
     const folderEntry = findFolderMarkdownEntryForGraphFile(snapshotFile);
     return typeof folderEntry?.content === "string" ? folderEntry.content : "";
   }
 
-  function graphFileMatchesGroupQuery(nodeData, snapshotFile, parsedQuery) {
+  function getGraphFilterFileData(nodeData, snapshotFile, options = {}) {
+    const status = nodeData?.status || snapshotFile?.status || "current";
+    const canUseCurrentFolder = options.useCurrentFolderData && status !== "saved-only";
+    const currentEntry = canUseCurrentFolder ? findFolderMarkdownEntryForGraphFile({
+      ...(snapshotFile || {}),
+      id: snapshotFile?.id || nodeData?.id,
+      path: snapshotFile?.path || nodeData?.path || nodeData?.fullPath || nodeData?.id,
+      fullPath: snapshotFile?.fullPath || nodeData?.fullPath || nodeData?.path || null,
+      name: snapshotFile?.name || nodeData?.name || getFileName(nodeData?.path || nodeData?.fullPath || nodeData?.id || "")
+    }) : null;
+    const metadataSource = currentEntry || snapshotFile || nodeData || {};
+    const path = metadataSource.path || nodeData?.path || nodeData?.fullPath || nodeData?.id || "";
+    const name = metadataSource.name || nodeData?.name || getFileName(path || nodeData?.id || "");
+    const fullPath = metadataSource.fullPath || nodeData?.fullPath || path;
+    const rawContent = typeof currentEntry?.content === "string"
+      ? currentEntry.content
+      : (typeof snapshotFile?.content === "string" ? snapshotFile.content : "");
+    const content = options.allowContentSearch ? rawContent : "";
+    const sourceTags = Array.isArray(metadataSource.tags) ? metadataSource.tags : [];
+    const tags = sourceTags.length ? sourceTags : (content ? getFileTagsFromContent(content) : []);
+
+    return {
+      id: metadataSource.id || nodeData?.id || "",
+      path,
+      name,
+      fullPath,
+      content,
+      tags,
+      linkText: String(options.linkText || "")
+    };
+  }
+
+  function graphFileMatchesGroupQuery(nodeData, snapshotFile, parsedQuery, options = {}) {
     if ((nodeData?.type || "file") !== "file") return false;
     if (!snapshotFile || !parsedQuery || !parsedQuery.terms?.length) return false;
 
-    const path = String(snapshotFile.path || "").toLowerCase();
-    const name = String(snapshotFile.name || "").toLowerCase();
-    const fullPath = String(snapshotFile.fullPath || "").toLowerCase();
-    const content = String(getGraphSnapshotFileCachedContent(snapshotFile)).toLowerCase();
-    const tags = (Array.isArray(snapshotFile.tags) ? snapshotFile.tags : [])
+    const fileData = getGraphFilterFileData(nodeData, snapshotFile, options);
+    const path = String(fileData.path || "").toLowerCase();
+    const name = String(fileData.name || "").toLowerCase();
+    const fullPath = String(fileData.fullPath || "").toLowerCase();
+    const content = String(fileData.content || "").toLowerCase();
+    const tagText = (Array.isArray(fileData.tags) ? fileData.tags : [])
       .map((tag) => String(tag || "").toLowerCase())
-      .filter(Boolean);
-    const tagText = tags.join(" ");
+      .filter(Boolean)
+      .join(" ");
+    const linkText = String(fileData.linkText || "").toLowerCase();
     const terms = parsedQuery.terms;
     const allTermsMatchText = (text) => terms.every((term) => text.includes(term));
 
@@ -11190,23 +11238,25 @@ ${body}`;
         return allTermsMatchText(name);
       case "tag":
         return allTermsMatchText(tagText);
+      case "link":
+        return allTermsMatchText(linkText);
       case "text":
-        return allTermsMatchText(content);
+        return options.allowContentSearch && allTermsMatchText(content);
       case "line":
-        return content
+        return options.allowContentSearch && content
           .split(/\r?\n/)
           .some((line) => terms.every((term) => line.includes(term)));
       default:
-        return allTermsMatchText([path, name, fullPath, content, tagText].filter(Boolean).join(" "));
+        return allTermsMatchText([path, name, fullPath, tagText, linkText, options.allowContentSearch ? content : ""].filter(Boolean).join(" "));
     }
   }
 
-  function getGraphGroupMatch(nodeData, snapshotFile, graphViewConfig) {
+  function getGraphGroupMatch(nodeData, snapshotFile, graphViewConfig, options = {}) {
     const groups = Array.isArray(graphViewConfig?.groups) ? graphViewConfig.groups : [];
     for (const group of groups) {
       if (!group || group.enabled === false) continue;
       const parsedQuery = parseGraphGroupQuery(group.query);
-      if (graphFileMatchesGroupQuery(nodeData, snapshotFile, parsedQuery)) return group;
+      if (graphFileMatchesGroupQuery(nodeData, snapshotFile, parsedQuery, options)) return group;
     }
     return null;
   }
@@ -11230,6 +11280,7 @@ ${body}`;
     { prefix: "path", label: "path:", description: "Match folders, path segments, or full paths." },
     { prefix: "file", label: "file:", description: "Match Markdown file names." },
     { prefix: "tag", label: "tag:", description: "Match normalized frontmatter tags." },
+    { prefix: "link", label: "link:", description: "Match linked file paths and names." },
     { prefix: "text", label: "text:", description: "Match file contents." },
     { prefix: "line", label: "line:", description: "Match individual Markdown lines." }
   ];
@@ -11239,7 +11290,7 @@ ${body}`;
     const value = String(input?.value || "");
     const cursor = typeof input?.selectionStart === "number" ? input.selectionStart : value.length;
     const beforeCursor = value.slice(0, cursor);
-    const prefixMatch = beforeCursor.match(/(^|\s)(path|file|tag|text|line):([^\s]*)$/i);
+    const prefixMatch = beforeCursor.match(/(^|\s)(path|file|tag|link|text|line):([^\s]*)$/i);
     if (!prefixMatch) {
       return { prefix: "", query: "", replaceStart: cursor, replaceEnd: cursor };
     }
@@ -11283,7 +11334,7 @@ ${body}`;
     });
   }
 
-  function getGraphGroupSuggestionEntries(graphSnapshot, prefix, query) {
+  function getGraphGroupSuggestionEntries(graphSnapshot, prefix, query, options = {}) {
     const normalizedQuery = String(query || "").toLowerCase();
     const entryMap = new Map();
     const addEntry = (value, type, detail) => {
@@ -11306,14 +11357,27 @@ ${body}`;
     } else if (prefix === "tag") {
       (graphSnapshot?.files || []).forEach((snapshotFile) => {
         normalizeFileTagList(snapshotFile.tags || []).forEach((tag) => addEntry(tag, "tag", "File tag"));
-        extractMarkdownTags(getGraphSnapshotFileCachedContent(snapshotFile)).forEach((tag) => addEntry(tag, "tag", "Markdown tag"));
+        if (!options.savedMetadataOnly) extractMarkdownTags(getGraphSnapshotFileCachedContent(snapshotFile)).forEach((tag) => addEntry(tag, "tag", "Markdown tag"));
       });
       (graphSnapshot?.nodes || []).forEach((node) => {
         if ((node?.type || "file") !== "tag") return;
         const tag = normalizeTagName(node.tag || node.label || String(node.id || "").replace(/^tag:/, ""));
         addEntry(tag, "tag", "Tag node");
       });
-      getAllKnownAndReferencedTags().forEach((tag) => addEntry(tag, "tag", "Known tag"));
+      if (!options.savedMetadataOnly) getAllKnownAndReferencedTags().forEach((tag) => addEntry(tag, "tag", "Known tag"));
+    } else if (prefix === "link") {
+      const filesById = new Map((graphSnapshot?.files || []).map((file) => [file.id, file]));
+      (graphSnapshot?.links || []).forEach((link) => {
+        if ((link?.type || "link") === "tag") return;
+        const sourceId = getGraphLinkEndpointKey(link.source);
+        const targetId = getGraphLinkEndpointKey(link.target);
+        [sourceId, targetId].forEach((nodeId) => {
+          const file = filesById.get(nodeId);
+          if (!file) return;
+          addEntry(file.path || file.fullPath || file.name || nodeId, "link", "Linked file");
+          addEntry(file.name || getFileName(file.path || file.fullPath || nodeId), "link", "Linked file name");
+        });
+      });
     }
 
     return Array.from(entryMap.values())
@@ -11350,6 +11414,12 @@ ${body}`;
       const value = String(queryInput.value || "");
       const nextValue = `${value.slice(0, context.replaceStart)}${replacement}${value.slice(context.replaceEnd)}`;
       const cursor = context.replaceStart + replacement.length;
+      const activeGraphTab = getActiveGraphTab();
+      if (isLightweightSavedGraphView(activeGraphTab, activeGraphTab?.graphSnapshot) && graphQueryRequiresFileContent(nextValue)) {
+        closePopover();
+        showLightweightSavedGraphTextSearchUnavailable();
+        return;
+      }
       queryInput.value = nextValue;
       queryInput.focus();
       queryInput.setSelectionRange(cursor, cursor);
@@ -11371,7 +11441,7 @@ ${body}`;
       let suggestions = [];
 
       if (context.prefix) {
-        suggestions = getGraphGroupSuggestionEntries(graphSnapshot, context.prefix, context.query);
+        suggestions = getGraphGroupSuggestionEntries(graphSnapshot, context.prefix, context.query, { savedMetadataOnly: isKeepSavedGraphMode(activeGraphTab) });
       } else {
         suggestions = GRAPH_GROUP_QUERY_PREFIX_HELP.map((item) => ({ ...item, value: item.label }));
       }
@@ -11460,7 +11530,7 @@ ${body}`;
         const activeGraphTab = getActiveGraphTab();
         const graphSnapshot = activeGraphTab?.graphSnapshot || sourceTab?.graphSnapshot || null;
         const suggestions = context.prefix
-          ? getGraphGroupSuggestionEntries(graphSnapshot, context.prefix, context.query)
+          ? getGraphGroupSuggestionEntries(graphSnapshot, context.prefix, context.query, { savedMetadataOnly: isKeepSavedGraphMode(activeGraphTab) })
           : GRAPH_GROUP_QUERY_PREFIX_HELP.map((item) => ({ ...item, value: item.label }));
         insertSuggestion(suggestions[selectedIndex]);
       }
@@ -11515,6 +11585,12 @@ ${body}`;
       const updateGroupQuery = () => {
         window.clearTimeout(queryUpdateTimeout);
         queryUpdateTimeout = null;
+        const activeGraphTab = getActiveGraphTab();
+        if (isLightweightSavedGraphView(activeGraphTab, activeGraphTab?.graphSnapshot) && graphQueryRequiresFileContent(queryInput.value)) {
+          queryInput.value = group.query || "";
+          showLightweightSavedGraphTextSearchUnavailable();
+          return;
+        }
         updateGraphGroup(group.id, { query: queryInput.value }, { skipToolbar: true });
       };
       queryInput.addEventListener("input", () => {
@@ -11577,7 +11653,7 @@ ${body}`;
     }
     if (graphSelectedTagFilter) {
       const selectedTagId = graphViewConfig.selectedTagIds[0] || "";
-      const tagIds = getGraphFilterTagNodeIds(graphSnapshot);
+      const tagIds = isKeepSavedGraphMode(tab) ? getGraphSnapshotTagNodeIds(graphSnapshot) : getGraphFilterTagNodeIds(graphSnapshot);
       graphSelectedTagFilter.innerHTML = '<option value="">All files</option>';
       tagIds.forEach((tagId) => {
         const option = document.createElement("option");
@@ -11785,22 +11861,39 @@ ${body}`;
     const getLinkSourceId = (link) => link?.source?.id || link?.source;
     const getLinkTargetId = (link) => link?.target?.id || link?.target;
     const snapshotFilesById = new Map((graphSnapshot.files || []).map((file) => [file.id, file]));
+    const graphNodesById = new Map(nodes.map((node) => [node.id, node]));
+    const fileLinkTextById = new Map();
+    const appendFileLinkText = (fileId, textParts) => {
+      if (!fileId) return;
+      const nextText = textParts.filter(Boolean).join(" ");
+      if (!nextText) return;
+      fileLinkTextById.set(fileId, [fileLinkTextById.get(fileId) || "", nextText].filter(Boolean).join(" "));
+    };
+    links.filter(isMarkdownLink).forEach((link) => {
+      const sourceId = getLinkSourceId(link);
+      const targetId = getLinkTargetId(link);
+      const sourceNode = graphNodesById.get(sourceId) || {};
+      const targetNode = graphNodesById.get(targetId) || {};
+      const sourceFile = snapshotFilesById.get(sourceId) || {};
+      const targetFile = snapshotFilesById.get(targetId) || {};
+      appendFileLinkText(sourceId, [targetId, targetNode.label, targetNode.path, targetNode.fullPath, targetFile.path, targetFile.fullPath, targetFile.name]);
+      appendFileLinkText(targetId, [sourceId, sourceNode.label, sourceNode.path, sourceNode.fullPath, sourceFile.path, sourceFile.fullPath, sourceFile.name]);
+    });
+    const isCompareGraphMode = !!activeTab.graphComparisonSnapshot;
+    const useCurrentFolderData = !isKeepSavedGraphMode(activeTab) || isCompareGraphMode;
+    const getGraphSearchOptions = (nodeData, snapshotFile, parsedQuery) => {
+      const status = nodeData?.status || snapshotFile?.status || "current";
+      return {
+        useCurrentFolderData,
+        allowContentSearch: status !== "saved-only" || typeof snapshotFile?.content === "string",
+        linkText: fileLinkTextById.get(nodeData?.id || snapshotFile?.id) || ""
+      };
+    };
     const fileMatchesGraphSearchQuery = (nodeData, searchQuery) => {
       if (!searchQuery || isTagNode(nodeData)) return !searchQuery;
       const snapshotFile = snapshotFilesById.get(nodeData.id) || {};
-      const searchableText = [
-        nodeData.id,
-        nodeData.label,
-        nodeData.fullPath,
-        nodeData.path,
-        nodeData.name,
-        snapshotFile.id,
-        snapshotFile.name,
-        snapshotFile.path,
-        snapshotFile.fullPath,
-        ...(Array.isArray(snapshotFile.tags) ? snapshotFile.tags : [])
-      ].filter(Boolean).join(" ").toLowerCase();
-      return searchableText.includes(searchQuery);
+      const parsedQuery = parseGraphGroupQuery(searchQuery);
+      return graphFileMatchesGroupQuery(nodeData, snapshotFile, parsedQuery, getGraphSearchOptions(nodeData, snapshotFile, parsedQuery));
     };
 
     if (graphViewConfig && graphViewConfig.searchQuery) {
@@ -11937,7 +12030,7 @@ ${body}`;
         return;
       }
       const snapshotFile = snapshotFilesById.get(nodeData.id);
-      const matchingGroup = getGraphGroupMatch(nodeData, snapshotFile, graphViewConfig);
+      const matchingGroup = getGraphGroupMatch(nodeData, snapshotFile, graphViewConfig, getGraphSearchOptions(nodeData, snapshotFile, parseGraphGroupQuery("")));
       if (matchingGroup) {
         nodeData.groupId = matchingGroup.id;
         nodeData.groupColor = matchingGroup.color;
@@ -13225,6 +13318,12 @@ ${body}`;
   if (graphHideTagsButton) graphHideTagsButton.addEventListener("click", () => updateActiveGraphViewConfig({ showTags: false }));
   if (graphFileSearchFilter) {
     graphFileSearchFilter.addEventListener("input", () => {
+      const activeGraphTab = getActiveGraphTab();
+      if (isLightweightSavedGraphView(activeGraphTab, activeGraphTab?.graphSnapshot) && graphQueryRequiresFileContent(graphFileSearchFilter.value)) {
+        graphFileSearchFilter.value = activeGraphTab?.graphViewConfig?.searchQuery || "";
+        showLightweightSavedGraphTextSearchUnavailable();
+        return;
+      }
       updateActiveGraphViewConfig({ searchQuery: graphFileSearchFilter.value });
     });
   }
