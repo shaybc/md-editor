@@ -24,6 +24,7 @@ document.addEventListener("DOMContentLoaded", function () {
   const editorSyntaxHighlight = document.getElementById("editor-syntax-highlight");
   const markdownPreview = document.getElementById("markdown-preview");
   const themeToggle = document.getElementById("theme-toggle");
+  const restoreDefaultsButtons = document.querySelectorAll(".restore-defaults-button");
   const importFromFileButtons = document.querySelectorAll("#import-from-file");
   const newDocumentButtons = document.querySelectorAll(".new-document-button");
   const importFromGithubButton = document.getElementById("import-from-github");
@@ -1868,6 +1869,17 @@ document.addEventListener("DOMContentLoaded", function () {
   // GLOBAL STATE (persisted across reloads)
   // ========================================
   const GLOBAL_STATE_KEY = 'markdownViewerGlobalState';
+  const DEFAULT_GLOBAL_STATE = Object.freeze({
+    autoSelectFileEnabled: true,
+    editorWidthPercent: 50,
+    folderSortMode: "name-asc",
+    graphMagneticEnabled: true,
+    showUnsupportedFolderFiles: false,
+    sidebarDropzoneVisible: true,
+    sidebarVisible: true,
+    syncScrollingEnabled: true,
+    viewMode: "split"
+  });
   currentFolderSortMode = getValidFolderSortMode(loadGlobalState().folderSortMode || currentFolderSortMode);
   editorWidthPercent = getClampedEditorWidthPercent(loadGlobalState().editorWidthPercent);
   const graphSettings = {
@@ -1891,6 +1903,74 @@ document.addEventListener("DOMContentLoaded", function () {
     } catch (error) {
       console.warn("Failed to save preferences:", error);
     }
+  }
+
+  function getDefaultThemePreference() {
+    return window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches
+      ? "dark"
+      : "light";
+  }
+
+  function getDefaultGlobalState() {
+    return {
+      ...DEFAULT_GLOBAL_STATE,
+      theme: getDefaultThemePreference()
+    };
+  }
+
+  function resetSidebarDropzoneLayoutToDefault() {
+    if (sidebarDropzonePanel) {
+      delete sidebarDropzonePanel.dataset.previousFlex;
+      sidebarDropzonePanel.style.flex = "";
+      sidebarDropzonePanel.style.display = "";
+      sidebarDropzonePanel.style.padding = "";
+      sidebarDropzonePanel.style.minHeight = "";
+    }
+    if (dropzone) {
+      dropzone.style.display = "";
+    }
+    if (sidebarDropzoneResizer) {
+      sidebarDropzoneResizer.style.display = "";
+      sidebarDropzoneResizer.style.flex = "";
+    }
+  }
+
+  function restoreDefaultPreferences() {
+    const confirmed = window.confirm(
+      "Restore default preferences? This resets saved view, theme, layout, graph, folder, sync, and tag preferences. Open documents and recent items are not removed."
+    );
+    if (!confirmed) return;
+
+    try {
+      localStorage.removeItem(GLOBAL_STATE_KEY);
+    } catch (error) {
+      console.warn("Failed to clear saved preferences:", error);
+    }
+
+    const defaults = getDefaultGlobalState();
+    currentFolderSortMode = defaults.folderSortMode;
+    editorWidthPercent = defaults.editorWidthPercent;
+    graphSettings.magneticEnabled = defaults.graphMagneticEnabled;
+    autoSelectFileEnabled = defaults.autoSelectFileEnabled;
+    showUnsupportedFolderFiles = defaults.showUnsupportedFolderFiles;
+    syncScrollingEnabled = defaults.syncScrollingEnabled;
+
+    document.documentElement.setAttribute("data-theme", defaults.theme);
+    updateThemeButtonLabels(defaults.theme);
+    resetSidebarDropzoneLayoutToDefault();
+    setSidebarVisible(defaults.sidebarVisible, false, false);
+    updateDropzoneToggleButtons();
+    applySidebarWidth(DEFAULT_SIDEBAR_WIDTH, false);
+    setViewMode(defaults.viewMode, false);
+    updateSyncToggleButtons();
+    updateAutoSelectFileButtons();
+    updateUnsupportedFileToggleButtons();
+    updateFolderTreeToolbarState();
+    renderFilteredFolderTree();
+    renderMarkdown();
+    scheduleGlobalProfileWrite();
+
+    window.alert("Preferences restored to defaults.");
   }
 
   function applyGlobalPreferences(state = loadGlobalState()) {
@@ -10689,6 +10769,16 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
     updateThemeButtonLabels(theme);
     
     renderMarkdown();
+  });
+
+  restoreDefaultsButtons.forEach(function(button) {
+    button.addEventListener("click", function(e) {
+      e.preventDefault();
+      restoreDefaultPreferences();
+      if (button.classList.contains("mobile-menu-item")) {
+        closeMobileMenu();
+      }
+    });
   });
 
   importFromFileButtons.forEach(function(button) {
