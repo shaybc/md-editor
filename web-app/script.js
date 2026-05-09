@@ -24,6 +24,7 @@ document.addEventListener("DOMContentLoaded", function () {
     tagManagementList,
     folderTreeFilterToggleButtons,
     folderTreeExpandToggleButtons,
+    folderTreeRoot,
     fileInput,
     folderInput,
     exportMd,

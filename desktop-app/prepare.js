@@ -23,7 +23,7 @@ const RESOURCES_DIR = path.resolve(__dirname, "resources");
 
 /**
  * Recursively copy a directory, creating target dirs as needed.
- * assets/ → resources/assets/ (excluding icon.jpg — maintained separately for desktop)
+ * Copies all files in the source directory into the generated resources tree.
  */
 function copyDirSync(src, dest, exclude = []) {
   fs.mkdirSync(dest, { recursive: true });
@@ -40,9 +40,13 @@ function copyDirSync(src, dest, exclude = []) {
 }
 
 
-/** script.js → resources/js/script.js */
+/** web-app/js/ → resources/js/ */
 const jsDest = path.join(RESOURCES_DIR, "js");
 fs.mkdirSync(jsDest, { recursive: true });
+copyDirSync(path.join(WEB_APP_DIR, "js"), jsDest);
+console.log("✓ Copied web-app/js/ → resources/js/");
+
+/** script.js → resources/js/script.js */
 fs.copyFileSync(
   path.join(WEB_APP_DIR, "script.js"),
   path.join(jsDest, "script.js"),
@@ -57,7 +61,7 @@ fs.copyFileSync(
 console.log("✓ Copied styles.css → resources/styles.css");
 
 /** assets/ → resources/assets/ */
-copyDirSync(path.join(WEB_APP_DIR, "assets"), path.join(RESOURCES_DIR, "assets"), ["icon.jpg"]);
+copyDirSync(path.join(WEB_APP_DIR, "assets"), path.join(RESOURCES_DIR, "assets"));
 console.log("✓ Copied assets/ → resources/assets/");
 
 /** @section Generate index.html with Neutralinojs injections */
@@ -67,6 +71,7 @@ let html = fs.readFileSync(path.join(WEB_APP_DIR, "index.html"), "utf-8");
 /** Fix relative asset paths → absolute (Neutralinojs documentRoot is /resources/) */
 html = html.replace(/href="assets\//g, 'href="/assets/');
 html = html.replace(/href="styles\.css"/g, 'href="/styles.css"');
+html = html.replace(/src="js\//g, 'src="/js/');
 /** Replace web-app script.js tag with neutralino.js + main.js + script.js under /js/ */
 html = html.replace(
   /<script src="script\.js"><\/script>/,
