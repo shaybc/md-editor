@@ -1778,7 +1778,10 @@ document.addEventListener("DOMContentLoaded", function () {
   const graphStaleKeepButton = document.getElementById("graph-stale-keep");
   const graphStaleCompareButton = document.getElementById("graph-stale-compare");
   const graphStaleViewDetailsButton = document.getElementById("graph-stale-view-details");
-  const graphStaleDetails = document.getElementById("graph-stale-details");
+  const graphComparisonDetailsModal = document.getElementById("graph-comparison-details-modal");
+  const graphComparisonDetailsCloseButton = document.getElementById("graph-comparison-details-close");
+  const graphComparisonDetailsDoneButton = document.getElementById("graph-comparison-details-done");
+  const graphComparisonDetailsContent = document.getElementById("graph-comparison-details-content");
   const graphStaleNewFilesCount = document.getElementById("graph-stale-new-files");
   const graphStaleSavedOnlyFilesCount = document.getElementById("graph-stale-saved-only-files");
   const graphStaleChangedConnectionsCount = document.getElementById("graph-stale-changed-connections");
@@ -4138,9 +4141,18 @@ This is a fully client-side application. Your content never leaves your browser 
   }
 
   let graphUpdateBannerTimeout = null;
+  let activeGraphComparisonDetailsModel = null;
 
   function showGraphUpdatedBanner() {
-    const message = "Graph updated from current folder. Saved layout was preserved where possible.";
+    showGraphBanner("Graph updated from current folder. Saved layout was preserved where possible.");
+  }
+
+  function showSavedGraphModeBanner(tab) {
+    const detailsModel = tab?.savedGraphComparisonDetails || null;
+    showGraphBanner("Saved graph mode — current folder changes are ignored.", detailsModel);
+  }
+
+  function showGraphBanner(message, detailsModel = null) {
     let banner = document.getElementById("graph-update-banner");
     if (!banner) {
       banner = document.createElement("div");
@@ -4152,7 +4164,7 @@ This is a fully client-side application. Your content never leaves your browser 
       banner.style.bottom = "24px";
       banner.style.transform = "translateX(-50%)";
       banner.style.zIndex = "2147483647";
-      banner.style.maxWidth = "min(92vw, 560px)";
+      banner.style.maxWidth = "min(92vw, 640px)";
       banner.style.padding = "10px 14px";
       banner.style.borderRadius = "999px";
       banner.style.background = "#111827";
@@ -4163,12 +4175,26 @@ This is a fully client-side application. Your content never leaves your browser 
       banner.style.textAlign = "center";
       document.body.appendChild(banner);
     }
-    banner.textContent = message;
+
+    banner.innerHTML = "";
+    const messageSpan = document.createElement("span");
+    messageSpan.textContent = message;
+    banner.appendChild(messageSpan);
+    if (detailsModel) {
+      banner.appendChild(document.createTextNode(" "));
+      const detailsButton = document.createElement("button");
+      detailsButton.type = "button";
+      detailsButton.className = "graph-update-banner-details-button";
+      detailsButton.textContent = "View details";
+      detailsButton.style.color = "#93c5fd";
+      detailsButton.addEventListener("click", () => openGraphComparisonDetailsModal(detailsModel));
+      banner.appendChild(detailsButton);
+    }
     banner.classList.remove("hidden");
     window.clearTimeout(graphUpdateBannerTimeout);
     graphUpdateBannerTimeout = window.setTimeout(() => {
       banner.classList.add("hidden");
-    }, 4500);
+    }, detailsModel ? 8000 : 4500);
   }
 
   function ensureSavedGraphModePill() {
@@ -4179,7 +4205,6 @@ This is a fully client-side application. Your content never leaves your browser 
       pill.className = "saved-graph-mode-pill hidden";
       pill.setAttribute("role", "status");
       pill.setAttribute("aria-live", "polite");
-      pill.textContent = "Saved graph mode — current folder changes are ignored.";
       const panelHeading = graphViewToolbar.querySelector(".graph-filter-panel-heading");
       if (panelHeading?.nextSibling) {
         graphViewToolbar.insertBefore(pill, panelHeading.nextSibling);
@@ -4194,6 +4219,22 @@ This is a fully client-side application. Your content never leaves your browser 
     const pill = ensureSavedGraphModePill();
     if (!pill) return;
     pill.classList.toggle("hidden", !isKeepSavedGraphMode(tab));
+    if (!isKeepSavedGraphMode(tab)) {
+      pill.innerHTML = "";
+      return;
+    }
+    pill.innerHTML = "";
+    const label = document.createElement("span");
+    label.textContent = "Saved graph mode — current folder changes are ignored.";
+    pill.appendChild(label);
+    if (tab?.savedGraphComparisonDetails) {
+      const detailsButton = document.createElement("button");
+      detailsButton.type = "button";
+      detailsButton.className = "saved-graph-mode-details-button";
+      detailsButton.textContent = "View details";
+      detailsButton.addEventListener("click", () => openGraphComparisonDetailsModal(tab.savedGraphComparisonDetails));
+      pill.appendChild(detailsButton);
+    }
   }
 
   function getGraphComparisonSummaryCounts(comparison) {
@@ -4211,48 +4252,104 @@ This is a fully client-side application. Your content never leaves your browser 
     return file.path || file.fullPath || file.name || file.id || "Unknown file";
   }
 
-  function getGraphLinkDifferenceLabel(link) {
+  function createGraphComparisonLabelLookup(savedSnapshot, currentSnapshot) {
+    const labels = new Map();
+    const addLabel = (id, label) => {
+      const key = String(id || "").trim();
+      const value = String(label || "").trim();
+      if (key && value && !labels.has(key)) labels.set(key, value);
+    };
+    [currentSnapshot, savedSnapshot].forEach((snapshot) => {
+      getGraphSnapshotFilesForComparison(snapshot).forEach((file) => {
+        const label = getGraphFileDifferenceLabel(file);
+        addLabel(file?.id, label);
+        addLabel(getGraphFileKey(file), label);
+        addLabel(file?.path, label);
+        addLabel(file?.fullPath, label);
+      });
+      (Array.isArray(snapshot?.nodes) ? snapshot.nodes : []).forEach((node) => {
+        const nodeId = String(node?.id || "").trim();
+        if (!nodeId) return;
+        if (nodeId.startsWith("tag:")) {
+          addLabel(nodeId, `#${getGraphTagLabelFromId(nodeId)}`);
+          return;
+        }
+        addLabel(nodeId, node?.path || node?.fullPath || node?.label || nodeId);
+      });
+    });
+    return labels;
+  }
+
+  function getGraphComparisonEndpointLabel(endpoint, labels) {
+    const endpointKey = getGraphLinkEndpointKey(endpoint) || String(endpoint || "").trim();
+    if (!endpointKey) return "unknown";
+    if (endpointKey.startsWith("tag:")) return `#${getGraphTagLabelFromId(endpointKey)}`;
+    return labels.get(endpointKey) || endpointKey;
+  }
+
+  function getGraphLinkDifferenceLabel(link, labels = new Map()) {
     if (!link) return "Unknown connection";
-    const source = getGraphLinkEndpointKey(link.source) || String(link.source || "unknown");
-    const target = getGraphLinkEndpointKey(link.target) || String(link.target || "unknown");
+    const source = getGraphComparisonEndpointLabel(link.source, labels);
+    const target = getGraphComparisonEndpointLabel(link.target, labels);
     return `${source} → ${target}`;
   }
 
-  function getGraphTagRelationDifferenceLabel(relationKey) {
+  function getGraphTagRelationDifferenceLabel(relationKey, labels = new Map()) {
     const rawKey = String(relationKey || "");
     const relationMatch = rawKey.match(/^(.*)->(tag:[^:]+):tag$/);
-    if (!relationMatch) return rawKey || "Unknown tag relation";
-    return `${relationMatch[1]} → #${relationMatch[2].replace(/^tag:/, "")}`;
+    if (!relationMatch) return rawKey || "Unknown tag";
+    const fileLabel = labels.get(relationMatch[1]) || relationMatch[1];
+    return `${fileLabel} → #${relationMatch[2].replace(/^tag:/, "")}`;
   }
 
-  function appendGraphDifferenceSection(lines, title, items, formatter) {
-    lines.push(title);
-    if (!items?.length) {
-      lines.push("  None");
-      lines.push("");
-      return;
+  function createGraphComparisonSection(title, items, formatter) {
+    return {
+      title,
+      items: (items || []).map((item) => String(formatter(item) || "").trim()).filter(Boolean)
+    };
+  }
+
+  function buildGraphComparisonDetailsModel(comparison, savedSnapshot, currentSnapshot) {
+    const labels = createGraphComparisonLabelLookup(savedSnapshot, currentSnapshot);
+    return {
+      sections: [
+        createGraphComparisonSection("New in current folder", comparison?.newFiles || [], getGraphFileDifferenceLabel),
+        createGraphComparisonSection("Only in saved graph", comparison?.savedOnlyFiles || [], getGraphFileDifferenceLabel),
+        createGraphComparisonSection("New connections", comparison?.newLinks || [], (link) => getGraphLinkDifferenceLabel(link, labels)),
+        createGraphComparisonSection("Saved-only connections", comparison?.savedOnlyLinks || [], (link) => getGraphLinkDifferenceLabel(link, labels)),
+        createGraphComparisonSection("New tags", comparison?.newTagRelations || [], (relationKey) => getGraphTagRelationDifferenceLabel(relationKey, labels)),
+        createGraphComparisonSection("Saved-only tags", comparison?.savedOnlyTagRelations || [], (relationKey) => getGraphTagRelationDifferenceLabel(relationKey, labels))
+      ]
+    };
+  }
+
+  function renderGraphComparisonDetailsModel(model) {
+    const sections = Array.isArray(model?.sections) ? model.sections : [];
+    if (!sections.length) {
+      return '<p class="graph-comparison-details-empty">No graph comparison details are available.</p>';
     }
-    items.forEach((item) => lines.push(`  - ${formatter(item)}`));
-    lines.push("");
+    return sections.map((section) => {
+      const items = Array.isArray(section.items) ? section.items : [];
+      const body = items.length
+        ? `<ul class="graph-comparison-details-list">${items.map((item) => `<li class="graph-comparison-details-item">${escapeHtml(String(item))}</li>`).join("")}</ul>`
+        : '<p class="graph-comparison-details-empty">None</p>';
+      return `<section class="graph-comparison-details-section"><h6>${escapeHtml(String(section.title || "Details"))}</h6>${body}</section>`;
+    }).join("");
   }
 
-  function formatGraphComparisonDetails(comparison) {
-    const lines = ["Graph differences", "=================", ""];
-    appendGraphDifferenceSection(lines, "New files", comparison?.newFiles || [], getGraphFileDifferenceLabel);
-    appendGraphDifferenceSection(lines, "Saved-only files", comparison?.savedOnlyFiles || [], getGraphFileDifferenceLabel);
-    appendGraphDifferenceSection(lines, "New connections", comparison?.newLinks || [], getGraphLinkDifferenceLabel);
-    appendGraphDifferenceSection(lines, "Saved-only connections", comparison?.savedOnlyLinks || [], getGraphLinkDifferenceLabel);
-    appendGraphDifferenceSection(lines, "New tag relations", comparison?.newTagRelations || [], getGraphTagRelationDifferenceLabel);
-    appendGraphDifferenceSection(lines, "Saved-only tag relations", comparison?.savedOnlyTagRelations || [], getGraphTagRelationDifferenceLabel);
-    return lines.join("\n").trim();
+  function openGraphComparisonDetailsModal(model) {
+    if (!graphComparisonDetailsModal || !graphComparisonDetailsContent) return;
+    activeGraphComparisonDetailsModel = model || activeGraphComparisonDetailsModel;
+    graphComparisonDetailsContent.innerHTML = renderGraphComparisonDetailsModel(activeGraphComparisonDetailsModel);
+    graphComparisonDetailsModal.classList.remove("hidden");
+    graphComparisonDetailsModal.setAttribute("aria-hidden", "false");
+    graphComparisonDetailsContent.focus({ preventScroll: true });
   }
 
-  function setGraphStaleDetailsVisible(visible) {
-    if (!graphStaleDetails || !graphStaleViewDetailsButton) return;
-    graphStaleDetails.classList.toggle("hidden", !visible);
-    graphStaleViewDetailsButton.setAttribute("aria-expanded", visible ? "true" : "false");
-    graphStaleViewDetailsButton.textContent = visible ? "Hide details" : "View details";
-    if (visible) graphStaleDetails.focus({ preventScroll: false });
+  function closeGraphComparisonDetailsModal() {
+    if (!graphComparisonDetailsModal) return;
+    graphComparisonDetailsModal.classList.add("hidden");
+    graphComparisonDetailsModal.setAttribute("aria-hidden", "true");
   }
 
   function hideGraphStaleModal() {
@@ -4260,21 +4357,20 @@ This is a fully client-side application. Your content never leaves your browser 
     if (!graphStaleModal) return;
     graphStaleModal.classList.add("hidden");
     graphStaleModal.setAttribute("aria-hidden", "true");
-    setGraphStaleDetailsVisible(false);
   }
 
   function showGraphStaleModal(tab, savedSnapshot, currentSnapshot, comparison) {
     if (!graphStaleModal) return;
-    activeGraphStaleComparison = { tabId: tab?.id || null, savedSnapshot, currentSnapshot, comparison };
+    const detailsModel = buildGraphComparisonDetailsModel(comparison, savedSnapshot, currentSnapshot);
+    activeGraphStaleComparison = { tabId: tab?.id || null, savedSnapshot, currentSnapshot, comparison, detailsModel };
+    activeGraphComparisonDetailsModel = detailsModel;
     const summary = getGraphComparisonSummaryCounts(comparison);
     if (graphStaleNewFilesCount) graphStaleNewFilesCount.textContent = String(summary.newFiles);
     if (graphStaleSavedOnlyFilesCount) graphStaleSavedOnlyFilesCount.textContent = String(summary.savedOnlyFiles);
     if (graphStaleChangedConnectionsCount) graphStaleChangedConnectionsCount.textContent = String(summary.changedConnections);
     if (graphStaleChangedTagsCount) graphStaleChangedTagsCount.textContent = String(summary.changedTags);
-    if (graphStaleDetails) graphStaleDetails.textContent = formatGraphComparisonDetails(comparison);
     graphStaleModal.classList.remove("hidden");
     graphStaleModal.setAttribute("aria-hidden", "false");
-    setGraphStaleDetailsVisible(false);
     graphStaleUpdateButton?.focus({ preventScroll: true });
   }
 
@@ -4299,9 +4395,13 @@ This is a fully client-side application. Your content never leaves your browser 
     const tab = tabs.find((candidate) => candidate.id === staleComparison?.tabId) || getActiveGraphTab();
     if (tab?.type === "graph") {
       tab.keepSavedGraphMode = true;
+      tab.savedGraphComparisonDetails = staleComparison?.detailsModel || null;
       delete tab.graphComparisonSnapshot;
       saveTabsToStorage(tabs);
-      if (activeTabId === tab.id) updateSavedGraphModePill(tab);
+      if (activeTabId === tab.id) {
+        updateSavedGraphModePill(tab);
+        showSavedGraphModeBanner(tab);
+      }
     }
     hideGraphStaleModal();
   }
@@ -4318,6 +4418,7 @@ This is a fully client-side application. Your content never leaves your browser 
       savedConfig: tab.graphViewConfig
     });
     delete tab.graphComparisonSnapshot;
+    delete tab.savedGraphComparisonDetails;
     tab.keepSavedGraphMode = false;
     markGraphTabAsChanged(tab);
     saveTabsToStorage(tabs);
@@ -4339,6 +4440,11 @@ This is a fully client-side application. Your content never leaves your browser 
       staleComparison.savedSnapshot,
       staleComparison.currentSnapshot,
       staleComparison.comparison
+    );
+    tab.savedGraphComparisonDetails = staleComparison.detailsModel || buildGraphComparisonDetailsModel(
+      staleComparison.comparison,
+      staleComparison.savedSnapshot,
+      staleComparison.currentSnapshot
     );
     hideGraphStaleModal();
     if (activeTabId === tab.id) {
@@ -13179,11 +13285,16 @@ ${body}`;
   graphStaleKeepButton?.addEventListener("click", keepSavedGraphFromStaleModal);
   graphStaleUpdateButton?.addEventListener("click", updateGraphFromStaleModal);
   graphStaleViewDetailsButton?.addEventListener("click", () => {
-    setGraphStaleDetailsVisible(graphStaleDetails?.classList.contains("hidden"));
+    openGraphComparisonDetailsModal(activeGraphStaleComparison?.detailsModel || activeGraphComparisonDetailsModel);
   });
   graphStaleCompareButton?.addEventListener("click", loadGraphComparisonFromStaleModal);
   graphStaleModal?.addEventListener("click", (event) => {
     if (event.target === graphStaleModal) hideGraphStaleModal();
+  });
+  graphComparisonDetailsCloseButton?.addEventListener("click", closeGraphComparisonDetailsModal);
+  graphComparisonDetailsDoneButton?.addEventListener("click", closeGraphComparisonDetailsModal);
+  graphComparisonDetailsModal?.addEventListener("click", (event) => {
+    if (event.target === graphComparisonDetailsModal) closeGraphComparisonDetailsModal();
   });
 
   function initializeGraphFilterTooltips() {
@@ -14304,6 +14415,7 @@ ${body}`;
     // Close modal overlays with Escape
     if (e.key === "Escape") {
       closeMermaidModal();
+      closeGraphComparisonDetailsModal();
       hideGraphStaleModal();
     }
   });

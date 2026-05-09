@@ -956,22 +956,76 @@ body {
   outline: none;
 }
 
-.graph-stale-details {
-  max-height: 260px;
-  margin: 0.75rem 0 0;
-  padding: 0.85rem;
+.graph-comparison-details-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 2300;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  background: rgba(0, 0, 0, 0.58);
+}
+
+.graph-comparison-details-modal.hidden {
+  display: none;
+}
+
+.graph-comparison-details-dialog {
+  width: min(760px, 95vw);
+  max-height: min(820px, 92vh);
+  overflow-y: auto;
+  background: var(--preview-bg);
+  border: 1px solid var(--border-color);
+  border-radius: 14px;
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.35);
+  color: var(--text-color);
+  padding: 1.25rem;
+}
+
+.graph-comparison-details-content {
+  display: grid;
+  gap: 1rem;
+  max-height: min(560px, 64vh);
+  margin-top: 1rem;
+  padding-right: 0.25rem;
   overflow: auto;
+}
+
+.graph-comparison-details-section {
+  padding: 0.85rem;
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  background: var(--editor-bg);
+}
+
+.graph-comparison-details-section h6 {
+  margin: 0 0 0.55rem;
+  color: var(--text-color);
+  font-size: 0.95rem;
+  font-weight: 700;
+}
+
+.graph-comparison-details-list {
+  display: grid;
+  gap: 0.35rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.graph-comparison-details-item,
+.graph-comparison-details-empty {
+  margin: 0;
   white-space: pre-wrap;
   word-break: break-word;
   color: var(--text-color);
-  background: var(--editor-bg);
-  border: 1px solid var(--border-color);
-  border-radius: 10px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
   font-size: 0.84rem;
 }
 
-.graph-stale-details.hidden {
-  display: none;
+.graph-comparison-details-empty {
+  color: var(--secondary-text);
 }
 
 .graph-stale-actions {
@@ -996,7 +1050,8 @@ body {
 .saved-graph-mode-pill {
   display: inline-flex;
   align-items: center;
-  gap: 0.35rem;
+  flex-wrap: wrap;
+  gap: 0.45rem;
   width: fit-content;
   max-width: 100%;
   margin: 0.65rem 0 0;
@@ -1011,6 +1066,26 @@ body {
 
 .saved-graph-mode-pill.hidden {
   display: none;
+}
+
+.saved-graph-mode-details-button,
+.graph-update-banner-details-button {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--accent-color);
+  font: inherit;
+  font-weight: 700;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.saved-graph-mode-details-button:hover,
+.saved-graph-mode-details-button:focus-visible,
+.graph-update-banner-details-button:hover,
+.graph-update-banner-details-button:focus-visible {
+  color: var(--text-color);
+  outline: none;
 }
 
 .saved-graph-missing-file-modal {

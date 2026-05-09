@@ -540,12 +540,29 @@
             <span>changed/new tags</span>
           </div>
         </div>
-        <button id="graph-stale-view-details" class="graph-stale-details-link" type="button" aria-expanded="false" aria-controls="graph-stale-details">View details</button>
-        <pre id="graph-stale-details" class="graph-stale-details hidden" tabindex="0" aria-label="Read-only graph differences"></pre>
+        <button id="graph-stale-view-details" class="graph-stale-details-link" type="button">View details</button>
         <div class="graph-stale-actions">
           <button id="graph-stale-update" class="tool-button graph-stale-primary-action" type="button">Update graph</button>
           <button id="graph-stale-keep" class="tool-button" type="button">Keep saved graph</button>
           <button id="graph-stale-compare" class="tool-button" type="button">Compare changes</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="graph-comparison-details-modal" class="graph-comparison-details-modal hidden" role="dialog" aria-modal="true" aria-labelledby="graph-comparison-details-title" aria-hidden="true">
+      <div class="graph-comparison-details-dialog">
+        <div class="graph-stale-header">
+          <div>
+            <p class="graph-stale-eyebrow">Saved graph comparison</p>
+            <h5 id="graph-comparison-details-title">View details</h5>
+          </div>
+          <button id="graph-comparison-details-close" class="graph-stale-icon-button" type="button" aria-label="Close graph comparison details">
+            <i class="bi bi-x-lg" aria-hidden="true"></i>
+          </button>
+        </div>
+        <div id="graph-comparison-details-content" class="graph-comparison-details-content" tabindex="0" aria-label="Read-only graph comparison details"></div>
+        <div class="graph-stale-actions">
+          <button id="graph-comparison-details-done" class="tool-button graph-stale-primary-action" type="button">Done</button>
         </div>
       </div>
     </div>
