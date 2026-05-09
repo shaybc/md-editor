@@ -1,80 +1,73 @@
 document.addEventListener("DOMContentLoaded", function () {
-  let markdownRenderTimeout = null;
-  const RENDER_DELAY = 100;
-  let syncScrollingEnabled = true;
-  let isEditorScrolling = false;
-  let isPreviewScrolling = false;
-  let scrollSyncTimeout = null;
-  const SCROLL_SYNC_DELAY = 10;
-
-  // View Mode State - Story 1.1
-  let currentViewMode = 'split'; // 'editor', 'split', or 'preview'
-  let autoSelectFileEnabled = true;
-  let currentFolderTreeNodes = [];
-  let folderTreeFilterText = "";
-  let selectedFolderTreeTags = new Set();
-  let currentFolderSortMode = "name-asc";
-  let showUnsupportedFolderFiles = false;
-  let isFolderOpen = false;
-
-  const markdownEditor = document.getElementById("markdown-editor");
-  const editorLineNumbers = document.getElementById("editor-line-numbers");
-  const editorCurrentLine = document.getElementById("editor-current-line");
-  const editorSelectionHighlights = document.getElementById("editor-selection-highlights");
-  const editorSyntaxHighlight = document.getElementById("editor-syntax-highlight");
-  const markdownPreview = document.getElementById("markdown-preview");
-  const themeToggle = document.getElementById("theme-toggle");
-  const restoreDefaultsButtons = document.querySelectorAll(".restore-defaults-button");
-  const importFromFileButtons = document.querySelectorAll("#import-from-file");
-  const newDocumentButtons = document.querySelectorAll(".new-document-button");
-  const importFromGithubButton = document.getElementById("import-from-github");
-  const importFromFolderButton = document.getElementById("import-from-folder");
-  const folderTreeFilterInput = document.getElementById("folder-tree-filter-input");
-  const createTagButton = document.getElementById("create-tag-button");
-  const deleteTagButton = document.getElementById("delete-tag-button");
-  const tagManagementSearch = document.getElementById("tag-management-search");
-  const tagManagementList = document.getElementById("tag-management-list");
-  const folderTreeFilterToggleButtons = document.querySelectorAll(".toggle-folder-tree-filter");
-  const folderTreeExpandToggleButtons = document.querySelectorAll(".toggle-folder-tree-expanded");
-  let folderTreeRoot = document.getElementById("folder-tree-root");
-
-  console.error("[FolderTree] init", {
-    hasPane: !!document.getElementById("folder-tree-pane"),
-    hasRoot: !!folderTreeRoot,
-    hasImportOption: !!document.getElementById("import-from-folder"),
-    viewportWidth: window.innerWidth
-  });
-  const fileInput = document.getElementById("file-input");
-  const folderInput = document.getElementById("folder-input");
-  let shownFolderInputFallbackNotice = false;
-  const exportMd = document.getElementById("export-md");
-  const exportHtml = document.getElementById("export-html");
-  const exportPdf = document.getElementById("export-pdf");
-  const copyMarkdownButton = document.getElementById("copy-markdown-button");
-  const dropzone = document.getElementById("dropzone");
-  const closeDropzoneBtn = document.getElementById("close-dropzone");
-  const syncToggleButtons = document.querySelectorAll(".sync-toggle-button");
-  const editorPane = document.getElementById("markdown-editor");
-  const previewPane = document.querySelector(".preview-pane");
-  const readingTimeElement = document.getElementById("reading-time");
-  const wordCountElement = document.getElementById("word-count");
-  const charCountElement = document.getElementById("char-count");
-  const statusTipElement = document.getElementById("status-tip");
-  const graphZoomStatusElement = document.getElementById("graph-zoom-status");
-  const graphZoomPercentElement = document.getElementById("graph-zoom-percent");
-  const graphPointsStatusElement = document.getElementById("graph-points-status");
-  const graphPointsCountElement = document.getElementById("graph-points-count");
-  const editorTextpadStatusElement = document.getElementById("editor-textpad-status");
-  const editorTotalLengthElement = document.getElementById("editor-total-length");
-  const editorTotalLinesElement = document.getElementById("editor-total-lines");
-  const editorCursorLineElement = document.getElementById("editor-cursor-line");
-  const editorCursorColumnElement = document.getElementById("editor-cursor-column");
-  const editorPositionLabelElement = document.getElementById("editor-position-label");
-  const editorPositionValueElement = document.getElementById("editor-position-value");
-  let previewHoveredLinkUrl = "";
-
-  let linkAutocompleteLayer = null;
-  let linkAutocompleteState = null;
+  const app = createAppContext();
+  const { RENDER_DELAY, SCROLL_SYNC_DELAY } = app.constants;
+  let {
+    markdownRenderTimeout,
+    syncScrollingEnabled,
+    isEditorScrolling,
+    isPreviewScrolling,
+    scrollSyncTimeout,
+    currentViewMode,
+    autoSelectFileEnabled,
+    currentFolderTreeNodes,
+    folderTreeFilterText,
+    selectedFolderTreeTags,
+    currentFolderSortMode,
+    showUnsupportedFolderFiles,
+    isFolderOpen,
+    shownFolderInputFallbackNotice,
+    previewHoveredLinkUrl,
+    linkAutocompleteLayer,
+    linkAutocompleteState
+  } = app.state;
+  const {
+    markdownEditor,
+    editorLineNumbers,
+    editorCurrentLine,
+    editorSelectionHighlights,
+    editorSyntaxHighlight,
+    markdownPreview,
+    themeToggle,
+    restoreDefaultsButtons,
+    importFromFileButtons,
+    newDocumentButtons,
+    importFromGithubButton,
+    importFromFolderButton,
+    folderTreeFilterInput,
+    createTagButton,
+    deleteTagButton,
+    tagManagementSearch,
+    tagManagementList,
+    folderTreeFilterToggleButtons,
+    folderTreeExpandToggleButtons,
+    fileInput,
+    folderInput,
+    exportMd,
+    exportHtml,
+    exportPdf,
+    copyMarkdownButton,
+    dropzone,
+    closeDropzoneBtn,
+    syncToggleButtons,
+    editorPane,
+    previewPane,
+    readingTimeElement,
+    wordCountElement,
+    charCountElement,
+    statusTipElement,
+    graphZoomStatusElement,
+    graphZoomPercentElement,
+    graphPointsStatusElement,
+    graphPointsCountElement,
+    editorTextpadStatusElement,
+    editorTotalLengthElement,
+    editorTotalLinesElement,
+    editorCursorLineElement,
+    editorCursorColumnElement,
+    editorPositionLabelElement,
+    editorPositionValueElement
+  } = app.dom;
+  let { folderTreeRoot } = app.dom;
 
   function getLinkAutocompleteLayer() {
     if (!linkAutocompleteLayer) {
