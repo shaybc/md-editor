@@ -3939,6 +3939,121 @@ This is a fully client-side application. Your content never leaves your browser 
     ].some((count) => Number(count) > 0);
   }
 
+
+  function getGraphNodeNormalizedPath(node) {
+    if (!node) return "";
+    if ((node.type || "file") === "tag" || String(node.id || "").startsWith("tag:")) return "";
+    return normalizeGraphNodeName(node.path || node.fullPath || node.id || node.name || "");
+  }
+
+  function getGraphLayoutEntryByNormalizedPath(graphLayout, savedSnapshot, normalizedPath) {
+    if (!graphLayout || !normalizedPath) return null;
+    const directEntry = getSavedGraphNodeLayout(graphLayout, normalizedPath);
+    if (directEntry) return directEntry;
+
+    const savedNodes = Array.isArray(savedSnapshot?.nodes) ? savedSnapshot.nodes : [];
+    const savedFiles = Array.isArray(savedSnapshot?.files) ? savedSnapshot.files : [];
+    const savedCandidates = [...savedNodes, ...savedFiles];
+    const matchingSavedNode = savedCandidates.find((candidate) => getGraphNodeNormalizedPath(candidate) === normalizedPath);
+    return matchingSavedNode?.id ? getSavedGraphNodeLayout(graphLayout, matchingSavedNode.id) : null;
+  }
+
+  function preserveGraphLayoutForCurrentSnapshot(savedLayout, savedSnapshot, currentSnapshot) {
+    const sourceLayout = savedLayout && typeof savedLayout === "object" ? savedLayout : {};
+    const currentNodes = Array.isArray(currentSnapshot?.nodes) ? currentSnapshot.nodes : [];
+    const nextNodes = {};
+
+    currentNodes.forEach((node) => {
+      if (!node?.id || (node.type || "file") === "tag") return;
+      const normalizedPath = getGraphNodeNormalizedPath(node);
+      const savedEntry = getGraphLayoutEntryByNormalizedPath(sourceLayout, savedSnapshot, normalizedPath);
+      if (savedEntry) nextNodes[node.id] = cloneGraphPersistenceValue(savedEntry);
+    });
+
+    const nextLayout = {
+      ...sourceLayout,
+      nodes: nextNodes,
+      updatedAt: Date.now()
+    };
+    const savedZoomTransform = getSavedGraphZoomTransform(sourceLayout);
+    if (savedZoomTransform) nextLayout.zoom = savedZoomTransform;
+    return nextLayout;
+  }
+
+  function preserveGraphConfigForCurrentSnapshot(savedConfig, currentSnapshot) {
+    const normalizedConfig = normalizeGraphViewConfig(savedConfig);
+    const currentNodeIds = new Set((Array.isArray(currentSnapshot?.nodes) ? currentSnapshot.nodes : [])
+      .map((node) => String(node?.id || "").trim())
+      .filter(Boolean));
+    const currentTagIds = new Set(Array.from(currentNodeIds).filter((nodeId) => nodeId.startsWith("tag:")));
+
+    normalizedConfig.hiddenNodeIds = normalizedConfig.hiddenNodeIds.filter((nodeId) => currentNodeIds.has(nodeId));
+    normalizedConfig.hiddenTagIds = normalizedConfig.hiddenTagIds.filter((tagId) => currentTagIds.has(tagId));
+    normalizedConfig.selectedTagIds = normalizedConfig.selectedTagIds.filter((tagId) => currentTagIds.has(tagId));
+
+    if (Array.isArray(normalizedConfig.allowedNodeIds)) {
+      normalizedConfig.allowedNodeIds = normalizedConfig.allowedNodeIds.filter((nodeId) => currentNodeIds.has(nodeId));
+    }
+    if (normalizedConfig.focusNodeId && !currentNodeIds.has(normalizedConfig.focusNodeId)) {
+      delete normalizedConfig.focusNodeId;
+      delete normalizedConfig.mode;
+    }
+
+    return normalizedConfig;
+  }
+
+  function applyCurrentFolderSnapshotToSavedGraphTab(tab, currentSnapshot, options = {}) {
+    if (!tab || tab.type !== "graph" || !currentSnapshot) return false;
+    const savedSnapshot = options.savedSnapshot || tab.graphSnapshot || tab.graphDocument?.snapshot || null;
+    const savedLayout = options.savedLayout !== undefined
+      ? options.savedLayout
+      : (tab.graphLayout !== undefined ? tab.graphLayout : (tab.graphDocument?.graphLayout ?? tab.graphDocument?.layout));
+    const savedConfig = options.savedConfig !== undefined
+      ? options.savedConfig
+      : (tab.graphViewConfig || tab.graphDocument?.viewConfig || null);
+
+    tab.graphSnapshot = currentSnapshot;
+    tab.graphViewConfig = preserveGraphConfigForCurrentSnapshot(savedConfig, currentSnapshot);
+    tab.graphLayout = preserveGraphLayoutForCurrentSnapshot(savedLayout, savedSnapshot, currentSnapshot);
+    tab.folderName = tab.folderName || currentSnapshot.folderName || "Graph View";
+    tab.graphDocument = serializeGraphTab(tab, { documentType: GRAPH_DOCUMENT_TYPE_VIEW });
+    return true;
+  }
+
+  let graphUpdateBannerTimeout = null;
+
+  function showGraphUpdatedBanner() {
+    const message = "Graph updated from current folder. Saved layout was preserved where possible.";
+    let banner = document.getElementById("graph-update-banner");
+    if (!banner) {
+      banner = document.createElement("div");
+      banner.id = "graph-update-banner";
+      banner.setAttribute("role", "status");
+      banner.setAttribute("aria-live", "polite");
+      banner.style.position = "fixed";
+      banner.style.left = "50%";
+      banner.style.bottom = "24px";
+      banner.style.transform = "translateX(-50%)";
+      banner.style.zIndex = "2147483647";
+      banner.style.maxWidth = "min(92vw, 560px)";
+      banner.style.padding = "10px 14px";
+      banner.style.borderRadius = "999px";
+      banner.style.background = "#111827";
+      banner.style.color = "#ffffff";
+      banner.style.boxShadow = "0 10px 30px rgba(15, 23, 42, 0.25)";
+      banner.style.fontSize = "0.92rem";
+      banner.style.fontWeight = "600";
+      banner.style.textAlign = "center";
+      document.body.appendChild(banner);
+    }
+    banner.textContent = message;
+    banner.classList.remove("hidden");
+    window.clearTimeout(graphUpdateBannerTimeout);
+    graphUpdateBannerTimeout = window.setTimeout(() => {
+      banner.classList.add("hidden");
+    }, 4500);
+  }
+
   function getGraphComparisonSummaryCounts(comparison) {
     const counts = comparison?.counts || {};
     return {
@@ -4043,15 +4158,18 @@ This is a fully client-side application. Your content never leaves your browser 
     const tab = tabs.find((candidate) => candidate.id === staleComparison.tabId) || getActiveGraphTab();
     if (!tab || tab.type !== "graph") return;
 
-    tab.graphSnapshot = staleComparison.currentSnapshot;
-    tab.folderName = tab.folderName || staleComparison.currentSnapshot.folderName || "Graph View";
-    tab.graphDocument = serializeGraphTab(tab, { documentType: GRAPH_DOCUMENT_TYPE_VIEW });
+    applyCurrentFolderSnapshotToSavedGraphTab(tab, staleComparison.currentSnapshot, {
+      savedSnapshot: staleComparison.savedSnapshot,
+      savedLayout: tab.graphLayout,
+      savedConfig: tab.graphViewConfig
+    });
     markGraphTabAsChanged(tab);
     saveTabsToStorage(tabs);
     hideGraphStaleModal();
     if (activeTabId === tab.id) {
       graphRenderCache.delete(tab.id);
       renderGraphView();
+      showGraphUpdatedBanner();
     }
   }
 
@@ -10533,6 +10651,15 @@ ${body}`;
     const graphData = deserializeGraphDocument(graphDocumentForTab);
     const fallbackName = getGraphTitleFromFileName(name) || "Saved Graph";
     const graphTab = createGraphTab(graphData.folderName || fallbackName, { graphDocument: graphData.graphDocument });
+    let updatedFromCurrentFolder = false;
+    if (graphDocumentKind.documentType === GRAPH_DOCUMENT_TYPE_VIEW && folderMarkdownFiles.length) {
+      const currentSnapshot = await createGraphSnapshot(folderMarkdownFiles.slice(), activeFolderName || graphData.folderName || fallbackName);
+      updatedFromCurrentFolder = applyCurrentFolderSnapshotToSavedGraphTab(graphTab, currentSnapshot, {
+        savedSnapshot: graphData.graphSnapshot,
+        savedLayout: graphData.graphLayout,
+        savedConfig: graphData.graphViewConfig
+      });
+    }
     graphTab.sourceFileName = name;
     graphTab.title = fallbackName;
     if (source.handle) graphTab.sourceFileHandle = source.handle;
@@ -10541,7 +10668,11 @@ ${body}`;
     tabs.push(graphTab);
     saveTabsToStorage(tabs);
     switchTab(graphTab.id);
-    promptForStaleSavedGraphIfNeeded(graphTab);
+    if (updatedFromCurrentFolder) {
+      showGraphUpdatedBanner();
+    } else {
+      promptForStaleSavedGraphIfNeeded(graphTab);
+    }
     return graphTab;
   }
 
