@@ -1942,6 +1942,17 @@ document.addEventListener("DOMContentLoaded", function () {
     return Array.from(tagSet).sort((a, b) => a.localeCompare(b));
   }
 
+  function getGraphFileEntryNodeId(fileEntry) {
+    if (!fileEntry) return "";
+    return fileEntry.id || normalizeGraphNodeName(fileEntry.path || fileEntry.fullPath || fileEntry.file?.webkitRelativePath || fileEntry.file?.name || fileEntry.name || "");
+  }
+
+  function findFolderMarkdownEntryForGraphFile(fileEntry) {
+    const fileNodeId = getGraphFileEntryNodeId(fileEntry);
+    if (!fileNodeId) return null;
+    return (folderMarkdownFiles || []).find((entry) => getGraphFileEntryNodeId(entry) === fileNodeId) || null;
+  }
+
   async function readFolderMarkdownFileContent(fileEntry) {
     if (!fileEntry) return "";
     if (typeof fileEntry.content === "string") return fileEntry.content;
@@ -1953,6 +1964,9 @@ document.addEventListener("DOMContentLoaded", function () {
     if (typeof NL_VERSION !== "undefined" && fileEntry.fullPath) {
       return Neutralino.filesystem.readFile(fileEntry.fullPath);
     }
+
+    const folderEntry = findFolderMarkdownEntryForGraphFile(fileEntry);
+    if (folderEntry && folderEntry !== fileEntry) return readFolderMarkdownFileContent(folderEntry);
     return "";
   }
 
@@ -3623,6 +3637,7 @@ This is a fully client-side application. Your content never leaves your browser 
   const DEFAULT_GRAPH_VIEW_CONFIG = Object.freeze({
     showTags: false,
     hiddenTagIds: [],
+    hiddenNodeIds: [],
     selectedTagIds: [],
     groups: [],
     searchQuery: "",
@@ -3721,6 +3736,9 @@ This is a fully client-side application. Your content never leaves your browser 
       ...source,
       showTags: source.showTags === true,
       hiddenTagIds: normalizeGraphTagNodeIds(source.hiddenTagIds),
+      hiddenNodeIds: Array.from(new Set((Array.isArray(source.hiddenNodeIds) ? source.hiddenNodeIds : [])
+        .map((nodeId) => String(nodeId || "").trim())
+        .filter(Boolean))),
       selectedTagIds: normalizeGraphTagNodeIds(source.selectedTagIds),
       groups: normalizeGraphGroups(source.groups),
       searchQuery: String(source.searchQuery || "").trim().toLowerCase(),
@@ -3775,6 +3793,45 @@ This is a fully client-side application. Your content never leaves your browser 
   function graphSnapshotHasEmbeddedFileContent(snapshot) {
     if (!snapshot || !Array.isArray(snapshot.files)) return false;
     return snapshot.files.some((file) => file && typeof file === "object" && Object.prototype.hasOwnProperty.call(file, "content"));
+  }
+
+  function shouldPreserveGraphSnapshotFullPath(snapshotFile) {
+    return !!(snapshotFile?.fullPath && isNeutralinoRuntime());
+  }
+
+  function stripGraphSnapshotContent(snapshot) {
+    const strippedSnapshot = cloneGraphPersistenceValue(snapshot || null);
+    if (!strippedSnapshot || typeof strippedSnapshot !== "object") return strippedSnapshot;
+
+    strippedSnapshot.nodes = Array.isArray(strippedSnapshot.nodes) ? cloneGraphPersistenceValue(strippedSnapshot.nodes) : [];
+    strippedSnapshot.links = Array.isArray(strippedSnapshot.links) ? cloneGraphPersistenceValue(strippedSnapshot.links) : [];
+    strippedSnapshot.files = (Array.isArray(strippedSnapshot.files) ? strippedSnapshot.files : [])
+      .map((snapshotFile) => {
+        const source = snapshotFile && typeof snapshotFile === "object" ? snapshotFile : {};
+        const strippedFile = {
+          id: source.id || normalizeGraphNodeName(source.path || source.fullPath || source.name || ""),
+          path: source.path || "",
+          name: source.name || getFileName(source.path || source.fullPath || "document.md"),
+          tags: normalizeFileTagList(source.tags || [])
+        };
+        if (shouldPreserveGraphSnapshotFullPath(source)) strippedFile.fullPath = source.fullPath;
+        return strippedFile;
+      });
+
+    return strippedSnapshot;
+  }
+
+  function serializeGraphViewDocument(tab) {
+    const graphDocument = serializeGraphTab(tab, { documentType: GRAPH_DOCUMENT_TYPE_VIEW });
+    return normalizeGraphDocument({
+      ...graphDocument,
+      documentType: GRAPH_DOCUMENT_TYPE_VIEW,
+      snapshot: stripGraphSnapshotContent(graphDocument.snapshot)
+    });
+  }
+
+  function serializeGraphExportDocument(tab) {
+    return serializeGraphTab(tab, { documentType: GRAPH_DOCUMENT_TYPE_EXPORT });
   }
 
   function normalizeGraphDocumentType(source, snapshot) {
@@ -3918,20 +3975,7 @@ This is a fully client-side application. Your content never leaves your browser 
     for (const fileEntry of (files || [])) {
       const path = fileEntry.path || fileEntry.file?.webkitRelativePath || fileEntry.file?.name || "";
       const name = getFileName(path || fileEntry.file?.name || "document.md");
-      let content = fileEntry.content;
-      if (content === undefined) {
-        if (fileEntry.file) {
-          content = await fileEntry.file.text();
-        } else if (fileEntry.handle) {
-          const file = await fileEntry.handle.getFile();
-          content = await file.text();
-        } else if (typeof NL_VERSION !== "undefined" && fileEntry.fullPath) {
-          content = await Neutralino.filesystem.readFile(fileEntry.fullPath);
-        } else {
-          content = "";
-        }
-      }
-
+      const content = await readFolderMarkdownFileContent(fileEntry);
       const fileContent = content || "";
       const tags = getFileTagsFromContent(fileContent);
       const id = normalizeGraphNodeName(path);
@@ -5008,10 +5052,11 @@ This is a fully client-side application. Your content never leaves your browser 
 
     const activeGraphTab = tabs.find((tab) => tab.id === activeTabId && tab.type === "graph");
     const snapshotFile = activeGraphTab?.graphSnapshot?.files?.find((file) => file.id === graphNode.id);
-    const fileEntry = snapshotFile || (folderMarkdownFiles || []).find(function(entry) {
-      const entryPath = entry.path || entry.file?.webkitRelativePath || entry.file?.name || "";
-      return normalizeGraphNodeName(entryPath) === graphNode.id;
+    const folderEntry = (folderMarkdownFiles || []).find(function(entry) {
+      return getGraphFileEntryNodeId(entry) === graphNode.id;
     });
+    const fileEntry = snapshotFile || folderEntry;
+    const readableFileEntry = (fileEntry && typeof fileEntry.content === "string") ? fileEntry : (folderEntry || fileEntry);
 
     if (!fileEntry) {
       alert("Unable to find the selected file in this graph snapshot.");
@@ -5022,8 +5067,8 @@ This is a fully client-side application. Your content never leaves your browser 
     const name = fileEntry.name || getFileName(path || graphNode.fullPath || graphNode.label || "document.md");
     const sourceFile = {
       name,
-      handle: fileEntry.handle || null,
-      path: fileEntry.fullPath || path
+      handle: fileEntry.handle || readableFileEntry?.handle || null,
+      path: fileEntry.fullPath || readableFileEntry?.fullPath || path
     };
 
     const existingTab = findTabForSourceFile(sourceFile);
@@ -5034,20 +5079,10 @@ This is a fully client-side application. Your content never leaves your browser 
     }
 
     try {
-      let content = fileEntry.content;
-      if (content === undefined) {
-        if (fileEntry.file) {
-          content = await fileEntry.file.text();
-        } else if (fileEntry.handle) {
-          const file = await fileEntry.handle.getFile();
-          content = await file.text();
-        } else if (typeof NL_VERSION !== "undefined" && fileEntry.fullPath) {
-          content = await Neutralino.filesystem.readFile(fileEntry.fullPath);
-          sourceFile.path = fileEntry.fullPath;
-        } else {
-          throw new Error("No readable Markdown file was provided.");
-        }
-      }
+      const content = await readFolderMarkdownFileContent(readableFileEntry);
+      if (content === undefined || content === null) throw new Error("No readable Markdown file was provided.");
+      if (!sourceFile.handle && readableFileEntry?.handle) sourceFile.handle = readableFileEntry.handle;
+      if (readableFileEntry?.fullPath) sourceFile.path = readableFileEntry.fullPath;
 
       return openSidebarFileInPermanentTab(content, getMarkdownTitleFromFileName(name), sourceFile);
     } catch (error) {
@@ -9997,13 +10032,14 @@ ${body}`;
       graphSnapshot,
       graphViewConfig: graphViewConfig || null
     });
-    const graphDocument = serializeGraphTab(graphTab, { documentType: GRAPH_DOCUMENT_TYPE_EXPORT });
+    const graphDocument = serializeGraphExportDocument(graphTab);
     return JSON.stringify(graphDocument, null, 2);
   }
 
-  async function writeGraphExportWithSaveDialog(content, suggestedName) {
-    const dialogTitle = "Export Folder to Graph - includes Markdown file contents";
-    const fileTypeDescription = "Portable graph archive with Markdown file contents";
+  async function writeGraphExportWithSaveDialog(content, suggestedName, options = {}) {
+    const includeMarkdownContents = options.includeMarkdownContents === true;
+    const dialogTitle = includeMarkdownContents ? "Export Folder to Graph - includes Markdown file contents" : "Save Graph View";
+    const fileTypeDescription = includeMarkdownContents ? "Portable graph archive with Markdown file contents" : "Markdown Viewer graph view";
 
     if (typeof NL_VERSION !== "undefined") {
       const defaultPath = activeFolderPath ? joinPath(activeFolderPath, suggestedName) : suggestedName;
@@ -10048,7 +10084,7 @@ ${body}`;
     const graphSnapshot = await createGraphSnapshot(folderFiles, folderName || "Graph View");
     const content = getGraphExportContent(graphSnapshot, folderName || graphSnapshot.folderName || "Graph View", null);
     const suggestedName = getSuggestedGraphFileName({ folderName: folderName || graphSnapshot.folderName || "Graph View" });
-    return !!(await writeGraphExportWithSaveDialog(content, suggestedName));
+    return !!(await writeGraphExportWithSaveDialog(content, suggestedName, { includeMarkdownContents: true }));
   }
 
   async function exportActiveFolderToGraph() {
@@ -10066,7 +10102,7 @@ ${body}`;
       captureGraphLayout(graphTab, cachedRender.nodes, cachedRender.getZoomTransform?.());
     }
     syncGraphTabDocument(graphTab);
-    const graphDocument = serializeGraphTab(graphTab, { documentType: GRAPH_DOCUMENT_TYPE_EXPORT });
+    const graphDocument = serializeGraphViewDocument(graphTab);
     return JSON.stringify(graphDocument, null, 2);
   }
 
@@ -10272,6 +10308,12 @@ ${body}`;
     };
   }
 
+  function getGraphSnapshotFileCachedContent(snapshotFile) {
+    if (typeof snapshotFile?.content === "string") return snapshotFile.content;
+    const folderEntry = findFolderMarkdownEntryForGraphFile(snapshotFile);
+    return typeof folderEntry?.content === "string" ? folderEntry.content : "";
+  }
+
   function graphFileMatchesGroupQuery(nodeData, snapshotFile, parsedQuery) {
     if ((nodeData?.type || "file") !== "file") return false;
     if (!snapshotFile || !parsedQuery || !parsedQuery.terms?.length) return false;
@@ -10279,7 +10321,7 @@ ${body}`;
     const path = String(snapshotFile.path || "").toLowerCase();
     const name = String(snapshotFile.name || "").toLowerCase();
     const fullPath = String(snapshotFile.fullPath || "").toLowerCase();
-    const content = String(snapshotFile.content || "").toLowerCase();
+    const content = String(getGraphSnapshotFileCachedContent(snapshotFile)).toLowerCase();
     const tags = (Array.isArray(snapshotFile.tags) ? snapshotFile.tags : [])
       .map((tag) => String(tag || "").toLowerCase())
       .filter(Boolean);
@@ -10412,7 +10454,7 @@ ${body}`;
     } else if (prefix === "tag") {
       (graphSnapshot?.files || []).forEach((snapshotFile) => {
         normalizeFileTagList(snapshotFile.tags || []).forEach((tag) => addEntry(tag, "tag", "File tag"));
-        extractMarkdownTags(snapshotFile.content || "").forEach((tag) => addEntry(tag, "tag", "Markdown tag"));
+        extractMarkdownTags(getGraphSnapshotFileCachedContent(snapshotFile)).forEach((tag) => addEntry(tag, "tag", "Markdown tag"));
       });
       (graphSnapshot?.nodes || []).forEach((node) => {
         if ((node?.type || "file") !== "tag") return;
@@ -11447,6 +11489,8 @@ ${body}`;
         return file.text();
       }
       if (isNeutralinoRuntime() && snapshotFile.fullPath) return Neutralino.filesystem.readFile(snapshotFile.fullPath);
+      const folderEntry = getFolderMarkdownEntryForNode(graphNode);
+      if (folderEntry) return readFolderMarkdownFileContent(folderEntry);
       throw new Error("No readable Markdown file was provided.");
     };
 
