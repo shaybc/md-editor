@@ -35,6 +35,8 @@ Then open **http://localhost:8080** in your browser.
 | [Desktop App](Desktop-App) | Build and run the native desktop application |
 | [Docker Deployment](Docker-Deployment) | Deploy with Docker and Docker Compose |
 | [Configuration](Configuration) | Configure the application and its build tools |
+| [Architecture and Technology](Architecture-and-Technology) | Understand the runtime architecture, deployment model, data flow, and stack |
+| [Project Modules](Modules) | Review the repository modules and logical application modules |
 | [Contributing](Contributing) | How to contribute to the project |
 | [FAQ](FAQ) | Frequently asked questions |
 
