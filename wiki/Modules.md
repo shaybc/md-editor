@@ -11,6 +11,7 @@ This document describes the major modules in **Markdown Viewer**. Because the ap
 - [Desktop Application Modules](#desktop-application-modules)
 - [Documentation and Support Modules](#documentation-and-support-modules)
 - [Logical Modules in `web-app/script.js`](#logical-modules-in-web-appscriptjs)
+- [Detailed Runtime Module Reference](#detailed-runtime-module-reference)
 - [Data Modules and Storage Keys](#data-modules-and-storage-keys)
 - [External Library Modules](#external-library-modules)
 
@@ -68,6 +69,8 @@ Responsibilities:
 - Manages global preferences, tabs, editor state, view modes, saved files, recent files/folders, and graph documents.
 - Connects UI controls to behavior through event listeners.
 - Coordinates Markdown rendering, file operations, folder import, GitHub import, graph visualization, exports, share URLs, and keyboard shortcuts.
+
+For a deeper breakdown of the modules and logic parts inside this file, see [Application Runtime Module](Application-Runtime-Module).
 
 ### 4. Asset Module
 
@@ -203,6 +206,12 @@ The main JavaScript file is organized into functional areas. The following list 
 | Drag and drop | Handles dropped Markdown files, text files, graph files, and folders where browser APIs allow it. |
 | Keyboard shortcuts | Implements save/export, copy, tab, sync-scroll, indentation, and modal/menu keyboard interactions. |
 | Mermaid tools | Adds diagram toolbars, zoom modal, pan/zoom controls, SVG export, PNG export, and copy-to-clipboard actions. |
+
+---
+
+## Detailed Runtime Module Reference
+
+The full, dedicated reference for the Application Runtime Module is available at [Application Runtime Module](Application-Runtime-Module). It explains the execution model, dependency integration, state model, module inventory, core workflows, browser/desktop compatibility branches, cross-cutting concerns, and change guidelines for `web-app/script.js`.
 
 ---
 
