@@ -12,7 +12,10 @@ node_modules/
 neutralino.js
 
 # Build-generated resources (copied from root by prepare.js)
-/resources/js/script.js
+/resources/js/**
+!/resources/js/
+!/resources/js/main.js
+!/resources/js/neutralino.d.ts
 /resources/styles.css
 /resources/assets/
 /resources/index.html
