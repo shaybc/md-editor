@@ -1,5 +1,5 @@
 document.addEventListener("DOMContentLoaded", function () {
-  const app = createAppContext();
+  const app = window.createAppContext();
 
   // Temporary migration helpers: keep the legacy local names available while
   // boot/context ownership moves into app.dom and app.state. Prefer app.state

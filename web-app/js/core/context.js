@@ -138,3 +138,7 @@ function createAppContext() {
     services: {}
   };
 }
+
+// Expose the boot context factory for the legacy script while the app is split
+// across separate classic script files during migration.
+window.createAppContext = createAppContext;
