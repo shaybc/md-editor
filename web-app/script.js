@@ -4067,6 +4067,12 @@ This is a fully client-side application. Your content never leaves your browser 
     return normalizeGraphNodeName(node.path || node.fullPath || node.id || node.name || "");
   }
 
+  function getGraphSnapshotNodeIds(snapshot) {
+    return new Set((Array.isArray(snapshot?.nodes) ? snapshot.nodes : [])
+      .map((node) => String(node?.id || "").trim())
+      .filter(Boolean));
+  }
+
   function getGraphLayoutEntryByNormalizedPath(graphLayout, savedSnapshot, normalizedPath) {
     if (!graphLayout || !normalizedPath) return null;
     const directEntry = getSavedGraphNodeLayout(graphLayout, normalizedPath);
@@ -4079,6 +4085,18 @@ This is a fully client-side application. Your content never leaves your browser 
     return matchingSavedNode?.id ? getSavedGraphNodeLayout(graphLayout, matchingSavedNode.id) : null;
   }
 
+  function getGraphLayoutEntryForSnapshotNode(graphLayout, savedSnapshot, node) {
+    if (!graphLayout || !node?.id) return null;
+    const directEntry = getSavedGraphNodeLayout(graphLayout, node.id);
+    if (directEntry) return directEntry;
+    if ((node.type || "file") === "tag") return null;
+    return getGraphLayoutEntryByNormalizedPath(graphLayout, savedSnapshot, getGraphNodeNormalizedPath(node));
+  }
+
+  function shouldPreserveGraphZoomTransform(savedZoomTransform, preservedNodeCount) {
+    return !!savedZoomTransform && preservedNodeCount > 0;
+  }
+
   function preserveGraphLayoutForCurrentSnapshot(savedLayout, savedSnapshot, currentSnapshot) {
     const sourceLayout = savedLayout && typeof savedLayout === "object" ? savedLayout : {};
     const currentNodes = Array.isArray(currentSnapshot?.nodes) ? currentSnapshot.nodes : [];
@@ -4086,8 +4104,7 @@ This is a fully client-side application. Your content never leaves your browser 
 
     currentNodes.forEach((node) => {
       if (!node?.id || (node.type || "file") === "tag") return;
-      const normalizedPath = getGraphNodeNormalizedPath(node);
-      const savedEntry = getGraphLayoutEntryByNormalizedPath(sourceLayout, savedSnapshot, normalizedPath);
+      const savedEntry = getGraphLayoutEntryForSnapshotNode(sourceLayout, savedSnapshot, node);
       if (savedEntry) nextNodes[node.id] = cloneGraphPersistenceValue(savedEntry);
     });
 
@@ -4097,15 +4114,42 @@ This is a fully client-side application. Your content never leaves your browser 
       updatedAt: Date.now()
     };
     const savedZoomTransform = getSavedGraphZoomTransform(sourceLayout);
-    if (savedZoomTransform) nextLayout.zoom = savedZoomTransform;
+    if (shouldPreserveGraphZoomTransform(savedZoomTransform, Object.keys(nextNodes).length)) nextLayout.zoom = savedZoomTransform;
+    else {
+      delete nextLayout.zoom;
+      delete nextLayout.transform;
+    }
+    return nextLayout;
+  }
+
+  function preserveGraphLayoutForCompareSnapshot(savedLayout, savedSnapshot, compareSnapshot) {
+    const sourceLayout = savedLayout && typeof savedLayout === "object" ? savedLayout : {};
+    const compareNodes = Array.isArray(compareSnapshot?.nodes) ? compareSnapshot.nodes : [];
+    const nextNodes = {};
+
+    compareNodes.forEach((node) => {
+      if (!node?.id) return;
+      const savedEntry = getGraphLayoutEntryForSnapshotNode(sourceLayout, savedSnapshot, node);
+      if (savedEntry) nextNodes[node.id] = cloneGraphPersistenceValue(savedEntry);
+    });
+
+    const nextLayout = {
+      ...sourceLayout,
+      nodes: nextNodes,
+      updatedAt: Date.now()
+    };
+    const savedZoomTransform = getSavedGraphZoomTransform(sourceLayout);
+    if (shouldPreserveGraphZoomTransform(savedZoomTransform, Object.keys(nextNodes).length)) nextLayout.zoom = savedZoomTransform;
+    else {
+      delete nextLayout.zoom;
+      delete nextLayout.transform;
+    }
     return nextLayout;
   }
 
   function preserveGraphConfigForCurrentSnapshot(savedConfig, currentSnapshot) {
     const normalizedConfig = normalizeGraphViewConfig(savedConfig);
-    const currentNodeIds = new Set((Array.isArray(currentSnapshot?.nodes) ? currentSnapshot.nodes : [])
-      .map((node) => String(node?.id || "").trim())
-      .filter(Boolean));
+    const currentNodeIds = getGraphSnapshotNodeIds(currentSnapshot);
     const currentTagIds = new Set(Array.from(currentNodeIds).filter((nodeId) => nodeId.startsWith("tag:")));
 
     normalizedConfig.hiddenNodeIds = normalizedConfig.hiddenNodeIds.filter((nodeId) => currentNodeIds.has(nodeId));
@@ -4398,6 +4442,7 @@ This is a fully client-side application. Your content never leaves your browser 
       tab.keepSavedGraphMode = true;
       tab.savedGraphComparisonDetails = staleComparison?.detailsModel || null;
       delete tab.graphComparisonSnapshot;
+      delete tab.graphComparisonLayout;
       saveTabsToStorage(tabs);
       if (activeTabId === tab.id) {
         updateSavedGraphModePill(tab);
@@ -4419,6 +4464,7 @@ This is a fully client-side application. Your content never leaves your browser 
       savedConfig: tab.graphViewConfig
     });
     delete tab.graphComparisonSnapshot;
+    delete tab.graphComparisonLayout;
     delete tab.savedGraphComparisonDetails;
     tab.keepSavedGraphMode = false;
     markGraphTabAsChanged(tab);
@@ -4441,6 +4487,11 @@ This is a fully client-side application. Your content never leaves your browser 
       staleComparison.savedSnapshot,
       staleComparison.currentSnapshot,
       staleComparison.comparison
+    );
+    tab.graphComparisonLayout = preserveGraphLayoutForCompareSnapshot(
+      tab.graphLayout,
+      staleComparison.savedSnapshot,
+      tab.graphComparisonSnapshot
     );
     tab.savedGraphComparisonDetails = staleComparison.detailsModel || buildGraphComparisonDetailsModel(
       staleComparison.comparison,
@@ -4813,7 +4864,9 @@ This is a fully client-side application. Your content never leaves your browser 
   function captureGraphLayout(tab, nodes, zoomTransform, options) {
     if (!tab || tab.type !== "graph") return null;
     const storePinnedPositions = !!options?.storePinnedPositions;
-    const existingLayout = tab.graphLayout && typeof tab.graphLayout === "object" ? tab.graphLayout : {};
+    const isCompareMode = !!tab.graphComparisonSnapshot;
+    const layoutSource = isCompareMode ? (tab.graphComparisonLayout || tab.graphLayout) : tab.graphLayout;
+    const existingLayout = layoutSource && typeof layoutSource === "object" ? layoutSource : {};
     const existingNodes = existingLayout.nodes && typeof existingLayout.nodes === "object" ? existingLayout.nodes : {};
     const nextNodes = { ...existingNodes };
 
@@ -4839,6 +4892,11 @@ This is a fully client-side application. Your content never leaves your browser 
       updatedAt: Date.now()
     };
     if (zoom) nextLayout.zoom = zoom;
+
+    if (isCompareMode) {
+      tab.graphComparisonLayout = nextLayout;
+      return nextLayout;
+    }
 
     tab.graphLayout = nextLayout;
     if (tab.graphDocument && typeof tab.graphDocument === "object") {
@@ -12043,9 +12101,12 @@ ${body}`;
     activeTab.visiblePointCount = nodes.length;
     updateStatusLine({ visiblePointCount: nodes.length });
 
-    applySavedGraphLayout(nodes, activeTab.graphLayout);
-    if (typeof activeTab.graphLayout?.magneticEnabled === "boolean") {
-      graphSettings.magneticEnabled = activeTab.graphLayout.magneticEnabled;
+    const activeGraphLayout = activeTab.graphComparisonSnapshot
+      ? (activeTab.graphComparisonLayout || activeTab.graphLayout)
+      : activeTab.graphLayout;
+    applySavedGraphLayout(nodes, activeGraphLayout);
+    if (typeof activeGraphLayout?.magneticEnabled === "boolean") {
+      graphSettings.magneticEnabled = activeGraphLayout.magneticEnabled;
     }
 
     const outgoingAdjacency = new Map();
@@ -12105,7 +12166,7 @@ ${body}`;
       });
 
     svg.call(zoomBehavior).on("dblclick.zoom", null);
-    const savedZoomTransform = getSavedGraphZoomTransform(activeTab.graphLayout);
+    const savedZoomTransform = getSavedGraphZoomTransform(activeGraphLayout);
     if (savedZoomTransform) {
       currentZoomTransform = d3.zoomIdentity
         .translate(savedZoomTransform.x, savedZoomTransform.y)
