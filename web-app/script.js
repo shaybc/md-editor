@@ -3596,6 +3596,9 @@ This is a fully client-side application. Your content never leaves your browser 
     "#4f46e5"
   ]);
   const GRAPH_DOCUMENT_SCHEMA_VERSION = 1;
+  const GRAPH_DOCUMENT_TYPE_VIEW = "graph-view";
+  const GRAPH_DOCUMENT_TYPE_EXPORT = "graph-export";
+  const GRAPH_DOCUMENT_TYPES = new Set([GRAPH_DOCUMENT_TYPE_VIEW, GRAPH_DOCUMENT_TYPE_EXPORT]);
   const DEFAULT_GRAPH_VIEW_CONFIG = Object.freeze({
     showTags: false,
     hiddenTagIds: [],
@@ -3748,9 +3751,30 @@ This is a fully client-side application. Your content never leaves your browser 
     return normalizedSnapshot;
   }
 
+  function graphSnapshotHasEmbeddedFileContent(snapshot) {
+    if (!snapshot || !Array.isArray(snapshot.files)) return false;
+    return snapshot.files.some((file) => file && typeof file === "object" && Object.prototype.hasOwnProperty.call(file, "content"));
+  }
+
+  function normalizeGraphDocumentType(source, snapshot) {
+    const explicitDocumentType = typeof source.documentType === "string" ? source.documentType : "";
+    if (GRAPH_DOCUMENT_TYPES.has(explicitDocumentType)) return explicitDocumentType;
+
+    // Accept a document-level `type` alias for imported graph documents, but avoid
+    // treating persisted application tab types such as `graph` as graph document types.
+    const explicitTypeAlias = typeof source.type === "string" ? source.type : "";
+    if (GRAPH_DOCUMENT_TYPES.has(explicitTypeAlias)) return explicitTypeAlias;
+
+    // Legacy graph documents did not include a document type. Files with embedded
+    // snapshot file content are full exports; files without embedded content are
+    // view-only graph documents.
+    return graphSnapshotHasEmbeddedFileContent(snapshot) ? GRAPH_DOCUMENT_TYPE_EXPORT : GRAPH_DOCUMENT_TYPE_VIEW;
+  }
+
   function normalizeGraphDocument(document) {
     const source = document && typeof document === "object" ? document : {};
     const snapshot = normalizeGraphSnapshot(source.snapshot || source.graphSnapshot || null);
+    const documentType = normalizeGraphDocumentType(source, snapshot);
     const hasViewConfig = Object.prototype.hasOwnProperty.call(source, "viewConfig");
     const viewConfig = normalizeGraphViewConfig(cloneGraphPersistenceValue(hasViewConfig ? source.viewConfig : (source.graphViewConfig || null)));
     const layoutSource = source.graphLayout !== undefined ? source.graphLayout : (
@@ -3761,6 +3785,7 @@ This is a fully client-side application. Your content never leaves your browser 
     const createdAt = normalizeGraphTimestamp(source.createdAt || snapshot?.createdAt, Date.now());
     const normalized = {
       schemaVersion: source.schemaVersion || GRAPH_DOCUMENT_SCHEMA_VERSION,
+      documentType,
       folderName: source.folderName || snapshot?.folderName || source.title || "Graph View",
       createdAt,
       updatedAt: normalizeGraphTimestamp(source.updatedAt, createdAt),
@@ -3775,10 +3800,11 @@ This is a fully client-side application. Your content never leaves your browser 
     return normalized;
   }
 
-  function serializeGraphTab(tab) {
+  function serializeGraphTab(tab, options) {
     const existingDocument = tab?.graphDocument && typeof tab.graphDocument === "object" ? tab.graphDocument : {};
     return normalizeGraphDocument({
       ...existingDocument,
+      documentType: options?.documentType || existingDocument.documentType,
       folderName: tab?.folderName || tab?.title || existingDocument.folderName || "Graph View",
       createdAt: existingDocument.createdAt || tab?.createdAt,
       updatedAt: Date.now(),
@@ -5740,6 +5766,8 @@ This is a fully client-side application. Your content never leaves your browser 
 
   function looksLikeGraphDocument(document) {
     if (!document || typeof document !== "object" || Array.isArray(document)) return false;
+    const documentType = typeof document.documentType === "string" ? document.documentType : document.type;
+    if (GRAPH_DOCUMENT_TYPES.has(documentType)) return true;
     return Object.prototype.hasOwnProperty.call(document, "snapshot")
       || Object.prototype.hasOwnProperty.call(document, "graphSnapshot")
       || Object.prototype.hasOwnProperty.call(document, "viewConfig")
@@ -9918,7 +9946,7 @@ ${body}`;
       captureGraphLayout(graphTab, cachedRender.nodes, cachedRender.getZoomTransform?.());
     }
     syncGraphTabDocument(graphTab);
-    const graphDocument = serializeGraphTab(graphTab);
+    const graphDocument = serializeGraphTab(graphTab, { documentType: GRAPH_DOCUMENT_TYPE_EXPORT });
     return JSON.stringify(graphDocument, null, 2);
   }
 
