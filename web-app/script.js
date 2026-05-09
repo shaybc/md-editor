@@ -3795,6 +3795,126 @@ This is a fully client-side application. Your content never leaves your browser 
     return snapshot.files.some((file) => file && typeof file === "object" && Object.prototype.hasOwnProperty.call(file, "content"));
   }
 
+  function getGraphFileKey(file) {
+    if (!file) return "";
+    const source = file && typeof file === "object" ? file : { path: file };
+    const path = source.path || source.fullPath || source.file?.webkitRelativePath || source.file?.name || source.name || "";
+    if (path) return normalizeGraphNodeName(path);
+    return String(source.id || "").trim().toLowerCase();
+  }
+
+  function getGraphLinkEndpointKey(endpoint) {
+    if (!endpoint) return "";
+    if (typeof endpoint === "object") {
+      return String(endpoint.id || getGraphFileKey(endpoint) || "").trim().toLowerCase();
+    }
+    return String(endpoint || "").trim().toLowerCase();
+  }
+
+  function getGraphLinkKey(link) {
+    if (!link) return "";
+    const source = getGraphLinkEndpointKey(link.source);
+    const target = getGraphLinkEndpointKey(link.target);
+    if (!source || !target) return "";
+    return `${source}->${target}:${link.type || "link"}`;
+  }
+
+  function getGraphSnapshotFilesForComparison(snapshot) {
+    if (!snapshot || typeof snapshot !== "object") return [];
+    const files = Array.isArray(snapshot.files) ? snapshot.files : [];
+    if (files.length) return files;
+    return (Array.isArray(snapshot.nodes) ? snapshot.nodes : []).filter((node) => (node?.type || "file") === "file");
+  }
+
+  function getGraphSnapshotLinksForComparison(snapshot) {
+    return (Array.isArray(snapshot?.links) ? snapshot.links : [])
+      .filter((link) => (link?.type || "link") !== "tag");
+  }
+
+  function getGraphTagRelationKeys(snapshot) {
+    const relationKeys = new Set();
+
+    (Array.isArray(snapshot?.links) ? snapshot.links : [])
+      .filter((link) => (link?.type || "link") === "tag")
+      .forEach((link) => {
+        const key = getGraphLinkKey({ ...link, type: "tag" });
+        if (key) relationKeys.add(key);
+      });
+
+    getGraphSnapshotFilesForComparison(snapshot).forEach((file) => {
+      const fileKey = getGraphFileKey(file);
+      if (!fileKey) return;
+      normalizeFileTagList(file.tags || getFileTagsFromContent(file.content || "")).forEach((tag) => {
+        const tagId = normalizeGraphTagNodeId(tag);
+        if (tagId && tagId !== "tag:") relationKeys.add(`${fileKey}->${tagId}:tag`);
+      });
+    });
+
+    return Array.from(relationKeys).sort();
+  }
+
+  function compareGraphCollections(savedItems, currentItems, keyGetter) {
+    const savedByKey = new Map();
+    const currentByKey = new Map();
+
+    (savedItems || []).forEach((item) => {
+      const key = keyGetter(item);
+      if (key && !savedByKey.has(key)) savedByKey.set(key, item);
+    });
+
+    (currentItems || []).forEach((item) => {
+      const key = keyGetter(item);
+      if (key && !currentByKey.has(key)) currentByKey.set(key, item);
+    });
+
+    return {
+      currentOnly: Array.from(currentByKey.entries())
+        .filter(([key]) => !savedByKey.has(key))
+        .map(([, item]) => item),
+      savedOnly: Array.from(savedByKey.entries())
+        .filter(([key]) => !currentByKey.has(key))
+        .map(([, item]) => item)
+    };
+  }
+
+  function compareGraphViewToCurrentFolder(savedSnapshot, currentSnapshot) {
+    const fileComparison = compareGraphCollections(
+      getGraphSnapshotFilesForComparison(savedSnapshot),
+      getGraphSnapshotFilesForComparison(currentSnapshot),
+      getGraphFileKey
+    );
+    const linkComparison = compareGraphCollections(
+      getGraphSnapshotLinksForComparison(savedSnapshot),
+      getGraphSnapshotLinksForComparison(currentSnapshot),
+      getGraphLinkKey
+    );
+    const tagRelationComparison = compareGraphCollections(
+      getGraphTagRelationKeys(savedSnapshot),
+      getGraphTagRelationKeys(currentSnapshot),
+      (key) => key
+    );
+
+    const result = {
+      newFiles: fileComparison.currentOnly,
+      savedOnlyFiles: fileComparison.savedOnly,
+      newLinks: linkComparison.currentOnly,
+      savedOnlyLinks: linkComparison.savedOnly,
+      newTagRelations: tagRelationComparison.currentOnly,
+      savedOnlyTagRelations: tagRelationComparison.savedOnly
+    };
+
+    result.counts = {
+      newFiles: result.newFiles.length,
+      savedOnlyFiles: result.savedOnlyFiles.length,
+      newLinks: result.newLinks.length,
+      savedOnlyLinks: result.savedOnlyLinks.length,
+      newTagRelations: result.newTagRelations.length,
+      savedOnlyTagRelations: result.savedOnlyTagRelations.length
+    };
+
+    return result;
+  }
+
   function shouldPreserveGraphSnapshotFullPath(snapshotFile) {
     return !!(snapshotFile?.fullPath && isNeutralinoRuntime());
   }
