@@ -1,81 +1,99 @@
-import { escapeHtml, getDirectoryPath } from "./src/core/utils.js";
-import { normalizeMarkdownLinkPath, safeDecodeLinkPath } from "./src/core/markdown-links.js";
-import { copyToClipboard as copyTextToClipboard, showCopiedMessage as showButtonCopiedMessage } from "./src/sharing/clipboard.js";
-export function initLegacyApp({ dom, state }) {
-  const {
-    markdownEditor,
-    editorLineNumbers,
-    editorCurrentLine,
-    editorSelectionHighlights,
-    editorSyntaxHighlight,
-    markdownPreview,
-    themeToggle,
-    restoreDefaultsButtons,
-    importFromFileButtons,
-    newDocumentButtons,
-    importFromGithubButton,
-    importFromFolderButton,
-    folderTreeFilterInput,
-    createTagButton,
-    deleteTagButton,
-    tagManagementSearch,
-    tagManagementList,
-    folderTreeFilterToggleButtons,
-    folderTreeExpandToggleButtons,
-    fileInput,
-    folderInput,
-    exportMd,
-    exportHtml,
-    exportPdf,
-    copyMarkdownButton,
-    dropzone,
-    closeDropzoneBtn,
-    syncToggleButtons,
-    editorPane,
-    previewPane,
-    readingTimeElement,
-    wordCountElement,
-    charCountElement,
-    statusTipElement,
-    graphZoomStatusElement,
-    graphZoomPercentElement,
-    graphPointsStatusElement,
-    graphPointsCountElement,
-    editorTextpadStatusElement,
-    editorTotalLengthElement,
-    editorTotalLinesElement,
-    editorCursorLineElement,
-    editorCursorColumnElement,
-    editorPositionLabelElement,
-    editorPositionValueElement,
-  } = dom;
-  let { folderTreePane, folderTreeRoot } = dom;
+document.addEventListener("DOMContentLoaded", function () {
+  let markdownRenderTimeout = null;
+  const RENDER_DELAY = 100;
+  let syncScrollingEnabled = true;
+  let isEditorScrolling = false;
+  let isPreviewScrolling = false;
+  let scrollSyncTimeout = null;
+  const SCROLL_SYNC_DELAY = 10;
+
+  // View Mode State - Story 1.1
+  let currentViewMode = 'split'; // 'editor', 'split', or 'preview'
+  let autoSelectFileEnabled = true;
+  let currentFolderTreeNodes = [];
+  let folderTreeFilterText = "";
+  let selectedFolderTreeTags = new Set();
+  let currentFolderSortMode = "name-asc";
+  let showUnsupportedFolderFiles = false;
+  let isFolderOpen = false;
+
+  const markdownEditor = document.getElementById("markdown-editor");
+  const editorLineNumbers = document.getElementById("editor-line-numbers");
+  const editorCurrentLine = document.getElementById("editor-current-line");
+  const editorSelectionHighlights = document.getElementById("editor-selection-highlights");
+  const editorSyntaxHighlight = document.getElementById("editor-syntax-highlight");
+  const markdownPreview = document.getElementById("markdown-preview");
+  const themeToggle = document.getElementById("theme-toggle");
+  const restoreDefaultsButtons = document.querySelectorAll(".restore-defaults-button");
+  const importFromFileButtons = document.querySelectorAll("#import-from-file");
+  const newDocumentButtons = document.querySelectorAll(".new-document-button");
+  const importFromGithubButton = document.getElementById("import-from-github");
+  const importFromFolderButton = document.getElementById("import-from-folder");
+  const folderTreeFilterInput = document.getElementById("folder-tree-filter-input");
+  const createTagButton = document.getElementById("create-tag-button");
+  const deleteTagButton = document.getElementById("delete-tag-button");
+  const tagManagementSearch = document.getElementById("tag-management-search");
+  const tagManagementList = document.getElementById("tag-management-list");
+  const folderTreeFilterToggleButtons = document.querySelectorAll(".toggle-folder-tree-filter");
+  const folderTreeExpandToggleButtons = document.querySelectorAll(".toggle-folder-tree-expanded");
+  let folderTreeRoot = document.getElementById("folder-tree-root");
 
   console.error("[FolderTree] init", {
-    hasPane: !!folderTreePane,
+    hasPane: !!document.getElementById("folder-tree-pane"),
     hasRoot: !!folderTreeRoot,
-    hasImportOption: !!importFromFolderButton,
+    hasImportOption: !!document.getElementById("import-from-folder"),
     viewportWidth: window.innerWidth
   });
+  const fileInput = document.getElementById("file-input");
+  const folderInput = document.getElementById("folder-input");
+  let shownFolderInputFallbackNotice = false;
+  const exportMd = document.getElementById("export-md");
+  const exportHtml = document.getElementById("export-html");
+  const exportPdf = document.getElementById("export-pdf");
+  const copyMarkdownButton = document.getElementById("copy-markdown-button");
+  const dropzone = document.getElementById("dropzone");
+  const closeDropzoneBtn = document.getElementById("close-dropzone");
+  const syncToggleButtons = document.querySelectorAll(".sync-toggle-button");
+  const editorPane = document.getElementById("markdown-editor");
+  const previewPane = document.querySelector(".preview-pane");
+  const readingTimeElement = document.getElementById("reading-time");
+  const wordCountElement = document.getElementById("word-count");
+  const charCountElement = document.getElementById("char-count");
+  const statusTipElement = document.getElementById("status-tip");
+  const graphZoomStatusElement = document.getElementById("graph-zoom-status");
+  const graphZoomPercentElement = document.getElementById("graph-zoom-percent");
+  const graphPointsStatusElement = document.getElementById("graph-points-status");
+  const graphPointsCountElement = document.getElementById("graph-points-count");
+  const editorTextpadStatusElement = document.getElementById("editor-textpad-status");
+  const editorTotalLengthElement = document.getElementById("editor-total-length");
+  const editorTotalLinesElement = document.getElementById("editor-total-lines");
+  const editorCursorLineElement = document.getElementById("editor-cursor-line");
+  const editorCursorColumnElement = document.getElementById("editor-cursor-column");
+  const editorPositionLabelElement = document.getElementById("editor-position-label");
+  const editorPositionValueElement = document.getElementById("editor-position-value");
+  let previewHoveredLinkUrl = "";
+
+  let linkAutocompleteLayer = null;
+  let linkAutocompleteState = null;
 
   function getLinkAutocompleteLayer() {
-    if (!state.linkAutocompleteLayer) {
-      state.linkAutocompleteLayer = document.createElement("div");
-      state.linkAutocompleteLayer.id = "link-autocomplete-layer";
-      state.linkAutocompleteLayer.className = "link-autocomplete-layer hidden";
-      state.linkAutocompleteLayer.setAttribute("role", "listbox");
-      state.linkAutocompleteLayer.setAttribute("aria-label", "Link suggestions");
-      document.body.appendChild(state.linkAutocompleteLayer);
+    if (!linkAutocompleteLayer) {
+      linkAutocompleteLayer = document.createElement("div");
+      linkAutocompleteLayer.id = "link-autocomplete-layer";
+      linkAutocompleteLayer.className = "link-autocomplete-layer hidden";
+      linkAutocompleteLayer.setAttribute("role", "listbox");
+      linkAutocompleteLayer.setAttribute("aria-label", "Link suggestions");
+      document.body.appendChild(linkAutocompleteLayer);
     }
-    return state.linkAutocompleteLayer;
+    return linkAutocompleteLayer;
   }
 
   function hideLinkAutocomplete() {
-    if (state.linkAutocompleteLayer) {
-      state.linkAutocompleteLayer.classList.add("hidden");
-      state.linkAutocompleteLayer.innerHTML = "";
+    if (linkAutocompleteLayer) {
+      linkAutocompleteLayer.classList.add("hidden");
+      linkAutocompleteLayer.innerHTML = "";
     }
-    state.linkAutocompleteState = null;
+    linkAutocompleteState = null;
     markdownEditor.removeAttribute("aria-activedescendant");
   }
 
@@ -375,8 +393,8 @@ export function initLegacyApp({ dom, state }) {
   }
 
   function getLinkAutocompleteInsertText(item) {
-    if (state.linkAutocompleteState?.type === "tag") return `#${item.tag}`;
-    if (state.linkAutocompleteState?.type === "frontmatter-tag") return item.tag;
+    if (linkAutocompleteState?.type === "tag") return `#${item.tag}`;
+    if (linkAutocompleteState?.type === "frontmatter-tag") return item.tag;
     return getRootRelativeMarkdownLinkTarget(item.path);
   }
 
@@ -435,10 +453,10 @@ export function initLegacyApp({ dom, state }) {
   }
 
   function positionLinkAutocompleteLayer() {
-    if (!state.linkAutocompleteState || !state.linkAutocompleteLayer || state.linkAutocompleteLayer.classList.contains("hidden")) return;
+    if (!linkAutocompleteState || !linkAutocompleteLayer || linkAutocompleteLayer.classList.contains("hidden")) return;
     const caret = getTextareaCaretClientPosition(markdownEditor, markdownEditor.selectionStart);
     const editorRect = markdownEditor.getBoundingClientRect();
-    const layerRect = state.linkAutocompleteLayer.getBoundingClientRect();
+    const layerRect = linkAutocompleteLayer.getBoundingClientRect();
     const lineHeight = getEditorLineHeight();
     const viewportPadding = 8;
     let top = caret.top + lineHeight + 4;
@@ -450,24 +468,24 @@ export function initLegacyApp({ dom, state }) {
     left = Math.max(viewportPadding, Math.min(left, window.innerWidth - layerRect.width - viewportPadding));
     top = Math.max(viewportPadding, Math.min(top, window.innerHeight - layerRect.height - viewportPadding));
 
-    state.linkAutocompleteLayer.style.top = `${top}px`;
-    state.linkAutocompleteLayer.style.left = `${Math.max(editorRect.left, left)}px`;
+    linkAutocompleteLayer.style.top = `${top}px`;
+    linkAutocompleteLayer.style.left = `${Math.max(editorRect.left, left)}px`;
   }
 
   function scrollLinkAutocompleteSelectionIntoView() {
-    if (!state.linkAutocompleteLayer || !state.linkAutocompleteState?.items.length) return;
-    const activeOption = state.linkAutocompleteLayer.querySelector(".link-autocomplete-option.active");
+    if (!linkAutocompleteLayer || !linkAutocompleteState?.items.length) return;
+    const activeOption = linkAutocompleteLayer.querySelector(".link-autocomplete-option.active");
     if (!activeOption) return;
 
     const optionTop = activeOption.offsetTop;
     const optionBottom = optionTop + activeOption.offsetHeight;
-    const visibleTop = state.linkAutocompleteLayer.scrollTop;
-    const visibleBottom = visibleTop + state.linkAutocompleteLayer.clientHeight;
+    const visibleTop = linkAutocompleteLayer.scrollTop;
+    const visibleBottom = visibleTop + linkAutocompleteLayer.clientHeight;
 
     if (optionTop < visibleTop) {
-      state.linkAutocompleteLayer.scrollTop = optionTop;
+      linkAutocompleteLayer.scrollTop = optionTop;
     } else if (optionBottom > visibleBottom) {
-      state.linkAutocompleteLayer.scrollTop = optionBottom - state.linkAutocompleteLayer.clientHeight;
+      linkAutocompleteLayer.scrollTop = optionBottom - linkAutocompleteLayer.clientHeight;
     }
   }
 
@@ -480,12 +498,12 @@ export function initLegacyApp({ dom, state }) {
 
     const items = getFilteredLinkAutocompleteItems(context);
     const layer = getLinkAutocompleteLayer();
-    const selectedIndex = Math.min(Math.max(state.linkAutocompleteState?.selectedIndex || 0, 0), Math.max(items.length - 1, 0));
-    state.linkAutocompleteState = { ...context, items, selectedIndex };
+    const selectedIndex = Math.min(Math.max(linkAutocompleteState?.selectedIndex || 0, 0), Math.max(items.length - 1, 0));
+    linkAutocompleteState = { ...context, items, selectedIndex };
     layer.innerHTML = "";
     layer.setAttribute("aria-label", context.type === "tag" || context.type === "frontmatter-tag" ? "Tag suggestions" : "Link suggestions");
 
-    if (context.type !== "tag" && context.type !== "frontmatter-tag" && (!state.isFolderOpen || !folderMarkdownFiles.length)) {
+    if (context.type !== "tag" && context.type !== "frontmatter-tag" && (!isFolderOpen || !folderMarkdownFiles.length)) {
       const empty = document.createElement("div");
       empty.className = "link-autocomplete-empty";
       empty.textContent = "Open a folder to link documents.";
@@ -522,20 +540,20 @@ export function initLegacyApp({ dom, state }) {
     });
   }
 
-  function acceptLinkAutocomplete(index = state.linkAutocompleteState?.selectedIndex || 0) {
-    if (!state.linkAutocompleteState || !state.linkAutocompleteState.items.length) return false;
-    const autocompleteState = state.linkAutocompleteState;
-    const item = autocompleteState.items[index] || autocompleteState.items[0];
+  function acceptLinkAutocomplete(index = linkAutocompleteState?.selectedIndex || 0) {
+    if (!linkAutocompleteState || !linkAutocompleteState.items.length) return false;
+    const state = linkAutocompleteState;
+    const item = state.items[index] || state.items[0];
     const baseInsertText = getLinkAutocompleteInsertText(item);
-    const closingSyntax = autocompleteState.type === "wiki" ? "]]" : autocompleteState.type === "markdown" ? ")" : "";
-    const insertText = autocompleteState.needsClosingSyntax && closingSyntax ? `${baseInsertText}${closingSyntax}` : baseInsertText;
+    const closingSyntax = state.type === "wiki" ? "]]" : state.type === "markdown" ? ")" : "";
+    const insertText = state.needsClosingSyntax && closingSyntax ? `${baseInsertText}${closingSyntax}` : baseInsertText;
     const value = markdownEditor.value;
     const closingSyntaxLength = closingSyntax
-      && (autocompleteState.needsClosingSyntax || value.slice(autocompleteState.replaceEnd, autocompleteState.replaceEnd + closingSyntax.length) === closingSyntax)
+      && (state.needsClosingSyntax || value.slice(state.replaceEnd, state.replaceEnd + closingSyntax.length) === closingSyntax)
       ? closingSyntax.length
       : 0;
-    markdownEditor.value = value.slice(0, autocompleteState.replaceStart) + insertText + value.slice(autocompleteState.replaceEnd);
-    const nextPosition = autocompleteState.replaceStart + baseInsertText.length + closingSyntaxLength;
+    markdownEditor.value = value.slice(0, state.replaceStart) + insertText + value.slice(state.replaceEnd);
+    const nextPosition = state.replaceStart + baseInsertText.length + closingSyntaxLength;
     markdownEditor.selectionStart = markdownEditor.selectionEnd = nextPosition;
     hideLinkAutocomplete();
     markdownEditor.focus();
@@ -544,9 +562,9 @@ export function initLegacyApp({ dom, state }) {
   }
 
   function moveLinkAutocompleteSelection(delta) {
-    if (!state.linkAutocompleteState || !state.linkAutocompleteState.items.length) return false;
-    const itemCount = state.linkAutocompleteState.items.length;
-    state.linkAutocompleteState.selectedIndex = (state.linkAutocompleteState.selectedIndex + delta + itemCount) % itemCount;
+    if (!linkAutocompleteState || !linkAutocompleteState.items.length) return false;
+    const itemCount = linkAutocompleteState.items.length;
+    linkAutocompleteState.selectedIndex = (linkAutocompleteState.selectedIndex + delta + itemCount) % itemCount;
     renderLinkAutocomplete();
     return true;
   }
@@ -822,7 +840,7 @@ export function initLegacyApp({ dom, state }) {
   }
 
   function handleLinkAutocompleteKeydown(event) {
-    if (!state.linkAutocompleteState || !state.linkAutocompleteLayer || state.linkAutocompleteLayer.classList.contains("hidden")) return false;
+    if (!linkAutocompleteState || !linkAutocompleteLayer || linkAutocompleteLayer.classList.contains("hidden")) return false;
     if (event.key === "ArrowDown") {
       event.preventDefault();
       return moveLinkAutocompleteSelection(1);
@@ -832,7 +850,7 @@ export function initLegacyApp({ dom, state }) {
       return moveLinkAutocompleteSelection(-1);
     }
     if (event.key === "Enter" || event.key === "Tab") {
-      if (state.linkAutocompleteState.items.length) {
+      if (linkAutocompleteState.items.length) {
         event.preventDefault();
         return acceptLinkAutocomplete();
       }
@@ -1683,7 +1701,7 @@ export function initLegacyApp({ dom, state }) {
 
   ensureFolderTreePane();
   folderTreeRoot = document.getElementById("folder-tree-root");
-  folderTreePane = document.getElementById("folder-tree-pane");
+  const folderTreePane = document.getElementById("folder-tree-pane");
   ensureRecentMenuContainers();
   hydrateRecentItemsFromProfile();
   hydrateGlobalStateFromProfile();
@@ -1700,21 +1718,21 @@ export function initLegacyApp({ dom, state }) {
   updateFolderTreeToolbarState();
   toggleAutoSelectFileButtons.forEach(function(button) {
     button.addEventListener("click", function() {
-      if (button.classList.contains("folder-tree-tool-button") && !state.isFolderOpen) return;
-      setAutoSelectFileEnabled(!state.autoSelectFileEnabled);
+      if (button.classList.contains("folder-tree-tool-button") && !isFolderOpen) return;
+      setAutoSelectFileEnabled(!autoSelectFileEnabled);
     });
   });
 
   folderTreeExpandToggleButtons.forEach(function(button) {
     button.addEventListener("click", function() {
-      if (!state.isFolderOpen) return;
+      if (!isFolderOpen) return;
       setAllFolderTreeDetails(hasCollapsedFolderTreeDetails());
     });
   });
 
   folderTreeFilterToggleButtons.forEach(function(button) {
     button.addEventListener("click", function() {
-      if (!state.isFolderOpen || !folderTreeFilterInput) return;
+      if (!isFolderOpen || !folderTreeFilterInput) return;
       const shouldShow = folderTreeFilterInput.hidden;
       folderTreeFilterInput.hidden = !shouldShow;
       updateFolderTreeFilterControls();
@@ -1723,7 +1741,7 @@ export function initLegacyApp({ dom, state }) {
         folderTreeFilterInput.select();
         return;
       }
-      state.folderTreeFilterText = "";
+      folderTreeFilterText = "";
       folderTreeFilterInput.value = "";
       renderFilteredFolderTree();
     });
@@ -1731,7 +1749,7 @@ export function initLegacyApp({ dom, state }) {
 
   if (folderTreeFilterInput) {
     folderTreeFilterInput.addEventListener("input", function() {
-      state.folderTreeFilterText = folderTreeFilterInput.value;
+      folderTreeFilterText = folderTreeFilterInput.value;
       renderFilteredFolderTree();
       updateFolderTreeFilterControls();
     });
@@ -1739,7 +1757,7 @@ export function initLegacyApp({ dom, state }) {
 
   folderTreeSortOptionButtons.forEach(function(button) {
     button.addEventListener("click", function() {
-      if (!state.isFolderOpen) return;
+      if (!isFolderOpen) return;
       applyFolderSortMode(button.dataset.folderSort || "name-asc");
     });
   });
@@ -1754,8 +1772,8 @@ export function initLegacyApp({ dom, state }) {
     if (!button || event.unsupportedFilesToggleHandled) return;
     event.unsupportedFilesToggleHandled = true;
     event.preventDefault();
-    if (button.classList.contains("folder-tree-tool-button") && !state.isFolderOpen) return;
-    setShowUnsupportedFolderFiles(!state.showUnsupportedFolderFiles);
+    if (button.classList.contains("folder-tree-tool-button") && !isFolderOpen) return;
+    setShowUnsupportedFolderFiles(!showUnsupportedFolderFiles);
   }
 
   getUnsupportedFileToggleButtons().forEach(function(button) {
@@ -1862,13 +1880,13 @@ export function initLegacyApp({ dom, state }) {
     syncScrollingEnabled: true,
     viewMode: "split"
   });
-  state.currentFolderSortMode = getValidFolderSortMode(loadGlobalState().folderSortMode || state.currentFolderSortMode);
+  currentFolderSortMode = getValidFolderSortMode(loadGlobalState().folderSortMode || currentFolderSortMode);
   editorWidthPercent = getClampedEditorWidthPercent(loadGlobalState().editorWidthPercent);
   const graphSettings = {
     magneticEnabled: loadGlobalState().graphMagneticEnabled !== false
   };
-  state.autoSelectFileEnabled = loadGlobalState().autoSelectFileEnabled !== false;
-  state.showUnsupportedFolderFiles = loadGlobalState().showUnsupportedFolderFiles === true;
+  autoSelectFileEnabled = loadGlobalState().autoSelectFileEnabled !== false;
+  showUnsupportedFolderFiles = loadGlobalState().showUnsupportedFolderFiles === true;
   updateAutoSelectFileButtons();
   updateUnsupportedFileToggleButtons();
   applySavedLayoutPreferences(loadGlobalState());
@@ -1930,12 +1948,12 @@ export function initLegacyApp({ dom, state }) {
     }
 
     const defaults = getDefaultGlobalState();
-    state.currentFolderSortMode = defaults.folderSortMode;
+    currentFolderSortMode = defaults.folderSortMode;
     editorWidthPercent = defaults.editorWidthPercent;
     graphSettings.magneticEnabled = defaults.graphMagneticEnabled;
-    state.autoSelectFileEnabled = defaults.autoSelectFileEnabled;
-    state.showUnsupportedFolderFiles = defaults.showUnsupportedFolderFiles;
-    state.syncScrollingEnabled = defaults.syncScrollingEnabled;
+    autoSelectFileEnabled = defaults.autoSelectFileEnabled;
+    showUnsupportedFolderFiles = defaults.showUnsupportedFolderFiles;
+    syncScrollingEnabled = defaults.syncScrollingEnabled;
 
     document.documentElement.setAttribute("data-theme", defaults.theme);
     updateThemeButtonLabels(defaults.theme);
@@ -1955,23 +1973,23 @@ export function initLegacyApp({ dom, state }) {
     window.alert("Preferences restored to defaults.");
   }
 
-  function applyGlobalPreferences(persistedState = loadGlobalState()) {
-    state.currentFolderSortMode = getValidFolderSortMode(persistedState.folderSortMode || state.currentFolderSortMode);
-    editorWidthPercent = getClampedEditorWidthPercent(persistedState.editorWidthPercent);
-    graphSettings.magneticEnabled = persistedState.graphMagneticEnabled !== false;
-    state.autoSelectFileEnabled = persistedState.autoSelectFileEnabled !== false;
-    state.showUnsupportedFolderFiles = persistedState.showUnsupportedFolderFiles === true;
-    state.syncScrollingEnabled = persistedState.syncScrollingEnabled !== false;
-    if (persistedState.theme === "dark" || persistedState.theme === "light") {
-      document.documentElement.setAttribute("data-theme", persistedState.theme);
-      updateThemeButtonLabels(persistedState.theme);
+  function applyGlobalPreferences(state = loadGlobalState()) {
+    currentFolderSortMode = getValidFolderSortMode(state.folderSortMode || currentFolderSortMode);
+    editorWidthPercent = getClampedEditorWidthPercent(state.editorWidthPercent);
+    graphSettings.magneticEnabled = state.graphMagneticEnabled !== false;
+    autoSelectFileEnabled = state.autoSelectFileEnabled !== false;
+    showUnsupportedFolderFiles = state.showUnsupportedFolderFiles === true;
+    syncScrollingEnabled = state.syncScrollingEnabled !== false;
+    if (state.theme === "dark" || state.theme === "light") {
+      document.documentElement.setAttribute("data-theme", state.theme);
+      updateThemeButtonLabels(state.theme);
       renderMarkdown();
     }
     updateSyncToggleButtons();
     updateAutoSelectFileButtons();
     updateUnsupportedFileToggleButtons();
     updateFolderTreeSortControls();
-    applySavedLayoutPreferences(persistedState);
+    applySavedLayoutPreferences(state);
   }
 
   function applySavedLayoutPreferences(state = loadGlobalState()) {
@@ -2060,7 +2078,7 @@ export function initLegacyApp({ dom, state }) {
       });
     };
 
-    updateNodes(state.currentFolderTreeNodes);
+    updateNodes(currentFolderTreeNodes);
   }
 
   function syncMarkdownTabTagsToFolderState(tab, content) {
@@ -2089,7 +2107,7 @@ export function initLegacyApp({ dom, state }) {
     syncOpenGraphSnapshotsForMarkdownTabTagChange(tab, normalizedContent);
     renderTagManagementList();
     renderLinkAutocomplete();
-    if (state.selectedFolderTreeTags.size) {
+    if (selectedFolderTreeTags.size) {
       renderFilteredFolderTree();
     }
   }
@@ -2165,7 +2183,7 @@ export function initLegacyApp({ dom, state }) {
     folderTagCounts = counts;
     renderTagManagementList();
     renderLinkAutocomplete();
-    if (state.selectedFolderTreeTags.size) {
+    if (selectedFolderTreeTags.size) {
       renderFilteredFolderTree();
     }
   }
@@ -2194,7 +2212,7 @@ export function initLegacyApp({ dom, state }) {
 
     tags.forEach((tag) => {
       const button = document.createElement("button");
-      const isSelected = state.selectedFolderTreeTags.has(tag);
+      const isSelected = selectedFolderTreeTags.has(tag);
       button.type = "button";
       button.className = "tag-management-list-item" + (isSelected ? " selected" : "");
       button.dataset.tagName = tag;
@@ -2450,9 +2468,9 @@ export function initLegacyApp({ dom, state }) {
 
     const activeGraphChanged = await updateOpenGraphSnapshotsForChangedTagFiles(changedEntries);
 
-    if (state.selectedFolderTreeTags.has(normalizedTag)) {
-      state.selectedFolderTreeTags = new Set(state.selectedFolderTreeTags);
-      state.selectedFolderTreeTags.delete(normalizedTag);
+    if (selectedFolderTreeTags.has(normalizedTag)) {
+      selectedFolderTreeTags = new Set(selectedFolderTreeTags);
+      selectedFolderTreeTags.delete(normalizedTag);
     }
 
     await refreshFolderTagCounts();
@@ -2515,8 +2533,8 @@ export function initLegacyApp({ dom, state }) {
   }
 
   function updateAutoSelectFileButtons() {
-    const label = state.autoSelectFileEnabled ? "Auto select file Off" : "Auto select file On";
-    const title = state.autoSelectFileEnabled ? "Disable Auto select file" : "Enable Auto select file";
+    const label = autoSelectFileEnabled ? "Auto select file Off" : "Auto select file On";
+    const title = autoSelectFileEnabled ? "Disable Auto select file" : "Enable Auto select file";
 
     toggleAutoSelectFileButtons.forEach(function(button) {
       const labelElement = button.querySelector(".auto-select-file-label");
@@ -2525,12 +2543,12 @@ export function initLegacyApp({ dom, state }) {
       } else {
         button.textContent = label;
       }
-      button.title = state.isFolderOpen ? title : "Open a folder to enable Auto select file";
+      button.title = isFolderOpen ? title : "Open a folder to enable Auto select file";
       button.setAttribute("aria-label", title);
-      button.setAttribute("aria-pressed", String(state.autoSelectFileEnabled));
+      button.setAttribute("aria-pressed", String(autoSelectFileEnabled));
       if (button.classList.contains("folder-tree-tool-button")) {
-        button.disabled = !state.isFolderOpen;
-        button.setAttribute("aria-disabled", state.isFolderOpen ? "false" : "true");
+        button.disabled = !isFolderOpen;
+        button.setAttribute("aria-disabled", isFolderOpen ? "false" : "true");
       }
     });
   }
@@ -2542,7 +2560,7 @@ export function initLegacyApp({ dom, state }) {
   }
 
   function updateFolderTreeExpandToggleButtons() {
-    const hasFolder = !!state.isFolderOpen;
+    const hasFolder = !!isFolderOpen;
     const shouldExpand = hasCollapsedFolderTreeDetails();
     const title = !hasFolder
       ? "Open a folder to expand or collapse folders"
@@ -2594,7 +2612,7 @@ export function initLegacyApp({ dom, state }) {
         return visibleNodes;
       }
 
-      if (state.showUnsupportedFolderFiles || isSupportedFolderTreeDocumentNode(node)) {
+      if (showUnsupportedFolderFiles || isSupportedFolderTreeDocumentNode(node)) {
         visibleNodes.push(node);
       }
       return visibleNodes;
@@ -2617,7 +2635,7 @@ export function initLegacyApp({ dom, state }) {
   }
 
   function getTagFilteredFolderTreeNodes(nodes) {
-    const selectedTags = Array.from(state.selectedFolderTreeTags || []);
+    const selectedTags = Array.from(selectedFolderTreeTags || []);
     if (!selectedTags.length) return nodes;
 
     return (nodes || []).reduce(function(matches, node) {
@@ -2640,11 +2658,11 @@ export function initLegacyApp({ dom, state }) {
   function toggleFolderTreeTagFilter(tagName) {
     const normalizedTag = normalizeTagName(tagName);
     if (!normalizedTag) return;
-    state.selectedFolderTreeTags = new Set(state.selectedFolderTreeTags);
-    if (state.selectedFolderTreeTags.has(normalizedTag)) {
-      state.selectedFolderTreeTags.delete(normalizedTag);
+    selectedFolderTreeTags = new Set(selectedFolderTreeTags);
+    if (selectedFolderTreeTags.has(normalizedTag)) {
+      selectedFolderTreeTags.delete(normalizedTag);
     } else {
-      state.selectedFolderTreeTags.add(normalizedTag);
+      selectedFolderTreeTags.add(normalizedTag);
     }
     renderTagManagementList();
     renderFilteredFolderTree();
@@ -2673,25 +2691,25 @@ export function initLegacyApp({ dom, state }) {
   }
 
   function renderFilteredFolderTree() {
-    if (!folderTreeRoot || !state.isFolderOpen) return;
-    const visibleNodes = getVisibleFolderTreeNodes(state.currentFolderTreeNodes);
+    if (!folderTreeRoot || !isFolderOpen) return;
+    const visibleNodes = getVisibleFolderTreeNodes(currentFolderTreeNodes);
     const tagFilteredNodes = getTagFilteredFolderTreeNodes(visibleNodes);
-    const nodes = getFilteredFolderTreeNodes(tagFilteredNodes, state.folderTreeFilterText);
+    const nodes = getFilteredFolderTreeNodes(tagFilteredNodes, folderTreeFilterText);
     renderFolderTree(nodes, { preserveNodes: true, skipTagRefresh: true });
-    if (state.folderTreeFilterText || state.selectedFolderTreeTags.size) {
+    if (folderTreeFilterText || selectedFolderTreeTags.size) {
       setAllFolderTreeDetails(true);
     }
   }
 
   function updateFolderTreeFilterControls() {
-    const hasFolder = !!state.isFolderOpen;
+    const hasFolder = !!isFolderOpen;
     const isVisible = !!(folderTreeFilterInput && !folderTreeFilterInput.hidden);
     folderTreeFilterToggleButtons.forEach(function(button) {
       button.disabled = !hasFolder;
       button.title = hasFolder ? "Filter files and folders" : "Open a folder to filter files and folders";
       button.setAttribute("aria-disabled", hasFolder ? "false" : "true");
       button.setAttribute("aria-expanded", String(hasFolder && isVisible));
-      button.setAttribute("aria-pressed", String(hasFolder && (isVisible || !!state.folderTreeFilterText)));
+      button.setAttribute("aria-pressed", String(hasFolder && (isVisible || !!folderTreeFilterText)));
     });
 
     if (folderTreeFilterInput) {
@@ -2716,8 +2734,8 @@ export function initLegacyApp({ dom, state }) {
   }
 
   function updateFolderTreeSortControls() {
-    const hasFolder = !!state.isFolderOpen;
-    const activeLabel = getFolderSortLabel(state.currentFolderSortMode);
+    const hasFolder = !!isFolderOpen;
+    const activeLabel = getFolderSortLabel(currentFolderSortMode);
     const title = hasFolder ? `Sort files and folders: ${activeLabel}` : "Open a folder to sort files and folders";
 
     folderTreeSortMenuButtons.forEach(function(button) {
@@ -2728,15 +2746,15 @@ export function initLegacyApp({ dom, state }) {
     });
 
     folderTreeSortOptionButtons.forEach(function(button) {
-      const isActive = button.dataset.folderSort === state.currentFolderSortMode;
+      const isActive = button.dataset.folderSort === currentFolderSortMode;
       button.classList.toggle("active", isActive);
       button.setAttribute("aria-checked", String(isActive));
     });
   }
 
   function updateUnsupportedFileToggleButtons() {
-    const hasFolder = !!state.isFolderOpen;
-    const label = state.showUnsupportedFolderFiles ? "Hide unsupported file types" : "Show unsupported file types";
+    const hasFolder = !!isFolderOpen;
+    const label = showUnsupportedFolderFiles ? "Hide unsupported file types" : "Show unsupported file types";
     const title = hasFolder ? `${label} in the folder view` : "Open a folder to show unsupported file types";
 
     getUnsupportedFileToggleButtons().forEach(function(button) {
@@ -2750,12 +2768,12 @@ export function initLegacyApp({ dom, state }) {
       }
       button.title = title;
       button.setAttribute("aria-label", title);
-      button.setAttribute("aria-pressed", String(hasFolder && state.showUnsupportedFolderFiles));
+      button.setAttribute("aria-pressed", String(hasFolder && showUnsupportedFolderFiles));
     });
   }
 
   function updateFolderTreeGraphViewButtons() {
-    const hasFolder = !!state.isFolderOpen;
+    const hasFolder = !!isFolderOpen;
     const title = hasFolder ? "Open Graph View" : "Open a folder to open Graph View";
     getFolderTreeGraphViewButtons().forEach(function(button) {
       button.disabled = !hasFolder;
@@ -2766,7 +2784,7 @@ export function initLegacyApp({ dom, state }) {
   }
 
   function updateFolderTreeGraphExportButtons() {
-    const hasFolder = !!state.isFolderOpen;
+    const hasFolder = !!isFolderOpen;
     const label = "Export Folder to Graph";
     const description = "Create a portable graph archive that includes Markdown file contents.";
     const title = hasFolder ? description : "Create a portable graph archive that includes Markdown file contents.";
@@ -2779,7 +2797,7 @@ export function initLegacyApp({ dom, state }) {
   }
 
   function updateTagManagementMenuButtons() {
-    const hasFolder = !!state.isFolderOpen;
+    const hasFolder = !!isFolderOpen;
     const title = hasFolder ? "Manage tags" : "Open a folder to manage tags";
     getTagManagementMenuButtons().forEach(function(button) {
       button.disabled = !hasFolder;
@@ -2795,8 +2813,8 @@ export function initLegacyApp({ dom, state }) {
   }
 
   function setShowUnsupportedFolderFiles(enabled) {
-    state.showUnsupportedFolderFiles = !!enabled;
-    saveGlobalState({ showUnsupportedFolderFiles: state.showUnsupportedFolderFiles });
+    showUnsupportedFolderFiles = !!enabled;
+    saveGlobalState({ showUnsupportedFolderFiles });
     updateUnsupportedFileToggleButtons();
     renderFilteredFolderTree();
   }
@@ -2813,10 +2831,10 @@ export function initLegacyApp({ dom, state }) {
   }
 
   function setAutoSelectFileEnabled(enabled) {
-    state.autoSelectFileEnabled = !!enabled;
-    saveGlobalState({ autoSelectFileEnabled: state.autoSelectFileEnabled });
+    autoSelectFileEnabled = !!enabled;
+    saveGlobalState({ autoSelectFileEnabled });
     updateAutoSelectFileButtons();
-    syncFolderTreeSelectionToActiveTab({ scroll: state.autoSelectFileEnabled });
+    syncFolderTreeSelectionToActiveTab({ scroll: autoSelectFileEnabled });
   }
 
   function findFolderTreeFileButtonForTab(tab) {
@@ -2844,7 +2862,7 @@ export function initLegacyApp({ dom, state }) {
       button.removeAttribute("aria-current");
     });
 
-    if (!state.autoSelectFileEnabled) return;
+    if (!autoSelectFileEnabled) return;
 
     const activeTab = tabs.find(function(tab) { return tab.id === activeTabId; });
     const selectedButton = findFolderTreeFileButtonForTab(activeTab);
@@ -3053,6 +3071,14 @@ export function initLegacyApp({ dom, state }) {
     return `<table class="frontmatter-table"><tbody>${rows.join('')}</tbody></table>`;
   }
 
+  function escapeHtml(str) {
+    return str
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
+
 
   function rangesOverlap(existingRanges, start, end) {
     return existingRanges.some(function(range) {
@@ -3224,6 +3250,42 @@ export function initLegacyApp({ dom, state }) {
     const suffix = firstCutIndex >= 0 ? rawTarget.slice(firstCutIndex) : "";
     const hash = hashIndex >= 0 ? rawTarget.slice(hashIndex + 1).split("?")[0] : "";
     return { path, suffix, hash };
+  }
+
+  function safeDecodeLinkPath(path) {
+    try {
+      return decodeURIComponent(String(path || ""));
+    } catch (_) {
+      return String(path || "");
+    }
+  }
+
+  function normalizeMarkdownLinkPath(path) {
+    const normalized = safeDecodeLinkPath(path)
+      .replace(/\\/g, "/")
+      .replace(/^\.\//, "");
+    const segments = [];
+
+    normalized.split("/").forEach((segment) => {
+      if (!segment || segment === ".") return;
+      if (segment === "..") {
+        if (segments.length && segments[segments.length - 1] !== "..") {
+          segments.pop();
+        } else {
+          segments.push(segment);
+        }
+        return;
+      }
+      segments.push(segment);
+    });
+
+    return segments.join("/");
+  }
+
+  function getDirectoryPath(path) {
+    const normalized = String(path || "").replace(/\\/g, "/");
+    const index = normalized.lastIndexOf("/");
+    return index >= 0 ? normalized.slice(0, index) : "";
   }
 
   function getLinkPathExtension(path) {
@@ -3455,7 +3517,7 @@ export function initLegacyApp({ dom, state }) {
     const anchor = event.target.closest("a[href], a[data-markdown-link-target]");
     if (!anchor || !markdownPreview.contains(anchor)) return;
 
-    state.previewHoveredLinkUrl = getPreviewLinkStatusUrl(anchor);
+    previewHoveredLinkUrl = getPreviewLinkStatusUrl(anchor);
     updateStatusLine();
   }
 
@@ -3464,7 +3526,7 @@ export function initLegacyApp({ dom, state }) {
     if (!anchor || !markdownPreview.contains(anchor)) return;
     if (event.relatedTarget && anchor.contains(event.relatedTarget)) return;
 
-    state.previewHoveredLinkUrl = "";
+    previewHoveredLinkUrl = "";
     updateStatusLine();
   }
 
@@ -5522,7 +5584,7 @@ Markdown content is processed client-side in your browser and sanitized before p
     if (tab.type === "graph") return;
     tab.content = markdownEditor.value;
     tab.scrollPos = markdownEditor.scrollTop;
-    tab.viewMode = isUnsupportedFileTab(tab) ? 'editor' : (state.currentViewMode || 'split');
+    tab.viewMode = isUnsupportedFileTab(tab) ? 'editor' : (currentViewMode || 'split');
     saveTabsToStorage(tabs);
   }
 
@@ -5726,7 +5788,7 @@ Markdown content is processed client-side in your browser and sanitized before p
         : getGraphZoomScaleFromLayout(activeGraphTab?.graphLayout));
 
     if (statusTipElement) {
-      statusTipElement.textContent = state.previewHoveredLinkUrl || (activeGraphTab
+      statusTipElement.textContent = previewHoveredLinkUrl || (activeGraphTab
         ? "Tip: hold ctrl / shift to see out / back links"
         : "Tip: drag in text files, use split preview, or open a folder to build a graph.");
     }
@@ -5745,7 +5807,7 @@ Markdown content is processed client-side in your browser and sanitized before p
   }
 
   function restoreViewMode(mode) {
-    state.currentViewMode = null;
+    currentViewMode = null;
     setViewMode(getAllowedViewModeForActiveTab(mode || loadGlobalState().viewMode || 'split'), false);
   }
 
@@ -6514,9 +6576,9 @@ Markdown content is processed client-side in your browser and sanitized before p
 
   function updateCloseFolderButtons() {
     document.querySelectorAll(".close-folder-button").forEach((button) => {
-      button.disabled = !state.isFolderOpen;
-      button.setAttribute("aria-disabled", state.isFolderOpen ? "false" : "true");
-      button.title = state.isFolderOpen ? "Close the currently open folder" : "Open a folder before closing it";
+      button.disabled = !isFolderOpen;
+      button.setAttribute("aria-disabled", isFolderOpen ? "false" : "true");
+      button.title = isFolderOpen ? "Close the currently open folder" : "Open a folder before closing it";
     });
   }
 
@@ -6524,13 +6586,13 @@ Markdown content is processed client-side in your browser and sanitized before p
     hideLinkAutocomplete();
     folderMarkdownFiles = [];
     clearFolderTagCounts();
-    state.selectedFolderTreeTags = new Set();
-    state.currentFolderTreeNodes = [];
-    state.folderTreeFilterText = "";
+    selectedFolderTreeTags = new Set();
+    currentFolderTreeNodes = [];
+    folderTreeFilterText = "";
     activeFolderName = "Graph View";
     activeFolderHandle = null;
     activeFolderPath = null;
-    state.isFolderOpen = false;
+    isFolderOpen = false;
     if (folderTreeFilterInput) {
       folderTreeFilterInput.value = "";
       folderTreeFilterInput.hidden = true;
@@ -6546,10 +6608,10 @@ Markdown content is processed client-side in your browser and sanitized before p
   }
 
   function renderFolderTree(nodes, options = {}) {
-    state.isFolderOpen = true;
+    isFolderOpen = true;
     if (!options.preserveNodes) {
-      state.currentFolderTreeNodes = nodes || [];
-      state.folderTreeFilterText = "";
+      currentFolderTreeNodes = nodes || [];
+      folderTreeFilterText = "";
       if (folderTreeFilterInput) {
         folderTreeFilterInput.value = "";
       }
@@ -6560,8 +6622,8 @@ Markdown content is processed client-side in your browser and sanitized before p
     const displayNodes = getVisibleFolderTreeNodes(nodes || []);
     folderTreeRoot.innerHTML = "";
     if (!displayNodes.length) {
-      const hasSelectedTagFilter = state.selectedFolderTreeTags.size > 0;
-      folderTreeRoot.innerHTML = state.folderTreeFilterText
+      const hasSelectedTagFilter = selectedFolderTreeTags.size > 0;
+      folderTreeRoot.innerHTML = folderTreeFilterText
         ? '<p class="folder-tree-placeholder">No files or folders match this filter.</p>'
         : hasSelectedTagFilter
           ? '<p class="folder-tree-placeholder">No Markdown files match the selected tag filter.</p>'
@@ -6604,7 +6666,7 @@ Markdown content is processed client-side in your browser and sanitized before p
   }
 
   async function refreshOpenFolderTreeAfterFileDelete(filePath) {
-    if (!state.isFolderOpen || !filePath) return false;
+    if (!isFolderOpen || !filePath) return false;
 
     if (activeFolderPath && !isPathInsideFolder(filePath, activeFolderPath)) {
       return false;
@@ -6699,7 +6761,7 @@ Markdown content is processed client-side in your browser and sanitized before p
   function compareFolderTreeNodes(a, b) {
     if (a.kind !== b.kind) return a.kind === "directory" ? -1 : 1;
 
-    const mode = getValidFolderSortMode(state.currentFolderSortMode);
+    const mode = getValidFolderSortMode(currentFolderSortMode);
     if (mode === "name-desc") return String(b.name || "").localeCompare(String(a.name || ""));
     if (mode === "modified-desc" || mode === "modified-asc") {
       const diff = getNodeTimestamp(a, "modifiedAt") - getNodeTimestamp(b, "modifiedAt");
@@ -6723,16 +6785,16 @@ Markdown content is processed client-side in your browser and sanitized before p
 
   async function updateFolderMarkdownFileOrderFromTree() {
     if (typeof NL_VERSION !== "undefined" && activeFolderPath) {
-      folderMarkdownFiles = await collectMarkdownFilesFromTreeNeutralino(state.currentFolderTreeNodes);
+      folderMarkdownFiles = await collectMarkdownFilesFromTreeNeutralino(currentFolderTreeNodes);
       return;
     }
-    folderMarkdownFiles = await collectMarkdownFilesFromTree(state.currentFolderTreeNodes);
+    folderMarkdownFiles = await collectMarkdownFilesFromTree(currentFolderTreeNodes);
   }
 
   async function applyFolderSortMode(mode) {
-    state.currentFolderSortMode = getValidFolderSortMode(mode);
-    saveGlobalState({ folderSortMode: state.currentFolderSortMode });
-    sortFolderTreeNodes(state.currentFolderTreeNodes);
+    currentFolderSortMode = getValidFolderSortMode(mode);
+    saveGlobalState({ folderSortMode: currentFolderSortMode });
+    sortFolderTreeNodes(currentFolderTreeNodes);
     await updateFolderMarkdownFileOrderFromTree();
     updateFolderTreeSortControls();
     renderFilteredFolderTree();
@@ -8952,7 +9014,7 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
   }
 
   function showSidebarClosedFolderContextMenu(event) {
-    if (state.isFolderOpen) return;
+    if (isFolderOpen) return;
     event.preventDefault();
     event.stopPropagation();
     hideSidebarFileContextMenu();
@@ -8970,7 +9032,7 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
 
   function handleFolderTreeRootContextMenu(event) {
     if (!folderTreeRoot) return;
-    if (!state.isFolderOpen) {
+    if (!isFolderOpen) {
       hideSidebarClosedFolderContextMenu();
       return;
     }
@@ -8982,7 +9044,7 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
   async function handleFolderTreeRootClick(event) {
     const targetElement = event.target instanceof Element ? event.target : event.target?.parentElement;
     const openFolderButton = targetElement?.closest(".folder-tree-open-folder-button");
-    if (!openFolderButton || state.isFolderOpen) return;
+    if (!openFolderButton || isFolderOpen) return;
     event.preventDefault();
     await openFolderTree(event);
   }
@@ -9309,9 +9371,9 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
   }
 
   if (folderInput) {
-    if (!state.shownFolderInputFallbackNotice) {
+    if (!shownFolderInputFallbackNotice) {
       console.info(getFolderPickerFallbackMessage());
-      state.shownFolderInputFallbackNotice = true;
+      shownFolderInputFallbackNotice = true;
     }
     folderInput.click();
   } else {
@@ -9469,7 +9531,7 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
 
     updateSidebarToggleButtons();
 
-    if (state.currentViewMode === 'split') {
+    if (currentViewMode === 'split') {
       requestAnimationFrame(applyPaneWidths);
     }
   }
@@ -10095,8 +10157,8 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
   }
 
   function debouncedRender() {
-    clearTimeout(state.markdownRenderTimeout);
-    state.markdownRenderTimeout = setTimeout(renderMarkdown, state.RENDER_DELAY);
+    clearTimeout(markdownRenderTimeout);
+    markdownRenderTimeout = setTimeout(renderMarkdown, RENDER_DELAY);
   }
 
   function updateDocumentStats() {
@@ -10113,12 +10175,12 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
   }
 
   function syncEditorToPreview() {
-    if (!state.syncScrollingEnabled || state.isPreviewScrolling) return;
+    if (!syncScrollingEnabled || isPreviewScrolling) return;
 
-    state.isEditorScrolling = true;
-    clearTimeout(state.scrollSyncTimeout);
+    isEditorScrolling = true;
+    clearTimeout(scrollSyncTimeout);
 
-    state.scrollSyncTimeout = setTimeout(() => {
+    scrollSyncTimeout = setTimeout(() => {
       const editorScrollRatio =
         editorPane.scrollTop /
         (editorPane.scrollHeight - editorPane.clientHeight);
@@ -10131,18 +10193,18 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
       }
 
       setTimeout(() => {
-        state.isEditorScrolling = false;
+        isEditorScrolling = false;
       }, 50);
-    }, state.SCROLL_SYNC_DELAY);
+    }, SCROLL_SYNC_DELAY);
   }
 
   function syncPreviewToEditor() {
-    if (!state.syncScrollingEnabled || state.isEditorScrolling) return;
+    if (!syncScrollingEnabled || isEditorScrolling) return;
 
-    state.isPreviewScrolling = true;
-    clearTimeout(state.scrollSyncTimeout);
+    isPreviewScrolling = true;
+    clearTimeout(scrollSyncTimeout);
 
-    state.scrollSyncTimeout = setTimeout(() => {
+    scrollSyncTimeout = setTimeout(() => {
       const previewScrollRatio =
         previewPane.scrollTop /
         (previewPane.scrollHeight - previewPane.clientHeight);
@@ -10155,14 +10217,14 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
       }
 
       setTimeout(() => {
-        state.isPreviewScrolling = false;
+        isPreviewScrolling = false;
       }, 50);
-    }, state.SCROLL_SYNC_DELAY);
+    }, SCROLL_SYNC_DELAY);
   }
 
   function updateSyncToggleButtons() {
     syncToggleButtons.forEach((button) => {
-      if (state.syncScrollingEnabled) {
+      if (syncScrollingEnabled) {
         button.innerHTML = '<i class="bi bi-link-45deg"></i> <span>Sync Off</span>';
         button.classList.add("sync-disabled");
         button.classList.remove("sync-enabled");
@@ -10179,9 +10241,9 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
   }
 
   function toggleSyncScrolling() {
-    state.syncScrollingEnabled = !state.syncScrollingEnabled;
+    syncScrollingEnabled = !syncScrollingEnabled;
     updateSyncToggleButtons();
-    saveGlobalState({ syncScrollingEnabled: state.syncScrollingEnabled });
+    saveGlobalState({ syncScrollingEnabled });
   }
 
   // View Mode Functions - Story 1.1 & 1.2
@@ -10219,14 +10281,14 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
 
   function setViewMode(mode, shouldPersist = true) {
     mode = getAllowedViewModeForActiveTab(mode);
-    if (mode === state.currentViewMode) {
+    if (mode === currentViewMode) {
       updateViewModeButtons(mode);
       updateSyncToggleVisibility(mode);
       return;
     }
 
-    const previousMode = state.currentViewMode;
-    state.currentViewMode = mode;
+    const previousMode = currentViewMode;
+    currentViewMode = mode;
     if (shouldPersist) {
       saveGlobalState({ viewMode: mode });
     }
@@ -10357,7 +10419,7 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
     if (shouldPersist) {
       saveGlobalState({ sidebarWidth });
     }
-    if (state.currentViewMode === 'split') {
+    if (currentViewMode === 'split') {
       requestAnimationFrame(applyPaneWidths);
     }
   }
@@ -10436,7 +10498,7 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
   }
 
   function startResize(e) {
-    if (state.currentViewMode !== 'split') return;
+    if (currentViewMode !== 'split') return;
     e.preventDefault();
     isResizing = true;
     resizePointerOffset = getResizePointerOffset(e.clientX);
@@ -10445,7 +10507,7 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
   }
 
   function startResizeTouch(e) {
-    if (state.currentViewMode !== 'split' || !e.touches[0]) return;
+    if (currentViewMode !== 'split' || !e.touches[0]) return;
     e.preventDefault();
     isResizing = true;
     resizePointerOffset = getResizePointerOffset(e.touches[0].clientX);
@@ -10508,7 +10570,7 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
   }
 
   function applyPaneWidths() {
-    if (state.currentViewMode !== 'split') return;
+    if (currentViewMode !== 'split') return;
 
     const resizeMetrics = getSplitResizeMetrics();
     if (resizeMetrics.width <= resizeMetrics.dividerWidth) return;
@@ -10682,7 +10744,7 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
   });
   markdownEditor.addEventListener("blur", function() {
     window.setTimeout(function() {
-      if (!state.linkAutocompleteLayer || !state.linkAutocompleteLayer.matches(":hover")) hideLinkAutocomplete();
+      if (!linkAutocompleteLayer || !linkAutocompleteLayer.matches(":hover")) hideLinkAutocomplete();
       updateEditorSelectionHighlights();
       updateStatusLine();
     }, 0);
@@ -14540,14 +14602,39 @@ ${body}`;
   });
 
   async function copyToClipboard(text) {
-    await copyTextToClipboard(text, {
-      onCopied: showCopiedMessage,
-      errorLabel: "HTML"
-    });
+    try {
+      if (navigator.clipboard && window.isSecureContext) {
+        await navigator.clipboard.writeText(text);
+        showCopiedMessage();
+      } else {
+        const textArea = document.createElement("textarea");
+        textArea.value = text;
+        textArea.style.position = "fixed";
+        textArea.style.opacity = "0";
+        document.body.appendChild(textArea);
+        textArea.focus();
+        textArea.select();
+        const successful = document.execCommand("copy");
+        document.body.removeChild(textArea);
+        if (successful) {
+          showCopiedMessage();
+        } else {
+          throw new Error("Copy command was unsuccessful");
+        }
+      }
+    } catch (err) {
+      console.error("Copy failed:", err);
+      alert("Failed to copy HTML: " + err.message);
+    }
   }
 
   function showCopiedMessage() {
-    showButtonCopiedMessage(copyMarkdownButton);
+    const originalText = copyMarkdownButton.innerHTML;
+    copyMarkdownButton.innerHTML = '<i class="bi bi-check-lg"></i> Copied!';
+
+    setTimeout(() => {
+      copyMarkdownButton.innerHTML = originalText;
+    }, 2000);
   }
 
   // ============================================
@@ -14743,7 +14830,7 @@ ${body}`;
     // Story 1.2: Only allow sync toggle shortcut when in split view
     if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === "S") {
       e.preventDefault();
-      if (state.currentViewMode === 'split') {
+      if (currentViewMode === 'split') {
         toggleSyncScrolling();
       }
     }
@@ -15092,5 +15179,4 @@ ${body}`;
       container.appendChild(toolbar);
     });
   }
-
-}
+});
