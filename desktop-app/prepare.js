@@ -67,6 +67,7 @@ let html = fs.readFileSync(path.join(WEB_APP_DIR, "index.html"), "utf-8");
 /** Fix relative asset paths → absolute (Neutralinojs documentRoot is /resources/) */
 html = html.replace(/href="assets\//g, 'href="/assets/');
 html = html.replace(/href="styles\.css"/g, 'href="/styles.css"');
+html = html.replace(/src="js\/core\/context\.js"/g, 'src="/js/core/context.js"');
 /** Replace web-app script.js tag with neutralino.js + main.js + script.js under /js/ */
 html = html.replace(
   /<script src="script\.js"><\/script>/,

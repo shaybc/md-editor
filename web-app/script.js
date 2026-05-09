@@ -1,25 +1,9 @@
 document.addEventListener("DOMContentLoaded", function () {
-  const app = createAppContext();
-  const { RENDER_DELAY, SCROLL_SYNC_DELAY } = app.constants;
-  let {
-    markdownRenderTimeout,
-    syncScrollingEnabled,
-    isEditorScrolling,
-    isPreviewScrolling,
-    scrollSyncTimeout,
-    currentViewMode,
-    autoSelectFileEnabled,
-    currentFolderTreeNodes,
-    folderTreeFilterText,
-    selectedFolderTreeTags,
-    currentFolderSortMode,
-    showUnsupportedFolderFiles,
-    isFolderOpen,
-    shownFolderInputFallbackNotice,
-    previewHoveredLinkUrl,
-    linkAutocompleteLayer,
-    linkAutocompleteState
-  } = app.state;
+  const app = window.createAppContext();
+
+  // Temporary migration helpers: keep the legacy local names available while
+  // boot/context ownership moves into app.dom and app.state. Prefer app.state
+  // for mutable state in newly migrated code so primitive values do not go stale.
   const {
     markdownEditor,
     editorLineNumbers,
@@ -68,6 +52,26 @@ document.addEventListener("DOMContentLoaded", function () {
     editorPositionValueElement
   } = app.dom;
   let { folderTreeRoot } = app.dom;
+  let {
+    markdownRenderTimeout,
+    syncScrollingEnabled,
+    isEditorScrolling,
+    isPreviewScrolling,
+    scrollSyncTimeout,
+    currentViewMode,
+    autoSelectFileEnabled,
+    currentFolderTreeNodes,
+    folderTreeFilterText,
+    selectedFolderTreeTags,
+    currentFolderSortMode,
+    showUnsupportedFolderFiles,
+    isFolderOpen,
+    shownFolderInputFallbackNotice,
+    previewHoveredLinkUrl,
+    linkAutocompleteLayer,
+    linkAutocompleteState
+  } = app.state;
+  const { RENDER_DELAY, SCROLL_SYNC_DELAY } = app.constants;
 
   function getLinkAutocompleteLayer() {
     if (!linkAutocompleteLayer) {
@@ -1693,7 +1697,8 @@ document.addEventListener("DOMContentLoaded", function () {
   }
 
   ensureFolderTreePane();
-  folderTreeRoot = document.getElementById("folder-tree-root");
+  app.dom.folderTreeRoot = document.getElementById("folder-tree-root");
+  folderTreeRoot = app.dom.folderTreeRoot;
   const folderTreePane = document.getElementById("folder-tree-pane");
   ensureRecentMenuContainers();
   hydrateRecentItemsFromProfile();

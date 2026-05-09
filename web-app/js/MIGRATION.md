@@ -13,7 +13,7 @@ codebase.
 | Wiki logical module | Source location in `web-app/script.js` | Target file | Moved? | Verified? | Removed from old script? |
 |---------------------|----------------------------------------|-------------|--------|-----------|--------------------------|
 | Autocomplete | Lines 78-563, 841 | `web-app/js/autocomplete.js` | No | Not yet | No |
-| Boot and DOM references | Lines 619, 882-947 | `web-app/js/boot/dom-references.js` | No | Not yet | No |
+| Boot and DOM references | Lines 619, 882-947 | `web-app/js/boot/dom-references.js` | Partial | Boot/context aliases added in `web-app/script.js`; full module extraction still pending | No |
 | Desktop compatibility bridges | Lines 1089-1243, 3322, 12771-12782 | `web-app/js/platform/desktop-bridges.js` | No | Not yet | No |
 | Drag and drop import | Lines 7055-7198, 9399, 14739-14787 | `web-app/js/import/drag-drop.js` | No | Not yet | No |
 | Editor context menu | Lines 577-826 | `web-app/js/editor/context-menu.js` | No | Not yet | No |
