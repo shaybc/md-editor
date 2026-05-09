@@ -835,6 +835,178 @@ body {
   display: none;
 }
 
+.graph-stale-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 2100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  background: rgba(0, 0, 0, 0.58);
+}
+
+.graph-stale-modal.hidden {
+  display: none;
+}
+
+.graph-stale-dialog {
+  width: min(640px, 95vw);
+  max-height: min(760px, 90vh);
+  overflow-y: auto;
+  background: var(--preview-bg);
+  border: 1px solid var(--border-color);
+  border-radius: 14px;
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.35);
+  color: var(--text-color);
+  padding: 1.25rem;
+}
+
+.graph-stale-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1rem;
+}
+
+.graph-stale-eyebrow {
+  margin: 0 0 0.25rem;
+  color: var(--secondary-text);
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.graph-stale-header h5 {
+  margin: 0;
+  color: var(--text-color);
+  font-size: 1.25rem;
+}
+
+.graph-stale-icon-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text-color);
+  cursor: pointer;
+}
+
+.graph-stale-icon-button:hover,
+.graph-stale-icon-button:focus-visible {
+  background: var(--button-hover);
+  border-color: var(--border-color);
+  outline: none;
+}
+
+.graph-stale-body {
+  margin: 0.9rem 0 1rem;
+  color: var(--secondary-text);
+  line-height: 1.5;
+}
+
+.graph-stale-summary {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+  margin-bottom: 0.9rem;
+}
+
+.graph-stale-summary-item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  padding: 0.85rem;
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  background: var(--header-bg);
+}
+
+.graph-stale-summary-count {
+  color: var(--accent-color);
+  font-size: 1.45rem;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.graph-stale-summary-item span:last-child {
+  color: var(--secondary-text);
+  font-size: 0.86rem;
+}
+
+.graph-stale-details-link {
+  display: inline-flex;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--accent-color);
+  font-weight: 600;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.graph-stale-details-link:hover,
+.graph-stale-details-link:focus-visible {
+  color: var(--text-color);
+  outline: none;
+}
+
+.graph-stale-details {
+  max-height: 260px;
+  margin: 0.75rem 0 0;
+  padding: 0.85rem;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: var(--text-color);
+  background: var(--editor-bg);
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  font-size: 0.84rem;
+}
+
+.graph-stale-details.hidden {
+  display: none;
+}
+
+.graph-stale-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.65rem;
+  margin-top: 1.15rem;
+}
+
+.graph-stale-primary-action {
+  background: var(--accent-color);
+  border-color: var(--accent-color);
+  color: var(--accent-text, #ffffff);
+}
+
+.graph-stale-primary-action:hover {
+  filter: brightness(0.96);
+}
+
+@media (max-width: 560px) {
+  .graph-stale-summary {
+    grid-template-columns: 1fr;
+  }
+
+  .graph-stale-actions {
+    flex-direction: column;
+  }
+
+  .graph-stale-actions .tool-button {
+    justify-content: center;
+    width: 100%;
+  }
+}
+
 .graph-view-content {
   background: var(--preview-bg);
   border: 1px solid var(--border-color);

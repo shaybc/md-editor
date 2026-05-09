@@ -510,6 +510,45 @@
         </footer>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.2/js/bootstrap.bundle.min.js"></script>
+    <div id="graph-stale-modal" class="graph-stale-modal hidden" role="dialog" aria-modal="true" aria-labelledby="graph-stale-title" aria-describedby="graph-stale-description" aria-hidden="true">
+      <div class="graph-stale-dialog">
+        <div class="graph-stale-header">
+          <div>
+            <p class="graph-stale-eyebrow">Saved graph</p>
+            <h5 id="graph-stale-title">This graph is not up to date</h5>
+          </div>
+          <button id="graph-stale-close" class="graph-stale-icon-button" type="button" aria-label="Keep saved graph and close this notice">
+            <i class="bi bi-x-lg" aria-hidden="true"></i>
+          </button>
+        </div>
+        <p id="graph-stale-description" class="graph-stale-body">The saved graph was created from an older version of this folder. Some files, tags, or connections have changed.</p>
+        <div class="graph-stale-summary" aria-label="Graph difference summary">
+          <div class="graph-stale-summary-item">
+            <span id="graph-stale-new-files" class="graph-stale-summary-count">0</span>
+            <span>new files</span>
+          </div>
+          <div class="graph-stale-summary-item">
+            <span id="graph-stale-saved-only-files" class="graph-stale-summary-count">0</span>
+            <span>saved-only files</span>
+          </div>
+          <div class="graph-stale-summary-item">
+            <span id="graph-stale-changed-connections" class="graph-stale-summary-count">0</span>
+            <span>changed/new connections</span>
+          </div>
+          <div class="graph-stale-summary-item">
+            <span id="graph-stale-changed-tags" class="graph-stale-summary-count">0</span>
+            <span>changed/new tags</span>
+          </div>
+        </div>
+        <button id="graph-stale-view-details" class="graph-stale-details-link" type="button" aria-expanded="false" aria-controls="graph-stale-details">View details</button>
+        <pre id="graph-stale-details" class="graph-stale-details hidden" tabindex="0" aria-label="Read-only graph differences"></pre>
+        <div class="graph-stale-actions">
+          <button id="graph-stale-update" class="tool-button graph-stale-primary-action" type="button">Update graph</button>
+          <button id="graph-stale-keep" class="tool-button" type="button">Keep saved graph</button>
+          <button id="graph-stale-compare" class="tool-button" type="button">Compare changes</button>
+        </div>
+      </div>
+    </div>
     <div id="graph-view-modal" class="graph-view-modal hidden" aria-hidden="true">
       <div class="graph-view-content">
         <div class="graph-view-header">

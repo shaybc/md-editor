@@ -1772,6 +1772,17 @@ document.addEventListener("DOMContentLoaded", function () {
   const graphLinkForce = document.getElementById("graph-link-force");
   const graphLinkDistance = document.getElementById("graph-link-distance");
   const graphResetDefaultsButton = document.getElementById("graph-reset-defaults");
+  const graphStaleModal = document.getElementById("graph-stale-modal");
+  const graphStaleCloseButton = document.getElementById("graph-stale-close");
+  const graphStaleUpdateButton = document.getElementById("graph-stale-update");
+  const graphStaleKeepButton = document.getElementById("graph-stale-keep");
+  const graphStaleCompareButton = document.getElementById("graph-stale-compare");
+  const graphStaleViewDetailsButton = document.getElementById("graph-stale-view-details");
+  const graphStaleDetails = document.getElementById("graph-stale-details");
+  const graphStaleNewFilesCount = document.getElementById("graph-stale-new-files");
+  const graphStaleSavedOnlyFilesCount = document.getElementById("graph-stale-saved-only-files");
+  const graphStaleChangedConnectionsCount = document.getElementById("graph-stale-changed-connections");
+  const graphStaleChangedTagsCount = document.getElementById("graph-stale-changed-tags");
   const shareButton         = document.getElementById("share-button");
   const mobileShareButton   = document.getElementById("mobile-share-button");
   const githubImportModal = document.getElementById("github-import-modal");
@@ -3619,6 +3630,7 @@ This is a fully client-side application. Your content never leaves your browser 
   let untitledCounter = 0;
   const graphRenderCache = new Map();
   let graphRenderRequestId = 0;
+  let activeGraphStaleComparison = null;
   const GRAPH_GROUP_QUERY_UPDATE_DELAY = 180;
   const GRAPH_GROUP_DEFAULT_COLORS = Object.freeze([
     "#7c3aed",
@@ -3913,6 +3925,134 @@ This is a fully client-side application. Your content never leaves your browser 
     };
 
     return result;
+  }
+
+  function hasGraphComparisonChanges(comparison) {
+    const counts = comparison?.counts || {};
+    return [
+      counts.newFiles,
+      counts.savedOnlyFiles,
+      counts.newLinks,
+      counts.savedOnlyLinks,
+      counts.newTagRelations,
+      counts.savedOnlyTagRelations
+    ].some((count) => Number(count) > 0);
+  }
+
+  function getGraphComparisonSummaryCounts(comparison) {
+    const counts = comparison?.counts || {};
+    return {
+      newFiles: counts.newFiles || 0,
+      savedOnlyFiles: counts.savedOnlyFiles || 0,
+      changedConnections: (counts.newLinks || 0) + (counts.savedOnlyLinks || 0),
+      changedTags: (counts.newTagRelations || 0) + (counts.savedOnlyTagRelations || 0)
+    };
+  }
+
+  function getGraphFileDifferenceLabel(file) {
+    if (!file) return "Unknown file";
+    return file.path || file.fullPath || file.name || file.id || "Unknown file";
+  }
+
+  function getGraphLinkDifferenceLabel(link) {
+    if (!link) return "Unknown connection";
+    const source = getGraphLinkEndpointKey(link.source) || String(link.source || "unknown");
+    const target = getGraphLinkEndpointKey(link.target) || String(link.target || "unknown");
+    return `${source} → ${target}`;
+  }
+
+  function getGraphTagRelationDifferenceLabel(relationKey) {
+    const rawKey = String(relationKey || "");
+    const relationMatch = rawKey.match(/^(.*)->(tag:[^:]+):tag$/);
+    if (!relationMatch) return rawKey || "Unknown tag relation";
+    return `${relationMatch[1]} → #${relationMatch[2].replace(/^tag:/, "")}`;
+  }
+
+  function appendGraphDifferenceSection(lines, title, items, formatter) {
+    lines.push(title);
+    if (!items?.length) {
+      lines.push("  None");
+      lines.push("");
+      return;
+    }
+    items.forEach((item) => lines.push(`  - ${formatter(item)}`));
+    lines.push("");
+  }
+
+  function formatGraphComparisonDetails(comparison) {
+    const lines = ["Graph differences", "=================", ""];
+    appendGraphDifferenceSection(lines, "New files", comparison?.newFiles || [], getGraphFileDifferenceLabel);
+    appendGraphDifferenceSection(lines, "Saved-only files", comparison?.savedOnlyFiles || [], getGraphFileDifferenceLabel);
+    appendGraphDifferenceSection(lines, "New connections", comparison?.newLinks || [], getGraphLinkDifferenceLabel);
+    appendGraphDifferenceSection(lines, "Saved-only connections", comparison?.savedOnlyLinks || [], getGraphLinkDifferenceLabel);
+    appendGraphDifferenceSection(lines, "New tag relations", comparison?.newTagRelations || [], getGraphTagRelationDifferenceLabel);
+    appendGraphDifferenceSection(lines, "Saved-only tag relations", comparison?.savedOnlyTagRelations || [], getGraphTagRelationDifferenceLabel);
+    return lines.join("\n").trim();
+  }
+
+  function setGraphStaleDetailsVisible(visible) {
+    if (!graphStaleDetails || !graphStaleViewDetailsButton) return;
+    graphStaleDetails.classList.toggle("hidden", !visible);
+    graphStaleViewDetailsButton.setAttribute("aria-expanded", visible ? "true" : "false");
+    graphStaleViewDetailsButton.textContent = visible ? "Hide details" : "View details";
+    if (visible) graphStaleDetails.focus({ preventScroll: false });
+  }
+
+  function hideGraphStaleModal() {
+    activeGraphStaleComparison = null;
+    if (!graphStaleModal) return;
+    graphStaleModal.classList.add("hidden");
+    graphStaleModal.setAttribute("aria-hidden", "true");
+    setGraphStaleDetailsVisible(false);
+  }
+
+  function showGraphStaleModal(tab, savedSnapshot, currentSnapshot, comparison) {
+    if (!graphStaleModal) return;
+    activeGraphStaleComparison = { tabId: tab?.id || null, savedSnapshot, currentSnapshot, comparison };
+    const summary = getGraphComparisonSummaryCounts(comparison);
+    if (graphStaleNewFilesCount) graphStaleNewFilesCount.textContent = String(summary.newFiles);
+    if (graphStaleSavedOnlyFilesCount) graphStaleSavedOnlyFilesCount.textContent = String(summary.savedOnlyFiles);
+    if (graphStaleChangedConnectionsCount) graphStaleChangedConnectionsCount.textContent = String(summary.changedConnections);
+    if (graphStaleChangedTagsCount) graphStaleChangedTagsCount.textContent = String(summary.changedTags);
+    if (graphStaleDetails) graphStaleDetails.textContent = formatGraphComparisonDetails(comparison);
+    graphStaleModal.classList.remove("hidden");
+    graphStaleModal.setAttribute("aria-hidden", "false");
+    setGraphStaleDetailsVisible(false);
+    graphStaleUpdateButton?.focus({ preventScroll: true });
+  }
+
+  async function promptForStaleSavedGraphIfNeeded(tab) {
+    if (!tab?.graphSnapshot || !folderMarkdownFiles.length) return;
+    const graphDocumentType = tab.graphDocument?.documentType || inferLegacyGraphDocumentType(tab.graphSnapshot);
+    if (graphDocumentType !== GRAPH_DOCUMENT_TYPE_VIEW) return;
+
+    try {
+      const currentSnapshot = await createGraphSnapshot(folderMarkdownFiles.slice(), activeFolderName || tab.folderName || tab.title);
+      const comparison = compareGraphViewToCurrentFolder(tab.graphSnapshot, currentSnapshot);
+      if (hasGraphComparisonChanges(comparison)) {
+        showGraphStaleModal(tab, tab.graphSnapshot, currentSnapshot, comparison);
+      }
+    } catch (error) {
+      console.warn("Failed to compare saved graph with the current folder:", error);
+    }
+  }
+
+  async function updateGraphFromStaleModal() {
+    const staleComparison = activeGraphStaleComparison;
+    if (!staleComparison?.currentSnapshot) return;
+    const tab = tabs.find((candidate) => candidate.id === staleComparison.tabId) || getActiveGraphTab();
+    if (!tab || tab.type !== "graph") return;
+
+    tab.graphSnapshot = staleComparison.currentSnapshot;
+    tab.folderName = tab.folderName || staleComparison.currentSnapshot.folderName || "Graph View";
+    tab.graphDocument = serializeGraphTab(tab, { documentType: GRAPH_DOCUMENT_TYPE_VIEW });
+    markGraphTabAsChanged(tab);
+    saveTabsToStorage(tabs);
+    hideGraphStaleModal();
+    if (activeTabId === tab.id) {
+      graphRenderCache.delete(tab.id);
+      renderGraphView();
+    }
   }
 
   function shouldPreserveGraphSnapshotFullPath(snapshotFile) {
@@ -10401,6 +10541,7 @@ ${body}`;
     tabs.push(graphTab);
     saveTabsToStorage(tabs);
     switchTab(graphTab.id);
+    promptForStaleSavedGraphIfNeeded(graphTab);
     return graphTab;
   }
 
@@ -12565,6 +12706,16 @@ ${body}`;
   bindGraphRangeControl(graphLinkForce, "linkForce");
   bindGraphRangeControl(graphLinkDistance, "linkDistance");
   if (graphResetDefaultsButton) graphResetDefaultsButton.addEventListener("click", resetActiveGraphViewToDefaults);
+  graphStaleCloseButton?.addEventListener("click", hideGraphStaleModal);
+  graphStaleKeepButton?.addEventListener("click", hideGraphStaleModal);
+  graphStaleUpdateButton?.addEventListener("click", updateGraphFromStaleModal);
+  graphStaleViewDetailsButton?.addEventListener("click", () => {
+    setGraphStaleDetailsVisible(graphStaleDetails?.classList.contains("hidden"));
+  });
+  graphStaleCompareButton?.addEventListener("click", () => setGraphStaleDetailsVisible(true));
+  graphStaleModal?.addEventListener("click", (event) => {
+    if (event.target === graphStaleModal) hideGraphStaleModal();
+  });
 
   function initializeGraphFilterTooltips() {
     if (!graphViewToolbar) return;
@@ -13681,9 +13832,10 @@ ${body}`;
       e.preventDefault();
       closeTab(activeTabId);
     }
-    // Close Mermaid zoom modal with Escape
+    // Close modal overlays with Escape
     if (e.key === "Escape") {
       closeMermaidModal();
+      hideGraphStaleModal();
     }
   });
 
