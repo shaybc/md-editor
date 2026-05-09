@@ -5331,56 +5331,25 @@ Markdown content is processed client-side in your browser and sanitized before p
         titleSpan.append(document.createTextNode(displayName));
       }
 
-      // Three-dot menu button
-      const menuBtn = document.createElement('button');
-      menuBtn.className = 'tab-menu-btn';
-      menuBtn.setAttribute('aria-label', 'File options');
-      menuBtn.title = 'File options';
-      menuBtn.innerHTML = '&#8943;';
-
-      // Dropdown
-      const dropdown = document.createElement('div');
-      dropdown.className = 'tab-menu-dropdown';
-      dropdown.innerHTML =
-        (tab.type === "graph" ? '' : '<button class="tab-menu-item" data-action="rename"><i class="bi bi-pencil"></i> Rename</button>' +
-        '<button class="tab-menu-item" data-action="duplicate"><i class="bi bi-files"></i> Duplicate</button>') +
-        '<button class="tab-menu-item tab-menu-item-danger" data-action="close"><i class="bi bi-x-lg"></i> Close</button>';
-
-      menuBtn.appendChild(dropdown);
-
-      menuBtn.addEventListener('click', function(e) {
+      const closeBtn = document.createElement('button');
+      closeBtn.className = 'tab-close-btn';
+      closeBtn.setAttribute('aria-label', 'Close tab');
+      closeBtn.title = 'Close tab';
+      closeBtn.innerHTML = '<i class="bi bi-x-lg" aria-hidden="true"></i>';
+      closeBtn.addEventListener('click', function(e) {
         e.stopPropagation();
-        // Close all other open dropdowns first
-        document.querySelectorAll('.tab-menu-btn.open').forEach(function(btn) {
-          if (btn !== menuBtn) btn.classList.remove('open');
-        });
-        menuBtn.classList.toggle('open');
-        // Position the dropdown relative to the viewport so it escapes the
-        // overflow scroll container on .tab-list
-        if (menuBtn.classList.contains('open')) {
-          var rect = menuBtn.getBoundingClientRect();
-          dropdown.style.top = (rect.bottom + 4) + 'px';
-          dropdown.style.right = (window.innerWidth - rect.right) + 'px';
-          dropdown.style.left = 'auto';
-        }
-      });
-
-      dropdown.querySelectorAll('.tab-menu-item').forEach(function(actionBtn) {
-        actionBtn.addEventListener('click', function(e) {
-          e.stopPropagation();
-          menuBtn.classList.remove('open');
-          const action = actionBtn.getAttribute('data-action');
-          if (action === 'rename') renameTab(tab.id);
-          else if (action === 'duplicate') duplicateTab(tab.id);
-          else if (action === 'close') closeTab(tab.id, { promptForUnsaved: true });
-        });
+        closeTab(tab.id, { promptForUnsaved: true });
       });
 
       item.appendChild(titleSpan);
-      item.appendChild(menuBtn);
+      item.appendChild(closeBtn);
 
       item.addEventListener('click', function() {
         switchTab(tab.id);
+      });
+
+      item.addEventListener('contextmenu', function(e) {
+        showTabContextMenu(e, tab);
       });
 
       item.addEventListener('dblclick', function() {
@@ -5472,73 +5441,121 @@ Markdown content is processed client-side in your browser and sanitized before p
         titleSpan.textContent = displayName;
       }
 
-      // Three-dot menu button (same as desktop)
-      const menuBtn = document.createElement('button');
-      menuBtn.className = 'tab-menu-btn';
-      menuBtn.setAttribute('aria-label', 'File options');
-      menuBtn.title = 'File options';
-      menuBtn.innerHTML = '&#8943;';
-
-      // Dropdown (same as desktop)
-      const dropdown = document.createElement('div');
-      dropdown.className = 'tab-menu-dropdown';
-      dropdown.innerHTML =
-        (tab.type === "graph" ? '' : '<button class="tab-menu-item" data-action="rename"><i class="bi bi-pencil"></i> Rename</button>' +
-        '<button class="tab-menu-item" data-action="duplicate"><i class="bi bi-files"></i> Duplicate</button>') +
-        '<button class="tab-menu-item tab-menu-item-danger" data-action="close"><i class="bi bi-x-lg"></i> Close</button>';
-
-      menuBtn.appendChild(dropdown);
-
-      menuBtn.addEventListener('click', function(e) {
+      const closeBtn = document.createElement('button');
+      closeBtn.className = 'tab-close-btn';
+      closeBtn.setAttribute('aria-label', 'Close tab');
+      closeBtn.title = 'Close tab';
+      closeBtn.innerHTML = '<i class="bi bi-x-lg" aria-hidden="true"></i>';
+      closeBtn.addEventListener('click', function(e) {
         e.stopPropagation();
-        document.querySelectorAll('.tab-menu-btn.open').forEach(function(btn) {
-          if (btn !== menuBtn) btn.classList.remove('open');
-        });
-        menuBtn.classList.toggle('open');
-        if (menuBtn.classList.contains('open')) {
-          const rect = menuBtn.getBoundingClientRect();
-          dropdown.style.top = (rect.bottom + 4) + 'px';
-          dropdown.style.right = (window.innerWidth - rect.right) + 'px';
-          dropdown.style.left = 'auto';
-        }
-      });
-
-      dropdown.querySelectorAll('.tab-menu-item').forEach(function(actionBtn) {
-        actionBtn.addEventListener('click', function(e) {
-          e.stopPropagation();
-          menuBtn.classList.remove('open');
-          const action = actionBtn.getAttribute('data-action');
-          if (action === 'rename') {
-            closeMobileMenu();
-            renameTab(tab.id);
-          } else if (action === 'duplicate') {
-            duplicateTab(tab.id);
-            closeMobileMenu();
-          } else if (action === 'close') {
-            closeTab(tab.id, { promptForUnsaved: true });
-            closeMobileMenu();
-          }
-        });
+        closeTab(tab.id, { promptForUnsaved: true });
+        closeMobileMenu();
       });
 
       item.appendChild(titleSpan);
-      item.appendChild(menuBtn);
+      item.appendChild(closeBtn);
 
       item.addEventListener('click', function() {
         switchTab(tab.id);
         closeMobileMenu();
       });
 
+      item.addEventListener('contextmenu', function(e) {
+        showTabContextMenu(e, tab, { closeMobileMenuOnAction: true });
+      });
+
       mobileTabList.appendChild(item);
     });
   }
 
-  // Close any open tab dropdown when clicking elsewhere in the document
-  document.addEventListener('click', function() {
-    document.querySelectorAll('.tab-menu-btn.open').forEach(function(btn) {
-      btn.classList.remove('open');
+  let tabContextMenu = null;
+  let tabContextTargetId = null;
+  let tabContextCloseMobileMenuOnAction = false;
+
+  function ensureTabContextMenu() {
+    if (tabContextMenu) return tabContextMenu;
+
+    tabContextMenu = document.createElement('div');
+    tabContextMenu.className = 'graph-context-menu tab-context-menu hidden';
+    tabContextMenu.setAttribute('role', 'menu');
+    tabContextMenu.innerHTML =
+      '<button class="graph-context-menu-item tab-context-menu-action" type="button" role="menuitem" data-action="rename"><i class="bi bi-pencil" aria-hidden="true"></i><span class="graph-context-menu-item-label">Rename</span></button>' +
+      '<button class="graph-context-menu-item tab-context-menu-action" type="button" role="menuitem" data-action="duplicate"><i class="bi bi-files" aria-hidden="true"></i><span class="graph-context-menu-item-label">Duplicate</span></button>' +
+      '<div class="graph-context-menu-separator" aria-hidden="true"></div>' +
+      '<button class="graph-context-menu-item graph-context-menu-item-danger tab-context-menu-action" type="button" role="menuitem" data-action="close"><i class="bi bi-x-lg" aria-hidden="true"></i><span class="graph-context-menu-item-label">Close</span></button>';
+
+    tabContextMenu.addEventListener('click', function(e) {
+      e.stopPropagation();
+      const actionBtn = e.target.closest('.tab-context-menu-action');
+      if (!actionBtn || !tabContextTargetId) return;
+      const action = actionBtn.getAttribute('data-action');
+      const targetTab = tabs.find(function(tab) { return tab.id === tabContextTargetId; });
+      const shouldCloseMobileMenu = tabContextCloseMobileMenuOnAction;
+      hideTabContextMenu();
+      if (!targetTab) return;
+      if (action === 'rename') renameTab(targetTab.id);
+      else if (action === 'duplicate') duplicateTab(targetTab.id);
+      else if (action === 'close') closeTab(targetTab.id, { promptForUnsaved: true });
+      if (shouldCloseMobileMenu) closeMobileMenu();
     });
+
+    document.body.appendChild(tabContextMenu);
+    return tabContextMenu;
+  }
+
+  function positionTabContextMenu(menu, event) {
+    const margin = 8;
+    menu.style.left = '0px';
+    menu.style.top = '0px';
+    const rect = menu.getBoundingClientRect();
+    const left = Math.min(
+      Math.max(margin, event.clientX),
+      Math.max(margin, window.innerWidth - rect.width - margin)
+    );
+    const top = Math.min(
+      Math.max(margin, event.clientY),
+      Math.max(margin, window.innerHeight - rect.height - margin)
+    );
+    menu.style.left = left + 'px';
+    menu.style.top = top + 'px';
+  }
+
+  function showTabContextMenu(event, tab, options) {
+    if (!tab) return;
+    event.preventDefault();
+    event.stopPropagation();
+    hideSidebarContextMenus();
+    hideTabContextMenu();
+
+    tabContextTargetId = tab.id;
+    tabContextCloseMobileMenuOnAction = !!(options && options.closeMobileMenuOnAction);
+    const menu = ensureTabContextMenu();
+    const isGraphTab = tab.type === 'graph';
+    menu.querySelectorAll('[data-action="rename"], [data-action="duplicate"]').forEach(function(button) {
+      button.classList.toggle('hidden', isGraphTab);
+    });
+    const separator = menu.querySelector('.graph-context-menu-separator');
+    if (separator) separator.classList.toggle('hidden', isGraphTab);
+    menu.classList.remove('hidden');
+    positionTabContextMenu(menu, event);
+  }
+
+  function hideTabContextMenu() {
+    if (tabContextMenu) tabContextMenu.classList.add('hidden');
+    tabContextTargetId = null;
+    tabContextCloseMobileMenuOnAction = false;
+  }
+
+  // Close any open tab context menu when clicking elsewhere in the document
+  document.addEventListener('click', function() {
+    hideTabContextMenu();
   });
+
+  document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') hideTabContextMenu();
+  });
+
+  window.addEventListener('blur', hideTabContextMenu);
 
   function saveCurrentTabState() {
     const tab = tabs.find(function(t) { return t.id === activeTabId; });

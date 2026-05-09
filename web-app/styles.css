@@ -2711,12 +2711,12 @@ a:focus {
   min-width: 0;
 }
 
-.mobile-tab-item .tab-menu-btn {
-  opacity: 0.6;
+.mobile-tab-item .tab-close-btn {
+  opacity: 0.65;
 }
 
-.mobile-tab-item:hover .tab-menu-btn,
-.mobile-tab-item.active .tab-menu-btn {
+.mobile-tab-item:hover .tab-close-btn,
+.mobile-tab-item.active .tab-close-btn {
   opacity: 0.8;
 }
 
@@ -3609,14 +3609,14 @@ a:focus {
   cursor: pointer;
   padding: 0;
   font-size: 11px;
-  opacity: 0;
+  opacity: 0.65;
   flex-shrink: 0;
   transition: background-color 0.15s ease, opacity 0.15s ease;
 }
 
 .tab-item:hover .tab-close-btn,
 .tab-item.active .tab-close-btn {
-  opacity: 0.6;
+  opacity: 0.8;
 }
 
 .tab-close-btn:hover {
@@ -3678,88 +3678,16 @@ a:focus {
 }
 
 /* ========================================
-   THREE-DOT TAB MENU
+   TAB CONTEXT MENU
    ======================================== */
 
-.tab-menu-btn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 18px;
-  height: 18px;
-  border-radius: 3px;
-  background: none;
-  border: none;
-  color: var(--text-color);
-  cursor: pointer;
-  padding: 0;
-  font-size: 14px;
-  font-weight: bold;
-  letter-spacing: 1px;
-  opacity: 0.65;
-  flex-shrink: 0;
-  transition: background-color 0.15s ease, opacity 0.15s ease;
-  position: relative;
+.tab-close-btn i {
+  pointer-events: none;
 }
 
-.tab-item:hover .tab-menu-btn,
-.tab-item.active .tab-menu-btn {
-  opacity: 0.65;
-}
-
-.tab-menu-btn:hover {
-  background-color: var(--button-active);
-  opacity: 1 !important;
-}
-
-.tab-menu-dropdown {
-  display: none;
+.tab-context-menu {
   position: fixed;
-  min-width: 130px;
-  background-color: var(--header-bg);
-  border: 1px solid var(--border-color);
-  border-radius: 6px;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-  z-index: 99999;
-  overflow: hidden;
-  flex-direction: column;
-}
-
-.tab-menu-btn.open .tab-menu-dropdown {
-  display: flex;
-}
-
-.tab-menu-item {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  padding: 7px 12px;
-  background: none;
-  border: none;
-  color: var(--text-color);
-  font-size: 12px;
-  cursor: pointer;
-  text-align: left;
-  transition: background-color 0.12s ease;
-  white-space: nowrap;
-}
-
-.tab-menu-item:hover:not(:disabled):not([aria-disabled="true"]) {
-  background-color: var(--button-hover);
-}
-
-.tab-menu-item:disabled,
-.tab-menu-item[aria-disabled="true"] {
-  color: var(--disabled-text-color);
-  cursor: not-allowed;
-}
-
-.tab-menu-item-danger {
-  color: var(--color-danger-fg, #d73a49);
-}
-
-.tab-menu-item-danger:hover {
-  background-color: rgba(215, 58, 73, 0.1);
+  z-index: 1050;
 }
 
 /* ========================================
