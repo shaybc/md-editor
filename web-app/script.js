@@ -10247,12 +10247,43 @@ ${body}`;
     };
   }
 
+  function isGraphGroupAbsolutePathSuggestion(path) {
+    const normalizedPath = String(path || "").replace(/\\/g, "/");
+    return /^([a-z]:\/|\/|~\/|\/\/)/i.test(normalizedPath);
+  }
+
+  function getGraphGroupRelativeFilePath(snapshotFile) {
+    const relativePath = String(snapshotFile?.path || snapshotFile?.file?.webkitRelativePath || "").replace(/\\/g, "/").replace(/^\/+/, "");
+    if (relativePath && !isGraphGroupAbsolutePathSuggestion(relativePath)) return relativePath;
+
+    const fullPath = String(snapshotFile?.fullPath || "").replace(/\\/g, "/");
+    if (fullPath && activeFolderPath) {
+      const relativeFullPath = getPathRelativeToFolder(fullPath, activeFolderPath);
+      if (relativeFullPath) return relativeFullPath.replace(/\\/g, "/").replace(/^\/+/, "");
+    }
+
+    return "";
+  }
+
+  function addGraphGroupPathFolderSuggestions(snapshotFile, addEntry) {
+    const relativePath = getGraphGroupRelativeFilePath(snapshotFile);
+    if (!relativePath) return;
+
+    const segments = relativePath.split("/").filter(Boolean);
+    segments.pop();
+    let folderPath = "";
+    segments.forEach((segment) => {
+      folderPath = folderPath ? `${folderPath}/${segment}` : segment;
+      addEntry(folderPath, "path", "Folder");
+    });
+  }
+
   function getGraphGroupSuggestionEntries(graphSnapshot, prefix, query) {
     const normalizedQuery = String(query || "").toLowerCase();
     const entryMap = new Map();
     const addEntry = (value, type, detail) => {
-      const normalizedValue = String(value || "").trim();
-      if (!normalizedValue) return;
+      const normalizedValue = String(value || "").trim().replace(/\\/g, "/").replace(/^\/+|\/+$/g, "");
+      if (!normalizedValue || isGraphGroupAbsolutePathSuggestion(normalizedValue)) return;
       if (normalizedQuery && !normalizedValue.toLowerCase().includes(normalizedQuery)) return;
       const key = `${type}:${normalizedValue.toLowerCase()}`;
       if (!entryMap.has(key)) entryMap.set(key, { value: normalizedValue, type, detail: detail || "" });
@@ -10260,10 +10291,7 @@ ${body}`;
 
     if (prefix === "path") {
       (graphSnapshot?.files || []).forEach((snapshotFile) => {
-        const path = String(snapshotFile.fullPath || snapshotFile.path || "").replace(/\\/g, "/");
-        if (!path) return;
-        addEntry(path, "path", "Full path");
-        path.split("/").filter(Boolean).forEach((segment) => addEntry(segment, "path", path));
+        addGraphGroupPathFolderSuggestions(snapshotFile, addEntry);
       });
     } else if (prefix === "file") {
       (graphSnapshot?.files || []).forEach((snapshotFile) => {
@@ -10324,6 +10352,12 @@ ${body}`;
       updateGraphGroup(group.id, { query: nextValue }, { skipToolbar: true });
     };
 
+    const scrollSelectedSuggestionIntoView = () => {
+      const selectedOption = popover.querySelector(".graph-group-query-suggestion.active");
+      if (!selectedOption) return;
+      selectedOption.scrollIntoView({ block: "nearest", inline: "nearest" });
+    };
+
     const renderPopover = () => {
       if (queryInput.disabled) return;
       const context = getGraphGroupQueryContext(queryInput);
@@ -10381,6 +10415,7 @@ ${body}`;
       if (activeGraphGroupSuggestionClose && activeGraphGroupSuggestionClose !== closePopover) activeGraphGroupSuggestionClose();
       activeGraphGroupSuggestionClose = closePopover;
       popover.classList.remove("hidden");
+      scrollSelectedSuggestionIntoView();
       document.addEventListener("mousedown", handleOutsideMouseDown, true);
     };
 
