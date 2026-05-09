@@ -4424,8 +4424,9 @@ This is a fully client-side application. Your content never leaves your browser 
     graphStaleUpdateButton?.focus({ preventScroll: true });
   }
 
-  async function promptForStaleSavedGraphIfNeeded(tab) {
-    if (!tab?.graphSnapshot || !folderMarkdownFiles.length || isKeepSavedGraphMode(tab)) return;
+  async function promptForStaleSavedGraphIfNeeded(tab, options = {}) {
+    const shouldPromptWhileKeepingSavedGraph = options.force === true;
+    if (!tab?.graphSnapshot || !folderMarkdownFiles.length || (!shouldPromptWhileKeepingSavedGraph && isKeepSavedGraphMode(tab))) return;
     const graphDocumentType = tab.graphDocument?.documentType || inferLegacyGraphDocumentType(tab.graphSnapshot);
     if (graphDocumentType !== GRAPH_DOCUMENT_TYPE_VIEW) return;
 
@@ -11142,9 +11143,9 @@ ${body}`;
     tabs.push(graphTab);
     saveTabsToStorage(tabs);
     switchTab(graphTab.id);
-    if (!isKeepSavedGraphMode(graphTab)) {
-      promptForStaleSavedGraphIfNeeded(graphTab);
-    }
+    promptForStaleSavedGraphIfNeeded(graphTab, {
+      force: graphDocumentKind.documentType === GRAPH_DOCUMENT_TYPE_VIEW
+    });
     return graphTab;
   }
 
