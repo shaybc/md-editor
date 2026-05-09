@@ -52,6 +52,7 @@ document.addEventListener("DOMContentLoaded", function () {
     editorPositionLabelElement,
     editorPositionValueElement
   } = app.dom;
+  let { folderTreeRoot } = app.dom;
   let {
     markdownRenderTimeout,
     syncScrollingEnabled,
@@ -1697,7 +1698,8 @@ document.addEventListener("DOMContentLoaded", function () {
   }
 
   ensureFolderTreePane();
-  folderTreeRoot = document.getElementById("folder-tree-root");
+  app.dom.folderTreeRoot = document.getElementById("folder-tree-root");
+  folderTreeRoot = app.dom.folderTreeRoot;
   const folderTreePane = document.getElementById("folder-tree-pane");
   ensureRecentMenuContainers();
   hydrateRecentItemsFromProfile();
