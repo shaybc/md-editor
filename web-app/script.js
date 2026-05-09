@@ -11636,6 +11636,24 @@ ${body}`;
     graphRenderWrapper.dataset.graphTabId = activeTab.id;
     graphViewCanvas.appendChild(graphRenderWrapper);
     hideInactiveGraphRenders(activeTab.id);
+
+    if (activeTab.graphComparisonSnapshot) {
+      const compareLegend = document.createElement("div");
+      compareLegend.className = "graph-compare-legend";
+      compareLegend.setAttribute("aria-label", "Compare mode legend");
+      compareLegend.innerHTML = `
+        <div class="graph-compare-legend-title">Compare mode</div>
+        <div class="graph-compare-legend-row">
+          <span class="graph-compare-legend-sample graph-compare-legend-sample-normal" aria-hidden="true"></span>
+          <span>Normal = current folder</span>
+        </div>
+        <div class="graph-compare-legend-row">
+          <span class="graph-compare-legend-sample graph-compare-legend-sample-saved-only" aria-hidden="true"></span>
+          <span>Faded/dashed = saved graph only</span>
+        </div>
+      `;
+      graphRenderWrapper.appendChild(compareLegend);
+    }
     const nodes = (graphSnapshot.nodes || []).map((node) => ({
       ...node,
       type: node?.type || "file",
@@ -11961,7 +11979,21 @@ ${body}`;
         }));
     maxNodeRadius = Math.max(1, ...nodes.map((d) => nodeRadius(d.id)));
     const graphTooltipPathsById = new Map((graphSnapshot.files || []).map((file) => [file.id, file.fullPath || file.path]));
-    node.append("title").text((d) => graphTooltipPathsById.get(d.id) || d.fullPath || getGraphNodeLabel(d));
+    const getGraphNodeTooltip = (nodeData) => {
+      if (getGraphItemStatus(nodeData) === "saved-only" && !isTagNode(nodeData)) {
+        return "Saved-only file. This file existed in the saved graph but is not part of the current folder graph.";
+      }
+      return graphTooltipPathsById.get(nodeData.id) || nodeData.fullPath || getGraphNodeLabel(nodeData);
+    };
+    const getGraphLinkTooltip = (linkData) => {
+      if (getGraphItemStatus(linkData) === "saved-only") {
+        return "Saved-only connection. This connection existed in the saved graph but was not found in the current folder graph.";
+      }
+      return null;
+    };
+    node.append("title").text(getGraphNodeTooltip);
+    link.append("title").text((d) => getGraphLinkTooltip(d) || "");
+    arrowhead.append("title").text((d) => getGraphLinkTooltip(d) || "");
     label = labelLayer.selectAll("text").data(nodes).enter().append("text")
       .text(getGraphNodeLabel)
       .attr("class", (d) => `graph-label graph-label-${getGraphNodeType(d)} graph-label-status-${getGraphItemStatus(d)}`);
