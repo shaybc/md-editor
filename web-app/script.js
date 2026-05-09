@@ -3620,172 +3620,126 @@ document.addEventListener("DOMContentLoaded", function () {
   }
 
   const sampleMarkdown = `---
-title: Welcome to Markdown Viewer
-description: A GitHub-style Markdown renderer with live preview, math, diagrams, and export support.
-author: ThisIs-Developer
-tags: ["markdown", "preview", "mermaid", "latex", "open-source"]
+title: Welcome to ShayBC Markdown-Viewer
+description: A client-side GitHub-flavored Markdown editor and previewer with tabs, graph workflows, math, diagrams, imports, and export tools.
+author: ShayBC
+tags: ["markdown", "preview", "mermaid", "latex", "graph", "open-source"]
+updated: 2026-05-09
+repository: https://github.com/ShayBC/Markdown-Viewer
 ---
 
-# Welcome to Markdown Viewer
+# Welcome to ShayBC Markdown-Viewer
 
-## ✨ Key Features
-- **Live Preview** with GitHub styling
-- **Smart Import/Export** (MD, HTML, PDF)
-- **Mermaid Diagrams** for visual documentation
-- **LaTeX Math Support** for scientific notation
-- **Emoji Support** 😄 👍 🎉
+ShayBC Markdown-Viewer is a modern, client-side Markdown workspace for writing, previewing, importing, organizing, and exporting Markdown documents. This welcome document appears when the app starts with no saved tabs and when all tabs are reset.
+
+- **Repository:** [github.com/ShayBC/Markdown-Viewer](https://github.com/ShayBC/Markdown-Viewer)
+- **Privacy model:** Your Markdown is rendered in your browser; document tabs are saved locally in this browser with localStorage.
+- **Best for:** Notes, READMEs, technical docs, wiki pages, research snippets, diagrams, math-heavy docs, and quick export workflows.
+- **App info:** Updated May 9, 2026.
+
+## 🚀 What You Can Do Here
+
+### Write and preview Markdown
+- GitHub-flavored Markdown (GFM), including tables, task lists, strikethrough, and autolinks
+- Live split-screen rendering with editor-only, preview-only, and split view modes
+- GitHub-style alerts such as \`> [!NOTE]\` and \`> [!WARNING]\`
+- Syntax highlighting for code blocks
+- Frontmatter parsing with rendered document metadata
+
+### Work with files and tabs
+- Open local Markdown files or import an entire folder of Markdown documents
+- Import Markdown directly from public GitHub URLs
+- Manage multiple document tabs: create, rename, duplicate, reorder, and close
+- Restore or reset the workspace when you want a fresh start
+
+### Build richer documentation
+- Mermaid diagrams with interactive zoom, pan, copy, PNG export, and SVG export controls
+- LaTeX math rendering through MathJax
+- Emoji shortcode support plus native Unicode emoji 😄
+- Local wiki-style links for connected note workflows
+- Folder graph view for seeing relationships across imported Markdown files
+
+### Export and share
+- Export Markdown, standalone HTML, or PDF
+- Copy rendered HTML for use in other tools
+- Share compressed Markdown through the page URL when you need a quick handoff
 
 ## 💻 Code with Syntax Highlighting
+
 \`\`\`javascript
-  function renderMarkdown() {
-    const markdown = markdownEditor.value;
-    const html = marked.parse(markdown);
-    const sanitizedHtml = DOMPurify.sanitize(html);
-    markdownPreview.innerHTML = sanitizedHtml;
-    
-    // Syntax highlighting is handled automatically
-    // during the parsing phase by the marked renderer.
-    // Themes are applied instantly via CSS variables.
-  }
+function renderMarkdown(markdown) {
+  const html = marked.parse(markdown);
+  const cleanHtml = DOMPurify.sanitize(html);
+  markdownPreview.innerHTML = cleanHtml;
+}
 \`\`\`
 
-## 🧮 Mathematical Expressions
-Write complex formulas with LaTeX syntax:
+## 🧮 Math Support
 
-Inline equation: $$E = mc^2$$
+Inline math: $$E = mc^2$$
 
-Display equations:
-$$\\frac{\\partial f}{\\partial x} = \\lim_{h \\to 0} \\frac{f(x+h) - f(x)}{h}$$
-
+Block math:
 $$\\sum_{i=1}^{n} i^2 = \\frac{n(n+1)(2n+1)}{6}$$
 
 ## 📊 Mermaid Diagrams
-Create powerful visualizations directly in markdown:
 
 \`\`\`mermaid
 flowchart LR
-    A[Start] --> B{Is it working?}
-    B -->|Yes| C[Great!]
-    B -->|No| D[Debug]
-    C --> E[Deploy]
-    D --> B
+    Start[Open ShayBC Markdown-Viewer] --> Write[Write or import Markdown]
+    Write --> Preview[Preview instantly]
+    Preview --> Export{Need output?}
+    Export -->|Yes| Files[Export MD, HTML, or PDF]
+    Export -->|No| KeepWriting[Keep writing]
+    KeepWriting --> Preview
 \`\`\`
 
-### Sequence Diagram Example
-\`\`\`mermaid
-sequenceDiagram
-    User->>Editor: Type markdown
-    Editor->>Preview: Render content
-    User->>Editor: Make changes
-    Editor->>Preview: Update rendering
-    User->>Export: Save as PDF
-\`\`\`
+## ✅ Markdown Task Lists
 
-## 📋 Task Management
-- [x] Create responsive layout
-- [x] Implement live preview with GitHub styling
-- [x] Add syntax highlighting for code blocks
-- [x] Support math expressions with LaTeX
-- [x] Enable mermaid diagrams
+- [x] Live Markdown preview
+- [x] Multi-tab documents
+- [x] Local and GitHub import workflows
+- [x] Mermaid diagrams
+- [x] LaTeX math
+- [x] HTML and PDF export
+- [x] Folder graph workflows
+- [ ] Your next document
 
-## 🆚 Feature Comparison
+## 🆚 Feature Snapshot
 
-| Feature                  | Markdown Viewer (Ours) | Other Markdown Editors  |
-|:-------------------------|:----------------------:|:-----------------------:|
-| Live Preview             | ✅ GitHub-Styled       | ✅                     |
-| Sync Scrolling           | ✅ Two-way             | 🔄 Partial/None        |
-| Mermaid Support          | ✅                     | ❌/Limited             |
-| LaTeX Math Rendering     | ✅                     | ❌/Limited             |
+| Capability | ShayBC Markdown-Viewer |
+|:--|:--|
+| Runs in browser | ✅ |
+| Client-side rendering | ✅ |
+| GitHub-flavored Markdown | ✅ |
+| Multi-document tabs | ✅ |
+| Folder import and graph view | ✅ |
+| Mermaid diagrams | ✅ |
+| LaTeX math | ✅ |
+| Export to MD, HTML, and PDF | ✅ |
+| Public GitHub import | ✅ |
 
-### 📝 Multi-row Headers Support
+## 📝 Formatting Examples
 
-<table>
-  <thead>
-    <tr>
-      <th rowspan="2">Document Type</th>
-      <th colspan="2">Support</th>
-    </tr>
-    <tr>
-      <th>Markdown Viewer (Ours)</th>
-      <th>Other Markdown Editors</th>
-    </tr>
-  </thead>
-  <tbody>
-    <tr>
-      <td>Technical Docs</td>
-      <td>Full + Diagrams</td>
-      <td>Limited/Basic</td>
-    </tr>
-    <tr>
-      <td>Research Notes</td>
-      <td>Full + Math</td>
-      <td>Partial</td>
-    </tr>
-    <tr>
-      <td>Developer Guides</td>
-      <td>Full + Export Options</td>
-      <td>Basic</td>
-    </tr>
-  </tbody>
-</table>
+Use **bold**, *italic*, ***bold italic***, ~~strikethrough~~, <mark>highlighting</mark>, and <u>underlines</u>.
 
-## 📝 Text Formatting Examples
+Chemical formulas: H<sub>2</sub>O and CO<sub>2</sub>  
+Keyboard shortcuts: <kbd>Ctrl</kbd>/<kbd>Cmd</kbd> + <kbd>S</kbd> to export Markdown.
 
-### Text Formatting
+> [!TIP]
+> Drag Markdown files into the app or use the import menu to bring in existing documentation quickly.
 
-Text can be formatted in various ways for ~~strikethrough~~, **bold**, *italic*, or ***bold italic***.
+## 🔗 Helpful Links
 
-For highlighting important information, use <mark>highlighted text</mark> or add <u>underlines</u> where appropriate.
-
-### Superscript and Subscript
-
-Chemical formulas: H<sub>2</sub>O, CO<sub>2</sub>  
-Mathematical notation: x<sup>2</sup>, e<sup>iπ</sup>
-
-### Keyboard Keys
-
-Press <kbd>Ctrl</kbd> + <kbd>B</kbd> for bold text.
-
-### Abbreviations
-
-<abbr title="Graphical User Interface">GUI</abbr>  
-<abbr title="Application Programming Interface">API</abbr>
-
-### Text Alignment
-
-<div style="text-align: center">
-Centered text for headings or important notices
-</div>
-
-<div style="text-align: right">
-Right-aligned text (for dates, signatures, etc.)
-</div>
-
-### **Lists**
-
-Create bullet points:
-* Item 1
-* Item 2
-  * Nested item
-    * Nested further
-
-### **Links and Images**
-
-Add a [link](https://github.com/ThisIs-Developer/Markdown-Viewer) to important resources.
-
-Embed an image:
-![Markdown Logo](https://markdownviewer.pages.dev/assets/icon.jpg)
-
-### **Blockquotes**
-
-Quote someone famous:
-> "The best way to predict the future is to invent it." - Alan Kay
+- [ShayBC Markdown-Viewer repository](https://github.com/ShayBC/Markdown-Viewer)
+- [GitHub Flavored Markdown spec](https://github.github.com/gfm/)
+- [Mermaid documentation](https://mermaid.js.org/)
+- [MathJax documentation](https://docs.mathjax.org/)
 
 ---
 
-## 🛡️ Security Note
+## 🛡️ Security and Privacy
 
-This is a fully client-side application. Your content never leaves your browser and stays secure on your device.`;
+Markdown content is processed client-side in your browser and sanitized before preview rendering. Public GitHub import uses GitHub-hosted resources only for the files you choose to import, and local tab persistence stays in this browser's storage.`;
 
   markdownEditor.value = sampleMarkdown;
 
@@ -6352,7 +6306,7 @@ This is a fully client-side application. Your content never leaves your browser 
       tabs = [];
       untitledCounter = 0;
       saveUntitledCounter(0);
-      const welcome = createTab(sampleMarkdown, 'Welcome to Markdown');
+      const welcome = createTab(sampleMarkdown, 'Welcome to ShayBC Markdown-Viewer');
       tabs.push(welcome);
       activeTabId = welcome.id;
       saveActiveTabId(activeTabId);
@@ -6403,7 +6357,7 @@ This is a fully client-side application. Your content never leaves your browser 
     });
     activeTabId = loadActiveTabId();
     if (tabs.length === 0) {
-      const tab = createTab(sampleMarkdown, 'Welcome to Markdown');
+      const tab = createTab(sampleMarkdown, 'Welcome to ShayBC Markdown-Viewer');
       tabs.push(tab);
       activeTabId = tab.id;
       saveTabsToStorage(tabs);
