@@ -1,25 +1,9 @@
 document.addEventListener("DOMContentLoaded", function () {
   const app = createAppContext();
-  const { RENDER_DELAY, SCROLL_SYNC_DELAY } = app.constants;
-  let {
-    markdownRenderTimeout,
-    syncScrollingEnabled,
-    isEditorScrolling,
-    isPreviewScrolling,
-    scrollSyncTimeout,
-    currentViewMode,
-    autoSelectFileEnabled,
-    currentFolderTreeNodes,
-    folderTreeFilterText,
-    selectedFolderTreeTags,
-    currentFolderSortMode,
-    showUnsupportedFolderFiles,
-    isFolderOpen,
-    shownFolderInputFallbackNotice,
-    previewHoveredLinkUrl,
-    linkAutocompleteLayer,
-    linkAutocompleteState
-  } = app.state;
+
+  // Temporary migration helpers: keep the legacy local names available while
+  // boot/context ownership moves into app.dom and app.state. Prefer app.state
+  // for mutable state in newly migrated code so primitive values do not go stale.
   const {
     markdownEditor,
     editorLineNumbers,
@@ -40,6 +24,7 @@ document.addEventListener("DOMContentLoaded", function () {
     tagManagementList,
     folderTreeFilterToggleButtons,
     folderTreeExpandToggleButtons,
+    folderTreeRoot,
     fileInput,
     folderInput,
     exportMd,
@@ -67,7 +52,26 @@ document.addEventListener("DOMContentLoaded", function () {
     editorPositionLabelElement,
     editorPositionValueElement
   } = app.dom;
-  let { folderTreeRoot } = app.dom;
+  let {
+    markdownRenderTimeout,
+    syncScrollingEnabled,
+    isEditorScrolling,
+    isPreviewScrolling,
+    scrollSyncTimeout,
+    currentViewMode,
+    autoSelectFileEnabled,
+    currentFolderTreeNodes,
+    folderTreeFilterText,
+    selectedFolderTreeTags,
+    currentFolderSortMode,
+    showUnsupportedFolderFiles,
+    isFolderOpen,
+    shownFolderInputFallbackNotice,
+    previewHoveredLinkUrl,
+    linkAutocompleteLayer,
+    linkAutocompleteState
+  } = app.state;
+  const { RENDER_DELAY, SCROLL_SYNC_DELAY } = app.constants;
 
   function getLinkAutocompleteLayer() {
     if (!linkAutocompleteLayer) {
