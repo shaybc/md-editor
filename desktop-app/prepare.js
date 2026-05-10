@@ -64,6 +64,9 @@ console.log("✓ Copied assets/ → resources/assets/");
 
 /** @section Generate index.html with Neutralinojs injections */
 
+copyDirSync(path.join(ROOT_DIR, "wiki"), path.join(RESOURCES_DIR, "wiki"));
+console.log("Copied wiki/ -> resources/wiki/");
+
 let html = fs.readFileSync(path.join(WEB_APP_DIR, "index.html"), "utf-8");
 
 /** Fix relative asset paths → absolute (Neutralinojs documentRoot is /resources/) */

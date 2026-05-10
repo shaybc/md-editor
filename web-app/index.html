@@ -132,6 +132,20 @@
                             <button class="dropdown-item action-menu-item export-folder-to-graph" type="button" title="Create a portable graph archive that includes Markdown file contents." disabled aria-disabled="true">
                                 <i class="bi bi-download me-2"></i> Export Folder to Graph
                             </button>
+                            <hr class="dropdown-divider">
+                            <div class="dropdown-submenu action-menu-submenu help-menu-submenu">
+                                <button class="dropdown-item action-menu-item dropdown-toggle" type="button" aria-haspopup="true" aria-expanded="false">
+                                    <i class="bi bi-question-circle me-2"></i> Help
+                                </button>
+                                <div class="dropdown-menu action-submenu" aria-label="Help options">
+                                    <button class="dropdown-item action-menu-item open-help-home" type="button" title="Open help">
+                                        <i class="bi bi-book me-2"></i> Help
+                                    </button>
+                                    <button class="dropdown-item action-menu-item show-about-dialog" type="button" title="About Markdown Viewer">
+                                        <i class="bi bi-info-circle me-2"></i> About
+                                    </button>
+                                </div>
+                            </div>
                         </div>
                     </div>
                     <!-- Hamburger menu for mobile -->
@@ -244,6 +258,16 @@
                             <button class="mobile-menu-item export-folder-to-graph" type="button" title="Create a portable graph archive that includes Markdown file contents." disabled aria-disabled="true">
                                 <i class="bi bi-download me-2"></i> Export Folder to Graph
                             </button>
+
+                            <div class="mobile-menu-section-label">Help</div>
+
+                            <button class="mobile-menu-item open-help-home" type="button" title="Open help">
+                                <i class="bi bi-book me-2"></i> Help
+                            </button>
+
+                            <button class="mobile-menu-item show-about-dialog" type="button" title="About Markdown Viewer">
+                                <i class="bi bi-info-circle me-2"></i> About
+                            </button>
                         </div>
                     </div>
 
@@ -331,6 +355,40 @@
             <div class="reset-modal-actions">
               <button class="reset-modal-btn reset-modal-cancel" id="github-import-cancel">Cancel</button>
               <button class="reset-modal-btn" id="github-import-submit">Import</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- About Modal -->
+        <div id="about-modal" class="reset-modal-overlay" role="dialog" aria-modal="true" aria-labelledby="about-modal-title" style="display:none;">
+          <div class="reset-modal-box about-modal-box">
+            <div class="about-modal-header">
+              <img src="assets/icon.jpg" alt="Markdown Viewer logo" class="about-modal-logo">
+              <div>
+                <p id="about-modal-title" class="about-modal-title">ShayBC Markdown-Viewer</p>
+                <p class="about-modal-subtitle">Markdown editor and live preview workspace</p>
+              </div>
+            </div>
+            <dl class="about-modal-details">
+              <div>
+                <dt>Version</dt>
+                <dd id="about-app-version">1.0.0</dd>
+              </div>
+              <div>
+                <dt>Last release</dt>
+                <dd id="about-release-date">May 9, 2026</dd>
+              </div>
+              <div>
+                <dt>Author</dt>
+                <dd id="about-app-author">ShayBC</dd>
+              </div>
+              <div>
+                <dt>License</dt>
+                <dd id="about-app-license">Apache License 2.0</dd>
+              </div>
+            </dl>
+            <div class="reset-modal-actions">
+              <button class="reset-modal-btn" id="about-modal-close" type="button">Close</button>
             </div>
           </div>
         </div>

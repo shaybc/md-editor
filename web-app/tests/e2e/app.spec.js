@@ -440,6 +440,36 @@ test("opens new documents in split view regardless of the current view mode", as
   })).toBe("split");
 });
 
+test("opens help and about from the action menu", async ({ page }) => {
+  await page.route("**/wiki/Home.md", async (route) => {
+    await route.fulfill({
+      contentType: "text/markdown",
+      body: "# Markdown Viewer Wiki\n\nHelp content from the wiki home file."
+    });
+  });
+  await openApp(page);
+
+  await page.locator("#desktopActionMenu").click();
+  await page.locator(".help-menu-submenu > .dropdown-toggle").hover();
+  await page.locator(".help-menu-submenu .open-help-home").click();
+
+  await expect(page.locator(".view-mode-btn[data-mode='preview']")).toHaveAttribute("aria-pressed", "true");
+  await expect(page.locator("#markdown-preview").getByRole("heading", { name: "Markdown Viewer Wiki" })).toBeVisible();
+
+  await page.locator("#desktopActionMenu").click();
+  await page.locator(".help-menu-submenu > .dropdown-toggle").hover();
+  await page.locator(".help-menu-submenu .show-about-dialog").click();
+
+  const aboutModal = page.locator("#about-modal");
+  await expect(aboutModal).toBeVisible();
+  await expect(aboutModal.getByText("ShayBC Markdown-Viewer")).toBeVisible();
+  await expect(aboutModal.getByText("1.0.0")).toBeVisible();
+  await expect(aboutModal.getByText("May 9, 2026")).toBeVisible();
+  await expect(aboutModal.locator("#about-app-author")).toHaveText("ShayBC");
+  await expect(aboutModal.getByText("Apache License 2.0")).toBeVisible();
+  await expect(aboutModal.locator(".about-modal-logo")).toBeVisible();
+});
+
 test("toggles theme and persists it across reloads", async ({ page }) => {
   await openApp(page);
 

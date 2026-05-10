@@ -798,6 +798,15 @@ body {
   background-color: transparent;
 }
 
+.mobile-menu-section-label {
+  color: var(--disabled-text-color);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0;
+  padding: 10px 12px 4px;
+  text-transform: uppercase;
+}
+
 .tool-button {
   background-color: var(--button-bg);
   border: 1px solid var(--border-color);
@@ -3803,6 +3812,65 @@ a:focus {
 .reset-modal-confirm:hover {
   background-color: #b02a37;
   border-color: #b02a37;
+}
+
+.about-modal-box {
+  max-width: 430px;
+  text-align: left;
+}
+
+.about-modal-header {
+  align-items: center;
+  display: flex;
+  gap: 14px;
+}
+
+.about-modal-logo {
+  border-radius: 8px;
+  flex: 0 0 auto;
+  height: 56px;
+  object-fit: cover;
+  width: 56px;
+}
+
+.about-modal-title {
+  color: var(--text-color);
+  font-size: 17px;
+  font-weight: 700;
+  line-height: 1.2;
+  margin: 0 0 4px;
+}
+
+.about-modal-subtitle {
+  color: var(--disabled-text-color);
+  font-size: 13px;
+  line-height: 1.35;
+  margin: 0;
+}
+
+.about-modal-details {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+}
+
+.about-modal-details div {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: 100px 1fr;
+}
+
+.about-modal-details dt {
+  color: var(--disabled-text-color);
+  font-size: 12px;
+  font-weight: 700;
+  margin: 0;
+}
+
+.about-modal-details dd {
+  color: var(--text-color);
+  font-size: 13px;
+  margin: 0;
 }
 
 /* ========================================

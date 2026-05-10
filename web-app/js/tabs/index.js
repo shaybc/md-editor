@@ -982,14 +982,15 @@
     }
   }
 
-  function newTab(content, title) {
+  function newTab(content, title, options) {
+    if (options === undefined) options = {};
     if (content === undefined) content = '';
     if (tabs.length >= 20) {
       alert('Maximum of 20 tabs reached. Please close an existing tab to open a new one.');
       return;
     }
     if (!title) title = nextUntitledTitle();
-    const tab = createTab(content, title, 'split');
+    const tab = createTab(content, title, options.viewMode || 'split');
     tabs.push(tab);
     const wasEmptyWorkspace = !activeTabId;
     if (wasEmptyWorkspace) {

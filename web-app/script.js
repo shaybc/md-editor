@@ -786,6 +786,10 @@
   const mobileCopyMarkdown  = document.getElementById("mobile-copy-markdown");
   const mobileThemeToggle   = document.getElementById("mobile-theme-toggle");
   const mobileOpenGraphView = document.getElementById("mobile-open-graph-view");
+  const helpHomeButtons = document.querySelectorAll(".open-help-home");
+  const aboutDialogButtons = document.querySelectorAll(".show-about-dialog");
+  const aboutModal = document.getElementById("about-modal");
+  const aboutModalClose = document.getElementById("about-modal-close");
   const desktopOpenGraphButtons = document.querySelectorAll(".open-graph-view");
   const graphViewCanvas = document.getElementById("graph-view-canvas");
   const graphViewToolbar = document.querySelector(".graph-view-toolbar");
@@ -1622,6 +1626,44 @@ Markdown content is processed client-side in your browser and sanitized before p
     resetAllTabs,
     initTabs,
   } = tabsModule;
+
+  async function fetchHelpHomeMarkdown() {
+    const helpPaths = ["wiki/Home.md", "../wiki/Home.md", "/wiki/Home.md"];
+    let lastError = null;
+
+    for (const path of helpPaths) {
+      try {
+        const response = await fetch(path, { cache: "no-cache" });
+        if (response.ok) return response.text();
+        lastError = new Error(`Help file request failed with ${response.status}`);
+      } catch (error) {
+        lastError = error;
+      }
+    }
+
+    throw lastError || new Error("Help file is unavailable.");
+  }
+
+  async function openHelpHome() {
+    try {
+      const markdown = await fetchHelpHomeMarkdown();
+      newTab(markdown, "Help", { viewMode: "preview" });
+    } catch (error) {
+      console.error("Failed to open help:", error);
+      alert("Unable to open the help file.");
+    }
+  }
+
+  function showAboutDialog() {
+    if (!aboutModal) return;
+    aboutModal.style.display = "flex";
+  }
+
+  function hideAboutDialog() {
+    if (!aboutModal) return;
+    aboutModal.style.display = "none";
+  }
+
   async function listMarkdownTree(dirHandle, parentPath = "") {
     const entries = [];
     for await (const entry of dirHandle.values()) {
@@ -2686,6 +2728,36 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
       }
     });
   });
+
+  helpHomeButtons.forEach(function(button) {
+    button.addEventListener("click", function(e) {
+      e.preventDefault();
+      openHelpHome();
+      if (button.classList.contains("mobile-menu-item")) {
+        closeMobileMenu();
+      }
+    });
+  });
+
+  aboutDialogButtons.forEach(function(button) {
+    button.addEventListener("click", function(e) {
+      e.preventDefault();
+      showAboutDialog();
+      if (button.classList.contains("mobile-menu-item")) {
+        closeMobileMenu();
+      }
+    });
+  });
+
+  if (aboutModalClose) {
+    aboutModalClose.addEventListener("click", hideAboutDialog);
+  }
+
+  if (aboutModal) {
+    aboutModal.addEventListener("click", function(e) {
+      if (e.target === aboutModal) hideAboutDialog();
+    });
+  }
 
   document.querySelectorAll("#import-from-folder").forEach(function(button) {
     button.addEventListener("click", function (e) {
