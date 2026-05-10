@@ -506,6 +506,7 @@
     updateSaveCurrentFileButtons();
     renderFilteredFolderTree();
     renderTagManagementList();
+    updateTagManagementMenuButtons();
     renderLinkAutocomplete();
 
     if (activeGraphChanged || (getActiveGraphTab() && activeTabId === getActiveGraphTab().id)) {

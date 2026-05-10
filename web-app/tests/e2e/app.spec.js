@@ -1360,6 +1360,7 @@ test("clicking a tag in the tag dialog filters the folder tree", async ({ page }
   await page.addInitScript(() => {
     window.NL_VERSION = "5.0.0";
     window.NL_OS = "Windows";
+    window.confirm = () => true;
     const files = new Map([
       ["tagged.md", "---\ntags: [project]\n---\n# Tagged"],
       ["untagged.md", "# Untagged"]
@@ -1383,6 +1384,9 @@ test("clicking a tag in the tag dialog filters the folder tree", async ({ page }
           const name = getName(path);
           if (files.has(name)) return files.get(name);
           throw new Error("Unexpected read path: " + path);
+        },
+        writeFile: async (path, content) => {
+          files.set(getName(path), String(content));
         }
       },
       clipboard: { writeText: async () => {} }
@@ -1411,6 +1415,20 @@ test("clicking a tag in the tag dialog filters the folder tree", async ({ page }
   await expect(untaggedFile).toBeVisible();
   await expect(page.locator(".tag-management-menu-button")).not.toHaveClass(/tag-filter-active/);
   await expect(page.locator("#clear-tag-filter-button")).toBeDisabled();
+
+  await tagButton.evaluate((button) => button.click());
+  await expect(page.locator(".tag-management-menu-button")).toHaveClass(/tag-filter-active/);
+  await expect(untaggedFile).toHaveCount(0);
+
+  await page.evaluate(() => {
+    window.prompt = () => "project";
+  });
+  await page.locator("#delete-tag-button").evaluate((button) => button.click());
+  await expect(taggedFile).toBeVisible();
+  await expect(untaggedFile).toBeVisible();
+  await expect(page.locator(".tag-management-menu-button")).not.toHaveClass(/tag-filter-active/);
+  await expect(page.locator("#clear-tag-filter-button")).toBeDisabled();
+  await expect(page.locator("#tag-management-list .tag-management-list-item", { hasText: "#project" })).toHaveCount(0);
 });
 
 test("keeps open folder graph views in sync with saved and deleted files", async ({ page }) => {

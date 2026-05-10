@@ -1399,6 +1399,7 @@ Markdown content is processed client-side in your browser and sanitized before p
     joinPath,
     get toggleFolderTreeTagFilter() { return toggleFolderTreeTagFilter; },
     get renderFilteredFolderTree() { return renderFilteredFolderTree; },
+    get updateTagManagementMenuButtons() { return updateTagManagementMenuButtons; },
     get renderLinkAutocomplete() { return renderLinkAutocomplete; },
     get renderEditorSyntaxHighlights() { return renderEditorSyntaxHighlights; },
     get updateEditorLineNumbers() { return updateEditorLineNumbers; },
