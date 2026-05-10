@@ -781,6 +781,18 @@
     }
   }
 
+  async function promptActiveSavedGraphForCurrentFolder() {
+    const tab = getActiveGraphTab();
+    if (!tab || !isFileBackedGraphTab(tab)) return false;
+
+    const graphDocumentType = tab.graphDocument?.documentType || inferLegacyGraphDocumentType(tab.graphSnapshot);
+    await promptForStaleSavedGraphIfNeeded(tab, {
+      force: graphDocumentType === GRAPH_DOCUMENT_TYPE_VIEW || !tab.graphDocument?.documentType,
+      legacyExport: !tab.graphDocument?.documentType && graphDocumentType === GRAPH_DOCUMENT_TYPE_EXPORT
+    });
+    return true;
+  }
+
   function keepSavedGraphFromStaleModal() {
     const staleComparison = activeGraphStaleComparison;
     const tab = tabs.find((candidate) => candidate.id === staleComparison?.tabId) || getActiveGraphTab();
@@ -1372,6 +1384,7 @@
       hideGraphStaleModal,
       showGraphStaleModal,
       promptForStaleSavedGraphIfNeeded,
+      promptActiveSavedGraphForCurrentFolder,
       keepSavedGraphFromStaleModal,
       updateGraphFromStaleModal,
       loadGraphComparisonFromStaleModal,

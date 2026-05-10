@@ -163,6 +163,7 @@
       folderMarkdownFiles = await collectMarkdownFilesFromTree(nodes);
       renderFolderTree(nodes);
       rememberRecentFolder({ name: activeFolderName, label: activeFolderName, handle: dirHandle });
+      await promptActiveSavedGraphForCurrentFolder?.();
       return true;
     }
 
@@ -175,6 +176,7 @@
       folderMarkdownFiles = await collectMarkdownFilesFromTree(nodes);
       renderFolderTree(nodes);
       rememberRecentFolder({ name: activeFolderName, label: activeFolderName });
+      await promptActiveSavedGraphForCurrentFolder?.();
       return true;
     }
 

@@ -10,6 +10,7 @@
     folderMarkdownFiles = await collectMarkdownFilesFromTreeNeutralino(nodes);
     renderFolderTree(nodes);
     rememberRecentFolder({ name: activeFolderName, label: activeFolderName, path: selectedPath });
+    await promptActiveSavedGraphForCurrentFolder?.();
   }
 
   async function openMarkdownSourceFile(sourceFile) {

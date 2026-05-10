@@ -228,6 +228,7 @@
     get openSidebarFileInPermanentTab() { return openSidebarFileInPermanentTab; },
     get rememberRecentFile() { return rememberRecentFile; },
     get openSavedGraphDocument() { return openSavedGraphDocument; },
+    get promptActiveSavedGraphForCurrentFolder() { return promptActiveSavedGraphForCurrentFolder; },
     get Neutralino() { return typeof Neutralino !== "undefined" ? Neutralino : undefined; },
     get NL_VERSION() { return typeof NL_VERSION !== "undefined" ? NL_VERSION : undefined; },
     alert
@@ -416,6 +417,7 @@
     set folderMarkdownFiles(value) { folderMarkdownFiles = value; },
     get renderFolderTree() { return renderFolderTree; },
     rememberRecentFolder,
+    get promptActiveSavedGraphForCurrentFolder() { return promptActiveSavedGraphForCurrentFolder; },
     get NL_VERSION() { return typeof NL_VERSION !== "undefined" ? NL_VERSION : undefined; },
     alert
   });
@@ -1251,6 +1253,7 @@ Markdown content is processed client-side in your browser and sanitized before p
     hideGraphStaleModal,
     showGraphStaleModal,
     promptForStaleSavedGraphIfNeeded,
+    promptActiveSavedGraphForCurrentFolder,
     keepSavedGraphFromStaleModal,
     updateGraphFromStaleModal,
     loadGraphComparisonFromStaleModal,
@@ -1750,6 +1753,7 @@ Markdown content is processed client-side in your browser and sanitized before p
       folderMarkdownFiles = await collectMarkdownFilesFromTreeNeutralino(nodes);
       renderFolderTree(nodes);
       await refreshOpenFolderGraphTabsFromFolderFiles();
+      await promptActiveSavedGraphForCurrentFolder();
       return true;
     }
 
@@ -1759,6 +1763,7 @@ Markdown content is processed client-side in your browser and sanitized before p
       renderFolderTree(nodes);
       rememberRecentFolder({ name: activeFolderName, label: activeFolderName });
       await refreshOpenFolderGraphTabsFromFolderFiles();
+      await promptActiveSavedGraphForCurrentFolder();
       return true;
     }
 
@@ -2143,7 +2148,8 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
     refreshOpenFolderTreeAfterFileDelete,
     isPathInsideFolder,
     reloadOpenFolderTree,
-    openFolderTreeFromNeutralinoPath
+    openFolderTreeFromNeutralinoPath,
+    get promptActiveSavedGraphForCurrentFolder() { return promptActiveSavedGraphForCurrentFolder; }
   });
   const {
     createFileContextMenuButton,
@@ -2748,6 +2754,7 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
       folderMarkdownFiles = await collectMarkdownFilesFromTree(nodes);
       renderFolderTree(nodes);
       rememberRecentFolder({ name: activeFolderName, label: activeFolderName });
+      await promptActiveSavedGraphForCurrentFolder();
       this.value = "";
     });
   }
@@ -3327,6 +3334,7 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
     collectMarkdownFilesFromTree,
     renderFolderTree,
     rememberRecentFolder,
+    get promptActiveSavedGraphForCurrentFolder() { return promptActiveSavedGraphForCurrentFolder; },
     get NL_VERSION() { return typeof NL_VERSION !== "undefined" ? NL_VERSION : undefined; },
     alert
   });

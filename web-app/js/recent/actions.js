@@ -66,6 +66,7 @@
         folderMarkdownFiles = await collectMarkdownFilesFromTree(nodes);
         renderFolderTree(nodes);
         rememberRecentFolder({ name: activeFolderName, label: activeFolderName, handle });
+        await promptActiveSavedGraphForCurrentFolder?.();
       } catch (error) {
         console.error("Failed to open recent folder:", error);
         alert("Unable to open the recent folder.");

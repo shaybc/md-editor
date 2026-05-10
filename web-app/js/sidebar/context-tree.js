@@ -2053,6 +2053,7 @@
       folderMarkdownFiles = await collectMarkdownFilesFromTree(nodes);
       renderFolderTree(nodes);
       rememberRecentFolder({ name: activeFolderName, label: activeFolderName, handle: dirHandle });
+      await promptActiveSavedGraphForCurrentFolder?.();
       return;
     } catch (error) {
       if (error && error.name === "AbortError") return;
