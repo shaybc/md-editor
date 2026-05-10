@@ -167,6 +167,16 @@
     previewHoveredLinkUrl: { get: () => previewHoveredLinkUrl, set: (value) => { previewHoveredLinkUrl = value; }, configurable: true }
   });
 
+  const frontmatterRenderer = window.registerMarkdownViewerFrontmatter(app, {
+    jsyaml
+  });
+  const {
+    parseFrontmatter,
+    renderFrontmatterValue,
+    renderFrontmatterTable,
+    escapeHtml
+  } = frontmatterRenderer;
+
   const markdownLinks = window.registerMarkdownViewerMarkdownLinks(app, {
     get activeFolderName() { return activeFolderName; },
     get activeFolderPath() { return activeFolderPath; },
@@ -252,7 +262,7 @@
     getFolderMarkdownFiles: function() { return folderMarkdownFiles; },
     getFolderTagCounts: function() { return folderTagCounts; },
     getIsFolderOpen: function() { return isFolderOpen; },
-    getKnownTags,
+    getKnownTags: function() { return getKnownTags(); },
     getTabs: function() { return tabs; },
     isMarkdownPath,
     normalizeFileTagList,
@@ -296,7 +306,7 @@
   const syncEditorLineNumberScroll = editorLineStatus.syncEditorLineNumberScroll;
 
   const recentItems = window.registerMarkdownViewerRecentItems(app, {
-    applyGlobalPreferences,
+    applyGlobalPreferences: function(state) { return applyGlobalPreferences(state); },
     escapeHtml,
     getFileName,
     globalStateKey: "markdownViewerGlobalState",
@@ -530,7 +540,7 @@
     get activeFolderName() { return activeFolderName; },
     get activeFolderPath() { return activeFolderPath; },
     get activeFolderHandle() { return activeFolderHandle; },
-    getFolderMarkdownEntryForTab,
+    get getFolderMarkdownEntryForTab() { return getFolderMarkdownEntryForTab; },
     getFileName,
     get normalizeFileTagList() { return normalizeFileTagList; },
     get normalizeTagName() { return normalizeTagName; },
@@ -668,11 +678,6 @@
   const SIDEBAR_VISIBILITY_ANIMATION_MS = 240;
   let sidebarVisibilityAnimationTimer = null;
 
-  function getClampedEditorWidthPercent(percent) {
-    const numericPercent = Number.parseFloat(percent);
-    const fallbackPercent = Number.isFinite(numericPercent) ? numericPercent : 50;
-    return Math.max(MIN_PANE_PERCENT, Math.min(100 - MIN_PANE_PERCENT, fallbackPercent));
-  }
   const viewLayout = window.registerMarkdownViewerViewLayout(app, {
     get currentViewMode() { return currentViewMode; },
     set currentViewMode(value) { currentViewMode = value; },
@@ -843,6 +848,53 @@
   rendererConfig.initialize();
   const initMermaid = rendererConfig.initMermaid;
 
+  const layoutPreferences = window.registerMarkdownViewerLayoutPreferences(app, {
+    GLOBAL_STATE_KEY,
+    DEFAULT_SIDEBAR_WIDTH,
+    MIN_PANE_PERCENT,
+    get currentFolderSortMode() { return currentFolderSortMode; },
+    set currentFolderSortMode(value) { currentFolderSortMode = value; },
+    get editorWidthPercent() { return editorWidthPercent; },
+    set editorWidthPercent(value) { editorWidthPercent = value; },
+    get graphSettings() { return graphSettings; },
+    get autoSelectFileEnabled() { return autoSelectFileEnabled; },
+    set autoSelectFileEnabled(value) { autoSelectFileEnabled = value; },
+    get showUnsupportedFolderFiles() { return showUnsupportedFolderFiles; },
+    set showUnsupportedFolderFiles(value) { showUnsupportedFolderFiles = value; },
+    get syncScrollingEnabled() { return syncScrollingEnabled; },
+    set syncScrollingEnabled(value) { syncScrollingEnabled = value; },
+    get sidebarDropzonePanel() { return sidebarDropzonePanel; },
+    get dropzone() { return dropzone; },
+    get sidebarDropzoneResizer() { return sidebarDropzoneResizer; },
+    loadGlobalState,
+    saveGlobalState,
+    getDefaultGlobalState,
+    updateThemeButtonLabels,
+    getValidFolderSortMode,
+    updateDropzoneToggleButtons,
+    applySidebarWidth,
+    applySidebarDropzoneHeight,
+    setSidebarVisible,
+    hideSidebarDropzone,
+    showSidebarDropzone,
+    setViewMode,
+    get updateSyncToggleButtons() { return updateSyncToggleButtons; },
+    updateAutoSelectFileButtons,
+    updateUnsupportedFileToggleButtons,
+    updateFolderTreeToolbarState,
+    get renderFilteredFolderTree() { return renderFilteredFolderTree; },
+    get renderMarkdown() { return renderMarkdown; },
+    scheduleGlobalProfileWrite,
+    get updateFolderTreeSortControls() { return updateFolderTreeSortControls; }
+  });
+  const {
+    getClampedEditorWidthPercent,
+    resetSidebarDropzoneLayoutToDefault,
+    restoreDefaultPreferences,
+    applyGlobalPreferences,
+    applySavedLayoutPreferences
+  } = layoutPreferences;
+
   currentFolderSortMode = getValidFolderSortMode(loadGlobalState().folderSortMode || currentFolderSortMode);
   editorWidthPercent = getClampedEditorWidthPercent(loadGlobalState().editorWidthPercent);
   const graphSettings = {
@@ -853,639 +905,6 @@
   updateAutoSelectFileButtons();
   updateUnsupportedFileToggleButtons();
   applySavedLayoutPreferences(loadGlobalState());
-
-  function resetSidebarDropzoneLayoutToDefault() {
-    if (sidebarDropzonePanel) {
-      delete sidebarDropzonePanel.dataset.previousFlex;
-      sidebarDropzonePanel.style.flex = "";
-      sidebarDropzonePanel.style.display = "";
-      sidebarDropzonePanel.style.padding = "";
-      sidebarDropzonePanel.style.minHeight = "";
-    }
-    if (dropzone) {
-      dropzone.style.display = "";
-    }
-    if (sidebarDropzoneResizer) {
-      sidebarDropzoneResizer.style.display = "";
-      sidebarDropzoneResizer.style.flex = "";
-    }
-  }
-
-  function restoreDefaultPreferences() {
-    const confirmed = window.confirm(
-      "Restore default preferences? This resets saved view, theme, layout, graph, folder, sync, and tag preferences. Open documents and recent items are not removed."
-    );
-    if (!confirmed) return;
-
-    try {
-      localStorage.removeItem(GLOBAL_STATE_KEY);
-    } catch (error) {
-      console.warn("Failed to clear saved preferences:", error);
-    }
-
-    const defaults = getDefaultGlobalState();
-    currentFolderSortMode = defaults.folderSortMode;
-    editorWidthPercent = defaults.editorWidthPercent;
-    graphSettings.magneticEnabled = defaults.graphMagneticEnabled;
-    autoSelectFileEnabled = defaults.autoSelectFileEnabled;
-    showUnsupportedFolderFiles = defaults.showUnsupportedFolderFiles;
-    syncScrollingEnabled = defaults.syncScrollingEnabled;
-
-    document.documentElement.setAttribute("data-theme", defaults.theme);
-    updateThemeButtonLabels(defaults.theme);
-    resetSidebarDropzoneLayoutToDefault();
-    setSidebarVisible(defaults.sidebarVisible, false, false);
-    updateDropzoneToggleButtons();
-    applySidebarWidth(DEFAULT_SIDEBAR_WIDTH, false);
-    setViewMode(defaults.viewMode, false);
-    updateSyncToggleButtons();
-    updateAutoSelectFileButtons();
-    updateUnsupportedFileToggleButtons();
-    updateFolderTreeToolbarState();
-    renderFilteredFolderTree();
-    renderMarkdown();
-    scheduleGlobalProfileWrite();
-
-    window.alert("Preferences restored to defaults.");
-  }
-
-  function applyGlobalPreferences(state = loadGlobalState()) {
-    currentFolderSortMode = getValidFolderSortMode(state.folderSortMode || currentFolderSortMode);
-    editorWidthPercent = getClampedEditorWidthPercent(state.editorWidthPercent);
-    graphSettings.magneticEnabled = state.graphMagneticEnabled !== false;
-    autoSelectFileEnabled = state.autoSelectFileEnabled !== false;
-    showUnsupportedFolderFiles = state.showUnsupportedFolderFiles === true;
-    syncScrollingEnabled = state.syncScrollingEnabled !== false;
-    if (state.theme === "dark" || state.theme === "light") {
-      document.documentElement.setAttribute("data-theme", state.theme);
-      updateThemeButtonLabels(state.theme);
-      renderMarkdown();
-    }
-    updateSyncToggleButtons();
-    updateAutoSelectFileButtons();
-    updateUnsupportedFileToggleButtons();
-    updateFolderTreeSortControls();
-    applySavedLayoutPreferences(state);
-  }
-
-  function applySavedLayoutPreferences(state = loadGlobalState()) {
-    applySidebarWidth(state.sidebarWidth, false);
-    applySidebarDropzoneHeight(state.sidebarDropzoneHeight, false);
-    if (state.sidebarDropzoneVisible === false) {
-      hideSidebarDropzone(false);
-    } else {
-      showSidebarDropzone(false);
-    }
-    setSidebarVisible(state.sidebarVisible !== false, false);
-  }
-
-  function getKnownTags() {
-    return normalizeFileTagList(loadGlobalState().knownTags || []);
-  }
-
-  function saveKnownTags(tags) {
-    saveGlobalState({ knownTags: normalizeFileTagList(tags).sort((a, b) => a.localeCompare(b)) });
-  }
-
-  function addTagsToCountMap(counts, tags) {
-    normalizeFileTagList(tags).forEach((tag) => {
-      counts.set(tag, (counts.get(tag) || 0) + 1);
-    });
-  }
-
-  function removeTagsFromCountMap(counts, tags) {
-    normalizeFileTagList(tags).forEach((tag) => {
-      const nextCount = (counts.get(tag) || 0) - 1;
-      if (nextCount > 0) {
-        counts.set(tag, nextCount);
-      } else {
-        counts.delete(tag);
-      }
-    });
-  }
-
-  function areTagListsEqual(firstTags, secondTags) {
-    const first = normalizeFileTagList(firstTags).sort();
-    const second = normalizeFileTagList(secondTags).sort();
-    return first.length === second.length && first.every((tag, index) => tag === second[index]);
-  }
-
-  function getComparableFolderEntryPath(entry) {
-    return getComparableFilePath(entry?.fullPath || entry?.path || entry?.file?.webkitRelativePath || entry?.file?.name || entry?.name || "");
-  }
-
-  function getFolderMarkdownEntryForTab(tab) {
-    if (!tab || tab.type === "graph") return null;
-
-    if (tab.sourceFileHandle) {
-      const handleMatch = (folderMarkdownFiles || []).find((entry) => entry.handle && entry.handle === tab.sourceFileHandle);
-      if (handleMatch) return handleMatch;
-    }
-
-    const tabPathKey = getComparableFilePath(tab.sourceFilePath || "");
-    if (tabPathKey) {
-      const pathMatch = (folderMarkdownFiles || []).find((entry) => getComparableFolderEntryPath(entry) === tabPathKey);
-      if (pathMatch) return pathMatch;
-    }
-
-    const tabName = tab.sourceFileName || (tab.sourceFilePath ? getFileName(tab.sourceFilePath) : "");
-    if (!tabName) return null;
-
-    return (folderMarkdownFiles || []).find((entry) => {
-      const entryName = entry.name || entry.file?.name || (entry.path ? getFileName(entry.path) : "") || (entry.fullPath ? getFileName(entry.fullPath) : "");
-      return entryName === tabName;
-    }) || null;
-  }
-
-  function updateFolderTreeNodeTagsForEntry(fileEntry, tags) {
-    const entryPathKey = getComparableFolderEntryPath(fileEntry);
-    if (!entryPathKey) return;
-
-    const updateNodes = (nodes) => {
-      (nodes || []).forEach((node) => {
-        if (node.kind === "directory") {
-          updateNodes(node.children || []);
-          return;
-        }
-
-        if (getFolderTreeNodePathKey(node) === entryPathKey) {
-          node.tags = normalizeFileTagList(tags);
-        }
-      });
-    };
-
-    updateNodes(currentFolderTreeNodes);
-  }
-
-  function syncMarkdownTabTagsToFolderState(tab, content) {
-    const normalizedContent = normalizeEditorContent(content);
-    const nextTags = getFileTagsFromContent(normalizedContent);
-    const fileEntry = getFolderMarkdownEntryForTab(tab);
-    const previousTags = fileEntry
-      ? normalizeFileTagList(fileEntry.tags || [])
-      : normalizeFileTagList(tab?.graphSyncedTags || getOpenGraphSnapshotTagsForMarkdownTab(tab));
-
-    if (fileEntry) {
-      fileEntry.content = normalizedContent;
-    }
-
-    if (areTagListsEqual(previousTags, nextTags)) return;
-
-    if (fileEntry) {
-      fileEntry.tags = nextTags;
-      removeTagsFromCountMap(folderTagCounts, previousTags);
-      addTagsToCountMap(folderTagCounts, nextTags);
-      updateFolderTreeNodeTagsForEntry(fileEntry, nextTags);
-    }
-    if (tab) tab.graphSyncedTags = nextTags;
-
-    saveKnownTags([...getKnownTags(), ...nextTags]);
-    syncOpenGraphSnapshotsForMarkdownTabTagChange(tab, normalizedContent);
-    renderTagManagementList();
-    renderLinkAutocomplete();
-    if (selectedFolderTreeTags.size) {
-      renderFilteredFolderTree();
-    }
-  }
-
-  function getActiveGraphSnapshotTagCounts() {
-    const counts = new Map();
-    const activeGraphTab = getActiveGraphTab();
-    (activeGraphTab?.graphSnapshot?.files || []).forEach((snapshotFile) => {
-      const tags = snapshotFile.tags?.length ? snapshotFile.tags : getFileTagsFromContent(snapshotFile.content || "");
-      addTagsToCountMap(counts, tags);
-    });
-    return counts;
-  }
-
-  function getReferencedTagCounts() {
-    const graphCounts = getActiveGraphSnapshotTagCounts();
-    if (graphCounts.size) return graphCounts;
-    return new Map(folderTagCounts || []);
-  }
-
-  function getAllKnownAndReferencedTags() {
-    const tagSet = new Set(getKnownTags());
-    getReferencedTagCounts().forEach((_count, tag) => tagSet.add(tag));
-    return Array.from(tagSet).sort((a, b) => a.localeCompare(b));
-  }
-
-  function getReferencedTags() {
-    return Array.from(getReferencedTagCounts().keys()).sort((a, b) => a.localeCompare(b));
-  }
-
-  function getGraphFileEntryNodeId(fileEntry) {
-    if (!fileEntry) return "";
-    return fileEntry.id || normalizeGraphNodeName(fileEntry.path || fileEntry.fullPath || fileEntry.file?.webkitRelativePath || fileEntry.file?.name || fileEntry.name || "");
-  }
-
-  function findFolderMarkdownEntryForGraphFile(fileEntry) {
-    const fileNodeId = getGraphFileEntryNodeId(fileEntry);
-    if (!fileNodeId) return null;
-    return (folderMarkdownFiles || []).find((entry) => getGraphFileEntryNodeId(entry) === fileNodeId) || null;
-  }
-
-  async function readFolderMarkdownFileContent(fileEntry) {
-    if (!fileEntry) return "";
-    if (typeof fileEntry.content === "string") return fileEntry.content;
-    if (fileEntry.file?.text) return fileEntry.file.text();
-    if (fileEntry.handle?.getFile) {
-      const file = await fileEntry.handle.getFile();
-      return file.text();
-    }
-    if (typeof NL_VERSION !== "undefined" && fileEntry.fullPath) {
-      return Neutralino.filesystem.readFile(fileEntry.fullPath);
-    }
-
-    const folderEntry = findFolderMarkdownEntryForGraphFile(fileEntry);
-    if (folderEntry && folderEntry !== fileEntry) return readFolderMarkdownFileContent(folderEntry);
-    return "";
-  }
-
-  async function refreshFolderTagCounts() {
-    const refreshId = ++folderTagCountsRefreshId;
-    const counts = new Map();
-    const files = (folderMarkdownFiles || []).slice();
-
-    for (const fileEntry of files) {
-      try {
-        const content = await readFolderMarkdownFileContent(fileEntry);
-        if (refreshId !== folderTagCountsRefreshId) return;
-        fileEntry.content = content || "";
-        fileEntry.tags = getFileTagsFromContent(fileEntry.content);
-        addTagsToCountMap(counts, fileEntry.tags);
-      } catch (error) {
-        console.warn("Failed to read folder file tags:", fileEntry.path || fileEntry.fullPath || fileEntry.name, error);
-      }
-    }
-
-    if (refreshId !== folderTagCountsRefreshId) return;
-    folderTagCounts = counts;
-    renderTagManagementList();
-    renderLinkAutocomplete();
-    if (selectedFolderTreeTags.size) {
-      renderFilteredFolderTree();
-    }
-  }
-
-  function clearFolderTagCounts() {
-    folderTagCountsRefreshId += 1;
-    folderTagCounts = new Map();
-    renderTagManagementList();
-  }
-
-  function renderTagManagementList() {
-    if (!tagManagementList) return;
-    tagManagementList.setAttribute("aria-multiselectable", "true");
-    const query = String(tagManagementSearch?.value || "").trim().toLowerCase();
-    const counts = getReferencedTagCounts();
-    const tags = getReferencedTags().filter((tag) => !query || tag.includes(query));
-    tagManagementList.innerHTML = "";
-
-    if (!tags.length) {
-      const empty = document.createElement("div");
-      empty.className = "tag-management-list-empty";
-      empty.textContent = query ? "No matching tags" : "No known tags yet";
-      tagManagementList.appendChild(empty);
-      return;
-    }
-
-    tags.forEach((tag) => {
-      const button = document.createElement("button");
-      const isSelected = selectedFolderTreeTags.has(tag);
-      button.type = "button";
-      button.className = "tag-management-list-item" + (isSelected ? " selected" : "");
-      button.dataset.tagName = tag;
-      button.setAttribute("role", "option");
-      button.setAttribute("aria-selected", isSelected ? "true" : "false");
-      button.title = isSelected ? `Remove #${tag} from the folder tree tag filter` : `Show files tagged #${tag} in the folder tree`;
-      button.innerHTML = `<i class="bi ${isSelected ? "bi-tag-fill" : "bi-tag"}" aria-hidden="true"></i><span>#${escapeHtml(tag)}</span><span class="tag-management-list-item-count">${counts.get(tag) || 0}</span>`;
-      button.addEventListener("click", () => {
-        toggleFolderTreeTagFilter(tag);
-      });
-      tagManagementList.appendChild(button);
-    });
-  }
-
-  function createTag(tagName) {
-    const normalizedTag = normalizeTagName(tagName);
-    if (!normalizedTag) {
-      alert("Enter a tag name to create.");
-      return false;
-    }
-
-    const tags = getKnownTags();
-    if (!tags.includes(normalizedTag)) {
-      saveKnownTags([...tags, normalizedTag]);
-    }
-    renderTagManagementList();
-    const activeGraphTab = getActiveGraphTab();
-    if (activeGraphTab) {
-      updateGraphTagToolbar(activeGraphTab, activeGraphTab.graphSnapshot || null);
-    }
-    return true;
-  }
-
-  function snapshotFileMatchesTab(snapshotFile, tab) {
-    if (!snapshotFile || !tab || tab.type === "graph") return false;
-    const candidatePaths = new Set([snapshotFile.fullPath, snapshotFile.path].filter(Boolean).map(getComparableFilePath));
-    const candidateNames = new Set([
-      snapshotFile.name,
-      snapshotFile.path ? getFileName(snapshotFile.path) : null,
-      snapshotFile.fullPath ? getFileName(snapshotFile.fullPath) : null
-    ].filter(Boolean));
-
-    if (tab.sourceFilePath && candidatePaths.has(getComparableFilePath(tab.sourceFilePath))) return true;
-    if (tab.sourceFileName && candidateNames.has(tab.sourceFileName)) return true;
-    return !!(tab.title && candidateNames.has(tab.title));
-  }
-
-  function updateOpenMarkdownTabsForSnapshotFile(snapshotFile) {
-    const normalizedContent = normalizeEditorContent(snapshotFile.content || "");
-    tabs.forEach((tab) => {
-      if (!snapshotFileMatchesTab(snapshotFile, tab)) return;
-      tab.content = normalizedContent;
-      if (tab.id === activeTabId) {
-        markdownEditor.value = normalizedContent;
-        renderEditorSyntaxHighlights();
-        updateEditorLineNumbers();
-        renderMarkdown();
-      }
-    });
-  }
-
-  function getOpenGraphSnapshotTagsForMarkdownTab(sourceTab) {
-    if (!sourceTab || sourceTab.type === "graph") return [];
-    for (const tab of tabs) {
-      if (tab?.type !== "graph" || !tab.graphSnapshot?.files) continue;
-      const matchingSnapshotFile = tab.graphSnapshot.files.find((snapshotFile) => snapshotFileMatchesTab(snapshotFile, sourceTab));
-      if (matchingSnapshotFile) {
-        return normalizeFileTagList(matchingSnapshotFile.tags?.length ? matchingSnapshotFile.tags : getFileTagsFromContent(matchingSnapshotFile.content || ""));
-      }
-    }
-    return [];
-  }
-
-  function updateFolderMarkdownEntryForSnapshotFile(snapshotFile) {
-    const snapshotNodeId = snapshotFile.id || normalizeGraphNodeName(snapshotFile.path || snapshotFile.fullPath || snapshotFile.name || "");
-    const folderEntry = (folderMarkdownFiles || []).find((entry) => {
-      const entryPath = entry.path || entry.fullPath || entry.file?.webkitRelativePath || entry.file?.name || "";
-      return normalizeGraphNodeName(entryPath) === snapshotNodeId;
-    });
-    if (folderEntry) {
-      folderEntry.content = snapshotFile.content || "";
-      folderEntry.tags = getFileTagsFromContent(folderEntry.content);
-      updateFolderTreeNodeTagsForEntry(folderEntry, folderEntry.tags);
-    }
-  }
-
-  async function syncOpenGraphSnapshotsForMarkdownTabTagChange(sourceTab, content) {
-    if (!sourceTab || sourceTab.type === "graph") return false;
-    const syncRequestId = ++openGraphSnapshotTagSyncRequestId;
-    const normalizedContent = normalizeEditorContent(content);
-    let changedActiveGraph = false;
-
-    for (const tab of tabs) {
-      if (syncRequestId !== openGraphSnapshotTagSyncRequestId) return false;
-      if (tab?.type !== "graph" || !tab.graphSnapshot?.files || isKeepSavedGraphMode(tab)) continue;
-
-      let graphChanged = false;
-      tab.graphSnapshot.files.forEach((snapshotFile) => {
-        if (!snapshotFileMatchesTab(snapshotFile, sourceTab)) return;
-        snapshotFile.content = normalizedContent;
-        snapshotFile.tags = getFileTagsFromContent(normalizedContent);
-        graphChanged = true;
-      });
-
-      if (!graphChanged) continue;
-      const currentSnapshot = tab.graphSnapshot;
-      tab.graphSnapshot = await createGraphSnapshot(currentSnapshot.files || [], currentSnapshot.folderName || tab.folderName || tab.title);
-      if (syncRequestId !== openGraphSnapshotTagSyncRequestId) return false;
-      if (currentSnapshot.createdAt) tab.graphSnapshot.createdAt = currentSnapshot.createdAt;
-      graphRenderCache.delete(tab.id);
-      markGraphTabAsChanged(tab);
-      changedActiveGraph = changedActiveGraph || tab.id === activeTabId;
-    }
-
-    if (changedActiveGraph) {
-      const activeGraphTab = getActiveGraphTab();
-      updateGraphTagToolbar(activeGraphTab, activeGraphTab?.graphSnapshot || null);
-      renderGraphView();
-    }
-
-    saveTabsToStorage(tabs);
-    return changedActiveGraph;
-  }
-
-  function getTagDeletionEntryKey(entry) {
-    return getComparableFilePath(entry?.fullPath || entry?.path || entry?.file?.webkitRelativePath || entry?.file?.name || entry?.name || "");
-  }
-
-  function getActiveGraphSnapshotFileDeletionTargets(tagName, existingKeys) {
-    const activeGraphTab = getActiveGraphTab();
-    if (!activeGraphTab?.graphSnapshot?.files || isKeepSavedGraphMode(activeGraphTab)) return [];
-
-    return activeGraphTab.graphSnapshot.files
-      .filter((snapshotFile) => !existingKeys.has(getTagDeletionEntryKey(snapshotFile)))
-      .filter((snapshotFile) => getFileTagsFromContent(snapshotFile.content || "").includes(tagName))
-      .map((snapshotFile) => ({
-        id: snapshotFile.id,
-        name: snapshotFile.name || (snapshotFile.path ? getFileName(snapshotFile.path) : "document.md"),
-        path: snapshotFile.path || snapshotFile.fullPath || snapshotFile.name || "",
-        fullPath: snapshotFile.fullPath || null,
-        content: snapshotFile.content || "",
-        tags: snapshotFile.tags || []
-      }));
-  }
-
-  function getNeutralinoTagDeletionWritePath(entry) {
-    if (!isNeutralinoRuntime()) return null;
-    if (entry.fullPath) return entry.fullPath;
-    if (!entry.path) return null;
-    const entryPath = String(entry.path);
-    const isAbsolutePath = /^[a-zA-Z]:[\\/]/.test(entryPath) || /^\\\\/.test(entryPath) || entryPath.startsWith("/");
-    return isAbsolutePath ? entryPath : (activeFolderPath ? joinPath(activeFolderPath, entryPath) : null);
-  }
-
-  async function writeTagDeletionTargetContent(entry, content) {
-    const neutralinoWritePath = getNeutralinoTagDeletionWritePath(entry);
-    if (neutralinoWritePath) {
-      if (!Neutralino.filesystem?.writeFile) throw new Error("No writable filesystem path is available.");
-      await Neutralino.filesystem.writeFile(neutralinoWritePath, content);
-      return;
-    }
-
-    if (entry.handle?.createWritable) {
-      const writable = await entry.handle.createWritable();
-      await writable.write(content);
-      await writable.close();
-      return;
-    }
-
-    throw new Error("No writable file handle is available.");
-  }
-
-  async function updateOpenGraphSnapshotsForChangedTagFiles(changedEntries) {
-    if (!changedEntries.length) return false;
-    let changedActiveGraph = false;
-
-    for (const tab of tabs) {
-      if (tab?.type !== "graph" || !tab.graphSnapshot?.files || isKeepSavedGraphMode(tab)) continue;
-
-      let graphChanged = false;
-      tab.graphSnapshot.files.forEach((snapshotFile) => {
-        const changedEntry = changedEntries.find((entry) => sidebarNodeMatchesSnapshotFile(entry, snapshotFile));
-        if (!changedEntry) return;
-        snapshotFile.content = changedEntry.content || "";
-        snapshotFile.tags = getFileTagsFromContent(snapshotFile.content);
-        graphChanged = true;
-      });
-
-      if (!graphChanged) continue;
-      const currentSnapshot = tab.graphSnapshot;
-      tab.graphSnapshot = await createGraphSnapshot(currentSnapshot.files || [], currentSnapshot.folderName || tab.folderName || tab.title);
-      if (currentSnapshot.createdAt) tab.graphSnapshot.createdAt = currentSnapshot.createdAt;
-      graphRenderCache.delete(tab.id);
-      markGraphTabAsChanged(tab);
-      changedActiveGraph = changedActiveGraph || tab.id === activeTabId;
-    }
-
-    return changedActiveGraph;
-  }
-
-  async function deleteTag(tagName) {
-    const normalizedTag = normalizeTagName(tagName);
-    if (!normalizedTag) {
-      alert("Enter a tag name to delete.");
-      return false;
-    }
-
-    const confirmed = window.confirm(`Delete tag "#${normalizedTag}"? This removes it from every file that has the tag and saves those files.`);
-    if (!confirmed) return false;
-
-    const folderTargets = [];
-    const targetKeys = new Set();
-    for (const fileEntry of (folderMarkdownFiles || [])) {
-      try {
-        const currentContent = await readFolderMarkdownFileContent(fileEntry);
-        const currentTags = getFileTagsFromContent(currentContent);
-        fileEntry.content = currentContent || "";
-        fileEntry.tags = currentTags;
-        updateFolderTreeNodeTagsForEntry(fileEntry, currentTags);
-        if (!currentTags.includes(normalizedTag)) continue;
-        folderTargets.push(fileEntry);
-        const targetKey = getTagDeletionEntryKey(fileEntry);
-        if (targetKey) targetKeys.add(targetKey);
-      } catch (error) {
-        console.warn("Failed to read folder file tags before deleting tag:", fileEntry.path || fileEntry.fullPath || fileEntry.name, error);
-      }
-    }
-
-    const targets = [
-      ...folderTargets,
-      ...getActiveGraphSnapshotFileDeletionTargets(normalizedTag, targetKeys)
-    ];
-
-    const changedEntries = [];
-    const failedEntries = [];
-    for (const entry of targets) {
-      try {
-        const currentContent = typeof entry.content === "string" ? entry.content : await readFolderMarkdownFileContent(entry);
-        const nextContent = removeTagFromContent(currentContent, normalizedTag);
-        if (nextContent === currentContent) continue;
-
-        await writeTagDeletionTargetContent(entry, nextContent);
-        entry.content = nextContent;
-        entry.tags = getFileTagsFromContent(nextContent);
-        updateFolderTreeNodeTagsForEntry(entry, entry.tags);
-        updateOpenMarkdownTabsForSidebarNode(entry, nextContent);
-        changedEntries.push(entry);
-      } catch (error) {
-        failedEntries.push(entry);
-        console.error("Failed to delete tag from file:", entry.path || entry.fullPath || entry.name, error);
-      }
-    }
-
-    const activeGraphChanged = await updateOpenGraphSnapshotsForChangedTagFiles(changedEntries);
-
-    if (selectedFolderTreeTags.has(normalizedTag)) {
-      selectedFolderTreeTags = new Set(selectedFolderTreeTags);
-      selectedFolderTreeTags.delete(normalizedTag);
-    }
-
-    await refreshFolderTagCounts();
-    if (!failedEntries.length) {
-      saveKnownTags(getKnownTags().filter((tag) => tag !== normalizedTag));
-    }
-    saveTabsToStorage(tabs);
-    renderTabBar(tabs, activeTabId);
-    updateSaveCurrentFileButtons();
-    renderFilteredFolderTree();
-    renderTagManagementList();
-    renderLinkAutocomplete();
-
-    if (activeGraphChanged || (getActiveGraphTab() && activeTabId === getActiveGraphTab().id)) {
-      renderGraphView();
-    }
-
-    if (failedEntries.length) {
-      alert(`Unable to delete #${normalizedTag} from ${failedEntries.length} file${failedEntries.length === 1 ? "" : "s"}. Files opened without write permission cannot be saved.`);
-      return false;
-    }
-
-    return true;
-  }
-
-  function parseFrontmatter(markdown) {
-    const match = markdown.match(/^---\r?\n([\s\S]*?)\r?\n---(\r?\n|$)/);
-    if (!match) return { frontmatter: null, body: markdown };
-    try {
-      const data = jsyaml.load(match[1]) || {};
-      return { frontmatter: data, body: markdown.slice(match[0].length) };
-    } catch (e) {
-      console.warn('Frontmatter YAML parse error:', e);
-      return { frontmatter: null, body: markdown };
-    }
-  }
-
-  function renderFrontmatterValue(value) {
-    if (value === null || value === undefined) return '';
-    if (value instanceof Date) {
-      const y = value.getUTCFullYear();
-      const m = String(value.getUTCMonth() + 1).padStart(2, '0');
-      const d = String(value.getUTCDate()).padStart(2, '0');
-      return `${y}-${m}-${d}`;
-    }
-    if (Array.isArray(value)) {
-      const allPrimitive = value.every(v => v === null || typeof v !== 'object');
-      if (allPrimitive) {
-        return value
-          .map(v => `<span class="fm-tag">${escapeHtml(String(v ?? ''))}</span>`)
-          .join('');
-      }
-      return `<pre class="fm-complex">${escapeHtml(jsyaml.dump(value).trimEnd())}</pre>`;
-    }
-    if (typeof value === 'object') {
-      return `<pre class="fm-complex">${escapeHtml(jsyaml.dump(value).trimEnd())}</pre>`;
-    }
-    return escapeHtml(String(value));
-  }
-
-  function renderFrontmatterTable(data) {
-    const rows = Object.entries(data).map(([key, value]) =>
-      `<tr><th>${escapeHtml(key)}</th><td>${renderFrontmatterValue(value)}</td></tr>`
-    );
-    return `<table class="frontmatter-table"><tbody>${rows.join('')}</tbody></table>`;
-  }
-
-  function escapeHtml(str) {
-    return str
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;');
-  }
-
 
   const editorSyntaxHighlighter = window.registerMarkdownViewerEditorSyntaxHighlight(app, {
     markdownEditor,
@@ -1607,7 +1026,7 @@ flowchart LR
 
 Use **bold**, *italic*, ***bold italic***, ~~strikethrough~~, <mark>highlighting</mark>, and <u>underlines</u>.
 
-Chemical formulas: H<sub>2</sub>O and CO<sub>2</sub>  
+Chemical formulas: H<sub>2</sub>O and CO<sub>2</sub><br>
 Keyboard shortcuts: <kbd>Ctrl</kbd>/<kbd>Cmd</kbd> + <kbd>S</kbd> to export Markdown.
 
 > [!TIP]
@@ -1721,9 +1140,9 @@ Markdown content is processed client-side in your browser and sanitized before p
     normalizeTagName,
     extractMarkdownLinks,
     getFileTagsFromContent,
-    readFolderMarkdownFileContent,
+    get readFolderMarkdownFileContent() { return readFolderMarkdownFileContent; },
     getFileName,
-    updateGraphTagToolbar,
+    get updateGraphTagToolbar() { return updateGraphTagToolbar; },
     get renderGraphView() { return renderGraphView; },
     saveGlobalState,
     get renderTabBar() { return renderTabBar; },
@@ -1826,6 +1245,91 @@ Markdown content is processed client-side in your browser and sanitized before p
     saveActiveTabId,
   } = graphPersistence;
 
+  const tagsModule = window.registerMarkdownViewerTags(app, {
+    get folderMarkdownFiles() { return folderMarkdownFiles; },
+    get folderTagCounts() { return folderTagCounts; },
+    set folderTagCounts(value) { folderTagCounts = value; },
+    get folderTagCountsRefreshId() { return folderTagCountsRefreshId; },
+    set folderTagCountsRefreshId(value) { folderTagCountsRefreshId = value; },
+    get selectedFolderTreeTags() { return selectedFolderTreeTags; },
+    set selectedFolderTreeTags(value) { selectedFolderTreeTags = value; },
+    get currentFolderTreeNodes() { return currentFolderTreeNodes; },
+    get openGraphSnapshotTagSyncRequestId() { return openGraphSnapshotTagSyncRequestId; },
+    set openGraphSnapshotTagSyncRequestId(value) { openGraphSnapshotTagSyncRequestId = value; },
+    get activeFolderPath() { return activeFolderPath; },
+    get activeTabId() { return activeTabId; },
+    get tabs() { return tabs; },
+    get markdownEditor() { return markdownEditor; },
+    get graphRenderCache() { return graphRenderCache; },
+    get Neutralino() { return typeof Neutralino !== "undefined" ? Neutralino : undefined; },
+    get NL_VERSION() { return typeof NL_VERSION !== "undefined" ? NL_VERSION : undefined; },
+    get tagManagementList() { return tagManagementList; },
+    get tagManagementSearch() { return tagManagementSearch; },
+    normalizeFileTagList,
+    normalizeTagName,
+    loadGlobalState,
+    saveGlobalState,
+    getComparableFilePath,
+    getFileName,
+    getFolderTreeNodePathKey,
+    get normalizeEditorContent() { return normalizeEditorContent; },
+    getFileTagsFromContent,
+    getActiveGraphTab,
+    get updateGraphTagToolbar() { return updateGraphTagToolbar; },
+    get renderGraphView() { return renderGraphView; },
+    createGraphSnapshot,
+    isKeepSavedGraphMode,
+    markGraphTabAsChanged,
+    saveTabsToStorage,
+    isNeutralinoRuntime,
+    joinPath,
+    get renderFilteredFolderTree() { return renderFilteredFolderTree; },
+    get renderLinkAutocomplete() { return renderLinkAutocomplete; },
+    get renderEditorSyntaxHighlights() { return renderEditorSyntaxHighlights; },
+    get updateEditorLineNumbers() { return updateEditorLineNumbers; },
+    get renderMarkdown() { return renderMarkdown; },
+    get sidebarNodeMatchesSnapshotFile() { return sidebarNodeMatchesSnapshotFile; },
+    get updateOpenMarkdownTabsForSidebarNode() { return updateOpenMarkdownTabsForSidebarNode; },
+    removeTagFromContent,
+    get renderTabBar() { return renderTabBar; },
+    get updateSaveCurrentFileButtons() { return updateSaveCurrentFileButtons; },
+    normalizeGraphNodeName,
+    escapeHtml
+  });
+  const {
+    getKnownTags,
+    saveKnownTags,
+    addTagsToCountMap,
+    removeTagsFromCountMap,
+    areTagListsEqual,
+    getComparableFolderEntryPath,
+    getFolderMarkdownEntryForTab,
+    updateFolderTreeNodeTagsForEntry,
+    syncMarkdownTabTagsToFolderState,
+    getActiveGraphSnapshotTagCounts,
+    getReferencedTagCounts,
+    getAllKnownAndReferencedTags,
+    getReferencedTags,
+    getGraphFileEntryNodeId,
+    findFolderMarkdownEntryForGraphFile,
+    readFolderMarkdownFileContent,
+    refreshFolderTagCounts,
+    clearFolderTagCounts,
+    renderTagManagementList,
+    createTag,
+    snapshotFileMatchesTab,
+    updateOpenMarkdownTabsForSnapshotFile,
+    getOpenGraphSnapshotTagsForMarkdownTab,
+    updateFolderMarkdownEntryForSnapshotFile,
+    syncOpenGraphSnapshotsForMarkdownTabTagChange,
+    getTagDeletionEntryKey,
+    getActiveGraphSnapshotFileDeletionTargets,
+    getNeutralinoTagDeletionWritePath,
+    writeTagDeletionTargetContent,
+    updateOpenGraphSnapshotsForChangedTagFiles,
+    deleteTag
+  } = tagsModule;
+
   renderTagManagementList();
 
   function loadUntitledCounter() {
@@ -1867,7 +1371,7 @@ Markdown content is processed client-side in your browser and sanitized before p
     normalizeGraphDocument,
     deserializeGraphDocument,
     serializeGraphTab,
-    getFileIconClass,
+    get getFileIconClass() { return getFileIconClass; },
     tabHasUnsavedChanges,
     isFileBackedGraphTab,
     saveTabsToStorage,
@@ -1879,17 +1383,17 @@ Markdown content is processed client-side in your browser and sanitized before p
     setViewMode,
     loadGlobalState,
     saveGlobalState,
-    setGraphViewMode,
+    get setGraphViewMode() { return setGraphViewMode; },
     get renderGraphView() { return renderGraphView; },
     renderMarkdown,
     renderEditorSyntaxHighlights,
     updateEditorLineNumbers,
     syncEditorSyntaxHighlightScroll,
     syncFolderTreeSelectionToActiveTab,
-    hideSidebarContextMenus,
+    get hideSidebarContextMenus() { return hideSidebarContextMenus; },
     suspendActiveGraphRender,
     removeGraphRenderForTab,
-    updateGraphTagToolbar,
+    get updateGraphTagToolbar() { return updateGraphTagToolbar; },
     getActiveGraphTab,
     get updateStatusLine() { return updateStatusLine; },
     saveActiveTabToSource,
@@ -1990,10 +1494,10 @@ Markdown content is processed client-side in your browser and sanitized before p
       enhanceGitHubAlerts(markdownPreview);
 
       processEmojis(markdownPreview);
-      
+
       // Reinitialize mermaid with current theme before rendering diagrams
       initMermaid();
-      
+
       try {
         const mermaidNodes = markdownPreview.querySelectorAll('.mermaid');
         if (mermaidNodes.length > 0) {
@@ -2007,7 +1511,7 @@ Markdown content is processed client-side in your browser and sanitized before p
       } catch (e) {
         console.warn("Mermaid rendering failed:", e);
       }
-      
+
       if (window.MathJax) {
         try {
           MathJax.typesetPromise([markdownPreview]).catch((err) => {
@@ -2832,2071 +2336,216 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
     openFolder: { label: "Open folder", icon: "bi bi-folder2-open" }
   });
 
-  function createFileContextMenuButton(labelText, iconClass, tooltipText) {
-    const button = document.createElement("button");
-    button.type = "button";
-    button.className = "graph-context-menu-item graph-context-menu-tooltip";
-    button.dataset.tooltip = tooltipText;
-    const icon = document.createElement("i");
-    icon.className = iconClass;
-    icon.setAttribute("aria-hidden", "true");
-    const label = document.createElement("span");
-    label.className = "graph-context-menu-item-label";
-    label.textContent = labelText;
-    button.appendChild(icon);
-    button.appendChild(label);
-    return button;
-  }
-
-  function createTagsContextSubmenu(tooltipText) {
-    const submenu = document.createElement("div");
-    submenu.className = "graph-context-menu-submenu tags-context-submenu";
-    const submenuBtn = createFileContextMenuButton(
-      CONTEXT_MENU_ACTIONS.tags.label,
-      CONTEXT_MENU_ACTIONS.tags.icon,
-      tooltipText || "Add or remove frontmatter tags for this file."
-    );
-    submenuBtn.setAttribute("aria-haspopup", "true");
-    const submenuArrow = document.createElement("span");
-    submenuArrow.className = "graph-context-menu-submenu-arrow";
-    submenuArrow.textContent = "›";
-    submenuBtn.appendChild(submenuArrow);
-    const submenuPanel = document.createElement("div");
-    submenuPanel.className = "graph-context-menu-submenu-panel tags-context-submenu-panel";
-    submenu.appendChild(submenuBtn);
-    submenu.appendChild(submenuPanel);
-    return { submenu, submenuBtn, submenuPanel };
-  }
-
-  function renderTagsContextSubmenu(submenuPanel, currentTags, onToggleTag) {
-    if (!submenuPanel) return;
-    const fileTags = new Set(normalizeFileTagList(currentTags || []));
-    const tags = Array.from(new Set([...getReferencedTags(), ...fileTags])).sort((a, b) => a.localeCompare(b));
-    submenuPanel.innerHTML = "";
-
-    if (!tags.length) {
-      const empty = document.createElement("div");
-      empty.className = "graph-context-menu-empty";
-      empty.textContent = "No available tags";
-      submenuPanel.appendChild(empty);
-      return;
-    }
-
-    tags.forEach((tag) => {
-      const isChecked = fileTags.has(tag);
-      const button = createFileContextMenuButton(
-        `#${tag}`,
-        isChecked ? "bi bi-check-lg" : "bi",
-        isChecked ? `Remove #${tag} from this file.` : `Add #${tag} to this file.`
-      );
-      button.classList.add("tags-context-menu-item");
-      button.dataset.tagName = tag;
-      button.setAttribute("aria-checked", isChecked ? "true" : "false");
-      button.addEventListener("click", async (event) => {
-        event.preventDefault();
-        event.stopPropagation();
-        await onToggleTag(tag, !isChecked);
-      });
-      submenuPanel.appendChild(button);
-    });
-  }
-
-  function getSidebarNodeSource(node) {
-    if (!node) return null;
-    return {
-      name: node.name,
-      file: node.file || null,
-      handle: node.handle || null,
-      path: node.fullPath || node.path || null
-    };
-  }
-
-  function getSidebarNodeClipboardPath(node) {
-    if (!node) return "";
-    return node.fullPath || node.path || node.name || "";
-  }
-
-  async function readSidebarNodeContent(node) {
-    if (!node) throw new Error("No sidebar file was selected.");
-    if (isNeutralinoRuntime() && node.fullPath) {
-      return Neutralino.filesystem.readFile(node.fullPath);
-    }
-    if (node.file) return node.file.text();
-    if (node.handle) {
-      const file = await node.handle.getFile();
-      return file.text();
-    }
-    throw new Error("No readable file was provided.");
-  }
-
-  async function writeSidebarNodeContent(node, content) {
-    if (!node) throw new Error("No sidebar file was selected.");
-    if (isNeutralinoRuntime()) {
-      const writePath = getSidebarNodeFilesystemPath(node);
-      if (!writePath || !Neutralino.filesystem?.writeFile) throw new Error("No writable filesystem path is available.");
-      await Neutralino.filesystem.writeFile(writePath, content);
-      return;
-    }
-    if (node.handle?.createWritable) {
-      const writable = await node.handle.createWritable();
-      await writable.write(content);
-      await writable.close();
-      return;
-    }
-    throw new Error("No writable file handle is available.");
-  }
-
-  function sidebarNodeMatchesSnapshotFile(node, snapshotFile) {
-    if (!node || !snapshotFile) return false;
-    if (node.handle && snapshotFile.handle && node.handle === snapshotFile.handle) return true;
-    const nodePaths = [node.fullPath, node.path, node.file?.webkitRelativePath, node.file?.name, node.name]
-      .filter(Boolean)
-      .map(getComparableFilePath);
-    const snapshotPaths = [snapshotFile.fullPath, snapshotFile.path, snapshotFile.file?.webkitRelativePath, snapshotFile.file?.name, snapshotFile.name]
-      .filter(Boolean)
-      .map(getComparableFilePath);
-    return nodePaths.some((nodePath) => snapshotPaths.some((snapshotPath) => nodePath === snapshotPath || nodePath.endsWith(`/${snapshotPath}`) || snapshotPath.endsWith(`/${nodePath}`)));
-  }
-
-  async function updateGraphSnapshotsForSidebarFileTagChange(node, content) {
-    const changedGraphTabs = [];
-    for (const tab of tabs) {
-      if (tab?.type !== "graph" || !tab.graphSnapshot?.files) continue;
-      let changed = false;
-      tab.graphSnapshot.files.forEach((snapshotFile) => {
-        if (!sidebarNodeMatchesSnapshotFile(node, snapshotFile)) return;
-        snapshotFile.content = content;
-        snapshotFile.tags = getFileTagsFromContent(content);
-        changed = true;
-      });
-      if (!changed) continue;
-      const currentSnapshot = tab.graphSnapshot;
-      tab.graphSnapshot = await createGraphSnapshot(currentSnapshot.files || [], currentSnapshot.folderName || tab.folderName || tab.title);
-      if (currentSnapshot.createdAt) tab.graphSnapshot.createdAt = currentSnapshot.createdAt;
-      graphRenderCache.delete(tab.id);
-      markGraphTabAsChanged(tab);
-      changedGraphTabs.push(tab);
-    }
-    return changedGraphTabs;
-  }
-
-  function updateOpenMarkdownTabsForSidebarNode(node, content) {
-    const normalizedContent = normalizeEditorContent(content);
-    let changed = false;
-    tabs.forEach((tab) => {
-      if (!tab || tab.type === "graph") return;
-      const matchesHandle = node.handle && tab.sourceFileHandle === node.handle;
-      const nodePathKey = getComparableFilePath(node.fullPath || node.path || "");
-      const tabPathKey = getComparableFilePath(tab.sourceFilePath || "");
-      const matchesPath = nodePathKey && tabPathKey && nodePathKey === tabPathKey;
-      const matchesName = node.name && (tab.sourceFileName === node.name || tab.title === getMarkdownTitleFromFileName(node.name));
-      if (!matchesHandle && !matchesPath && !matchesName) return;
-      tab.content = normalizedContent;
-      tab.savedContent = normalizedContent;
-      if (tab.id === activeTabId) {
-        markdownEditor.value = normalizedContent;
-        renderEditorSyntaxHighlights();
-        updateEditorLineNumbers();
-        renderMarkdown();
-      }
-      changed = true;
-    });
-    if (changed) {
-      saveTabsToStorage(tabs);
-      renderTabBar(tabs, activeTabId);
-      updateSaveCurrentFileButtons();
-    }
-  }
-
-  async function setSidebarNodeTags(node, nextTags) {
-    const currentContent = await readSidebarNodeContent(node);
-    const nextContent = setFileTagsInContent(currentContent, nextTags);
-    if (nextContent === currentContent) return;
-
-    await writeSidebarNodeContent(node, nextContent);
-    node.tags = getFileTagsFromContent(nextContent);
-
-    const folderEntry = (folderMarkdownFiles || []).find((entry) => {
-      const entryPathKey = getComparableFilePath(entry.fullPath || entry.path || entry.file?.webkitRelativePath || entry.file?.name || entry.name || "");
-      const nodePathKey = getFolderTreeNodePathKey(node);
-      return entry.handle === node.handle || (entryPathKey && nodePathKey && entryPathKey === nodePathKey);
-    });
-    if (folderEntry) {
-      folderEntry.content = nextContent;
-      folderEntry.tags = node.tags;
-    }
-    updateFolderTreeNodeTagsForEntry(folderEntry || node, node.tags);
-    updateOpenMarkdownTabsForSidebarNode(node, nextContent);
-    saveKnownTags([...getKnownTags(), ...node.tags]);
-    await updateGraphSnapshotsForSidebarFileTagChange(node, nextContent);
-    await refreshFolderTagCounts();
-    renderFilteredFolderTree();
-    renderTagManagementList();
-    renderLinkAutocomplete();
-    saveTabsToStorage(tabs);
-    if (getActiveGraphTab()) renderGraphView();
-  }
-
-  function runWithTemporaryEditorContent(content, action) {
-    const previousValue = markdownEditor.value;
-    markdownEditor.value = content || "";
-    try {
-      action();
-    } finally {
-      markdownEditor.value = previousValue;
-      renderEditorSyntaxHighlights();
-      updateEditorLineNumbers();
-    }
-  }
-
-  function exportMarkdownContent(content, name) {
-    const suggestedName = sanitizeMarkdownFileName(name || "document");
-    saveAs(new Blob([content || ""], { type: "text/markdown;charset=utf-8" }), suggestedName);
-  }
-
-  function exportHtmlContent(content) {
-    runWithTemporaryEditorContent(content, () => exportHtml.click());
-  }
-
-  function exportPdfContent(content) {
-    runWithTemporaryEditorContent(content, () => exportPdf.click());
-  }
-
-  function getSidebarNodeFilesystemPath(node) {
-    if (!node || !isNeutralinoRuntime()) return null;
-    if (node.fullPath) return node.fullPath;
-    if (activeFolderPath && node.path) return joinPath(activeFolderPath, node.path);
-    return null;
-  }
-
-  async function copySidebarContextText(text) {
-    if (isNeutralinoRuntime() && Neutralino.clipboard?.writeText) {
-      await Neutralino.clipboard.writeText(text || "");
-      showCopiedMessage();
-      return;
-    }
-    await copyToClipboard(text || "");
-  }
-
-  function hideSidebarFileContextMenu() {
-    if (!sidebarFileContextMenu) return;
-    sidebarFileContextMenu.classList.add("hidden");
-    sidebarContextTarget = null;
-  }
-
-  function hideSidebarFolderContextMenu() {
-    if (!sidebarFolderContextMenu) return;
-    sidebarFolderContextMenu.classList.add("hidden");
-    sidebarContextTarget = null;
-  }
-
-  function hideSidebarClosedFolderContextMenu() {
-    if (!sidebarClosedFolderContextMenu) return;
-    sidebarClosedFolderContextMenu.classList.add("hidden");
-    sidebarContextTarget = null;
-  }
-
-  function hideSidebarContextMenus() {
-    hideSidebarFileContextMenu();
-    hideSidebarFolderContextMenu();
-    hideSidebarClosedFolderContextMenu();
-  }
-
-  function positionSidebarContextMenu(menu, event, fallbackHeight) {
-    if (!menu) return;
-    const menuWidth = menu.offsetWidth || 230;
-    const menuHeight = menu.offsetHeight || fallbackHeight || 280;
-    const left = Math.max(0, Math.min(event.clientX, window.innerWidth - menuWidth - 8));
-    const top = Math.max(0, Math.min(event.clientY, window.innerHeight - menuHeight - 8));
-    menu.style.left = `${left}px`;
-    menu.style.top = `${top}px`;
-  }
-
-  function positionSidebarFileContextMenu(event) {
-    positionSidebarContextMenu(sidebarFileContextMenu, event, 320);
-  }
-
-  function positionSidebarFolderContextMenu(event) {
-    positionSidebarContextMenu(sidebarFolderContextMenu, event, 250);
-  }
-
-  function positionSidebarClosedFolderContextMenu(event) {
-    positionSidebarContextMenu(sidebarClosedFolderContextMenu, event, 80);
-  }
-
-  function getOpenFolderMainMenuButton() {
-    return document.querySelector("#import-from-folder");
-  }
-
-  function getOpenFolderActionLabel() {
-    const button = getOpenFolderMainMenuButton();
-    const buttonLabel = button ? button.textContent.replace(/\s+/g, " ").trim() : "";
-    return buttonLabel ? buttonLabel.replace(/\s*\.\.\.$/, "") : CONTEXT_MENU_ACTIONS.openFolder.label;
-  }
-
-  function getOpenFolderActionTitle() {
-    const button = getOpenFolderMainMenuButton();
-    return (button && button.title) || "Open a folder to browse text and graph files.";
-  }
-
-  function getPathDirectory(path) {
-    if (!path) return "";
-    const normalized = String(path);
-    const lastSlash = Math.max(normalized.lastIndexOf("/"), normalized.lastIndexOf("\\"));
-    return lastSlash >= 0 ? normalized.slice(0, lastSlash) : "";
-  }
-
-  function getRenamedSiblingPath(path, newName) {
-    const directory = getPathDirectory(path);
-    return directory ? joinPath(directory, newName) : newName;
-  }
-
-  function validateSidebarRenameName(name, kind) {
-    const value = String(name || "").trim();
-    if (!value) return `Enter a name before ${kind === "new-file" ? "creating the file" : "renaming"}.`;
-    if (/[\\/]/.test(value)) return "Enter a name only, without folder separators.";
-    if (/^\.+$/.test(value)) return "Enter a name that is not only dots.";
-    if (kind === "file" && !isSidebarDocumentPath(value)) {
-      return "File names must end in .md, .markdown, .mdviewer-graph.json, .mdgraph.json, or .json.";
-    }
-    return "";
-  }
-
-  function promptSidebarRename(node, kind) {
-    return new Promise((resolve) => {
-      const modal = document.getElementById('rename-modal');
-      const title = document.getElementById('rename-modal-title');
-      const input = document.getElementById('rename-modal-input');
-      const confirmBtn = document.getElementById('rename-modal-confirm');
-      const cancelBtn = document.getElementById('rename-modal-cancel');
-      if (!modal || !input || !confirmBtn || !cancelBtn) {
-        resolve(null);
-        return;
-      }
-
-      if (title) title.textContent = kind === "folder" ? "Rename folder" : "Rename file";
-      input.value = node?.name || "";
-      input.placeholder = kind === "folder" ? "Folder name" : "File name";
-      confirmBtn.textContent = "Rename";
-      modal.style.display = 'flex';
-      input.focus();
-      input.select();
-
-      function cleanup(result) {
-        confirmBtn.removeEventListener('click', onConfirm);
-        cancelBtn.removeEventListener('click', onCancel);
-        input.removeEventListener('keydown', onKey);
-        modal.style.display = 'none';
-        resolve(result);
-      }
-
-      function onConfirm() {
-        const newName = input.value.trim();
-        const validationMessage = validateSidebarRenameName(newName, kind);
-        if (validationMessage) {
-          alert(validationMessage);
-          input.focus();
-          return;
-        }
-        cleanup(newName);
-      }
-
-      function onCancel() {
-        cleanup(null);
-      }
-
-      function onKey(event) {
-        if (event.key === 'Enter') onConfirm();
-        else if (event.key === 'Escape') onCancel();
-      }
-
-      confirmBtn.addEventListener('click', onConfirm);
-      cancelBtn.addEventListener('click', onCancel);
-      input.addEventListener('keydown', onKey);
-    });
-  }
-
-  function promptSidebarNewFileName(parentNode) {
-    return new Promise((resolve) => {
-      const modal = document.getElementById('rename-modal');
-      const title = document.getElementById('rename-modal-title');
-      const input = document.getElementById('rename-modal-input');
-      const confirmBtn = document.getElementById('rename-modal-confirm');
-      const cancelBtn = document.getElementById('rename-modal-cancel');
-      if (!modal || !input || !confirmBtn || !cancelBtn) {
-        resolve(null);
-        return;
-      }
-
-      if (title) title.textContent = `New file in ${parentNode?.name || "folder"}`;
-      input.value = "Untitled.md";
-      input.placeholder = "File name (for example, notes.md)";
-      confirmBtn.textContent = "Create";
-      modal.style.display = 'flex';
-      input.focus();
-      input.select();
-
-      function cleanup(result) {
-        confirmBtn.removeEventListener('click', onConfirm);
-        cancelBtn.removeEventListener('click', onCancel);
-        input.removeEventListener('keydown', onKey);
-        modal.style.display = 'none';
-        confirmBtn.textContent = "Rename";
-        resolve(result);
-      }
-
-      function onConfirm() {
-        const fileName = input.value.trim();
-        const validationMessage = validateSidebarRenameName(fileName, "new-file");
-        if (validationMessage) {
-          alert(validationMessage);
-          input.focus();
-          return;
-        }
-        cleanup(fileName);
-      }
-
-      function onCancel() {
-        cleanup(null);
-      }
-
-      function onKey(event) {
-        if (event.key === 'Enter') onConfirm();
-        else if (event.key === 'Escape') onCancel();
-      }
-
-      confirmBtn.addEventListener('click', onConfirm);
-      cancelBtn.addEventListener('click', onCancel);
-      input.addEventListener('keydown', onKey);
-    });
-  }
-
-  function promptSidebarNewFolderName(parentNode) {
-    return new Promise((resolve) => {
-      const modal = document.getElementById('rename-modal');
-      const title = document.getElementById('rename-modal-title');
-      const input = document.getElementById('rename-modal-input');
-      const confirmBtn = document.getElementById('rename-modal-confirm');
-      const cancelBtn = document.getElementById('rename-modal-cancel');
-      if (!modal || !input || !confirmBtn || !cancelBtn) {
-        resolve(null);
-        return;
-      }
-
-      if (title) title.textContent = `New folder in ${parentNode?.name || "folder"}`;
-      input.value = "";
-      input.placeholder = "Folder name";
-      confirmBtn.textContent = "Create";
-      modal.style.display = 'flex';
-      input.focus();
-
-      function cleanup(result) {
-        confirmBtn.removeEventListener('click', onConfirm);
-        cancelBtn.removeEventListener('click', onCancel);
-        input.removeEventListener('keydown', onKey);
-        modal.style.display = 'none';
-        confirmBtn.textContent = "Rename";
-        resolve(result);
-      }
-
-      function onConfirm() {
-        const folderName = input.value.trim();
-        const validationMessage = validateSidebarRenameName(folderName, "folder");
-        if (validationMessage) {
-          alert(validationMessage);
-          input.focus();
-          return;
-        }
-        if ((parentNode?.children || []).some((child) => child.kind === "directory" && child.name.toLowerCase() === folderName.toLowerCase())) {
-          alert("A folder with this name already exists here.");
-          input.focus();
-          return;
-        }
-        cleanup(folderName);
-      }
-
-      function onCancel() {
-        cleanup(null);
-      }
-
-      function onKey(event) {
-        if (event.key === 'Enter') onConfirm();
-        else if (event.key === 'Escape') onCancel();
-      }
-
-      confirmBtn.addEventListener('click', onConfirm);
-      cancelBtn.addEventListener('click', onCancel);
-      input.addEventListener('keydown', onKey);
-    });
-  }
-
-  function updateTabsAfterSidebarFileRename(target, oldPath, newPath, newName) {
-    let changed = false;
-    tabs.forEach((tab) => {
-      const matchesPath = oldPath && tab.sourceFilePath === oldPath;
-      const matchesHandle = target?.handle && tab.sourceFileHandle === target.handle;
-      if (!matchesPath && !matchesHandle) return;
-      tab.sourceFileName = newName;
-      if (newPath) tab.sourceFilePath = newPath;
-      if (tab.type !== "graph") {
-        tab.title = isGraphFilePath(newName) ? getGraphTitleFromFileName(newName) : getMarkdownTitleFromFileName(newName);
-      }
-      changed = true;
-    });
-    changed = updateGraphTabsAfterPathRename(getSidebarRenamePathMappings(oldPath || target?.path, newPath, "file")) || changed;
-    if (changed) {
-      saveTabsToStorage(tabs);
-      renderTabBar(tabs, activeTabId);
-      updateSaveCurrentFileButtons();
-      if (getActiveGraphTab()) renderGraphView();
-    }
-  }
-
-  function stripMarkdownExtension(path) {
-    return String(path || "").replace(/\.(md|markdown)$/i, "");
-  }
-
-  function splitMarkdownLinkSuffix(reference) {
-    const value = String(reference || "");
-    let suffixIndex = -1;
-    ["#", "?"].forEach((marker) => {
-      const index = value.indexOf(marker);
-      if (index >= 0 && (suffixIndex < 0 || index < suffixIndex)) suffixIndex = index;
-    });
-    if (suffixIndex < 0) return { target: value, suffix: "" };
-    return {
-      target: value.slice(0, suffixIndex),
-      suffix: value.slice(suffixIndex)
-    };
-  }
-
-  function getRelativePathBetweenFiles(sourcePath, targetPath) {
-    const sourceParts = String(sourcePath || "").replace(/\\/g, "/").split("/").filter(Boolean);
-    const targetParts = String(targetPath || "").replace(/\\/g, "/").split("/").filter(Boolean);
-    sourceParts.pop();
-    while (sourceParts.length && targetParts.length && sourceParts[0].toLowerCase() === targetParts[0].toLowerCase()) {
-      sourceParts.shift();
-      targetParts.shift();
-    }
-    return [...sourceParts.map(() => ".."), ...targetParts].join("/");
-  }
-
-  function getRenameReferenceTargetPath(referenceTarget, sourcePath, oldPath, newPath, kind, resolvedTargetPath) {
-    const normalizedTarget = String(referenceTarget || "").replace(/\\/g, "/").replace(/^\.\//, "").replace(/^\/+/, "");
-    const targetHasMarkdownExtension = /\.(md|markdown)$/i.test(normalizedTarget);
-    const useExtension = targetHasMarkdownExtension;
-    const isBareReference = !normalizedTarget.includes("/");
-    const oldRelativePath = activeFolderPath ? getPathRelativeToFolder(oldPath, activeFolderPath) : oldPath;
-    const newRelativePath = activeFolderPath ? getPathRelativeToFolder(newPath, activeFolderPath) : newPath;
-    const normalizedOldRelativePath = String(oldRelativePath || oldPath || "").replace(/\\/g, "/");
-    const normalizedNewRelativePath = String(newRelativePath || newPath || "").replace(/\\/g, "/");
-    if (!normalizedOldRelativePath || !normalizedNewRelativePath) return null;
-
-    const renamedPath = kind === "folder"
-      ? stripMarkdownExtension(replacePathPrefix(resolvedTargetPath, normalizedOldRelativePath, normalizedNewRelativePath))
-      : stripMarkdownExtension(normalizedNewRelativePath);
-
-    if (!renamedPath || renamedPath === normalizedTarget) return null;
-
-    const sourceAfterRename = kind === "folder"
-      ? replacePathPrefix(sourcePath, normalizedOldRelativePath, normalizedNewRelativePath)
-      : sourcePath;
-    let replacement = isBareReference
-      ? (renamedPath.split("/").pop() || renamedPath)
-      : getRelativePathBetweenFiles(sourceAfterRename, useExtension ? `${renamedPath}.md` : renamedPath);
-    if (!useExtension) replacement = stripMarkdownExtension(replacement);
-    if (useExtension && !/\.(md|markdown)$/i.test(replacement)) replacement += ".md";
-    if (String(referenceTarget || "").startsWith("./") && !replacement.startsWith(".") && !replacement.startsWith("/")) {
-      replacement = `./${replacement}`;
-    }
-    if (String(referenceTarget || "").startsWith("/") && !replacement.startsWith("/")) {
-      replacement = `/${useExtension ? `${renamedPath}.md` : stripMarkdownExtension(renamedPath)}`;
-    }
-    return replacement;
-  }
-
-  function updateMarkdownRenameLinks(content, sourcePath, nodeIndex, oldPath, newPath, kind) {
-    if (!content || !oldPath || !newPath) return content;
-    const oldRelativePath = activeFolderPath ? getPathRelativeToFolder(oldPath, activeFolderPath) : oldPath;
-    const oldTargetId = normalizeGraphNodeName(oldRelativePath || oldPath);
-    const getResolvedRenameTarget = (reference) => {
-      const target = resolveGraphTargetId(reference, sourcePath, nodeIndex);
-      if (!target) return null;
-      const isMatch = kind === "folder" ? (target === oldTargetId || target.startsWith(oldTargetId + "/")) : target === oldTargetId;
-      return isMatch ? { id: target, path: nodeIndex.get(target) || target } : null;
-    };
-    const renameReference = (reference) => {
-      const { target, suffix } = splitMarkdownLinkSuffix(reference);
-      const resolvedTarget = getResolvedRenameTarget(target);
-      if (!resolvedTarget) return reference;
-      const renamedTarget = getRenameReferenceTargetPath(target, sourcePath, oldPath, newPath, kind, resolvedTarget.path);
-      return renamedTarget ? `${renamedTarget}${suffix}` : reference;
-    };
-
-    return String(content)
-      .replace(/\[\[([^\]]+)\]\]/g, (fullMatch, inner) => {
-        const pipeIndex = String(inner).indexOf("|");
-        const target = pipeIndex >= 0 ? String(inner).slice(0, pipeIndex) : String(inner);
-        const alias = pipeIndex >= 0 ? String(inner).slice(pipeIndex) : "";
-        const renamedTarget = renameReference(target.trim());
-        return renamedTarget === target.trim() ? fullMatch : `[[${renamedTarget}${alias}]]`;
-      })
-      .replace(/(\[[^\]]*?\]\()([^\s)]+)(\))/g, (fullMatch, prefix, url, suffix) => {
-        if (/^(https?:|mailto:|tel:|#)/i.test(url)) return fullMatch;
-        const renamedUrl = renameReference(url);
-        return renamedUrl === url ? fullMatch : `${prefix}${renamedUrl}${suffix}`;
-      });
-  }
-
-  async function writeFolderMarkdownEntryContent(entry, content, oldPath, newPath, kind) {
-    const entryFullPath = entry.fullPath || null;
-    let writePath = entryFullPath;
-    if (kind === "folder") writePath = replacePathPrefix(entryFullPath, oldPath, newPath);
-    if (kind === "file" && entryFullPath === oldPath) writePath = newPath;
-
-    if (isNeutralinoRuntime()) {
-      if (!writePath || !Neutralino.filesystem?.writeFile) throw new Error("No writable filesystem path is available.");
-      await Neutralino.filesystem.writeFile(writePath, content);
-      return writePath;
-    }
-
-    if (entry.handle?.createWritable) {
-      const writable = await entry.handle.createWritable();
-      await writable.write(content);
-      await writable.close();
-      return entry.path;
-    }
-
-    throw new Error("No writable file handle is available.");
-  }
-
-  function getEntryContent(entry) {
-    if (entry.content !== undefined) return Promise.resolve(entry.content);
-    if (entry.file) return entry.file.text();
-    if (entry.handle) return entry.handle.getFile().then((file) => file.text());
-    if (isNeutralinoRuntime() && entry.fullPath) return Neutralino.filesystem.readFile(entry.fullPath);
-    return Promise.reject(new Error("No readable Markdown file is available."));
-  }
-
-  function updateOpenTabsAfterMarkdownLinkRename(changedFiles) {
-    if (!changedFiles || !changedFiles.size) return;
-    let changed = false;
-    tabs.forEach((tab) => {
-      if (tab.type === "graph") return;
-      const pathKey = tab.sourceFilePath || "";
-      const handleEntry = Array.from(changedFiles.values()).find((item) => item.handle && item.handle === tab.sourceFileHandle);
-      const changedEntry = changedFiles.get(pathKey) || handleEntry;
-      if (!changedEntry) return;
-      const normalizedContent = normalizeEditorContent(changedEntry.content);
-      tab.content = normalizedContent;
-      tab.savedContent = normalizedContent;
-      if (tab.id === activeTabId) {
-        markdownEditor.value = normalizedContent;
-        renderEditorSyntaxHighlights();
-        renderMarkdown();
-      }
-      changed = true;
-    });
-    if (changed) {
-      saveTabsToStorage(tabs);
-      renderTabBar(tabs, activeTabId);
-      updateSaveCurrentFileButtons();
-    }
-  }
-
-  async function updateOpenFolderLinksAfterSidebarRename(oldPath, newPath, kind) {
-    if (!oldPath || !newPath || !folderMarkdownFiles.length) return 0;
-    const files = folderMarkdownFiles.slice();
-    const nodeIndex = new Map();
-    files.forEach((entry) => {
-      const path = entry.path || entry.file?.webkitRelativePath || entry.file?.name || "";
-      const id = normalizeGraphNodeName(path);
-      if (id) nodeIndex.set(id, path);
-    });
-
-    const changedFiles = new Map();
-    for (const entry of files) {
-      const sourcePath = entry.path || entry.file?.webkitRelativePath || entry.file?.name || "";
-      if (!sourcePath) continue;
-      try {
-        const content = await getEntryContent(entry);
-        const updatedContent = updateMarkdownRenameLinks(content, sourcePath, nodeIndex, oldPath, newPath, kind);
-        if (updatedContent === content) continue;
-        const writePath = await writeFolderMarkdownEntryContent(entry, updatedContent, oldPath, newPath, kind);
-        const changedEntry = {
-          content: updatedContent,
-          handle: entry.handle || null
-        };
-        [writePath, entry.fullPath, entry.path, sourcePath]
-          .filter(Boolean)
-          .forEach((pathKey) => changedFiles.set(pathKey, changedEntry));
-      } catch (error) {
-        console.warn(`Failed to update Markdown links in ${sourcePath}:`, error);
-      }
-    }
-    updateOpenTabsAfterMarkdownLinkRename(changedFiles);
-    return changedFiles.size;
-  }
-
-  function replacePathPrefix(path, oldPrefix, newPrefix) {
-    if (!path || !oldPrefix || !newPrefix) return path;
-    const originalPath = String(path);
-    const normalize = (value) => String(value).replace(/\\/g, "/").replace(/\/+$/, "");
-    const normalizedPath = originalPath.replace(/\\/g, "/");
-    const normalizedOldPrefix = normalize(oldPrefix);
-    if (normalizedPath !== normalizedOldPrefix && !normalizedPath.startsWith(normalizedOldPrefix + "/")) {
-      return path;
-    }
-    return String(newPrefix).replace(/\/+$/, "") + normalizedPath.slice(normalizedOldPrefix.length);
-  }
-
-  function getPathRelativeToFolder(path, folderPath) {
-    if (!path || !folderPath || !isPathInsideFolder(path, folderPath)) return "";
-    const normalize = (value) => String(value).replace(/\\/g, "/").replace(/\/+$/, "");
-    const normalizedFolder = normalize(folderPath);
-    const normalizedPath = String(path).replace(/\\/g, "/");
-    return normalizedPath === normalizedFolder ? "" : normalizedPath.slice(normalizedFolder.length + 1);
-  }
-
-  function renameGraphSnapshotPathReferences(snapshot, pathMappings) {
-    if (!snapshot || !Array.isArray(pathMappings) || !pathMappings.length) return false;
-    let changed = false;
-    const idMappings = new Map();
-    const getRenamedPath = (path) => {
-      for (const mapping of pathMappings) {
-        const renamed = mapping.isPrefix
-          ? replacePathPrefix(path, mapping.oldPath, mapping.newPath)
-          : (path === mapping.oldPath ? mapping.newPath : path);
-        if (renamed !== path) return renamed;
-      }
-      return path;
-    };
-
-    (snapshot.nodes || []).forEach((node) => {
-      const oldId = node.id;
-      const oldPath = node.fullPath || oldId;
-      const newPath = getRenamedPath(oldPath);
-      if (newPath === oldPath) return;
-      const newId = normalizeGraphNodeName(newPath);
-      if (oldId && newId && oldId !== newId) idMappings.set(oldId, newId);
-      node.id = newId || oldId;
-      node.label = getGraphDisplayLabel(newPath);
-      node.fullPath = newPath;
-      changed = true;
-    });
-
-    (snapshot.files || []).forEach((file) => {
-      const oldId = file.id;
-      const oldPath = file.path || oldId;
-      const oldFullPath = file.fullPath || "";
-      const newPath = getRenamedPath(oldPath);
-      const newFullPath = getRenamedPath(oldFullPath);
-      if (newPath === oldPath && newFullPath === oldFullPath) return;
-      const idPath = newPath !== oldPath ? newPath : (newFullPath || oldPath);
-      const newId = normalizeGraphNodeName(idPath);
-      if (oldId && newId && oldId !== newId) idMappings.set(oldId, newId);
-      file.id = newId || oldId;
-      file.path = newPath;
-      file.name = getFileName(newPath || newFullPath || file.name);
-      if (file.fullPath !== undefined) file.fullPath = newFullPath || file.fullPath;
-      changed = true;
-    });
-
-    if (idMappings.size) {
-      (snapshot.links || []).forEach((link) => {
-        const newSource = idMappings.get(link.source);
-        const newTarget = idMappings.get(link.target);
-        if (newSource) {
-          link.source = newSource;
-          changed = true;
-        }
-        if (newTarget) {
-          link.target = newTarget;
-          changed = true;
-        }
-      });
-    }
-
-    return { changed, idMappings };
-  }
-
-  function updateGraphTabConfigAfterNodeRename(tab, idMappings) {
-    if (!tab || !idMappings || !idMappings.size) return false;
-    let changed = false;
-    const renameId = (id) => idMappings.get(id) || id;
-    const renameIds = (ids) => Array.isArray(ids) ? ids.map(renameId) : ids;
-
-    if (tab.graphViewConfig) {
-      if (tab.graphViewConfig.focusNodeId && idMappings.has(tab.graphViewConfig.focusNodeId)) {
-        tab.graphViewConfig.focusNodeId = renameId(tab.graphViewConfig.focusNodeId);
-        changed = true;
-      }
-      ["allowedNodeIds", "hiddenNodeIds"].forEach((key) => {
-        const renamedIds = renameIds(tab.graphViewConfig[key]);
-        if (renamedIds && renamedIds !== tab.graphViewConfig[key]) {
-          tab.graphViewConfig[key] = renamedIds;
-          changed = true;
-        }
-      });
-    }
-
-    if (tab.graphLayout?.nodes && typeof tab.graphLayout.nodes === "object") {
-      idMappings.forEach((newId, oldId) => {
-        if (!Object.prototype.hasOwnProperty.call(tab.graphLayout.nodes, oldId)) return;
-        tab.graphLayout.nodes[newId] = tab.graphLayout.nodes[oldId];
-        delete tab.graphLayout.nodes[oldId];
-        changed = true;
-      });
-    }
-
-    return changed;
-  }
-
-  function updateGraphTabsAfterPathRename(pathMappings) {
-    if (!Array.isArray(pathMappings) || !pathMappings.length) return false;
-    let changed = false;
-    tabs.forEach((tab) => {
-      if (tab.type !== "graph" || !tab.graphSnapshot) return;
-      const result = renameGraphSnapshotPathReferences(tab.graphSnapshot, pathMappings);
-      if (!result?.changed) return;
-      updateGraphTabConfigAfterNodeRename(tab, result.idMappings);
-      const cachedRender = graphRenderCache.get(tab.id);
-      if (cachedRender?.simulation) cachedRender.simulation.stop();
-      if (cachedRender?.wrapper) cachedRender.wrapper.remove();
-      graphRenderCache.delete(tab.id);
-      changed = true;
-    });
-    return changed;
-  }
-
-  function getSidebarRenamePathMappings(oldPath, newPath, kind) {
-    const mappings = [];
-    if (oldPath && newPath) {
-      mappings.push({ oldPath, newPath, isPrefix: kind === "folder" });
-    }
-    if (activeFolderPath && oldPath && newPath) {
-      const oldRelativePath = getPathRelativeToFolder(oldPath, activeFolderPath);
-      const newRelativePath = getPathRelativeToFolder(newPath, activeFolderPath);
-      if (oldRelativePath && newRelativePath) {
-        mappings.push({ oldPath: oldRelativePath, newPath: newRelativePath, isPrefix: kind === "folder" });
-      }
-    }
-    return mappings;
-  }
-
-  function updateTabsAfterSidebarFolderRename(oldPath, newPath) {
-    if (!oldPath || !newPath) return;
-    let changed = false;
-    tabs.forEach((tab) => {
-      const renamedPath = replacePathPrefix(tab.sourceFilePath, oldPath, newPath);
-      if (renamedPath === tab.sourceFilePath) return;
-      tab.sourceFilePath = renamedPath;
-      changed = true;
-    });
-    changed = updateGraphTabsAfterPathRename(getSidebarRenamePathMappings(oldPath, newPath, "folder")) || changed;
-    if (changed) {
-      saveTabsToStorage(tabs);
-      renderTabBar(tabs, activeTabId);
-      updateSaveCurrentFileButtons();
-      if (getActiveGraphTab()) renderGraphView();
-    }
-  }
-
-  async function sidebarFileExists(parentNode, fileName) {
-    if (!parentNode || !fileName) return false;
-
-    if (isNeutralinoRuntime()) {
-      const parentPath = getSidebarFolderFilesystemPath(parentNode);
-      if (!parentPath || !Neutralino.filesystem?.readDirectory) return false;
-      const entries = await Neutralino.filesystem.readDirectory(parentPath);
-      return entries.some((entry) => entry.entry.toLowerCase() === fileName.toLowerCase());
-    }
-
-    if (parentNode.handle && typeof parentNode.handle.getFileHandle === "function") {
-      try {
-        await parentNode.handle.getFileHandle(fileName, { create: false });
-        return true;
-      } catch (error) {
-        if (error && (error.name === "NotFoundError" || error.code === 8)) return false;
-        throw error;
-      }
-    }
-
-    return (parentNode.children || []).some((child) => child.kind === "file" && child.name.toLowerCase() === fileName.toLowerCase());
-  }
-
-  async function createSidebarFileOnDisk(node) {
-    if (!node || node.kind !== "directory") return;
-    const fileName = await promptSidebarNewFileName(node);
-    if (!fileName) return;
-
-    if (await sidebarFileExists(node, fileName)) {
-      alert("A file with this name already exists here.");
-      return;
-    }
-
-    if (isNeutralinoRuntime()) {
-      const parentPath = getSidebarFolderFilesystemPath(node);
-      if (!parentPath || !Neutralino.filesystem?.writeFile) {
-        alert("Creating files is available only in the desktop app for folders opened from disk.");
-        return;
-      }
-      const filePath = joinPath(parentPath, fileName);
-      await Neutralino.filesystem.writeFile(filePath, "");
-    } else if (node.handle && typeof node.handle.getFileHandle === "function") {
-      const fileHandle = await node.handle.getFileHandle(fileName, { create: true });
-      if (!fileHandle || typeof fileHandle.createWritable !== "function") {
-        alert("Creating files from the folder tree requires write access to the opened folder.");
-        return;
-      }
-      const writable = await fileHandle.createWritable();
-      await writable.write("");
-      await writable.close();
-    } else {
-      alert("Creating files from the folder tree is available in the desktop app or in browsers when the folder was opened with write access.");
-      return;
-    }
-
-    await reloadOpenFolderTree();
-  }
-
-  async function createSidebarFolderOnDisk(node) {
-    if (!node || node.kind !== "directory") return;
-    const folderName = await promptSidebarNewFolderName(node);
-    if (!folderName) return;
-
-    if (isNeutralinoRuntime()) {
-      const parentPath = getSidebarFolderFilesystemPath(node);
-      if (!parentPath || !Neutralino.filesystem?.createDirectory) {
-        alert("Creating folders is available only in the desktop app for folders opened from disk.");
-        return;
-      }
-      await Neutralino.filesystem.createDirectory(joinPath(parentPath, folderName));
-    } else if (node.handle && typeof node.handle.getDirectoryHandle === "function") {
-      await node.handle.getDirectoryHandle(folderName, { create: true });
-    } else {
-      alert("Creating folders from the folder tree is available in the desktop app or in browsers when the folder was opened with write access.");
-      return;
-    }
-
-    await reloadOpenFolderTree();
-  }
-
-  async function renameSidebarNodeOnDisk(node, kind) {
-    if (!node) return;
-    const oldName = node.name || "";
-    const newName = await promptSidebarRename(node, kind);
-    if (!newName || newName === oldName) return;
-
-    const oldPath = kind === "folder" ? getSidebarFolderFilesystemPath(node) : getSidebarNodeFilesystemPath(node);
-    const newPath = oldPath ? getRenamedSiblingPath(oldPath, newName) : (node.path ? getRenamedSiblingPath(node.path, newName) : newName);
-
-    if (isNeutralinoRuntime()) {
-      if (!oldPath || !Neutralino.filesystem?.move) {
-        alert(`Renaming ${kind}s requires filesystem.move permission in the desktop app for ${kind}s opened from disk.`);
-        return;
-      }
-      await Neutralino.filesystem.move(oldPath, newPath);
-    } else if (node.handle && typeof node.handle.move === "function") {
-      await node.handle.move(newName);
-    } else {
-      alert(`Renaming ${kind}s from the folder tree is available in the desktop app for ${kind}s opened from disk.`);
-      return;
-    }
-
-    try {
-      await updateOpenFolderLinksAfterSidebarRename(oldPath || node.path, newPath, kind);
-    } catch (error) {
-      console.warn(`Renamed ${kind}, but failed to update Markdown links:`, error);
-    }
-
-    if (kind === "folder") {
-      updateTabsAfterSidebarFolderRename(oldPath || node.path, newPath);
-    } else {
-      updateTabsAfterSidebarFileRename(node, oldPath || node.path, newPath, newName);
-    }
-
-    try {
-      await reloadOpenFolderTree();
-    } catch (error) {
-      console.warn(`Renamed ${kind}, but failed to refresh the folder tree:`, error);
-    }
-  }
-
-  function ensureSidebarFileContextMenu() {
-    if (sidebarFileContextMenu) return sidebarFileContextMenu;
-
-    const menu = document.createElement("div");
-    menu.className = "graph-context-menu sidebar-file-context-menu hidden";
-
-    const title = document.createElement("div");
-    title.className = "graph-context-menu-title";
-    const separator = document.createElement("div");
-    separator.className = "graph-context-menu-separator";
-
-    const openFileBtn = createFileContextMenuButton(
-      CONTEXT_MENU_ACTIONS.openInNewTab.label,
-      CONTEXT_MENU_ACTIONS.openInNewTab.icon,
-      "Open this file in a dedicated tab from the sidebar tree."
-    );
-    const openDefaultAppBtn = createFileContextMenuButton(
-      CONTEXT_MENU_ACTIONS.openWithDefaultApp.label,
-      CONTEXT_MENU_ACTIONS.openWithDefaultApp.icon,
-      "Ask the operating system to open this file with its configured default application."
-    );
-    const revealFileBtn = createFileContextMenuButton(
-      CONTEXT_MENU_ACTIONS.revealInFileExplorer.label,
-      CONTEXT_MENU_ACTIONS.revealInFileExplorer.icon,
-      "Open the file's folder in the system file explorer and select this file when supported."
-    );
-    const renameFileBtn = createFileContextMenuButton(
-      CONTEXT_MENU_ACTIONS.rename.label,
-      CONTEXT_MENU_ACTIONS.rename.icon,
-      "Rename this file on disk and refresh the folder tree."
-    );
-
-    const { submenu: tagsSubmenu, submenuPanel: tagsSubmenuPanel } = createTagsContextSubmenu(
-      "Add or remove YAML frontmatter tags for this file."
-    );
-
-    const copySubmenu = document.createElement("div");
-    copySubmenu.className = "graph-context-menu-submenu";
-    const copySubmenuBtn = createFileContextMenuButton(
-      CONTEXT_MENU_ACTIONS.copy.label,
-      CONTEXT_MENU_ACTIONS.copy.icon,
-      "Open copy actions for this file, including its path and content."
-    );
-    copySubmenuBtn.setAttribute("aria-haspopup", "true");
-    const copySubmenuArrow = document.createElement("span");
-    copySubmenuArrow.className = "graph-context-menu-submenu-arrow";
-    copySubmenuArrow.textContent = "›";
-    copySubmenuBtn.appendChild(copySubmenuArrow);
-    const copySubmenuPanel = document.createElement("div");
-    copySubmenuPanel.className = "graph-context-menu-submenu-panel";
-    const copyPathBtn = createFileContextMenuButton(
-      CONTEXT_MENU_ACTIONS.copyPath.label,
-      CONTEXT_MENU_ACTIONS.copyPath.icon,
-      "Copy this file's path and file name to the clipboard."
-    );
-    const copyContentBtn = createFileContextMenuButton(
-      CONTEXT_MENU_ACTIONS.copyContent.label,
-      CONTEXT_MENU_ACTIONS.copyContent.icon,
-      "Copy the entire content of this file to the clipboard."
-    );
-    copySubmenuPanel.appendChild(copyPathBtn);
-    copySubmenuPanel.appendChild(copyContentBtn);
-    copySubmenu.appendChild(copySubmenuBtn);
-    copySubmenu.appendChild(copySubmenuPanel);
-
-    const shareFileBtn = createFileContextMenuButton(
-      CONTEXT_MENU_ACTIONS.share.label,
-      CONTEXT_MENU_ACTIONS.share.icon,
-      "Copy a shareable URL containing this file's Markdown content."
-    );
-
-    const deleteFileBtn = createFileContextMenuButton(
-      CONTEXT_MENU_ACTIONS.deleteFile.label,
-      CONTEXT_MENU_ACTIONS.deleteFile.icon,
-      "Delete this file from disk after confirmation."
-    );
-    deleteFileBtn.classList.add("graph-context-menu-item-danger");
-
-    const exportSubmenu = document.createElement("div");
-    exportSubmenu.className = "graph-context-menu-submenu";
-    const exportSubmenuBtn = createFileContextMenuButton(
-      CONTEXT_MENU_ACTIONS.export.label,
-      CONTEXT_MENU_ACTIONS.export.icon,
-      "Open export actions for this file."
-    );
-    exportSubmenuBtn.setAttribute("aria-haspopup", "true");
-    const exportSubmenuArrow = document.createElement("span");
-    exportSubmenuArrow.className = "graph-context-menu-submenu-arrow";
-    exportSubmenuArrow.textContent = "›";
-    exportSubmenuBtn.appendChild(exportSubmenuArrow);
-    const exportSubmenuPanel = document.createElement("div");
-    exportSubmenuPanel.className = "graph-context-menu-submenu-panel";
-    const exportMarkdownBtn = createFileContextMenuButton(CONTEXT_MENU_ACTIONS.exportMarkdown.label, CONTEXT_MENU_ACTIONS.exportMarkdown.icon, "Download this file as Markdown.");
-    const exportHtmlBtn = createFileContextMenuButton(CONTEXT_MENU_ACTIONS.exportHtml.label, CONTEXT_MENU_ACTIONS.exportHtml.icon, "Download this file as HTML.");
-    const exportPdfBtn = createFileContextMenuButton(CONTEXT_MENU_ACTIONS.exportPdf.label, CONTEXT_MENU_ACTIONS.exportPdf.icon, "Download this file as PDF.");
-    [exportMarkdownBtn, exportHtmlBtn, exportPdfBtn].forEach((button) => exportSubmenuPanel.appendChild(button));
-    exportSubmenu.appendChild(exportSubmenuBtn);
-    exportSubmenu.appendChild(exportSubmenuPanel);
-
-    const deleteFileTopSeparator = document.createElement("div");
-    deleteFileTopSeparator.className = "graph-context-menu-separator";
-    const deleteFileBottomSeparator = document.createElement("div");
-    deleteFileBottomSeparator.className = "graph-context-menu-separator";
-
-    [
-      title,
-      separator,
-      openFileBtn,
-      openDefaultAppBtn,
-      revealFileBtn,
-      renameFileBtn,
-      tagsSubmenu,
-      copySubmenu,
-      shareFileBtn,
-      deleteFileTopSeparator,
-      deleteFileBtn,
-      deleteFileBottomSeparator,
-      exportSubmenu
-    ].forEach((item) => {
-      menu.appendChild(item);
-    });
-    document.body.appendChild(menu);
-
-    openFileBtn.addEventListener("click", async (event) => {
-      event.stopPropagation();
-      const target = sidebarContextTarget;
-      hideSidebarFileContextMenu();
-      if (!target) return;
-      try {
-        await openDocumentSourceFile({ ...getSidebarNodeSource(target), content: await readSidebarNodeContent(target) });
-        rememberRecentFile(getSidebarNodeSource(target));
-      } catch (error) {
-        console.error("Failed to open sidebar context file:", error);
-        alert("Unable to open selected file.");
-      }
-    });
-
-    openDefaultAppBtn.addEventListener("click", async (event) => {
-      event.stopPropagation();
-      const target = sidebarContextTarget;
-      const filePath = getSidebarNodeFilesystemPath(target);
-      hideSidebarFileContextMenu();
-      if (!filePath || !isNeutralinoRuntime() || !Neutralino.os?.open) {
-        alert("Opening with the default app is available only in the desktop app for files opened from disk.");
-        return;
-      }
-      try {
-        await Neutralino.os.open(filePath);
-      } catch (error) {
-        console.error("Failed to open sidebar file with default app:", error);
-        alert("Unable to open this file with the default app.");
-      }
-    });
-
-    revealFileBtn.addEventListener("click", async (event) => {
-      event.stopPropagation();
-      const target = sidebarContextTarget;
-      const filePath = getSidebarNodeFilesystemPath(target);
-      hideSidebarFileContextMenu();
-      if (!filePath || !isNeutralinoRuntime()) {
-        alert("Revealing files is available only in the desktop app for files opened from disk.");
-        return;
-      }
-      try {
-        if (typeof NL_OS !== "undefined" && NL_OS === "Windows" && Neutralino.os?.execCommand) {
-          const windowsPath = filePath.replace(/"/g, "").replace(/\//g, "\\");
-          await Neutralino.os.execCommand(`explorer.exe /select,"${windowsPath}"`);
-        } else if (Neutralino.os?.open) {
-          const normalized = filePath.replace(/\\/g, "/");
-          const folderPath = normalized.includes("/") ? normalized.slice(0, normalized.lastIndexOf("/")) : normalized;
-          await Neutralino.os.open(folderPath);
-        } else {
-          throw new Error("No supported reveal command is available.");
-        }
-      } catch (error) {
-        console.error("Failed to reveal sidebar file:", error);
-        alert("Unable to reveal this file in the file explorer.");
-      }
-    });
-
-    renameFileBtn.addEventListener("click", async (event) => {
-      event.stopPropagation();
-      const target = sidebarContextTarget;
-      hideSidebarFileContextMenu();
-      try {
-        await renameSidebarNodeOnDisk(target, "file");
-      } catch (error) {
-        console.error("Failed to rename sidebar file:", error);
-        alert("Unable to rename this file.");
-      }
-    });
-
-    copyPathBtn.addEventListener("click", async (event) => {
-      event.stopPropagation();
-      const target = sidebarContextTarget;
-      hideSidebarFileContextMenu();
-      if (!target) return;
-      try {
-        await copySidebarContextText(getSidebarNodeClipboardPath(target));
-      } catch (error) {
-        console.error("Failed to copy sidebar file path:", error);
-        alert("Unable to copy this file path.");
-      }
-    });
-
-    copyContentBtn.addEventListener("click", async (event) => {
-      event.stopPropagation();
-      const target = sidebarContextTarget;
-      hideSidebarFileContextMenu();
-      if (!target) return;
-      try {
-        await copySidebarContextText(await readSidebarNodeContent(target));
-      } catch (error) {
-        console.error("Failed to copy sidebar file content:", error);
-        alert("Unable to copy this file content.");
-      }
-    });
-
-    shareFileBtn.addEventListener("click", async (event) => {
-      event.stopPropagation();
-      const target = sidebarContextTarget;
-      hideSidebarFileContextMenu();
-      if (!target) return;
-      try {
-        copyShareUrlFromText(await readSidebarNodeContent(target), shareFileBtn);
-      } catch (error) {
-        console.error("Failed to share sidebar file:", error);
-        alert("Unable to share this file.");
-      }
-    });
-
-    exportMarkdownBtn.addEventListener("click", async (event) => {
-      event.stopPropagation();
-      const target = sidebarContextTarget;
-      hideSidebarFileContextMenu();
-      if (!target) return;
-      try {
-        exportMarkdownContent(await readSidebarNodeContent(target), target.name);
-      } catch (error) {
-        console.error("Failed to export sidebar file as Markdown:", error);
-        alert("Unable to export this file as Markdown.");
-      }
-    });
-
-    exportHtmlBtn.addEventListener("click", async (event) => {
-      event.stopPropagation();
-      const target = sidebarContextTarget;
-      hideSidebarFileContextMenu();
-      if (!target) return;
-      try {
-        exportHtmlContent(await readSidebarNodeContent(target));
-      } catch (error) {
-        console.error("Failed to export sidebar file as HTML:", error);
-        alert("Unable to export this file as HTML.");
-      }
-    });
-
-    exportPdfBtn.addEventListener("click", async (event) => {
-      event.stopPropagation();
-      const target = sidebarContextTarget;
-      hideSidebarFileContextMenu();
-      if (!target) return;
-      try {
-        exportPdfContent(await readSidebarNodeContent(target));
-      } catch (error) {
-        console.error("Failed to export sidebar file as PDF:", error);
-        alert("Unable to export this file as PDF.");
-      }
-    });
-
-    deleteFileBtn.addEventListener("click", async (event) => {
-      event.stopPropagation();
-      const target = sidebarContextTarget;
-      const filePath = getSidebarNodeFilesystemPath(target);
-      hideSidebarFileContextMenu();
-      if (!filePath || !isNeutralinoRuntime() || !Neutralino.filesystem?.remove) {
-        alert("Deleting files is available only in the desktop app for files opened from disk.");
-        return;
-      }
-      const confirmed = window.confirm(`Delete "${target.name}" from disk? This action cannot be undone.`);
-      if (!confirmed) return;
-      try {
-        await Neutralino.filesystem.remove(filePath);
-        closeTabsForDeletedPath(filePath, { kind: "file", targetHandle: target.handle || null });
-        await refreshOpenFolderTreeAfterFileDelete(filePath);
-      } catch (error) {
-        console.error("Failed to delete sidebar file:", error);
-        alert("Unable to delete this file.");
-      }
-    });
-
-    document.addEventListener("click", hideSidebarContextMenus);
-    document.addEventListener("keydown", (event) => {
-      if (event.key === "Escape") hideSidebarContextMenus();
-    });
-    window.addEventListener("blur", hideSidebarContextMenus);
-
-    sidebarFileContextMenu = menu;
-    return sidebarFileContextMenu;
-  }
-
-  function isOpenFolderRootContextNode(node) {
-    return !!(node && node.isOpenFolderRootContext === true);
-  }
-
-  function getOpenFolderRootContextNode() {
-    return {
-      kind: "directory",
-      name: activeFolderName || "Folder",
-      path: "",
-      fullPath: activeFolderPath || "",
-      handle: activeFolderHandle || null,
-      isOpenFolderRootContext: true
-    };
-  }
-
-  function getSidebarFolderClipboardPath(node) {
-    if (!node) return "";
-    if (isOpenFolderRootContextNode(node)) {
-      return activeFolderPath || activeFolderName || "";
-    }
-    return node.fullPath || node.path || node.name || "";
-  }
-
-  function getSidebarFolderFilesystemPath(node) {
-    if (!node || !isNeutralinoRuntime()) return null;
-    if (isOpenFolderRootContextNode(node)) return activeFolderPath || null;
-    if (node.fullPath) return node.fullPath;
-    if (activeFolderPath && node.path) return joinPath(activeFolderPath, node.path);
-    return null;
-  }
-
-  function getSidebarFolderGraphTitle(node) {
-    const folderPath = getSidebarFolderClipboardPath(node);
-    return folderPath ? `Graph View: ${folderPath}` : `Graph View: ${node?.name || "Folder"}`;
-  }
-
-  async function collectMarkdownFilesForSidebarFolder(node) {
-    if (!node || node.kind !== "directory") return [];
-    const parentPath = node.path || node.name || "";
-    if (isNeutralinoRuntime()) {
-      return collectMarkdownFilesFromTreeNeutralino(node.children || [], parentPath);
-    }
-    return collectMarkdownFilesFromTree(node.children || [], parentPath);
-  }
-
-  async function openSidebarFolderGraphView(node) {
-    if (!node || node.kind !== "directory") return;
-    if (isOpenFolderRootContextNode(node)) {
-      await openGraphView();
-      return;
-    }
-
-    const folderName = getSidebarFolderGraphTitle(node);
-    const graphScopeKey = createFolderGraphScopeKey("sidebar-folder", getSidebarFolderClipboardPath(node) || folderName);
-    if (focusExistingFolderGraphTab(graphScopeKey, folderName)) return;
-
-    if (tabs.length >= 20) {
-      alert('Maximum of 20 tabs reached. Please close an existing tab to open a new one.');
-      return;
-    }
-
-    const folderFiles = await collectMarkdownFilesForSidebarFolder(node);
-    if (!folderFiles.length) {
-      alert("This folder does not contain Markdown files to graph.");
-      return;
-    }
-
-    const graphSnapshot = await createGraphSnapshot(folderFiles, folderName);
-    const graphTab = createGraphTab(folderName, { graphSnapshot, graphViewConfig: null, graphScopeKey });
-    tabs.push(graphTab);
-    switchTab(graphTab.id);
-    saveTabsToStorage(tabs);
-  }
-
-  async function exportSidebarFolderToGraph(node) {
-    if (!node || node.kind !== "directory") return false;
-    if (isOpenFolderRootContextNode(node)) {
-      return exportActiveFolderToGraph();
-    }
-
-    const folderName = getSidebarFolderGraphTitle(node);
-    const folderFiles = await collectMarkdownFilesForSidebarFolder(node);
-    return exportFolderFilesToGraph(folderFiles, folderName);
-  }
-
-  async function revealSidebarFolder(node) {
-    const folderPath = getSidebarFolderFilesystemPath(node);
-    if (!folderPath || !isNeutralinoRuntime() || !Neutralino.os?.open) {
-      alert("Revealing folders is available only in the desktop app for folders opened from disk.");
-      return;
-    }
-    await Neutralino.os.open(folderPath);
-  }
-
-  async function deleteSidebarFolder(node) {
-    const folderPath = getSidebarFolderFilesystemPath(node);
-    if (!folderPath || !isNeutralinoRuntime() || !Neutralino.filesystem?.remove) {
-      alert("Deleting folders is available only in the desktop app for folders opened from disk.");
-      return;
-    }
-    const confirmed = window.confirm(`Delete folder "${node.name}" and its contents from disk? This action cannot be undone.`);
-    if (!confirmed) return;
-    await Neutralino.filesystem.remove(folderPath);
-    closeTabsForDeletedPath(folderPath, { kind: "folder" });
-    if (isOpenFolderRootContextNode(node)) {
-      closeFolderTree();
-    } else {
-      await reloadOpenFolderTree();
-    }
-  }
-
-  function ensureSidebarFolderContextMenu() {
-    if (sidebarFolderContextMenu) return sidebarFolderContextMenu;
-
-    const menu = document.createElement("div");
-    menu.className = "graph-context-menu sidebar-folder-context-menu hidden";
-
-    const title = document.createElement("div");
-    title.className = "graph-context-menu-title";
-    const separator = document.createElement("div");
-    separator.className = "graph-context-menu-separator";
-
-    const showGraphBtn = createFileContextMenuButton(
-      CONTEXT_MENU_ACTIONS.showGraphView.label,
-      CONTEXT_MENU_ACTIONS.showGraphView.icon,
-      "Open a graph view containing only Markdown files in this folder and its sub-folders."
-    );
-    const exportFolderToGraphBtn = createFileContextMenuButton(
-      CONTEXT_MENU_ACTIONS.exportFolderToGraph.label,
-      CONTEXT_MENU_ACTIONS.exportFolderToGraph.icon,
-      "Create a portable graph archive that includes Markdown file contents."
-    );
-    const refreshFolderTreeBtn = createFileContextMenuButton(
-      CONTEXT_MENU_ACTIONS.refresh.label,
-      CONTEXT_MENU_ACTIONS.refresh.icon,
-      "Reload the open folder tree from disk to show file system changes."
-    );
-    const revealFolderBtn = createFileContextMenuButton(
-      CONTEXT_MENU_ACTIONS.revealInFileExplorer.label,
-      CONTEXT_MENU_ACTIONS.revealInFileExplorer.icon,
-      "Open this folder in the system file explorer."
-    );
-    const copyPathBtn = createFileContextMenuButton(
-      CONTEXT_MENU_ACTIONS.copyPath.label,
-      CONTEXT_MENU_ACTIONS.copyPath.icon,
-      "Copy this folder path to the clipboard."
-    );
-    const newFileBtn = createFileContextMenuButton(
-      CONTEXT_MENU_ACTIONS.newFile.label,
-      CONTEXT_MENU_ACTIONS.newFile.icon,
-      "Create a new empty text file under this folder."
-    );
-    const newFolderBtn = createFileContextMenuButton(
-      CONTEXT_MENU_ACTIONS.newFolder.label,
-      CONTEXT_MENU_ACTIONS.newFolder.icon,
-      "Create a new folder under this folder."
-    );
-    const renameFolderBtn = createFileContextMenuButton(
-      CONTEXT_MENU_ACTIONS.rename.label,
-      CONTEXT_MENU_ACTIONS.rename.icon,
-      "Rename this folder on disk and refresh the folder tree."
-    );
-    const deleteFolderBtn = createFileContextMenuButton(
-      CONTEXT_MENU_ACTIONS.deleteFolder.label,
-      CONTEXT_MENU_ACTIONS.deleteFolder.icon,
-      "Delete this folder and its contents from disk after confirmation."
-    );
-    const deleteFolderSeparator = document.createElement("div");
-    deleteFolderSeparator.className = "graph-context-menu-separator";
-    renameFolderBtn.dataset.sidebarFolderAction = "rename";
-    deleteFolderBtn.dataset.sidebarFolderAction = "delete";
-    deleteFolderSeparator.dataset.sidebarFolderAction = "delete";
-    deleteFolderBtn.classList.add("graph-context-menu-item-danger");
-
-    [
-      title,
-      separator,
-      revealFolderBtn,
-      renameFolderBtn,
-      copyPathBtn,
-      newFileBtn,
-      newFolderBtn,
-      showGraphBtn,
-      exportFolderToGraphBtn,
-      refreshFolderTreeBtn,
-      deleteFolderSeparator,
-      deleteFolderBtn
-    ].forEach((item) => menu.appendChild(item));
-    document.body.appendChild(menu);
-
-    refreshFolderTreeBtn.addEventListener("click", async (event) => {
-      event.stopPropagation();
-      hideSidebarFolderContextMenu();
-      try {
-        const refreshed = await reloadOpenFolderTree();
-        if (!refreshed) {
-          alert("Unable to refresh the folder tree because no reusable folder source is available. Please reopen the folder.");
-        }
-      } catch (error) {
-        console.error("Failed to refresh folder tree:", error);
-        alert("Unable to refresh the folder tree.");
-      }
-    });
-
-    showGraphBtn.addEventListener("click", async (event) => {
-      event.stopPropagation();
-      const target = sidebarContextTarget;
-      hideSidebarFolderContextMenu();
-      try {
-        await openSidebarFolderGraphView(target);
-      } catch (error) {
-        console.error("Failed to open sidebar folder graph view:", error);
-        alert("Unable to open a graph view for this folder.");
-      }
-    });
-
-    exportFolderToGraphBtn.addEventListener("click", async (event) => {
-      event.stopPropagation();
-      const target = sidebarContextTarget;
-      hideSidebarFolderContextMenu();
-      try {
-        await exportSidebarFolderToGraph(target);
-      } catch (error) {
-        if (error && error.name === "AbortError") return;
-        console.error("Failed to export sidebar folder to graph:", error);
-        alert("Unable to export this folder to a graph archive.");
-      }
-    });
-
-    newFileBtn.addEventListener("click", async (event) => {
-      event.stopPropagation();
-      const target = sidebarContextTarget;
-      hideSidebarFolderContextMenu();
-      try {
-        await createSidebarFileOnDisk(target);
-      } catch (error) {
-        console.error("Failed to create sidebar file:", error);
-        alert("Unable to create a new file here.");
-      }
-    });
-
-    newFolderBtn.addEventListener("click", async (event) => {
-      event.stopPropagation();
-      const target = sidebarContextTarget;
-      hideSidebarFolderContextMenu();
-      try {
-        await createSidebarFolderOnDisk(target);
-      } catch (error) {
-        console.error("Failed to create sidebar folder:", error);
-        alert("Unable to create a new folder here.");
-      }
-    });
-
-    revealFolderBtn.addEventListener("click", async (event) => {
-      event.stopPropagation();
-      const target = sidebarContextTarget;
-      hideSidebarFolderContextMenu();
-      try {
-        await revealSidebarFolder(target);
-      } catch (error) {
-        console.error("Failed to reveal sidebar folder:", error);
-        alert("Unable to reveal this folder in the file explorer.");
-      }
-    });
-
-    renameFolderBtn.addEventListener("click", async (event) => {
-      event.stopPropagation();
-      const target = sidebarContextTarget;
-      hideSidebarFolderContextMenu();
-      try {
-        await renameSidebarNodeOnDisk(target, "folder");
-      } catch (error) {
-        console.error("Failed to rename sidebar folder:", error);
-        alert("Unable to rename this folder.");
-      }
-    });
-
-    copyPathBtn.addEventListener("click", async (event) => {
-      event.stopPropagation();
-      const target = sidebarContextTarget;
-      hideSidebarFolderContextMenu();
-      if (!target) return;
-      try {
-        await copySidebarContextText(getSidebarFolderClipboardPath(target));
-      } catch (error) {
-        console.error("Failed to copy sidebar folder path:", error);
-        alert("Unable to copy this folder path.");
-      }
-    });
-
-    deleteFolderBtn.addEventListener("click", async (event) => {
-      event.stopPropagation();
-      const target = sidebarContextTarget;
-      hideSidebarFolderContextMenu();
-      try {
-        await deleteSidebarFolder(target);
-      } catch (error) {
-        console.error("Failed to delete sidebar folder:", error);
-        alert("Unable to delete this folder.");
-      }
-    });
-
-    document.addEventListener("click", hideSidebarContextMenus);
-    document.addEventListener("keydown", (event) => {
-      if (event.key === "Escape") hideSidebarContextMenus();
-    });
-    window.addEventListener("blur", hideSidebarContextMenus);
-
-    sidebarFolderContextMenu = menu;
-    return sidebarFolderContextMenu;
-  }
-
-  function showSidebarFileContextMenu(event, node) {
-    if (!node || node.kind !== "file") return;
-    event.preventDefault();
-    event.stopPropagation();
-    hideSidebarFolderContextMenu();
-    sidebarContextTarget = node;
-    const menu = ensureSidebarFileContextMenu();
-    const title = menu.querySelector(".graph-context-menu-title");
-    if (title) title.textContent = node.name || "File";
-    const tagsSubmenu = menu.querySelector(".tags-context-submenu");
-    const tagsSubmenuPanel = menu.querySelector(".tags-context-submenu-panel");
-    const canManageTags = isMarkdownPath(node.name || node.path || node.fullPath || "");
-    if (tagsSubmenu) tagsSubmenu.classList.toggle("hidden", !canManageTags);
-    if (canManageTags) {
-      const renderSidebarTags = (currentTags) => {
-        renderTagsContextSubmenu(tagsSubmenuPanel, currentTags, async (tag, shouldAdd) => {
-          const latestContent = await readSidebarNodeContent(node);
-          const latestTags = getFileTagsFromContent(latestContent);
-          const nextTags = shouldAdd
-            ? [...latestTags, tag]
-            : latestTags.filter((existingTag) => existingTag !== tag);
-          hideSidebarFileContextMenu();
-          try {
-            await setSidebarNodeTags(node, nextTags);
-          } catch (error) {
-            console.error("Failed to update sidebar file tags:", error);
-            alert("Unable to update this file's tags.");
-          }
-        });
-      };
-      renderSidebarTags(getFolderTreeNodeTags(node));
-      readSidebarNodeContent(node)
-        .then((content) => renderSidebarTags(getFileTagsFromContent(content)))
-        .catch((error) => console.warn("Failed to refresh sidebar context tag checks:", error));
-    }
-    menu.classList.remove("hidden");
-    positionSidebarFileContextMenu(event);
-  }
-
-  function showSidebarFolderContextMenu(event, node) {
-    if (!node || node.kind !== "directory") return;
-    event.preventDefault();
-    event.stopPropagation();
-    hideSidebarFileContextMenu();
-    sidebarContextTarget = node;
-    const menu = ensureSidebarFolderContextMenu();
-    const isRootContext = isOpenFolderRootContextNode(node);
-    const title = menu.querySelector(".graph-context-menu-title");
-    if (title) title.textContent = isRootContext ? (activeFolderName || "Folder") : (node.name || "Folder");
-    menu.querySelectorAll('[data-sidebar-folder-action="rename"], [data-sidebar-folder-action="delete"]').forEach((item) => {
-      item.classList.toggle("hidden", isRootContext);
-    });
-    menu.classList.remove("hidden");
-    positionSidebarFolderContextMenu(event);
-  }
-
-  function ensureSidebarClosedFolderContextMenu() {
-    if (sidebarClosedFolderContextMenu) return sidebarClosedFolderContextMenu;
-
-    const menu = document.createElement("div");
-    menu.className = "graph-context-menu sidebar-closed-folder-context-menu hidden";
-
-    const openFolderBtn = createFileContextMenuButton(
-      getOpenFolderActionLabel(),
-      CONTEXT_MENU_ACTIONS.openFolder.icon,
-      getOpenFolderActionTitle()
-    );
-    openFolderBtn.dataset.sidebarClosedFolderAction = "open-folder";
-
-    menu.appendChild(openFolderBtn);
-    document.body.appendChild(menu);
-
-    openFolderBtn.addEventListener("click", async (event) => {
-      event.preventDefault();
-      event.stopPropagation();
-      hideSidebarClosedFolderContextMenu();
-      await openFolderTree(event);
-    });
-
-    document.addEventListener("click", hideSidebarContextMenus);
-    document.addEventListener("keydown", (event) => {
-      if (event.key === "Escape") hideSidebarContextMenus();
-    });
-    window.addEventListener("blur", hideSidebarContextMenus);
-
-    sidebarClosedFolderContextMenu = menu;
-    return sidebarClosedFolderContextMenu;
-  }
-
-  function showSidebarClosedFolderContextMenu(event) {
-    if (isFolderOpen) return;
-    event.preventDefault();
-    event.stopPropagation();
-    hideSidebarFileContextMenu();
-    hideSidebarFolderContextMenu();
-    const menu = ensureSidebarClosedFolderContextMenu();
-    const openFolderBtn = menu.querySelector('[data-sidebar-closed-folder-action="open-folder"]');
-    if (openFolderBtn) {
-      const label = openFolderBtn.querySelector(".graph-context-menu-item-label");
-      if (label) label.textContent = getOpenFolderActionLabel();
-      openFolderBtn.dataset.tooltip = getOpenFolderActionTitle();
-    }
-    menu.classList.remove("hidden");
-    positionSidebarClosedFolderContextMenu(event);
-  }
-
-  function handleFolderTreeRootContextMenu(event) {
-    if (!folderTreeRoot) return;
-    if (!isFolderOpen) {
-      hideSidebarClosedFolderContextMenu();
-      return;
-    }
-    const targetElement = event.target instanceof Element ? event.target : event.target?.parentElement;
-    if (targetElement?.closest(".folder-tree-label, .folder-tree-file")) return;
-    showSidebarFolderContextMenu(event, getOpenFolderRootContextNode());
-  }
-
-  async function handleFolderTreeRootClick(event) {
-    const targetElement = event.target instanceof Element ? event.target : event.target?.parentElement;
-    const openFolderButton = targetElement?.closest(".folder-tree-open-folder-button");
-    if (!openFolderButton || isFolderOpen) return;
-    event.preventDefault();
-    await openFolderTree(event);
-  }
-
-  const folderTreeAnimationTimers = new WeakMap();
-
-  function getFolderTreeChildrenContainer(details) {
-    return details.querySelector(":scope > .folder-tree-children");
-  }
-
-  function resetFolderTreeAnimation(details, childrenContainer) {
-    const existingTimer = folderTreeAnimationTimers.get(details);
-    if (existingTimer) {
-      window.clearTimeout(existingTimer);
-      folderTreeAnimationTimers.delete(details);
-    }
-
-    details.classList.remove("is-expanding", "is-collapsing");
-    if (childrenContainer) {
-      childrenContainer.style.height = "";
-      childrenContainer.style.opacity = "";
-    }
-  }
-
-  function finishFolderTreeAnimation(details, childrenContainer, shouldOpen) {
-    details.open = shouldOpen;
-    resetFolderTreeAnimation(details, childrenContainer);
-  }
-
-  function prefersReducedFolderTreeMotion() {
-    return window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-  }
-
-  function toggleFolderTreeDetails(details) {
-    const childrenContainer = getFolderTreeChildrenContainer(details);
-    if (!childrenContainer || prefersReducedFolderTreeMotion()) {
-      resetFolderTreeAnimation(details, childrenContainer);
-      details.open = !details.open;
-      updateFolderTreeExpandToggleButtons();
-      return;
-    }
-
-    const shouldExpand = !details.open || details.classList.contains("is-collapsing");
-    resetFolderTreeAnimation(details, childrenContainer);
-
-    if (shouldExpand) {
-      details.open = true;
-      details.classList.add("is-expanding");
-      childrenContainer.style.height = "0px";
-      childrenContainer.style.opacity = "0";
-
-      window.requestAnimationFrame(() => {
-        childrenContainer.style.height = `${childrenContainer.scrollHeight}px`;
-        childrenContainer.style.opacity = "1";
-      });
-
-      const timer = window.setTimeout(() => {
-        finishFolderTreeAnimation(details, childrenContainer, true);
-        updateFolderTreeExpandToggleButtons();
-      }, 220);
-      folderTreeAnimationTimers.set(details, timer);
-      return;
-    }
-
-    details.classList.add("is-collapsing");
-    childrenContainer.style.height = `${childrenContainer.scrollHeight}px`;
-    childrenContainer.style.opacity = "1";
-
-    window.requestAnimationFrame(() => {
-      childrenContainer.style.height = "0px";
-      childrenContainer.style.opacity = "0";
-    });
-
-    const timer = window.setTimeout(() => {
-      finishFolderTreeAnimation(details, childrenContainer, false);
-      updateFolderTreeExpandToggleButtons();
-    }, 220);
-    folderTreeAnimationTimers.set(details, timer);
-  }
-
-  function getFileIconClass(fileName, options = {}) {
-    if (options.isUnsupportedFile) return "bi-file-earmark-x";
-    if (options.isGraphFile || isGraphFilePath(fileName)) return "bi-diagram-3";
-    const extension = getFileExtension(fileName);
-    const iconByExtension = {
-      json: "bi-filetype-json",
-      js: "bi-filetype-js",
-      mjs: "bi-filetype-js",
-      cjs: "bi-filetype-js",
-      ts: "bi-filetype-tsx",
-      tsx: "bi-filetype-tsx",
-      jsx: "bi-filetype-jsx",
-      css: "bi-filetype-css",
-      html: "bi-filetype-html",
-      htm: "bi-filetype-html",
-      java: "bi-filetype-java",
-      py: "bi-filetype-py",
-      php: "bi-filetype-php",
-      rb: "bi-filetype-rb",
-      sql: "bi-filetype-sql",
-      xml: "bi-filetype-xml",
-      yaml: "bi-filetype-yml",
-      yml: "bi-filetype-yml",
-      csv: "bi-filetype-csv",
-      txt: "bi-filetype-txt",
-      text: "bi-filetype-txt"
-    };
-    if (iconByExtension[extension]) return iconByExtension[extension];
-    return isMarkdownPath(fileName) ? "bi-file-earmark-text" : "bi-file-text";
-  }
-
-  function renderFolderTreeNode(node, parentPath = "") {
-    const li = document.createElement("li");
-    li.className = "folder-tree-item";
-    if (node.kind === "directory") {
-      const currentPath = node.path || (parentPath ? `${parentPath}/${node.name}` : node.name);
-      node.path = currentPath;
-      const details = document.createElement("details");
-      details.open = true;
-      const summary = document.createElement("summary");
-      summary.className = "folder-tree-label";
-      const icon = document.createElement("i");
-      icon.className = "bi bi-folder";
-      const label = document.createElement("span");
-      label.textContent = node.name;
-      summary.appendChild(icon);
-      summary.appendChild(label);
-      summary.addEventListener("click", (event) => {
-        event.preventDefault();
-        toggleFolderTreeDetails(details);
-      });
-      summary.addEventListener("contextmenu", (event) => showSidebarFolderContextMenu(event, node));
-      details.appendChild(summary);
-
-      const childrenContainer = document.createElement("div");
-      childrenContainer.className = "folder-tree-children";
-      const ul = document.createElement("ul");
-      ul.className = "folder-tree-list";
-      node.children.forEach((child) => ul.appendChild(renderFolderTreeNode(child, currentPath)));
-      childrenContainer.appendChild(ul);
-      details.appendChild(childrenContainer);
-      li.appendChild(details);
-      return li;
-    }
-
-    const button = document.createElement("button");
-    let sidebarOpenClickTimer = null;
-    const isGraphFile = isGraphFilePath(node.name) || node.isGraphDocumentFile === true;
-    const isJsonFile = isJsonPath(node.name);
-    const isUnsupportedFile = !isSupportedFolderTreeDocumentNode(node);
-    const canOpenAsTextFile = isSidebarDocumentNode(node);
-    button.type = "button";
-    button.className = "folder-tree-file"
-      + (isGraphFile ? " folder-tree-graph-file" : "")
-      + (isUnsupportedFile ? " folder-tree-unsupported-file" : "");
-    button.title = isUnsupportedFile
-      ? (canOpenAsTextFile
-        ? "Click to preview this text file; double-click to keep open"
-        : "Unsupported files are hidden by default and shown here only because unsupported files are enabled")
-      : (isGraphFile ? "Click to open graph" : "Click to preview in the text editor; double-click to keep open");
-    button.dataset.name = node.name || "";
-    button.dataset.path = node.path || "";
-    button.dataset.fullPath = node.fullPath || "";
-    const fileIconClass = getFileIconClass(node.name, { isGraphFile, isJsonFile, isUnsupportedFile });
-    button.innerHTML = `<i class="bi ${fileIconClass}"></i><span>${node.name}</span>`;
-
-    async function readSidebarFileContent() {
-      if (typeof NL_VERSION !== "undefined" && node.fullPath) {
-        // Desktop: read file via Neutralino filesystem
-        return Neutralino.filesystem.readFile(node.fullPath);
-      }
-
-      // Browser: read file via File System Access API or upload fallback
-      const nodePathKey = getComparableFilePath(node.fullPath || node.path || node.name || "");
-      const folderEntry = (folderMarkdownFiles || []).find((entry) => {
-        const entryPathKey = getComparableFilePath(entry.fullPath || entry.path || entry.file?.webkitRelativePath || entry.file?.name || entry.name || "");
-        return entryPathKey && nodePathKey && entryPathKey === nodePathKey;
-      });
-      if (folderEntry) return readFolderMarkdownFileContent(folderEntry);
-
-      if (!node.handle?.getFile) throw new Error("No readable file handle is available.");
-      const file = node.file ? node.file : await node.handle.getFile();
-      return file.text();
-    }
-
-    function getSidebarFileSource() {
-      return {
-        name: node.name,
-        handle: node.handle || null,
-        path: node.fullPath || node.path || null
-      };
-    }
-
-    async function openSidebarFile(options) {
-      try {
-        const existingTab = findTabForSidebarFile(node);
-        if (existingTab) {
-          switchTab(existingTab.id);
-          if (options && options.temporary === false) {
-            pinTemporaryTab(existingTab.id);
-          }
-          rememberRecentFile(getSidebarFileSource());
-          return;
-        }
-
-        const content = await readSidebarFileContent();
-        const sourceFile = getSidebarFileSource();
-        if (isGraphFile || isJsonFile) {
-          const openedTab = await openDocumentSourceFile({ ...sourceFile, content });
-          if (openedTab && options && options.temporary === false) {
-            pinTemporaryTab(openedTab.id);
-          }
-        } else {
-          const title = getMarkdownTitleFromFileName(node.name);
-          if (options && options.temporary === false) {
-            openSidebarFileInPermanentTab(content, title, sourceFile);
-          } else {
-            openSidebarFileInTemporaryTab(content, title, sourceFile);
-          }
-        }
-        rememberRecentFile(sourceFile);
-      } catch (error) {
-        console.error("Failed to open sidebar file:", error);
-        alert("Unable to open selected file.");
-      }
-    }
-
-    if (canOpenAsTextFile) {
-      button.addEventListener("click", () => {
-        window.clearTimeout(sidebarOpenClickTimer);
-        sidebarOpenClickTimer = window.setTimeout(() => {
-          openSidebarFile({ temporary: true });
-        }, 200);
-      });
-
-      button.addEventListener("dblclick", (event) => {
-        event.preventDefault();
-        window.clearTimeout(sidebarOpenClickTimer);
-        openSidebarFile({ temporary: false });
-      });
-    }
-
-    button.addEventListener("contextmenu", (event) => {
-      window.clearTimeout(sidebarOpenClickTimer);
-      showSidebarFileContextMenu(event, node);
-    });
-
-    li.appendChild(button);
-    return li;
-  }
-
-  function findTabForSidebarFile(node) {
-    if (!node || node.kind !== "file") return null;
-
-    if (node.handle) {
-      const handleMatch = tabs.find(function(tab) {
-        return tab.sourceFileHandle === node.handle;
-      });
-      if (handleMatch) return handleMatch;
-    }
-
-    const nodePath = node.fullPath || node.path || null;
-    if (nodePath) {
-      const pathMatch = tabs.find(function(tab) {
-        return tab.sourceFilePath === nodePath;
-      });
-      if (pathMatch) return pathMatch;
-    }
-
-    const title = isGraphFilePath(node.name) ? getGraphTitleFromFileName(node.name) : getMarkdownTitleFromFileName(node.name);
-    return tabs.find(function(tab) {
-      return tab.sourceFileName === node.name || tab.title === title;
-    }) || null;
-  }
-
-  async function buildTreeFromFileList(fileList) {
-    const root = [];
-    const ensureDir = (nodes, name) => {
-      let dir = nodes.find((n) => n.kind === "directory" && n.name === name);
-      if (!dir) {
-        dir = { kind: "directory", name, children: [] };
-        nodes.push(dir);
-      }
-      return dir;
-    };
-
-    for (const file of Array.from(fileList)) {
-      const relPath = (file.webkitRelativePath || file.name).split("/");
-      const fileName = relPath.pop();
-      let cursor = root;
-      relPath.forEach((segment) => {
-        cursor = ensureDir(cursor, segment).children;
-      });
-      const modifiedAt = Number(file?.lastModified || 0) || 0;
-      const isGraphDocumentFile = await fileContainsGraphDocument(file);
-      cursor.push({ kind: "file", name: fileName, file, path: (file.webkitRelativePath || file.name), modifiedAt, createdAt: modifiedAt, isGraphDocumentFile });
-    }
-
-    return sortFolderTreeNodes(root);
-  }
-  async function openFolderTree(event) {
-  // Desktop app: use Neutralino native folder picker (no permission dialog)
-  if (typeof NL_VERSION !== "undefined") {
-    try {
-      const selectedPath = await Neutralino.os.showFolderDialog("Select a folder");
-      await openFolderTreeFromNeutralinoPath(selectedPath);
-    } catch (error) {
-      if (error && error.name === "AbortError") return;
-      console.error("Neutralino folder picker error:", error);
-    }
-    return;
-  }
-
-  if (folderPicker.shouldUseNativeDirectoryPicker(event)) {
-    try {
-      const dirHandle = await window.showDirectoryPicker();
-      activeFolderName = dirHandle && dirHandle.name ? dirHandle.name : "Graph View";
-      activeFolderHandle = dirHandle || null;
-      activeFolderPath = null;
-      const nodes = await listMarkdownTree(dirHandle);
-      folderMarkdownFiles = await collectMarkdownFilesFromTree(nodes);
-      renderFolderTree(nodes);
-      rememberRecentFolder({ name: activeFolderName, label: activeFolderName, handle: dirHandle });
-      return;
-    } catch (error) {
-      if (error && error.name === "AbortError") return;
-      console.warn("Directory picker unavailable, using browser folder input.", error);
-    }
-  }
-
-  if (folderInput) {
-    if (!shownFolderInputFallbackNotice) {
-      console.info(folderPicker.getFolderPickerFallbackMessage());
-      shownFolderInputFallbackNotice = true;
-    }
-    folderInput.click();
-  } else {
-    alert("Folder selection is not supported in this environment.");
-  }
-}
+  const sidebarContextTree = window.registerMarkdownViewerSidebarContextTree(app, {
+    CONTEXT_MENU_ACTIONS,
+    get activeFolderName() { return activeFolderName; },
+    set activeFolderName(value) { activeFolderName = value; },
+    get activeFolderHandle() { return activeFolderHandle; },
+    set activeFolderHandle(value) { activeFolderHandle = value; },
+    get activeFolderPath() { return activeFolderPath; },
+    set activeFolderPath(value) { activeFolderPath = value; },
+    get activeTabId() { return activeTabId; },
+    get tabs() { return tabs; },
+    get folderMarkdownFiles() { return folderMarkdownFiles; },
+    set folderMarkdownFiles(value) { folderMarkdownFiles = value; },
+    get currentFolderTreeNodes() { return currentFolderTreeNodes; },
+    set currentFolderTreeNodes(value) { currentFolderTreeNodes = value; },
+    get selectedFolderTreeTags() { return selectedFolderTreeTags; },
+    set selectedFolderTreeTags(value) { selectedFolderTreeTags = value; },
+    get isFolderOpen() { return isFolderOpen; },
+    set isFolderOpen(value) { isFolderOpen = value; },
+    get shownFolderInputFallbackNotice() { return shownFolderInputFallbackNotice; },
+    set shownFolderInputFallbackNotice(value) { shownFolderInputFallbackNotice = value; },
+    get markdownEditor() { return markdownEditor; },
+    get graphRenderCache() { return graphRenderCache; },
+    get folderTreeRoot() { return folderTreeRoot; },
+    get folderInput() { return folderInput; },
+    get sidebarFileContextMenu() { return sidebarFileContextMenu; },
+    set sidebarFileContextMenu(value) { sidebarFileContextMenu = value; },
+    get sidebarFileContextTargetNode() { return sidebarFileContextTargetNode; },
+    set sidebarFileContextTargetNode(value) { sidebarFileContextTargetNode = value; },
+    get sidebarFolderContextMenu() { return sidebarFolderContextMenu; },
+    set sidebarFolderContextMenu(value) { sidebarFolderContextMenu = value; },
+    get sidebarFolderContextTargetNode() { return sidebarFolderContextTargetNode; },
+    set sidebarFolderContextTargetNode(value) { sidebarFolderContextTargetNode = value; },
+    get sidebarClosedFolderContextMenu() { return sidebarClosedFolderContextMenu; },
+    set sidebarClosedFolderContextMenu(value) { sidebarClosedFolderContextMenu = value; },
+    get sidebarRenameModal() { return sidebarRenameModal; },
+    get sidebarRenameTitle() { return sidebarRenameTitle; },
+    get sidebarRenameInput() { return sidebarRenameInput; },
+    get sidebarRenameError() { return sidebarRenameError; },
+    get sidebarRenameConfirm() { return sidebarRenameConfirm; },
+    get sidebarRenameCancel() { return sidebarRenameCancel; },
+    get Neutralino() { return typeof Neutralino !== "undefined" ? Neutralino : undefined; },
+    get NL_VERSION() { return typeof NL_VERSION !== "undefined" ? NL_VERSION : undefined; },
+    get bootstrap() { return typeof bootstrap !== "undefined" ? bootstrap : undefined; },
+    get navigator() { return navigator; },
+    folderPicker,
+    get normalizeEditorContent() { return normalizeEditorContent; },
+    normalizeFileTagList,
+    normalizeTagName,
+    addTagToContent,
+    removeTagFromContent,
+    getFileTagsFromContent,
+    getKnownTags,
+    getReferencedTags,
+    saveKnownTags,
+    getComparableFilePath,
+    getFolderTreeNodePathKey,
+    readFolderMarkdownFileContent,
+    updateFolderTreeNodeTagsForEntry,
+    refreshFolderTagCounts,
+    getActiveGraphTab,
+    get updateGraphTagToolbar() { return updateGraphTagToolbar; },
+    get renderGraphView() { return renderGraphView; },
+    createGraphSnapshot,
+    isKeepSavedGraphMode,
+    markGraphTabAsChanged,
+    saveTabsToStorage,
+    get renderFilteredFolderTree() { return renderFilteredFolderTree; },
+    get renderLinkAutocomplete() { return renderLinkAutocomplete; },
+    get renderEditorSyntaxHighlights() { return renderEditorSyntaxHighlights; },
+    get updateEditorLineNumbers() { return updateEditorLineNumbers; },
+    get renderMarkdown() { return renderMarkdown; },
+    get renderTabBar() { return renderTabBar; },
+    get updateSaveCurrentFileButtons() { return updateSaveCurrentFileButtons; },
+    get openSidebarFileInPermanentTab() { return openSidebarFileInPermanentTab; },
+    get openSidebarFileInTemporaryTab() { return openSidebarFileInTemporaryTab; },
+    get openDocumentSourceFile() { return openDocumentSourceFile; },
+    get findTabForSourceFile() { return findTabForSourceFile; },
+    get switchTab() { return switchTab; },
+    get pinTemporaryTab() { return pinTemporaryTab; },
+    get createGraphTab() { return createGraphTab; },
+    getGraphTitleFromFileName,
+    getGraphDisplayLabel,
+    normalizeGraphNodeName,
+    getGraphLinkKey,
+    normalizeGraphTagNodeId,
+    normalizeGraphTagNodeIds,
+    normalizeGraphViewConfig,
+    getGraphColorInputValue,
+    createGraphGroupId,
+    normalizeGraphGroups,
+    getNextDefaultGraphGroupColor,
+    serializeGraphExportDocument,
+    getSuggestedGraphFileName,
+    getGraphExportContent,
+    exportFolderFilesToGraph,
+    copyToClipboard,
+    showCopiedMessage,
+    isNeutralinoRuntime,
+    joinPath,
+    getFileName,
+    getFileExtension,
+    getMarkdownTitleFromFileName,
+    isGraphFilePath,
+    isJsonPath,
+    isSidebarDocumentPath,
+    isSidebarDocumentNode,
+    isSupportedFolderTreeDocumentNode,
+    isMarkdownPath,
+    isKnownTextFilePath,
+    fileContainsGraphDocument,
+    listMarkdownTree,
+    collectMarkdownFilesFromTree,
+    sortFolderTreeNodes,
+    listMarkdownTreeNeutralino,
+    collectMarkdownFilesFromTreeNeutralino,
+    renderFolderTree,
+    rememberRecentFolder,
+    updateCloseFolderButtons,
+    updateFolderTreeToolbarState,
+    clearFolderTagCounts,
+    closeFolderTree,
+    closeTabsForDeletedPath,
+    refreshOpenFolderTreeAfterFileDelete,
+    openFolderTreeFromNeutralinoPath
+  });
+  const {
+    createFileContextMenuButton,
+    createTagsContextSubmenu,
+    renderTagsContextSubmenu,
+    getSidebarNodeSource,
+    getSidebarNodeClipboardPath,
+    readSidebarNodeContent,
+    writeSidebarNodeContent,
+    sidebarNodeMatchesSnapshotFile,
+    updateGraphSnapshotsForSidebarFileTagChange,
+    updateOpenMarkdownTabsForSidebarNode,
+    setSidebarNodeTags,
+    runWithTemporaryEditorContent,
+    exportMarkdownContent,
+    exportHtmlContent,
+    exportPdfContent,
+    getSidebarNodeFilesystemPath,
+    copySidebarContextText,
+    hideSidebarFileContextMenu,
+    hideSidebarFolderContextMenu,
+    hideSidebarClosedFolderContextMenu,
+    hideSidebarContextMenus,
+    positionSidebarContextMenu,
+    positionSidebarFileContextMenu,
+    positionSidebarFolderContextMenu,
+    positionSidebarClosedFolderContextMenu,
+    getOpenFolderMainMenuButton,
+    getOpenFolderActionLabel,
+    getOpenFolderActionTitle,
+    getPathDirectory,
+    getRenamedSiblingPath,
+    validateSidebarRenameName,
+    promptSidebarRename,
+    promptSidebarNewFileName,
+    promptSidebarNewFolderName,
+    updateTabsAfterSidebarFileRename,
+    stripMarkdownExtension,
+    splitMarkdownLinkSuffix,
+    getRelativePathBetweenFiles,
+    getRenameReferenceTargetPath,
+    updateMarkdownRenameLinks,
+    writeFolderMarkdownEntryContent,
+    getEntryContent,
+    updateOpenTabsAfterMarkdownLinkRename,
+    updateOpenFolderLinksAfterSidebarRename,
+    replacePathPrefix,
+    getPathRelativeToFolder,
+    renameGraphSnapshotPathReferences,
+    updateGraphTabConfigAfterNodeRename,
+    updateGraphTabsAfterPathRename,
+    getSidebarRenamePathMappings,
+    updateTabsAfterSidebarFolderRename,
+    sidebarFileExists,
+    createSidebarFileOnDisk,
+    createSidebarFolderOnDisk,
+    renameSidebarNodeOnDisk,
+    ensureSidebarFileContextMenu,
+    isOpenFolderRootContextNode,
+    getOpenFolderRootContextNode,
+    getSidebarFolderClipboardPath,
+    getSidebarFolderFilesystemPath,
+    getSidebarFolderGraphTitle,
+    collectMarkdownFilesForSidebarFolder,
+    openSidebarFolderGraphView,
+    exportSidebarFolderToGraph,
+    revealSidebarFolder,
+    deleteSidebarFolder,
+    ensureSidebarFolderContextMenu,
+    showSidebarFileContextMenu,
+    showSidebarFolderContextMenu,
+    ensureSidebarClosedFolderContextMenu,
+    showSidebarClosedFolderContextMenu,
+    handleFolderTreeRootContextMenu,
+    handleFolderTreeRootClick,
+    getFolderTreeChildrenContainer,
+    resetFolderTreeAnimation,
+    finishFolderTreeAnimation,
+    prefersReducedFolderTreeMotion,
+    toggleFolderTreeDetails,
+    getFileIconClass,
+    renderFolderTreeNode,
+    findTabForSidebarFile,
+    buildTreeFromFileList,
+    openFolderTree
+  } = sidebarContextTree;
 
   async function importDocumentFile(file) {
     try {
@@ -5274,7 +2923,7 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
       null,
       false
     );
-    
+
     const textNodes = [];
     let node;
     while ((node = walker.nextNode())) {
@@ -5287,25 +2936,25 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
         }
         parent = parent.parentNode;
       }
-      
+
       if (!isInCode && node.nodeValue.includes(':')) {
         textNodes.push(node);
       }
     }
-    
+
     textNodes.forEach(textNode => {
       const text = textNode.nodeValue;
       const emojiRegex = /:([\w+-]+):/g;
-      
+
       let match;
       let lastIndex = 0;
       let result = '';
       let hasEmoji = false;
-      
+
       while ((match = emojiRegex.exec(text)) !== null) {
         const shortcode = match[1];
         const emoji = joypixels.shortnameToUnicode(`:${shortcode}:`);
-        
+
         if (emoji !== `:${shortcode}:`) { // If conversion was successful
           hasEmoji = true;
           result += text.substring(lastIndex, match.index) + emoji;
@@ -5315,7 +2964,7 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
           lastIndex = emojiRegex.lastIndex;
         }
       }
-      
+
       if (hasEmoji) {
         result += text.substring(lastIndex);
         const span = document.createElement('span');
@@ -5400,7 +3049,7 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
   const updateStatusLine = statusLine.updateStatusLine;
 
   mobileMenu.bindMobileMenu();
-  
+
   // View Mode Button Event Listeners - Story 1.1
   viewModeButtons.forEach(btn => {
     btn.addEventListener('click', function() {
@@ -5440,7 +3089,7 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
     clearTimeout(saveTabStateTimeout);
     saveTabStateTimeout = setTimeout(saveCurrentTabState, 500);
   });
-  
+
   // Tab key handler to insert indentation instead of moving focus
   markdownEditor.addEventListener("keydown", function(e) {
     if (handleLinkAutocompleteKeydown(e)) return;
@@ -5454,27 +3103,27 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
     }
     if (e.key === 'Tab') {
       e.preventDefault();
-      
+
       const start = this.selectionStart;
       const end = this.selectionEnd;
       const value = this.value;
-      
+
       // Insert 2 spaces
       const indent = '  '; // 2 spaces
-      
+
       // Update textarea value
       this.value = value.substring(0, start) + indent + value.substring(end);
-      
+
       // Update cursor position
       this.selectionStart = this.selectionEnd = start + indent.length;
-      
+
       // Trigger input event to update preview
       this.dispatchEvent(new Event('input'));
       updateEditorLineNumbers();
       updateEditorSelectionHighlights();
     }
   });
-  
+
   ["click", "keyup", "select"].forEach(function(eventName) {
     markdownEditor.addEventListener(eventName, function() {
       renderLinkAutocomplete();
@@ -5892,665 +3541,107 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
     return graphTab;
   }
 
-  function setGraphFilterPanelCollapsed(collapsed) {
-    if (!graphViewToolbar || !graphFilterPanelToggle) return;
-    graphViewToolbar.classList.toggle("collapsed", collapsed);
-    graphFilterPanelToggle.setAttribute("aria-expanded", collapsed ? "false" : "true");
-    graphFilterPanelToggle.setAttribute("aria-label", collapsed ? "Expand graph filters" : "Collapse graph filters");
-    graphFilterPanelToggle.setAttribute("title", collapsed ? "Expand filters" : "Collapse filters");
-  }
-
-  function setGraphViewMode(enabled) {
-    const contentContainer = document.querySelector(".content-container");
-    if (!contentContainer || !graphViewCanvas) return;
-    const previewPane = document.querySelector(".preview-pane");
-    const graphViewHeader = document.querySelector("#graph-view-modal .graph-view-header");
-    const graphViewContent = document.querySelector("#graph-view-modal .graph-view-content");
-    if (enabled) {
-      contentContainer.classList.add("graph-view-active");
-      if (previewPane) {
-        if (graphViewToolbar && graphViewToolbar.parentElement !== previewPane) {
-          previewPane.insertBefore(graphViewToolbar, previewPane.firstChild);
-        }
-        if (!graphViewCanvas.parentElement || !graphViewCanvas.closest(".preview-pane")) {
-          previewPane.appendChild(graphViewCanvas);
-        } else if (graphViewToolbar && graphViewCanvas.previousElementSibling !== graphViewToolbar) {
-          previewPane.insertBefore(graphViewToolbar, graphViewCanvas);
-        }
-      }
-      if (graphViewToolbar) graphViewToolbar.classList.add("graph-tab-toolbar");
-      graphViewCanvas.classList.add("tab-graph-canvas");
-    } else {
-      contentContainer.classList.remove("graph-view-active");
-      if (graphViewToolbar) {
-        graphViewToolbar.classList.remove("graph-tab-toolbar");
-        if (graphViewHeader && graphViewToolbar.parentElement !== graphViewHeader) {
-          graphViewHeader.appendChild(graphViewToolbar);
-        }
-      }
-      graphViewCanvas.classList.remove("tab-graph-canvas");
-      if (graphViewContent && graphViewCanvas.parentElement !== graphViewContent) {
-        graphViewContent.appendChild(graphViewCanvas);
-      }
-    }
-  }
-
-  function getGraphSnapshotTagNodeIds(graphSnapshot) {
-    return (graphSnapshot?.nodes || [])
-      .filter((node) => (node?.type || "file") === "tag")
-      .map((node) => normalizeGraphTagNodeId(node.id || node.tag || node.label))
-      .filter(Boolean)
-      .sort((a, b) => a.localeCompare(b));
-  }
-
-  function getGraphFilterTagNodeIds(graphSnapshot) {
-    return getGraphSnapshotTagNodeIds(graphSnapshot);
-  }
-
-  function getGraphTagLabelFromId(tagNodeId) {
-    return `#${String(tagNodeId || "").replace(/^tag:/, "")}`;
-  }
-
-  function parseGraphGroupQuery(query) {
-    const rawQuery = String(query || "").trim();
-    const prefixMatch = rawQuery.match(/^([a-z]+)\s*:\s*(.*)$/i);
-    const supportedPrefixes = new Set(["path", "file", "name", "tag", "link", "text", "line"]);
-    const prefix = prefixMatch ? prefixMatch[1].toLowerCase() : "";
-    const type = supportedPrefixes.has(prefix) ? prefix : "";
-    const value = (type ? prefixMatch[2] : rawQuery).trim();
-    const terms = value
-      .toLowerCase()
-      .split(/\s+/)
-      .map((term) => term.trim())
-      .filter(Boolean);
-    return {
-      type,
-      value,
-      terms
-    };
-  }
-
-  function graphQueryRequiresFileContent(query) {
-    const parsedQuery = parseGraphGroupQuery(query);
-    return parsedQuery.type === "text" || parsedQuery.type === "line";
-  }
-
-  function isLightweightSavedGraphView(tab, graphSnapshot) {
-    return !!(isKeepSavedGraphMode(tab) && !graphSnapshotHasEmbeddedFileContent(graphSnapshot || tab?.graphSnapshot));
-  }
-
-  function showLightweightSavedGraphTextSearchUnavailable() {
-    showGraphBanner(LIGHTWEIGHT_SAVED_GRAPH_TEXT_SEARCH_MESSAGE);
-  }
-
-  function getGraphSnapshotFileCachedContent(snapshotFile) {
-    if (typeof snapshotFile?.content === "string") return snapshotFile.content;
-    const folderEntry = findFolderMarkdownEntryForGraphFile(snapshotFile);
-    return typeof folderEntry?.content === "string" ? folderEntry.content : "";
-  }
-
-  function getGraphFilterFileData(nodeData, snapshotFile, options = {}) {
-    const status = nodeData?.status || snapshotFile?.status || "current";
-    const canUseCurrentFolder = options.useCurrentFolderData && status !== "saved-only";
-    const currentEntry = canUseCurrentFolder ? findFolderMarkdownEntryForGraphFile({
-      ...(snapshotFile || {}),
-      id: snapshotFile?.id || nodeData?.id,
-      path: snapshotFile?.path || nodeData?.path || nodeData?.fullPath || nodeData?.id,
-      fullPath: snapshotFile?.fullPath || nodeData?.fullPath || nodeData?.path || null,
-      name: snapshotFile?.name || nodeData?.name || getFileName(nodeData?.path || nodeData?.fullPath || nodeData?.id || "")
-    }) : null;
-    const metadataSource = currentEntry || snapshotFile || nodeData || {};
-    const path = metadataSource.path || nodeData?.path || nodeData?.fullPath || nodeData?.id || "";
-    const name = metadataSource.name || nodeData?.name || getFileName(path || nodeData?.id || "");
-    const fullPath = metadataSource.fullPath || nodeData?.fullPath || path;
-    const rawContent = typeof currentEntry?.content === "string"
-      ? currentEntry.content
-      : (typeof snapshotFile?.content === "string" ? snapshotFile.content : "");
-    const content = options.allowContentSearch ? rawContent : "";
-    const sourceTags = Array.isArray(metadataSource.tags) ? metadataSource.tags : [];
-    const tags = sourceTags.length ? sourceTags : (content ? getFileTagsFromContent(content) : []);
-
-    return {
-      id: metadataSource.id || nodeData?.id || "",
-      path,
-      name,
-      fullPath,
-      content,
-      tags,
-      linkText: String(options.linkText || "")
-    };
-  }
-
-  function graphFileMatchesGroupQuery(nodeData, snapshotFile, parsedQuery, options = {}) {
-    if ((nodeData?.type || "file") !== "file") return false;
-    if (!snapshotFile || !parsedQuery || !parsedQuery.terms?.length) return false;
-
-    const fileData = getGraphFilterFileData(nodeData, snapshotFile, options);
-    const path = String(fileData.path || "").toLowerCase();
-    const name = String(fileData.name || "").toLowerCase();
-    const fullPath = String(fileData.fullPath || "").toLowerCase();
-    const content = String(fileData.content || "").toLowerCase();
-    const tagText = (Array.isArray(fileData.tags) ? fileData.tags : [])
-      .map((tag) => String(tag || "").toLowerCase())
-      .filter(Boolean)
-      .join(" ");
-    const linkText = String(fileData.linkText || "").toLowerCase();
-    const terms = parsedQuery.terms;
-    const allTermsMatchText = (text) => terms.every((term) => text.includes(term));
-
-    switch (parsedQuery.type) {
-      case "path":
-        return allTermsMatchText([path, fullPath].filter(Boolean).join(" "));
-      case "file":
-        return allTermsMatchText([name, path, fullPath].filter(Boolean).join(" "));
-      case "name":
-        return allTermsMatchText(name);
-      case "tag":
-        return allTermsMatchText(tagText);
-      case "link":
-        return allTermsMatchText(linkText);
-      case "text":
-        return options.allowContentSearch && allTermsMatchText(content);
-      case "line":
-        return options.allowContentSearch && content
-          .split(/\r?\n/)
-          .some((line) => terms.every((term) => line.includes(term)));
-      default:
-        return allTermsMatchText([path, name, fullPath, tagText, linkText, options.allowContentSearch ? content : ""].filter(Boolean).join(" "));
-    }
-  }
-
-  function getGraphGroupMatch(nodeData, snapshotFile, graphViewConfig, options = {}) {
-    const groups = Array.isArray(graphViewConfig?.groups) ? graphViewConfig.groups : [];
-    for (const group of groups) {
-      if (!group || group.enabled === false) continue;
-      const parsedQuery = parseGraphGroupQuery(group.query);
-      if (graphFileMatchesGroupQuery(nodeData, snapshotFile, parsedQuery, options)) return group;
-    }
-    return null;
-  }
-
-  function updateGraphGroup(groupId, patch, options = {}) {
-    const activeGraphTab = getActiveGraphTab();
-    if (!activeGraphTab) return;
-    const graphViewConfig = normalizeGraphViewConfig(activeGraphTab.graphViewConfig);
-    const groups = graphViewConfig.groups.map((group) => (group.id === groupId ? { ...group, ...patch } : group));
-    updateActiveGraphViewConfig({ groups }, options);
-  }
-
-  function deleteGraphGroup(groupId) {
-    const activeGraphTab = getActiveGraphTab();
-    if (!activeGraphTab) return;
-    const graphViewConfig = normalizeGraphViewConfig(activeGraphTab.graphViewConfig);
-    updateActiveGraphViewConfig({ groups: graphViewConfig.groups.filter((group) => group.id !== groupId) });
-  }
-
-  const GRAPH_GROUP_QUERY_PREFIX_HELP = [
-    { prefix: "path", label: "path:", description: "Match folders, path segments, or full paths." },
-    { prefix: "file", label: "file:", description: "Match Markdown file names." },
-    { prefix: "tag", label: "tag:", description: "Match normalized frontmatter tags." },
-    { prefix: "link", label: "link:", description: "Match linked file paths and names." },
-    { prefix: "text", label: "text:", description: "Match file contents." },
-    { prefix: "line", label: "line:", description: "Match individual Markdown lines." }
-  ];
-  let activeGraphGroupSuggestionClose = null;
-
-  function getGraphGroupQueryContext(input) {
-    const value = String(input?.value || "");
-    const cursor = typeof input?.selectionStart === "number" ? input.selectionStart : value.length;
-    const beforeCursor = value.slice(0, cursor);
-    const prefixMatch = beforeCursor.match(/(^|\s)(path|file|tag|link|text|line):([^\s]*)$/i);
-    if (!prefixMatch) {
-      return { prefix: "", query: "", replaceStart: cursor, replaceEnd: cursor };
-    }
-
-    return {
-      prefix: prefixMatch[2].toLowerCase(),
-      query: prefixMatch[3] || "",
-      replaceStart: cursor - (prefixMatch[3] || "").length,
-      replaceEnd: cursor
-    };
-  }
-
-  function isGraphGroupAbsolutePathSuggestion(path) {
-    const normalizedPath = String(path || "").replace(/\\/g, "/");
-    return /^([a-z]:\/|\/|~\/|\/\/)/i.test(normalizedPath);
-  }
-
-  function getGraphGroupRelativeFilePath(snapshotFile) {
-    const relativePath = String(snapshotFile?.path || snapshotFile?.file?.webkitRelativePath || "").replace(/\\/g, "/").replace(/^\/+/, "");
-    if (relativePath && !isGraphGroupAbsolutePathSuggestion(relativePath)) return relativePath;
-
-    const fullPath = String(snapshotFile?.fullPath || "").replace(/\\/g, "/");
-    if (fullPath && activeFolderPath) {
-      const relativeFullPath = getPathRelativeToFolder(fullPath, activeFolderPath);
-      if (relativeFullPath) return relativeFullPath.replace(/\\/g, "/").replace(/^\/+/, "");
-    }
-
-    return "";
-  }
-
-  function addGraphGroupPathFolderSuggestions(snapshotFile, addEntry) {
-    const relativePath = getGraphGroupRelativeFilePath(snapshotFile);
-    if (!relativePath) return;
-
-    const segments = relativePath.split("/").filter(Boolean);
-    segments.pop();
-    let folderPath = "";
-    segments.forEach((segment) => {
-      folderPath = folderPath ? `${folderPath}/${segment}` : segment;
-      addEntry(folderPath, "path", "Folder");
-    });
-  }
-
-  function getGraphGroupSuggestionEntries(graphSnapshot, prefix, query, options = {}) {
-    const normalizedQuery = String(query || "").toLowerCase();
-    const entryMap = new Map();
-    const addEntry = (value, type, detail) => {
-      const normalizedValue = String(value || "").trim().replace(/\\/g, "/").replace(/^\/+|\/+$/g, "");
-      if (!normalizedValue || isGraphGroupAbsolutePathSuggestion(normalizedValue)) return;
-      if (normalizedQuery && !normalizedValue.toLowerCase().includes(normalizedQuery)) return;
-      const key = `${type}:${normalizedValue.toLowerCase()}`;
-      if (!entryMap.has(key)) entryMap.set(key, { value: normalizedValue, type, detail: detail || "" });
-    };
-
-    if (prefix === "path") {
-      (graphSnapshot?.files || []).forEach((snapshotFile) => {
-        addGraphGroupPathFolderSuggestions(snapshotFile, addEntry);
-      });
-    } else if (prefix === "file") {
-      (graphSnapshot?.files || []).forEach((snapshotFile) => {
-        const path = String(snapshotFile.fullPath || snapshotFile.path || "");
-        addEntry(snapshotFile.name || getFileName(path), "file", path || "File name");
-      });
-    } else if (prefix === "tag") {
-      (graphSnapshot?.files || []).forEach((snapshotFile) => {
-        normalizeFileTagList(snapshotFile.tags || []).forEach((tag) => addEntry(tag, "tag", "File tag"));
-        if (!options.savedMetadataOnly) extractMarkdownTags(getGraphSnapshotFileCachedContent(snapshotFile)).forEach((tag) => addEntry(tag, "tag", "Markdown tag"));
-      });
-      (graphSnapshot?.nodes || []).forEach((node) => {
-        if ((node?.type || "file") !== "tag") return;
-        const tag = normalizeTagName(node.tag || node.label || String(node.id || "").replace(/^tag:/, ""));
-        addEntry(tag, "tag", "Tag node");
-      });
-      if (!options.savedMetadataOnly) getAllKnownAndReferencedTags().forEach((tag) => addEntry(tag, "tag", "Known tag"));
-    } else if (prefix === "link") {
-      const filesById = new Map((graphSnapshot?.files || []).map((file) => [file.id, file]));
-      (graphSnapshot?.links || []).forEach((link) => {
-        if ((link?.type || "link") === "tag") return;
-        const sourceId = getGraphLinkEndpointKey(link.source);
-        const targetId = getGraphLinkEndpointKey(link.target);
-        [sourceId, targetId].forEach((nodeId) => {
-          const file = filesById.get(nodeId);
-          if (!file) return;
-          addEntry(file.path || file.fullPath || file.name || nodeId, "link", "Linked file");
-          addEntry(file.name || getFileName(file.path || file.fullPath || nodeId), "link", "Linked file name");
-        });
-      });
-    }
-
-    return Array.from(entryMap.values())
-      .sort((a, b) => a.value.localeCompare(b.value, undefined, { sensitivity: "base" }));
-  }
-
-  function attachGraphGroupQuerySuggestions(row, queryInput, group, sourceTab) {
-    const popover = document.createElement("div");
-    popover.className = "graph-group-query-suggestions hidden";
-    popover.setAttribute("role", "listbox");
-    popover.setAttribute("aria-label", "Graph group query suggestions");
-    row.appendChild(popover);
-
-    let selectedIndex = 0;
-    let isPointerSelectingSuggestion = false;
-
-    const closePopover = () => {
-      popover.classList.add("hidden");
-      popover.innerHTML = "";
-      queryInput.removeAttribute("aria-activedescendant");
-      if (activeGraphGroupSuggestionClose === closePopover) activeGraphGroupSuggestionClose = null;
-      document.removeEventListener("mousedown", handleOutsideMouseDown, true);
-    };
-
-    function handleOutsideMouseDown(event) {
-      if (row.contains(event.target)) return;
-      closePopover();
-    }
-
-    const insertSuggestion = (suggestion) => {
-      if (!suggestion) return;
-      const context = getGraphGroupQueryContext(queryInput);
-      const replacement = context.prefix ? suggestion.value : `${suggestion.prefix}:`;
-      const value = String(queryInput.value || "");
-      const nextValue = `${value.slice(0, context.replaceStart)}${replacement}${value.slice(context.replaceEnd)}`;
-      const cursor = context.replaceStart + replacement.length;
-      const activeGraphTab = getActiveGraphTab();
-      if (isLightweightSavedGraphView(activeGraphTab, activeGraphTab?.graphSnapshot) && graphQueryRequiresFileContent(nextValue)) {
-        closePopover();
-        showLightweightSavedGraphTextSearchUnavailable();
-        return;
-      }
-      queryInput.value = nextValue;
-      queryInput.focus();
-      queryInput.setSelectionRange(cursor, cursor);
-      closePopover();
-      updateGraphGroup(group.id, { query: nextValue }, { skipToolbar: true });
-    };
-
-    const scrollSelectedSuggestionIntoView = () => {
-      const selectedOption = popover.querySelector(".graph-group-query-suggestion.active");
-      if (!selectedOption) return;
-      selectedOption.scrollIntoView({ block: "nearest", inline: "nearest" });
-    };
-
-    const renderPopover = () => {
-      if (queryInput.disabled) return;
-      const context = getGraphGroupQueryContext(queryInput);
-      const activeGraphTab = getActiveGraphTab();
-      const graphSnapshot = activeGraphTab?.graphSnapshot || sourceTab?.graphSnapshot || null;
-      let suggestions = [];
-
-      if (context.prefix) {
-        suggestions = getGraphGroupSuggestionEntries(graphSnapshot, context.prefix, context.query, { savedMetadataOnly: isKeepSavedGraphMode(activeGraphTab) });
-      } else {
-        suggestions = GRAPH_GROUP_QUERY_PREFIX_HELP.map((item) => ({ ...item, value: item.label }));
-      }
-
-      popover.innerHTML = "";
-      selectedIndex = Math.min(selectedIndex, Math.max(suggestions.length - 1, 0));
-
-      if (!suggestions.length) {
-        const empty = document.createElement("div");
-        empty.className = "graph-group-query-suggestion-empty";
-        empty.textContent = `No ${context.prefix}: suggestions.`;
-        popover.appendChild(empty);
-      } else {
-        suggestions.forEach((suggestion, index) => {
-          const button = document.createElement("button");
-          button.type = "button";
-          button.id = `graph-group-query-suggestion-${group.id}-${index}`;
-          button.className = `graph-group-query-suggestion${index === selectedIndex ? " active" : ""}`;
-          button.setAttribute("role", "option");
-          button.setAttribute("aria-selected", index === selectedIndex ? "true" : "false");
-          button.dataset.index = String(index);
-          const title = document.createElement("span");
-          title.className = "graph-group-query-suggestion-title";
-          title.textContent = context.prefix ? suggestion.value : suggestion.label;
-          const detail = document.createElement("span");
-          detail.className = "graph-group-query-suggestion-detail";
-          detail.textContent = context.prefix ? suggestion.detail : suggestion.description;
-          button.append(title, detail);
-          button.addEventListener("mousedown", (event) => {
-            event.preventDefault();
-            isPointerSelectingSuggestion = true;
-          });
-          button.addEventListener("mouseenter", () => {
-            selectedIndex = index;
-            renderPopover();
-          });
-          button.addEventListener("click", () => {
-            isPointerSelectingSuggestion = false;
-            insertSuggestion(suggestion);
-          });
-          popover.appendChild(button);
-        });
-        queryInput.setAttribute("aria-activedescendant", `graph-group-query-suggestion-${group.id}-${selectedIndex}`);
-      }
-
-      if (activeGraphGroupSuggestionClose && activeGraphGroupSuggestionClose !== closePopover) activeGraphGroupSuggestionClose();
-      activeGraphGroupSuggestionClose = closePopover;
-      popover.classList.remove("hidden");
-      scrollSelectedSuggestionIntoView();
-      document.addEventListener("mousedown", handleOutsideMouseDown, true);
-    };
-
-    queryInput.addEventListener("focus", renderPopover);
-    queryInput.addEventListener("click", renderPopover);
-    queryInput.addEventListener("keyup", (event) => {
-      if (["ArrowDown", "ArrowUp", "Enter", "Escape"].includes(event.key)) return;
-      renderPopover();
-    });
-    queryInput.addEventListener("blur", () => {
-      window.setTimeout(() => {
-        if (!isPointerSelectingSuggestion) closePopover();
-        isPointerSelectingSuggestion = false;
-      }, 120);
-    });
-    queryInput.addEventListener("keydown", (event) => {
-      if (popover.classList.contains("hidden")) {
-        if (event.key !== "Escape") renderPopover();
-        return;
-      }
-
-      const options = Array.from(popover.querySelectorAll(".graph-group-query-suggestion"));
-      if (event.key === "Escape") {
-        event.preventDefault();
-        closePopover();
-      } else if (event.key === "ArrowDown" && options.length) {
-        event.preventDefault();
-        selectedIndex = (selectedIndex + 1) % options.length;
-        renderPopover();
-      } else if (event.key === "ArrowUp" && options.length) {
-        event.preventDefault();
-        selectedIndex = (selectedIndex - 1 + options.length) % options.length;
-        renderPopover();
-      } else if (event.key === "Enter" && options.length) {
-        event.preventDefault();
-        const context = getGraphGroupQueryContext(queryInput);
-        const activeGraphTab = getActiveGraphTab();
-        const graphSnapshot = activeGraphTab?.graphSnapshot || sourceTab?.graphSnapshot || null;
-        const suggestions = context.prefix
-          ? getGraphGroupSuggestionEntries(graphSnapshot, context.prefix, context.query, { savedMetadataOnly: isKeepSavedGraphMode(activeGraphTab) })
-          : GRAPH_GROUP_QUERY_PREFIX_HELP.map((item) => ({ ...item, value: item.label }));
-        insertSuggestion(suggestions[selectedIndex]);
-      }
-    });
-  }
-
-  function renderGraphGroupsToolbar(tab) {
-    if (!graphGroupsList) return;
-    const graphViewConfig = normalizeGraphViewConfig(tab?.graphViewConfig);
-    const isGraphTab = !!(tab && tab.type === "graph");
-    graphGroupsList.innerHTML = "";
-
-    if (!graphViewConfig.groups.length) {
-      const emptyMessage = document.createElement("p");
-      emptyMessage.className = "graph-groups-empty";
-      emptyMessage.textContent = "No groups yet.";
-      graphGroupsList.appendChild(emptyMessage);
-    }
-
-    graphViewConfig.groups.forEach((group, index) => {
-      const row = document.createElement("div");
-      row.className = "graph-group-row";
-
-      const enabledLabel = document.createElement("label");
-      enabledLabel.className = "graph-group-enabled graph-toggle-row";
-      enabledLabel.title = "Enable or disable this graph group";
-
-      const enabledText = document.createElement("span");
-      enabledText.textContent = `Group ${index + 1}`;
-      const enabledInput = document.createElement("input");
-      enabledInput.className = "graph-switch-input";
-      enabledInput.type = "checkbox";
-      enabledInput.checked = group.enabled !== false;
-      enabledInput.disabled = !isGraphTab;
-      enabledInput.setAttribute("aria-label", `Enable graph group ${index + 1}`);
-      enabledInput.addEventListener("change", () => updateGraphGroup(group.id, { enabled: enabledInput.checked }));
-      const enabledSwitch = document.createElement("span");
-      enabledSwitch.className = "graph-switch";
-      enabledSwitch.setAttribute("aria-hidden", "true");
-      enabledLabel.append(enabledText, enabledInput, enabledSwitch);
-
-      const queryInput = document.createElement("input");
-      queryInput.className = "graph-group-query-input";
-      queryInput.type = "text";
-      queryInput.placeholder = "tag:project or path:docs";
-      queryInput.value = group.query || "";
-      queryInput.disabled = !isGraphTab;
-      queryInput.autocomplete = "off";
-      queryInput.setAttribute("aria-label", `Graph group ${index + 1} query`);
-      queryInput.setAttribute("aria-haspopup", "listbox");
-      let queryUpdateTimeout = null;
-      const updateGroupQuery = () => {
-        window.clearTimeout(queryUpdateTimeout);
-        queryUpdateTimeout = null;
-        const activeGraphTab = getActiveGraphTab();
-        if (isLightweightSavedGraphView(activeGraphTab, activeGraphTab?.graphSnapshot) && graphQueryRequiresFileContent(queryInput.value)) {
-          queryInput.value = group.query || "";
-          showLightweightSavedGraphTextSearchUnavailable();
-          return;
-        }
-        updateGraphGroup(group.id, { query: queryInput.value }, { skipToolbar: true });
-      };
-      queryInput.addEventListener("input", () => {
-        window.clearTimeout(queryUpdateTimeout);
-        queryUpdateTimeout = window.setTimeout(updateGroupQuery, GRAPH_GROUP_QUERY_UPDATE_DELAY);
-      });
-      queryInput.addEventListener("change", updateGroupQuery);
-      queryInput.addEventListener("keydown", (event) => {
-        if (event.key === "Enter" && !queryInput.getAttribute("aria-activedescendant")) {
-          event.preventDefault();
-          queryInput.blur();
-        }
-      });
-
-      const colorInput = document.createElement("input");
-      colorInput.className = "graph-group-color-input";
-      colorInput.type = "color";
-      colorInput.value = getGraphColorInputValue(group.color);
-      colorInput.disabled = !isGraphTab;
-      colorInput.setAttribute("aria-label", `Graph group ${index + 1} color`);
-      colorInput.addEventListener("change", () => updateGraphGroup(group.id, { color: colorInput.value }));
-
-      const deleteButton = document.createElement("button");
-      deleteButton.className = "tool-button graph-group-delete-button";
-      deleteButton.type = "button";
-      deleteButton.title = "Delete graph group";
-      deleteButton.disabled = !isGraphTab;
-      deleteButton.setAttribute("aria-label", `Delete graph group ${index + 1}`);
-      deleteButton.innerHTML = '<i class="bi bi-trash"></i>';
-      deleteButton.addEventListener("click", () => deleteGraphGroup(group.id));
-
-      row.append(enabledLabel, queryInput, colorInput, deleteButton);
-      attachGraphGroupQuerySuggestions(row, queryInput, group, tab);
-      graphGroupsList.appendChild(row);
-    });
-
-    if (graphAddGroupButton) graphAddGroupButton.disabled = !isGraphTab;
-  }
-
-  function updateGraphTagToolbar(tab, graphSnapshot) {
-    const graphViewConfig = normalizeGraphViewConfig(tab?.graphViewConfig);
-    const isGraphTab = !!(tab && tab.type === "graph");
-    updateSavedGraphModePill(tab);
-    renderGraphGroupsToolbar(tab);
-    if (graphShowTagsButton) {
-      graphShowTagsButton.disabled = !isGraphTab;
-      graphShowTagsButton.classList.toggle("active", isGraphTab && graphViewConfig.showTags);
-      graphShowTagsButton.setAttribute("aria-pressed", isGraphTab && graphViewConfig.showTags ? "true" : "false");
-    }
-    if (graphHideTagsButton) {
-      graphHideTagsButton.disabled = !isGraphTab;
-      graphHideTagsButton.classList.toggle("active", isGraphTab && !graphViewConfig.showTags);
-      graphHideTagsButton.setAttribute("aria-pressed", isGraphTab && !graphViewConfig.showTags ? "true" : "false");
-    }
-    if (graphFileSearchFilter) {
-      graphFileSearchFilter.disabled = !isGraphTab;
-      if (document.activeElement !== graphFileSearchFilter) {
-        graphFileSearchFilter.value = graphViewConfig.searchQuery || "";
-      }
-    }
-    if (graphSelectedTagFilter) {
-      const selectedTagId = graphViewConfig.selectedTagIds[0] || "";
-      const tagIds = isKeepSavedGraphMode(tab) ? getGraphSnapshotTagNodeIds(graphSnapshot) : getGraphFilterTagNodeIds(graphSnapshot);
-      graphSelectedTagFilter.innerHTML = '<option value="">All files</option>';
-      tagIds.forEach((tagId) => {
-        const option = document.createElement("option");
-        option.value = tagId;
-        option.textContent = getGraphTagLabelFromId(tagId);
-        graphSelectedTagFilter.appendChild(option);
-      });
-      graphSelectedTagFilter.value = tagIds.includes(selectedTagId) ? selectedTagId : "";
-      graphSelectedTagFilter.disabled = !isGraphTab || !tagIds.length;
-    }
-    if (graphOnlySelectedTagButton) {
-      graphOnlySelectedTagButton.disabled = !isGraphTab;
-      graphOnlySelectedTagButton.classList.toggle("active", isGraphTab && graphViewConfig.selectedTagIds.length > 0);
-      graphOnlySelectedTagButton.setAttribute("aria-pressed", isGraphTab && graphViewConfig.selectedTagIds.length > 0 ? "true" : "false");
-    }
-    const graphControlInputs = [
-      graphDisplayArrows,
-      graphTextFadeThreshold,
-      graphNodeSize,
-      graphLinkThickness,
-      graphCenterForce,
-      graphRepelForce,
-      graphLinkForce,
-      graphLinkDistance
-    ].filter(Boolean);
-    graphControlInputs.forEach((input) => { input.disabled = !isGraphTab; });
-    if (graphDisplayArrows) graphDisplayArrows.checked = graphViewConfig.showArrows;
-    if (graphTextFadeThreshold) graphTextFadeThreshold.value = graphViewConfig.textFadeThreshold;
-    if (graphNodeSize) graphNodeSize.value = graphViewConfig.nodeSize;
-    if (graphLinkThickness) graphLinkThickness.value = graphViewConfig.linkThickness;
-    if (graphCenterForce) graphCenterForce.value = graphViewConfig.centerForce;
-    if (graphRepelForce) graphRepelForce.value = graphViewConfig.repelForce;
-    if (graphLinkForce) graphLinkForce.value = graphViewConfig.linkForce;
-    if (graphLinkDistance) graphLinkDistance.value = graphViewConfig.linkDistance;
-    if (graphResetDefaultsButton) graphResetDefaultsButton.disabled = !isGraphTab;
-  }
-
-  function resetActiveGraphViewToDefaults() {
-    const currentConfig = normalizeGraphViewConfig(getActiveGraphTab()?.graphViewConfig);
-    updateActiveGraphViewConfig({
-      showTags: DEFAULT_GRAPH_VIEW_CONFIG.showTags,
-      selectedTagIds: [],
-      searchQuery: DEFAULT_GRAPH_VIEW_CONFIG.searchQuery,
-      groups: currentConfig.groups.map((group) => ({ ...group, enabled: false })),
-      showArrows: DEFAULT_GRAPH_VIEW_CONFIG.showArrows,
-      textFadeThreshold: DEFAULT_GRAPH_VIEW_CONFIG.textFadeThreshold,
-      nodeSize: DEFAULT_GRAPH_VIEW_CONFIG.nodeSize,
-      linkThickness: DEFAULT_GRAPH_VIEW_CONFIG.linkThickness,
-      centerForce: DEFAULT_GRAPH_VIEW_CONFIG.centerForce,
-      repelForce: DEFAULT_GRAPH_VIEW_CONFIG.repelForce,
-      linkForce: DEFAULT_GRAPH_VIEW_CONFIG.linkForce,
-      linkDistance: DEFAULT_GRAPH_VIEW_CONFIG.linkDistance
-    });
-  }
-
-  function updateActiveGraphViewConfig(patch, options = {}) {
-    const activeGraphTab = getActiveGraphTab();
-    if (!activeGraphTab) return;
-    activeGraphTab.graphViewConfig = normalizeGraphViewConfig({
-      ...(activeGraphTab.graphViewConfig || {}),
-      ...patch
-    });
-    if (activeGraphTab.graphDocument && typeof activeGraphTab.graphDocument === "object") {
-      activeGraphTab.graphDocument.viewConfig = activeGraphTab.graphViewConfig;
-      activeGraphTab.graphDocument.updatedAt = Date.now();
-    }
-    removeGraphRenderForTab(activeGraphTab.id);
-    if (!options.skipToolbar) updateGraphTagToolbar(activeGraphTab, activeGraphTab.graphSnapshot || null);
-    markGraphTabAsChanged(activeGraphTab);
-    saveTabsToStorage(tabs);
-    renderGraphView({ skipToolbar: options.skipToolbar });
-  }
-
-  function animateActiveGraphView() {
-    const activeGraphTab = getActiveGraphTab();
-    if (!activeGraphTab) return;
-    const cachedRender = graphRenderCache.get(activeGraphTab.id);
-    if (cachedRender?.simulation) {
-      graphSettings.magneticEnabled = true;
-      if (activeGraphTab.graphLayout) activeGraphTab.graphLayout.magneticEnabled = true;
-      if (typeof cachedRender.animate === "function") cachedRender.animate();
-      else cachedRender.simulation.alpha(0.9).restart();
-      saveGlobalState({ graphMagneticEnabled: graphSettings.magneticEnabled });
-      saveTabsToStorage(tabs);
-    } else {
-      renderGraphView();
-    }
-  }
+  const graphToolbar = window.registerMarkdownViewerGraphToolbar(app, {
+    DEFAULT_GRAPH_VIEW_CONFIG,
+    GRAPH_GROUP_QUERY_UPDATE_DELAY,
+    LIGHTWEIGHT_SAVED_GRAPH_TEXT_SEARCH_MESSAGE,
+    get activeFolderPath() { return activeFolderPath; },
+    get tabs() { return tabs; },
+    get graphSettings() { return graphSettings; },
+    get graphRenderCache() { return graphRenderCache; },
+    get graphViewCanvas() { return graphViewCanvas; },
+    get graphViewToolbar() { return graphViewToolbar; },
+    get graphFilterPanelToggle() { return graphFilterPanelToggle; },
+    get graphGroupsList() { return graphGroupsList; },
+    get graphAddGroupButton() { return graphAddGroupButton; },
+    get graphShowTagsButton() { return graphShowTagsButton; },
+    get graphHideTagsButton() { return graphHideTagsButton; },
+    get graphFileSearchFilter() { return graphFileSearchFilter; },
+    get graphSelectedTagFilter() { return graphSelectedTagFilter; },
+    get graphOnlySelectedTagButton() { return graphOnlySelectedTagButton; },
+    get graphDisplayArrows() { return graphDisplayArrows; },
+    get graphTextFadeThreshold() { return graphTextFadeThreshold; },
+    get graphNodeSize() { return graphNodeSize; },
+    get graphLinkThickness() { return graphLinkThickness; },
+    get graphCenterForce() { return graphCenterForce; },
+    get graphRepelForce() { return graphRepelForce; },
+    get graphLinkForce() { return graphLinkForce; },
+    get graphLinkDistance() { return graphLinkDistance; },
+    get graphResetDefaultsButton() { return graphResetDefaultsButton; },
+    get graphStaleCloseButton() { return graphStaleCloseButton; },
+    get graphStaleKeepButton() { return graphStaleKeepButton; },
+    get graphStaleUpdateButton() { return graphStaleUpdateButton; },
+    get graphStaleViewDetailsButton() { return graphStaleViewDetailsButton; },
+    get graphStaleCompareButton() { return graphStaleCompareButton; },
+    get graphStaleModal() { return graphStaleModal; },
+    get graphComparisonDetailsCloseButton() { return graphComparisonDetailsCloseButton; },
+    get graphComparisonDetailsDoneButton() { return graphComparisonDetailsDoneButton; },
+    get graphComparisonDetailsModal() { return graphComparisonDetailsModal; },
+    desktopOpenGraphButtons,
+    mobileOpenGraphView,
+    openGraphView,
+    normalizeGraphTagNodeId,
+    graphSnapshotHasEmbeddedFileContent,
+    isKeepSavedGraphMode,
+    showGraphBanner,
+    findFolderMarkdownEntryForGraphFile,
+    getFileTagsFromContent,
+    getFileName,
+    normalizeFileTagList,
+    extractMarkdownTags,
+    normalizeTagName,
+    getAllKnownAndReferencedTags,
+    getGraphLinkEndpointKey,
+    getPathRelativeToFolder,
+    getActiveGraphTab,
+    normalizeGraphViewConfig,
+    updateSavedGraphModePill,
+    getGraphColorInputValue,
+    createGraphGroupId,
+    getNextDefaultGraphGroupColor,
+    normalizeGraphGroups,
+    removeGraphRenderForTab,
+    markGraphTabAsChanged,
+    saveTabsToStorage,
+    get renderGraphView() { return renderGraphView; },
+    saveGlobalState,
+    getGraphDisplayLabel,
+    openGraphStaleComparisonDetailsModal,
+    keepSavedGraphFromStaleModal,
+    updateGraphFromStaleModal,
+    loadGraphComparisonFromStaleModal,
+    hideGraphStaleModal,
+    closeGraphComparisonDetailsModal
+  });
+  const {
+    setGraphFilterPanelCollapsed,
+    setGraphViewMode,
+    getGraphSnapshotTagNodeIds,
+    getGraphFilterTagNodeIds,
+    getGraphTagLabelFromId,
+    parseGraphGroupQuery,
+    graphQueryRequiresFileContent,
+    isLightweightSavedGraphView,
+    showLightweightSavedGraphTextSearchUnavailable,
+    getGraphSnapshotFileCachedContent,
+    getGraphFilterFileData,
+    graphFileMatchesGroupQuery,
+    getGraphGroupMatch,
+    updateGraphGroup,
+    deleteGraphGroup,
+    getGraphGroupQueryContext,
+    isGraphGroupAbsolutePathSuggestion,
+    getGraphGroupRelativeFilePath,
+    addGraphGroupPathFolderSuggestions,
+    getGraphGroupSuggestionEntries,
+    attachGraphGroupQuerySuggestions,
+    renderGraphGroupsToolbar,
+    updateGraphTagToolbar,
+    resetActiveGraphViewToDefaults,
+    updateActiveGraphViewConfig,
+    animateActiveGraphView,
+    initializeGraphFilterTooltips
+  } = graphToolbar;
 
   const graphRenderer = window.registerMarkdownViewerGraphRenderer(app, {
     get graphRenderRequestId() { return graphRenderRequestId; },
@@ -6679,189 +3770,6 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
       alert("Export failed: " + e.message);
     }
   });
-
-  desktopOpenGraphButtons.forEach((button) => button.addEventListener("click", openGraphView));
-  if (mobileOpenGraphView) mobileOpenGraphView.addEventListener("click", openGraphView);
-  if (graphShowTagsButton) graphShowTagsButton.addEventListener("click", () => updateActiveGraphViewConfig({ showTags: true }));
-  if (graphHideTagsButton) graphHideTagsButton.addEventListener("click", () => updateActiveGraphViewConfig({ showTags: false }));
-  if (graphFileSearchFilter) {
-    graphFileSearchFilter.addEventListener("input", () => {
-      const activeGraphTab = getActiveGraphTab();
-      if (isLightweightSavedGraphView(activeGraphTab, activeGraphTab?.graphSnapshot) && graphQueryRequiresFileContent(graphFileSearchFilter.value)) {
-        graphFileSearchFilter.value = activeGraphTab?.graphViewConfig?.searchQuery || "";
-        showLightweightSavedGraphTextSearchUnavailable();
-        return;
-      }
-      updateActiveGraphViewConfig({ searchQuery: graphFileSearchFilter.value });
-    });
-  }
-  if (graphSelectedTagFilter) {
-    graphSelectedTagFilter.addEventListener("change", () => {
-      const selectedTagId = normalizeGraphTagNodeId(graphSelectedTagFilter.value);
-      updateActiveGraphViewConfig({ selectedTagIds: selectedTagId ? [selectedTagId] : [] });
-    });
-  }
-  if (graphFilterPanelToggle) {
-    graphFilterPanelToggle.addEventListener("click", () => {
-      setGraphFilterPanelCollapsed(!graphViewToolbar?.classList.contains("collapsed"));
-    });
-  }
-  if (graphOnlySelectedTagButton) {
-    graphOnlySelectedTagButton.addEventListener("click", () => {
-      const currentConfig = normalizeGraphViewConfig(getActiveGraphTab()?.graphViewConfig);
-      if (currentConfig.selectedTagIds.length) {
-        updateActiveGraphViewConfig({ selectedTagIds: [] });
-        return;
-      }
-      const selectedTagId = normalizeGraphTagNodeId(graphSelectedTagFilter?.value);
-      if (!selectedTagId) {
-        alert("Choose a tag before filtering the graph to selected-tag files.");
-        return;
-      }
-      updateActiveGraphViewConfig({ selectedTagIds: [selectedTagId], showTags: true });
-    });
-  }
-  if (graphAddGroupButton) {
-    graphAddGroupButton.addEventListener("click", () => {
-      const currentConfig = normalizeGraphViewConfig(getActiveGraphTab()?.graphViewConfig);
-      const nextIndex = currentConfig.groups.length + 1;
-      const nextDefaultColor = getNextDefaultGraphGroupColor(currentConfig.groups);
-      const group = normalizeGraphGroups([{
-        id: createGraphGroupId(`group:${Date.now()}:${nextIndex}`),
-        query: "",
-        color: nextDefaultColor,
-        enabled: true
-      }])[0];
-      updateActiveGraphViewConfig({ groups: [...currentConfig.groups, group] });
-    });
-  }
-  if (graphDisplayArrows) graphDisplayArrows.addEventListener("change", () => updateActiveGraphViewConfig({ showArrows: graphDisplayArrows.checked }));
-  const bindGraphRangeControl = (input, configKey) => {
-    if (!input) return;
-    input.addEventListener("input", () => updateActiveGraphViewConfig({ [configKey]: Number(input.value) }));
-  };
-  bindGraphRangeControl(graphTextFadeThreshold, "textFadeThreshold");
-  bindGraphRangeControl(graphNodeSize, "nodeSize");
-  bindGraphRangeControl(graphLinkThickness, "linkThickness");
-  bindGraphRangeControl(graphCenterForce, "centerForce");
-  bindGraphRangeControl(graphRepelForce, "repelForce");
-  bindGraphRangeControl(graphLinkForce, "linkForce");
-  bindGraphRangeControl(graphLinkDistance, "linkDistance");
-  if (graphResetDefaultsButton) graphResetDefaultsButton.addEventListener("click", resetActiveGraphViewToDefaults);
-  graphStaleCloseButton?.addEventListener("click", keepSavedGraphFromStaleModal);
-  graphStaleKeepButton?.addEventListener("click", keepSavedGraphFromStaleModal);
-  graphStaleUpdateButton?.addEventListener("click", updateGraphFromStaleModal);
-  graphStaleViewDetailsButton?.addEventListener("click", openGraphStaleComparisonDetailsModal);
-  graphStaleCompareButton?.addEventListener("click", loadGraphComparisonFromStaleModal);
-  graphStaleModal?.addEventListener("click", (event) => {
-    if (event.target === graphStaleModal) hideGraphStaleModal();
-  });
-  graphComparisonDetailsCloseButton?.addEventListener("click", closeGraphComparisonDetailsModal);
-  graphComparisonDetailsDoneButton?.addEventListener("click", closeGraphComparisonDetailsModal);
-  graphComparisonDetailsModal?.addEventListener("click", (event) => {
-    if (event.target === graphComparisonDetailsModal) closeGraphComparisonDetailsModal();
-  });
-
-  function initializeGraphFilterTooltips() {
-    if (!graphViewToolbar) return;
-    const tooltipTextBySelector = [
-      ["#graph-file-search-filter", "Filter graph points by file name, path, tag, or text without changing the files on disk."],
-      ["#graph-show-tags", "Show tag points and the connections between tags and files."],
-      ["#graph-hide-tags", "Hide tag points so only file points and Markdown links are drawn."],
-      ["#graph-selected-tag-filter", "Choose a tag to focus the graph on files that contain that tag."],
-      ["#graph-only-selected-tag", "Limit the graph to files with the selected tag and their connected tag points."],
-      ["#graph-add-group", "Add a color group. Groups use queries like path:, file:, tag:, text:, and line: to color matching files."],
-      ["#graph-display-arrows", "Toggle arrowheads on Markdown links to show link direction."],
-      ["#graph-text-fade-threshold", "Control how aggressively labels disappear while zooming out. At the default, labels are gone near 45% zoom and only larger points keep faded labels around 65%."],
-      ["#graph-node-size", "Scale every graph point. Larger points are easier to hit and keep labels visible slightly longer while zoomed out."],
-      ["#graph-link-thickness", "Adjust the stroke width of Markdown links between file points."],
-      ["#graph-center-force", "Pull points toward the middle of the graph. Higher values make the layout cluster closer to center."],
-      ["#graph-repel-force", "Push points away from each other. Higher values spread the graph out more."],
-      ["#graph-link-force", "Control how strongly linked points pull toward their target link distance."],
-      ["#graph-link-distance", "Set the preferred distance between connected points."],
-      ["#graph-reset-defaults", "Reset search, selected tag, group toggles, display options, and force settings to defaults."],
-      ["#graph-view-close", "Close graph view and return to the document view."],
-      [".graph-collapsible-summary", "Expand or collapse this section of graph filters."],
-      [".graph-group-query-input", "Type a group query. Use prefixes such as path:, file:, tag:, text:, or line:."],
-      [".graph-group-enabled-input", "Enable or disable this group color without deleting it."],
-      [".graph-group-color-input", "Pick the color used for files that match this group query."],
-      [".graph-group-delete-button", "Delete this color group from the graph filter settings."]
-    ];
-
-    tooltipTextBySelector.forEach(([selector, text]) => {
-      graphViewToolbar.querySelectorAll(selector).forEach((element) => {
-        const target = element.closest("label, button, summary, p, div") || element;
-        if (!target.dataset.graphTooltip) target.dataset.graphTooltip = text;
-      });
-    });
-
-    const tooltip = document.createElement("div");
-    tooltip.className = "graph-filter-tooltip hidden";
-    tooltip.setAttribute("role", "tooltip");
-    document.body.appendChild(tooltip);
-
-    let tooltipTimer = null;
-    let tooltipTarget = null;
-
-    const hideTooltip = () => {
-      window.clearTimeout(tooltipTimer);
-      tooltipTimer = null;
-      tooltipTarget = null;
-      tooltip.classList.add("hidden");
-    };
-
-    const positionTooltip = (target) => {
-      const rect = target.getBoundingClientRect();
-      tooltip.style.left = `${Math.min(window.innerWidth - tooltip.offsetWidth - 12, Math.max(12, rect.left))}px`;
-      tooltip.style.top = `${Math.min(window.innerHeight - tooltip.offsetHeight - 12, rect.bottom + 8)}px`;
-    };
-
-    const getTooltipTarget = (source) => {
-      const directTarget = source?.closest?.("[data-graph-tooltip]");
-      if (directTarget && graphViewToolbar.contains(directTarget)) return directTarget;
-      const controlTarget = source?.closest?.("label, button, summary, input, select, p, div");
-      if (!controlTarget || !graphViewToolbar.contains(controlTarget)) return null;
-      const matchedTooltip = tooltipTextBySelector.find(([selector]) => {
-        if (controlTarget.matches(selector)) return true;
-        return !!controlTarget.querySelector?.(selector);
-      });
-      if (!matchedTooltip) return null;
-      controlTarget.dataset.graphTooltip = matchedTooltip[1];
-      return controlTarget;
-    };
-
-    const scheduleTooltip = (target) => {
-      const tooltipText = target?.dataset?.graphTooltip;
-      if (!tooltipText) return;
-      hideTooltip();
-      tooltipTarget = target;
-      tooltipTimer = window.setTimeout(() => {
-        if (tooltipTarget !== target) return;
-        tooltip.textContent = tooltipText;
-        tooltip.classList.remove("hidden");
-        positionTooltip(target);
-      }, 3000);
-    };
-
-    graphViewToolbar.addEventListener("mouseover", (event) => {
-      const target = getTooltipTarget(event.target);
-      if (target) scheduleTooltip(target);
-    });
-    graphViewToolbar.addEventListener("focusin", (event) => {
-      const target = getTooltipTarget(event.target);
-      if (target) scheduleTooltip(target);
-    });
-    graphViewToolbar.addEventListener("mouseout", (event) => {
-      if (tooltipTarget && !tooltipTarget.contains(event.relatedTarget)) hideTooltip();
-    });
-    graphViewToolbar.addEventListener("focusout", hideTooltip);
-    graphViewToolbar.addEventListener("input", hideTooltip);
-    graphViewToolbar.addEventListener("click", hideTooltip);
-    window.addEventListener("scroll", hideTooltip, true);
-    window.addEventListener("resize", hideTooltip);
-  }
-
-  initializeGraphFilterTooltips();
 
   exportHtml.addEventListener("click", function () {
     try {
@@ -7262,11 +4170,3 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
   });
 
 });
-
-
-
-
-
-
-
-

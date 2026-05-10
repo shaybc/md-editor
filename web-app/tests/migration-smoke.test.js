@@ -241,12 +241,14 @@ test("folder open defaults to native directory picker when the browser supports 
   const html = readWebFile("index.html");
   const legacyScript = readWebFile("script.js");
   const folderPickerScript = readWebFile("js/platform/folder-picker.js");
+  const sidebarContextTreeScript = readWebFile("js/sidebar/context-tree.js");
   const match = folderPickerScript.match(/function shouldUseNativeDirectoryPicker\(\) \{([\s\S]*?)\n    \}/);
 
   assert.match(html, /src="js\/platform\/folder-picker\.js"/);
   assert.match(folderPickerScript, /window\.registerMarkdownViewerFolderPicker\s*=/);
   assert.match(legacyScript, /window\.registerMarkdownViewerFolderPicker\(app\)/);
-  assert.match(legacyScript, /folderPicker\.shouldUseNativeDirectoryPicker\(event\)/);
+  assert.match(html, /src="js\/sidebar\/context-tree\.js"/);
+  assert.match(sidebarContextTreeScript, /folderPicker\.shouldUseNativeDirectoryPicker\(event\)/);
   assert.ok(match, "shouldUseNativeDirectoryPicker should exist");
   assert.match(match[1], /supported = supportsNativeDirectoryPicker\(\);/);
   assert.match(match[1], /return supported;/);
@@ -255,9 +257,9 @@ test("folder open defaults to native directory picker when the browser supports 
 
 test("folder input fallback remains available for unsupported browsers", () => {
   const html = readWebFile("index.html");
-  const script = readWebFile("script.js");
+  const sidebarContextTreeScript = readWebFile("js/sidebar/context-tree.js");
 
   assert.match(html, /id="folder-input"[^>]*webkitdirectory[^>]*directory[^>]*multiple/);
-  assert.match(script, /folderInput\.click\(\)/);
-  assert.match(script, /Folder selection is not supported in this environment/);
+  assert.match(sidebarContextTreeScript, /folderInput\.click\(\)/);
+  assert.match(sidebarContextTreeScript, /Folder selection is not supported in this environment/);
 });
