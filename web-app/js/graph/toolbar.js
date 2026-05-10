@@ -548,6 +548,7 @@
       });
 
       const enabledText = document.createElement("span");
+      enabledText.className = "graph-group-label-text";
       enabledText.textContent = `Group ${index + 1}`;
       const enabledInput = document.createElement("input");
       enabledInput.className = "graph-switch-input";
@@ -559,7 +560,6 @@
       const enabledSwitch = document.createElement("span");
       enabledSwitch.className = "graph-switch";
       enabledSwitch.setAttribute("aria-hidden", "true");
-      enabledLabel.append(moveHandle, enabledText, enabledInput, enabledSwitch);
 
       const hideGroupButton = document.createElement("button");
       hideGroupButton.className = "tool-button graph-group-hide-button";
@@ -570,7 +570,13 @@
       hideGroupButton.setAttribute("aria-label", `${group.hidden === true ? "Show" : "Hide"} graph group ${index + 1} points`);
       hideGroupButton.setAttribute("aria-pressed", group.hidden === true ? "true" : "false");
       hideGroupButton.innerHTML = `<i class="bi ${group.hidden === true ? "bi-eye" : "bi-eye-slash"}" aria-hidden="true"></i>`;
-      hideGroupButton.addEventListener("click", () => updateGraphGroup(group.id, { hidden: group.hidden !== true }));
+      hideGroupButton.addEventListener("click", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        updateGraphGroup(group.id, { hidden: group.hidden !== true });
+      });
+
+      enabledLabel.append(moveHandle, enabledText, hideGroupButton, enabledInput, enabledSwitch);
 
       const queryInput = document.createElement("input");
       queryInput.className = "graph-group-query-input";
@@ -622,7 +628,7 @@
       deleteButton.innerHTML = '<i class="bi bi-trash"></i>';
       deleteButton.addEventListener("click", () => deleteGraphGroup(group.id));
 
-      row.append(enabledLabel, hideGroupButton, queryInput, colorInput, deleteButton);
+      row.append(enabledLabel, queryInput, colorInput, deleteButton);
       attachGraphGroupQuerySuggestions(row, queryInput, group, tab);
       graphGroupsList.appendChild(row);
     });
