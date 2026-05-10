@@ -1219,6 +1219,71 @@ test("saves a new graph view through the desktop save dialog", async ({ page }) 
     .toContain('"documentType": "graph-view"');
 });
 
+test("prompts for a stale app-saved graph view after folder files change", async ({ page }) => {
+  await page.addInitScript(() => {
+    window.NL_VERSION = "5.0.0";
+    window.NL_OS = "Windows";
+    window.__alerts = [];
+    window.alert = (message) => window.__alerts.push(String(message));
+    const files = new Map([
+      ["alpha.md", "---\ntags: [old]\n---\n# Alpha"],
+      ["beta.md", "# Beta"]
+    ]);
+    const getName = (path) => String(path || "").split(/[\\/]/).pop();
+    window.__mutateVault = () => {
+      files.set("alpha.md", "---\ntags: [new]\n---\n# Alpha");
+      files.delete("beta.md");
+    };
+    window.Neutralino = {
+      os: {
+        showFolderDialog: async () => "C:/vault",
+        showSaveDialog: async () => "C:/vault/graph.mdviewer-graph.json",
+        showOpenDialog: async () => "C:/vault/graph.mdviewer-graph.json",
+        open: async () => {},
+        execCommand: async () => {}
+      },
+      filesystem: {
+        readDirectory: async (path) => {
+          if (path === "C:/vault") {
+            return Array.from(files.keys()).map((entry) => ({ entry, type: "FILE" }));
+          }
+          return [];
+        },
+        getStats: async () => ({ modifiedAt: 1, createdAt: 1 }),
+        readFile: async (path) => {
+          const name = getName(path);
+          if (files.has(name)) return files.get(name);
+          throw new Error("Unexpected read path: " + path);
+        },
+        writeFile: async (path, content) => {
+          files.set(getName(path), String(content));
+        }
+      },
+      clipboard: { writeText: async () => {} }
+    };
+  });
+  await openApp(page);
+
+  await page.locator("#import-from-folder").click();
+  await page.locator(".open-graph-view").first().click();
+  await expect(page.locator(".graph-node-file")).toHaveCount(2);
+
+  await page.locator(".save-current-file-button").first().click();
+  await expect.poll(() => page.evaluate(() => window.Neutralino.filesystem.readFile("C:/vault/graph.mdviewer-graph.json")))
+    .toContain('"documentType": "graph-view"');
+
+  await page.evaluate(() => window.__mutateVault());
+  await page.locator("#import-from-file").first().click();
+
+  await expect(page.locator("#graph-stale-modal")).not.toHaveClass(/hidden/);
+  await expect(page.locator("#graph-stale-update")).toBeVisible();
+  await expect(page.locator("#graph-stale-keep")).toBeVisible();
+  await expect(page.locator("#graph-stale-compare")).toBeVisible();
+  await expect(page.locator("#graph-stale-saved-only-files")).toHaveText("1");
+  await expect(page.locator("#graph-stale-changed-tags")).not.toHaveText("0");
+  await expect.poll(() => page.evaluate(() => window.__alerts)).toEqual([]);
+});
+
 test("opens a saved graph view file from the desktop file picker", async ({ page }) => {
   await page.addInitScript(() => {
     window.NL_VERSION = "5.0.0";

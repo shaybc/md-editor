@@ -11,6 +11,10 @@
     return `tag:${normalizeTagName(rawValue)}`;
   }
 
+  function getGraphTagLabelFromId(tagNodeId) {
+    return `#${String(tagNodeId || "").replace(/^tag:/, "")}`;
+  }
+
   function normalizeGraphTagNodeIds(values) {
     return Array.from(new Set((Array.isArray(values) ? values : [])
       .map(normalizeGraphTagNodeId)

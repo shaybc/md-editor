@@ -1335,6 +1335,7 @@ Markdown content is processed client-side in your browser and sanitized before p
     get Neutralino() { return typeof Neutralino !== "undefined" ? Neutralino : undefined; },
     get NL_VERSION() { return typeof NL_VERSION !== "undefined" ? NL_VERSION : undefined; },
     get saveAs() { return saveAs; },
+    get refreshFolderFilesForGraphComparison() { return refreshFolderFilesForGraphComparison; },
     alert
   });
   const openGraphView = graphDocuments.openGraphView;
@@ -1764,6 +1765,25 @@ Markdown content is processed client-side in your browser and sanitized before p
       rememberRecentFolder({ name: activeFolderName, label: activeFolderName });
       await refreshOpenFolderGraphTabsFromFolderFiles();
       await promptActiveSavedGraphForCurrentFolder();
+      return true;
+    }
+
+    return false;
+  }
+
+  async function refreshFolderFilesForGraphComparison() {
+    if (typeof NL_VERSION !== "undefined" && activeFolderPath) {
+      const nodes = await listMarkdownTreeNeutralino(activeFolderPath);
+      folderMarkdownFiles = await collectMarkdownFilesFromTreeNeutralino(nodes);
+      renderFolderTree(nodes);
+      return true;
+    }
+
+    if (activeFolderHandle) {
+      const nodes = await listMarkdownTree(activeFolderHandle);
+      folderMarkdownFiles = await collectMarkdownFilesFromTree(nodes);
+      renderFolderTree(nodes);
+      rememberRecentFolder({ name: activeFolderName, label: activeFolderName });
       return true;
     }
 
