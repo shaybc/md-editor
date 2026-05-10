@@ -941,6 +941,18 @@ test("desktop tree context menu can update file tags", async ({ page }) => {
   await expect.poll(() => page.evaluate(() => window.__alerts)).toEqual([]);
   await expect.poll(() => page.evaluate(() => window.__writes.length)).toBe(1);
   await expect.poll(() => page.evaluate(() => window.__writes[0].content)).toContain("defined, other");
+
+  await page.locator(".open-graph-view").first().click();
+  await expect.poll(() => page.evaluate(() => {
+    const graphTab = JSON.parse(localStorage.getItem("markdownViewerTabs") || "[]")
+      .find((tab) => tab.type === "graph");
+    return graphTab?.graphSnapshot?.files?.find((file) => file.path === "alpha.md")?.tags || [];
+  })).toEqual(["defined", "other"]);
+  await expect(page.locator("#graph-selected-tag-filter option")).toHaveText(["All files", "#defined", "#other"]);
+  await page.locator("#graph-show-tags").evaluate((button) => button.click());
+  await expect(page.locator(".graph-node-tag")).toHaveCount(2);
+  await expect(page.locator(".graph-label-tag", { hasText: "#other" })).toHaveCount(1);
+  await expect(page.locator(".graph-link-tag")).toHaveCount(3);
 });
 
 test("renders recent files in the action menu", async ({ page }) => {
