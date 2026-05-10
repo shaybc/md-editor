@@ -961,6 +961,59 @@ test("saves folder-backed edits with Ctrl+S and the Save changes menu item", asy
   await expect(page.locator("#tab-list .tab-item.active")).not.toHaveClass(/unsaved/);
 });
 
+test("opens files from the folder tree without showing an error", async ({ page }) => {
+  await openApp(page);
+
+  await page.evaluate(() => {
+    window.__alertMessages = [];
+    window.alert = (message) => {
+      window.__alertMessages.push(String(message));
+    };
+    const markdownFile = new File(["# Folder Note\n\nOpened from tree."], "folder-note.md", {
+      type: "text/markdown",
+      lastModified: Date.now()
+    });
+    const fileHandle = {
+      kind: "file",
+      name: "folder-note.md",
+      getFile: async () => markdownFile,
+      createWritable: async () => ({ write: async () => {}, close: async () => {} })
+    };
+    window.showDirectoryPicker = async () => ({
+      kind: "directory",
+      name: "Test Folder",
+      values: async function* values() {
+        yield fileHandle;
+      }
+    });
+  });
+
+  await page.locator("#import-from-folder").click();
+  await page.locator(".folder-tree-file", { hasText: "folder-note.md" }).evaluate((button) => {
+    button.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
+  });
+
+  await expect(page.locator("#markdown-editor")).toHaveValue(/Opened from tree/);
+  await expect.poll(() => page.evaluate(() => window.__alertMessages)).toEqual([]);
+
+  await page.locator(".folder-tree-file", { hasText: "folder-note.md" }).evaluate((button) => {
+    button.dispatchEvent(new MouseEvent("dblclick", { bubbles: true, cancelable: true }));
+  });
+  await expect(page.locator("#tab-list .tab-item", { hasText: "folder-note" })).toHaveCount(1);
+  await expect.poll(() => page.evaluate(() => window.__alertMessages)).toEqual([]);
+
+  await page.locator(".folder-tree-file", { hasText: "folder-note.md" }).dispatchEvent("contextmenu", {
+    bubbles: true,
+    cancelable: true,
+    button: 2,
+    clientX: 90,
+    clientY: 180
+  });
+  await page.locator(".sidebar-file-context-menu:not(.hidden) .graph-context-menu-item", { hasText: "Open in a new tab" }).evaluate((button) => button.click());
+  await expect(page.locator("#tab-list .tab-item", { hasText: "folder-note" })).toHaveCount(1);
+  await expect.poll(() => page.evaluate(() => window.__alertMessages)).toEqual([]);
+});
+
 test("opens files from a desktop folder tree", async ({ page }) => {
   await page.addInitScript(() => {
     window.NL_VERSION = "5.0.0";

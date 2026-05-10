@@ -2459,6 +2459,7 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
     listMarkdownTreeNeutralino,
     collectMarkdownFilesFromTreeNeutralino,
     renderFolderTree,
+    rememberRecentFile,
     rememberRecentFolder,
     updateCloseFolderButtons,
     updateFolderTreeToolbarState,
