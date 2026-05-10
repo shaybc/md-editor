@@ -684,7 +684,11 @@ test("desktop graph context menu can update file tags", async ({ page }) => {
     window.alert = (message) => window.__alerts.push(String(message));
     window.Neutralino = {
       filesystem: {
-        readFile: async (path) => path.endsWith("alpha.md") ? "---\ntags: [defined]\n---\n# Alpha" : "---\ntags: [other]\n---\n# Beta",
+        readFile: async (path) => {
+          if (path === "C:/vault/alpha.md") return "---\ntags: [defined]\n---\n# Alpha";
+          if (path === "C:/vault/archive/alpha.md") return "---\ntags: [archive]\n---\n# Archived Alpha";
+          return "---\ntags: [other]\n---\n# Beta";
+        },
         writeFile: async (path, content) => {
           window.__writes.push({ path, content });
         },
@@ -728,16 +732,20 @@ test("desktop graph context menu can update file tags", async ({ page }) => {
         nodes: [
           { id: "alpha.md", label: "alpha.md", fullPath: "C:/vault/alpha.md", type: "file", status: "current", tags: ["defined"] },
           { id: "beta.md", label: "beta.md", fullPath: "C:/vault/beta.md", type: "file", status: "current", tags: ["other"] },
+          { id: "archive/alpha.md", label: "alpha.md", fullPath: "C:/vault/archive/alpha.md", type: "file", status: "current", tags: ["archive"] },
+          { id: "tag:archive", label: "#archive", type: "tag", status: "current", tag: "archive" },
           { id: "tag:defined", label: "#defined", type: "tag", status: "current", tag: "defined" },
           { id: "tag:other", label: "#other", type: "tag", status: "current", tag: "other" }
         ],
         links: [
           { source: "alpha.md", target: "tag:defined", type: "tag", status: "current" },
-          { source: "beta.md", target: "tag:other", type: "tag", status: "current" }
+          { source: "beta.md", target: "tag:other", type: "tag", status: "current" },
+          { source: "archive/alpha.md", target: "tag:archive", type: "tag", status: "current" }
         ],
         files: [
           { id: "alpha.md", path: "alpha.md", name: "alpha.md", content: "---\ntags: [defined]\n---\n# Alpha", fullPath: "C:/vault/alpha.md", status: "current", tags: ["defined"] },
-          { id: "beta.md", path: "beta.md", name: "beta.md", content: "---\ntags: [other]\n---\n# Beta", fullPath: "C:/vault/beta.md", status: "current", tags: ["other"] }
+          { id: "beta.md", path: "beta.md", name: "beta.md", content: "---\ntags: [other]\n---\n# Beta", fullPath: "C:/vault/beta.md", status: "current", tags: ["other"] },
+          { id: "archive/alpha.md", path: "archive/alpha.md", name: "alpha.md", content: "---\ntags: [archive]\n---\n# Archived Alpha", fullPath: "C:/vault/archive/alpha.md", status: "current", tags: ["archive"] }
         ]
       }
     };
@@ -747,7 +755,7 @@ test("desktop graph context menu can update file tags", async ({ page }) => {
   });
 
   await page.goto("/");
-  await expect(page.locator(".graph-node")).toHaveCount(4);
+  await expect(page.locator(".graph-node")).toHaveCount(6);
 
   await page.locator(".graph-node").first().dispatchEvent("contextmenu", {
     bubbles: true,
@@ -758,14 +766,18 @@ test("desktop graph context menu can update file tags", async ({ page }) => {
   });
 
   const tagItems = page.locator(".graph-tab-render .tags-context-menu-item");
-  await expect(tagItems).toHaveText(["#defined", "#other"]);
+  await expect(tagItems).toHaveText(["#archive", "#defined", "#other"]);
   await page.locator(".graph-context-menu-submenu", { hasText: "Tags" }).hover();
   await tagItems.filter({ hasText: "#other" }).evaluate((button) => button.click());
 
   await expect.poll(() => page.evaluate(() => window.__alerts)).toEqual([]);
   await expect.poll(() => page.evaluate(() => window.__writes.length)).toBe(1);
   await expect.poll(() => page.evaluate(() => window.__writes[0].content)).toContain("other");
-  await expect(page.locator(".graph-link-tag")).toHaveCount(3);
+  await expect(page.locator(".graph-link-tag")).toHaveCount(4);
+  await expect.poll(() => page.evaluate(() => {
+    const graphTab = JSON.parse(localStorage.getItem("markdownViewerTabs"))[0];
+    return graphTab.graphSnapshot.files.find((file) => file.fullPath === "C:/vault/archive/alpha.md").tags;
+  })).toEqual(["archive"]);
 
   await page.locator(".graph-node").first().dispatchEvent("contextmenu", {
     bubbles: true,
@@ -779,7 +791,7 @@ test("desktop graph context menu can update file tags", async ({ page }) => {
 
   await expect.poll(() => page.evaluate(() => window.__alerts)).toEqual([]);
   await expect.poll(() => page.evaluate(() => window.__writes.length)).toBe(2);
-  await expect(page.locator(".graph-link-tag")).toHaveCount(2);
+  await expect(page.locator(".graph-link-tag")).toHaveCount(3);
   await page.locator(".graph-node").first().dispatchEvent("contextmenu", {
     bubbles: true,
     cancelable: true,
@@ -787,7 +799,7 @@ test("desktop graph context menu can update file tags", async ({ page }) => {
     clientX: 220,
     clientY: 220
   });
-  await expect(page.locator(".graph-tab-render .tags-context-menu-item")).toHaveText(["#other"]);
+  await expect(page.locator(".graph-tab-render .tags-context-menu-item")).toHaveText(["#archive", "#other"]);
 
   await page.locator(".graph-node").first().dispatchEvent("contextmenu", {
     bubbles: true,

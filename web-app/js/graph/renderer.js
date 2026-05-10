@@ -863,25 +863,18 @@
 
     const graphSnapshotFileMatches = (candidateFile, referenceFile) => {
       if (!candidateFile || !referenceFile) return false;
-      const candidateIds = new Set([
-        candidateFile.id,
-        candidateFile.path ? normalizeGraphNodeName(candidateFile.path) : null,
-        candidateFile.fullPath ? normalizeGraphNodeName(candidateFile.fullPath) : null,
-        candidateFile.name ? normalizeGraphNodeName(candidateFile.name) : null
-      ].filter(Boolean));
-      const referenceIds = [
-        referenceFile.id,
-        referenceFile.path ? normalizeGraphNodeName(referenceFile.path) : null,
-        referenceFile.fullPath ? normalizeGraphNodeName(referenceFile.fullPath) : null,
-        referenceFile.name ? normalizeGraphNodeName(referenceFile.name) : null
+      const getStableKeys = (file) => [
+        file.id,
+        file.path ? normalizeGraphNodeName(file.path) : null,
+        file.fullPath ? normalizeGraphNodeName(file.fullPath) : null
       ].filter(Boolean);
-      if (referenceIds.some((id) => candidateIds.has(id))) return true;
+      const candidateStableKeys = new Set(getStableKeys(candidateFile));
+      const referenceStableKeys = getStableKeys(referenceFile);
+      if (candidateStableKeys.size || referenceStableKeys.length) {
+        return referenceStableKeys.some((key) => candidateStableKeys.has(key));
+      }
 
-      const candidatePaths = new Set([
-        candidateFile.path,
-        candidateFile.fullPath
-      ].filter(Boolean));
-      return [referenceFile.path, referenceFile.fullPath].filter(Boolean).some((path) => candidatePaths.has(path));
+      return !!candidateFile.name && candidateFile.name === referenceFile.name;
     };
 
     const rebuildOpenGraphSnapshotsAfterTagChange = async (changedSnapshotFile) => {
