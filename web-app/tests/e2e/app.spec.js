@@ -961,6 +961,40 @@ test("saves folder-backed edits with Ctrl+S and the Save changes menu item", asy
   await expect(page.locator("#tab-list .tab-item.active")).not.toHaveClass(/unsaved/);
 });
 
+test("opens files from a desktop folder tree", async ({ page }) => {
+  await page.addInitScript(() => {
+    window.NL_VERSION = "5.0.0";
+    window.Neutralino = {
+      os: {
+        showFolderDialog: async () => "C:/vault"
+      },
+      filesystem: {
+        readDirectory: async (path) => {
+          if (path === "C:/vault") {
+            return [{ entry: "desktop-note.md", type: "FILE" }];
+          }
+          return [];
+        },
+        getStats: async () => ({ modifiedAt: 1, createdAt: 1 }),
+        readFile: async (path) => {
+          if (path === "C:/vault/desktop-note.md") return "# Desktop Note\n\nOpened from tree.";
+          throw new Error("Unexpected read path: " + path);
+        }
+      }
+    };
+  });
+  await openApp(page);
+
+  await page.locator("#import-from-folder").click();
+  await expect(page.locator(".folder-tree-file", { hasText: "desktop-note.md" })).toBeVisible();
+  await page.locator(".folder-tree-file", { hasText: "desktop-note.md" }).evaluate((button) => {
+    button.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
+  });
+
+  await expect(page.locator("#tab-list .tab-item", { hasText: "desktop-note" })).toHaveCount(1);
+  await expect(page.locator("#markdown-editor")).toHaveValue(/Desktop Note/);
+});
+
 test("folder and graph Open in a new tab focus existing file tabs", async ({ page }) => {
   await page.addInitScript(() => {
     localStorage.setItem("markdownViewerTabs", JSON.stringify([{

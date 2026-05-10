@@ -1895,9 +1895,10 @@
     button.innerHTML = `<i class="bi ${fileIconClass}"></i><span>${node.name}</span>`;
 
     async function readSidebarFileContent() {
-      if (typeof NL_VERSION !== "undefined" && node.fullPath) {
+      const desktopPath = getSidebarNodeFilesystemPath(node);
+      if (typeof NL_VERSION !== "undefined" && desktopPath) {
         // Desktop: read file via Neutralino filesystem
-        return Neutralino.filesystem.readFile(node.fullPath);
+        return Neutralino.filesystem.readFile(desktopPath);
       }
 
       // Browser: read file via File System Access API or upload fallback
@@ -1916,8 +1917,9 @@
     function getSidebarFileSource() {
       return {
         name: node.name,
+        file: node.file || null,
         handle: node.handle || null,
-        path: node.fullPath || node.path || null
+        path: getSidebarNodeFilesystemPath(node) || node.fullPath || node.path || null
       };
     }
 
