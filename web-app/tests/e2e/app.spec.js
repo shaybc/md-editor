@@ -1300,6 +1300,46 @@ test("opens preview links relative to an opened file when no folder is open", as
   await expect.poll(() => page.evaluate(() => window.__alertMessages)).toEqual([]);
 });
 
+test("scrolls same-file preview links to heading anchors", async ({ page }) => {
+  await page.addInitScript(() => {
+    window.NL_VERSION = "5.0.0";
+    window.__scrolledPreviewTarget = "";
+    const originalScrollIntoView = Element.prototype.scrollIntoView;
+    Element.prototype.scrollIntoView = function scrollIntoView(options) {
+      if (/^H[1-6]$/.test(this.tagName)) {
+        window.__scrolledPreviewTarget = this.textContent;
+      }
+      if (originalScrollIntoView) {
+        originalScrollIntoView.call(this, options);
+      }
+    };
+    window.Neutralino = {
+      os: {
+        showOpenDialog: async () => "C:/vault/my-page.md",
+        open: async () => {}
+      },
+      filesystem: {
+        readFile: async (path) => {
+          const normalized = String(path || "").replace(/\\/g, "/");
+          if (normalized === "C:/vault/my-page.md") {
+            return "# My Page\n\n[[my-page#title2|Jump to title 2]]\n\n## Title1\n\nBody\n\n## Title2\n\nTarget";
+          }
+          throw new Error("Unexpected read path: " + path);
+        }
+      }
+    };
+  });
+  await openApp(page);
+
+  await page.locator("#import-from-file").click();
+  await expect(page.locator("#markdown-preview").getByRole("heading", { name: "My Page" })).toBeVisible();
+  const tabCountBeforeClick = await page.locator("#tab-list .tab-item").count();
+  await page.locator("#markdown-preview a", { hasText: "Jump to title 2" }).click();
+
+  await expect.poll(() => page.evaluate(() => window.__scrolledPreviewTarget)).toBe("Title2");
+  await expect(page.locator("#tab-list .tab-item")).toHaveCount(tabCountBeforeClick);
+});
+
 test("opens files from the folder tree without showing an error", async ({ page }) => {
   await openApp(page);
 

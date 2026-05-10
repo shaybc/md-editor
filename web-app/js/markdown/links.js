@@ -258,12 +258,24 @@
     if (!hash) return;
     requestAnimationFrame(() => {
       const decodedHash = safeDecodeLinkPath(String(hash).replace(/^#/, ""));
+      const normalizedHash = normalizeMarkdownAnchorSlug(decodedHash);
       const target = markdownPreview.querySelector(`#${CSS.escape(decodedHash)}`)
-        || markdownPreview.querySelector(`[name="${CSS.escape(decodedHash)}"]`);
+        || markdownPreview.querySelector(`[name="${CSS.escape(decodedHash)}"]`)
+        || Array.from(markdownPreview.querySelectorAll("h1, h2, h3, h4, h5, h6"))
+          .find((heading) => normalizeMarkdownAnchorSlug(heading.id || heading.textContent || "") === normalizedHash);
       if (target && typeof target.scrollIntoView === "function") {
         target.scrollIntoView({ behavior: "smooth", block: "start" });
       }
     });
+  }
+
+  function normalizeMarkdownAnchorSlug(value) {
+    return safeDecodeLinkPath(value)
+      .trim()
+      .toLowerCase()
+      .replace(/<[^>]*>/g, "")
+      .replace(/[^\p{L}\p{N}\s_-]/gu, "")
+      .replace(/\s+/g, "-");
   }
 
   async function openMarkdownLinkFromPreview(rawTarget) {
@@ -272,6 +284,12 @@
 
     if (!sourceFile) {
       alert("Unable to open this Markdown link. Open the containing folder or use the desktop app so MD-Editor can read linked local files.");
+      return;
+    }
+
+    const activeMarkdownTab = getActiveMarkdownTab();
+    if (hash && markdownSourceFileMatchesTab(sourceFile, activeMarkdownTab)) {
+      scrollMarkdownPreviewToHash(hash);
       return;
     }
 
@@ -293,6 +311,19 @@
       console.error("Failed to open linked Markdown file:", error);
       alert("Unable to open linked Markdown file.");
     }
+  }
+
+  function markdownSourceFileMatchesTab(sourceFile, tab) {
+    if (!sourceFile || !tab || tab.type === "graph") return false;
+    if (sourceFile.handle && tab.sourceFileHandle === sourceFile.handle) return true;
+
+    const sourcePath = normalizeFilesystemLinkPath(sourceFile.path || "");
+    const tabPath = normalizeFilesystemLinkPath(tab.sourceFilePath || "");
+    if (sourcePath && tabPath && sourcePath.toLowerCase() === tabPath.toLowerCase()) return true;
+
+    const sourceName = sourceFile.name || (sourceFile.path ? getFileName(sourceFile.path) : "");
+    const tabName = tab.sourceFileName || (tab.sourceFilePath ? getFileName(tab.sourceFilePath) : "");
+    return !!sourceName && !!tabName && sourceName.toLowerCase() === tabName.toLowerCase();
   }
 
   function annotatePreviewMarkdownLinks(container) {
@@ -461,7 +492,9 @@
       api.findOpenFolderMarkdownEntry = findOpenFolderMarkdownEntry;
       api.getMarkdownLinkSourceFile = getMarkdownLinkSourceFile;
       api.scrollMarkdownPreviewToHash = scrollMarkdownPreviewToHash;
+      api.normalizeMarkdownAnchorSlug = normalizeMarkdownAnchorSlug;
       api.openMarkdownLinkFromPreview = openMarkdownLinkFromPreview;
+      api.markdownSourceFileMatchesTab = markdownSourceFileMatchesTab;
       api.annotatePreviewMarkdownLinks = annotatePreviewMarkdownLinks;
       api.getPreviewLinkStatusUrl = getPreviewLinkStatusUrl;
       api.handlePreviewLinkMouseOver = handlePreviewLinkMouseOver;
