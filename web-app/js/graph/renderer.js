@@ -273,6 +273,31 @@
       return outgoingNodeIds;
     };
 
+    const getDirectIncomingNodeIds = (nodeId) => links
+      .filter((link) => isMarkdownLink(link) && getLinkTargetId(link) === nodeId)
+      .map(getLinkSourceId)
+      .filter(Boolean);
+
+    const getFullIncomingNodeIds = (nodeId) => {
+      const incomingNodeIds = new Set();
+      const nodesToVisit = [...getDirectIncomingNodeIds(nodeId)];
+
+      while (nodesToVisit.length) {
+        const currentNodeId = nodesToVisit.shift();
+        if (!currentNodeId || currentNodeId === nodeId || incomingNodeIds.has(currentNodeId)) continue;
+        incomingNodeIds.add(currentNodeId);
+        nodesToVisit.push(...getDirectIncomingNodeIds(currentNodeId));
+      }
+
+      return incomingNodeIds;
+    };
+
+    const getFullNetworkNodeIds = (nodeId) => new Set([
+      nodeId,
+      ...getFullIncomingNodeIds(nodeId),
+      ...getFullOutgoingNodeIds(nodeId)
+    ]);
+
     if (graphViewConfig && graphViewConfig.mode === "local" && graphViewConfig.focusNodeId) {
       const focusNodeId = graphViewConfig.focusNodeId;
       filterGraphToNodeIds(new Set([focusNodeId, ...getDirectOutgoingNodeIds(focusNodeId)]));
@@ -281,6 +306,10 @@
     if (graphViewConfig && graphViewConfig.mode === "full-local" && graphViewConfig.focusNodeId) {
       const focusNodeId = graphViewConfig.focusNodeId;
       filterGraphToNodeIds(new Set([focusNodeId, ...getFullOutgoingNodeIds(focusNodeId)]));
+    }
+
+    if (graphViewConfig && graphViewConfig.mode === "full-network" && graphViewConfig.focusNodeId) {
+      filterGraphToNodeIds(getFullNetworkNodeIds(graphViewConfig.focusNodeId));
     }
 
     nodes.forEach((nodeData) => {
@@ -553,6 +582,12 @@
       "Open a graph that follows every outgoing dependency reachable from this point."
     );
     fullLocalGraphBtn.classList.add("hidden");
+    const fullNetworkBtn = createContextMenuButton(
+      CONTEXT_MENU_ACTIONS.showFullNetwork.label,
+      CONTEXT_MENU_ACTIONS.showFullNetwork.icon,
+      "Open a graph containing every recursive backlink and outgoing dependency reachable from this point."
+    );
+    fullNetworkBtn.classList.add("hidden");
     const addTagBtn = createContextMenuButton(
       CONTEXT_MENU_ACTIONS.addTag.label,
       CONTEXT_MENU_ACTIONS.addTag.icon,
@@ -680,6 +715,7 @@
     contextMenu.appendChild(hidePointBtn);
     contextMenu.appendChild(localGraphBtn);
     contextMenu.appendChild(fullLocalGraphBtn);
+    contextMenu.appendChild(fullNetworkBtn);
     contextMenu.appendChild(addTagBtn);
     contextMenu.appendChild(removeTagBtn);
     contextMenu.appendChild(deleteTagBtn);
@@ -1083,6 +1119,7 @@
       hidePointBtn,
       localGraphBtn,
       fullLocalGraphBtn,
+      fullNetworkBtn,
       tagsSubmenu,
       deleteTagBtn,
       contextMenuDeleteSeparator,
@@ -1134,7 +1171,7 @@
       setNodeContextItemsHidden(false);
       const isFileNode = (d.type || "file") !== "tag";
       const keepSavedMode = isKeepSavedGraphMode(activeTab);
-      [openFileBtn, openDefaultAppBtn, revealFileBtn, copySubmenu, sharePointBtn, localGraphBtn, fullLocalGraphBtn, exportSubmenu].forEach((item) => item.classList.toggle("hidden", !isFileNode));
+      [openFileBtn, openDefaultAppBtn, revealFileBtn, copySubmenu, sharePointBtn, localGraphBtn, fullLocalGraphBtn, fullNetworkBtn, exportSubmenu].forEach((item) => item.classList.toggle("hidden", !isFileNode));
       [renameFileBtn, deleteFileBtn].forEach((item) => item.classList.toggle("hidden", !isFileNode || keepSavedMode));
       tagsSubmenu.classList.toggle("hidden", !isFileNode || keepSavedMode);
       if (isFileNode) {
@@ -1502,6 +1539,10 @@
 
     fullLocalGraphBtn.addEventListener("click", () => {
       openLocalGraphTab("full-local", "Full Local Graph");
+    });
+
+    fullNetworkBtn.addEventListener("click", () => {
+      openLocalGraphTab("full-network", "Full Network");
     });
 
     let hoveredGraphNode = null;

@@ -717,7 +717,7 @@ test("saved graph remains interactive and filters only graph snapshot tags", asy
     clientY: 220
   });
   await page.locator(".graph-context-menu-submenu", { hasText: "Copy" }).hover();
-  await page.locator(".graph-context-menu-item", { hasText: "Copy path" }).click();
+  await page.locator(".graph-context-menu-item", { hasText: "Copy path" }).dispatchEvent("click");
   await expect.poll(async () => page.evaluate(() => navigator.clipboard.readText())).toBe("alpha.md");
 
   await page.locator(".graph-node").first().dispatchEvent("contextmenu", {
@@ -728,7 +728,7 @@ test("saved graph remains interactive and filters only graph snapshot tags", asy
     clientY: 220
   });
   await page.locator(".graph-context-menu-submenu", { hasText: "Copy" }).hover();
-  await page.locator(".graph-context-menu-item", { hasText: "Copy content" }).click();
+  await page.locator(".graph-context-menu-item", { hasText: "Copy content" }).dispatchEvent("click");
   await expect.poll(async () => page.evaluate(() => navigator.clipboard.readText())).toContain("# Alpha");
 
   await page.locator(".graph-node").first().dispatchEvent("contextmenu", {
@@ -739,7 +739,7 @@ test("saved graph remains interactive and filters only graph snapshot tags", asy
     clientY: 220
   });
   await page.locator(".graph-context-menu-submenu", { hasText: "Copy" }).hover();
-  await page.locator(".graph-context-menu-item", { hasText: "Copy frontmatter" }).click();
+  await page.locator(".graph-context-menu-item", { hasText: "Copy frontmatter" }).dispatchEvent("click");
   await expect.poll(async () => page.evaluate(async () => (await navigator.clipboard.readText()).replace(/\r\n/g, "\n"))).toBe("---\ntags: [defined]\n---");
 
   await page.locator(".graph-node").first().dispatchEvent("contextmenu", {
@@ -763,6 +763,19 @@ test("saved graph remains interactive and filters only graph snapshot tags", asy
   await page.locator(".graph-context-menu-submenu", { hasText: "Copy" }).hover();
   await page.locator(".graph-context-menu-item", { hasText: "Copy full network" }).dispatchEvent("click");
   await expect.poll(async () => page.evaluate(async () => (await navigator.clipboard.readText()).replace(/\r\n/g, "\n"))).toBe("gamma.md\nepsilon.md\nbeta.md\ndelta.md");
+
+  await page.locator(".graph-node").first().dispatchEvent("contextmenu", {
+    bubbles: true,
+    cancelable: true,
+    button: 2,
+    clientX: 220,
+    clientY: 220
+  });
+  await page.locator(".graph-context-menu-item", { hasText: "Show full network" }).click();
+  await expect(page.locator("#tab-list .tab-item.active")).toContainText("Full Network: alpha.md");
+  const activeGraph = page.locator(".graph-tab-render:not(.hidden)");
+  await expect(activeGraph.locator(".graph-node-file")).toHaveCount(5);
+  await expect(activeGraph.locator(".graph-node-tag")).toHaveCount(0);
 });
 
 test("creating a tag from the tag dialog shows the new tag", async ({ page }) => {

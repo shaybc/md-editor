@@ -2075,6 +2075,7 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
     removePoint: { label: "Remove this point", icon: "bi bi-eye-slash" },
     showLocalGraph: { label: "Show local graph", icon: "bi bi-diagram-2" },
     showFullLocalGraph: { label: "Show full local graph", icon: "bi bi-diagram-3" },
+    showFullNetwork: { label: "Show full network", icon: "bi bi-diagram-3" },
     tags: { label: "Tags", icon: "bi bi-tags" },
     addTag: { label: "Add tag…", icon: "bi bi-tag" },
     removeTag: { label: "Remove tag…", icon: "bi bi-tag-fill" },
