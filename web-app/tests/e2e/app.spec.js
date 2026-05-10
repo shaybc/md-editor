@@ -1119,6 +1119,57 @@ test("keeps open folder graph views in sync with saved and deleted files", async
   await expect.poll(() => page.evaluate(() => window.__alerts)).toEqual([]);
 });
 
+test("saves a new graph view through the desktop save dialog", async ({ page }) => {
+  await page.addInitScript(() => {
+    window.NL_VERSION = "5.0.0";
+    window.NL_OS = "Windows";
+    window.__graphSaveDialogs = [];
+    const files = new Map([["alpha.md", "# Alpha"]]);
+    const getName = (path) => String(path || "").split(/[\\/]/).pop();
+    window.Neutralino = {
+      os: {
+        showFolderDialog: async () => "C:/vault",
+        showSaveDialog: async (title, options) => {
+          window.__graphSaveDialogs.push({ title, options });
+          return "C:/vault/graph.mdviewer-graph.json";
+        },
+        open: async () => {},
+        execCommand: async () => {}
+      },
+      filesystem: {
+        readDirectory: async (path) => {
+          if (path === "C:/vault") {
+            return Array.from(files.keys()).map((entry) => ({ entry, type: "FILE" }));
+          }
+          return [];
+        },
+        getStats: async () => ({ modifiedAt: 1, createdAt: 1 }),
+        readFile: async (path) => {
+          const name = getName(path);
+          if (files.has(name)) return files.get(name);
+          throw new Error("Unexpected read path: " + path);
+        },
+        writeFile: async (path, content) => {
+          files.set(getName(path), String(content));
+        }
+      },
+      clipboard: { writeText: async () => {} }
+    };
+  });
+  await openApp(page);
+
+  await page.locator("#import-from-folder").click();
+  await page.locator(".open-graph-view").first().click();
+  await expect(page.locator(".graph-node-file")).toHaveCount(1);
+
+  await page.locator(".save-current-file-button").first().click();
+
+  await expect.poll(() => page.evaluate(() => window.__graphSaveDialogs.length)).toBe(1);
+  await expect.poll(() => page.evaluate(() => window.__graphSaveDialogs[0].title)).toBe("Save Graph View");
+  await expect.poll(() => page.evaluate(() => window.Neutralino.filesystem.readFile("C:/vault/graph.mdviewer-graph.json")))
+    .toContain('"documentType": "graph-view"');
+});
+
 test("folder and graph Open in a new tab focus existing file tabs", async ({ page }) => {
   await page.addInitScript(() => {
     localStorage.setItem("markdownViewerTabs", JSON.stringify([{
