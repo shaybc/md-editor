@@ -423,6 +423,23 @@ test("switches between editor, preview, and split views", async ({ page }) => {
   await expect(previewPane).toBeVisible();
 });
 
+test("opens new documents in split view regardless of the current view mode", async ({ page }) => {
+  await openApp(page);
+
+  await page.locator(".view-mode-btn[data-mode='preview']").click();
+  await expect(page.locator(".view-mode-btn[data-mode='preview']")).toHaveAttribute("aria-pressed", "true");
+
+  await page.locator(".tab-new-btn").click();
+
+  await expect(page.locator(".view-mode-btn[data-mode='split']")).toHaveAttribute("aria-pressed", "true");
+  await expect(page.locator(".editor-pane")).toBeVisible();
+  await expect(page.locator(".preview-pane")).toBeVisible();
+  await expect.poll(() => page.evaluate(() => {
+    const tabs = JSON.parse(localStorage.getItem("markdownViewerTabs") || "[]");
+    return tabs.find((tab) => /^Untitled \d+$/.test(tab.title))?.viewMode;
+  })).toBe("split");
+});
+
 test("toggles theme and persists it across reloads", async ({ page }) => {
   await openApp(page);
 

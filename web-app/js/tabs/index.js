@@ -989,7 +989,7 @@
       return;
     }
     if (!title) title = nextUntitledTitle();
-    const tab = createTab(content, title);
+    const tab = createTab(content, title, 'split');
     tabs.push(tab);
     const wasEmptyWorkspace = !activeTabId;
     if (wasEmptyWorkspace) {
