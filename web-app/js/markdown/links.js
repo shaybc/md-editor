@@ -267,7 +267,7 @@
     const sourceFile = getMarkdownLinkSourceFile(rawTarget);
 
     if (!sourceFile) {
-      alert("Unable to open this Markdown link. Open the containing folder or use the desktop app so Markdown Viewer can read linked local files.");
+      alert("Unable to open this Markdown link. Open the containing folder or use the desktop app so MD-Editor can read linked local files.");
       return;
     }
 

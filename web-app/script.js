@@ -978,7 +978,7 @@
 
 
   const sampleMarkdown = `---
-title: Welcome to Markdown Viewer
+title: Welcome to MD-Editor
 description: A client-side GitHub-flavored Markdown editor and previewer with tabs, graph workflows, math, diagrams, imports, and export tools.
 author: ShayBC
 tags: ["markdown", "preview", "mermaid", "latex", "graph", "open-source"]
@@ -986,9 +986,9 @@ updated: 2026-05-09
 repository: https://github.com/ThisIs-Developer/Markdown-Viewer
 ---
 
-# Welcome to Markdown Viewer
+# Welcome to MD-Editor
 
-Markdown Viewer is a modern, client-side Markdown workspace for writing, previewing, importing, organizing, and exporting Markdown documents. This welcome document appears when the app starts with no saved tabs and when all tabs are reset.
+MD-Editor is a modern, client-side Markdown workspace for writing, previewing, importing, organizing, and exporting Markdown documents. This welcome document appears when the app starts with no saved tabs and when all tabs are reset.
 
 - **Repository:** [github.com/ThisIs-Developer/Markdown-Viewer](https://github.com/ThisIs-Developer/Markdown-Viewer)
 - **Privacy model:** Your Markdown is rendered in your browser; document tabs are saved locally in this browser with localStorage.
@@ -1043,7 +1043,7 @@ $$\\sum_{i=1}^{n} i^2 = \\frac{n(n+1)(2n+1)}{6}$$
 
 \`\`\`mermaid
 flowchart LR
-    Start[Open Markdown Viewer] --> Write[Write or import Markdown]
+    Start[Open MD-Editor] --> Write[Write or import Markdown]
     Write --> Preview[Preview instantly]
     Preview --> Export{Need output?}
     Export -->|Yes| Files[Export MD, HTML, or PDF]
@@ -1064,7 +1064,7 @@ flowchart LR
 
 ## ?? Feature Snapshot
 
-| Capability | Markdown Viewer |
+| Capability | MD-Editor |
 |:--|:--|
 | Runs in browser | ? |
 | Client-side rendering | ? |
@@ -1088,7 +1088,7 @@ Keyboard shortcuts: <kbd>Ctrl</kbd>/<kbd>Cmd</kbd> + <kbd>S</kbd> to export Mark
 
 ## ?? Helpful Links
 
-- [Markdown Viewer repository](https://github.com/ThisIs-Developer/Markdown-Viewer)
+- [MD-Editor repository](https://github.com/ThisIs-Developer/Markdown-Viewer)
 - [GitHub Flavored Markdown spec](https://github.github.com/gfm/)
 - [Mermaid documentation](https://mermaid.js.org/)
 - [MathJax documentation](https://docs.mathjax.org/)

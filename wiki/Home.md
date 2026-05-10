@@ -1,10 +1,10 @@
-# Markdown Viewer Wiki
+# MD-Editor Wiki
 
-Welcome to the **Markdown Viewer** wiki — your comprehensive reference for installation, configuration, and usage of the Markdown Viewer application.
+Welcome to the **MD-Editor** wiki — your comprehensive reference for installation, configuration, and usage of the MD-Editor application.
 
-## What is Markdown Viewer?
+## What is MD-Editor?
 
-Markdown Viewer is a **professional, feature-rich, GitHub-style Markdown editor and live-preview application** that runs entirely in the browser. It provides real-time rendering, syntax highlighting, LaTeX math support, Mermaid diagrams, and much more — all without requiring any server-side processing, sign-up, or data uploads.
+MD-Editor is a **professional, feature-rich, GitHub-style Markdown editor and live-preview application** that runs entirely in the browser. It provides real-time rendering, syntax highlighting, LaTeX math support, Mermaid diagrams, and much more — all without requiring any server-side processing, sign-up, or data uploads.
 
 > **Privacy First**: All content is processed locally in your browser. Nothing you type is ever sent to a server.
 
@@ -64,13 +64,13 @@ Then open **http://localhost:8080** in your browser.
 
 ## 📈 Development Journey
 
-Markdown Viewer has grown from a lightweight Markdown parser into a production-ready writing tool. Visit the [Development Journey](Development-Journey) page for a concise comparison between the original prototype and the current release.
+MD-Editor has grown from a lightweight Markdown parser into a production-ready writing tool. Visit the [Development Journey](Development-Journey) page for a concise comparison between the original prototype and the current release.
 
 ---
 
 ## Transparency & Data Handling
 
-Markdown Viewer is designed to be transparent about how your data is handled:
+MD-Editor is designed to be transparent about how your data is handled:
 
 - **Local-only processing**: Markdown rendering happens entirely in your browser.
 - **Local storage**: Content and preferences are saved in your browser's `localStorage` for autosave and session restore.

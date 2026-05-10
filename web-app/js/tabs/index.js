@@ -1251,7 +1251,7 @@
     });
     activeTabId = loadActiveTabId();
     if (tabs.length === 0) {
-      const tab = createTab(sampleMarkdown, 'Welcome to Markdown Viewer');
+      const tab = createTab(sampleMarkdown, 'Welcome to MD-Editor');
       tabs.push(tab);
       activeTabId = tab.id;
       saveTabsToStorage(tabs);

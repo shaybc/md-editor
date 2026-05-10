@@ -62,9 +62,9 @@ function addDesktopExitMenuButton() {
   exitButton.id = "desktop-exit-app-button";
   exitButton.className = "dropdown-item action-menu-item";
   exitButton.type = "button";
-  exitButton.title = "Close MD-Viewer";
+  exitButton.title = "Close MD-Editor";
   exitButton.innerHTML =
-    '<i class="bi bi-box-arrow-right me-2"></i> Exit MD-Viewer';
+    '<i class="bi bi-box-arrow-right me-2"></i> Exit MD-Editor';
   exitButton.addEventListener("click", exitDesktopApp);
 
   desktopActionMenu.append(separator, exitButton);

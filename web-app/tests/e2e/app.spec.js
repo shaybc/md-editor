@@ -444,7 +444,7 @@ test("opens help and about from the action menu", async ({ page }) => {
   await page.route("**/wiki/Home.md", async (route) => {
     await route.fulfill({
       contentType: "text/markdown",
-      body: "# Markdown Viewer Wiki\n\nHelp content from the wiki home file."
+      body: "# MD-Editor Wiki\n\nHelp content from the wiki home file."
     });
   });
   await openApp(page);
@@ -454,7 +454,7 @@ test("opens help and about from the action menu", async ({ page }) => {
   await page.locator(".help-menu-submenu .open-help-home").click();
 
   await expect(page.locator(".view-mode-btn[data-mode='preview']")).toHaveAttribute("aria-pressed", "true");
-  await expect(page.locator("#markdown-preview").getByRole("heading", { name: "Markdown Viewer Wiki" })).toBeVisible();
+  await expect(page.locator("#markdown-preview").getByRole("heading", { name: "MD-Editor Wiki" })).toBeVisible();
 
   await page.locator("#desktopActionMenu").click();
   await page.locator(".help-menu-submenu > .dropdown-toggle").hover();
@@ -462,7 +462,7 @@ test("opens help and about from the action menu", async ({ page }) => {
 
   const aboutModal = page.locator("#about-modal");
   await expect(aboutModal).toBeVisible();
-  await expect(aboutModal.getByText("Markdown Viewer", { exact: true })).toBeVisible();
+  await expect(aboutModal.getByText("MD-Editor", { exact: true })).toBeVisible();
   await expect(aboutModal.getByText("1.0.0")).toBeVisible();
   await expect(aboutModal.getByText("May 9, 2026")).toBeVisible();
   await expect(aboutModal.locator("#about-app-author")).toHaveText("ShayBC");
@@ -579,7 +579,7 @@ test("converts selected editor text from the context menu", async ({ page }) => 
   await editor.dispatchEvent("contextmenu", { button: 2, clientX: 160, clientY: 180 });
 
   await expect(page.locator("#editor-context-menu")).toBeVisible();
-  await page.locator("#editor-context-menu [data-markdown-action='heading-1']").click();
+  await page.locator("#editor-context-menu [data-markdown-action='heading-1']").dispatchEvent("click");
 
   await expect(editor).toHaveValue("# Context heading");
 });

@@ -985,7 +985,7 @@
     }
 
     if (!looksLikeGraphDocument(document)) {
-      throw new Error("The selected JSON file is not a Markdown Viewer graph file.");
+      throw new Error("The selected JSON file is not an MD-Editor graph file.");
     }
   }
 

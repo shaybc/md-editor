@@ -29,7 +29,7 @@
   "globalVariables": {},
   "modes": {
     "window": {
-      "title": "Markdown Viewer",
+      "title": "MD-Editor",
       "width": 800,
       "height": 500,
       "minWidth": 400,

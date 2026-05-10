@@ -1,7 +1,7 @@
-# Markdown Viewer (Forked by SBC)
+# MD-Editor (Forked by SBC)
 
 <div align="center">
-  <img src="web-app/assets/icon.jpg" alt="Markdown Viewer Logo" width="140" />
+  <img src="web-app/assets/icon.jpg" alt="MD-Editor Logo" width="140" />
 
   <p><strong>Professional GitHub-style Markdown editor and previewer</strong></p>
   <p>Live preview, diagrams, math, export tools, and multi-document workflows — all in your browser.</p>
@@ -47,7 +47,7 @@
 
 ## About the Project
 
-Markdown Viewer is a full-featured Markdown editor and preview application that renders GitHub-flavored Markdown in real time. It is entirely client-side, lightweight, and optimized for a professional writing workflow — from quick notes to technical documentation with diagrams and LaTeX.
+MD-Editor is a full-featured Markdown editor and preview application that renders GitHub-flavored Markdown in real time. It is entirely client-side, lightweight, and optimized for a professional writing workflow — from quick notes to technical documentation with diagrams and LaTeX.
 
 ---
 
@@ -187,7 +187,7 @@ Explore the full documentation on the wiki:
 
 ## Showcase
 
-**Built with Markdown Viewer**
+**Built with MD-Editor**
 
 | Project | Description |
 |---------|-------------|
@@ -203,7 +203,7 @@ Contributions are welcome! Please review the [Contributing Guide](https://github
 
 ## Contributors
 
-Thanks to everyone who has contributed to Markdown Viewer.
+Thanks to everyone who has contributed to MD-Editor.
 
 [![Contributors](https://contrib.rocks/image?repo=ThisIs-Developer/Markdown-Viewer)](https://github.com/ThisIs-Developer/Markdown-Viewer/graphs/contributors)
 
@@ -211,7 +211,7 @@ Thanks to everyone who has contributed to Markdown Viewer.
 
 ## 📈 Development Journey
 
-Markdown Viewer has grown from a lightweight Markdown parser into a full-featured, professional application with advanced rendering, workflow, and export capabilities. Compare the [current version](https://markdownviewer.pages.dev/) with the [original version](https://a1b91221.markdownviewer.pages.dev/) to see the progress in UI design, performance optimization, and feature depth.
+MD-Editor has grown from a lightweight Markdown parser into a full-featured, professional application with advanced rendering, workflow, and export capabilities. Compare the [current version](https://markdownviewer.pages.dev/) with the [original version](https://a1b91221.markdownviewer.pages.dev/) to see the progress in UI design, performance optimization, and feature depth.
 
 ---
 
