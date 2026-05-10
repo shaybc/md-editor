@@ -861,17 +861,34 @@
       }) || null;
     };
 
-    const graphSnapshotFileMatches = (candidateFile, referenceFile) => {
+    const getGraphSnapshotContextKey = (tab) => [
+      tab?.graphScopeKey,
+      tab?.graphSnapshot?.folderName,
+      tab?.folderName,
+      tab?.title
+    ].map((value) => String(value || "").trim().toLowerCase()).find(Boolean) || "";
+
+    const graphSnapshotFileMatches = (candidateFile, referenceFile, candidateTab, referenceTab) => {
       if (!candidateFile || !referenceFile) return false;
-      const getStableKeys = (file) => [
+      const getFullPathKey = (file) => file.fullPath ? normalizeGraphNodeName(file.fullPath) : "";
+      const candidateFullPathKey = getFullPathKey(candidateFile);
+      const referenceFullPathKey = getFullPathKey(referenceFile);
+      if (candidateFullPathKey || referenceFullPathKey) {
+        return !!candidateFullPathKey && candidateFullPathKey === referenceFullPathKey;
+      }
+
+      const candidateContextKey = getGraphSnapshotContextKey(candidateTab);
+      const referenceContextKey = getGraphSnapshotContextKey(referenceTab);
+      if (candidateTab !== referenceTab && (!candidateContextKey || candidateContextKey !== referenceContextKey)) return false;
+
+      const getRelativeKeys = (file) => [
         file.id,
-        file.path ? normalizeGraphNodeName(file.path) : null,
-        file.fullPath ? normalizeGraphNodeName(file.fullPath) : null
+        file.path ? normalizeGraphNodeName(file.path) : null
       ].filter(Boolean);
-      const candidateStableKeys = new Set(getStableKeys(candidateFile));
-      const referenceStableKeys = getStableKeys(referenceFile);
-      if (candidateStableKeys.size || referenceStableKeys.length) {
-        return referenceStableKeys.some((key) => candidateStableKeys.has(key));
+      const candidateRelativeKeys = new Set(getRelativeKeys(candidateFile));
+      const referenceRelativeKeys = getRelativeKeys(referenceFile);
+      if (candidateRelativeKeys.size || referenceRelativeKeys.length) {
+        return referenceRelativeKeys.some((key) => candidateRelativeKeys.has(key));
       }
 
       return !!candidateFile.name && candidateFile.name === referenceFile.name;
@@ -886,7 +903,7 @@
 
         let graphChanged = false;
         tab.graphSnapshot.files.forEach((snapshotFile) => {
-          if (!graphSnapshotFileMatches(snapshotFile, changedSnapshotFile)) return;
+          if (!graphSnapshotFileMatches(snapshotFile, changedSnapshotFile, tab, getActiveGraphTab())) return;
           snapshotFile.content = changedSnapshotFile.content || "";
           snapshotFile.tags = normalizeFileTagList(changedSnapshotFile.tags || getFileTagsFromContent(snapshotFile.content));
           graphChanged = true;
@@ -933,6 +950,7 @@
 
       snapshotFile.content = nextContent;
       snapshotFile.tags = getFileTagsFromContent(nextContent);
+      if (!snapshotFile.fullPath && graphNode.fullPath) snapshotFile.fullPath = graphNode.fullPath;
       saveKnownTags([...getKnownTags(), ...snapshotFile.tags]);
 
       const folderEntry = getFolderMarkdownEntryForNode(graphNode);

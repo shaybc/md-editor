@@ -709,6 +709,7 @@ test("desktop graph context menu can update file tags", async ({ page }) => {
       isTemporary: false,
       type: "graph",
       folderName: "Desktop Graph E2E",
+      graphScopeKey: "root-folder:c:/vault",
       graphViewConfig: {
         showTags: true,
         hiddenTagIds: [],
@@ -743,14 +744,36 @@ test("desktop graph context menu can update file tags", async ({ page }) => {
           { source: "archive/alpha.md", target: "tag:archive", type: "tag", status: "current" }
         ],
         files: [
-          { id: "alpha.md", path: "alpha.md", name: "alpha.md", content: "---\ntags: [defined]\n---\n# Alpha", fullPath: "C:/vault/alpha.md", status: "current", tags: ["defined"] },
+          { id: "alpha.md", path: "alpha.md", name: "alpha.md", content: "---\ntags: [defined]\n---\n# Alpha", status: "current", tags: ["defined"] },
           { id: "beta.md", path: "beta.md", name: "beta.md", content: "---\ntags: [other]\n---\n# Beta", fullPath: "C:/vault/beta.md", status: "current", tags: ["other"] },
           { id: "archive/alpha.md", path: "archive/alpha.md", name: "alpha.md", content: "---\ntags: [archive]\n---\n# Archived Alpha", fullPath: "C:/vault/archive/alpha.md", status: "current", tags: ["archive"] }
         ]
       }
     };
+    const unrelatedGraphTab = {
+      ...graphTab,
+      id: "unrelated_graph_e2e",
+      title: "Unrelated Graph E2E",
+      folderName: "Unrelated Graph E2E",
+      graphScopeKey: "root-folder:c:/other-vault",
+      graphSnapshot: {
+        version: 1,
+        folderName: "Unrelated Graph E2E",
+        createdAt: Date.now(),
+        nodes: [
+          { id: "alpha.md", label: "alpha.md", type: "file", status: "current", tags: ["unrelated"] },
+          { id: "tag:unrelated", label: "#unrelated", type: "tag", status: "current", tag: "unrelated" }
+        ],
+        links: [
+          { source: "alpha.md", target: "tag:unrelated", type: "tag", status: "current" }
+        ],
+        files: [
+          { id: "alpha.md", path: "alpha.md", name: "alpha.md", content: "---\ntags: [unrelated]\n---\n# Other Alpha", status: "current", tags: ["unrelated"] }
+        ]
+      }
+    };
     localStorage.setItem("markdownViewerGlobalState", JSON.stringify({ knownTags: ["ghost"], graphMagneticEnabled: true }));
-    localStorage.setItem("markdownViewerTabs", JSON.stringify([graphTab]));
+    localStorage.setItem("markdownViewerTabs", JSON.stringify([graphTab, unrelatedGraphTab]));
     localStorage.setItem("markdownViewerActiveTab", graphTab.id);
   });
 
@@ -775,9 +798,14 @@ test("desktop graph context menu can update file tags", async ({ page }) => {
   await expect.poll(() => page.evaluate(() => window.__writes[0].content)).toContain("other");
   await expect(page.locator(".graph-link-tag")).toHaveCount(4);
   await expect.poll(() => page.evaluate(() => {
-    const graphTab = JSON.parse(localStorage.getItem("markdownViewerTabs"))[0];
-    return graphTab.graphSnapshot.files.find((file) => file.fullPath === "C:/vault/archive/alpha.md").tags;
-  })).toEqual(["archive"]);
+    const tabs = JSON.parse(localStorage.getItem("markdownViewerTabs"));
+    const graphTab = tabs.find((tab) => tab.id === "desktop_graph_e2e");
+    const unrelatedGraphTab = tabs.find((tab) => tab.id === "unrelated_graph_e2e");
+    return {
+      archive: graphTab.graphSnapshot.files.find((file) => file.fullPath === "C:/vault/archive/alpha.md").tags,
+      unrelated: unrelatedGraphTab.graphSnapshot.files[0].tags
+    };
+  })).toEqual({ archive: ["archive"], unrelated: ["unrelated"] });
 
   await page.locator(".graph-node").first().dispatchEvent("contextmenu", {
     bubbles: true,
