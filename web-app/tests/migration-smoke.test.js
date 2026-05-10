@@ -15,9 +15,13 @@ test("classic migration scripts load before the legacy monolith", () => {
     'src="js/core/context.js"',
     'src="js/app.js"',
     'src="js/platform/folder-picker.js"',
+    'src="js/files/types.js"',
+    'src="js/files/save.js"',
+    'src="js/files/open.js"',
     'src="js/ui/theme-preferences.js"',
     'src="js/ui/mobile-menu.js"',
     'src="js/recent/index.js"',
+    'src="js/recent/actions.js"',
     'src="js/clipboard.js"',
     'src="js/scroll-sync.js"',
     'src="js/unsaved-changes.js"',
@@ -27,6 +31,10 @@ test("classic migration scripts load before the legacy monolith", () => {
     'src="js/editor/autocomplete.js"',
     'src="js/editor/syntax-highlight.js"',
     'src="js/markdown/renderer-config.js"',
+    'src="js/markdown/render.js"',
+    'src="js/graph/documents.js"',
+    'src="js/tabs/counter.js"',
+    'src="js/import/dropped-items.js"',
     'src="js/import/drag-drop.js"',
     'src="js/share-url.js"',
     'src="js/keyboard-shortcuts.js"',
@@ -95,6 +103,17 @@ test("recent item helpers are registered from their extracted classic script", (
   assert.doesNotMatch(legacyScript, /function readRecentItemsFromLocalStorage/);
   assert.doesNotMatch(legacyScript, /function renderRecentMenus/);
   assert.doesNotMatch(legacyScript, /function scheduleGlobalProfileWrite/);
+});
+
+test("recent open actions are registered from their extracted classic script", () => {
+  const html = readWebFile("index.html");
+  const legacyScript = readWebFile("script.js");
+  const recentActionsScript = readWebFile("js/recent/actions.js");
+
+  assert.match(html, /src="js\/recent\/actions\.js"/);
+  assert.match(recentActionsScript, /window\.registerMarkdownViewerRecentActions\s*=/);
+  assert.match(legacyScript, /window\.registerMarkdownViewerRecentActions\(app,/);
+  assert.doesNotMatch(legacyScript, /async function openRecentFile/);
 });
 
 test("keyboard shortcuts are registered from their extracted classic script", () => {
@@ -237,6 +256,28 @@ test("drag and drop behavior is registered from its extracted classic script", (
   assert.doesNotMatch(legacyScript, /function unhighlight\(\)/);
 });
 
+test("dropped item open behavior is registered from its extracted classic script", () => {
+  const html = readWebFile("index.html");
+  const legacyScript = readWebFile("script.js");
+  const droppedItemsScript = readWebFile("js/import/dropped-items.js");
+
+  assert.match(html, /src="js\/import\/dropped-items\.js"/);
+  assert.match(droppedItemsScript, /window\.registerMarkdownViewerDroppedItems\s*=/);
+  assert.match(legacyScript, /window\.registerMarkdownViewerDroppedItems\(app,/);
+  assert.doesNotMatch(legacyScript, /async function openDroppedFolder/);
+});
+
+test("graph document actions are registered from their extracted classic script", () => {
+  const html = readWebFile("index.html");
+  const legacyScript = readWebFile("script.js");
+  const graphDocumentsScript = readWebFile("js/graph/documents.js");
+
+  assert.match(html, /src="js\/graph\/documents\.js"/);
+  assert.match(graphDocumentsScript, /window\.registerMarkdownViewerGraphDocuments\s*=/);
+  assert.match(legacyScript, /window\.registerMarkdownViewerGraphDocuments\(app,/);
+  assert.doesNotMatch(legacyScript, /async function openGraphView/);
+});
+
 test("folder open defaults to native directory picker when the browser supports it", () => {
   const html = readWebFile("index.html");
   const legacyScript = readWebFile("script.js");
@@ -262,4 +303,59 @@ test("folder input fallback remains available for unsupported browsers", () => {
   assert.match(html, /id="folder-input"[^>]*webkitdirectory[^>]*directory[^>]*multiple/);
   assert.match(sidebarContextTreeScript, /folderInput\.click\(\)/);
   assert.match(sidebarContextTreeScript, /Folder selection is not supported in this environment/);
+});
+
+test("file type helpers are registered from their extracted classic script", () => {
+  const html = readWebFile("index.html");
+  const legacyScript = readWebFile("script.js");
+  const fileTypesScript = readWebFile("js/files/types.js");
+
+  assert.match(html, /src="js\/files\/types\.js"/);
+  assert.match(fileTypesScript, /window\.registerMarkdownViewerFileTypes\s*=/);
+  assert.match(legacyScript, /window\.registerMarkdownViewerFileTypes\(app,/);
+  assert.doesNotMatch(legacyScript, /function isGraphFilePath/);
+});
+
+test("file save behavior is registered from its extracted classic script", () => {
+  const html = readWebFile("index.html");
+  const legacyScript = readWebFile("script.js");
+  const saveScript = readWebFile("js/files/save.js");
+
+  assert.match(html, /src="js\/files\/save\.js"/);
+  assert.match(saveScript, /window\.registerMarkdownViewerFileSave\s*=/);
+  assert.match(legacyScript, /window\.registerMarkdownViewerFileSave\(app,/);
+  assert.doesNotMatch(legacyScript, /function saveMarkdownTabToSource/);
+});
+
+test("file open behavior is registered from its extracted classic script", () => {
+  const html = readWebFile("index.html");
+  const legacyScript = readWebFile("script.js");
+  const openScript = readWebFile("js/files/open.js");
+
+  assert.match(html, /src="js\/files\/open\.js"/);
+  assert.match(openScript, /window\.registerMarkdownViewerFileOpen\s*=/);
+  assert.match(legacyScript, /window\.registerMarkdownViewerFileOpen\(app,/);
+  assert.doesNotMatch(legacyScript, /async function openDocumentSourceFile/);
+});
+
+test("markdown rendering is registered from its extracted classic script", () => {
+  const html = readWebFile("index.html");
+  const legacyScript = readWebFile("script.js");
+  const renderScript = readWebFile("js/markdown/render.js");
+
+  assert.match(html, /src="js\/markdown\/render\.js"/);
+  assert.match(renderScript, /window\.registerMarkdownViewerRender\s*=/);
+  assert.match(legacyScript, /window\.registerMarkdownViewerRender\(app,/);
+  assert.doesNotMatch(legacyScript, /function processEmojis/);
+});
+
+test("untitled tab counter persistence is registered from its extracted classic script", () => {
+  const html = readWebFile("index.html");
+  const legacyScript = readWebFile("script.js");
+  const counterScript = readWebFile("js/tabs/counter.js");
+
+  assert.match(html, /src="js\/tabs\/counter\.js"/);
+  assert.match(counterScript, /window\.registerMarkdownViewerTabCounter\s*=/);
+  assert.match(legacyScript, /window\.registerMarkdownViewerTabCounter\(app,/);
+  assert.doesNotMatch(legacyScript, /function loadUntitledCounter/);
 });

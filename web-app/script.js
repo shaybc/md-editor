@@ -177,6 +177,68 @@
     escapeHtml
   } = frontmatterRenderer;
 
+  const fileTypes = window.registerMarkdownViewerFileTypes(app, {
+    get Neutralino() { return typeof Neutralino !== "undefined" ? Neutralino : undefined; },
+    navigator
+  });
+  const {
+    getMarkdownTitleFromFileName,
+    isGraphFilePath,
+    isJsonPath,
+    isPotentialGraphFilePath,
+    getFileExtension,
+    isKnownTextFilePath,
+    isTextFileLike,
+    isTextDocumentPath,
+    isSidebarDocumentPath,
+    isSidebarDocumentNode,
+    isSupportedFolderTreeDocumentPath,
+    isSupportedFolderTreeDocumentNode,
+    fileContainsGraphDocument,
+    neutralinoPathContainsGraphDocument,
+    looksLikeGraphDocument,
+    isFirefoxBrowser,
+    sanitizeMarkdownFileName,
+    getSuggestedMarkdownFileName,
+    joinPath,
+    isMarkdownPath,
+    getFileName
+  } = fileTypes;
+
+  const fileOpen = window.registerMarkdownViewerFileOpen(app, {
+    get activeFolderName() { return activeFolderName; },
+    set activeFolderName(value) { activeFolderName = value; },
+    get activeFolderHandle() { return activeFolderHandle; },
+    set activeFolderHandle(value) { activeFolderHandle = value; },
+    get activeFolderPath() { return activeFolderPath; },
+    set activeFolderPath(value) { activeFolderPath = value; },
+    get folderMarkdownFiles() { return folderMarkdownFiles; },
+    set folderMarkdownFiles(value) { folderMarkdownFiles = value; },
+    get fileInput() { return fileInput; },
+    getFileName,
+    getMarkdownTitleFromFileName,
+    isGraphFilePath,
+    isJsonPath,
+    looksLikeGraphDocument,
+    isMarkdownPath,
+    get listMarkdownTreeNeutralino() { return listMarkdownTreeNeutralino; },
+    get collectMarkdownFilesFromTreeNeutralino() { return collectMarkdownFilesFromTreeNeutralino; },
+    get renderFolderTree() { return renderFolderTree; },
+    get rememberRecentFolder() { return rememberRecentFolder; },
+    get openSidebarFileInPermanentTab() { return openSidebarFileInPermanentTab; },
+    get rememberRecentFile() { return rememberRecentFile; },
+    get openSavedGraphDocument() { return openSavedGraphDocument; },
+    get Neutralino() { return typeof Neutralino !== "undefined" ? Neutralino : undefined; },
+    get NL_VERSION() { return typeof NL_VERSION !== "undefined" ? NL_VERSION : undefined; },
+    alert
+  });
+  const openFolderTreeFromNeutralinoPath = fileOpen.openFolderTreeFromNeutralinoPath;
+  const openMarkdownSourceFile = fileOpen.openMarkdownSourceFile;
+  const readOpenFileSourceContent = fileOpen.readOpenFileSourceContent;
+  const openDocumentSourceFile = fileOpen.openDocumentSourceFile;
+  const openDocumentFileFromPicker = fileOpen.openDocumentFileFromPicker;
+  const importDocumentFile = fileOpen.importDocumentFile;
+
   const markdownLinks = window.registerMarkdownViewerMarkdownLinks(app, {
     get activeFolderName() { return activeFolderName; },
     get activeFolderPath() { return activeFolderPath; },
@@ -326,80 +388,39 @@
   const scheduleGlobalProfileWrite = recentItems.scheduleGlobalProfileWrite;
   const RECENT_FILES_KEY = recentItems.keys.files;
   const RECENT_FOLDERS_KEY = recentItems.keys.folders;
-  async function openRecentFile(key) {
-    const item = readRecentItems(RECENT_FILES_KEY).find((recentItem) => getRecentItemKey(recentItem) === key);
-    if (!item) return;
-
-    const handle = await getPersistedRecentHandle(RECENT_FILES_KEY, key);
-    const sourceFile = {
-      name: item.name || item.label || (item.path ? getFileName(item.path) : null),
-      path: item.path || null,
-      handle
-    };
-
-    const isGraphFile = isGraphFilePath(sourceFile.path || sourceFile.name);
-    const existingTab = isGraphFile ? findGraphTabForSourceFile(sourceFile) : findTabForSourceFile(sourceFile);
-    if (existingTab) {
-      switchTab(existingTab.id);
-      pinTemporaryTab(existingTab.id);
-      rememberRecentFile(sourceFile);
-      return;
-    }
-
-    if (!item.path && !handle) {
-      alert("This recent file was opened with a browser picker that did not provide a reusable file handle. Please choose it again with Open file ...");
-      return;
-    }
-
-    try {
-      if (handle && !(await ensureFileSystemHandlePermission(handle))) {
-        alert("Permission is required to reopen this recent file. Please allow access or choose it again with Open file ...");
-        return;
-      }
-      await openDocumentSourceFile(sourceFile);
-    } catch (error) {
-      console.error("Failed to open recent file:", error);
-      alert("Unable to open the recent file.");
-    }
-  }
-
-  async function openRecentFolder(key) {
-    const item = readRecentItems(RECENT_FOLDERS_KEY).find((recentItem) => getRecentItemKey(recentItem) === key);
-    if (!item) return;
-
-    const handle = await getPersistedRecentHandle(RECENT_FOLDERS_KEY, key);
-    if (typeof NL_VERSION !== "undefined" && item.path) {
-      try {
-        await openFolderTreeFromNeutralinoPath(item.path);
-      } catch (error) {
-        console.error("Failed to open recent folder:", error);
-        alert("Unable to open the recent folder.");
-      }
-      return;
-    }
-
-    if (handle) {
-      try {
-        if (!(await ensureFileSystemHandlePermission(handle))) {
-          alert("Permission is required to reopen this recent folder. Please allow access or choose it again with Open folder ...");
-          return;
-        }
-        activeFolderName = handle.name || item.name || "Graph View";
-        activeFolderHandle = handle;
-        activeFolderPath = null;
-        const nodes = await listMarkdownTree(handle);
-        folderMarkdownFiles = await collectMarkdownFilesFromTree(nodes);
-        renderFolderTree(nodes);
-        rememberRecentFolder({ name: activeFolderName, label: activeFolderName, handle });
-      } catch (error) {
-        console.error("Failed to open recent folder:", error);
-        alert("Unable to open the recent folder.");
-      }
-      return;
-    }
-
-    alert("This recent folder was opened with a browser picker that did not provide a reusable folder handle. Please choose it again with Open folder ...");
-  }
+  const recentActions = window.registerMarkdownViewerRecentActions(app, {
+    RECENT_FILES_KEY,
+    RECENT_FOLDERS_KEY,
+    readRecentItems,
+    getRecentItemKey,
+    getPersistedRecentHandle,
+    getFileName,
+    isGraphFilePath,
+    get findGraphTabForSourceFile() { return findGraphTabForSourceFile; },
+    get findTabForSourceFile() { return findTabForSourceFile; },
+    get switchTab() { return switchTab; },
+    get pinTemporaryTab() { return pinTemporaryTab; },
+    rememberRecentFile,
+    ensureFileSystemHandlePermission,
+    get openDocumentSourceFile() { return openDocumentSourceFile; },
+    get openFolderTreeFromNeutralinoPath() { return openFolderTreeFromNeutralinoPath; },
+    get activeFolderName() { return activeFolderName; },
+    set activeFolderName(value) { activeFolderName = value; },
+    get activeFolderHandle() { return activeFolderHandle; },
+    set activeFolderHandle(value) { activeFolderHandle = value; },
+    get activeFolderPath() { return activeFolderPath; },
+    set activeFolderPath(value) { activeFolderPath = value; },
+    get listMarkdownTree() { return listMarkdownTree; },
+    get collectMarkdownFilesFromTree() { return collectMarkdownFilesFromTree; },
+    get folderMarkdownFiles() { return folderMarkdownFiles; },
+    set folderMarkdownFiles(value) { folderMarkdownFiles = value; },
+    get renderFolderTree() { return renderFolderTree; },
+    rememberRecentFolder,
+    get NL_VERSION() { return typeof NL_VERSION !== "undefined" ? NL_VERSION : undefined; },
+    alert
+  });
+  const openRecentFile = recentActions.openRecentFile;
+  const openRecentFolder = recentActions.openRecentFolder;
 
   document.addEventListener("click", function(event) {
     const recentButton = event.target.closest(".recent-menu-item");
@@ -711,7 +732,7 @@
     get isUnsupportedFileTab() { return isUnsupportedFileTab; },
     get getAllowedViewModeForActiveTab() { return getAllowedViewModeForActiveTab; },
     get saveGlobalState() { return saveGlobalState; },
-    renderMarkdown,
+    renderMarkdown: function() { return renderMarkdown(); },
     scheduleEditorLineNumbersUpdate,
     isSidebarVisible
   });
@@ -921,6 +942,33 @@
   });
   const addMermaidToolbars = mermaidTools.addMermaidToolbars;
   const closeMermaidModal = mermaidTools.closeMermaidModal;
+
+  const markdownRender = window.registerMarkdownViewerRender(app, {
+    RENDER_DELAY,
+    markdownEditor,
+    markdownPreview,
+    getMarkdownRenderTimeout: function() { return markdownRenderTimeout; },
+    setMarkdownRenderTimeout: function(value) { markdownRenderTimeout = value; },
+    parseFrontmatter,
+    renderFrontmatterTable,
+    updateEditorLineNumbers,
+    enhanceWikiLinks,
+    annotatePreviewMarkdownLinks,
+    get enhanceGitHubAlerts() { return enhanceGitHubAlerts; },
+    get initMermaid() { return initMermaid; },
+    addMermaidToolbars,
+    get updateDocumentStats() { return updateDocumentStats; },
+    document,
+    NodeFilter,
+    get marked() { return marked; },
+    get DOMPurify() { return DOMPurify; },
+    get mermaid() { return mermaid; },
+    get MathJax() { return window.MathJax; },
+    get joypixels() { return joypixels; }
+  });
+  const processEmojis = markdownRender.processEmojis;
+  const renderMarkdown = markdownRender.renderMarkdown;
+  const debouncedRender = markdownRender.debouncedRender;
 
 
   const sampleMarkdown = `---
@@ -1245,6 +1293,58 @@ Markdown content is processed client-side in your browser and sanitized before p
     saveActiveTabId,
   } = graphPersistence;
 
+  const graphDocuments = window.registerMarkdownViewerGraphDocuments(app, {
+    GRAPH_DOCUMENT_TYPE_VIEW,
+    GRAPH_DOCUMENT_TYPE_EXPORT,
+    get activeTabId() { return activeTabId; },
+    get activeFolderName() { return activeFolderName; },
+    get activeFolderPath() { return activeFolderPath; },
+    get folderMarkdownFiles() { return folderMarkdownFiles; },
+    get graphRenderCache() { return graphRenderCache; },
+    get tabs() { return tabs; },
+    serializeGraphExportDocument,
+    serializeGraphViewDocument,
+    createGraphSnapshot,
+    getSuggestedGraphFileName,
+    syncGraphTabDocument,
+    captureGraphLayout,
+    clearGraphTabUnsavedChanges,
+    validateParsedGraphDocument,
+    normalizeGraphSnapshot,
+    getGraphDocumentKind,
+    stripGraphSnapshotContent,
+    deserializeGraphDocument,
+    saveTabsToStorage,
+    isFirefoxBrowser,
+    getFileName,
+    joinPath,
+    get getRootFolderGraphScopeKey() { return getRootFolderGraphScopeKey; },
+    get focusExistingFolderGraphTab() { return focusExistingFolderGraphTab; },
+    get createGraphTab() { return createGraphTab; },
+    get switchTab() { return switchTab; },
+    get getGraphTitleFromFileName() { return getGraphTitleFromFileName; },
+    get renderTabBar() { return renderTabBar; },
+    get updateSaveCurrentFileButtons() { return updateSaveCurrentFileButtons; },
+    get getActiveGraphTab() { return getActiveGraphTab; },
+    get promptForStaleSavedGraphIfNeeded() { return promptForStaleSavedGraphIfNeeded; },
+    get Neutralino() { return typeof Neutralino !== "undefined" ? Neutralino : undefined; },
+    get NL_VERSION() { return typeof NL_VERSION !== "undefined" ? NL_VERSION : undefined; },
+    get saveAs() { return saveAs; },
+    alert
+  });
+  const openGraphView = graphDocuments.openGraphView;
+  const getGraphExportContent = graphDocuments.getGraphExportContent;
+  const writeGraphExportWithSaveDialog = graphDocuments.writeGraphExportWithSaveDialog;
+  const exportFolderFilesToGraph = graphDocuments.exportFolderFilesToGraph;
+  const exportActiveFolderToGraph = graphDocuments.exportActiveFolderToGraph;
+  const getActiveGraphSaveContent = graphDocuments.getActiveGraphSaveContent;
+  const updateGraphTabAfterSave = graphDocuments.updateGraphTabAfterSave;
+  const saveGraphTabToSource = graphDocuments.saveGraphTabToSource;
+  const saveActiveGraphToSource = graphDocuments.saveActiveGraphToSource;
+  const saveGraphTabWithSaveDialog = graphDocuments.saveGraphTabWithSaveDialog;
+  const saveActiveGraphWithSaveDialog = graphDocuments.saveActiveGraphWithSaveDialog;
+  const openSavedGraphDocument = graphDocuments.openSavedGraphDocument;
+
   const tagsModule = window.registerMarkdownViewerTags(app, {
     get folderMarkdownFiles() { return folderMarkdownFiles; },
     get folderTagCounts() { return folderTagCounts; },
@@ -1332,19 +1432,48 @@ Markdown content is processed client-side in your browser and sanitized before p
 
   renderTagManagementList();
 
-  function loadUntitledCounter() {
-    return parseInt(localStorage.getItem(UNTITLED_COUNTER_KEY) || '0', 10);
-  }
-
-  function saveUntitledCounter(val) {
-    localStorage.setItem(UNTITLED_COUNTER_KEY, String(val));
-  }
+  const tabCounter = window.registerMarkdownViewerTabCounter(app, {
+    UNTITLED_COUNTER_KEY,
+    localStorage
+  });
+  const loadUntitledCounter = tabCounter.loadUntitledCounter;
+  const saveUntitledCounter = tabCounter.saveUntitledCounter;
 
   const unsavedChanges = window.registerMarkdownViewerUnsavedChanges(app, {
     isFileBackedGraphTab
   });
   const normalizeEditorContent = unsavedChanges.normalizeEditorContent;
   const tabHasUnsavedChanges = unsavedChanges.tabHasUnsavedChanges;
+
+  const fileSave = window.registerMarkdownViewerFileSave(app, {
+    get activeTabId() { return activeTabId; },
+    get activeFolderHandle() { return activeFolderHandle; },
+    get activeFolderPath() { return activeFolderPath; },
+    get markdownEditor() { return markdownEditor; },
+    get tabs() { return tabs; },
+    normalizeEditorContent,
+    getMarkdownTitleFromFileName,
+    syncMarkdownTabTagsToFolderState,
+    saveTabsToStorage,
+    get renderTabBar() { return renderTabBar; },
+    get updateSaveCurrentFileButtons() { return updateSaveCurrentFileButtons; },
+    getFileName,
+    getSuggestedMarkdownFileName,
+    joinPath,
+    isPathInsideFolder,
+    get reloadOpenFolderTree() { return reloadOpenFolderTree; },
+    isFirefoxBrowser,
+    get getActiveMarkdownTab() { return getActiveMarkdownTab; },
+    get Neutralino() { return typeof Neutralino !== "undefined" ? Neutralino : undefined; },
+    get NL_VERSION() { return typeof NL_VERSION !== "undefined" ? NL_VERSION : undefined; },
+    get saveAs() { return saveAs; }
+  });
+  const updateTabAfterSave = fileSave.updateTabAfterSave;
+  const getMarkdownTabContentForSave = fileSave.getMarkdownTabContentForSave;
+  const saveMarkdownTabToSource = fileSave.saveMarkdownTabToSource;
+  const saveMarkdownTabWithSaveDialog = fileSave.saveMarkdownTabWithSaveDialog;
+  const saveActiveTabWithSaveDialog = fileSave.saveActiveTabWithSaveDialog;
+  const saveActiveTabToSource = fileSave.saveActiveTabToSource;
 
   const tabsModule = window.registerMarkdownViewerTabs(app, {
     sampleMarkdown,
@@ -1484,62 +1613,6 @@ Markdown content is processed client-side in your browser and sanitized before p
     resetAllTabs,
     initTabs,
   } = tabsModule;
-  function renderMarkdown() {
-    updateEditorLineNumbers();
-    try {
-      const { frontmatter, body } = parseFrontmatter(markdownEditor.value);
-      const tableHtml = frontmatter ? renderFrontmatterTable(frontmatter) : '';
-      const html = tableHtml + marked.parse(body);
-      const sanitizedHtml = DOMPurify.sanitize(html, {
-        ADD_TAGS: ['mjx-container'],
-        ADD_ATTR: ['id', 'class', 'style']
-      });
-      markdownPreview.innerHTML = sanitizedHtml;
-      enhanceWikiLinks(markdownPreview);
-      annotatePreviewMarkdownLinks(markdownPreview);
-      enhanceGitHubAlerts(markdownPreview);
-
-      processEmojis(markdownPreview);
-
-      // Reinitialize mermaid with current theme before rendering diagrams
-      initMermaid();
-
-      try {
-        const mermaidNodes = markdownPreview.querySelectorAll('.mermaid');
-        if (mermaidNodes.length > 0) {
-          Promise.resolve(mermaid.init(undefined, mermaidNodes))
-            .then(() => addMermaidToolbars())
-            .catch((e) => {
-              console.warn("Mermaid rendering failed:", e);
-              addMermaidToolbars();
-            });
-        }
-      } catch (e) {
-        console.warn("Mermaid rendering failed:", e);
-      }
-
-      if (window.MathJax) {
-        try {
-          MathJax.typesetPromise([markdownPreview]).catch((err) => {
-            console.warn('MathJax typesetting failed:', err);
-          });
-        } catch (e) {
-          console.warn("MathJax rendering failed:", e);
-        }
-      }
-
-      updateDocumentStats();
-    } catch (e) {
-      console.error("Markdown rendering failed:", e);
-      markdownPreview.innerHTML = `<div class="alert alert-danger">
-              <strong>Error rendering markdown:</strong> ${e.message}
-          </div>
-          <pre>${markdownEditor.value}</pre>`;
-    }
-  }
-
-
-
   async function listMarkdownTree(dirHandle, parentPath = "") {
     const entries = [];
     for await (const entry of dirHandle.values()) {
@@ -1852,439 +1925,6 @@ Markdown content is processed client-side in your browser and sanitized before p
     renderFilteredFolderTree();
   }
 
-  async function openFolderTreeFromNeutralinoPath(selectedPath) {
-    if (!selectedPath) return;
-    activeFolderName = selectedPath.split(/[\\/]/).pop() || "Graph View";
-    activeFolderHandle = null;
-    activeFolderPath = selectedPath;
-    const nodes = await listMarkdownTreeNeutralino(selectedPath);
-    folderMarkdownFiles = await collectMarkdownFilesFromTreeNeutralino(nodes);
-    renderFolderTree(nodes);
-    rememberRecentFolder({ name: activeFolderName, label: activeFolderName, path: selectedPath });
-  }
-
-  function getMarkdownTitleFromFileName(fileName) {
-    return (fileName || "document.md").replace(/\.(md|markdown)$/i, "");
-  }
-
-  async function openMarkdownSourceFile(sourceFile) {
-    if (!sourceFile) return null;
-
-    let content = sourceFile.content;
-    let file = sourceFile.file || null;
-    const handle = sourceFile.handle || null;
-    const path = sourceFile.path || null;
-    let name = sourceFile.name || (path ? getFileName(path) : null);
-
-    if (content === undefined) {
-      if (typeof NL_VERSION !== "undefined" && path) {
-        content = await Neutralino.filesystem.readFile(path);
-      } else {
-        if (!file && handle) {
-          file = await handle.getFile();
-        }
-        if (!file) {
-          throw new Error("No readable Markdown file was provided.");
-        }
-        content = await file.text();
-        name = name || file.name;
-      }
-    }
-
-    name = name || (file && file.name) || "document.md";
-    const tab = openSidebarFileInPermanentTab(content, getMarkdownTitleFromFileName(name), {
-      name,
-      handle,
-      path
-    });
-    rememberRecentFile({
-      name,
-      label: name,
-      path,
-      handle
-    });
-    return tab;
-  }
-
-  function isGraphFilePath(path) {
-    return /\.(mdviewer-graph\.json|mdgraph\.json)$/i.test(path || "");
-  }
-
-  function isJsonPath(path) {
-    return /\.json$/i.test(path || "");
-  }
-
-  function isPotentialGraphFilePath(path) {
-    return isGraphFilePath(path) || isJsonPath(path);
-  }
-
-  function getFileExtension(path) {
-    const match = String(path || "").toLowerCase().match(/\.([a-z0-9+_-]+)$/i);
-    return match ? match[1] : "";
-  }
-
-  function isKnownTextFilePath(path) {
-    const extension = getFileExtension(path);
-    if (!extension) {
-      return /(^|[\/])(dockerfile|makefile|rakefile|gemfile|license|readme|changelog|authors|contributors)$/i.test(path || "");
-    }
-    return new Set([
-      "txt", "text", "md", "markdown", "json", "jsonc", "js", "jsx", "ts", "tsx", "mjs", "cjs",
-      "css", "scss", "sass", "less", "html", "htm", "xml", "svg", "csv", "tsv", "yaml", "yml",
-      "toml", "ini", "conf", "config", "env", "properties", "java", "c", "h", "cpp", "hpp", "cc",
-      "cs", "go", "rs", "py", "rb", "php", "swift", "kt", "kts", "sh", "bash", "zsh", "fish",
-      "bat", "cmd", "ps1", "sql", "r", "lua", "pl", "pm", "scala", "clj", "ex", "exs", "erl",
-      "hrl", "fs", "fsx", "vb", "dockerfile", "gitignore", "gitattributes", "editorconfig", "log"
-    ]).has(extension) || /(^|[\/])(dockerfile|makefile|rakefile|gemfile|license|readme|changelog|authors|contributors)$/i.test(path || "");
-  }
-
-  function isTextFileLike(file) {
-    if (!file) return false;
-    const type = String(file.type || "").toLowerCase();
-    return type.startsWith("text/")
-      || type === "application/json"
-      || type === "application/xml"
-      || type === "application/javascript"
-      || type === "application/x-javascript"
-      || isKnownTextFilePath(file.name || file.path);
-  }
-
-  function isTextDocumentPath(path) {
-    return isMarkdownPath(path) || isPotentialGraphFilePath(path) || isKnownTextFilePath(path);
-  }
-
-  function isSidebarDocumentPath(path) {
-    return isTextDocumentPath(path);
-  }
-
-  function isSidebarDocumentNode(node) {
-    return !!(node && (isSidebarDocumentPath(node.name || node.path || node.fullPath) || isTextFileLike(node.file)));
-  }
-
-  function isSupportedFolderTreeDocumentPath(path) {
-    return isMarkdownPath(path) || isGraphFilePath(path);
-  }
-
-  function isSupportedFolderTreeDocumentNode(node) {
-    return !!(node && node.kind === "file" && (
-      isSupportedFolderTreeDocumentPath(node.name || node.path || node.fullPath)
-      || node.isGraphDocumentFile === true
-    ));
-  }
-
-  async function fileContainsGraphDocument(file) {
-    if (!file || !isJsonPath(file.name || file.path)) return false;
-    try {
-      return looksLikeGraphDocument(JSON.parse(await file.text()));
-    } catch (_) {
-      return false;
-    }
-  }
-
-  async function neutralinoPathContainsGraphDocument(filePath) {
-    if (!isJsonPath(filePath)) return false;
-    try {
-      return looksLikeGraphDocument(JSON.parse(await Neutralino.filesystem.readFile(filePath)));
-    } catch (_) {
-      return false;
-    }
-  }
-
-  function looksLikeGraphDocument(document) {
-    if (!document || typeof document !== "object" || Array.isArray(document)) return false;
-    const documentType = typeof document.documentType === "string" ? document.documentType : document.type;
-    if (GRAPH_DOCUMENT_TYPES.has(documentType)) return true;
-    return Object.prototype.hasOwnProperty.call(document, "snapshot")
-      || Object.prototype.hasOwnProperty.call(document, "graphSnapshot")
-      || Object.prototype.hasOwnProperty.call(document, "viewConfig")
-      || Object.prototype.hasOwnProperty.call(document, "graphViewConfig")
-      || Object.prototype.hasOwnProperty.call(document, "graphLayout")
-      || Object.prototype.hasOwnProperty.call(document, "layout")
-      || (Object.prototype.hasOwnProperty.call(document, "schemaVersion") && Object.prototype.hasOwnProperty.call(document, "folderName"));
-  }
-
-  async function readOpenFileSourceContent(sourceFile) {
-    if (sourceFile.content !== undefined) return sourceFile.content;
-    if (typeof NL_VERSION !== "undefined" && sourceFile.path) {
-      return Neutralino.filesystem.readFile(sourceFile.path);
-    }
-    let file = sourceFile.file || null;
-    if (!file && sourceFile.handle) file = await sourceFile.handle.getFile();
-    if (!file) throw new Error("No readable file was provided.");
-    return file.text();
-  }
-
-  async function openDocumentSourceFile(sourceFile) {
-    if (!sourceFile) return null;
-    const path = sourceFile.path || null;
-    const name = sourceFile.name || (path ? getFileName(path) : sourceFile.file?.name || sourceFile.handle?.name || "document.md");
-    const filePath = path || name;
-
-    if (isGraphFilePath(filePath)) {
-      return openSavedGraphDocument({ ...sourceFile, name });
-    }
-
-    if (isMarkdownPath(filePath)) {
-      return openMarkdownSourceFile({ ...sourceFile, name });
-    }
-
-    const content = await readOpenFileSourceContent(sourceFile);
-    if (isJsonPath(filePath)) {
-      try {
-        const parsed = JSON.parse(content);
-        if (looksLikeGraphDocument(parsed)) {
-          return openSavedGraphDocument({ ...sourceFile, name, content });
-        }
-      } catch (_) {
-        // Invalid JSON is still text and can be edited in the basic text editor.
-      }
-    }
-
-    return openMarkdownSourceFile({ ...sourceFile, name, content });
-  }
-
-  async function openDocumentFileFromPicker() {
-    if (typeof NL_VERSION !== "undefined") {
-      try {
-        const selected = await Neutralino.os.showOpenDialog("Open file", {
-          filters: [
-            { name: "Text-based files", extensions: ["md", "markdown", "mdviewer-graph.json", "mdgraph.json", "json", "txt", "java", "css", "js", "ts", "html", "xml", "csv", "yml", "yaml", "toml", "ini", "log"] }
-          ]
-        });
-        const selectedPath = Array.isArray(selected) ? selected[0] : selected;
-        if (!selectedPath) return;
-        await openDocumentSourceFile({
-          name: getFileName(selectedPath),
-          path: selectedPath
-        });
-      } catch (error) {
-        if (error && error.name === "AbortError") return;
-        console.error("Neutralino file picker error:", error);
-        alert("Unable to open selected file: " + error.message);
-      }
-      return;
-    }
-
-    if (typeof window.showOpenFilePicker === "function") {
-      let handle = null;
-      try {
-        const handles = await window.showOpenFilePicker({
-          multiple: false,
-          types: [
-            {
-              description: "Text-based files",
-              accept: {
-                "text/markdown": [".md", ".markdown"],
-                "text/plain": [".txt", ".text", ".java", ".css", ".js", ".ts", ".html", ".xml", ".csv", ".yml", ".yaml", ".toml", ".ini", ".log"],
-                "application/json": [".json"]
-              }
-            }
-          ]
-        });
-        handle = handles && handles[0];
-      } catch (error) {
-        if (error && error.name === "AbortError") return;
-        console.warn("File picker unavailable, using fallback input.", error);
-        fileInput.click();
-        return;
-      }
-
-      if (!handle) return;
-      try {
-        await openDocumentSourceFile({
-          name: handle.name,
-          handle
-        });
-      } catch (error) {
-        console.error("Failed to open selected file:", error);
-        alert("Unable to open selected file: " + error.message);
-      }
-      return;
-    }
-
-    fileInput.click();
-  }
-
-  async function getFileSystemHandlesFromDrop(dataTransfer) {
-    const items = Array.from((dataTransfer && dataTransfer.items) || []);
-    const handles = [];
-
-    for (const item of items) {
-      if (typeof item.getAsFileSystemHandle !== "function") continue;
-      try {
-        const handle = await item.getAsFileSystemHandle();
-        if (handle) handles.push(handle);
-      } catch (error) {
-        console.warn("Unable to read dropped file system handle:", error);
-      }
-    }
-
-    return handles;
-  }
-
-  async function getDirectoryHandleFromDrop(dataTransfer, fileSystemHandles) {
-    const handles = fileSystemHandles || await getFileSystemHandlesFromDrop(dataTransfer);
-    return handles.find((handle) => handle && handle.kind === "directory") || null;
-  }
-
-  function getDirectoryEntryFromDrop(dataTransfer) {
-    const items = Array.from((dataTransfer && dataTransfer.items) || []);
-    for (const item of items) {
-      if (typeof item.webkitGetAsEntry !== "function") continue;
-      const entry = item.webkitGetAsEntry();
-      if (entry && entry.isDirectory) return entry;
-    }
-    return null;
-  }
-
-  function readDirectoryEntries(directoryEntry) {
-    const reader = directoryEntry.createReader();
-    const entries = [];
-
-    return new Promise((resolve, reject) => {
-      function readNextBatch() {
-        reader.readEntries((batch) => {
-          if (!batch.length) {
-            resolve(entries);
-            return;
-          }
-          entries.push(...batch);
-          readNextBatch();
-        }, reject);
-      }
-
-      readNextBatch();
-    });
-  }
-
-  function getFileFromEntry(fileEntry) {
-    return new Promise((resolve, reject) => {
-      fileEntry.file(resolve, reject);
-    });
-  }
-
-  async function listMarkdownTreeFromEntry(directoryEntry) {
-    const entries = [];
-    const childEntries = await readDirectoryEntries(directoryEntry);
-
-    for (const entry of childEntries) {
-      if (entry.isDirectory) {
-        const children = await listMarkdownTreeFromEntry(entry);
-        entries.push({ kind: "directory", name: entry.name, children, handle: entry });
-      } else if (entry.isFile) {
-        try {
-          const file = await getFileFromEntry(entry);
-          const modifiedAt = Number(file?.lastModified || 0) || 0;
-          const isGraphDocumentFile = await fileContainsGraphDocument(file);
-          entries.push({ kind: "file", name: entry.name, file, path: entry.fullPath || entry.name, modifiedAt, createdAt: modifiedAt, isGraphDocumentFile });
-        } catch (error) {
-          console.warn("Failed to read dropped document file:", entry.name, error);
-        }
-      }
-    }
-
-    return sortFolderTreeNodes(entries);
-  }
-
-  async function getDocumentFileHandleFromDrop(dataTransfer, fileSystemHandles) {
-    const handles = fileSystemHandles || await getFileSystemHandlesFromDrop(dataTransfer);
-    return handles.find((handle) => handle && handle.kind === "file" && isTextDocumentPath(handle.name)) || null;
-  }
-
-  async function getDocumentFileFromEntryDrop(dataTransfer) {
-    const items = Array.from((dataTransfer && dataTransfer.items) || []);
-    for (const item of items) {
-      if (typeof item.webkitGetAsEntry !== "function") continue;
-      const entry = item.webkitGetAsEntry();
-      if (!entry || !entry.isFile || !isTextDocumentPath(entry.name)) continue;
-      try {
-        const file = await getFileFromEntry(entry);
-        return { file, name: entry.name };
-      } catch (error) {
-        console.warn("Failed to read dropped file entry:", entry.name, error);
-      }
-    }
-    return null;
-  }
-
-  async function openDroppedDocumentFile(dataTransfer, fileSystemHandles) {
-    const files = Array.from((dataTransfer && dataTransfer.files) || []);
-
-    if (typeof NL_VERSION !== "undefined") {
-      const droppedPath = files.find((file) => file && file.path && (isTextDocumentPath(file.path || file.name) || isTextFileLike(file)));
-      if (droppedPath) {
-        await openDocumentSourceFile({
-          name: getFileName(droppedPath.path || droppedPath.name),
-          path: droppedPath.path
-        });
-        return true;
-      }
-    }
-
-    const handle = await getDocumentFileHandleFromDrop(dataTransfer, fileSystemHandles);
-    if (handle) {
-      await openDocumentSourceFile({
-        name: handle.name,
-        handle
-      });
-      return true;
-    }
-
-    const entryFile = await getDocumentFileFromEntryDrop(dataTransfer);
-    if (entryFile) {
-      await openDocumentSourceFile(entryFile);
-      return true;
-    }
-
-    const file = files.find((candidate) => candidate && (isTextDocumentPath(candidate.name) || isTextFileLike(candidate)));
-    if (file) {
-      await openDocumentSourceFile({
-        name: file.name,
-        file
-      });
-      return true;
-    }
-
-    return false;
-  }
-
-  async function openDroppedFolder(dataTransfer, fileSystemHandles) {
-    if (typeof NL_VERSION !== "undefined") {
-      const files = Array.from((dataTransfer && dataTransfer.files) || []);
-      const droppedPath = files.find((file) => file && file.path && !isTextDocumentPath(file.path || file.name));
-      if (droppedPath) {
-        await openFolderTreeFromNeutralinoPath(droppedPath.path);
-        return true;
-      }
-    }
-
-    const dirHandle = await getDirectoryHandleFromDrop(dataTransfer, fileSystemHandles);
-    if (dirHandle) {
-      activeFolderName = dirHandle.name || "Graph View";
-      activeFolderHandle = dirHandle;
-      activeFolderPath = null;
-      const nodes = await listMarkdownTree(dirHandle);
-      folderMarkdownFiles = await collectMarkdownFilesFromTree(nodes);
-      renderFolderTree(nodes);
-      rememberRecentFolder({ name: activeFolderName, label: activeFolderName, handle: dirHandle });
-      return true;
-    }
-
-    const directoryEntry = getDirectoryEntryFromDrop(dataTransfer);
-    if (directoryEntry) {
-      activeFolderName = directoryEntry.name || "Graph View";
-      activeFolderHandle = null;
-      activeFolderPath = null;
-      const nodes = await listMarkdownTreeFromEntry(directoryEntry);
-      folderMarkdownFiles = await collectMarkdownFilesFromTree(nodes);
-      renderFolderTree(nodes);
-      rememberRecentFolder({ name: activeFolderName, label: activeFolderName });
-      return true;
-    }
-
-    return false;
-  }
-
 async function listMarkdownTreeNeutralino(dirPath) {
   const entries = [];
   try {
@@ -2588,18 +2228,6 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
     openFolderTree
   } = sidebarContextTree;
 
-  async function importDocumentFile(file) {
-    try {
-      await openDocumentSourceFile({
-        name: file.name,
-        file
-      });
-    } catch (error) {
-      console.error("Failed to open file:", error);
-      alert("Unable to open selected file: " + error.message);
-    }
-  }
-
   function isSidebarDropzoneVisible() {
     return !!sidebarDropzonePanel && sidebarDropzonePanel.style.display !== "none";
   }
@@ -2747,173 +2375,11 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
     setSidebarVisible(!isSidebarVisible());
   }
 
-  function isFirefoxBrowser() {
-    return /firefox\//i.test(navigator.userAgent || "");
-  }
-
-  function sanitizeMarkdownFileName(fileName) {
-    const fallback = "document";
-    let cleaned = String(fileName || fallback)
-      .trim()
-      .replace(/[\\/:*?"<>|]+/g, "-")
-      .replace(/\s+/g, " ");
-    cleaned = cleaned.replace(/^\.+$/, "") || fallback;
-    if (!/\.(md|markdown)$/i.test(cleaned)) {
-      cleaned += ".md";
-    }
-    return cleaned;
-  }
-
-  function getSuggestedMarkdownFileName(tab) {
-    return sanitizeMarkdownFileName((tab && tab.title) || "document");
-  }
-
-  function joinPath(dirPath, fileName) {
-    if (!dirPath) return fileName;
-    return dirPath.replace(/[\\/]+$/, "") + "/" + fileName;
-  }
-
-  function updateTabAfterSave(tab, content, metadata) {
-    const normalizedContent = normalizeEditorContent(content);
-    tab.content = normalizedContent;
-    tab.savedContent = normalizedContent;
-    if (metadata) {
-      if (metadata.name) {
-        tab.sourceFileName = metadata.name;
-        tab.title = getMarkdownTitleFromFileName(metadata.name);
-      }
-      if (metadata.handle) tab.sourceFileHandle = metadata.handle;
-      if (metadata.path) tab.sourceFilePath = metadata.path;
-    }
-    syncMarkdownTabTagsToFolderState(tab, normalizedContent);
-    saveTabsToStorage(tabs);
-    renderTabBar(tabs, activeTabId);
-    updateSaveCurrentFileButtons();
-  }
-
-  function getMarkdownTabContentForSave(tab) {
-    if (!tab) return '';
-    return normalizeEditorContent(tab.id === activeTabId ? markdownEditor.value : tab.content);
-  }
-
-  async function saveMarkdownTabToSource(tab) {
-    if (!tab || tab.type === "graph" || (!tab.sourceFileHandle && !tab.sourceFilePath)) return false;
-
-    try {
-      const content = getMarkdownTabContentForSave(tab);
-      if (tab.sourceFileHandle && typeof tab.sourceFileHandle.createWritable === "function") {
-        const writable = await tab.sourceFileHandle.createWritable();
-        await writable.write(content);
-        await writable.close();
-        updateTabAfterSave(tab, content, {
-          name: tab.sourceFileHandle.name || tab.sourceFileName,
-          handle: tab.sourceFileHandle
-        });
-      } else if (typeof NL_VERSION !== "undefined" && tab.sourceFilePath) {
-        await Neutralino.filesystem.writeFile(tab.sourceFilePath, content);
-        updateTabAfterSave(tab, content, {
-          name: getFileName(tab.sourceFilePath),
-          path: tab.sourceFilePath
-        });
-      } else {
-        return false;
-      }
-      return true;
-    } catch (error) {
-      console.error("Failed to save file to original location:", error);
-      return false;
-    }
-  }
-
-  async function saveMarkdownTabWithSaveDialog(tab) {
-    if (!tab || tab.type === "graph") return false;
-
-    const content = getMarkdownTabContentForSave(tab);
-    const suggestedName = getSuggestedMarkdownFileName(tab);
-
-    if (typeof NL_VERSION !== "undefined") {
-      const defaultPath = activeFolderPath ? joinPath(activeFolderPath, suggestedName) : suggestedName;
-      const selectedPath = await Neutralino.os.showSaveDialog("Save Markdown file", {
-        defaultPath,
-        filters: [
-          { name: "Markdown files", extensions: ["md", "markdown"] }
-        ]
-      });
-      if (!selectedPath) return false;
-      const finalPath = /\.(md|markdown)$/i.test(selectedPath) ? selectedPath : selectedPath + ".md";
-      await Neutralino.filesystem.writeFile(finalPath, content);
-      updateTabAfterSave(tab, content, {
-        name: getFileName(finalPath),
-        path: finalPath
-      });
-      if (isPathInsideFolder(finalPath, activeFolderPath)) {
-        await reloadOpenFolderTree();
-      }
-      return true;
-    }
-
-    if (typeof window.showSaveFilePicker === "function" && !isFirefoxBrowser()) {
-      const pickerOptions = {
-        suggestedName,
-        types: [
-          {
-            description: "Markdown files",
-            accept: {
-              "text/markdown": [".md", ".markdown"],
-              "text/plain": [".md", ".markdown"]
-            }
-          }
-        ]
-      };
-      if (activeFolderHandle) {
-        pickerOptions.startIn = activeFolderHandle;
-      }
-      const handle = await window.showSaveFilePicker(pickerOptions);
-      const writable = await handle.createWritable();
-      await writable.write(content);
-      await writable.close();
-      updateTabAfterSave(tab, content, {
-        name: handle.name,
-        handle
-      });
-      if (activeFolderHandle) {
-        await reloadOpenFolderTree();
-      }
-      return true;
-    }
-
-    const blob = new Blob([content], {
-      type: "text/markdown;charset=utf-8",
-    });
-    saveAs(blob, suggestedName);
-    updateTabAfterSave(tab, content, {
-      name: suggestedName
-    });
-    return true;
-  }
-
-  async function saveActiveTabWithSaveDialog() {
-    const tab = getActiveMarkdownTab();
-    return saveMarkdownTabWithSaveDialog(tab);
-  }
-
-  async function saveActiveTabToSource() {
-    const tab = tabs.find(function(t) { return t.id === activeTabId; });
-    return saveMarkdownTabToSource(tab);
-  }
-
-  function isMarkdownPath(path) {
-    return /\.(md|markdown)$/i.test(path || "");
-  }
   const MAX_GITHUB_FILES_SHOWN = 30;
   const GITHUB_IMPORT_MIN_REQUEST_INTERVAL_MS = 800;
   let lastGitHubImportRequestAt = 0;
   const selectedGitHubImportPaths = new Set();
   let availableGitHubImportPaths = [];
-
-  function getFileName(path) {
-    return (path || "").split(/[\\/]/).pop() || "document.md";
-  }
 
   const githubImport = window.registerMarkdownViewerGitHubImport(app, {
     get lastGitHubImportRequestAt() { return lastGitHubImportRequestAt; },
@@ -2957,69 +2423,6 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
   const openGitHubImportModal = githubImport.openGitHubImportModal;
   const closeGitHubImportModal = githubImport.closeGitHubImportModal;
   const handleGitHubImportSubmit = githubImport.handleGitHubImportSubmit;
-  function processEmojis(element) {
-    const walker = document.createTreeWalker(
-      element,
-      NodeFilter.SHOW_TEXT,
-      null,
-      false
-    );
-
-    const textNodes = [];
-    let node;
-    while ((node = walker.nextNode())) {
-      let parent = node.parentNode;
-      let isInCode = false;
-      while (parent && parent !== element) {
-        if (parent.tagName === 'PRE' || parent.tagName === 'CODE') {
-          isInCode = true;
-          break;
-        }
-        parent = parent.parentNode;
-      }
-
-      if (!isInCode && node.nodeValue.includes(':')) {
-        textNodes.push(node);
-      }
-    }
-
-    textNodes.forEach(textNode => {
-      const text = textNode.nodeValue;
-      const emojiRegex = /:([\w+-]+):/g;
-
-      let match;
-      let lastIndex = 0;
-      let result = '';
-      let hasEmoji = false;
-
-      while ((match = emojiRegex.exec(text)) !== null) {
-        const shortcode = match[1];
-        const emoji = joypixels.shortnameToUnicode(`:${shortcode}:`);
-
-        if (emoji !== `:${shortcode}:`) { // If conversion was successful
-          hasEmoji = true;
-          result += text.substring(lastIndex, match.index) + emoji;
-          lastIndex = emojiRegex.lastIndex;
-        } else {
-          result += text.substring(lastIndex, emojiRegex.lastIndex);
-          lastIndex = emojiRegex.lastIndex;
-        }
-      }
-
-      if (hasEmoji) {
-        result += text.substring(lastIndex);
-        const span = document.createElement('span');
-        span.innerHTML = result;
-        textNode.parentNode.replaceChild(span, textNode);
-      }
-    });
-  }
-
-  function debouncedRender() {
-    clearTimeout(markdownRenderTimeout);
-    markdownRenderTimeout = setTimeout(renderMarkdown, RENDER_DELAY);
-  }
-
   const scrollSync = window.registerMarkdownViewerScrollSync(app, {
     delay: SCROLL_SYNC_DELAY,
     editorPane,
@@ -3347,240 +2750,6 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
   }
 
   // Graph extraction helpers are registered near startup from js/graph/extraction.js.
-
-  async function openGraphView() {
-    if (!folderMarkdownFiles.length) {
-      alert("Open a folder first to build the graph view.");
-      return;
-    }
-
-    const folderName = activeFolderName || "Graph View";
-    const graphScopeKey = getRootFolderGraphScopeKey();
-    if (focusExistingFolderGraphTab(graphScopeKey, folderName)) return;
-
-    if (tabs.length >= 20) {
-      alert('Maximum of 20 tabs reached. Please close an existing tab to open a new one.');
-      return;
-    }
-
-    const graphTab = createGraphTab(folderName, { graphViewConfig: null, graphScopeKey });
-    tabs.push(graphTab);
-    switchTab(graphTab.id);
-    saveTabsToStorage(tabs);
-  }
-
-
-  function getGraphExportContent(graphSnapshot, folderName, graphViewConfig) {
-    const graphTab = createGraphTab(folderName || graphSnapshot?.folderName || "Graph View", {
-      graphSnapshot,
-      graphViewConfig: graphViewConfig || null
-    });
-    const graphDocument = serializeGraphExportDocument(graphTab);
-    return JSON.stringify(graphDocument, null, 2);
-  }
-
-  async function writeGraphExportWithSaveDialog(content, suggestedName, options = {}) {
-    const includeMarkdownContents = options.includeMarkdownContents === true;
-    const dialogTitle = includeMarkdownContents ? "Export Folder to Graph" : "Save Graph View";
-    const fileTypeDescription = includeMarkdownContents
-      ? "Create a portable graph archive that includes Markdown file contents."
-      : "Save layout, groups, filters, hidden points, tags, and connections. File contents are not included.";
-
-    if (typeof NL_VERSION !== "undefined") {
-      const defaultPath = activeFolderPath ? joinPath(activeFolderPath, suggestedName) : suggestedName;
-      const selectedPath = await Neutralino.os.showSaveDialog(dialogTitle, {
-        defaultPath,
-        filters: [
-          { name: fileTypeDescription, extensions: ["mdviewer-graph.json", "mdgraph.json", "json"] }
-        ]
-      });
-      if (!selectedPath) return null;
-      const finalPath = /\.(mdviewer-graph\.json|mdgraph\.json|json)$/i.test(selectedPath) ? selectedPath : `${selectedPath}.mdviewer-graph.json`;
-      await Neutralino.filesystem.writeFile(finalPath, content);
-      return { name: getFileName(finalPath), path: finalPath };
-    }
-
-    if (typeof window.showSaveFilePicker === "function" && !isFirefoxBrowser()) {
-      const handle = await window.showSaveFilePicker({
-        suggestedName,
-        types: [
-          {
-            description: fileTypeDescription,
-            accept: { "application/json": [".json"] }
-          }
-        ]
-      });
-      const writable = await handle.createWritable();
-      await writable.write(content);
-      await writable.close();
-      return { name: handle.name, handle };
-    }
-
-    saveAs(new Blob([content], { type: "application/json;charset=utf-8" }), suggestedName);
-    return { name: suggestedName };
-  }
-
-  async function exportFolderFilesToGraph(folderFiles, folderName) {
-    if (!folderFiles.length) {
-      alert("This folder does not contain Markdown files to export to a graph archive.");
-      return false;
-    }
-
-    const graphSnapshot = await createGraphSnapshot(folderFiles, folderName || "Graph View");
-    const content = getGraphExportContent(graphSnapshot, folderName || graphSnapshot.folderName || "Graph View", null);
-    const suggestedName = getSuggestedGraphFileName({ folderName: folderName || graphSnapshot.folderName || "Graph View" });
-    return !!(await writeGraphExportWithSaveDialog(content, suggestedName, { includeMarkdownContents: true }));
-  }
-
-  async function exportActiveFolderToGraph() {
-    if (!folderMarkdownFiles.length) {
-      alert("Open a folder first to export it to a graph archive.");
-      return false;
-    }
-    return exportFolderFilesToGraph(folderMarkdownFiles, activeFolderName || "Graph View");
-  }
-
-
-  function getActiveGraphSaveContent(graphTab) {
-    const cachedRender = graphRenderCache.get(graphTab.id);
-    if (cachedRender?.nodes) {
-      captureGraphLayout(graphTab, cachedRender.nodes, cachedRender.getZoomTransform?.());
-    }
-    syncGraphTabDocument(graphTab);
-    const graphDocument = serializeGraphViewDocument(graphTab);
-    return JSON.stringify(graphDocument, null, 2);
-  }
-
-  function updateGraphTabAfterSave(tab, metadata) {
-    if (!tab) return;
-    if (metadata) {
-      if (metadata.name) {
-        tab.sourceFileName = metadata.name;
-        tab.title = getGraphTitleFromFileName(metadata.name) || metadata.name;
-      }
-      if (metadata.handle) tab.sourceFileHandle = metadata.handle;
-      if (metadata.path) tab.sourceFilePath = metadata.path;
-    }
-    syncGraphTabDocument(tab);
-    clearGraphTabUnsavedChanges(tab);
-    saveTabsToStorage(tabs);
-    renderTabBar(tabs, activeTabId);
-    updateSaveCurrentFileButtons();
-  }
-
-  async function saveGraphTabToSource(graphTab) {
-    if (!graphTab || (!graphTab.sourceFileHandle && !graphTab.sourceFilePath)) return false;
-
-    try {
-      const content = getActiveGraphSaveContent(graphTab);
-      if (graphTab.sourceFileHandle && typeof graphTab.sourceFileHandle.createWritable === "function") {
-        const writable = await graphTab.sourceFileHandle.createWritable();
-        await writable.write(content);
-        await writable.close();
-        updateGraphTabAfterSave(graphTab, { name: graphTab.sourceFileHandle.name || graphTab.sourceFileName });
-      } else if (typeof NL_VERSION !== "undefined" && graphTab.sourceFilePath) {
-        await Neutralino.filesystem.writeFile(graphTab.sourceFilePath, content);
-        updateGraphTabAfterSave(graphTab, {
-          name: getFileName(graphTab.sourceFilePath),
-          path: graphTab.sourceFilePath
-        });
-      } else {
-        return false;
-      }
-      return true;
-    } catch (error) {
-      console.error("Failed to save graph to original location:", error);
-      return false;
-    }
-  }
-
-  async function saveActiveGraphToSource() {
-    return saveGraphTabToSource(getActiveGraphTab());
-  }
-
-  async function saveGraphTabWithSaveDialog(graphTab) {
-    if (!graphTab) {
-      return false;
-    }
-
-    const content = getActiveGraphSaveContent(graphTab);
-    const suggestedName = getSuggestedGraphFileName(graphTab);
-
-    try {
-      const metadata = await writeGraphExportWithSaveDialog(content, suggestedName);
-      if (!metadata) return false;
-      updateGraphTabAfterSave(graphTab, metadata);
-      return true;
-    } catch (error) {
-      if (error && error.name === "AbortError") return false;
-      console.error("Failed to export graph:", error);
-      alert("Failed to export graph: " + error.message);
-      return false;
-    }
-  }
-
-  async function saveActiveGraphWithSaveDialog() {
-    return saveGraphTabWithSaveDialog(getActiveGraphTab());
-  }
-
-  async function openSavedGraphDocument(source) {
-    if (!source) return null;
-    if (tabs.length >= 20) {
-      alert('Maximum of 20 tabs reached. Please close an existing tab to open a saved graph.');
-      return null;
-    }
-    let content = source.content;
-    let name = source.name || "Saved Graph";
-
-    if (content === undefined) {
-      if (typeof NL_VERSION !== "undefined" && source.path) {
-        content = await Neutralino.filesystem.readFile(source.path);
-        name = getFileName(source.path) || name;
-      } else {
-        let file = source.file || null;
-        if (!file && source.handle) file = await source.handle.getFile();
-        if (!file) throw new Error("No readable graph file was provided.");
-        content = await file.text();
-        name = file.name || name;
-      }
-    }
-
-    let graphDocument;
-    try {
-      graphDocument = JSON.parse(content);
-    } catch (error) {
-      throw new Error("The selected graph file is not valid JSON.");
-    }
-
-    validateParsedGraphDocument(graphDocument);
-
-    const normalizedSnapshot = normalizeGraphSnapshot(graphDocument.snapshot || graphDocument.graphSnapshot || null);
-    const graphDocumentKind = getGraphDocumentKind(graphDocument, normalizedSnapshot);
-    const graphDocumentForTab = graphDocumentKind.documentType === GRAPH_DOCUMENT_TYPE_EXPORT
-      ? graphDocument
-      : {
-        ...graphDocument,
-        documentType: GRAPH_DOCUMENT_TYPE_VIEW,
-        snapshot: stripGraphSnapshotContent(normalizedSnapshot),
-        graphSnapshot: undefined
-      };
-    const graphData = deserializeGraphDocument(graphDocumentForTab);
-    const fallbackName = getGraphTitleFromFileName(name) || "Saved Graph";
-    const graphTab = createGraphTab(graphData.folderName || fallbackName, { graphDocument: graphData.graphDocument });
-    graphTab.keepSavedGraphMode = graphDocumentKind.documentType === GRAPH_DOCUMENT_TYPE_VIEW;
-    graphTab.sourceFileName = name;
-    graphTab.title = fallbackName;
-    if (source.handle) graphTab.sourceFileHandle = source.handle;
-    if (source.path) graphTab.sourceFilePath = source.path;
-    clearGraphTabUnsavedChanges(graphTab);
-    tabs.push(graphTab);
-    saveTabsToStorage(tabs);
-    switchTab(graphTab.id);
-    promptForStaleSavedGraphIfNeeded(graphTab, {
-      force: graphDocumentKind.documentType === GRAPH_DOCUMENT_TYPE_VIEW
-    });
-    return graphTab;
-  }
 
   const graphToolbar = window.registerMarkdownViewerGraphToolbar(app, {
     DEFAULT_GRAPH_VIEW_CONFIG,
@@ -4130,10 +3299,35 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
     markdownEditor,
     mobileShareButton,
     renderEditorSyntaxHighlights,
-    renderMarkdown,
+    renderMarkdown: function() { return renderMarkdown(); },
     saveCurrentTabState,
     shareButton
   });
+
+  const droppedItems = window.registerMarkdownViewerDroppedItems(app, {
+    get activeFolderName() { return activeFolderName; },
+    set activeFolderName(value) { activeFolderName = value; },
+    get activeFolderHandle() { return activeFolderHandle; },
+    set activeFolderHandle(value) { activeFolderHandle = value; },
+    get activeFolderPath() { return activeFolderPath; },
+    set activeFolderPath(value) { activeFolderPath = value; },
+    get folderMarkdownFiles() { return folderMarkdownFiles; },
+    set folderMarkdownFiles(value) { folderMarkdownFiles = value; },
+    isTextDocumentPath,
+    isTextFileLike,
+    getFileName,
+    fileContainsGraphDocument,
+    sortFolderTreeNodes,
+    openDocumentSourceFile,
+    openFolderTreeFromNeutralinoPath,
+    listMarkdownTree,
+    collectMarkdownFilesFromTree,
+    renderFolderTree,
+    rememberRecentFolder,
+    get NL_VERSION() { return typeof NL_VERSION !== "undefined" ? NL_VERSION : undefined; },
+    alert
+  });
+  const handleDrop = droppedItems.handleDrop;
 
   window.registerMarkdownViewerDragDrop(app, {
     dropzone,
@@ -4164,33 +3358,6 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
   });
   updateDropzoneToggleButtons();
   updateSidebarToggleButtons();
-
-  async function handleDrop(e) {
-    const dt = e.dataTransfer;
-
-    try {
-      // Folder drops can expose their contained files through dataTransfer.files,
-      // so check for a dropped directory before falling back to a single document file.
-      // Cache File System Access handles because some browsers do not reliably
-      // return the same dropped file handle after a previous directory check.
-      const fileSystemHandles = await getFileSystemHandlesFromDrop(dt);
-      if (await openDroppedFolder(dt, fileSystemHandles)) {
-        return;
-      }
-      if (await openDroppedDocumentFile(dt, fileSystemHandles)) {
-        return;
-      }
-    } catch (error) {
-      console.error("Failed to open dropped item:", error);
-      alert("Unable to open the dropped file or folder.");
-      return;
-    }
-
-    const files = dt.files;
-    if (files.length) {
-      alert("Please open a text-based file (for example .md, .txt, .java, .css, or .json), a saved graph file (.mdviewer-graph.json or .mdgraph.json), or a folder that contains text files.");
-    }
-  }
 
   window.registerMarkdownViewerKeyboardShortcuts(app, {
     closeGraphComparisonDetailsModal,
