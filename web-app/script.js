@@ -2424,6 +2424,7 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
     get createGraphTab() { return createGraphTab; },
     getGraphTitleFromFileName,
     getGraphDisplayLabel,
+    resolveGraphTargetId,
     normalizeGraphNodeName,
     getGraphLinkKey,
     normalizeGraphTagNodeId,
@@ -2467,6 +2468,8 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
     closeFolderTree,
     closeTabsForDeletedPath,
     refreshOpenFolderTreeAfterFileDelete,
+    isPathInsideFolder,
+    reloadOpenFolderTree,
     openFolderTreeFromNeutralinoPath
   });
   const {

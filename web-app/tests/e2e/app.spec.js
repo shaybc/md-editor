@@ -1180,6 +1180,96 @@ test("renaming folder-backed files updates open tab titles", async ({ page }) =>
   await expect(page.locator("#tab-list .tab-item", { hasText: "alpha" })).toHaveCount(0);
 });
 
+test("renames desktop folder files from tree, tab, and graph without showing an error", async ({ page }) => {
+  await page.addInitScript(() => {
+    window.NL_VERSION = "5.0.0";
+    window.NL_OS = "Windows";
+    window.__alerts = [];
+    window.__moves = [];
+    window.alert = (message) => window.__alerts.push(String(message));
+
+    let fileName = "alpha.md";
+    const getPath = () => `C:/vault/${fileName}`;
+    window.Neutralino = {
+      os: {
+        showFolderDialog: async () => "C:/vault",
+        open: async () => {},
+        execCommand: async () => {}
+      },
+      filesystem: {
+        readDirectory: async (path) => {
+          if (path === "C:/vault") return [{ entry: fileName, type: "FILE" }];
+          return [];
+        },
+        getStats: async () => ({ modifiedAt: 1, createdAt: 1 }),
+        readFile: async (path) => {
+          if (path === getPath()) return "# Alpha";
+          throw new Error("Unexpected read path: " + path);
+        },
+        writeFile: async () => {},
+        move: async (oldPath, newPath) => {
+          window.__moves.push({ oldPath, newPath });
+          fileName = newPath.split(/[\\/]/).pop();
+        }
+      },
+      clipboard: { writeText: async () => {} }
+    };
+  });
+  await openApp(page);
+
+  await page.locator("#import-from-folder").click();
+  await page.locator(".folder-tree-file", { hasText: "alpha.md" }).evaluate((button) => {
+    button.dispatchEvent(new MouseEvent("dblclick", { bubbles: true, cancelable: true }));
+  });
+  await expect(page.locator("#tab-list .tab-item", { hasText: "alpha" })).toHaveCount(1);
+
+  await page.locator("#tab-list .tab-item", { hasText: "alpha" }).dispatchEvent("contextmenu", {
+    bubbles: true,
+    cancelable: true,
+    button: 2,
+    clientX: 120,
+    clientY: 80
+  });
+  await page.locator(".tab-context-menu-action[data-action='rename']").evaluate((button) => button.click());
+  await page.locator("#rename-modal-input").fill("beta.md");
+  await page.locator("#rename-modal-confirm").click();
+  await expect.poll(() => page.evaluate(() => window.__alerts)).toEqual([]);
+  await expect(page.locator("#tab-list .tab-item", { hasText: "beta" })).toHaveCount(1);
+
+  await page.locator(".folder-tree-file", { hasText: "beta.md" }).dispatchEvent("contextmenu", {
+    bubbles: true,
+    cancelable: true,
+    button: 2,
+    clientX: 90,
+    clientY: 180
+  });
+  await page.locator(".sidebar-file-context-menu:not(.hidden) .graph-context-menu-item", { hasText: "Rename" }).evaluate((button) => button.click());
+  await page.locator("#rename-modal-input").fill("gamma.md");
+  await page.locator("#rename-modal-confirm").click();
+  await expect.poll(() => page.evaluate(() => window.__alerts)).toEqual([]);
+  await expect(page.locator("#tab-list .tab-item", { hasText: "gamma" })).toHaveCount(1);
+
+  await page.locator(".open-graph-view").first().click();
+  await expect(page.locator(".graph-node-file")).toHaveCount(1);
+  await page.locator(".graph-node-file").dispatchEvent("contextmenu", {
+    bubbles: true,
+    cancelable: true,
+    button: 2,
+    clientX: 220,
+    clientY: 220
+  });
+  await page.locator(".graph-tab-render .graph-context-menu:not(.hidden) .graph-context-menu-item", { hasText: "Rename" }).click();
+  await page.locator("#rename-modal-input").fill("delta.md");
+  await page.locator("#rename-modal-confirm").click();
+
+  await expect.poll(() => page.evaluate(() => window.__alerts)).toEqual([]);
+  await expect.poll(() => page.evaluate(() => window.__moves.map((move) => move.newPath))).toEqual([
+    "C:/vault/beta.md",
+    "C:/vault/gamma.md",
+    "C:/vault/delta.md"
+  ]);
+});
+
 test("hovering a graph tag point highlights directly tagged files", async ({ page }) => {
   await page.addInitScript(() => {
     localStorage.setItem("markdownViewerTabs", JSON.stringify([{
