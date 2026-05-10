@@ -229,7 +229,8 @@
     switchTab(graphTab.id);
     await promptForStaleSavedGraphIfNeeded(graphTab, {
       force: graphDocumentKind.documentType === GRAPH_DOCUMENT_TYPE_VIEW || graphDocumentKind.isLegacy,
-      legacyExport: graphDocumentKind.isLegacy && graphDocumentKind.documentType === GRAPH_DOCUMENT_TYPE_EXPORT
+      legacyExport: graphDocumentKind.isLegacy && graphDocumentKind.documentType === GRAPH_DOCUMENT_TYPE_EXPORT,
+      includeExports: graphDocumentKind.documentType === GRAPH_DOCUMENT_TYPE_EXPORT
     });
     return graphTab;
   }

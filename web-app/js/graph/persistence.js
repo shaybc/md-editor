@@ -766,31 +766,48 @@
   async function promptForStaleSavedGraphIfNeeded(tab, options = {}) {
     const shouldPromptWhileKeepingSavedGraph = options.force === true;
     const shouldPromptForLegacyExport = options.legacyExport === true;
+    const shouldPromptForExports = options.includeExports === true;
     if (!tab?.graphSnapshot || !folderMarkdownFiles.length || (!shouldPromptWhileKeepingSavedGraph && isKeepSavedGraphMode(tab))) return;
     const graphDocumentType = tab.graphDocument?.documentType || inferLegacyGraphDocumentType(tab.graphSnapshot);
-    if (graphDocumentType !== GRAPH_DOCUMENT_TYPE_VIEW && !(shouldPromptForLegacyExport && graphDocumentType === GRAPH_DOCUMENT_TYPE_EXPORT)) return;
+    if (
+      graphDocumentType !== GRAPH_DOCUMENT_TYPE_VIEW
+      && !((shouldPromptForLegacyExport || shouldPromptForExports) && graphDocumentType === GRAPH_DOCUMENT_TYPE_EXPORT)
+    ) return;
 
     try {
       const currentSnapshot = await createGraphSnapshot(folderMarkdownFiles.slice(), activeFolderName || tab.folderName || tab.title);
       const comparison = compareGraphViewToCurrentFolder(tab.graphSnapshot, currentSnapshot);
       if (hasGraphComparisonChanges(comparison)) {
         showGraphStaleModal(tab, tab.graphSnapshot, currentSnapshot, comparison);
+        return true;
       }
     } catch (error) {
       console.warn("Failed to compare saved graph with the current folder:", error);
     }
+    return false;
+  }
+
+  async function promptSavedGraphTabForCurrentFolder(tab) {
+    if (!tab || tab.type !== "graph" || !isFileBackedGraphTab(tab)) return false;
+    const graphDocumentType = tab.graphDocument?.documentType || inferLegacyGraphDocumentType(tab.graphSnapshot);
+    return promptForStaleSavedGraphIfNeeded(tab, {
+      force: true,
+      legacyExport: !tab.graphDocument?.documentType && graphDocumentType === GRAPH_DOCUMENT_TYPE_EXPORT,
+      includeExports: graphDocumentType === GRAPH_DOCUMENT_TYPE_EXPORT
+    });
   }
 
   async function promptActiveSavedGraphForCurrentFolder() {
-    const tab = getActiveGraphTab();
-    if (!tab || !isFileBackedGraphTab(tab)) return false;
+    const activeGraphTab = getActiveGraphTab();
+    const graphTabs = [
+      activeGraphTab,
+      ...tabs.filter((tab) => tab && tab.type === "graph" && tab.id !== activeGraphTab?.id)
+    ].filter(Boolean);
 
-    const graphDocumentType = tab.graphDocument?.documentType || inferLegacyGraphDocumentType(tab.graphSnapshot);
-    await promptForStaleSavedGraphIfNeeded(tab, {
-      force: graphDocumentType === GRAPH_DOCUMENT_TYPE_VIEW || !tab.graphDocument?.documentType,
-      legacyExport: !tab.graphDocument?.documentType && graphDocumentType === GRAPH_DOCUMENT_TYPE_EXPORT
-    });
-    return true;
+    for (const tab of graphTabs) {
+      if (await promptSavedGraphTabForCurrentFolder(tab)) return true;
+    }
+    return false;
   }
 
   function keepSavedGraphFromStaleModal() {
