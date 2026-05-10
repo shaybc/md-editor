@@ -203,7 +203,8 @@
     tagManagementList.setAttribute("aria-multiselectable", "true");
     const query = String(tagManagementSearch?.value || "").trim().toLowerCase();
     const counts = getReferencedTagCounts();
-    const tags = getReferencedTags().filter((tag) => !query || tag.includes(query));
+    const tagSource = query ? getAllKnownAndReferencedTags() : getReferencedTags();
+    const tags = tagSource.filter((tag) => !query || tag.includes(query));
     tagManagementList.innerHTML = "";
 
     if (!tags.length) {
@@ -242,6 +243,7 @@
     if (!tags.includes(normalizedTag)) {
       saveKnownTags([...tags, normalizedTag]);
     }
+    if (tagManagementSearch) tagManagementSearch.value = normalizedTag;
     renderTagManagementList();
     const activeGraphTab = getActiveGraphTab();
     if (activeGraphTab) {

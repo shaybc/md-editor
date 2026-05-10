@@ -674,6 +674,33 @@ test("saved graph remains interactive and filters only graph snapshot tags", asy
   await expect.poll(async () => page.evaluate(() => navigator.clipboard.readText())).toContain("# Alpha");
 });
 
+test("creating a tag from the tag dialog shows the new tag", async ({ page }) => {
+  await page.addInitScript(() => {
+    localStorage.setItem("markdownViewerGlobalState", JSON.stringify({ knownTags: ["stale-known"] }));
+    window.prompt = () => "Fresh Tag";
+    window.showDirectoryPicker = async () => ({
+      kind: "directory",
+      name: "Test Folder",
+      values: async function* values() {
+        yield {
+          kind: "file",
+          name: "untagged.md",
+          getFile: async () => new File(["# Untagged"], "untagged.md", { type: "text/markdown" }),
+          createWritable: async () => ({ write: async () => {}, close: async () => {} })
+        };
+      }
+    });
+  });
+  await openApp(page);
+
+  await page.locator("#import-from-folder").click();
+  await expect(page.locator("#tag-management-list .tag-management-list-empty")).toBeVisible();
+  await page.locator("#create-tag-button").evaluate((button) => button.click());
+
+  await expect(page.locator("#tag-management-search")).toHaveValue("fresh tag");
+  await expect(page.locator("#tag-management-list .tag-management-list-item")).toHaveText(["#fresh tag0"]);
+});
+
 test("desktop graph context menu can update file tags", async ({ page }) => {
   await page.addInitScript(() => {
     window.NL_VERSION = "test";
