@@ -982,6 +982,10 @@
     return Array.from(tagSet).sort((a, b) => a.localeCompare(b));
   }
 
+  function getReferencedTags() {
+    return Array.from(getReferencedTagCounts().keys()).sort((a, b) => a.localeCompare(b));
+  }
+
   function getGraphFileEntryNodeId(fileEntry) {
     if (!fileEntry) return "";
     return fileEntry.id || normalizeGraphNodeName(fileEntry.path || fileEntry.fullPath || fileEntry.file?.webkitRelativePath || fileEntry.file?.name || fileEntry.name || "");
@@ -1047,7 +1051,7 @@
     tagManagementList.setAttribute("aria-multiselectable", "true");
     const query = String(tagManagementSearch?.value || "").trim().toLowerCase();
     const counts = getReferencedTagCounts();
-    const tags = getAllKnownAndReferencedTags().filter((tag) => !query || tag.includes(query));
+    const tags = getReferencedTags().filter((tag) => !query || tag.includes(query));
     tagManagementList.innerHTML = "";
 
     if (!tags.length) {
@@ -3373,7 +3377,8 @@ Markdown content is processed client-side in your browser and sanitized before p
   }
 
   function saveActiveTabId(id) {
-    localStorage.setItem(ACTIVE_TAB_KEY, id);
+    if (id) localStorage.setItem(ACTIVE_TAB_KEY, id);
+    else localStorage.removeItem(ACTIVE_TAB_KEY);
   }
 
   function loadUntitledCounter() {
@@ -4377,10 +4382,22 @@ Markdown content is processed client-side in your browser and sanitized before p
     }
     tabs.splice(idx, 1);
     if (tabs.length === 0) {
-      // Auto-create new "Untitled" when last tab is deleted
-      const newT = createTab('', nextUntitledTitle());
-      tabs.push(newT);
-      activeTabId = newT.id;
+      if (options.allowEmpty) {
+        activeTabId = null;
+        saveActiveTabId(null);
+        setGraphViewMode(false);
+        markdownEditor.value = '';
+        restoreViewMode('split');
+        renderEditorSyntaxHighlights();
+        renderMarkdown();
+        saveTabsToStorage(tabs);
+        renderTabBar(tabs, activeTabId);
+        return;
+      }
+
+      const newTabAfterClose = createTab('', nextUntitledTitle());
+      tabs.push(newTabAfterClose);
+      activeTabId = newTabAfterClose.id;
       saveActiveTabId(activeTabId);
       setGraphViewMode(false);
       markdownEditor.value = '';
@@ -4514,14 +4531,15 @@ Markdown content is processed client-side in your browser and sanitized before p
     return window.confirm('You have unsaved changes in ' + unsavedTabsToClose.length + ' tabs. Are you sure you want to close them?');
   }
 
-  function closeTabsByIds(tabIds) {
+  function closeTabsByIds(tabIds, options) {
+    if (options === undefined) options = {};
     const idsToClose = Array.from(new Set(tabIds));
     const tabsToClose = idsToClose
       .map(function(tabId) { return tabs.find(function(tab) { return tab.id === tabId; }); })
       .filter(Boolean);
-    if (tabsToClose.length === 0 || !confirmCloseTabsIfNeeded(tabsToClose)) return;
+    if (tabsToClose.length === 0 || (options.promptForUnsaved !== false && !confirmCloseTabsIfNeeded(tabsToClose))) return;
     idsToClose.forEach(function(tabId) {
-      closeTab(tabId, { promptForUnsaved: false });
+      closeTab(tabId, { promptForUnsaved: false, allowEmpty: options.allowEmpty });
     });
   }
 
@@ -4536,9 +4554,10 @@ Markdown content is processed client-side in your browser and sanitized before p
     }
   }
 
-  function closeAllTabs() {
+  function closeAllTabs(options) {
+    if (options === undefined) options = {};
     if (tabs.length === 0) return;
-    closeTabsByIds(tabs.map(function(tab) { return tab.id; }));
+    closeTabsByIds(tabs.map(function(tab) { return tab.id; }), { allowEmpty: true, promptForUnsaved: options.promptForUnsaved });
   }
 
   function resetAllTabs() {
@@ -4551,20 +4570,9 @@ Markdown content is processed client-side in your browser and sanitized before p
     function doReset() {
       modal.style.display = 'none';
       cleanup();
-      tabs = [];
+      closeAllTabs({ promptForUnsaved: false });
       untitledCounter = 0;
       saveUntitledCounter(0);
-      const welcome = createTab(sampleMarkdown, 'Welcome to ShayBC Markdown-Viewer');
-      tabs.push(welcome);
-      activeTabId = welcome.id;
-      saveActiveTabId(activeTabId);
-      saveTabsToStorage(tabs);
-      setGraphViewMode(false);
-      markdownEditor.value = sampleMarkdown;
-      restoreViewMode('split');
-      renderEditorSyntaxHighlights();
-      renderMarkdown();
-      renderTabBar(tabs, activeTabId);
     }
 
     function doCancel() {
@@ -5531,7 +5539,7 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
   function renderTagsContextSubmenu(submenuPanel, currentTags, onToggleTag) {
     if (!submenuPanel) return;
     const fileTags = new Set(normalizeFileTagList(currentTags || []));
-    const tags = Array.from(new Set([...getAllKnownAndReferencedTags(), ...fileTags])).sort((a, b) => a.localeCompare(b));
+    const tags = Array.from(new Set([...getReferencedTags(), ...fileTags])).sort((a, b) => a.localeCompare(b));
     submenuPanel.innerHTML = "";
 
     if (!tags.length) {
@@ -9238,9 +9246,12 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
     scheduleGraphLayoutStorageSave,
     markGraphTabAsChanged,
     saveGlobalState,
+    getKnownTags,
+    saveKnownTags,
     getGraphDisplayLabel,
     getGraphContextMenuTitle,
     getFolderMarkdownEntryForTab,
+    normalizeGraphNodeName,
     getFileTagsFromContent,
     normalizeFileTagList,
     normalizeTagName,
@@ -9248,6 +9259,9 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
     removeTagFromContent,
     createTagsContextSubmenu,
     renderTagsContextSubmenu,
+    normalizeEditorContent,
+    renderEditorSyntaxHighlights,
+    updateEditorLineNumbers,
     renderMarkdown,
     openGraphNodeFileInPermanentTab,
     openSidebarFileInPermanentTab,
@@ -9266,9 +9280,16 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
     exportPdfContent,
     CONTEXT_MENU_ACTIONS,
     copyToClipboard,
+    showCopiedMessage,
     refreshFolderTagCounts,
+    updateFolderTreeNodeTagsForEntry,
+    updateSaveCurrentFileButtons,
+    renderFilteredFolderTree,
+    renderLinkAutocomplete,
+    renderTabBar,
     renameSidebarNodeOnDisk,
     get copyShareUrlFromText() { return app.actions.copyShareUrlFromText; },
+    get markdownEditor() { return markdownEditor; },
     deleteTag
   });
   const renderGraphView = graphRenderer.renderGraphView;

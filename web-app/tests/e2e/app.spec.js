@@ -107,8 +107,20 @@ const browserLibraryStub = `
       inflate: function (bytes) { return bytes; }
     };
     window.jsyaml = {
-      load: function () { return {}; },
-      dump: function () { return ""; }
+      load: function (yaml) {
+        var data = {};
+        String(yaml || "").split(/\\r?\\n/).forEach(function (line) {
+          var inlineTags = line.match(/^tags:\\s*\\[([^\\]]*)\\]\\s*$/);
+          if (inlineTags) {
+            data.tags = inlineTags[1].split(",").map(function (tag) { return tag.trim(); }).filter(Boolean);
+          }
+        });
+        return data;
+      },
+      dump: function (data) {
+        var tags = Array.isArray(data && data.tags) ? data.tags : [];
+        return "tags: [" + tags.join(", ") + "]\\n";
+      }
     };
     window.saveAs = function () {};
     window.html2pdf = function () { return { set: function () { return this; }, from: function () { return this; }, save: function () { return Promise.resolve(); } }; };
@@ -551,7 +563,8 @@ test("suggests and accepts known tags while typing", async ({ page }) => {
   await expect(editor).toHaveValue("#alpha");
 });
 
-test("saved graph remains interactive and filters only graph snapshot tags", async ({ page }) => {
+test("saved graph remains interactive and filters only graph snapshot tags", async ({ page, context }) => {
+  await context.grantPermissions(["clipboard-read", "clipboard-write"]);
   await page.addInitScript(() => {
     const graphTab = {
       id: "graph_e2e",
@@ -610,6 +623,7 @@ test("saved graph remains interactive and filters only graph snapshot tags", asy
 
   const tagOptions = await page.locator("#graph-selected-tag-filter option").allTextContents();
   expect(tagOptions).toEqual(["All files", "#defined"]);
+  await expect(page.locator("#tag-management-list .tag-management-list-item")).toHaveText(["#defined1"]);
 
   await page.locator(".graph-node").first().dispatchEvent("contextmenu", {
     bubbles: true,
@@ -623,6 +637,7 @@ test("saved graph remains interactive and filters only graph snapshot tags", asy
   await expect(graphMenu).toBeVisible();
   await expect(graphMenu).toContainText("Turn magnetic forces off");
   await expect(graphMenu).toContainText("Open in a new tab");
+  await expect(graphMenu.locator(".tags-context-menu-item")).toHaveText(["#defined"]);
 
   await graphMenu.getByText("Turn magnetic forces off").click();
   await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem("markdownViewerGlobalState")).graphMagneticEnabled)).toBe(false);
@@ -635,6 +650,137 @@ test("saved graph remains interactive and filters only graph snapshot tags", asy
     clientY: 260
   });
   await expect(page.locator(".graph-tab-render .graph-context-menu:not(.hidden)")).toContainText("Turn magnetic forces on");
+
+  await page.locator(".graph-node").first().dispatchEvent("contextmenu", {
+    bubbles: true,
+    cancelable: true,
+    button: 2,
+    clientX: 220,
+    clientY: 220
+  });
+  await page.locator(".graph-context-menu-submenu", { hasText: "Copy" }).hover();
+  await page.locator(".graph-context-menu-item", { hasText: "Copy path" }).click();
+  await expect.poll(async () => page.evaluate(() => navigator.clipboard.readText())).toBe("alpha.md");
+
+  await page.locator(".graph-node").first().dispatchEvent("contextmenu", {
+    bubbles: true,
+    cancelable: true,
+    button: 2,
+    clientX: 220,
+    clientY: 220
+  });
+  await page.locator(".graph-context-menu-submenu", { hasText: "Copy" }).hover();
+  await page.locator(".graph-context-menu-item", { hasText: "Copy content" }).click();
+  await expect.poll(async () => page.evaluate(() => navigator.clipboard.readText())).toContain("# Alpha");
+});
+
+test("desktop graph context menu can update file tags", async ({ page }) => {
+  await page.addInitScript(() => {
+    window.NL_VERSION = "test";
+    window.NL_OS = "Windows";
+    window.__alerts = [];
+    window.__writes = [];
+    window.__moves = [];
+    window.alert = (message) => window.__alerts.push(String(message));
+    window.Neutralino = {
+      filesystem: {
+        readFile: async (path) => path.endsWith("alpha.md") ? "---\ntags: [defined]\n---\n# Alpha" : "---\ntags: [other]\n---\n# Beta",
+        writeFile: async (path, content) => {
+          window.__writes.push({ path, content });
+        },
+        move: async (oldPath, newPath) => {
+          window.__moves.push({ oldPath, newPath });
+        }
+      },
+      clipboard: { writeText: async () => {} },
+      os: { open: async () => {}, execCommand: async () => {} }
+    };
+    const graphTab = {
+      id: "desktop_graph_e2e",
+      title: "Desktop Graph E2E",
+      content: "",
+      scrollPos: 0,
+      viewMode: "preview",
+      createdAt: Date.now(),
+      isTemporary: false,
+      type: "graph",
+      folderName: "Desktop Graph E2E",
+      graphViewConfig: {
+        showTags: true,
+        hiddenTagIds: [],
+        hiddenNodeIds: [],
+        selectedTagIds: [],
+        groups: [],
+        searchQuery: "",
+        showArrows: true,
+        textFadeThreshold: 0.35,
+        nodeSize: 0.8,
+        linkThickness: 1,
+        centerForce: 1,
+        repelForce: 650,
+        linkForce: 0.4,
+        linkDistance: 170
+      },
+      graphSnapshot: {
+        version: 1,
+        folderName: "Desktop Graph E2E",
+        createdAt: Date.now(),
+        nodes: [
+          { id: "alpha.md", label: "alpha.md", fullPath: "C:/vault/alpha.md", type: "file", status: "current", tags: ["defined"] },
+          { id: "beta.md", label: "beta.md", fullPath: "C:/vault/beta.md", type: "file", status: "current", tags: ["other"] },
+          { id: "tag:defined", label: "#defined", type: "tag", status: "current", tag: "defined" },
+          { id: "tag:other", label: "#other", type: "tag", status: "current", tag: "other" }
+        ],
+        links: [
+          { source: "alpha.md", target: "tag:defined", type: "tag", status: "current" },
+          { source: "beta.md", target: "tag:other", type: "tag", status: "current" }
+        ],
+        files: [
+          { id: "alpha.md", path: "alpha.md", name: "alpha.md", content: "---\ntags: [defined]\n---\n# Alpha", fullPath: "C:/vault/alpha.md", status: "current", tags: ["defined"] },
+          { id: "beta.md", path: "beta.md", name: "beta.md", content: "---\ntags: [other]\n---\n# Beta", fullPath: "C:/vault/beta.md", status: "current", tags: ["other"] }
+        ]
+      }
+    };
+    localStorage.setItem("markdownViewerGlobalState", JSON.stringify({ knownTags: ["ghost"], graphMagneticEnabled: true }));
+    localStorage.setItem("markdownViewerTabs", JSON.stringify([graphTab]));
+    localStorage.setItem("markdownViewerActiveTab", graphTab.id);
+  });
+
+  await page.goto("/");
+  await expect(page.locator(".graph-node")).toHaveCount(4);
+
+  await page.locator(".graph-node").first().dispatchEvent("contextmenu", {
+    bubbles: true,
+    cancelable: true,
+    button: 2,
+    clientX: 220,
+    clientY: 220
+  });
+
+  const tagItems = page.locator(".graph-tab-render .tags-context-menu-item");
+  await expect(tagItems).toHaveText(["#defined", "#other"]);
+  await page.locator(".graph-context-menu-submenu", { hasText: "Tags" }).hover();
+  await tagItems.filter({ hasText: "#other" }).evaluate((button) => button.click());
+
+  await expect.poll(() => page.evaluate(() => window.__alerts)).toEqual([]);
+  await expect.poll(() => page.evaluate(() => window.__writes.length)).toBe(1);
+  await expect.poll(() => page.evaluate(() => window.__writes[0].content)).toContain("other");
+
+  await page.locator(".graph-node").first().dispatchEvent("contextmenu", {
+    bubbles: true,
+    cancelable: true,
+    button: 2,
+    clientX: 220,
+    clientY: 220
+  });
+  await page.locator(".graph-tab-render .graph-context-menu:not(.hidden) .graph-context-menu-item", { hasText: "Rename" }).click();
+  await page.locator("#rename-modal-input").fill("renamed.md");
+  await page.locator("#rename-modal-confirm").click();
+
+  await expect.poll(() => page.evaluate(() => window.__moves)).toEqual([
+    { oldPath: "C:/vault/alpha.md", newPath: "C:/vault/renamed.md" }
+  ]);
+  await expect.poll(() => page.evaluate(() => window.__alerts)).toEqual([]);
 });
 
 test("renders recent files in the action menu", async ({ page }) => {
@@ -668,6 +814,63 @@ test("marks edited documents as unsaved", async ({ page }) => {
 
   await expect(page.locator("#tab-list .tab-item.active")).toHaveClass(/unsaved/);
   await expect.poll(() => page.evaluate(() => window.markdownViewerHasUnsavedChanges())).toBe(true);
+});
+
+test("close all leaves the workspace without replacement tabs", async ({ page }) => {
+  const seedTabs = () => {
+    const tabs = [
+      {
+        id: "tab_a",
+        title: "A",
+        content: "# A",
+        savedContent: "# A",
+        scrollPos: 0,
+        viewMode: "split",
+        createdAt: Date.now(),
+        isTemporary: false,
+        type: "markdown"
+      },
+      {
+        id: "tab_b",
+        title: "B",
+        content: "# B",
+        savedContent: "# B",
+        scrollPos: 0,
+        viewMode: "split",
+        createdAt: Date.now(),
+        isTemporary: false,
+        type: "markdown"
+      }
+    ];
+    localStorage.setItem("markdownViewerTabs", JSON.stringify(tabs));
+    localStorage.setItem("markdownViewerActiveTab", "tab_a");
+  };
+
+  await page.addInitScript(seedTabs);
+  await openApp(page);
+
+  await page.locator("#tab-reset-btn").click();
+  await page.locator("#reset-modal-confirm").click();
+  await expect(page.locator("#tab-list .tab-item")).toHaveCount(0);
+  await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem("markdownViewerTabs")))).toEqual([]);
+  await expect.poll(() => page.evaluate(() => localStorage.getItem("markdownViewerActiveTab"))).toBe(null);
+
+  await page.evaluate(seedTabs);
+  await page.reload();
+  await expect(page.locator("#tab-list .tab-item")).toHaveCount(2);
+
+  await page.locator("#tab-list .tab-item").first().dispatchEvent("contextmenu", {
+    bubbles: true,
+    cancelable: true,
+    button: 2,
+    clientX: 120,
+    clientY: 80
+  });
+  await page.locator(".tab-context-menu-action[data-action='close-all']").evaluate((button) => button.click());
+
+  await expect(page.locator("#tab-list .tab-item")).toHaveCount(0);
+  await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem("markdownViewerTabs")))).toEqual([]);
+  await expect.poll(() => page.evaluate(() => localStorage.getItem("markdownViewerActiveTab"))).toBe(null);
 });
 
 test("copies markdown content to the clipboard", async ({ page, context }) => {
