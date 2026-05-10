@@ -991,7 +991,21 @@
     if (!title) title = nextUntitledTitle();
     const tab = createTab(content, title);
     tabs.push(tab);
-    switchTab(tab.id);
+    const wasEmptyWorkspace = !activeTabId;
+    if (wasEmptyWorkspace) {
+      activeTabId = tab.id;
+      saveActiveTabId(activeTabId);
+      setGraphViewMode(false);
+      setNoOpenTabsMode(false);
+      markdownEditor.value = tab.content;
+      restoreViewMode(tab.viewMode);
+      renderEditorSyntaxHighlights();
+      renderMarkdown();
+      saveTabsToStorage(tabs);
+      renderTabBar(tabs, activeTabId);
+    } else {
+      switchTab(tab.id);
+    }
     markdownEditor.focus();
   }
 

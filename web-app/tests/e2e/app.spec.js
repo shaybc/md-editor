@@ -1134,6 +1134,22 @@ test("closing the last tab leaves the workspace empty", async ({ page }) => {
   await expect(page.locator("#markdown-editor")).not.toBeVisible();
 });
 
+test("new file from an empty workspace shows the editor immediately", async ({ page }) => {
+  await openApp(page);
+
+  await page.locator("#tab-reset-btn").click();
+  await page.locator("#reset-modal-confirm").click();
+  await expect(page.locator("#tab-list .tab-item")).toHaveCount(0);
+  await expect(page.locator(".content-container")).toHaveClass(/no-open-tabs/);
+
+  await page.locator(".new-document-button").first().click();
+  await expect(page.locator("#tab-list .tab-item")).toHaveCount(1);
+  await expect(page.locator(".content-container")).not.toHaveClass(/no-open-tabs/);
+  await expect(page.locator("#markdown-editor")).toBeVisible();
+  await expect(page.locator("#markdown-editor")).toBeEditable();
+  await expect(page.locator("#markdown-editor")).toBeFocused();
+});
+
 test("renaming folder-backed files updates open tab titles", async ({ page }) => {
   await openApp(page);
 
