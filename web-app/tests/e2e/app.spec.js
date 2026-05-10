@@ -1048,6 +1048,77 @@ test("opens files from a desktop folder tree", async ({ page }) => {
   await expect(page.locator("#markdown-editor")).toHaveValue(/Desktop Note/);
 });
 
+test("keeps open folder graph views in sync with saved and deleted files", async ({ page }) => {
+  await page.addInitScript(() => {
+    window.NL_VERSION = "5.0.0";
+    window.NL_OS = "Windows";
+    window.__alerts = [];
+    window.alert = (message) => window.__alerts.push(String(message));
+    const files = new Map([["alpha.md", "# Alpha"]]);
+    const getName = (path) => String(path || "").split(/[\\/]/).pop();
+    window.Neutralino = {
+      os: {
+        showFolderDialog: async () => "C:/vault",
+        showSaveDialog: async () => "C:/vault/beta.md",
+        open: async () => {},
+        execCommand: async () => {}
+      },
+      filesystem: {
+        readDirectory: async (path) => {
+          if (path === "C:/vault") {
+            return Array.from(files.keys()).map((entry) => ({ entry, type: "FILE" }));
+          }
+          return [];
+        },
+        getStats: async () => ({ modifiedAt: 1, createdAt: 1 }),
+        readFile: async (path) => {
+          const name = getName(path);
+          if (files.has(name)) return files.get(name);
+          throw new Error("Unexpected read path: " + path);
+        },
+        writeFile: async (path, content) => {
+          files.set(getName(path), String(content));
+        },
+        remove: async (path) => {
+          files.delete(getName(path));
+        }
+      },
+      clipboard: { writeText: async () => {} }
+    };
+    window.confirm = () => true;
+  });
+  await openApp(page);
+
+  await page.locator("#import-from-folder").click();
+  await page.locator(".open-graph-view").first().click();
+  await expect(page.locator(".graph-node-file")).toHaveCount(1);
+  await expect(page.locator(".graph-label-file")).toContainText("alpha");
+
+  await page.locator(".tab-new-btn").click();
+  await page.locator(".view-mode-btn[data-mode='split']").click();
+  await page.locator("#markdown-editor").fill("# Beta");
+  await page.keyboard.press("Control+S");
+  await expect(page.locator("#tab-list .tab-item", { hasText: "beta" })).toHaveCount(1);
+
+  await page.locator("#tab-list .tab-item", { has: page.locator(".bi-diagram-3") }).click();
+  await expect(page.locator(".graph-node-file")).toHaveCount(2);
+  await expect(page.locator(".graph-label-file", { hasText: "beta" })).toHaveCount(1);
+
+  await page.locator(".folder-tree-file", { hasText: "alpha.md" }).dispatchEvent("contextmenu", {
+    bubbles: true,
+    cancelable: true,
+    button: 2,
+    clientX: 90,
+    clientY: 180
+  });
+  await page.locator(".sidebar-file-context-menu:not(.hidden) .graph-context-menu-item", { hasText: "Delete file" }).evaluate((button) => button.click());
+
+  await expect(page.locator(".graph-node-file")).toHaveCount(1);
+  await expect(page.locator(".graph-label-file", { hasText: "beta" })).toHaveCount(1);
+  await expect(page.locator(".graph-label-file", { hasText: "alpha" })).toHaveCount(0);
+  await expect.poll(() => page.evaluate(() => window.__alerts)).toEqual([]);
+});
+
 test("folder and graph Open in a new tab focus existing file tabs", async ({ page }) => {
   await page.addInitScript(() => {
     localStorage.setItem("markdownViewerTabs", JSON.stringify([{
@@ -1131,6 +1202,9 @@ test("closing the last tab leaves the workspace empty", async ({ page }) => {
   await page.locator("#tab-list .tab-item .tab-close-btn").click();
   await expect(page.locator("#tab-list .tab-item")).toHaveCount(0);
   await expect(page.locator(".content-container")).toHaveClass(/no-open-tabs/);
+  await expect(page.locator("#tab-bar")).toBeVisible();
+  await expect(page.locator(".tab-new-btn")).toBeVisible();
+  await expect(page.locator("#tab-reset-btn")).toBeVisible();
   await expect(page.locator("#markdown-editor")).not.toBeVisible();
 });
 
@@ -1141,6 +1215,9 @@ test("new file from an empty workspace shows the editor immediately", async ({ p
   await page.locator("#reset-modal-confirm").click();
   await expect(page.locator("#tab-list .tab-item")).toHaveCount(0);
   await expect(page.locator(".content-container")).toHaveClass(/no-open-tabs/);
+  await expect(page.locator("#tab-bar")).toBeVisible();
+  await expect(page.locator(".tab-new-btn")).toBeVisible();
+  await expect(page.locator("#tab-reset-btn")).toBeVisible();
 
   await page.locator(".new-document-button").first().click();
   await expect(page.locator("#tab-list .tab-item")).toHaveCount(1);

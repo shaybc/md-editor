@@ -203,7 +203,7 @@ body {
   overflow: hidden;
 }
 
-.content-container.no-open-tabs .editor-workspace {
+.content-container.no-open-tabs .editor-content-row {
   display: none;
 }
 

@@ -1673,6 +1673,7 @@ Markdown content is processed client-side in your browser and sanitized before p
       const nodes = await listMarkdownTreeNeutralino(activeFolderPath);
       folderMarkdownFiles = await collectMarkdownFilesFromTreeNeutralino(nodes);
       renderFolderTree(nodes);
+      await refreshOpenFolderGraphTabsFromFolderFiles();
       return true;
     }
 
@@ -1681,11 +1682,40 @@ Markdown content is processed client-side in your browser and sanitized before p
       folderMarkdownFiles = await collectMarkdownFilesFromTree(nodes);
       renderFolderTree(nodes);
       rememberRecentFolder({ name: activeFolderName, label: activeFolderName });
+      await refreshOpenFolderGraphTabsFromFolderFiles();
       return true;
     }
 
     return false;
   }
+
+  const refreshOpenFolderGraphTabsFromFolderFiles = async function() {
+    const graphTabs = tabs.filter((tab) => (
+      tab
+      && tab.type === "graph"
+      && !isFileBackedGraphTab(tab)
+      && !isKeepSavedGraphMode(tab)
+      && !tab.graphComparisonSnapshot
+    ));
+    if (!graphTabs.length) return false;
+
+    let changed = false;
+    for (const tab of graphTabs) {
+      const currentSnapshot = tab.graphSnapshot || null;
+      const nextSnapshot = await createGraphSnapshot(folderMarkdownFiles || [], currentSnapshot?.folderName || tab.folderName || tab.title);
+      if (currentSnapshot?.createdAt) nextSnapshot.createdAt = currentSnapshot.createdAt;
+      tab.graphSnapshot = nextSnapshot;
+      syncGraphTabDocument(tab);
+      graphRenderCache.delete(tab.id);
+      changed = true;
+    }
+
+    if (!changed) return false;
+    saveTabsToStorage(tabs);
+    updateGraphTagToolbar(getActiveGraphTab(), getActiveGraphTab()?.graphSnapshot || null);
+    if (getActiveGraphTab()) renderGraphView();
+    return true;
+  };
 
   async function refreshOpenFolderTreeAfterFileDelete(filePath) {
     if (!isFolderOpen || !filePath) return false;
