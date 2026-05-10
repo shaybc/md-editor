@@ -24,7 +24,7 @@
   }
 
   if (tagManagementSearch) {
-    tagManagementSearch.addEventListener("input", renderTagManagementList);
+    tagManagementSearch.addEventListener("input", () => renderTagManagementList());
     tagManagementSearch.addEventListener("keydown", (event) => {
       if (event.key !== "Enter") return;
       event.preventDefault();
