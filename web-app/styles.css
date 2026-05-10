@@ -3490,6 +3490,15 @@ a:focus {
   border-color: var(--border-color);
 }
 
+.folder-tree-tool-button.tag-filter-active:not(:disabled),
+.folder-tree-tool-button.tag-filter-active:not(:disabled) i {
+  color: var(--accent-color);
+}
+
+.folder-tree-tool-button.tag-filter-active:not(:disabled) {
+  border-color: var(--accent-color);
+}
+
 .folder-tree-tool-button:disabled,
 .folder-tree-tool-button[aria-disabled="true"] {
   color: var(--disabled-text-color);

@@ -47,6 +47,7 @@
   const folderTreeFilterInput = document.getElementById("folder-tree-filter-input");
   const createTagButton = document.getElementById("create-tag-button");
   const deleteTagButton = document.getElementById("delete-tag-button");
+  const clearTagFilterButton = document.getElementById("clear-tag-filter-button");
   const tagManagementSearch = document.getElementById("tag-management-search");
   const tagManagementList = document.getElementById("tag-management-list");
   const folderTreeFilterToggleButtons = document.querySelectorAll(".toggle-folder-tree-filter");
@@ -558,6 +559,7 @@
     get toggleAutoSelectFileButtons() { return toggleAutoSelectFileButtons; },
     get createTagButton() { return createTagButton; },
     get deleteTagButton() { return deleteTagButton; },
+    get clearTagFilterButton() { return clearTagFilterButton; },
     get tagManagementSearch() { return tagManagementSearch; },
     get isFolderOpen() { return isFolderOpen; },
     get activeFolderName() { return activeFolderName; },

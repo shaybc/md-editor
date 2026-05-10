@@ -1403,6 +1403,14 @@ test("clicking a tag in the tag dialog filters the folder tree", async ({ page }
   await expect(taggedFile).toBeVisible();
   await expect(untaggedFile).toHaveCount(0);
   await expect(tagButton).toHaveAttribute("aria-selected", "true");
+  await expect(page.locator(".tag-management-menu-button")).toHaveClass(/tag-filter-active/);
+  await expect(page.locator(".tag-management-menu-button")).toHaveCSS("color", "rgb(3, 102, 214)");
+
+  await page.locator("#clear-tag-filter-button").evaluate((button) => button.click());
+  await expect(taggedFile).toBeVisible();
+  await expect(untaggedFile).toBeVisible();
+  await expect(page.locator(".tag-management-menu-button")).not.toHaveClass(/tag-filter-active/);
+  await expect(page.locator("#clear-tag-filter-button")).toBeDisabled();
 });
 
 test("keeps open folder graph views in sync with saved and deleted files", async ({ page }) => {

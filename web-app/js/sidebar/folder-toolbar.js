@@ -23,6 +23,12 @@
     });
   }
 
+  if (clearTagFilterButton) {
+    clearTagFilterButton.addEventListener("click", () => {
+      clearFolderTreeTagFilters();
+    });
+  }
+
   if (tagManagementSearch) {
     tagManagementSearch.addEventListener("input", () => renderTagManagementList());
     tagManagementSearch.addEventListener("keydown", (event) => {
@@ -173,6 +179,15 @@
     }
     renderTagManagementList();
     renderFilteredFolderTree();
+    updateTagManagementMenuButtons();
+  }
+
+  function clearFolderTreeTagFilters() {
+    if (!selectedFolderTreeTags.size) return;
+    selectedFolderTreeTags = new Set();
+    renderTagManagementList();
+    renderFilteredFolderTree();
+    updateTagManagementMenuButtons();
   }
 
   function getFilteredFolderTreeNodes(nodes, filterText) {
@@ -305,18 +320,27 @@
 
   function updateTagManagementMenuButtons() {
     const hasFolder = !!isFolderOpen;
-    const title = hasFolder ? "Manage tags" : "Open a folder to manage tags";
+    const hasTagFilter = hasFolder && selectedFolderTreeTags.size > 0;
+    const selectedTagList = Array.from(selectedFolderTreeTags).map((tag) => `#${tag}`).join(", ");
+    const title = hasTagFilter ? `Tag filter active: ${selectedTagList}` : (hasFolder ? "Manage tags" : "Open a folder to manage tags");
     getTagManagementMenuButtons().forEach(function(button) {
       button.disabled = !hasFolder;
+      button.classList.toggle("tag-filter-active", hasTagFilter);
       button.title = title;
-      button.setAttribute("aria-label", title);
+      button.setAttribute("aria-label", hasTagFilter ? `Manage tags. ${title}` : title);
       button.setAttribute("aria-disabled", hasFolder ? "false" : "true");
+      button.setAttribute("aria-pressed", hasTagFilter ? "true" : "false");
     });
     [createTagButton, deleteTagButton, tagManagementSearch].forEach(function(control) {
       if (!control) return;
       control.disabled = !hasFolder;
       control.setAttribute("aria-disabled", hasFolder ? "false" : "true");
     });
+    if (clearTagFilterButton) {
+      clearTagFilterButton.disabled = !hasTagFilter;
+      clearTagFilterButton.title = hasTagFilter ? `Clear tag filter: ${selectedTagList}` : "No tag filter is active";
+      clearTagFilterButton.setAttribute("aria-disabled", hasTagFilter ? "false" : "true");
+    }
   }
 
   function setShowUnsupportedFolderFiles(enabled) {
@@ -484,6 +508,7 @@
       getFolderTreeNodeTags,
       getTagFilteredFolderTreeNodes,
       toggleFolderTreeTagFilter,
+      clearFolderTreeTagFilters,
       getFilteredFolderTreeNodes,
       renderFilteredFolderTree,
       updateFolderTreeFilterControls,
