@@ -1453,6 +1453,13 @@ body {
   white-space: nowrap;
 }
 
+.graph-group-switch-label {
+  display: inline-flex;
+  flex: 0 0 auto;
+  margin: 0;
+  cursor: pointer;
+}
+
 .graph-group-query-input {
   min-width: 0;
   width: 100%;

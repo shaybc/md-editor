@@ -965,8 +965,24 @@ test("graph group hide button removes and restores matching points", async ({ pa
   await page.locator("#graph-filter-panel-toggle").click();
   await page.locator(".graph-collapsible-section", { hasText: "Groups" }).locator("summary").click();
   const hideButton = page.locator(".graph-group-row").first().locator(".graph-group-hide-button");
+  const switchLabel = page.locator(".graph-group-row").first().locator(".graph-group-switch-label");
   await expect(hideButton).toHaveAttribute("aria-pressed", "false");
   await expect(hideButton.locator("i")).toHaveClass(/bi-eye-slash/);
+
+  await switchLabel.click();
+  await expect.poll(() => page.evaluate(() => {
+    const alpha = Array.from(document.querySelectorAll(".graph-node"))
+      .find((node) => node.__data__?.id === "alpha.md");
+    const tabs = JSON.parse(localStorage.getItem("markdownViewerTabs") || "[]");
+    return { enabled: tabs[0]?.graphViewConfig?.groups?.[0]?.enabled, groupId: alpha?.__data__?.groupId || "" };
+  })).toEqual({ enabled: false, groupId: "" });
+  await switchLabel.click();
+  await expect.poll(() => page.evaluate(() => {
+    const alpha = Array.from(document.querySelectorAll(".graph-node"))
+      .find((node) => node.__data__?.id === "alpha.md");
+    const tabs = JSON.parse(localStorage.getItem("markdownViewerTabs") || "[]");
+    return { enabled: tabs[0]?.graphViewConfig?.groups?.[0]?.enabled, groupId: alpha?.__data__?.groupId || "" };
+  })).toEqual({ enabled: true, groupId: "shared_group" });
 
   await hideButton.click();
   await expect(hideButton).toHaveAttribute("aria-pressed", "true");

@@ -515,9 +515,8 @@
         reorderGraphGroup(sourceGroupId, index);
       });
 
-      const enabledLabel = document.createElement("label");
-      enabledLabel.className = "graph-group-enabled graph-toggle-row";
-      enabledLabel.title = "Enable or disable this graph group";
+      const enabledRow = document.createElement("div");
+      enabledRow.className = "graph-group-enabled graph-toggle-row";
 
       const moveHandle = document.createElement("button");
       moveHandle.className = "tool-button graph-group-drag-handle";
@@ -560,6 +559,10 @@
       const enabledSwitch = document.createElement("span");
       enabledSwitch.className = "graph-switch";
       enabledSwitch.setAttribute("aria-hidden", "true");
+      const enabledLabel = document.createElement("label");
+      enabledLabel.className = "graph-group-switch-label";
+      enabledLabel.title = "Enable or disable this graph group";
+      enabledLabel.append(enabledInput, enabledSwitch);
 
       const hideGroupButton = document.createElement("button");
       hideGroupButton.className = "tool-button graph-group-hide-button";
@@ -576,7 +579,7 @@
         updateGraphGroup(group.id, { hidden: group.hidden !== true });
       });
 
-      enabledLabel.append(moveHandle, enabledText, hideGroupButton, enabledInput, enabledSwitch);
+      enabledRow.append(moveHandle, enabledText, hideGroupButton, enabledLabel);
 
       const queryInput = document.createElement("input");
       queryInput.className = "graph-group-query-input";
@@ -628,7 +631,7 @@
       deleteButton.innerHTML = '<i class="bi bi-trash"></i>';
       deleteButton.addEventListener("click", () => deleteGraphGroup(group.id));
 
-      row.append(enabledLabel, queryInput, colorInput, deleteButton);
+      row.append(enabledRow, queryInput, colorInput, deleteButton);
       attachGraphGroupQuerySuggestions(row, queryInput, group, tab);
       graphGroupsList.appendChild(row);
     });
