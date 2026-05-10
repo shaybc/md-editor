@@ -1251,7 +1251,7 @@
     });
     activeTabId = loadActiveTabId();
     if (tabs.length === 0) {
-      const tab = createTab(sampleMarkdown, 'Welcome to ShayBC Markdown-Viewer');
+      const tab = createTab(sampleMarkdown, 'Welcome to Markdown Viewer');
       tabs.push(tab);
       activeTabId = tab.id;
       saveTabsToStorage(tabs);

@@ -462,7 +462,7 @@ test("opens help and about from the action menu", async ({ page }) => {
 
   const aboutModal = page.locator("#about-modal");
   await expect(aboutModal).toBeVisible();
-  await expect(aboutModal.getByText("ShayBC Markdown-Viewer")).toBeVisible();
+  await expect(aboutModal.getByText("Markdown Viewer", { exact: true })).toBeVisible();
   await expect(aboutModal.getByText("1.0.0")).toBeVisible();
   await expect(aboutModal.getByText("May 9, 2026")).toBeVisible();
   await expect(aboutModal.locator("#about-app-author")).toHaveText("ShayBC");
