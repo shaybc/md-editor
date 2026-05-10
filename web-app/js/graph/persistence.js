@@ -765,9 +765,10 @@
 
   async function promptForStaleSavedGraphIfNeeded(tab, options = {}) {
     const shouldPromptWhileKeepingSavedGraph = options.force === true;
+    const shouldPromptForLegacyExport = options.legacyExport === true;
     if (!tab?.graphSnapshot || !folderMarkdownFiles.length || (!shouldPromptWhileKeepingSavedGraph && isKeepSavedGraphMode(tab))) return;
     const graphDocumentType = tab.graphDocument?.documentType || inferLegacyGraphDocumentType(tab.graphSnapshot);
-    if (graphDocumentType !== GRAPH_DOCUMENT_TYPE_VIEW) return;
+    if (graphDocumentType !== GRAPH_DOCUMENT_TYPE_VIEW && !(shouldPromptForLegacyExport && graphDocumentType === GRAPH_DOCUMENT_TYPE_EXPORT)) return;
 
     try {
       const currentSnapshot = await createGraphSnapshot(folderMarkdownFiles.slice(), activeFolderName || tab.folderName || tab.title);
