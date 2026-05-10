@@ -1269,6 +1269,37 @@ test("saves folder-backed edits with Ctrl+S and the Save changes menu item", asy
   await expect(page.locator("#tab-list .tab-item.active")).not.toHaveClass(/unsaved/);
 });
 
+test("opens preview links relative to an opened file when no folder is open", async ({ page }) => {
+  await page.addInitScript(() => {
+    window.NL_VERSION = "5.0.0";
+    window.__alertMessages = [];
+    window.alert = (message) => window.__alertMessages.push(String(message));
+    window.Neutralino = {
+      os: {
+        showOpenDialog: async () => "C:/vault/index.md",
+        open: async () => {}
+      },
+      filesystem: {
+        readFile: async (path) => {
+          const normalized = String(path || "").replace(/\\/g, "/");
+          if (normalized === "C:/vault/index.md") return "# Index\n\n[[linked|Open linked]]";
+          if (normalized === "C:/vault/linked.md") return "# Linked\n\nOpened from relative path.";
+          throw new Error("Unexpected read path: " + path);
+        }
+      }
+    };
+  });
+  await openApp(page);
+
+  await page.locator("#import-from-file").click();
+  await expect(page.locator("#markdown-preview").getByRole("heading", { name: "Index" })).toBeVisible();
+  await page.locator("#markdown-preview a", { hasText: "Open linked" }).click();
+
+  await expect(page.locator("#tab-list .tab-item.active")).toContainText("linked");
+  await expect(page.locator("#markdown-preview").getByRole("heading", { name: "Linked" })).toBeVisible();
+  await expect.poll(() => page.evaluate(() => window.__alertMessages)).toEqual([]);
+});
+
 test("opens files from the folder tree without showing an error", async ({ page }) => {
   await openApp(page);
 

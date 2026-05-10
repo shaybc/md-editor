@@ -169,6 +169,10 @@
     return activeTab && activeTab.sourceFilePath ? activeTab.sourceFilePath : "";
   }
 
+  function canReadLinkedFilesystemPath() {
+    return typeof Neutralino !== "undefined" && !!Neutralino.filesystem?.readFile;
+  }
+
   function getFolderEntryPathCandidates(entry) {
     const candidates = [
       entry && entry.path,
@@ -230,7 +234,7 @@
       };
     }
 
-    if (typeof NL_VERSION !== "undefined") {
+    if (canReadLinkedFilesystemPath()) {
       if (isAbsoluteFilesystemPath(resolvedPath)) {
         return {
           name: getFileName(resolvedPath),
@@ -452,6 +456,7 @@
       api.normalizeFilesystemLinkPath = normalizeFilesystemLinkPath;
       api.resolveMarkdownLinkPath = resolveMarkdownLinkPath;
       api.getActiveMarkdownSourcePath = getActiveMarkdownSourcePath;
+      api.canReadLinkedFilesystemPath = canReadLinkedFilesystemPath;
       api.getFolderEntryPathCandidates = getFolderEntryPathCandidates;
       api.findOpenFolderMarkdownEntry = findOpenFolderMarkdownEntry;
       api.getMarkdownLinkSourceFile = getMarkdownLinkSourceFile;
