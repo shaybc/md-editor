@@ -2065,6 +2065,7 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
 
   const CONTEXT_MENU_ACTIONS = Object.freeze({
     openInNewTab: { label: "Open in a new tab", icon: "bi bi-box-arrow-up-right" },
+    openAll: { label: "Open all", icon: "bi bi-folder2-open" },
     openWithDefaultApp: { label: "Open with default app", icon: "bi bi-window" },
     revealInFileExplorer: { label: "Reveal in file explorer", icon: "bi bi-folder2-open" },
     revealInTreeView: { label: "Reveal in TreeView", icon: "bi bi-list-ul" },

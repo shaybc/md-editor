@@ -583,6 +583,11 @@
       "Open this Markdown file in a dedicated editor tab without changing the graph tab."
     );
     openFileBtn.classList.add("hidden");
+    const openAllBtn = createContextMenuButton(
+      CONTEXT_MENU_ACTIONS.openAll.label,
+      CONTEXT_MENU_ACTIONS.openAll.icon,
+      "Open every visible file point in editor tabs."
+    );
     const openDefaultAppBtn = createContextMenuButton(
       CONTEXT_MENU_ACTIONS.openWithDefaultApp.label,
       CONTEXT_MENU_ACTIONS.openWithDefaultApp.icon,
@@ -751,6 +756,7 @@
 
     contextMenu.appendChild(contextMenuTitle);
     contextMenu.appendChild(contextMenuTitleSeparator);
+    contextMenu.appendChild(openAllBtn);
     contextMenu.appendChild(openFileBtn);
     contextMenu.appendChild(openDefaultAppBtn);
     contextMenu.appendChild(revealFileBtn);
@@ -804,6 +810,11 @@
     const getNodeClipboardPath = (graphNode) => {
       const snapshotFile = getSnapshotFileForNode(graphNode);
       return snapshotFile?.fullPath || snapshotFile?.path || graphNode?.fullPath || graphNode?.label || graphNode?.id || "";
+    };
+
+    const getNodeEditorTitle = (graphNode) => {
+      const sourceName = getNodeFileName(graphNode?.id);
+      return String(sourceName || graphNode?.label || graphNode?.id || "document.md").replace(/\.(md|markdown)$/i, "") || "Untitled";
     };
 
     const getNodeClipboardTags = (graphNode) => {
@@ -973,6 +984,54 @@
 
     const copyNodeFileNameList = async (nodeIds) => {
       await copyGraphText(Array.from(new Set(nodeIds)).map(getNodeFileName).join("\n"));
+    };
+
+    const openGraphNodeFileFromCurrentRender = async (graphNode) => {
+      if (!graphNode || isTagNode(graphNode)) return null;
+      const snapshotFile = getSnapshotFileForNode(graphNode);
+      const folderEntry = getFolderMarkdownEntryForNode(graphNode);
+      const fileEntry = snapshotFile || folderEntry;
+      if (!fileEntry) throw new Error(`Unable to find ${graphNode.id} in this graph snapshot.`);
+      const sourcePath = fileEntry.fullPath || fileEntry.path || graphNode.fullPath || graphNode.id;
+      const sourceFile = {
+        name: fileEntry.name || getFileName(sourcePath || graphNode.label || "document.md"),
+        handle: fileEntry.handle || folderEntry?.handle || null,
+        path: sourcePath || null
+      };
+      const existingTab = findTabForSourceFile(sourceFile);
+      if (existingTab) {
+        switchTab(existingTab.id);
+        pinTemporaryTab(existingTab.id);
+        return existingTab;
+      }
+      const content = await readGraphNodeContent(graphNode);
+      return openSidebarFileInPermanentTab(normalizeEditorContent(content), getNodeEditorTitle(graphNode), sourceFile);
+    };
+
+    const getVisibleFileNodes = () => nodes.filter((graphNode) => !isTagNode(graphNode));
+
+    const openAllVisibleGraphFiles = async () => {
+      const fileNodes = getVisibleFileNodes();
+      if (!fileNodes.length) {
+        alert("There are no visible file points to open.");
+        return;
+      }
+      if (fileNodes.length > 20) {
+        const shouldContinue = window.confirm(`Open ${fileNodes.length} files in editor tabs?\n\nThis might slow down your computer or crash the app.`);
+        if (!shouldContinue) return;
+      }
+      const failedNodeLabels = [];
+      for (const graphNode of fileNodes) {
+        try {
+          await openGraphNodeFileFromCurrentRender(graphNode);
+        } catch (error) {
+          console.error("Failed to open graph file:", error);
+          failedNodeLabels.push(getNodeFileName(graphNode.id));
+        }
+      }
+      if (failedNodeLabels.length) {
+        alert(`Unable to open ${failedNodeLabels.length} file${failedNodeLabels.length === 1 ? "" : "s"}:\n${failedNodeLabels.join("\n")}`);
+      }
     };
 
     const hideGraphPoint = (nodeId) => {
@@ -1295,6 +1354,12 @@
       captureGraphLayout(activeTab, nodes, currentZoomTransform);
       markGraphTabAsChanged(activeTab);
       hideContextMenu();
+    });
+
+    openAllBtn.addEventListener("click", async (event) => {
+      event.stopPropagation();
+      hideContextMenu();
+      await openAllVisibleGraphFiles();
     });
 
     openFileBtn.addEventListener("click", async (event) => {

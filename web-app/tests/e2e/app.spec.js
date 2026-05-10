@@ -1077,6 +1077,143 @@ test("graph display can hide and show orphan points", async ({ page }) => {
   })).toBe(true);
 });
 
+test("graph context menu opens all visible file points", async ({ page }) => {
+  await page.addInitScript(() => {
+    const graphTab = {
+      id: "open_all_graph_e2e",
+      title: "Open All Graph E2E",
+      content: "",
+      scrollPos: 0,
+      viewMode: "preview",
+      createdAt: Date.now(),
+      isTemporary: false,
+      type: "graph",
+      folderName: "Open All Graph E2E",
+      graphViewConfig: {
+        showTags: true,
+        hiddenTagIds: [],
+        hiddenNodeIds: [],
+        selectedTagIds: [],
+        groups: [],
+        searchQuery: "",
+        showArrows: true,
+        showOrphans: true,
+        textFadeThreshold: 0.35,
+        nodeSize: 0.8,
+        linkThickness: 1,
+        centerForce: 1,
+        repelForce: 650,
+        linkForce: 0.4,
+        linkDistance: 170
+      },
+      graphSnapshot: {
+        version: 1,
+        folderName: "Open All Graph E2E",
+        createdAt: Date.now(),
+        nodes: [
+          { id: "alpha.md", label: "alpha.md", fullPath: "alpha.md", type: "file", status: "current", tags: ["doc"] },
+          { id: "beta.md", label: "beta.md", fullPath: "beta.md", type: "file", status: "current", tags: [] },
+          { id: "tag:doc", label: "#doc", type: "tag", status: "current", tag: "doc" }
+        ],
+        links: [
+          { source: "alpha.md", target: "beta.md", type: "link", status: "current" },
+          { source: "alpha.md", target: "tag:doc", type: "tag", status: "current" }
+        ],
+        files: [
+          { id: "alpha.md", path: "alpha.md", name: "alpha.md", content: "# Alpha", status: "current", tags: ["doc"] },
+          { id: "beta.md", path: "beta.md", name: "beta.md", content: "# Beta", status: "current", tags: [] }
+        ]
+      }
+    };
+    localStorage.setItem("markdownViewerTabs", JSON.stringify([graphTab]));
+    localStorage.setItem("markdownViewerActiveTab", graphTab.id);
+  });
+  await page.goto("/");
+  await expect(page.locator("#graph-view-canvas")).toBeVisible();
+  await expect(page.locator(".graph-node")).toHaveCount(3);
+
+  await page.locator(".graph-tab-render").click({ button: "right", position: { x: 60, y: 60 } });
+  await page.locator(".graph-context-menu:not(.hidden) .graph-context-menu-item", { hasText: "Open all" }).click();
+
+  await expect.poll(() => page.evaluate(() => {
+    const tabs = JSON.parse(localStorage.getItem("markdownViewerTabs") || "[]");
+    return tabs.map((tab) => ({ title: tab.title, type: tab.type || "file", content: tab.content }));
+  })).toEqual([
+    { title: "Open All Graph E2E", type: "graph", content: "" },
+    { title: "alpha", type: "markdown", content: "# Alpha" },
+    { title: "beta", type: "markdown", content: "# Beta" }
+  ]);
+});
+
+test("graph open all asks before opening more than twenty visible file points", async ({ page }) => {
+  await page.addInitScript(() => {
+    window.__confirms = [];
+    window.confirm = (message) => {
+      window.__confirms.push(String(message));
+      return false;
+    };
+    const nodes = [];
+    const files = [];
+    for (let index = 1; index <= 21; index += 1) {
+      const id = `file-${index}.md`;
+      nodes.push({ id, label: id, fullPath: id, type: "file", status: "current", tags: [] });
+      files.push({ id, path: id, name: id, content: `# File ${index}`, status: "current", tags: [] });
+    }
+    const graphTab = {
+      id: "open_all_warning_graph_e2e",
+      title: "Open All Warning Graph E2E",
+      content: "",
+      scrollPos: 0,
+      viewMode: "preview",
+      createdAt: Date.now(),
+      isTemporary: false,
+      type: "graph",
+      folderName: "Open All Warning Graph E2E",
+      graphViewConfig: {
+        showTags: false,
+        hiddenTagIds: [],
+        hiddenNodeIds: [],
+        selectedTagIds: [],
+        groups: [],
+        searchQuery: "",
+        showArrows: true,
+        showOrphans: true,
+        textFadeThreshold: 0.35,
+        nodeSize: 0.8,
+        linkThickness: 1,
+        centerForce: 1,
+        repelForce: 650,
+        linkForce: 0.4,
+        linkDistance: 170
+      },
+      graphSnapshot: {
+        version: 1,
+        folderName: "Open All Warning Graph E2E",
+        createdAt: Date.now(),
+        nodes,
+        links: [],
+        files
+      }
+    };
+    localStorage.setItem("markdownViewerTabs", JSON.stringify([graphTab]));
+    localStorage.setItem("markdownViewerActiveTab", graphTab.id);
+  });
+  await page.goto("/");
+  await expect(page.locator("#graph-view-canvas")).toBeVisible();
+  await expect(page.locator(".graph-node")).toHaveCount(21);
+
+  await page.locator(".graph-tab-render").click({ button: "right", position: { x: 60, y: 60 } });
+  await page.locator(".graph-context-menu:not(.hidden) .graph-context-menu-item", { hasText: "Open all" }).click();
+
+  await expect.poll(() => page.evaluate(() => ({
+    confirms: window.__confirms,
+    tabCount: JSON.parse(localStorage.getItem("markdownViewerTabs") || "[]").length
+  }))).toEqual({
+    confirms: ["Open 21 files in editor tabs?\n\nThis might slow down your computer or crash the app."],
+    tabCount: 1
+  });
+});
+
 test("desktop graph context menu can update file tags", async ({ page }) => {
   await page.addInitScript(() => {
     window.NL_VERSION = "test";
