@@ -34,6 +34,22 @@
     return JSON.stringify(graphDocument, null, 2);
   }
 
+  async function refreshOpenFolderTreeAfterGraphSave(metadata) {
+    if (!metadata) return false;
+    if (typeof NL_VERSION !== "undefined") {
+      if (metadata.path && isPathInsideFolder(metadata.path, activeFolderPath)) {
+        return reloadOpenFolderTree();
+      }
+      return false;
+    }
+
+    if (metadata.handle && activeFolderHandle) {
+      return reloadOpenFolderTree();
+    }
+
+    return false;
+  }
+
   async function writeGraphExportWithSaveDialog(content, suggestedName, options = {}) {
     const includeMarkdownContents = options.includeMarkdownContents === true;
     const dialogTitle = includeMarkdownContents ? "Export Folder to Graph" : "Save Graph View";
@@ -52,7 +68,9 @@
       if (!selectedPath) return null;
       const finalPath = /\.(mdviewer-graph\.json|mdgraph\.json|json)$/i.test(selectedPath) ? selectedPath : `${selectedPath}.mdviewer-graph.json`;
       await Neutralino.filesystem.writeFile(finalPath, content);
-      return { name: getFileName(finalPath), path: finalPath };
+      const metadata = { name: getFileName(finalPath), path: finalPath };
+      await refreshOpenFolderTreeAfterGraphSave(metadata);
+      return metadata;
     }
 
     if (typeof window.showSaveFilePicker === "function" && !isFirefoxBrowser()) {
@@ -68,7 +86,9 @@
       const writable = await handle.createWritable();
       await writable.write(content);
       await writable.close();
-      return { name: handle.name, handle };
+      const metadata = { name: handle.name, handle };
+      await refreshOpenFolderTreeAfterGraphSave(metadata);
+      return metadata;
     }
 
     saveAs(new Blob([content], { type: "application/json;charset=utf-8" }), suggestedName);
@@ -131,13 +151,17 @@
         const writable = await graphTab.sourceFileHandle.createWritable();
         await writable.write(content);
         await writable.close();
-        updateGraphTabAfterSave(graphTab, { name: graphTab.sourceFileHandle.name || graphTab.sourceFileName });
+        const metadata = { name: graphTab.sourceFileHandle.name || graphTab.sourceFileName, handle: graphTab.sourceFileHandle };
+        updateGraphTabAfterSave(graphTab, metadata);
+        await refreshOpenFolderTreeAfterGraphSave(metadata);
       } else if (typeof NL_VERSION !== "undefined" && graphTab.sourceFilePath) {
         await Neutralino.filesystem.writeFile(graphTab.sourceFilePath, content);
-        updateGraphTabAfterSave(graphTab, {
+        const metadata = {
           name: getFileName(graphTab.sourceFilePath),
           path: graphTab.sourceFilePath
-        });
+        };
+        updateGraphTabAfterSave(graphTab, metadata);
+        await refreshOpenFolderTreeAfterGraphSave(metadata);
       } else {
         return false;
       }

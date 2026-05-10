@@ -1527,7 +1527,9 @@ test("saves a new graph view through the desktop save dialog", async ({ page }) 
         showFolderDialog: async () => "C:/vault",
         showSaveDialog: async (title, options) => {
           window.__graphSaveDialogs.push({ title, options });
-          return "C:/vault/graph.mdviewer-graph.json";
+          return title === "Export Folder to Graph"
+            ? "C:/vault/backup.mdviewer-graph.json"
+            : "C:/vault/graph.mdviewer-graph.json";
         },
         open: async () => {},
         execCommand: async () => {}
@@ -1564,6 +1566,14 @@ test("saves a new graph view through the desktop save dialog", async ({ page }) 
   await expect.poll(() => page.evaluate(() => window.__graphSaveDialogs[0].title)).toBe("Save Graph View");
   await expect.poll(() => page.evaluate(() => window.Neutralino.filesystem.readFile("C:/vault/graph.mdviewer-graph.json")))
     .toContain('"documentType": "graph-view"');
+  await expect(page.locator(".folder-tree-file", { hasText: "graph.mdviewer-graph.json" })).toBeVisible();
+
+  await page.locator(".export-folder-to-graph").first().click();
+  await expect.poll(() => page.evaluate(() => window.__graphSaveDialogs.length)).toBe(2);
+  await expect.poll(() => page.evaluate(() => window.__graphSaveDialogs[1].title)).toBe("Export Folder to Graph");
+  await expect.poll(() => page.evaluate(() => window.Neutralino.filesystem.readFile("C:/vault/backup.mdviewer-graph.json")))
+    .toContain('"documentType": "graph-export"');
+  await expect(page.locator(".folder-tree-file", { hasText: "backup.mdviewer-graph.json" })).toBeVisible();
 });
 
 test("prompts for a stale app-saved graph view after folder files change", async ({ page }) => {
