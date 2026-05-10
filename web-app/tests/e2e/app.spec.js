@@ -1303,16 +1303,6 @@ test("opens preview links relative to an opened file when no folder is open", as
 test("scrolls same-file preview links to heading anchors", async ({ page }) => {
   await page.addInitScript(() => {
     window.NL_VERSION = "5.0.0";
-    window.__scrolledPreviewTarget = "";
-    const originalScrollIntoView = Element.prototype.scrollIntoView;
-    Element.prototype.scrollIntoView = function scrollIntoView(options) {
-      if (/^H[1-6]$/.test(this.tagName)) {
-        window.__scrolledPreviewTarget = this.textContent;
-      }
-      if (originalScrollIntoView) {
-        originalScrollIntoView.call(this, options);
-      }
-    };
     window.Neutralino = {
       os: {
         showOpenDialog: async () => "C:/vault/my-page.md",
@@ -1322,7 +1312,8 @@ test("scrolls same-file preview links to heading anchors", async ({ page }) => {
         readFile: async (path) => {
           const normalized = String(path || "").replace(/\\/g, "/");
           if (normalized === "C:/vault/my-page.md") {
-            return "# My Page\n\n[[my-page#title2|Jump to title 2]]\n\n## Title1\n\nBody\n\n## Title2\n\nTarget";
+            const filler = Array.from({ length: 45 }, (_, index) => `## Filler ${index + 1}\n\nBody ${index + 1}`).join("\n\n");
+            return `# My Page\n\n[[my-page#title2|Jump to title 2]]\n\n${filler}\n\n## Title2\n\nTarget`;
           }
           throw new Error("Unexpected read path: " + path);
         }
@@ -1336,7 +1327,12 @@ test("scrolls same-file preview links to heading anchors", async ({ page }) => {
   const tabCountBeforeClick = await page.locator("#tab-list .tab-item").count();
   await page.locator("#markdown-preview a", { hasText: "Jump to title 2" }).click();
 
-  await expect.poll(() => page.evaluate(() => window.__scrolledPreviewTarget)).toBe("Title2");
+  await expect.poll(() => page.locator(".preview-pane").evaluate((pane) => pane.scrollTop)).toBeGreaterThan(0);
+  await expect.poll(() => page.locator("#markdown-preview h2", { hasText: "Title2" }).evaluate((heading) => {
+    const headingRect = heading.getBoundingClientRect();
+    const paneRect = document.querySelector(".preview-pane").getBoundingClientRect();
+    return headingRect.top >= paneRect.top && headingRect.top <= paneRect.bottom;
+  })).toBe(true);
   await expect(page.locator("#tab-list .tab-item")).toHaveCount(tabCountBeforeClick);
 });
 

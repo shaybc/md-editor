@@ -263,10 +263,25 @@
         || markdownPreview.querySelector(`[name="${CSS.escape(decodedHash)}"]`)
         || Array.from(markdownPreview.querySelectorAll("h1, h2, h3, h4, h5, h6"))
           .find((heading) => normalizeMarkdownAnchorSlug(heading.id || heading.textContent || "") === normalizedHash);
-      if (target && typeof target.scrollIntoView === "function") {
-        target.scrollIntoView({ behavior: "smooth", block: "start" });
+      if (target) {
+        scrollMarkdownPreviewTargetIntoView(target);
       }
     });
+  }
+
+  function scrollMarkdownPreviewTargetIntoView(target) {
+    const scrollContainer = markdownPreview.closest(".preview-pane") || markdownPreview.parentElement || markdownPreview;
+    if (!scrollContainer || typeof scrollContainer.getBoundingClientRect !== "function") {
+      if (typeof target.scrollIntoView === "function") {
+        target.scrollIntoView({ block: "start" });
+      }
+      return;
+    }
+
+    const containerRect = scrollContainer.getBoundingClientRect();
+    const targetRect = target.getBoundingClientRect();
+    const nextScrollTop = scrollContainer.scrollTop + targetRect.top - containerRect.top - 12;
+    scrollContainer.scrollTop = Math.max(0, nextScrollTop);
   }
 
   function normalizeMarkdownAnchorSlug(value) {
@@ -492,6 +507,7 @@
       api.findOpenFolderMarkdownEntry = findOpenFolderMarkdownEntry;
       api.getMarkdownLinkSourceFile = getMarkdownLinkSourceFile;
       api.scrollMarkdownPreviewToHash = scrollMarkdownPreviewToHash;
+      api.scrollMarkdownPreviewTargetIntoView = scrollMarkdownPreviewTargetIntoView;
       api.normalizeMarkdownAnchorSlug = normalizeMarkdownAnchorSlug;
       api.openMarkdownLinkFromPreview = openMarkdownLinkFromPreview;
       api.markdownSourceFileMatchesTab = markdownSourceFileMatchesTab;
