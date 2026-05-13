@@ -628,6 +628,41 @@ test("mirrors editor markdown syntax in the highlight overlay", async ({ page })
   await expect(page.locator("#editor-syntax-highlight .editor-md-strong")).toHaveText("**Important**");
 });
 
+test("marks Mermaid v11 syntax risks in the editor", async ({ page }) => {
+  await openApp(page);
+
+  await page.locator("#markdown-editor").fill([
+    "```mermaid",
+    "graph TD",
+    "    A -->|ok| end",
+    "    B[User (Admin)] --> C",
+    "```"
+  ].join("\n"));
+
+  const warnings = page.locator("#editor-syntax-highlight .editor-mermaid-warning");
+  await expect(warnings.filter({ hasText: "end" })).toHaveCount(1);
+  await expect(warnings.filter({ hasText: "User (Admin)" })).toHaveCount(1);
+
+  await warnings.filter({ hasText: "end" }).dispatchEvent("mousemove", {
+    bubbles: true,
+    cancelable: true,
+    clientX: 180,
+    clientY: 180
+  });
+
+  await expect(page.locator(".editor-mermaid-tooltip")).toBeVisible();
+  await expect(page.locator(".editor-mermaid-tooltip")).toContainText("Mermaid syntax risk");
+  await expect(page.locator(".editor-mermaid-tooltip")).toContainText("keyword");
+
+  await page.locator("#markdown-editor").dispatchEvent("mousemove", {
+    bubbles: true,
+    cancelable: true,
+    clientX: 20,
+    clientY: 20
+  });
+  await expect(page.locator(".editor-mermaid-tooltip")).toBeHidden();
+});
+
 test("suggests and accepts known tags while typing", async ({ page }) => {
   await page.addInitScript(() => {
     localStorage.setItem("markdownViewerGlobalState", JSON.stringify({ knownTags: ["alpha", "archive"] }));

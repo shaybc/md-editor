@@ -424,6 +424,47 @@ body {
   color: var(--editor-syntax-code);
 }
 
+.editor-mermaid-warning {
+  color: #ff7b72;
+  cursor: help;
+  pointer-events: auto;
+  text-decoration-line: underline;
+  text-decoration-style: wavy;
+  text-decoration-color: #ff4d4f;
+  text-decoration-thickness: 1.5px;
+  text-underline-offset: 3px;
+}
+
+.editor-mermaid-tooltip {
+  position: fixed;
+  z-index: 1700;
+  width: min(360px, calc(100vw - 16px));
+  padding: 10px 12px;
+  border: 1px solid rgba(248, 81, 73, 0.45);
+  border-radius: 8px;
+  background-color: var(--preview-bg);
+  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.3);
+  color: var(--text-color);
+  font-size: 13px;
+  line-height: 1.4;
+  pointer-events: none;
+}
+
+.editor-mermaid-tooltip.hidden {
+  display: none;
+}
+
+.editor-mermaid-tooltip-title {
+  margin-bottom: 4px;
+  color: #f85149;
+  font-weight: 700;
+}
+
+.editor-mermaid-tooltip-suggestion {
+  margin-top: 7px;
+  color: var(--disabled-text-color);
+}
+
 .editor-md-link {
   color: var(--editor-syntax-link);
 }
