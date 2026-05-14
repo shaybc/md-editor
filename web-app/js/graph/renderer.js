@@ -149,11 +149,45 @@
         linkText: fileLinkTextById.get(nodeData?.id || snapshotFile?.id) || ""
       };
     };
+    const getGraphLinksGroupMetric = (parsedQuery) => {
+      if (parsedQuery?.type !== "links") return "";
+      const metric = String(parsedQuery.value || parsedQuery.terms?.[0] || "").trim().toLowerCase();
+      if (["max-in", "min-in", "max-out", "min-out"].includes(metric)) return metric;
+      return "";
+    };
+    const getGraphLinksGroupNodeIds = (parsedQuery, candidateNodes = nodes, candidateLinks = links) => {
+      const metric = getGraphLinksGroupMetric(parsedQuery);
+      if (!metric) return new Set();
+
+      const candidateFileIds = new Set(candidateNodes.filter((node) => !isTagNode(node)).map((node) => node.id));
+      const countsByNodeId = new Map(Array.from(candidateFileIds).map((nodeId) => [nodeId, 0]));
+      candidateLinks.filter(isMarkdownLink).forEach((link) => {
+        const sourceId = getLinkSourceId(link);
+        const targetId = getLinkTargetId(link);
+        if (!candidateFileIds.has(sourceId) || !candidateFileIds.has(targetId)) return;
+        if (metric.endsWith("-out")) countsByNodeId.set(sourceId, (countsByNodeId.get(sourceId) || 0) + 1);
+        if (metric.endsWith("-in")) countsByNodeId.set(targetId, (countsByNodeId.get(targetId) || 0) + 1);
+      });
+
+      const descending = metric.startsWith("max-");
+      return new Set(Array.from(countsByNodeId.entries())
+        .sort((a, b) => {
+          const countCompare = descending ? b[1] - a[1] : a[1] - b[1];
+          return countCompare || String(a[0]).localeCompare(String(b[0]), undefined, { sensitivity: "base" });
+        })
+        .slice(0, 5)
+        .map(([nodeId]) => nodeId));
+    };
+    const getGraphGroupMatchOptions = (nodeData, snapshotFile, parsedQuery, linkMetricMatchIds = null) => ({
+      ...getGraphSearchOptions(nodeData, snapshotFile, parsedQuery),
+      linkMetricMatchIds
+    });
     const fileMatchesGraphSearchQuery = (nodeData, searchQuery) => {
       if (!searchQuery || isTagNode(nodeData)) return !searchQuery;
       const snapshotFile = snapshotFilesById.get(nodeData.id) || {};
       const parsedQuery = parseGraphGroupQuery(searchQuery);
-      return graphFileMatchesGroupQuery(nodeData, snapshotFile, parsedQuery, getGraphSearchOptions(nodeData, snapshotFile, parsedQuery));
+      const linkMetricMatchIds = getGraphLinksGroupMetric(parsedQuery) ? getGraphLinksGroupNodeIds(parsedQuery) : null;
+      return graphFileMatchesGroupQuery(nodeData, snapshotFile, parsedQuery, getGraphGroupMatchOptions(nodeData, snapshotFile, parsedQuery, linkMetricMatchIds));
     };
 
     if (graphViewConfig && graphViewConfig.searchQuery) {
@@ -231,10 +265,11 @@
         .filter((group) => group?.hidden === true)
         .forEach((group) => {
           const parsedQuery = parseGraphGroupQuery(group.query);
+          const linkMetricMatchIds = getGraphLinksGroupMetric(parsedQuery) ? getGraphLinksGroupNodeIds(parsedQuery) : null;
           nodes.forEach((nodeData) => {
             if (isTagNode(nodeData) || hiddenGroupNodeIds.has(nodeData.id)) return;
             const snapshotFile = snapshotFilesById.get(nodeData.id);
-            if (graphFileMatchesGroupQuery(nodeData, snapshotFile, parsedQuery, getGraphSearchOptions(nodeData, snapshotFile, parsedQuery))) {
+            if (graphFileMatchesGroupQuery(nodeData, snapshotFile, parsedQuery, getGraphGroupMatchOptions(nodeData, snapshotFile, parsedQuery, linkMetricMatchIds))) {
               hiddenGroupNodeIds.add(nodeData.id);
             }
           });
@@ -360,7 +395,17 @@
         return;
       }
       const snapshotFile = snapshotFilesById.get(nodeData.id);
-      const matchingGroup = getGraphGroupMatch(nodeData, snapshotFile, graphViewConfig, getGraphSearchOptions(nodeData, snapshotFile, parseGraphGroupQuery("")));
+      const groups = Array.isArray(graphViewConfig?.groups) ? graphViewConfig.groups : [];
+      let matchingGroup = null;
+      for (const group of groups) {
+        if (!group || group.enabled === false) continue;
+        const parsedQuery = parseGraphGroupQuery(group.query);
+        const linkMetricMatchIds = getGraphLinksGroupMetric(parsedQuery) ? getGraphLinksGroupNodeIds(parsedQuery) : null;
+        if (graphFileMatchesGroupQuery(nodeData, snapshotFile, parsedQuery, getGraphGroupMatchOptions(nodeData, snapshotFile, parsedQuery, linkMetricMatchIds))) {
+          matchingGroup = group;
+          break;
+        }
+      }
       if (matchingGroup) {
         nodeData.groupId = matchingGroup.id;
         nodeData.groupColor = matchingGroup.color;

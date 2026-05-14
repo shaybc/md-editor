@@ -65,7 +65,7 @@
   function parseGraphGroupQuery(query) {
     const rawQuery = String(query || "").trim();
     const prefixMatch = rawQuery.match(/^([a-z]+)\s*:\s*(.*)$/i);
-    const supportedPrefixes = new Set(["path", "file", "name", "tag", "link", "text", "line"]);
+    const supportedPrefixes = new Set(["path", "file", "name", "tag", "link", "links", "text", "line"]);
     const prefix = prefixMatch ? prefixMatch[1].toLowerCase() : "";
     const type = supportedPrefixes.has(prefix) ? prefix : "";
     const value = (type ? prefixMatch[2] : rawQuery).trim();
@@ -134,7 +134,11 @@
 
   function graphFileMatchesGroupQuery(nodeData, snapshotFile, parsedQuery, options = {}) {
     if ((nodeData?.type || "file") !== "file") return false;
-    if (!snapshotFile || !parsedQuery || !parsedQuery.terms?.length) return false;
+    if (!parsedQuery || !parsedQuery.terms?.length) return false;
+    if (parsedQuery.type === "links") {
+      return options.linkMetricMatchIds instanceof Set && options.linkMetricMatchIds.has(nodeData.id);
+    }
+    if (!snapshotFile) return false;
 
     const fileData = getGraphFilterFileData(nodeData, snapshotFile, options);
     const path = String(fileData.path || "").toLowerCase();
@@ -224,6 +228,7 @@
     { prefix: "file", label: "file:", description: "Match Markdown file names." },
     { prefix: "tag", label: "tag:", description: "Match normalized frontmatter tags." },
     { prefix: "link", label: "link:", description: "Match linked file paths and names." },
+    { prefix: "links", label: "links:", description: "Rank by direct link counts: max-in, min-in, max-out, or min-out." },
     { prefix: "text", label: "text:", description: "Match file contents." },
     { prefix: "line", label: "line:", description: "Match individual Markdown lines." }
   ];
@@ -232,17 +237,30 @@
   function getGraphGroupQueryContext(input) {
     const value = String(input?.value || "");
     const cursor = typeof input?.selectionStart === "number" ? input.selectionStart : value.length;
-    const beforeCursor = value.slice(0, cursor);
-    const prefixMatch = beforeCursor.match(/(^|\s)(path|file|tag|link|text|line):([^\s]*)$/i);
-    if (!prefixMatch) {
-      return { prefix: "", query: "", replaceStart: cursor, replaceEnd: cursor };
+    const tokenStart = Math.max(value.lastIndexOf(" ", cursor - 1), value.lastIndexOf("\t", cursor - 1), value.lastIndexOf("\n", cursor - 1)) + 1;
+    const tokenEndMatch = value.slice(cursor).match(/\s/);
+    const tokenEnd = tokenEndMatch ? cursor + tokenEndMatch.index : value.length;
+    const token = value.slice(tokenStart, tokenEnd);
+    const tokenBeforeCursor = value.slice(tokenStart, cursor);
+    const prefixMatch = token.match(/^([a-z]+):(.*)$/i);
+    const supportedPrefixes = new Set(GRAPH_GROUP_QUERY_PREFIX_HELP.map((item) => item.prefix));
+
+    if (!prefixMatch || !supportedPrefixes.has(prefixMatch[1].toLowerCase())) {
+      return {
+        prefix: "",
+        query: tokenBeforeCursor,
+        replaceStart: tokenStart,
+        replaceEnd: tokenEnd
+      };
     }
 
+    const prefix = prefixMatch[1].toLowerCase();
+    const valueStart = tokenStart + prefixMatch[1].length + 1;
     return {
-      prefix: prefixMatch[2].toLowerCase(),
-      query: prefixMatch[3] || "",
-      replaceStart: cursor - (prefixMatch[3] || "").length,
-      replaceEnd: cursor
+      prefix,
+      query: value.slice(valueStart, tokenEnd),
+      replaceStart: valueStart,
+      replaceEnd: tokenEnd
     };
   }
 
@@ -321,6 +339,13 @@
           addEntry(file.name || getFileName(file.path || file.fullPath || nodeId), "link", "Linked file name");
         });
       });
+    } else if (prefix === "links") {
+      [
+        ["max-in", "Top 5 by incoming links"],
+        ["min-in", "Bottom 5 by incoming links"],
+        ["max-out", "Top 5 by outgoing links"],
+        ["min-out", "Bottom 5 by outgoing links"]
+      ].forEach(([value, detail]) => addEntry(value, "links", detail));
     }
 
     return Array.from(entryMap.values())
@@ -354,6 +379,7 @@
       if (!suggestion) return;
       const context = getGraphGroupQueryContext(queryInput);
       const replacement = context.prefix ? suggestion.value : `${suggestion.prefix}:`;
+      const shouldShowNextSuggestions = !context.prefix && !!suggestion.prefix;
       const value = String(queryInput.value || "");
       const nextValue = `${value.slice(0, context.replaceStart)}${replacement}${value.slice(context.replaceEnd)}`;
       const cursor = context.replaceStart + replacement.length;
@@ -368,6 +394,7 @@
       queryInput.setSelectionRange(cursor, cursor);
       closePopover();
       updateGraphGroup(group.id, { query: nextValue }, { skipToolbar: true });
+      if (shouldShowNextSuggestions) window.setTimeout(renderPopover, 0);
     };
 
     const scrollSelectedSuggestionIntoView = () => {
@@ -386,7 +413,10 @@
       if (context.prefix) {
         suggestions = getGraphGroupSuggestionEntries(graphSnapshot, context.prefix, context.query, { savedMetadataOnly: isKeepSavedGraphMode(activeGraphTab) });
       } else {
-        suggestions = GRAPH_GROUP_QUERY_PREFIX_HELP.map((item) => ({ ...item, value: item.label }));
+        const query = String(context.query || "").toLowerCase();
+        suggestions = GRAPH_GROUP_QUERY_PREFIX_HELP
+          .filter((item) => !query || item.prefix.includes(query) || item.label.toLowerCase().includes(query))
+          .map((item) => ({ ...item, value: item.label }));
       }
 
       popover.innerHTML = "";
@@ -395,7 +425,7 @@
       if (!suggestions.length) {
         const empty = document.createElement("div");
         empty.className = "graph-group-query-suggestion-empty";
-        empty.textContent = `No ${context.prefix}: suggestions.`;
+        empty.textContent = context.prefix ? `No ${context.prefix}: suggestions.` : "No group type suggestions.";
         popover.appendChild(empty);
       } else {
         suggestions.forEach((suggestion, index) => {
@@ -416,14 +446,16 @@
           button.addEventListener("mousedown", (event) => {
             event.preventDefault();
             isPointerSelectingSuggestion = true;
+            insertSuggestion(suggestion);
           });
           button.addEventListener("mouseenter", () => {
             selectedIndex = index;
-            renderPopover();
-          });
-          button.addEventListener("click", () => {
-            isPointerSelectingSuggestion = false;
-            insertSuggestion(suggestion);
+            Array.from(popover.querySelectorAll(".graph-group-query-suggestion")).forEach((option, optionIndex) => {
+              const isSelected = optionIndex === selectedIndex;
+              option.classList.toggle("active", isSelected);
+              option.setAttribute("aria-selected", isSelected ? "true" : "false");
+            });
+            queryInput.setAttribute("aria-activedescendant", `graph-group-query-suggestion-${group.id}-${selectedIndex}`);
           });
           popover.appendChild(button);
         });
@@ -474,7 +506,9 @@
         const graphSnapshot = activeGraphTab?.graphSnapshot || sourceTab?.graphSnapshot || null;
         const suggestions = context.prefix
           ? getGraphGroupSuggestionEntries(graphSnapshot, context.prefix, context.query, { savedMetadataOnly: isKeepSavedGraphMode(activeGraphTab) })
-          : GRAPH_GROUP_QUERY_PREFIX_HELP.map((item) => ({ ...item, value: item.label }));
+          : GRAPH_GROUP_QUERY_PREFIX_HELP
+            .filter((item) => !context.query || item.prefix.includes(String(context.query).toLowerCase()) || item.label.toLowerCase().includes(String(context.query).toLowerCase()))
+            .map((item) => ({ ...item, value: item.label }));
         insertSuggestion(suggestions[selectedIndex]);
       }
     });
@@ -847,7 +881,7 @@
       ["#graph-hide-tags", "Hide tag points so only file points and Markdown links are drawn."],
       ["#graph-selected-tag-filter", "Choose a tag to focus the graph on files that contain that tag."],
       ["#graph-only-selected-tag", "Limit the graph to files with the selected tag and their connected tag points."],
-      ["#graph-add-group", "Add a color group. Groups use queries like path:, file:, tag:, text:, and line: to color matching files."],
+      ["#graph-add-group", "Add a color group. Groups use queries like path:, file:, tag:, links:, text:, and line: to color matching files."],
       ["#graph-display-arrows", "Toggle arrowheads on Markdown links to show link direction."],
       ["#graph-display-orphans", "Toggle graph points that do not have any visible connections."],
       ["#graph-text-fade-threshold", "Control how aggressively labels disappear while zooming out. At the default, labels are gone near 45% zoom and only larger points keep faded labels around 65%."],
@@ -860,7 +894,7 @@
       ["#graph-reset-defaults", "Reset search, selected tag, group toggles, display options, and force settings to defaults."],
       ["#graph-view-close", "Close graph view and return to the document view."],
       [".graph-collapsible-summary", "Expand or collapse this section of graph filters."],
-      [".graph-group-query-input", "Type a group query. Use prefixes such as path:, file:, tag:, text:, or line:."],
+      [".graph-group-query-input", "Type a group query. Use prefixes such as path:, file:, tag:, links:, text:, or line:."],
       [".graph-group-enabled-input", "Enable or disable this group color without deleting it."],
       [".graph-group-color-input", "Pick the color used for files that match this group query."],
       [".graph-group-drag-handle", "Drag this handle to reorder groups. Earlier groups take priority when multiple groups match the same file."],

@@ -1210,6 +1210,76 @@ test("graph group order can be rearranged and changes point priority", async ({ 
   })).toEqual(["second_group", "first_group"]);
 });
 
+test("graph group query suggestions can be selected with the mouse", async ({ page }) => {
+  await page.addInitScript(() => {
+    const graphTab = {
+      id: "group_mouse_suggestions_e2e",
+      title: "Group Mouse Suggestions E2E",
+      content: "",
+      scrollPos: 0,
+      viewMode: "preview",
+      createdAt: Date.now(),
+      isTemporary: false,
+      type: "graph",
+      folderName: "Group Mouse Suggestions E2E",
+      graphViewConfig: {
+        showTags: false,
+        hiddenTagIds: [],
+        hiddenNodeIds: [],
+        selectedTagIds: [],
+        groups: [
+          { id: "mouse_group", query: "", color: "#ff0000", enabled: true }
+        ],
+        searchQuery: "",
+        showArrows: true,
+        textFadeThreshold: 0.35,
+        nodeSize: 0.8,
+        linkThickness: 1,
+        centerForce: 1,
+        repelForce: 650,
+        linkForce: 0.4,
+        linkDistance: 170
+      },
+      graphSnapshot: {
+        version: 1,
+        folderName: "Group Mouse Suggestions E2E",
+        createdAt: Date.now(),
+        nodes: [
+          { id: "alpha.md", label: "alpha.md", fullPath: "alpha.md", type: "file", status: "current" }
+        ],
+        links: [],
+        files: [
+          { id: "alpha.md", path: "alpha.md", name: "alpha.md", content: "# Alpha", status: "current" }
+        ]
+      }
+    };
+    localStorage.setItem("markdownViewerTabs", JSON.stringify([graphTab]));
+    localStorage.setItem("markdownViewerActiveTab", graphTab.id);
+  });
+  await page.goto("/");
+  await expect(page.locator("#graph-view-canvas")).toBeVisible();
+
+  await page.locator("#graph-filter-panel-toggle").click();
+  await page.locator(".graph-collapsible-section", { hasText: "Groups" }).locator("summary").click();
+  const queryInput = page.locator(".graph-group-query-input").first();
+  await queryInput.click();
+  await page.keyboard.type("li");
+  await page.locator(".graph-group-query-suggestion", { hasText: "links:" }).click();
+  await expect(queryInput).toHaveValue("links:");
+
+  await page.locator(".graph-group-query-suggestion", { hasText: "max-in" }).click();
+  await expect(queryInput).toHaveValue("links:max-in");
+  await expect.poll(() => page.evaluate(() => {
+    const tabs = JSON.parse(localStorage.getItem("markdownViewerTabs") || "[]");
+    return tabs[0]?.graphViewConfig?.groups?.[0]?.query || "";
+  })).toBe("links:max-in");
+
+  await queryInput.fill("");
+  await page.keyboard.type("links:mi");
+  await page.keyboard.press("Enter");
+  await expect(queryInput).toHaveValue("links:min-in");
+});
+
 test("graph group hide button removes and restores matching points", async ({ page }) => {
   await page.addInitScript(() => {
     const graphTab = {
@@ -1302,6 +1372,160 @@ test("graph group hide button removes and restores matching points", async ({ pa
   await expect(hideButton).toHaveAttribute("aria-pressed", "false");
   await expect(page.locator(".graph-node")).toHaveCount(2);
   await expect(page.locator(".graph-link")).toHaveCount(1);
+});
+
+test("graph link metric groups color ranked points", async ({ page }) => {
+  await page.addInitScript(() => {
+    const graphTab = {
+      id: "links_group_graph_e2e",
+      title: "Links Group Graph E2E",
+      content: "",
+      scrollPos: 0,
+      viewMode: "preview",
+      createdAt: Date.now(),
+      isTemporary: false,
+      type: "graph",
+      folderName: "Links Group Graph E2E",
+      graphViewConfig: {
+        showTags: false,
+        hiddenTagIds: [],
+        hiddenNodeIds: [],
+        selectedTagIds: [],
+        groups: [
+          { id: "incoming_group", query: "links:max-in", color: "#ffff00", enabled: true, hidden: false }
+        ],
+        searchQuery: "",
+        showArrows: true,
+        textFadeThreshold: 0.35,
+        nodeSize: 0.8,
+        linkThickness: 1,
+        centerForce: 1,
+        repelForce: 650,
+        linkForce: 0.4,
+        linkDistance: 170
+      },
+      graphSnapshot: {
+        version: 1,
+        folderName: "Links Group Graph E2E",
+        createdAt: Date.now(),
+        nodes: [
+          { id: "hub.md", label: "hub.md", type: "file", status: "current" },
+          { id: "mid.md", label: "mid.md", type: "file", status: "current" },
+          { id: "alpha.md", label: "alpha.md", type: "file", status: "current" },
+          { id: "beta.md", label: "beta.md", type: "file", status: "current" },
+          { id: "gamma.md", label: "gamma.md", type: "file", status: "current" },
+          { id: "lonely.md", label: "lonely.md", type: "file", status: "current" }
+        ],
+        links: [
+          { source: "mid.md", target: "hub.md", type: "link", status: "current" },
+          { source: "alpha.md", target: "hub.md", type: "link", status: "current" },
+          { source: "beta.md", target: "hub.md", type: "link", status: "current" },
+          { source: "gamma.md", target: "hub.md", type: "link", status: "current" },
+          { source: "lonely.md", target: "hub.md", type: "link", status: "current" },
+          { source: "alpha.md", target: "mid.md", type: "link", status: "current" },
+          { source: "beta.md", target: "mid.md", type: "link", status: "current" },
+          { source: "gamma.md", target: "mid.md", type: "link", status: "current" },
+          { source: "beta.md", target: "alpha.md", type: "link", status: "current" },
+          { source: "gamma.md", target: "alpha.md", type: "link", status: "current" },
+          { source: "gamma.md", target: "beta.md", type: "link", status: "current" }
+        ],
+        files: [
+          { id: "hub.md", path: "hub.md", name: "hub.md", content: "# Hub", status: "current" },
+          { id: "mid.md", path: "mid.md", name: "mid.md", content: "# Mid", status: "current" },
+          { id: "alpha.md", path: "alpha.md", name: "alpha.md", content: "# Alpha", status: "current" },
+          { id: "beta.md", path: "beta.md", name: "beta.md", content: "# Beta", status: "current" },
+          { id: "gamma.md", path: "gamma.md", name: "gamma.md", content: "# Gamma", status: "current" },
+          { id: "lonely.md", path: "lonely.md", name: "lonely.md", content: "# Lonely", status: "current" }
+        ]
+      }
+    };
+    localStorage.setItem("markdownViewerTabs", JSON.stringify([graphTab]));
+    localStorage.setItem("markdownViewerActiveTab", graphTab.id);
+  });
+
+  await page.goto("/");
+  await expect(page.locator(".graph-node-file")).toHaveCount(6);
+  await expect.poll(() => page.evaluate(() => {
+    return Array.from(document.querySelectorAll(".graph-node-file"))
+      .filter((node) => node.__data__?.groupId === "incoming_group")
+      .map((node) => node.__data__.id)
+      .sort();
+  })).toEqual(["alpha.md", "beta.md", "gamma.md", "hub.md", "mid.md"]);
+});
+
+test("graph hidden link metric groups remove ranked points", async ({ page }) => {
+  await page.addInitScript(() => {
+    const graphTab = {
+      id: "links_hidden_group_graph_e2e",
+      title: "Links Hidden Group Graph E2E",
+      content: "",
+      scrollPos: 0,
+      viewMode: "preview",
+      createdAt: Date.now(),
+      isTemporary: false,
+      type: "graph",
+      folderName: "Links Hidden Group Graph E2E",
+      graphViewConfig: {
+        showTags: false,
+        hiddenTagIds: [],
+        hiddenNodeIds: [],
+        selectedTagIds: [],
+        groups: [
+          { id: "low_incoming_group", query: "links:min-in", color: "#ff00ff", enabled: true, hidden: true }
+        ],
+        searchQuery: "",
+        showArrows: true,
+        textFadeThreshold: 0.35,
+        nodeSize: 0.8,
+        linkThickness: 1,
+        centerForce: 1,
+        repelForce: 650,
+        linkDistance: 170
+      },
+      graphSnapshot: {
+        version: 1,
+        folderName: "Links Hidden Group Graph E2E",
+        createdAt: Date.now(),
+        nodes: [
+          { id: "hub.md", label: "hub.md", type: "file", status: "current" },
+          { id: "mid.md", label: "mid.md", type: "file", status: "current" },
+          { id: "alpha.md", label: "alpha.md", type: "file", status: "current" },
+          { id: "beta.md", label: "beta.md", type: "file", status: "current" },
+          { id: "gamma.md", label: "gamma.md", type: "file", status: "current" },
+          { id: "lonely.md", label: "lonely.md", type: "file", status: "current" }
+        ],
+        links: [
+          { source: "mid.md", target: "hub.md", type: "link", status: "current" },
+          { source: "alpha.md", target: "hub.md", type: "link", status: "current" },
+          { source: "beta.md", target: "hub.md", type: "link", status: "current" },
+          { source: "gamma.md", target: "hub.md", type: "link", status: "current" },
+          { source: "lonely.md", target: "hub.md", type: "link", status: "current" },
+          { source: "alpha.md", target: "mid.md", type: "link", status: "current" },
+          { source: "beta.md", target: "mid.md", type: "link", status: "current" },
+          { source: "gamma.md", target: "mid.md", type: "link", status: "current" },
+          { source: "beta.md", target: "alpha.md", type: "link", status: "current" },
+          { source: "gamma.md", target: "alpha.md", type: "link", status: "current" },
+          { source: "gamma.md", target: "beta.md", type: "link", status: "current" }
+        ],
+        files: [
+          { id: "hub.md", path: "hub.md", name: "hub.md", content: "# Hub", status: "current" },
+          { id: "mid.md", path: "mid.md", name: "mid.md", content: "# Mid", status: "current" },
+          { id: "alpha.md", path: "alpha.md", name: "alpha.md", content: "# Alpha", status: "current" },
+          { id: "beta.md", path: "beta.md", name: "beta.md", content: "# Beta", status: "current" },
+          { id: "gamma.md", path: "gamma.md", name: "gamma.md", content: "# Gamma", status: "current" },
+          { id: "lonely.md", path: "lonely.md", name: "lonely.md", content: "# Lonely", status: "current" }
+        ]
+      }
+    };
+    localStorage.setItem("markdownViewerTabs", JSON.stringify([graphTab]));
+    localStorage.setItem("markdownViewerActiveTab", graphTab.id);
+  });
+
+  await page.goto("/");
+  await expect(page.locator(".graph-node-file")).toHaveCount(1);
+  await expect.poll(() => page.evaluate(() => {
+    return Array.from(document.querySelectorAll(".graph-node-file")).map((node) => node.__data__?.id);
+  })).toEqual(["hub.md"]);
 });
 
 test("graph display can hide and show orphan points", async ({ page }) => {
