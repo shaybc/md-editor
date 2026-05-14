@@ -494,11 +494,11 @@ body {
 
 #markdown-editor.syntax-highlight-enabled::selection {
   color: transparent;
-  background-color: rgba(3, 102, 214, 0.25);
+  background-color: transparent;
 }
 
 [data-theme="dark"] #markdown-editor.syntax-highlight-enabled::selection {
-  background-color: rgba(88, 166, 255, 0.35);
+  background-color: transparent;
 }
 
 .link-autocomplete-layer {
