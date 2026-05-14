@@ -99,9 +99,148 @@
   const editorReferenceTitleInput = document.getElementById("editor-reference-title");
   const editorReferenceCancelButton = document.getElementById("editor-reference-cancel");
   const editorReferenceApplyButton = document.getElementById("editor-reference-apply");
+  const editorImageModal = document.getElementById("editor-image-modal");
+  const editorImageSourceInputs = document.querySelectorAll("input[name='editor-image-source']");
+  const editorImageUrlFields = document.getElementById("editor-image-url-fields");
+  const editorImageFileFields = document.getElementById("editor-image-file-fields");
+  const editorImageUrlInput = document.getElementById("editor-image-url");
+  const editorImageFilePathInput = document.getElementById("editor-image-file-path");
+  const editorImageFileInput = document.getElementById("editor-image-file-input");
+  const editorImageBrowseButton = document.getElementById("editor-image-browse");
+  const editorImageAltInput = document.getElementById("editor-image-alt");
+  const editorImageCancelButton = document.getElementById("editor-image-cancel");
+  const editorImageApplyButton = document.getElementById("editor-image-apply");
+  const editorAlertModal = document.getElementById("editor-alert-modal");
+  const editorAlertCards = document.querySelectorAll(".editor-alert-card");
+  const editorAlertCancelButton = document.getElementById("editor-alert-cancel");
+  const editorAlertApplyButton = document.getElementById("editor-alert-apply");
+  const editorSymbolModal = document.getElementById("editor-symbol-modal");
+  const editorSymbolSearchInput = document.getElementById("editor-symbol-search");
+  const editorSymbolList = document.getElementById("editor-symbol-list");
+  const editorSymbolCancelButton = document.getElementById("editor-symbol-cancel");
+  const editorSymbolApplyButton = document.getElementById("editor-symbol-apply");
+  const editorEmojiModal = document.getElementById("editor-emoji-modal");
+  const editorEmojiSearchInput = document.getElementById("editor-emoji-search");
+  const editorEmojiList = document.getElementById("editor-emoji-list");
+  const editorEmojiCancelButton = document.getElementById("editor-emoji-cancel");
+  const editorEmojiApplyButton = document.getElementById("editor-emoji-apply");
+  const editorClearMarkdownModal = document.getElementById("editor-clear-markdown-modal");
+  const editorClearMarkdownCloseButton = document.getElementById("editor-clear-markdown-close");
+  const editorClearMarkdownCancelButton = document.getElementById("editor-clear-markdown-cancel");
+  const editorClearMarkdownApplyButton = document.getElementById("editor-clear-markdown-apply");
+  const editorFindReplaceModal = document.getElementById("editor-find-replace-modal");
+  const editorFindReplaceCloseButton = document.getElementById("editor-find-replace-close");
+  const editorFindReplaceCancelButton = document.getElementById("editor-find-replace-cancel");
+  const editorFindInput = document.getElementById("editor-find-input");
+  const editorReplaceInput = document.getElementById("editor-replace-input");
+  const editorFindReplaceStatus = document.getElementById("editor-find-replace-status");
+  const editorFindPrevButton = document.getElementById("editor-find-prev");
+  const editorFindNextButton = document.getElementById("editor-find-next");
+  const editorReplaceOneButton = document.getElementById("editor-replace-one");
+  const editorReplaceAllButton = document.getElementById("editor-replace-all");
   let previewHoveredLinkUrl = "";
   let editorLinkSelection = null;
   let editorReferenceSelection = null;
+  let editorImageSelection = null;
+  let editorAlertSelection = null;
+  let editorSelectedAlertType = "NOTE";
+  let editorSymbolSelection = null;
+  let editorSelectedSymbolEntity = "&copy;";
+  let editorEmojiSelection = null;
+  let editorSelectedEmojiShortcode = ":+1:";
+  let editorClearMarkdownSelection = null;
+  let editorFindMatches = [];
+  let editorFindCurrentIndex = -1;
+  const editorSymbols = [
+    { group: "Common Symbols", symbol: "©", entity: "&copy;", keywords: "copyright c" },
+    { group: "Common Symbols", symbol: "®", entity: "&reg;", keywords: "registered trademark r" },
+    { group: "Common Symbols", symbol: "™", entity: "&trade;", keywords: "trademark tm" },
+    { group: "Common Symbols", symbol: "✓", entity: "&check;", keywords: "check tick done" },
+    { group: "Common Symbols", symbol: "★", entity: "&star;", keywords: "star favorite" },
+    { group: "Common Symbols", symbol: "•", entity: "&bull;", keywords: "bullet dot" },
+    { group: "Common Symbols", symbol: "…", entity: "&hellip;", keywords: "ellipsis dots" },
+    { group: "Common Symbols", symbol: "—", entity: "&mdash;", keywords: "em dash long dash" },
+    { group: "Common Symbols", symbol: "–", entity: "&ndash;", keywords: "en dash" },
+    { group: "Common Symbols", symbol: "→", entity: "&rarr;", keywords: "right arrow" },
+    { group: "Common Symbols", symbol: "←", entity: "&larr;", keywords: "left arrow" },
+    { group: "Common Symbols", symbol: "↑", entity: "&uarr;", keywords: "up arrow" },
+    { group: "Common Symbols", symbol: "↓", entity: "&darr;", keywords: "down arrow" },
+    { group: "HTML Entities", symbol: "€", entity: "&euro;", keywords: "euro currency" },
+    { group: "HTML Entities", symbol: "£", entity: "&pound;", keywords: "pound currency" },
+    { group: "HTML Entities", symbol: "¥", entity: "&yen;", keywords: "yen currency" },
+    { group: "HTML Entities", symbol: "§", entity: "&sect;", keywords: "section" },
+    { group: "HTML Entities", symbol: "°", entity: "&deg;", keywords: "degree" },
+    { group: "HTML Entities", symbol: "±", entity: "&plusmn;", keywords: "plus minus" },
+    { group: "HTML Entities", symbol: "×", entity: "&times;", keywords: "multiply times" },
+    { group: "HTML Entities", symbol: "÷", entity: "&divide;", keywords: "divide division" },
+    { group: "HTML Entities", symbol: "≠", entity: "&ne;", keywords: "not equal" },
+    { group: "HTML Entities", symbol: "<", entity: "&lt;", keywords: "less than angle bracket" },
+    { group: "HTML Entities", symbol: ">", entity: "&gt;", keywords: "greater than angle bracket" },
+    { group: "HTML Entities", symbol: "&", entity: "&amp;", keywords: "ampersand and" },
+    { group: "HTML Entities", symbol: "\"", entity: "&quot;", keywords: "quote quotation" },
+    { group: "HTML Entities", symbol: "'", entity: "&apos;", keywords: "apostrophe quote" },
+    { group: "HTML Entities", symbol: " ", entity: "&nbsp;", keywords: "non breaking space nbsp" },
+    { group: "Greek Letters", symbol: "α", entity: "&alpha;", keywords: "alpha greek" },
+    { group: "Greek Letters", symbol: "β", entity: "&beta;", keywords: "beta greek" },
+    { group: "Greek Letters", symbol: "γ", entity: "&gamma;", keywords: "gamma greek" },
+    { group: "Greek Letters", symbol: "δ", entity: "&delta;", keywords: "delta greek" },
+    { group: "Greek Letters", symbol: "π", entity: "&pi;", keywords: "pi greek" },
+    { group: "Greek Letters", symbol: "Ω", entity: "&Omega;", keywords: "omega greek" }
+  ];
+  const editorEmojis = [
+    { emoji: "👎", shortcode: ":-1:", keywords: "thumbs down no dislike" },
+    { emoji: "👍", shortcode: ":+1:", keywords: "thumbs up yes like" },
+    { emoji: "💯", shortcode: ":100:", keywords: "hundred score perfect" },
+    { emoji: "🔢", shortcode: ":1234:", keywords: "numbers input" },
+    { emoji: "🥇", shortcode: ":1st_place_medal:", keywords: "gold medal first" },
+    { emoji: "🥈", shortcode: ":2nd_place_medal:", keywords: "silver medal second" },
+    { emoji: "🥉", shortcode: ":3rd_place_medal:", keywords: "bronze medal third" },
+    { emoji: "🎱", shortcode: ":8ball:", keywords: "pool billiards" },
+    { emoji: "🅰️", shortcode: ":a:", keywords: "letter a blood type" },
+    { emoji: "🆎", shortcode: ":ab:", keywords: "letter ab blood type" },
+    { emoji: "🔤", shortcode: ":abc:", keywords: "letters alphabet" },
+    { emoji: "🔡", shortcode: ":abcd:", keywords: "letters alphabet" },
+    { emoji: "🉑", shortcode: ":accept:", keywords: "accept japanese" },
+    { emoji: "♿", shortcode: ":accessibility:", keywords: "wheelchair access" },
+    { emoji: "🪗", shortcode: ":accordion:", keywords: "music instrument" },
+    { emoji: "🩹", shortcode: ":adhesive_bandage:", keywords: "bandage medical" },
+    { emoji: "🧑", shortcode: ":adult:", keywords: "person adult" },
+    { emoji: "🚡", shortcode: ":aerial_tramway:", keywords: "tram cable car" },
+    { emoji: "🇦🇫", shortcode: ":afghanistan:", keywords: "flag afghanistan" },
+    { emoji: "✈️", shortcode: ":airplane:", keywords: "plane travel" },
+    { emoji: "⏰", shortcode: ":alarm_clock:", keywords: "alarm clock time" },
+    { emoji: "⚗️", shortcode: ":alembic:", keywords: "science chemistry" },
+    { emoji: "👽", shortcode: ":alien:", keywords: "alien ufo" },
+    { emoji: "🚑", shortcode: ":ambulance:", keywords: "medical emergency" },
+    { emoji: "⚓", shortcode: ":anchor:", keywords: "ship nautical" },
+    { emoji: "😇", shortcode: ":angel:", keywords: "smile halo" },
+    { emoji: "💢", shortcode: ":anger:", keywords: "angry mad" },
+    { emoji: "😠", shortcode: ":angry:", keywords: "angry mad" },
+    { emoji: "🐜", shortcode: ":ant:", keywords: "bug insect" },
+    { emoji: "🍎", shortcode: ":apple:", keywords: "fruit red" },
+    { emoji: "♈", shortcode: ":aries:", keywords: "zodiac" },
+    { emoji: "◀️", shortcode: ":arrow_backward:", keywords: "arrow left" },
+    { emoji: "⏬", shortcode: ":arrow_double_down:", keywords: "arrow down" },
+    { emoji: "⏫", shortcode: ":arrow_double_up:", keywords: "arrow up" },
+    { emoji: "⬇️", shortcode: ":arrow_down:", keywords: "arrow down" },
+    { emoji: "➡️", shortcode: ":arrow_forward:", keywords: "arrow right" },
+    { emoji: "⬅️", shortcode: ":arrow_left:", keywords: "arrow left" },
+    { emoji: "↘️", shortcode: ":arrow_lower_right:", keywords: "arrow down right" },
+    { emoji: "↙️", shortcode: ":arrow_lower_left:", keywords: "arrow down left" },
+    { emoji: "➡️", shortcode: ":arrow_right:", keywords: "arrow right" },
+    { emoji: "⬆️", shortcode: ":arrow_up:", keywords: "arrow up" },
+    { emoji: "😊", shortcode: ":blush:", keywords: "smile happy" },
+    { emoji: "🎉", shortcode: ":tada:", keywords: "party celebration" },
+    { emoji: "❤️", shortcode: ":heart:", keywords: "love heart" },
+    { emoji: "🔥", shortcode: ":fire:", keywords: "hot flame" },
+    { emoji: "🚀", shortcode: ":rocket:", keywords: "ship launch" },
+    { emoji: "✅", shortcode: ":white_check_mark:", keywords: "check done success" },
+    { emoji: "❌", shortcode: ":x:", keywords: "cross fail no" },
+    { emoji: "⚠️", shortcode: ":warning:", keywords: "warning caution" },
+    { emoji: "💡", shortcode: ":bulb:", keywords: "idea light" },
+    { emoji: "📌", shortcode: ":pushpin:", keywords: "pin note" },
+    { emoji: "🐛", shortcode: ":bug:", keywords: "bug issue" }
+  ];
 
   const clipboard = window.registerMarkdownViewerClipboard(app, {
     copyMarkdownButton,
@@ -258,6 +397,7 @@
   const markdownLinks = window.registerMarkdownViewerMarkdownLinks(app, {
     get activeFolderName() { return activeFolderName; },
     get activeFolderPath() { return activeFolderPath; },
+    get currentFolderTreeNodes() { return currentFolderTreeNodes; },
     get folderMarkdownFiles() { return folderMarkdownFiles; },
     get markdownPreview() { return markdownPreview; },
     get previewHoveredLinkUrl() { return previewHoveredLinkUrl; },
@@ -297,6 +437,7 @@
   const getMarkdownLinkSourceFile = markdownLinks.getMarkdownLinkSourceFile;
   const scrollMarkdownPreviewToHash = markdownLinks.scrollMarkdownPreviewToHash;
   const openMarkdownLinkFromPreview = markdownLinks.openMarkdownLinkFromPreview;
+  const enhancePreviewMarkdownImages = markdownLinks.enhancePreviewMarkdownImages;
   const annotatePreviewMarkdownLinks = markdownLinks.annotatePreviewMarkdownLinks;
   const getPreviewLinkStatusUrl = markdownLinks.getPreviewLinkStatusUrl;
   const handlePreviewLinkMouseOver = markdownLinks.handlePreviewLinkMouseOver;
@@ -338,6 +479,7 @@
     getEditorLineHeight: function() { return getEditorLineHeight(); },
     getFileName,
     getFolderMarkdownFiles: function() { return folderMarkdownFiles; },
+    getCurrentFolderTreeNodes: function() { return currentFolderTreeNodes; },
     getFolderTagCounts: function() { return folderTagCounts; },
     getIsFolderOpen: function() { return isFolderOpen; },
     getKnownTags: function() { return getKnownTags(); },
@@ -365,6 +507,192 @@
   const handleEditorContextMenu = editorContextMenu.handleEditorContextMenu;
   const redoEditorContextMenuConversion = editorContextMenu.redoEditorContextMenuConversion;
   const undoEditorContextMenuConversion = editorContextMenu.undoEditorContextMenuConversion;
+  function runNativeEditorHistoryCommand(command) {
+    markdownEditor.focus();
+    try {
+      return document.execCommand(command);
+    } catch (_) {
+      return false;
+    }
+  }
+  function undoEditorToolbarAction() {
+    if (runNativeEditorHistoryCommand("undo")) return;
+    undoEditorContextMenuConversion();
+  }
+  function redoEditorToolbarAction() {
+    if (runNativeEditorHistoryCommand("redo")) return;
+    redoEditorContextMenuConversion();
+  }
+  function stripMarkdownFormatting(text) {
+    let plainText = String(text || "");
+    plainText = plainText.replace(/^```[^\n]*\n?/gm, "").replace(/^```\s*$/gm, "");
+    plainText = plainText.replace(/^#{1,6}\s+/gm, "");
+    plainText = plainText.replace(/^>\s?\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION)\]\s*$/gmi, "");
+    plainText = plainText.replace(/^>\s?/gm, "");
+    plainText = plainText.replace(/^\s*[-*+]\s+\[[ xX]\]\s+/gm, "");
+    plainText = plainText.replace(/^\s*[-*+]\s+/gm, "");
+    plainText = plainText.replace(/^\s*\d+\.\s+/gm, "");
+    plainText = plainText.replace(/^\s*\[[^\]]+\]:\s+\S+(?:\s+"[^"]*")?\s*$/gm, "");
+    plainText = plainText.replace(/!\[([^\]]*)\]\([^)]+\)/g, "$1");
+    plainText = plainText.replace(/\[([^\]]+)\]\([^)]+\)/g, "$1");
+    plainText = plainText.replace(/\[([^\]]+)\]\[[^\]]*\]/g, "$1");
+    plainText = plainText.replace(/`([^`]+)`/g, "$1");
+    plainText = plainText.replace(/~~([^~]+)~~/g, "$1");
+    plainText = plainText.replace(/\*\*([^*]+)\*\*/g, "$1").replace(/__([^_]+)__/g, "$1");
+    plainText = plainText.replace(/\*([^*\n]+)\*/g, "$1").replace(/_([^_\n]+)_/g, "$1");
+    plainText = plainText.replace(/^\s*\|?(.+?)\|?\s*$/gm, function(match, content) {
+      if (!match.includes("|")) return match;
+      if (/^\s*:?-{3,}:?\s*(\|\s*:?-{3,}:?\s*)+$/.test(match)) return "";
+      return content.split("|").map(function(cell) { return cell.trim(); }).filter(Boolean).join(" ");
+    });
+    return plainText.replace(/\n{3,}/g, "\n\n").trim();
+  }
+  function openEditorClearMarkdownModal() {
+    if (!editorClearMarkdownModal) return;
+    const start = Math.min(markdownEditor.selectionStart || 0, markdownEditor.selectionEnd || 0);
+    const end = Math.max(markdownEditor.selectionStart || 0, markdownEditor.selectionEnd || 0);
+    if (start === end) {
+      markdownEditor.focus();
+      return;
+    }
+    editorClearMarkdownSelection = { start, end };
+    editorClearMarkdownModal.style.display = "flex";
+    window.setTimeout(function() {
+      editorClearMarkdownApplyButton?.focus();
+    }, 0);
+  }
+  function closeEditorClearMarkdownModal() {
+    if (!editorClearMarkdownModal) return;
+    editorClearMarkdownModal.style.display = "none";
+    markdownEditor.focus();
+  }
+  function applyEditorClearMarkdownModal() {
+    if (!editorClearMarkdownSelection) return;
+    const selectedText = markdownEditor.value.slice(editorClearMarkdownSelection.start, editorClearMarkdownSelection.end);
+    markdownEditor.focus();
+    markdownEditor.selectionStart = editorClearMarkdownSelection.start;
+    markdownEditor.selectionEnd = editorClearMarkdownSelection.end;
+    editorContextMenu.replaceSelectionWithText(stripMarkdownFormatting(selectedText));
+    closeEditorClearMarkdownModal();
+  }
+  function getEditorFindQuery() {
+    return String(editorFindInput?.value || "");
+  }
+  function collectEditorFindMatches(query) {
+    const matches = [];
+    if (!query) return matches;
+    const value = markdownEditor.value;
+    let index = value.indexOf(query);
+    while (index >= 0) {
+      matches.push({ start: index, end: index + query.length });
+      index = value.indexOf(query, index + Math.max(query.length, 1));
+    }
+    return matches;
+  }
+  function updateEditorFindReplaceStatus() {
+    if (!editorFindReplaceStatus) return;
+    if (!getEditorFindQuery()) {
+      editorFindReplaceStatus.textContent = "0 matches";
+      return;
+    }
+    if (!editorFindMatches.length) {
+      editorFindReplaceStatus.textContent = "0 matches";
+      return;
+    }
+    editorFindReplaceStatus.textContent = `${editorFindCurrentIndex + 1} of ${editorFindMatches.length} matches`;
+  }
+  function selectEditorFindMatch(index) {
+    if (!editorFindMatches.length) {
+      editorFindCurrentIndex = -1;
+      updateEditorFindReplaceStatus();
+      return;
+    }
+    editorFindCurrentIndex = (index + editorFindMatches.length) % editorFindMatches.length;
+    const match = editorFindMatches[editorFindCurrentIndex];
+    markdownEditor.focus();
+    markdownEditor.selectionStart = match.start;
+    markdownEditor.selectionEnd = match.end;
+    markdownEditor.scrollIntoView({ block: "nearest" });
+    updateEditorFindReplaceStatus();
+  }
+  function refreshEditorFindMatches(options = {}) {
+    const query = getEditorFindQuery();
+    const previousStart = editorFindMatches[editorFindCurrentIndex]?.start ?? markdownEditor.selectionStart ?? 0;
+    editorFindMatches = collectEditorFindMatches(query);
+    if (!editorFindMatches.length) {
+      editorFindCurrentIndex = -1;
+      updateEditorFindReplaceStatus();
+      return;
+    }
+    let nextIndex = editorFindMatches.findIndex(function(match) {
+      return match.start >= previousStart;
+    });
+    if (nextIndex < 0) nextIndex = 0;
+    if (options.select !== false) {
+      selectEditorFindMatch(nextIndex);
+    } else {
+      editorFindCurrentIndex = nextIndex;
+      updateEditorFindReplaceStatus();
+    }
+  }
+  function openEditorFindReplaceModal() {
+    if (!editorFindReplaceModal) return;
+    const selectedText = getSelectedEditorText();
+    if (editorFindInput) editorFindInput.value = selectedText;
+    if (editorReplaceInput) editorReplaceInput.value = "";
+    editorFindReplaceModal.style.display = "flex";
+    refreshEditorFindMatches({ select: !!selectedText });
+    window.setTimeout(function() {
+      editorFindInput?.focus();
+      editorFindInput?.select();
+    }, 0);
+  }
+  function closeEditorFindReplaceModal() {
+    if (!editorFindReplaceModal) return;
+    editorFindReplaceModal.style.display = "none";
+    markdownEditor.focus();
+  }
+  function goToNextEditorFindMatch() {
+    if (!editorFindMatches.length) refreshEditorFindMatches();
+    if (editorFindMatches.length) selectEditorFindMatch(editorFindCurrentIndex + 1);
+  }
+  function goToPreviousEditorFindMatch() {
+    if (!editorFindMatches.length) refreshEditorFindMatches();
+    if (editorFindMatches.length) selectEditorFindMatch(editorFindCurrentIndex - 1);
+  }
+  function replaceCurrentEditorFindMatch() {
+    const query = getEditorFindQuery();
+    if (!query) {
+      editorFindInput?.focus();
+      return;
+    }
+    if (!editorFindMatches.length) refreshEditorFindMatches();
+    const match = editorFindMatches[editorFindCurrentIndex];
+    if (!match) return;
+    markdownEditor.focus();
+    markdownEditor.selectionStart = match.start;
+    markdownEditor.selectionEnd = match.end;
+    editorContextMenu.replaceSelectionWithText(editorReplaceInput?.value || "");
+    refreshEditorFindMatches();
+  }
+  function replaceAllEditorFindMatches() {
+    const query = getEditorFindQuery();
+    if (!query) {
+      editorFindInput?.focus();
+      return;
+    }
+    const replacement = editorReplaceInput?.value || "";
+    const value = markdownEditor.value;
+    if (!value.includes(query)) {
+      refreshEditorFindMatches({ select: false });
+      return;
+    }
+    markdownEditor.focus();
+    markdownEditor.selectionStart = 0;
+    markdownEditor.selectionEnd = value.length;
+    editorContextMenu.replaceSelectionWithText(value.split(query).join(replacement));
+    refreshEditorFindMatches({ select: false });
+  }
   function getSelectedEditorText() {
     const selectionStart = Math.min(markdownEditor.selectionStart || 0, markdownEditor.selectionEnd || 0);
     const selectionEnd = Math.max(markdownEditor.selectionStart || 0, markdownEditor.selectionEnd || 0);
@@ -458,6 +786,306 @@
     editorContextMenu.replaceRangeWithText(editorReferenceSelection.start, value.length, replacement);
     closeEditorReferenceModal();
   }
+  function getEditorImageSourceMode() {
+    const selected = Array.from(editorImageSourceInputs).find((input) => input.checked);
+    return selected ? selected.value : "url";
+  }
+  function setEditorImageSourceMode(mode) {
+    editorImageSourceInputs.forEach(function(input) {
+      input.checked = input.value === mode;
+    });
+    updateEditorImageSourceFields();
+  }
+  function updateEditorImageSourceFields() {
+    const isFileMode = getEditorImageSourceMode() === "file";
+    if (editorImageUrlFields) editorImageUrlFields.style.display = isFileMode ? "none" : "block";
+    if (editorImageFileFields) editorImageFileFields.style.display = isFileMode ? "flex" : "none";
+  }
+  function escapeMarkdownImageAltText(value) {
+    return String(value || "").replace(/\\/g, "\\\\").replace(/]/g, "\\]");
+  }
+  function escapeMarkdownImageTitle(value) {
+    return String(value || "").replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+  }
+  function getMarkdownImageText(target, altText) {
+    const trimmedAltText = String(altText || "").trim();
+    const escapedAltText = escapeMarkdownImageAltText(trimmedAltText);
+    const escapedTitle = escapeMarkdownImageTitle(trimmedAltText);
+    return trimmedAltText ? `![${escapedAltText}](${target} "${escapedTitle}")` : `![](${target})`;
+  }
+  function getRelativeImagePathForEditor(imagePath) {
+    const normalizedImagePath = normalizeFilesystemLinkPath(imagePath || "");
+    if (!normalizedImagePath) return "";
+    const activeSourcePath = normalizeFilesystemLinkPath(getActiveMarkdownSourcePath() || "");
+    if (activeSourcePath && isAbsoluteFilesystemPath(activeSourcePath) && isAbsoluteFilesystemPath(normalizedImagePath)) {
+      return getRelativePathBetweenFiles(activeSourcePath, normalizedImagePath);
+    }
+    if (activeFolderPath && isAbsoluteFilesystemPath(normalizedImagePath) && isPathInsideFolder(normalizedImagePath, activeFolderPath)) {
+      return getPathRelativeToFolder(normalizedImagePath, activeFolderPath);
+    }
+    return normalizedImagePath.split("/").pop() || normalizedImagePath;
+  }
+  function openEditorImageModal() {
+    if (!editorImageModal) return;
+    editorImageSelection = {
+      start: Math.min(markdownEditor.selectionStart || 0, markdownEditor.selectionEnd || 0),
+      end: Math.max(markdownEditor.selectionStart || 0, markdownEditor.selectionEnd || 0)
+    };
+    setEditorImageSourceMode("url");
+    editorImageUrlInput.value = "https://";
+    editorImageFilePathInput.value = "";
+    editorImageAltInput.value = getSelectedEditorText();
+    editorImageModal.style.display = "flex";
+    window.setTimeout(function() {
+      editorImageUrlInput.focus();
+      editorImageUrlInput.select();
+    }, 0);
+  }
+  function closeEditorImageModal() {
+    if (!editorImageModal) return;
+    editorImageModal.style.display = "none";
+    markdownEditor.focus();
+  }
+  async function browseEditorImageFile() {
+    if (typeof Neutralino !== "undefined" && Neutralino.os?.showOpenDialog) {
+      try {
+        const selected = await Neutralino.os.showOpenDialog("Select image file", {
+          multiSelections: false,
+          filters: [{ name: "Images", extensions: ["png", "jpg", "jpeg", "gif", "webp", "svg", "avif"] }]
+        });
+        const selectedPath = Array.isArray(selected) ? selected[0] : selected;
+        if (selectedPath) editorImageFilePathInput.value = getRelativeImagePathForEditor(selectedPath);
+        return;
+      } catch (error) {
+        console.warn("Failed to open image picker:", error);
+      }
+    }
+    if (editorImageFileInput) editorImageFileInput.click();
+  }
+  function applyEditorImageModal() {
+    if (!editorImageSelection) return;
+    const isFileMode = getEditorImageSourceMode() === "file";
+    const target = (isFileMode ? editorImageFilePathInput.value : editorImageUrlInput.value).trim();
+    if (!target) {
+      (isFileMode ? editorImageFilePathInput : editorImageUrlInput).focus();
+      return;
+    }
+
+    markdownEditor.focus();
+    markdownEditor.selectionStart = editorImageSelection.start;
+    markdownEditor.selectionEnd = editorImageSelection.end;
+    editorContextMenu.replaceSelectionWithText(getMarkdownImageText(target, editorImageAltInput.value));
+    closeEditorImageModal();
+  }
+  function setEditorAlertType(alertType) {
+    editorSelectedAlertType = alertType || "NOTE";
+    editorAlertCards.forEach(function(card) {
+      const isSelected = card.dataset.alertType === editorSelectedAlertType;
+      card.classList.toggle("is-selected", isSelected);
+      card.setAttribute("aria-pressed", isSelected ? "true" : "false");
+    });
+  }
+  function getMarkdownAlertBody(alertType, selectedText) {
+    const title = String(alertType || "NOTE").toLowerCase().replace(/^\w/, function(letter) {
+      return letter.toUpperCase();
+    });
+    const body = String(selectedText || "").trim() || `${title} details go here.`;
+    return body.split(/\r?\n/).map(function(line) {
+      return line ? `> ${line}` : ">";
+    }).join("\n");
+  }
+  function getMarkdownAlertText(alertType, selectedText) {
+    return `> [!${alertType}]\n${getMarkdownAlertBody(alertType, selectedText)}`;
+  }
+  function openEditorAlertModal() {
+    if (!editorAlertModal) return;
+    editorAlertSelection = {
+      start: Math.min(markdownEditor.selectionStart || 0, markdownEditor.selectionEnd || 0),
+      end: Math.max(markdownEditor.selectionStart || 0, markdownEditor.selectionEnd || 0)
+    };
+    setEditorAlertType("NOTE");
+    editorAlertModal.style.display = "flex";
+    window.setTimeout(function() {
+      const selectedCard = editorAlertModal.querySelector(".editor-alert-card.is-selected");
+      if (selectedCard) selectedCard.focus();
+    }, 0);
+  }
+  function closeEditorAlertModal() {
+    if (!editorAlertModal) return;
+    editorAlertModal.style.display = "none";
+    markdownEditor.focus();
+  }
+  function applyEditorAlertModal() {
+    if (!editorAlertSelection) return;
+    const selectedText = markdownEditor.value.slice(editorAlertSelection.start, editorAlertSelection.end);
+    markdownEditor.focus();
+    markdownEditor.selectionStart = editorAlertSelection.start;
+    markdownEditor.selectionEnd = editorAlertSelection.end;
+    editorContextMenu.replaceSelectionWithText(getMarkdownAlertText(editorSelectedAlertType, selectedText));
+    closeEditorAlertModal();
+  }
+  function getFilteredEditorSymbols() {
+    const query = String(editorSymbolSearchInput?.value || "").trim().toLowerCase();
+    if (!query) return editorSymbols;
+    return editorSymbols.filter(function(item) {
+      return [item.group, item.symbol, item.entity, item.keywords].join(" ").toLowerCase().includes(query);
+    });
+  }
+  function setEditorSelectedSymbol(entity) {
+    editorSelectedSymbolEntity = entity || "&copy;";
+    if (!editorSymbolList) return;
+    editorSymbolList.querySelectorAll(".editor-symbol-card").forEach(function(card) {
+      const isSelected = card.dataset.entity === editorSelectedSymbolEntity;
+      card.classList.toggle("is-selected", isSelected);
+      card.setAttribute("aria-pressed", isSelected ? "true" : "false");
+    });
+  }
+  function renderEditorSymbolList() {
+    if (!editorSymbolList) return;
+    const filteredSymbols = getFilteredEditorSymbols();
+    const groups = [];
+    filteredSymbols.forEach(function(item) {
+      let group = groups.find(function(groupItem) { return groupItem.name === item.group; });
+      if (!group) {
+        group = { name: item.group, items: [] };
+        groups.push(group);
+      }
+      group.items.push(item);
+    });
+    editorSymbolList.innerHTML = "";
+    if (!groups.length) {
+      const empty = document.createElement("div");
+      empty.className = "editor-symbol-empty";
+      empty.textContent = "No symbols found";
+      editorSymbolList.appendChild(empty);
+      return;
+    }
+
+    groups.forEach(function(group) {
+      const section = document.createElement("section");
+      section.className = "editor-symbol-section";
+      const heading = document.createElement("h3");
+      heading.className = "editor-symbol-section-title";
+      heading.textContent = group.name;
+      const grid = document.createElement("div");
+      grid.className = "editor-symbol-grid";
+      group.items.forEach(function(item) {
+        const card = document.createElement("button");
+        card.className = "editor-symbol-card";
+        card.type = "button";
+        card.dataset.entity = item.entity;
+        card.setAttribute("aria-pressed", item.entity === editorSelectedSymbolEntity ? "true" : "false");
+        card.innerHTML = `<span class="editor-symbol-glyph">${escapeHtml(item.symbol)}</span><span class="editor-symbol-entity">${escapeHtml(item.entity)} <i class="bi bi-clipboard" aria-hidden="true"></i></span>`;
+        card.addEventListener("click", function() {
+          setEditorSelectedSymbol(item.entity);
+        });
+        grid.appendChild(card);
+      });
+      section.appendChild(heading);
+      section.appendChild(grid);
+      editorSymbolList.appendChild(section);
+    });
+    setEditorSelectedSymbol(editorSelectedSymbolEntity);
+  }
+  function openEditorSymbolModal() {
+    if (!editorSymbolModal) return;
+    editorSymbolSelection = {
+      start: Math.min(markdownEditor.selectionStart || 0, markdownEditor.selectionEnd || 0),
+      end: Math.max(markdownEditor.selectionStart || 0, markdownEditor.selectionEnd || 0)
+    };
+    editorSelectedSymbolEntity = "&copy;";
+    if (editorSymbolSearchInput) editorSymbolSearchInput.value = "";
+    renderEditorSymbolList();
+    editorSymbolModal.style.display = "flex";
+    window.setTimeout(function() {
+      editorSymbolSearchInput?.focus();
+    }, 0);
+  }
+  function closeEditorSymbolModal() {
+    if (!editorSymbolModal) return;
+    editorSymbolModal.style.display = "none";
+    markdownEditor.focus();
+  }
+  function applyEditorSymbolModal() {
+    if (!editorSymbolSelection || !editorSelectedSymbolEntity) return;
+    markdownEditor.focus();
+    markdownEditor.selectionStart = editorSymbolSelection.start;
+    markdownEditor.selectionEnd = editorSymbolSelection.end;
+    editorContextMenu.replaceSelectionWithText(editorSelectedSymbolEntity);
+    closeEditorSymbolModal();
+  }
+  function getFilteredEditorEmojis() {
+    const query = String(editorEmojiSearchInput?.value || "").trim().toLowerCase();
+    if (!query) return editorEmojis;
+    return editorEmojis.filter(function(item) {
+      return [item.emoji, item.shortcode, item.keywords].join(" ").toLowerCase().includes(query);
+    });
+  }
+  function setEditorSelectedEmoji(shortcode) {
+    editorSelectedEmojiShortcode = shortcode || ":+1:";
+    if (!editorEmojiList) return;
+    editorEmojiList.querySelectorAll(".editor-emoji-card").forEach(function(card) {
+      const isSelected = card.dataset.shortcode === editorSelectedEmojiShortcode;
+      card.classList.toggle("is-selected", isSelected);
+      card.setAttribute("aria-pressed", isSelected ? "true" : "false");
+    });
+  }
+  function renderEditorEmojiList() {
+    if (!editorEmojiList) return;
+    const filteredEmojis = getFilteredEditorEmojis();
+    editorEmojiList.innerHTML = "";
+    if (!filteredEmojis.length) {
+      const empty = document.createElement("div");
+      empty.className = "editor-symbol-empty";
+      empty.textContent = "No emojis found";
+      editorEmojiList.appendChild(empty);
+      return;
+    }
+
+    const grid = document.createElement("div");
+    grid.className = "editor-symbol-grid editor-emoji-grid";
+    filteredEmojis.forEach(function(item) {
+      const card = document.createElement("button");
+      card.className = "editor-symbol-card editor-emoji-card";
+      card.type = "button";
+      card.dataset.shortcode = item.shortcode;
+      card.setAttribute("aria-pressed", item.shortcode === editorSelectedEmojiShortcode ? "true" : "false");
+      card.innerHTML = `<span class="editor-symbol-glyph editor-emoji-glyph">${escapeHtml(item.emoji)}</span><span class="editor-symbol-entity">${escapeHtml(item.shortcode)} <i class="bi bi-clipboard" aria-hidden="true"></i></span>`;
+      card.addEventListener("click", function() {
+        setEditorSelectedEmoji(item.shortcode);
+      });
+      grid.appendChild(card);
+    });
+    editorEmojiList.appendChild(grid);
+    setEditorSelectedEmoji(editorSelectedEmojiShortcode);
+  }
+  function openEditorEmojiModal() {
+    if (!editorEmojiModal) return;
+    editorEmojiSelection = {
+      start: Math.min(markdownEditor.selectionStart || 0, markdownEditor.selectionEnd || 0),
+      end: Math.max(markdownEditor.selectionStart || 0, markdownEditor.selectionEnd || 0)
+    };
+    editorSelectedEmojiShortcode = ":+1:";
+    if (editorEmojiSearchInput) editorEmojiSearchInput.value = "";
+    renderEditorEmojiList();
+    editorEmojiModal.style.display = "flex";
+    window.setTimeout(function() {
+      editorEmojiSearchInput?.focus();
+    }, 0);
+  }
+  function closeEditorEmojiModal() {
+    if (!editorEmojiModal) return;
+    editorEmojiModal.style.display = "none";
+    markdownEditor.focus();
+  }
+  function applyEditorEmojiModal() {
+    if (!editorEmojiSelection || !editorSelectedEmojiShortcode) return;
+    markdownEditor.focus();
+    markdownEditor.selectionStart = editorEmojiSelection.start;
+    markdownEditor.selectionEnd = editorEmojiSelection.end;
+    editorContextMenu.replaceSelectionWithText(editorSelectedEmojiShortcode);
+    closeEditorEmojiModal();
+  }
   editorFormattingToolbarButtons.forEach(function(button) {
     button.addEventListener("mousedown", function(event) {
       event.preventDefault();
@@ -466,12 +1094,44 @@
       event.preventDefault();
       hideLinkAutocomplete();
       hideEditorContextMenu();
+      if (button.dataset.editorFormatAction === "undo") {
+        undoEditorToolbarAction();
+        return;
+      }
+      if (button.dataset.editorFormatAction === "redo") {
+        redoEditorToolbarAction();
+        return;
+      }
+      if (button.dataset.editorFormatAction === "clear-formatting") {
+        openEditorClearMarkdownModal();
+        return;
+      }
+      if (button.dataset.editorFormatAction === "find-replace") {
+        openEditorFindReplaceModal();
+        return;
+      }
       if (button.dataset.editorFormatAction === "link") {
         openEditorLinkModal();
         return;
       }
       if (button.dataset.editorFormatAction === "reference") {
         openEditorReferenceModal();
+        return;
+      }
+      if (button.dataset.editorFormatAction === "image") {
+        openEditorImageModal();
+        return;
+      }
+      if (button.dataset.editorFormatAction === "alert") {
+        openEditorAlertModal();
+        return;
+      }
+      if (button.dataset.editorFormatAction === "symbol") {
+        openEditorSymbolModal();
+        return;
+      }
+      if (button.dataset.editorFormatAction === "emoji") {
+        openEditorEmojiModal();
         return;
       }
       editorContextMenu.applyMarkdownActionToSelection(button.dataset.editorFormatAction);
@@ -499,6 +1159,202 @@
       if (event.target === editorReferenceModal) closeEditorReferenceModal();
     });
   }
+  editorImageSourceInputs.forEach(function(input) {
+    input.addEventListener("change", function() {
+      updateEditorImageSourceFields();
+      window.setTimeout(function() {
+        const targetInput = getEditorImageSourceMode() === "file" ? editorImageFilePathInput : editorImageUrlInput;
+        targetInput.focus();
+        targetInput.select();
+      }, 0);
+    });
+  });
+  if (editorImageBrowseButton) {
+    editorImageBrowseButton.addEventListener("click", browseEditorImageFile);
+  }
+  if (editorImageFileInput) {
+    editorImageFileInput.addEventListener("change", function() {
+      const file = editorImageFileInput.files && editorImageFileInput.files[0];
+      if (!file) return;
+      editorImageFilePathInput.value = (file.webkitRelativePath || file.name || "").replace(/\\/g, "/");
+    });
+  }
+  if (editorImageCancelButton) {
+    editorImageCancelButton.addEventListener("click", closeEditorImageModal);
+  }
+  if (editorImageApplyButton) {
+    editorImageApplyButton.addEventListener("click", applyEditorImageModal);
+  }
+  if (editorImageModal) {
+    editorImageModal.addEventListener("click", function(event) {
+      if (event.target === editorImageModal) closeEditorImageModal();
+    });
+  }
+  editorAlertCards.forEach(function(card) {
+    card.addEventListener("click", function() {
+      setEditorAlertType(card.dataset.alertType);
+    });
+  });
+  if (editorAlertCancelButton) {
+    editorAlertCancelButton.addEventListener("click", closeEditorAlertModal);
+  }
+  if (editorAlertApplyButton) {
+    editorAlertApplyButton.addEventListener("click", applyEditorAlertModal);
+  }
+  if (editorAlertModal) {
+    editorAlertModal.addEventListener("click", function(event) {
+      if (event.target === editorAlertModal) closeEditorAlertModal();
+    });
+    editorAlertModal.addEventListener("keydown", function(event) {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        closeEditorAlertModal();
+      }
+      if (event.key === "Enter" && event.target && event.target.classList.contains("editor-alert-card")) {
+        event.preventDefault();
+        applyEditorAlertModal();
+      }
+    });
+  }
+  if (editorSymbolSearchInput) {
+    editorSymbolSearchInput.addEventListener("input", renderEditorSymbolList);
+    editorSymbolSearchInput.addEventListener("keydown", function(event) {
+      if (event.key === "Enter") {
+        event.preventDefault();
+        applyEditorSymbolModal();
+      }
+      if (event.key === "Escape") {
+        event.preventDefault();
+        closeEditorSymbolModal();
+      }
+    });
+  }
+  if (editorSymbolCancelButton) {
+    editorSymbolCancelButton.addEventListener("click", closeEditorSymbolModal);
+  }
+  if (editorSymbolApplyButton) {
+    editorSymbolApplyButton.addEventListener("click", applyEditorSymbolModal);
+  }
+  if (editorSymbolModal) {
+    editorSymbolModal.addEventListener("click", function(event) {
+      if (event.target === editorSymbolModal) closeEditorSymbolModal();
+    });
+    editorSymbolModal.addEventListener("keydown", function(event) {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        closeEditorSymbolModal();
+      }
+      if (event.key === "Enter" && event.target && event.target.classList.contains("editor-symbol-card")) {
+        event.preventDefault();
+        applyEditorSymbolModal();
+      }
+    });
+  }
+  if (editorEmojiSearchInput) {
+    editorEmojiSearchInput.addEventListener("input", renderEditorEmojiList);
+    editorEmojiSearchInput.addEventListener("keydown", function(event) {
+      if (event.key === "Enter") {
+        event.preventDefault();
+        applyEditorEmojiModal();
+      }
+      if (event.key === "Escape") {
+        event.preventDefault();
+        closeEditorEmojiModal();
+      }
+    });
+  }
+  if (editorEmojiCancelButton) {
+    editorEmojiCancelButton.addEventListener("click", closeEditorEmojiModal);
+  }
+  if (editorEmojiApplyButton) {
+    editorEmojiApplyButton.addEventListener("click", applyEditorEmojiModal);
+  }
+  if (editorEmojiModal) {
+    editorEmojiModal.addEventListener("click", function(event) {
+      if (event.target === editorEmojiModal) closeEditorEmojiModal();
+    });
+    editorEmojiModal.addEventListener("keydown", function(event) {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        closeEditorEmojiModal();
+      }
+      if (event.key === "Enter" && event.target && event.target.classList.contains("editor-emoji-card")) {
+        event.preventDefault();
+        applyEditorEmojiModal();
+      }
+    });
+  }
+  [editorClearMarkdownCloseButton, editorClearMarkdownCancelButton].forEach(function(button) {
+    if (!button) return;
+    button.addEventListener("click", closeEditorClearMarkdownModal);
+  });
+  if (editorClearMarkdownApplyButton) {
+    editorClearMarkdownApplyButton.addEventListener("click", applyEditorClearMarkdownModal);
+  }
+  if (editorClearMarkdownModal) {
+    editorClearMarkdownModal.addEventListener("click", function(event) {
+      if (event.target === editorClearMarkdownModal) closeEditorClearMarkdownModal();
+    });
+    editorClearMarkdownModal.addEventListener("keydown", function(event) {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        closeEditorClearMarkdownModal();
+      }
+      if (event.key === "Enter") {
+        event.preventDefault();
+        applyEditorClearMarkdownModal();
+      }
+    });
+  }
+  [editorFindReplaceCloseButton, editorFindReplaceCancelButton].forEach(function(button) {
+    if (!button) return;
+    button.addEventListener("click", closeEditorFindReplaceModal);
+  });
+  if (editorFindInput) {
+    editorFindInput.addEventListener("input", function() {
+      refreshEditorFindMatches({ select: false });
+    });
+    editorFindInput.addEventListener("keydown", function(event) {
+      if (event.key === "Enter") {
+        event.preventDefault();
+        if (event.shiftKey) goToPreviousEditorFindMatch();
+        else goToNextEditorFindMatch();
+      }
+      if (event.key === "Escape") {
+        event.preventDefault();
+        closeEditorFindReplaceModal();
+      }
+    });
+  }
+  if (editorReplaceInput) {
+    editorReplaceInput.addEventListener("keydown", function(event) {
+      if (event.key === "Enter") {
+        event.preventDefault();
+        replaceCurrentEditorFindMatch();
+      }
+      if (event.key === "Escape") {
+        event.preventDefault();
+        closeEditorFindReplaceModal();
+      }
+    });
+  }
+  if (editorFindPrevButton) {
+    editorFindPrevButton.addEventListener("click", goToPreviousEditorFindMatch);
+  }
+  if (editorFindNextButton) {
+    editorFindNextButton.addEventListener("click", goToNextEditorFindMatch);
+  }
+  if (editorReplaceOneButton) {
+    editorReplaceOneButton.addEventListener("click", replaceCurrentEditorFindMatch);
+  }
+  if (editorReplaceAllButton) {
+    editorReplaceAllButton.addEventListener("click", replaceAllEditorFindMatches);
+  }
+  if (editorFindReplaceModal) {
+    editorFindReplaceModal.addEventListener("click", function(event) {
+      if (event.target === editorFindReplaceModal) closeEditorFindReplaceModal();
+    });
+  }
   [editorLinkUrlInput, editorLinkTextInput].forEach(function(input) {
     if (!input) return;
     input.addEventListener("keydown", function(event) {
@@ -509,6 +1365,19 @@
       if (event.key === "Escape") {
         event.preventDefault();
         closeEditorLinkModal();
+      }
+    });
+  });
+  [editorImageUrlInput, editorImageFilePathInput, editorImageAltInput].forEach(function(input) {
+    if (!input) return;
+    input.addEventListener("keydown", function(event) {
+      if (event.key === "Enter") {
+        event.preventDefault();
+        applyEditorImageModal();
+      }
+      if (event.key === "Escape") {
+        event.preventDefault();
+        closeEditorImageModal();
       }
     });
   });
@@ -1137,6 +2006,7 @@
     renderFrontmatterTable,
     updateEditorLineNumbers,
     enhanceWikiLinks,
+    enhancePreviewMarkdownImages,
     annotatePreviewMarkdownLinks,
     get enhanceGitHubAlerts() { return enhanceGitHubAlerts; },
     get initMermaid() { return initMermaid; },
@@ -2262,6 +3132,7 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
     newFile: { label: "New file ...", icon: "bi bi-file-earmark-plus" },
     newFolder: { label: "New folder ...", icon: "bi bi-folder-plus" },
     removePoint: { label: "Remove this point", icon: "bi bi-eye-slash" },
+    removeLeafNodes: { label: "Remove Leaf Nodes", icon: "bi bi-diagram-2" },
     showLocalGraph: { label: "Show local graph", icon: "bi bi-diagram-2" },
     showFullLocalGraph: { label: "Show full local graph", icon: "bi bi-diagram-3" },
     showFullNetwork: { label: "Show full network", icon: "bi bi-diagram-3" },

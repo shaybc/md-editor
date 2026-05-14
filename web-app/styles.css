@@ -237,6 +237,10 @@ body {
   transition: background-color 0.3s ease, border-color 0.3s ease;
 }
 
+.content-container.view-preview-only .editor-formatting-toolbar {
+  display: none;
+}
+
 .editor-formatting-toolbar::-webkit-scrollbar {
   height: 6px;
 }
@@ -4084,6 +4088,324 @@ a:focus {
   color: var(--disabled-text-color);
   font-size: 12px;
   font-weight: 600;
+}
+
+.editor-image-modal-box {
+  gap: 14px;
+}
+
+.editor-image-mode-options {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 2px 0 4px;
+}
+
+.editor-image-mode-option {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-color);
+  font-size: 13px;
+  line-height: 1.2;
+}
+
+.editor-image-mode-option input {
+  margin: 0;
+}
+
+.editor-image-file-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.editor-image-file-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.editor-image-file-row .rename-modal-input {
+  min-width: 0;
+}
+
+.editor-image-browse-button {
+  flex: 0 0 auto;
+}
+
+.editor-alert-modal-box {
+  width: min(640px, calc(100vw - 18px));
+  max-width: min(640px, calc(100vw - 18px));
+  gap: 16px;
+}
+
+.editor-alert-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.editor-alert-card {
+  display: block;
+  padding: 12px;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  background: var(--bg-color);
+  color: var(--text-color);
+  text-align: left;
+  cursor: pointer;
+}
+
+.editor-alert-card:hover,
+.editor-alert-card:focus-visible {
+  border-color: var(--accent-color);
+  outline: none;
+}
+
+.editor-alert-card.is-selected {
+  border-color: var(--accent-color);
+  box-shadow: 0 0 0 2px rgba(47, 129, 247, 0.24);
+}
+
+.editor-alert-preview {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-height: 78px;
+  padding: 12px 14px;
+  border-left: 4px solid currentColor;
+  border-radius: 6px;
+}
+
+.editor-alert-heading {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.editor-alert-body {
+  color: var(--text-color);
+  font-size: 15px;
+  line-height: 1.4;
+}
+
+.editor-alert-preview-note {
+  color: #58a6ff;
+  background: rgba(47, 129, 247, 0.2);
+}
+
+.editor-alert-preview-tip {
+  color: #3fb950;
+  background: rgba(35, 134, 54, 0.18);
+}
+
+.editor-alert-preview-important {
+  color: #a371f7;
+  background: rgba(111, 66, 193, 0.22);
+}
+
+.editor-alert-preview-warning {
+  color: #d29922;
+  background: rgba(187, 128, 9, 0.2);
+}
+
+.editor-alert-preview-caution {
+  color: #f85149;
+  background: rgba(248, 81, 73, 0.2);
+}
+
+.editor-symbol-modal-box {
+  width: min(980px, calc(100vw - 18px));
+  max-width: min(980px, calc(100vw - 18px));
+  max-height: min(650px, calc(100vh - 18px));
+  gap: 14px;
+}
+
+.editor-symbol-list {
+  max-height: 440px;
+  overflow: auto;
+  padding-right: 4px;
+}
+
+.editor-symbol-section {
+  margin-bottom: 16px;
+}
+
+.editor-symbol-section-title {
+  margin: 0 0 6px;
+  color: var(--disabled-text-color);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.editor-symbol-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.editor-symbol-card {
+  display: flex;
+  min-height: 80px;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 10px;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  background: var(--bg-color);
+  color: var(--text-color);
+  cursor: pointer;
+}
+
+.editor-symbol-card:hover,
+.editor-symbol-card:focus-visible {
+  border-color: var(--accent-color);
+  outline: none;
+}
+
+.editor-symbol-card.is-selected {
+  border-color: var(--accent-color);
+  background: rgba(47, 129, 247, 0.12);
+  box-shadow: 0 0 0 1px rgba(47, 129, 247, 0.36);
+}
+
+.editor-symbol-glyph {
+  min-height: 28px;
+  color: var(--text-color);
+  font-size: 28px;
+  line-height: 1;
+}
+
+.editor-symbol-entity {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--disabled-text-color);
+  font-size: 12px;
+}
+
+.editor-symbol-empty {
+  padding: 24px;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  color: var(--disabled-text-color);
+  text-align: center;
+}
+
+.editor-emoji-glyph {
+  font-size: 30px;
+}
+
+.editor-clear-markdown-modal-box {
+  position: relative;
+  width: min(640px, calc(100vw - 18px));
+  max-width: min(640px, calc(100vw - 18px));
+  gap: 20px;
+  padding: 28px;
+  text-align: left;
+}
+
+.editor-clear-markdown-title {
+  padding-right: 40px;
+  text-align: left;
+}
+
+.editor-clear-markdown-message {
+  margin: 0;
+  color: var(--disabled-text-color);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.editor-clear-markdown-close {
+  position: absolute;
+  top: 20px;
+  right: 20px;
+  width: 30px;
+  height: 30px;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  background: var(--button-bg);
+  color: var(--text-color);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.editor-clear-markdown-close:hover {
+  background: var(--button-hover);
+}
+
+.editor-clear-markdown-confirm {
+  border-color: #f85149;
+  background: #f85149;
+  color: #ffffff;
+}
+
+.editor-clear-markdown-confirm:hover {
+  background: #da3633;
+}
+
+.editor-find-replace-modal-box {
+  position: relative;
+  width: min(980px, calc(100vw - 18px));
+  max-width: min(980px, calc(100vw - 18px));
+  gap: 14px;
+  padding: 28px;
+  text-align: left;
+}
+
+.editor-find-replace-status-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-top: 6px;
+}
+
+.editor-find-replace-status {
+  color: var(--disabled-text-color);
+  font-size: 13px;
+}
+
+.editor-find-replace-nav {
+  display: inline-flex;
+  gap: 6px;
+}
+
+.editor-find-replace-nav-btn {
+  width: 32px;
+  height: 28px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.editor-symbol-actions {
+  padding-top: 2px;
+}
+
+@media (max-width: 760px) {
+  .editor-symbol-grid,
+  .editor-alert-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 420px) {
+  .editor-symbol-grid,
+  .editor-alert-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 .github-import-error {

@@ -6,6 +6,7 @@
     const escapeHtml = deps.escapeHtml;
     let linkAutocompleteLayer = null;
     let linkAutocompleteState = null;
+    const imagePathPattern = /\.(avif|bmp|gif|jpe?g|png|svg|webp)$/i;
 
     function getLinkAutocompleteLayer() {
       if (!linkAutocompleteLayer) {
@@ -209,6 +210,16 @@
         };
       }
 
+      if (lineBefore.endsWith("![]()")) {
+        return {
+          type: "image",
+          query: "",
+          replaceStart: cursor - 1,
+          replaceEnd: cursor - 1,
+          needsClosingSyntax: false
+        };
+      }
+
       if (lineBefore.endsWith("[]()")) {
         return {
           type: "markdown",
@@ -239,15 +250,17 @@
 
       const markdownStart = lineBefore.lastIndexOf("](");
       if (markdownStart !== -1) {
-        const query = lineBefore.slice(markdownStart + 2);
+        const rawQuery = lineBefore.slice(markdownStart + 2);
+        const query = rawQuery.replace(/\s+["'][^"']*$/, "");
         const labelOpen = lineBefore.lastIndexOf("[", markdownStart);
-        if (labelOpen !== -1 && !query.includes(")")) {
+        const isImageTarget = labelOpen > 0 && lineBefore[labelOpen - 1] === "!";
+        if (labelOpen !== -1 && !rawQuery.includes(")") && !/\s/.test(query)) {
           const lineEnd = value.indexOf("\n", cursor);
           const lineAfter = value.slice(cursor, lineEnd === -1 ? value.length : lineEnd);
           const closingParenOffset = lineAfter.indexOf(")");
           const hasClosingSyntax = closingParenOffset !== -1;
           return {
-            type: "markdown",
+            type: isImageTarget ? "image" : "markdown",
             query,
             replaceStart: lineStart + markdownStart + 2,
             replaceEnd: hasClosingSyntax ? cursor + closingParenOffset : cursor,
@@ -264,6 +277,30 @@
         .map((entry) => {
           const path = deps.normalizeMarkdownLinkPath(entry.path || entry.fullPath || entry.file?.webkitRelativePath || entry.file?.name || entry.name || "");
           if (!path || !deps.isMarkdownPath(path)) return null;
+          const name = entry.name || deps.getFileName(path);
+          return { entry, name, path };
+        })
+        .filter(Boolean)
+        .sort((a, b) => a.path.localeCompare(b.path, undefined, { sensitivity: "base" }));
+    }
+
+    function getAllFolderTreeFiles(nodes, files = []) {
+      (nodes || []).forEach((node) => {
+        if (!node) return;
+        if (node.kind === "directory") {
+          getAllFolderTreeFiles(node.children || [], files);
+        } else if (node.kind === "file") {
+          files.push(node);
+        }
+      });
+      return files;
+    }
+
+    function getImageAutocompleteEntries() {
+      return getAllFolderTreeFiles(deps.getCurrentFolderTreeNodes ? deps.getCurrentFolderTreeNodes() : [])
+        .map((entry) => {
+          const path = deps.normalizeMarkdownLinkPath(entry.path || entry.file?.webkitRelativePath || entry.name || entry.fullPath || "");
+          if (!path || !imagePathPattern.test(path)) return null;
           const name = entry.name || deps.getFileName(path);
           return { entry, name, path };
         })
@@ -326,6 +363,7 @@
     function getLinkAutocompleteInsertText(item) {
       if (linkAutocompleteState?.type === "tag") return `#${item.tag}`;
       if (linkAutocompleteState?.type === "frontmatter-tag") return item.tag;
+      if (linkAutocompleteState?.type === "image") return deps.normalizeMarkdownLinkPath(item.path);
       return getRootRelativeMarkdownLinkTarget(item.path);
     }
 
@@ -339,10 +377,10 @@
           : entries;
       }
 
-      const entries = getMarkdownLinkAutocompleteEntries();
+      const entries = context.type === "image" ? getImageAutocompleteEntries() : getMarkdownLinkAutocompleteEntries();
       return query
         ? entries.filter((item) => {
-            const nameWithoutExtension = item.name.replace(/\.(md|markdown)$/i, "").toLowerCase();
+            const nameWithoutExtension = item.name.replace(/\.[^.]+$/i, "").toLowerCase();
             return item.name.toLowerCase().includes(query)
               || item.path.toLowerCase().includes(query)
               || nameWithoutExtension.includes(query);
@@ -432,17 +470,17 @@
       const selectedIndex = Math.min(Math.max(linkAutocompleteState?.selectedIndex || 0, 0), Math.max(items.length - 1, 0));
       linkAutocompleteState = { ...context, items, selectedIndex };
       layer.innerHTML = "";
-      layer.setAttribute("aria-label", context.type === "tag" || context.type === "frontmatter-tag" ? "Tag suggestions" : "Link suggestions");
+      layer.setAttribute("aria-label", context.type === "tag" || context.type === "frontmatter-tag" ? "Tag suggestions" : context.type === "image" ? "Image suggestions" : "Link suggestions");
 
-      if (context.type !== "tag" && context.type !== "frontmatter-tag" && (!deps.getIsFolderOpen() || !deps.getFolderMarkdownFiles().length)) {
+      if (context.type !== "tag" && context.type !== "frontmatter-tag" && !deps.getIsFolderOpen()) {
         const empty = document.createElement("div");
         empty.className = "link-autocomplete-empty";
-        empty.textContent = "Open a folder to link documents.";
+        empty.textContent = context.type === "image" ? "Open a folder to insert images." : "Open a folder to link documents.";
         layer.appendChild(empty);
       } else if (!items.length) {
         const empty = document.createElement("div");
         empty.className = "link-autocomplete-empty";
-        empty.textContent = context.type === "tag" || context.type === "frontmatter-tag" ? "No matching tags." : "No matching Markdown documents.";
+        empty.textContent = context.type === "tag" || context.type === "frontmatter-tag" ? "No matching tags." : context.type === "image" ? "No matching images." : "No matching Markdown documents.";
         layer.appendChild(empty);
       } else {
         items.forEach((item, index) => {
@@ -454,7 +492,9 @@
           option.setAttribute("aria-selected", index === selectedIndex ? "true" : "false");
           option.innerHTML = context.type === "tag" || context.type === "frontmatter-tag"
             ? `<span class="link-autocomplete-name">${escapeHtml(item.name)}</span><span class="link-autocomplete-path">Tag</span>`
-            : `<span class="link-autocomplete-name">${escapeHtml(item.name.replace(/\.(md|markdown)$/i, ""))}</span><span class="link-autocomplete-path">${escapeHtml(item.path)}</span>`;
+            : context.type === "image"
+              ? `<span class="link-autocomplete-name">${escapeHtml(item.name)}</span><span class="link-autocomplete-path">${escapeHtml(item.path)}</span>`
+              : `<span class="link-autocomplete-name">${escapeHtml(item.name.replace(/\.(md|markdown)$/i, ""))}</span><span class="link-autocomplete-path">${escapeHtml(item.path)}</span>`;
           option.addEventListener("mousedown", (event) => {
             event.preventDefault();
             acceptLinkAutocomplete(index);
@@ -476,7 +516,7 @@
       const state = linkAutocompleteState;
       const item = state.items[index] || state.items[0];
       const baseInsertText = getLinkAutocompleteInsertText(item);
-      const closingSyntax = state.type === "wiki" ? "]]" : state.type === "markdown" ? ")" : "";
+      const closingSyntax = state.type === "wiki" ? "]]" : (state.type === "markdown" || state.type === "image") ? ")" : "";
       const insertText = state.needsClosingSyntax && closingSyntax ? `${baseInsertText}${closingSyntax}` : baseInsertText;
       const value = markdownEditor.value;
       const closingSyntaxLength = closingSyntax

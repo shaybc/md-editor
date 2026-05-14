@@ -70,6 +70,16 @@ const browserLibraryStub = `
             continue;
           }
 
+          var image = line.match(/^!\\[([^\\]]*)\\]\\((\\S+)(?:\\s+"([^"]*)")?\\)$/);
+          if (image) {
+            if (inList) {
+              html += "</ul>";
+              inList = false;
+            }
+            html += "<p><img src=\\"" + escapeHtml(image[2]) + "\\" alt=\\"" + escapeHtml(image[1]) + "\\"" + (image[3] ? " title=\\"" + escapeHtml(image[3]) + "\\"" : "") + "></p>";
+            continue;
+          }
+
           if (!line.trim()) {
             if (inList) {
               html += "</ul>";
@@ -434,16 +444,19 @@ test("switches between editor, preview, and split views", async ({ page }) => {
   await expect(page.locator(".view-mode-btn[data-mode='preview']")).toHaveAttribute("aria-pressed", "true");
   await expect(previewPane).toBeVisible();
   await expect(editorPane).not.toBeVisible();
+  await expect(page.locator(".editor-formatting-toolbar")).not.toBeVisible();
 
   await page.locator(".view-mode-btn[data-mode='editor']").click();
   await expect(page.locator(".view-mode-btn[data-mode='editor']")).toHaveAttribute("aria-pressed", "true");
   await expect(editorPane).toBeVisible();
   await expect(previewPane).not.toBeVisible();
+  await expect(page.locator(".editor-formatting-toolbar")).toBeVisible();
 
   await page.locator(".view-mode-btn[data-mode='split']").click();
   await expect(page.locator(".view-mode-btn[data-mode='split']")).toHaveAttribute("aria-pressed", "true");
   await expect(editorPane).toBeVisible();
   await expect(previewPane).toBeVisible();
+  await expect(page.locator(".editor-formatting-toolbar")).toBeVisible();
 });
 
 test("opens new documents in split view regardless of the current view mode", async ({ page }) => {
@@ -614,6 +627,21 @@ test("converts selected editor text from the formatting toolbar", async ({ page 
   await page.locator(".editor-format-button[data-editor-format-action='heading-1']").click();
 
   await expect(editor).toHaveValue("# Toolbar heading");
+  await page.locator(".editor-format-button[data-editor-format-action='undo']").click();
+  await expect(editor).toHaveValue("Toolbar heading");
+  await page.locator(".editor-format-button[data-editor-format-action='redo']").click();
+  await expect(editor).toHaveValue("# Toolbar heading");
+
+  await editor.fill("**Bold** and [link](https://example.com)");
+  await editor.evaluate((textarea) => {
+    textarea.focus();
+    textarea.selectionStart = 0;
+    textarea.selectionEnd = textarea.value.length;
+  });
+  await page.locator(".editor-format-button[data-editor-format-action='clear-formatting']").click();
+  await expect(page.locator("#editor-clear-markdown-modal")).toBeVisible();
+  await page.locator("#editor-clear-markdown-apply").click();
+  await expect(editor).toHaveValue("Bold and link");
 
   await editor.fill("small heading");
   await editor.evaluate((textarea) => {
@@ -687,6 +715,103 @@ test("converts selected editor text from the formatting toolbar", async ({ page 
   await page.locator("#editor-reference-title").fill("Reference title");
   await page.locator("#editor-reference-apply").click();
   await expect(editor).toHaveValue('italic text[1]\n\n[1]: https://example.com/ref "Reference title"');
+
+  await editor.fill("Architecture chart");
+  await editor.evaluate((textarea) => {
+    textarea.focus();
+    textarea.selectionStart = 0;
+    textarea.selectionEnd = textarea.value.length;
+  });
+  await page.locator(".editor-format-button[data-editor-format-action='image']").click();
+  await expect(page.locator("#editor-image-modal")).toBeVisible();
+  await expect(page.locator("#editor-image-alt")).toHaveValue("Architecture chart");
+  await page.locator("#editor-image-url").fill("https://example.com/chart.png");
+  await page.locator("#editor-image-apply").click();
+  await expect(editor).toHaveValue('![Architecture chart](https://example.com/chart.png "Architecture chart")');
+
+  await page.evaluate(() => {
+    const file = new File([new Uint8Array([137, 80, 78, 71])], "diagram.png", { type: "image/png" });
+    window.markdownViewerApp.state.currentFolderTreeNodes = [
+      {
+        kind: "directory",
+        name: "images",
+        path: "images",
+        children: [{ kind: "file", name: "diagram.png", path: "images/diagram.png", file }]
+      }
+    ];
+  });
+  await editor.fill("Local diagram");
+  await editor.evaluate((textarea) => {
+    textarea.focus();
+    textarea.selectionStart = 0;
+    textarea.selectionEnd = textarea.value.length;
+  });
+  await page.locator(".editor-format-button[data-editor-format-action='image']").click();
+  await page.locator("input[name='editor-image-source'][value='file']").check();
+  await expect(page.locator("#editor-image-file-fields")).toBeVisible();
+  await page.locator("#editor-image-file-path").fill("images/diagram.png");
+  await page.locator("#editor-image-apply").click();
+  await expect(editor).toHaveValue('![Local diagram](images/diagram.png "Local diagram")');
+  await expect.poll(() => page.locator("#markdown-preview img[alt='Local diagram']").getAttribute("src"))
+    .toContain("blob:");
+
+  await editor.fill("Review this before release.");
+  await editor.evaluate((textarea) => {
+    textarea.focus();
+    textarea.selectionStart = 0;
+    textarea.selectionEnd = textarea.value.length;
+  });
+  await page.locator(".editor-format-button[data-editor-format-action='alert']").click();
+  await expect(page.locator("#editor-alert-modal")).toBeVisible();
+  await expect(page.locator(".editor-alert-card.is-selected")).toHaveAttribute("data-alert-type", "NOTE");
+  await page.locator(".editor-alert-card[data-alert-type='WARNING']").click();
+  await page.locator("#editor-alert-apply").click();
+  await expect(editor).toHaveValue("> [!WARNING]\n> Review this before release.");
+
+  await editor.fill("Copyright ");
+  await editor.evaluate((textarea) => {
+    textarea.focus();
+    textarea.selectionStart = textarea.value.length;
+    textarea.selectionEnd = textarea.value.length;
+  });
+  await page.locator(".editor-format-button[data-editor-format-action='symbol']").click();
+  await expect(page.locator("#editor-symbol-modal")).toBeVisible();
+  await expect(page.locator(".editor-symbol-card.is-selected")).toHaveAttribute("data-entity", "&copy;");
+  await page.locator("#editor-symbol-search").fill("right arrow");
+  await page.locator(".editor-symbol-card[data-entity='&rarr;']").click();
+  await page.locator("#editor-symbol-apply").click();
+  await expect(editor).toHaveValue("Copyright &rarr;");
+
+  await editor.fill("Ship it ");
+  await editor.evaluate((textarea) => {
+    textarea.focus();
+    textarea.selectionStart = textarea.value.length;
+    textarea.selectionEnd = textarea.value.length;
+  });
+  await page.locator(".editor-format-button[data-editor-format-action='emoji']").click();
+  await expect(page.locator("#editor-emoji-modal")).toBeVisible();
+  await expect(page.locator(".editor-emoji-card.is-selected")).toHaveAttribute("data-shortcode", ":+1:");
+  await page.locator("#editor-emoji-search").fill("rocket");
+  await page.locator(".editor-emoji-card[data-shortcode=':rocket:']").click();
+  await page.locator("#editor-emoji-apply").click();
+  await expect(editor).toHaveValue("Ship it :rocket:");
+
+  await editor.fill("alpha beta alpha");
+  await editor.evaluate((textarea) => {
+    textarea.focus();
+    textarea.selectionStart = 0;
+    textarea.selectionEnd = 5;
+  });
+  await page.locator(".editor-format-button[data-editor-format-action='find-replace']").click();
+  await expect(page.locator("#editor-find-replace-modal")).toBeVisible();
+  await expect(page.locator("#editor-find-input")).toHaveValue("alpha");
+  await expect(page.locator("#editor-find-replace-status")).toHaveText("1 of 2 matches");
+  await page.locator("#editor-replace-input").fill("gamma");
+  await page.locator("#editor-replace-one").click();
+  await expect(editor).toHaveValue("gamma beta alpha");
+  await expect(page.locator("#editor-find-replace-status")).toHaveText("1 of 1 matches");
+  await page.locator("#editor-replace-all").click();
+  await expect(editor).toHaveValue("gamma beta gamma");
 });
 
 test("mirrors editor markdown syntax in the highlight overlay", async ({ page }) => {
@@ -750,6 +875,40 @@ test("suggests and accepts known tags while typing", async ({ page }) => {
 
   await page.keyboard.press("Enter");
   await expect(editor).toHaveValue("#alpha");
+});
+
+test("suggests image files inside Markdown image targets", async ({ page }) => {
+  await openApp(page);
+  await page.evaluate(() => {
+    window.markdownViewerApp.state.isFolderOpen = true;
+    window.markdownViewerApp.state.currentFolderTreeNodes = [
+      { kind: "file", name: "README.md", path: "README.md" },
+      {
+        kind: "directory",
+        name: "images",
+        path: "images",
+        children: [
+          { kind: "file", name: "diagram.png", path: "images/diagram.png" },
+          { kind: "file", name: "photo.webp", path: "images/photo.webp" }
+        ]
+      }
+    ];
+  });
+
+  const editor = page.locator("#markdown-editor");
+  await editor.fill("");
+  await editor.focus();
+  await page.keyboard.type("![Diagram](dia");
+
+  const autocomplete = page.locator("#link-autocomplete-layer");
+  await expect(autocomplete).toBeVisible();
+  await expect(autocomplete).toHaveAttribute("aria-label", "Image suggestions");
+  await expect(autocomplete.locator(".link-autocomplete-option")).toHaveCount(1);
+  await expect(autocomplete.locator(".link-autocomplete-option").first()).toContainText("diagram.png");
+  await expect(autocomplete).not.toContainText("README");
+
+  await page.keyboard.press("Enter");
+  await expect(editor).toHaveValue("![Diagram](images/diagram.png)");
 });
 
 test("saved graph remains interactive and filters only graph snapshot tags", async ({ page, context }) => {
@@ -833,11 +992,25 @@ test("saved graph remains interactive and filters only graph snapshot tags", asy
 
   const graphMenu = page.locator(".graph-tab-render .graph-context-menu:not(.hidden)");
   await expect(graphMenu).toBeVisible();
-  await expect(graphMenu).toContainText("Turn magnetic forces off");
   await expect(graphMenu).toContainText("Open in a new tab");
+  await expect(graphMenu.getByRole("button", { name: "Turn magnetic forces off" })).toBeHidden();
+  await expect(graphMenu.getByRole("button", { name: "Open all" })).toBeHidden();
+  await expect(graphMenu.getByRole("button", { name: "Remove Leaf Nodes" })).toBeHidden();
   await expect(graphMenu.locator(".tags-context-menu-item")).toHaveText(["#defined"]);
 
-  await graphMenu.getByText("Turn magnetic forces off").click();
+  await page.locator(".graph-tab-render").dispatchEvent("contextmenu", {
+    bubbles: true,
+    cancelable: true,
+    button: 2,
+    clientX: 260,
+    clientY: 260
+  });
+  const mapMenu = page.locator(".graph-tab-render .graph-context-menu:not(.hidden)");
+  await expect(mapMenu).toContainText("Turn magnetic forces off");
+  await expect(mapMenu).toContainText("Remove Leaf Nodes");
+  await expect(mapMenu.getByRole("button", { name: "Open in a new tab" })).toBeHidden();
+
+  await mapMenu.getByText("Turn magnetic forces off").click();
   await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem("markdownViewerGlobalState")).graphMagneticEnabled)).toBe(false);
 
   await page.locator(".graph-tab-render").dispatchEvent("contextmenu", {
@@ -1342,6 +1515,87 @@ test("graph open all asks before opening more than twenty visible file points", 
     confirms: ["Open 21 files in editor tabs?\n\nThis might slow down your computer or crash the app."],
     tabCount: 1
   });
+});
+
+test("graph context menu removes visible leaf nodes generation by generation", async ({ page }) => {
+  await page.addInitScript(() => {
+    const graphTab = {
+      id: "graph_leaf_e2e",
+      title: "Leaf Graph",
+      content: "",
+      scrollPos: 0,
+      viewMode: "preview",
+      createdAt: Date.now(),
+      isTemporary: false,
+      type: "graph",
+      folderName: "Leaf Graph",
+      graphViewConfig: {
+        showTags: false,
+        hiddenTagIds: [],
+        hiddenNodeIds: [],
+        selectedTagIds: [],
+        groups: [],
+        searchQuery: "",
+        showArrows: true,
+        textFadeThreshold: 0.35,
+        nodeSize: 0.8,
+        linkThickness: 1,
+        centerForce: 1,
+        repelForce: 650,
+        linkForce: 0.4,
+        linkDistance: 170
+      },
+      graphSnapshot: {
+        version: 1,
+        folderName: "Leaf Graph",
+        createdAt: Date.now(),
+        nodes: [
+          { id: "root.md", label: "root.md", type: "file", status: "current" },
+          { id: "mid.md", label: "mid.md", type: "file", status: "current" },
+          { id: "leaf.md", label: "leaf.md", type: "file", status: "current" }
+        ],
+        links: [
+          { source: "root.md", target: "mid.md", type: "link", status: "current" },
+          { source: "mid.md", target: "leaf.md", type: "link", status: "current" }
+        ],
+        files: [
+          { id: "root.md", path: "root.md", name: "root.md", content: "[[mid]]", status: "current" },
+          { id: "mid.md", path: "mid.md", name: "mid.md", content: "[[leaf]]", status: "current" },
+          { id: "leaf.md", path: "leaf.md", name: "leaf.md", content: "# Leaf", status: "current" }
+        ]
+      }
+    };
+    localStorage.setItem("markdownViewerTabs", JSON.stringify([graphTab]));
+    localStorage.setItem("markdownViewerActiveTab", graphTab.id);
+  });
+
+  await page.goto("/");
+  await expect(page.locator(".graph-tab-render")).toBeVisible();
+  await expect(page.locator(".graph-node-file")).toHaveCount(3);
+
+  await page.locator(".graph-tab-render").dispatchEvent("contextmenu", {
+    bubbles: true,
+    cancelable: true,
+    button: 2,
+    clientX: 260,
+    clientY: 260
+  });
+  await page.locator(".graph-context-menu-item", { hasText: "Remove Leaf Nodes" }).click();
+  await expect(page.locator(".graph-node-file")).toHaveCount(2);
+  await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem("markdownViewerTabs"))[0].graphViewConfig.hiddenNodeIds.sort()))
+    .toEqual(["leaf.md"]);
+
+  await page.locator(".graph-tab-render").dispatchEvent("contextmenu", {
+    bubbles: true,
+    cancelable: true,
+    button: 2,
+    clientX: 260,
+    clientY: 260
+  });
+  await page.locator(".graph-context-menu-item", { hasText: "Remove Leaf Nodes" }).click();
+  await expect(page.locator(".graph-node-file")).toHaveCount(1);
+  await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem("markdownViewerTabs"))[0].graphViewConfig.hiddenNodeIds.sort()))
+    .toEqual(["leaf.md", "mid.md"]);
 });
 
 test("desktop graph context menu can update file tags", async ({ page }) => {

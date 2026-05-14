@@ -398,6 +398,157 @@
           </div>
         </div>
 
+        <!-- Editor Image Modal -->
+        <div id="editor-image-modal" class="reset-modal-overlay editor-link-modal" role="dialog" aria-modal="true" aria-labelledby="editor-image-modal-title" style="display:none;">
+          <div class="reset-modal-box editor-link-modal-box editor-image-modal-box">
+            <p id="editor-image-modal-title" class="reset-modal-message editor-link-modal-title">Insert image</p>
+            <div class="editor-image-mode-options" role="radiogroup" aria-label="Image source">
+              <label class="editor-image-mode-option">
+                <input type="radio" name="editor-image-source" value="file" />
+                <span>select from folders</span>
+              </label>
+              <label class="editor-image-mode-option">
+                <input type="radio" name="editor-image-source" value="url" checked />
+                <span>External Image (URL)</span>
+              </label>
+            </div>
+            <div id="editor-image-url-fields">
+              <label class="editor-link-modal-label" for="editor-image-url">Image URL</label>
+              <input type="url" id="editor-image-url" class="rename-modal-input" placeholder="https://" autocomplete="url" />
+            </div>
+            <div id="editor-image-file-fields" class="editor-image-file-fields" style="display:none;">
+              <label class="editor-link-modal-label" for="editor-image-file-path">Image file path</label>
+              <div class="editor-image-file-row">
+                <input type="text" id="editor-image-file-path" class="rename-modal-input" placeholder="images/example.png" />
+                <button class="reset-modal-btn editor-image-browse-button" id="editor-image-browse" type="button">Browse</button>
+              </div>
+              <input type="file" id="editor-image-file-input" accept="image/*" hidden />
+            </div>
+            <label class="editor-link-modal-label" for="editor-image-alt">Alt Text (used for title)</label>
+            <input type="text" id="editor-image-alt" class="rename-modal-input" placeholder="Image description" />
+            <div class="reset-modal-actions">
+              <button class="reset-modal-btn reset-modal-cancel" id="editor-image-cancel" type="button">Cancel</button>
+              <button class="reset-modal-btn" id="editor-image-apply" type="button">Insert</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Editor Markdown Alert Modal -->
+        <div id="editor-alert-modal" class="reset-modal-overlay editor-link-modal" role="dialog" aria-modal="true" aria-labelledby="editor-alert-modal-title" style="display:none;">
+          <div class="reset-modal-box editor-link-modal-box editor-alert-modal-box">
+            <p id="editor-alert-modal-title" class="reset-modal-message editor-link-modal-title">Markdown alerts</p>
+            <div class="editor-alert-grid" role="radiogroup" aria-label="Markdown alert type">
+              <button class="editor-alert-card is-selected" type="button" data-alert-type="NOTE" aria-pressed="true">
+                <span class="editor-alert-preview editor-alert-preview-note">
+                  <span class="editor-alert-heading"><i class="bi bi-info-circle-fill" aria-hidden="true"></i> Note</span>
+                  <span class="editor-alert-body">Note details go here.</span>
+                </span>
+              </button>
+              <button class="editor-alert-card" type="button" data-alert-type="TIP" aria-pressed="false">
+                <span class="editor-alert-preview editor-alert-preview-tip">
+                  <span class="editor-alert-heading"><i class="bi bi-lightbulb" aria-hidden="true"></i> Tip</span>
+                  <span class="editor-alert-body">Tip details go here.</span>
+                </span>
+              </button>
+              <button class="editor-alert-card" type="button" data-alert-type="IMPORTANT" aria-pressed="false">
+                <span class="editor-alert-preview editor-alert-preview-important">
+                  <span class="editor-alert-heading"><i class="bi bi-exclamation-circle-fill" aria-hidden="true"></i> Important</span>
+                  <span class="editor-alert-body">Important details go here.</span>
+                </span>
+              </button>
+              <button class="editor-alert-card" type="button" data-alert-type="WARNING" aria-pressed="false">
+                <span class="editor-alert-preview editor-alert-preview-warning">
+                  <span class="editor-alert-heading"><i class="bi bi-exclamation-triangle-fill" aria-hidden="true"></i> Warning</span>
+                  <span class="editor-alert-body">Warning details go here.</span>
+                </span>
+              </button>
+              <button class="editor-alert-card" type="button" data-alert-type="CAUTION" aria-pressed="false">
+                <span class="editor-alert-preview editor-alert-preview-caution">
+                  <span class="editor-alert-heading"><i class="bi bi-x-circle-fill" aria-hidden="true"></i> Caution</span>
+                  <span class="editor-alert-body">Caution details go here.</span>
+                </span>
+              </button>
+            </div>
+            <div class="reset-modal-actions">
+              <button class="reset-modal-btn reset-modal-cancel" id="editor-alert-cancel" type="button">Cancel</button>
+              <button class="reset-modal-btn" id="editor-alert-apply" type="button">Insert</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Editor Symbols Modal -->
+        <div id="editor-symbol-modal" class="reset-modal-overlay editor-link-modal" role="dialog" aria-modal="true" aria-labelledby="editor-symbol-modal-title" style="display:none;">
+          <div class="reset-modal-box editor-link-modal-box editor-symbol-modal-box">
+            <p id="editor-symbol-modal-title" class="reset-modal-message editor-link-modal-title">Symbols &amp; HTML Entities</p>
+            <label class="editor-link-modal-label" for="editor-symbol-search">Search</label>
+            <input type="search" id="editor-symbol-search" class="rename-modal-input" placeholder="Search symbols" autocomplete="off" />
+            <div id="editor-symbol-list" class="editor-symbol-list" role="radiogroup" aria-label="Symbols and HTML entities"></div>
+            <div class="reset-modal-actions editor-symbol-actions">
+              <button class="reset-modal-btn reset-modal-cancel" id="editor-symbol-cancel" type="button">Cancel</button>
+              <button class="reset-modal-btn" id="editor-symbol-apply" type="button">Insert</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Editor Emoji Modal -->
+        <div id="editor-emoji-modal" class="reset-modal-overlay editor-link-modal" role="dialog" aria-modal="true" aria-labelledby="editor-emoji-modal-title" style="display:none;">
+          <div class="reset-modal-box editor-link-modal-box editor-symbol-modal-box">
+            <p id="editor-emoji-modal-title" class="reset-modal-message editor-link-modal-title">GitHub Emojis</p>
+            <label class="editor-link-modal-label" for="editor-emoji-search">Search</label>
+            <input type="search" id="editor-emoji-search" class="rename-modal-input" placeholder="Search emojis" autocomplete="off" />
+            <div id="editor-emoji-list" class="editor-symbol-list editor-emoji-list" role="radiogroup" aria-label="GitHub emoji shortcodes"></div>
+            <div class="reset-modal-actions editor-symbol-actions">
+              <button class="reset-modal-btn reset-modal-cancel" id="editor-emoji-cancel" type="button">Cancel</button>
+              <button class="reset-modal-btn" id="editor-emoji-apply" type="button">Insert</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Editor Clear Markdown Modal -->
+        <div id="editor-clear-markdown-modal" class="reset-modal-overlay editor-link-modal" role="dialog" aria-modal="true" aria-labelledby="editor-clear-markdown-title" style="display:none;">
+          <div class="reset-modal-box editor-clear-markdown-modal-box">
+            <button class="modal-close editor-clear-markdown-close" id="editor-clear-markdown-close" type="button" aria-label="Close clear Markdown dialog">
+              <i class="bi bi-x-lg" aria-hidden="true"></i>
+            </button>
+            <p id="editor-clear-markdown-title" class="reset-modal-message editor-clear-markdown-title">Clear Markdown formatting?</p>
+            <p class="editor-clear-markdown-message">Only the Markdown formatting in the selected content is cleared. The file itself is not deleted.</p>
+            <div class="reset-modal-actions">
+              <button class="reset-modal-btn reset-modal-cancel" id="editor-clear-markdown-cancel" type="button">Cancel</button>
+              <button class="reset-modal-btn editor-clear-markdown-confirm" id="editor-clear-markdown-apply" type="button">Clear Markdown</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Editor Find and Replace Modal -->
+        <div id="editor-find-replace-modal" class="reset-modal-overlay editor-link-modal" role="dialog" aria-modal="true" aria-labelledby="editor-find-replace-title" style="display:none;">
+          <div class="reset-modal-box editor-find-replace-modal-box">
+            <button class="modal-close editor-clear-markdown-close" id="editor-find-replace-close" type="button" aria-label="Close find and replace dialog">
+              <i class="bi bi-x-lg" aria-hidden="true"></i>
+            </button>
+            <p id="editor-find-replace-title" class="reset-modal-message editor-clear-markdown-title">Find &amp; Replace</p>
+            <label class="editor-link-modal-label" for="editor-find-input">Find</label>
+            <input type="text" id="editor-find-input" class="rename-modal-input" placeholder="Find text" autocomplete="off" />
+            <label class="editor-link-modal-label" for="editor-replace-input">Replace</label>
+            <input type="text" id="editor-replace-input" class="rename-modal-input" placeholder="Replace with" autocomplete="off" />
+            <div class="editor-find-replace-status-row">
+              <span id="editor-find-replace-status" class="editor-find-replace-status">0 matches</span>
+              <div class="editor-find-replace-nav">
+                <button class="reset-modal-btn editor-find-replace-nav-btn" id="editor-find-prev" type="button" title="Previous match" aria-label="Previous match">
+                  <i class="bi bi-chevron-up" aria-hidden="true"></i>
+                </button>
+                <button class="reset-modal-btn editor-find-replace-nav-btn" id="editor-find-next" type="button" title="Next match" aria-label="Next match">
+                  <i class="bi bi-chevron-down" aria-hidden="true"></i>
+                </button>
+              </div>
+            </div>
+            <div class="reset-modal-actions">
+              <button class="reset-modal-btn reset-modal-cancel" id="editor-find-replace-cancel" type="button">Close</button>
+              <button class="reset-modal-btn" id="editor-replace-one" type="button">Replace</button>
+              <button class="reset-modal-btn" id="editor-replace-all" type="button">Replace All</button>
+            </div>
+          </div>
+        </div>
+
         <!-- About Modal -->
         <div id="about-modal" class="reset-modal-overlay" role="dialog" aria-modal="true" aria-labelledby="about-modal-title" style="display:none;">
           <div class="reset-modal-box about-modal-box">
@@ -541,6 +692,16 @@
                   </button>
                 </div>
                 <div class="editor-formatting-toolbar" role="toolbar" aria-label="Markdown formatting tools">
+                  <button class="editor-format-button" type="button" data-editor-format-action="undo" title="Undo" aria-label="Undo">
+                    <i class="bi bi-arrow-counterclockwise" aria-hidden="true"></i>
+                  </button>
+                  <button class="editor-format-button" type="button" data-editor-format-action="redo" title="Redo" aria-label="Redo">
+                    <i class="bi bi-arrow-clockwise" aria-hidden="true"></i>
+                  </button>
+                  <button class="editor-format-button" type="button" data-editor-format-action="clear-formatting" title="Clear Markdown formatting" aria-label="Clear Markdown formatting">
+                    <i class="bi bi-eraser" aria-hidden="true"></i>
+                  </button>
+                  <span class="editor-format-separator" aria-hidden="true"></span>
                   <button class="editor-format-button" type="button" data-editor-format-action="strong" title="Bold" aria-label="Bold">
                     <i class="bi bi-type-bold" aria-hidden="true"></i>
                   </button>
@@ -587,11 +748,26 @@
                     <i class="bi bi-link-45deg" aria-hidden="true"></i>
                   </button>
                   <button class="editor-format-button editor-format-reference" type="button" data-editor-format-action="reference" title="Reference" aria-label="Reference">[]</button>
+                  <button class="editor-format-button" type="button" data-editor-format-action="image" title="Image" aria-label="Image">
+                    <i class="bi bi-image" aria-hidden="true"></i>
+                  </button>
                   <button class="editor-format-button" type="button" data-editor-format-action="url" title="URL" aria-label="URL">
                     <i class="bi bi-globe" aria-hidden="true"></i>
                   </button>
                   <button class="editor-format-button" type="button" data-editor-format-action="table" title="Table" aria-label="Table">
                     <i class="bi bi-table" aria-hidden="true"></i>
+                  </button>
+                  <button class="editor-format-button" type="button" data-editor-format-action="alert" title="Markdown alert" aria-label="Markdown alert">
+                    <i class="bi bi-info-square" aria-hidden="true"></i>
+                  </button>
+                  <button class="editor-format-button" type="button" data-editor-format-action="symbol" title="Symbols &amp; HTML entities" aria-label="Symbols and HTML entities">
+                    <i class="bi bi-c-circle" aria-hidden="true"></i>
+                  </button>
+                  <button class="editor-format-button" type="button" data-editor-format-action="emoji" title="Emoji shortcode" aria-label="Emoji shortcode">
+                    <i class="bi bi-emoji-smile" aria-hidden="true"></i>
+                  </button>
+                  <button class="editor-format-button" type="button" data-editor-format-action="find-replace" title="Find &amp; Replace" aria-label="Find and Replace">
+                    <i class="bi bi-search" aria-hidden="true"></i>
                   </button>
                 </div>
                 <div class="editor-content-row">

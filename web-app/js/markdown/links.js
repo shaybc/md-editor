@@ -201,8 +201,10 @@
           ? candidate.slice(activeFolderName.length + 1)
           : candidate;
         return candidate === normalizedResolvedPath
+          || candidate === normalizedRawTargetPath
           || candidate === resolvedWithoutFolderRoot
           || candidateWithoutFolderRoot === normalizedResolvedPath
+          || candidateWithoutFolderRoot === normalizedRawTargetPath
           || candidateWithoutFolderRoot === resolvedWithoutFolderRoot;
       });
     });
@@ -252,6 +254,128 @@
     }
 
     return null;
+  }
+
+  function isPreviewImagePath(path) {
+    return /\.(avif|bmp|gif|jpe?g|png|svg|webp)([#?].*)?$/i.test(path || "");
+  }
+
+  function getImageMimeType(path) {
+    const extension = String(path || "").toLowerCase().split(/[?#]/)[0].split(".").pop();
+    switch (extension) {
+      case "avif": return "image/avif";
+      case "bmp": return "image/bmp";
+      case "gif": return "image/gif";
+      case "jpg":
+      case "jpeg": return "image/jpeg";
+      case "png": return "image/png";
+      case "svg": return "image/svg+xml";
+      case "webp": return "image/webp";
+      default: return "application/octet-stream";
+    }
+  }
+
+  function getAllFolderTreeFileNodes(nodes, files = []) {
+    (nodes || []).forEach((node) => {
+      if (!node) return;
+      if (node.kind === "directory") {
+        getAllFolderTreeFileNodes(node.children || [], files);
+      } else if (node.kind === "file") {
+        files.push(node);
+      }
+    });
+    return files;
+  }
+
+  function findOpenFolderFileNode(resolvedPath, rawTargetPath) {
+    const normalizedResolvedPath = normalizeMarkdownLinkPath(resolvedPath);
+    const normalizedRawTargetPath = normalizeMarkdownLinkPath(rawTargetPath || "");
+    const rawTargetIsBareFileName = !!normalizedRawTargetPath && !normalizedRawTargetPath.includes("/");
+    const rawTargetFileName = rawTargetIsBareFileName ? getFileName(normalizedRawTargetPath).toLowerCase() : "";
+    const resolvedWithoutFolderRoot = activeFolderName && normalizedResolvedPath.startsWith(`${activeFolderName}/`)
+      ? normalizedResolvedPath.slice(activeFolderName.length + 1)
+      : normalizedResolvedPath;
+
+    const exactMatch = getAllFolderTreeFileNodes(currentFolderTreeNodes || []).find((node) => {
+      const candidates = [
+        node.path,
+        node.fullPath,
+        node.file && node.file.webkitRelativePath,
+        node.file && node.file.name,
+        node.name
+      ].filter(Boolean).map((candidate) => normalizeMarkdownLinkPath(candidate));
+
+      return candidates.some((candidate) => {
+        const candidateWithoutFolderRoot = activeFolderName && candidate.startsWith(`${activeFolderName}/`)
+          ? candidate.slice(activeFolderName.length + 1)
+          : candidate;
+        return candidate === normalizedResolvedPath
+          || candidate === resolvedWithoutFolderRoot
+          || candidateWithoutFolderRoot === normalizedResolvedPath
+          || candidateWithoutFolderRoot === resolvedWithoutFolderRoot
+          || candidate === normalizedRawTargetPath;
+      });
+    });
+
+    if (exactMatch || !rawTargetIsBareFileName) return exactMatch || null;
+
+    return getAllFolderTreeFileNodes(currentFolderTreeNodes || []).find((node) => {
+      return getFileName(node.path || node.fullPath || node.name || "").toLowerCase() === rawTargetFileName;
+    }) || null;
+  }
+
+  function getReadableFilesystemImagePath(resolvedPath) {
+    if (isAbsoluteFilesystemPath(resolvedPath)) return resolvedPath;
+    if (!activeFolderPath) return "";
+    const normalized = normalizeMarkdownLinkPath(resolvedPath);
+    const folderRelativePath = activeFolderName && normalized.startsWith(`${activeFolderName}/`)
+      ? normalized.slice(activeFolderName.length + 1)
+      : normalized;
+    return joinPath(activeFolderPath, folderRelativePath);
+  }
+
+  async function readFilesystemImageAsObjectUrl(path) {
+    if (typeof Neutralino === "undefined" || !Neutralino.filesystem?.readBinaryFile || !path) return "";
+    const buffer = await Neutralino.filesystem.readBinaryFile(path);
+    const blob = new Blob([buffer], { type: getImageMimeType(path) });
+    return URL.createObjectURL(blob);
+  }
+
+  async function getPreviewImageObjectUrl(rawSrc) {
+    if (!rawSrc || rawSrc.startsWith("data:") || rawSrc.startsWith("blob:") || isExternalOrSpecialLinkTarget(rawSrc)) return "";
+    if (!isPreviewImagePath(rawSrc)) return "";
+
+    const activeSourcePath = getActiveMarkdownSourcePath();
+    const resolvedPath = resolveMarkdownLinkPath(rawSrc, activeSourcePath);
+    const folderNode = findOpenFolderFileNode(resolvedPath, rawSrc);
+    if (folderNode?.file) {
+      return URL.createObjectURL(folderNode.file);
+    }
+    if (folderNode?.handle) {
+      const file = await folderNode.handle.getFile();
+      return URL.createObjectURL(file);
+    }
+
+    const filesystemPath = folderNode?.fullPath || getReadableFilesystemImagePath(resolvedPath);
+    return filesystemPath ? readFilesystemImageAsObjectUrl(filesystemPath) : "";
+  }
+
+  function enhancePreviewMarkdownImages(container) {
+    if (!container) return;
+    container.querySelectorAll("img[src]").forEach((image) => {
+      const rawSrc = image.getAttribute("src") || "";
+      if (!rawSrc || image.dataset.markdownImageResolved === "true") return;
+      image.dataset.markdownImageOriginalSrc = rawSrc;
+      getPreviewImageObjectUrl(rawSrc)
+        .then((objectUrl) => {
+          if (!objectUrl) return;
+          image.src = objectUrl;
+          image.dataset.markdownImageResolved = "true";
+        })
+        .catch((error) => {
+          console.warn("Failed to resolve preview image:", rawSrc, error);
+        });
+    });
   }
 
   function scrollMarkdownPreviewToHash(hash) {
@@ -433,7 +557,7 @@
     anchor.className = "wiki-link";
     anchor.href = getWikiLinkHref(target);
     anchor.textContent = label;
-    anchor.title = `Wiki link: ${target}`;
+    anchor.title = `Open Markdown file: ${ensureMarkdownLinkExtension(target)}`;
     anchor.dataset.wikiTarget = target;
     return anchor;
   }
@@ -511,6 +635,7 @@
       api.normalizeMarkdownAnchorSlug = normalizeMarkdownAnchorSlug;
       api.openMarkdownLinkFromPreview = openMarkdownLinkFromPreview;
       api.markdownSourceFileMatchesTab = markdownSourceFileMatchesTab;
+      api.enhancePreviewMarkdownImages = enhancePreviewMarkdownImages;
       api.annotatePreviewMarkdownLinks = annotatePreviewMarkdownLinks;
       api.getPreviewLinkStatusUrl = getPreviewLinkStatusUrl;
       api.handlePreviewLinkMouseOver = handlePreviewLinkMouseOver;

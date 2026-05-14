@@ -622,6 +622,11 @@
       "Remove this point from the current graph view while keeping the original file on disk."
     );
     hidePointBtn.classList.add("hidden");
+    const removeLeafNodesBtn = createContextMenuButton(
+      CONTEXT_MENU_ACTIONS.removeLeafNodes.label,
+      CONTEXT_MENU_ACTIONS.removeLeafNodes.icon,
+      "Hide all visible file points that have no direct outgoing Markdown links."
+    );
     const localGraphBtn = createContextMenuButton(
       CONTEXT_MENU_ACTIONS.showLocalGraph.label,
       CONTEXT_MENU_ACTIONS.showLocalGraph.icon,
@@ -767,6 +772,7 @@
     contextMenu.appendChild(sharePointBtn);
     contextMenu.appendChild(contextMenuGraphSeparator);
     contextMenu.appendChild(hidePointBtn);
+    contextMenu.appendChild(removeLeafNodesBtn);
     contextMenu.appendChild(localGraphBtn);
     contextMenu.appendChild(fullLocalGraphBtn);
     contextMenu.appendChild(fullNetworkBtn);
@@ -1052,6 +1058,42 @@
       renderGraphView();
     };
 
+    const getVisibleLeafNodeIds = () => {
+      const visibleFileNodeIds = new Set(nodes.filter((n) => !isTagNode(n)).map((n) => n.id));
+      const nodesWithOutgoingLinks = new Set();
+      links.filter(isMarkdownLink).forEach((link) => {
+        const sourceId = getLinkSourceId(link);
+        const targetId = getLinkTargetId(link);
+        if (visibleFileNodeIds.has(sourceId) && visibleFileNodeIds.has(targetId)) {
+          nodesWithOutgoingLinks.add(sourceId);
+        }
+      });
+      return Array.from(visibleFileNodeIds).filter((nodeId) => !nodesWithOutgoingLinks.has(nodeId));
+    };
+
+    const hideLeafGraphPoints = () => {
+      const leafNodeIds = getVisibleLeafNodeIds();
+      if (!leafNodeIds.length) {
+        hideContextMenu();
+        return;
+      }
+
+      simulation.stop();
+      const activeGraphTab = getActiveGraphTab();
+      if (activeGraphTab) {
+        activeGraphTab.graphViewConfig = {
+          ...(activeGraphTab.graphViewConfig || {}),
+          hiddenNodeIds: Array.from(new Set([...(activeGraphTab.graphViewConfig?.hiddenNodeIds || []), ...leafNodeIds]))
+        };
+        markGraphTabAsChanged(activeGraphTab);
+        saveTabsToStorage(tabs);
+        graphRenderCache.delete(activeGraphTab.id);
+      }
+      hideContextMenu();
+      graphRenderWrapper.remove();
+      renderGraphView();
+    };
+
     const removeGraphPointFromSnapshot = (nodeId) => {
       const activeGraphTab = getActiveGraphTab();
       if (!activeGraphTab?.graphSnapshot) return;
@@ -1275,9 +1317,18 @@
       contextMenuDeleteEndSeparator,
       exportSubmenu
     ];
+    const graphContextMenuItems = [
+      openAllBtn,
+      removeLeafNodesBtn,
+      magneticToggleBtn
+    ];
 
     const setNodeContextItemsHidden = (hidden) => {
       nodeContextMenuItems.forEach((item) => item.classList.toggle("hidden", hidden));
+    };
+
+    const setGraphContextItemsHidden = (hidden) => {
+      graphContextMenuItems.forEach((item) => item.classList.toggle("hidden", hidden));
     };
 
     const positionContextMenu = (event) => {
@@ -1294,6 +1345,7 @@
       contextMenuTitleSeparator.classList.add("hidden");
       contextMenuActionSeparator.classList.add("hidden");
       setNodeContextItemsHidden(true);
+      setGraphContextItemsHidden(false);
     };
 
     graphRenderWrapper.addEventListener("contextmenu", (event) => {
@@ -1304,6 +1356,7 @@
       contextMenuTitleSeparator.classList.add("hidden");
       contextMenuActionSeparator.classList.add("hidden");
       setNodeContextItemsHidden(true);
+      setGraphContextItemsHidden(false);
       positionContextMenu(event);
       contextMenu.classList.remove("hidden");
     });
@@ -1315,8 +1368,9 @@
       contextMenuTitle.textContent = getGraphContextMenuTitle(d);
       contextMenuTitle.classList.remove("hidden");
       contextMenuTitleSeparator.classList.remove("hidden");
-      contextMenuActionSeparator.classList.remove("hidden");
+      contextMenuActionSeparator.classList.add("hidden");
       setNodeContextItemsHidden(false);
+      setGraphContextItemsHidden(true);
       const isFileNode = (d.type || "file") !== "tag";
       const keepSavedMode = isKeepSavedGraphMode(activeTab);
       [openFileBtn, openDefaultAppBtn, revealFileBtn, revealTreeViewBtn, copySubmenu, sharePointBtn, localGraphBtn, fullLocalGraphBtn, fullNetworkBtn, exportSubmenu].forEach((item) => item.classList.toggle("hidden", !isFileNode));
@@ -1360,6 +1414,11 @@
       event.stopPropagation();
       hideContextMenu();
       await openAllVisibleGraphFiles();
+    });
+
+    removeLeafNodesBtn.addEventListener("click", (event) => {
+      event.stopPropagation();
+      hideLeafGraphPoints();
     });
 
     openFileBtn.addEventListener("click", async (event) => {

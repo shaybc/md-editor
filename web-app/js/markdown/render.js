@@ -72,6 +72,7 @@
       });
       markdownPreview.innerHTML = sanitizedHtml;
       enhanceWikiLinks(markdownPreview);
+      enhancePreviewMarkdownImages(markdownPreview);
       annotatePreviewMarkdownLinks(markdownPreview);
       enhanceGitHubAlerts(markdownPreview);
 

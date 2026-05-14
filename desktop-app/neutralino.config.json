@@ -17,6 +17,7 @@
     "app.*",
     "os.*",
     "filesystem.readFile",
+    "filesystem.readBinaryFile",
     "filesystem.writeFile",
     "filesystem.readDirectory",
     "filesystem.createDirectory",
