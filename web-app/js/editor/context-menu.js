@@ -239,6 +239,16 @@
       hideEditorContextMenu();
     }
 
+    function applyMarkdownActionToSelection(type) {
+      const selectionStart = markdownEditor.selectionStart;
+      const selectionEnd = markdownEditor.selectionEnd;
+      editorContextMenuSelection = {
+        start: Math.min(selectionStart, selectionEnd),
+        end: Math.max(selectionStart, selectionEnd)
+      };
+      replaceEditorSelectionWithMarkdown(type);
+    }
+
     function renderEditorContextMenu(clientX, clientY) {
       const menu = getEditorContextMenu();
       const selectedText = markdownEditor.value.slice(editorContextMenuSelection.start, editorContextMenuSelection.end);
@@ -288,6 +298,7 @@
     const api = {
       contains,
       convertSelectionToMarkdown,
+      applyMarkdownActionToSelection,
       hideEditorContextMenu,
       handleEditorContextMenu,
       redoEditorContextMenuConversion,

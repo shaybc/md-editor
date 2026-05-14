@@ -599,22 +599,21 @@ test("updates document statistics and focused editor position", async ({ page })
   await expect(page.locator("#editor-position-value")).toHaveText(String(markdown.length + 1));
 });
 
-test("converts selected editor text from the context menu", async ({ page }) => {
+test("converts selected editor text from the formatting toolbar", async ({ page }) => {
   await openApp(page);
 
   const editor = page.locator("#markdown-editor");
-  await editor.fill("Context heading");
+  await editor.fill("Toolbar heading");
   await editor.evaluate((textarea) => {
     textarea.focus();
     textarea.selectionStart = 0;
     textarea.selectionEnd = textarea.value.length;
   });
-  await editor.dispatchEvent("contextmenu", { button: 2, clientX: 160, clientY: 180 });
 
-  await expect(page.locator("#editor-context-menu")).toBeVisible();
-  await page.locator("#editor-context-menu [data-markdown-action='heading-1']").dispatchEvent("click");
+  await expect(page.locator(".editor-formatting-toolbar")).toBeVisible();
+  await page.locator(".editor-format-button[data-editor-format-action='heading-1']").click();
 
-  await expect(editor).toHaveValue("# Context heading");
+  await expect(editor).toHaveValue("# Toolbar heading");
 });
 
 test("mirrors editor markdown syntax in the highlight overlay", async ({ page }) => {

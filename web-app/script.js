@@ -87,6 +87,7 @@
   const editorCursorColumnElement = document.getElementById("editor-cursor-column");
   const editorPositionLabelElement = document.getElementById("editor-position-label");
   const editorPositionValueElement = document.getElementById("editor-position-value");
+  const editorFormattingToolbarButtons = document.querySelectorAll(".editor-formatting-toolbar [data-editor-format-action]");
   let previewHoveredLinkUrl = "";
 
   const clipboard = window.registerMarkdownViewerClipboard(app, {
@@ -351,6 +352,17 @@
   const handleEditorContextMenu = editorContextMenu.handleEditorContextMenu;
   const redoEditorContextMenuConversion = editorContextMenu.redoEditorContextMenuConversion;
   const undoEditorContextMenuConversion = editorContextMenu.undoEditorContextMenuConversion;
+  editorFormattingToolbarButtons.forEach(function(button) {
+    button.addEventListener("mousedown", function(event) {
+      event.preventDefault();
+    });
+    button.addEventListener("click", function(event) {
+      event.preventDefault();
+      hideLinkAutocomplete();
+      hideEditorContextMenu();
+      editorContextMenu.applyMarkdownActionToSelection(button.dataset.editorFormatAction);
+    });
+  });
   // View Mode Elements - Story 1.1
   const contentContainer = document.querySelector(".content-container");
   const viewModeButtons = document.querySelectorAll(".view-mode-btn");
@@ -2698,7 +2710,6 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
     syncEditorSelectionHighlightsScroll();
     hideEditorContextMenu();
   });
-  markdownEditor.addEventListener("contextmenu", handleEditorContextMenu);
   document.addEventListener("click", function(event) {
     if (!editorContextMenu || editorContextMenu.contains(event.target)) return;
     hideEditorContextMenu();
