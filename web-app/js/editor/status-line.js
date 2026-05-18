@@ -14,6 +14,10 @@
     const graphZoomPercentElement = deps.graphZoomPercentElement;
     const graphPointsStatusElement = deps.graphPointsStatusElement;
     const graphPointsCountElement = deps.graphPointsCountElement;
+    const graphCollapsedNodesStatusElement = deps.graphCollapsedNodesStatusElement;
+    const graphClustersCountElement = deps.graphClustersCountElement;
+    const graphClustersLabelElement = deps.graphClustersLabelElement;
+    const graphCollapsedNodesCountElement = deps.graphCollapsedNodesCountElement;
     const graphSelectedNodesStatusElement = deps.graphSelectedNodesStatusElement;
     const graphSelectedNodesCountElement = deps.graphSelectedNodesCountElement;
     const editorTextpadStatusElement = deps.editorTextpadStatusElement;
@@ -85,6 +89,12 @@
       const selectedGraphNodeCount = typeof options.selectedGraphNodeCount === "number"
         ? options.selectedGraphNodeCount
         : (typeof activeGraphTab?.selectedGraphNodeCount === "number" ? activeGraphTab.selectedGraphNodeCount : 0);
+      const graphClusterCount = typeof options.graphClusterCount === "number"
+        ? options.graphClusterCount
+        : (typeof activeGraphTab?.graphClusterCount === "number" ? activeGraphTab.graphClusterCount : 0);
+      const graphCollapsedNodeCount = typeof options.graphCollapsedNodeCount === "number"
+        ? options.graphCollapsedNodeCount
+        : (typeof activeGraphTab?.graphCollapsedNodeCount === "number" ? activeGraphTab.graphCollapsedNodeCount : 0);
 
       if (statusTipElement) {
         statusTipElement.textContent = getPreviewHoveredLinkUrl() || (activeGraphTab
@@ -100,6 +110,13 @@
       if (graphPointsStatusElement && graphPointsCountElement) {
         graphPointsCountElement.textContent = visiblePointCount.toLocaleString();
         graphPointsStatusElement.classList.toggle("hidden", !activeGraphTab);
+      }
+
+      if (graphCollapsedNodesStatusElement && graphClustersCountElement && graphCollapsedNodesCountElement) {
+        graphClustersCountElement.textContent = graphClusterCount.toLocaleString();
+        if (graphClustersLabelElement) graphClustersLabelElement.textContent = graphClusterCount === 1 ? "cluster" : "clusters";
+        graphCollapsedNodesCountElement.textContent = graphCollapsedNodeCount.toLocaleString();
+        graphCollapsedNodesStatusElement.classList.toggle("hidden", !activeGraphTab || graphClusterCount <= 0 || graphCollapsedNodeCount <= 0);
       }
 
       if (graphSelectedNodesStatusElement && graphSelectedNodesCountElement) {

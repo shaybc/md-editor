@@ -80,6 +80,10 @@
   const graphZoomPercentElement = document.getElementById("graph-zoom-percent");
   const graphPointsStatusElement = document.getElementById("graph-points-status");
   const graphPointsCountElement = document.getElementById("graph-points-count");
+  const graphCollapsedNodesStatusElement = document.getElementById("graph-collapsed-nodes-status");
+  const graphClustersCountElement = document.getElementById("graph-clusters-count");
+  const graphClustersLabelElement = document.getElementById("graph-clusters-label");
+  const graphCollapsedNodesCountElement = document.getElementById("graph-collapsed-nodes-count");
   const graphSelectedNodesStatusElement = document.getElementById("graph-selected-nodes-status");
   const graphSelectedNodesCountElement = document.getElementById("graph-selected-nodes-count");
   const appStatusLineElement = document.querySelector(".app-status-line");
@@ -3737,6 +3741,10 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
     graphZoomPercentElement,
     graphPointsStatusElement,
     graphPointsCountElement,
+    graphCollapsedNodesStatusElement,
+    graphClustersCountElement,
+    graphClustersLabelElement,
+    graphCollapsedNodesCountElement,
     editorTextpadStatusElement,
     editorTotalLengthElement,
     editorTotalLinesElement,

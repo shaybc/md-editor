@@ -760,6 +760,8 @@
       searchQuery: DEFAULT_GRAPH_VIEW_CONFIG.searchQuery,
       groups: currentConfig.groups.map((group) => ({ ...group, enabled: false, hidden: false })),
       collapsedClusters: [],
+      autoCollapsedLargeGraph: false,
+      autoCollapsedLargeGraphVersion: 0,
       showArrows: DEFAULT_GRAPH_VIEW_CONFIG.showArrows,
       showOrphans: DEFAULT_GRAPH_VIEW_CONFIG.showOrphans,
       showLabels: DEFAULT_GRAPH_VIEW_CONFIG.showLabels,

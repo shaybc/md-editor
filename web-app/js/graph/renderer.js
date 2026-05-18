@@ -30,7 +30,7 @@
     };
     removeGraphLoadingState();
     if (!activeTab || activeTab.type !== "graph") {
-      updateStatusLine({ visiblePointCount: 0 });
+      updateStatusLine({ visiblePointCount: 0, graphClusterCount: 0, graphCollapsedNodeCount: 0 });
       updateGraphTagToolbar(null, null);
       renderTagManagementList();
       return;
@@ -81,8 +81,10 @@
       });
       graphRenderCache.clear();
       activeTab.visiblePointCount = 0;
+      activeTab.graphClusterCount = 0;
+      activeTab.graphCollapsedNodeCount = 0;
       if (!options.skipToolbar) updateGraphTagToolbar(activeTab, graphSnapshot);
-      updateStatusLine({ visiblePointCount: 0 });
+      updateStatusLine({ visiblePointCount: 0, graphClusterCount: 0, graphCollapsedNodeCount: 0 });
       graphViewCanvas.innerHTML = '<p class="folder-tree-placeholder">This graph tab does not have a saved graph snapshot.</p>';
       return;
     }
@@ -97,7 +99,15 @@
       activeTab.visiblePointCount = cachedRender.visiblePointCount || 0;
       activeTab.graphZoomScale = cachedRender.zoomScale || getGraphZoomScaleFromLayout(activeTab.graphLayout);
       activeTab.selectedGraphNodeCount = 0;
-      updateStatusLine({ visiblePointCount: activeTab.visiblePointCount, graphZoomScale: activeTab.graphZoomScale, selectedGraphNodeCount: 0 });
+      activeTab.graphClusterCount = cachedRender.graphClusterCount || 0;
+      activeTab.graphCollapsedNodeCount = cachedRender.graphCollapsedNodeCount || 0;
+      updateStatusLine({
+        visiblePointCount: activeTab.visiblePointCount,
+        graphZoomScale: activeTab.graphZoomScale,
+        selectedGraphNodeCount: 0,
+        graphClusterCount: activeTab.graphClusterCount,
+        graphCollapsedNodeCount: activeTab.graphCollapsedNodeCount
+      });
       return;
     }
 
@@ -448,9 +458,11 @@
     }
 
     const LARGE_GRAPH_AUTO_CLUSTER_NODE_LIMIT = 500;
-    const LARGE_GRAPH_AUTO_CLUSTER_VERSION = 2;
-    const getLargeGraphAutoClusterTarget = (nodeCount) => Math.min(1000, Math.max(500, Math.floor(nodeCount * 0.35)));
-    const getLargeGraphAutoClusterMaxSize = (nodeCount) => Math.max(80, Math.min(450, Math.ceil(nodeCount / 35)));
+    const LARGE_GRAPH_AUTO_CLUSTER_VERSION = 3;
+    const LARGE_GRAPH_RENDER_NODE_BUDGET = 900;
+    const getLargeGraphAutoClusterTarget = (nodeCount) => Math.min(LARGE_GRAPH_RENDER_NODE_BUDGET, Math.max(450, Math.floor(nodeCount * 0.08)));
+    const getLargeGraphAutoClusterMaxSize = (nodeCount) => Math.max(160, Math.min(900, Math.ceil(nodeCount / 18)));
+    const getLargeGraphHubBudget = (nodeCount) => Math.max(100, Math.min(320, Math.floor(getLargeGraphAutoClusterTarget(nodeCount) * 0.35)));
     const getVisibleFileNodeIdsForClustering = () => new Set(nodes
       .filter((nodeData) => !isTagNode(nodeData) && !isClusterNode(nodeData))
       .map((nodeData) => nodeData.id));
@@ -597,12 +609,17 @@
 
       const nodesById = new Map(nodes.map((nodeData) => [nodeData.id, nodeData]));
       const outgoingCountsByNodeId = new Map();
+      const incomingCountsByNodeId = new Map();
       links.filter(isMarkdownLink).forEach((link) => {
         const sourceId = getLinkSourceId(link);
         const targetId = getLinkTargetId(link);
         if (!sourceId || !targetId || sourceId === targetId) return;
         outgoingCountsByNodeId.set(sourceId, (outgoingCountsByNodeId.get(sourceId) || 0) + 1);
+        incomingCountsByNodeId.set(targetId, (incomingCountsByNodeId.get(targetId) || 0) + 1);
       });
+      const importanceOf = (nodeId) => (adjacency.get(nodeId)?.size || 0)
+        + (outgoingCountsByNodeId.get(nodeId) || 0)
+        + (incomingCountsByNodeId.get(nodeId) || 0);
       const usedNodeIds = new Set();
       const clusters = [];
       const targetNodeCount = getLargeGraphAutoClusterTarget(visibleFileNodeIds.size);
@@ -614,7 +631,7 @@
         memberNodeIds.forEach((nodeId) => usedNodeIds.add(nodeId));
         const seedNodeId = memberNodeIds
           .slice()
-          .sort((a, b) => ((outgoingCountsByNodeId.get(b) || 0) - (outgoingCountsByNodeId.get(a) || 0)) || a.localeCompare(b))[0];
+          .sort((a, b) => importanceOf(b) - importanceOf(a) || a.localeCompare(b))[0];
         const seedNode = nodesById.get(seedNodeId) || {};
         clusters.push({
           id: createGraphGroupId(`auto-cluster:${activeTab.id}:${source}:${index}:${seedNodeId}:${memberNodeIds.join(",")}`),
@@ -645,6 +662,25 @@
         fallbackChunks.forEach((chunkNodeIds, index) => {
           if (currentReduction >= requiredReduction) return;
           addClusterCandidate(chunkNodeIds, index, "budget");
+        });
+      }
+
+      if (currentReduction < requiredReduction) {
+        const hubNodeIds = new Set(Array.from(visibleFileNodeIds)
+          .filter((nodeId) => !usedNodeIds.has(nodeId))
+          .sort((a, b) => importanceOf(b) - importanceOf(a) || a.localeCompare(b))
+          .slice(0, getLargeGraphHubBudget(visibleFileNodeIds.size)));
+        const detailNodeIds = Array.from(visibleFileNodeIds)
+          .filter((nodeId) => !usedNodeIds.has(nodeId) && !hubNodeIds.has(nodeId));
+        const detailChunks = getConnectedClusterSubsets(detailNodeIds, adjacency)
+          .sort((a, b) => b.length - a.length || String(a[0] || "").localeCompare(String(b[0] || "")))
+          .flatMap((componentNodeIds) => getBudgetedClusterChunks(componentNodeIds, adjacency, {
+            maxClusterSize: getLargeGraphAutoClusterMaxSize(visibleFileNodeIds.size),
+            minClusterSize: 3
+          }));
+        detailChunks.forEach((chunkNodeIds, index) => {
+          if (currentReduction >= requiredReduction) return;
+          addClusterCandidate(chunkNodeIds, index, "detail");
         });
       }
 
@@ -781,9 +817,19 @@
       }
     });
 
+    const clusterNodes = nodes.filter(isClusterNode);
+    const graphClusterCount = clusterNodes.length;
+    const graphCollapsedNodeCount = clusterNodes.reduce((total, nodeData) => total + Math.max(0, Number(nodeData.collapsedCount || nodeData.memberNodeIds?.length || 0)), 0);
     activeTab.visiblePointCount = nodes.length;
     activeTab.selectedGraphNodeCount = 0;
-    updateStatusLine({ visiblePointCount: nodes.length, selectedGraphNodeCount: 0 });
+    activeTab.graphClusterCount = graphClusterCount;
+    activeTab.graphCollapsedNodeCount = graphCollapsedNodeCount;
+    updateStatusLine({
+      visiblePointCount: nodes.length,
+      selectedGraphNodeCount: 0,
+      graphClusterCount,
+      graphCollapsedNodeCount
+    });
 
     const activeGraphLayout = activeTab.graphComparisonSnapshot
       ? (activeTab.graphComparisonLayout || activeTab.graphLayout)
@@ -837,6 +883,7 @@
     };
     const width = graphRenderWrapper.clientWidth || graphViewCanvas.clientWidth || 900;
     const height = graphRenderWrapper.clientHeight || graphViewCanvas.clientHeight || 560;
+    const useStaticLargeGraphLayout = nodes.length > LARGE_GRAPH_RENDER_NODE_BUDGET;
     const svg = d3.select(graphRenderWrapper).append("svg").attr("width", width).attr("height", height);
     const graphLayer = svg.append("g").attr("class", "graph-layer");
 
@@ -871,14 +918,17 @@
     updateStatusLine({ visiblePointCount: activeTab.visiblePointCount || nodes.length, graphZoomScale: currentZoomTransform.k });
 
     const simulation = d3.forceSimulation(nodes);
-    const baseLinkForce = d3.forceLink(links).id((d) => d.id).distance(graphViewConfig.linkDistance).strength(graphViewConfig.linkForce);
-    const baseChargeForce = d3.forceManyBody().strength(-graphViewConfig.repelForce);
+    const baseLinkForce = d3.forceLink(links)
+      .id((d) => d.id)
+      .distance(useStaticLargeGraphLayout ? Math.max(80, graphViewConfig.linkDistance * 0.75) : graphViewConfig.linkDistance)
+      .strength(useStaticLargeGraphLayout ? Math.min(0.18, graphViewConfig.linkForce) : graphViewConfig.linkForce);
+    const baseChargeForce = d3.forceManyBody().strength(useStaticLargeGraphLayout ? -Math.min(260, graphViewConfig.repelForce) : -graphViewConfig.repelForce);
     const centerForceStrength = Math.max(0, graphViewConfig.centerForce);
     const baseCenterForce = d3.forceCenter(width / 2, height / 2);
     if (typeof baseCenterForce.strength === "function") baseCenterForce.strength(Math.min(1, centerForceStrength));
     const baseCenterPullX = d3.forceX(width / 2).strength(centerForceStrength * 0.08);
     const baseCenterPullY = d3.forceY(height / 2).strength(centerForceStrength * 0.08);
-    const baseCollisionForce = d3.forceCollide().radius((d) => nodeRadius(d.id) + 30).strength(0.9);
+    const baseCollisionForce = useStaticLargeGraphLayout ? null : d3.forceCollide().radius((d) => nodeRadius(d.id) + 30).strength(0.9);
     const createGroupClusterForce = () => {
       const strength = Math.max(0, Number(graphViewConfig.groupForce) || 0);
       const groupedNodes = nodes.filter((nodeData) => nodeData.groupId);
@@ -954,7 +1004,8 @@
       .force("centerX", baseCenterPullX)
       .force("centerY", baseCenterPullY)
       .force("collision", baseCollisionForce)
-      .force("groupCluster", baseGroupClusterForce);
+      .force("groupCluster", useStaticLargeGraphLayout ? null : baseGroupClusterForce);
+    if (useStaticLargeGraphLayout) simulation.stop();
     // Keep the former marker dimensions: 9x8 viewBox scaled into a 5x5 marker viewport.
     const arrowheadLength = 5;
     const arrowheadHalfHeight = 20 / 9;
@@ -977,7 +1028,7 @@
       })
       .call(d3.drag()
         .on("start", (event, d) => {
-          if (graphSettings.magneticEnabled && !event.active) simulation.alphaTarget(0.3).restart();
+          if (!useStaticLargeGraphLayout && graphSettings.magneticEnabled && !event.active) simulation.alphaTarget(0.3).restart();
           d.fx = d.x;
           d.fy = d.y;
         })
@@ -990,7 +1041,7 @@
           captureGraphLayout(activeTab, nodes, currentZoomTransform);
         })
         .on("end", (event, d) => {
-          if (graphSettings.magneticEnabled && !event.active) simulation.alphaTarget(0);
+          if (!useStaticLargeGraphLayout && graphSettings.magneticEnabled && !event.active) simulation.alphaTarget(0);
           d.x = event.x;
           d.y = event.y;
           d.fx = null;
@@ -2150,9 +2201,15 @@
           .force("centerX", baseCenterPullX)
           .force("centerY", baseCenterPullY)
           .force("collision", baseCollisionForce)
-          .force("groupCluster", baseGroupClusterForce)
-          .alpha(0.7)
-          .restart();
+          .force("groupCluster", useStaticLargeGraphLayout ? null : baseGroupClusterForce);
+        if (useStaticLargeGraphLayout) {
+          simulation.alpha(0.85).tick(70).stop();
+          renderGraphTick();
+          captureGraphLayout(activeTab, nodes, currentZoomTransform);
+          scheduleGraphLayoutStorageSave();
+        } else {
+          simulation.alpha(0.7).restart();
+        }
       } else {
         simulation
           .force("link", null)
@@ -2913,6 +2970,8 @@
       simulation,
       nodes,
       visiblePointCount: nodes.length,
+      graphClusterCount,
+      graphCollapsedNodeCount,
       zoomScale: currentZoomTransform.k,
       getZoomTransform: () => currentZoomTransform,
       animate: () => {

@@ -199,6 +199,7 @@ body {
 }
 
 .graph-points-status.hidden,
+.graph-collapsed-nodes-status.hidden,
 .editor-textpad-status.hidden {
   display: none;
 }
