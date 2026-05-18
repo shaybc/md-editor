@@ -1,3 +1,27 @@
+# Dependencies
+node_modules/
+web-app/node_modules/
+desktop-app/node_modules/
+
+# Developer tools' files
+.lite_workspace.lua
+
+# Build/test output
+web-app/playwright-report/
+desktop-app/dist/
+desktop-app/output/
+
+# Neutralinojs runtime state
+desktop-app/.tmp/
+desktop-app/.storage
+desktop-app/*.log
+
+# Build-generated desktop resources
+desktop-app/resources/index.html
+desktop-app/resources/styles.css
+desktop-app/resources/assets/
+desktop-app/resources/wiki/
 desktop-app/resources/js/*
 !desktop-app/resources/js/main.js
 !desktop-app/resources/js/neutralino.d.ts
+!desktop-app/resources/js/neutralino.js
