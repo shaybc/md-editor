@@ -38,11 +38,12 @@
   }
 
   function getDefaultGraphViewConfigForNodeCount(nodeCount) {
-    const config = { ...DEFAULT_GRAPH_VIEW_CONFIG };
+    const preferenceDefaults = typeof getGraphViewPreferenceDefaults === "function" ? getGraphViewPreferenceDefaults() : {};
+    const config = { ...DEFAULT_GRAPH_VIEW_CONFIG, ...preferenceDefaults };
     if (nodeCount > LARGE_GRAPH_DISPLAY_NODE_LIMIT) {
-      config.showArrows = false;
-      config.showOrphans = false;
-      config.showLabels = false;
+      if (!Object.prototype.hasOwnProperty.call(preferenceDefaults, "showArrows")) config.showArrows = false;
+      if (!Object.prototype.hasOwnProperty.call(preferenceDefaults, "showOrphans")) config.showOrphans = false;
+      if (!Object.prototype.hasOwnProperty.call(preferenceDefaults, "showLabels")) config.showLabels = false;
     }
     return config;
   }

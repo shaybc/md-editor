@@ -80,6 +80,8 @@
   const graphZoomPercentElement = document.getElementById("graph-zoom-percent");
   const graphPointsStatusElement = document.getElementById("graph-points-status");
   const graphPointsCountElement = document.getElementById("graph-points-count");
+  const graphSelectedNodesStatusElement = document.getElementById("graph-selected-nodes-status");
+  const graphSelectedNodesCountElement = document.getElementById("graph-selected-nodes-count");
   const appStatusLineElement = document.querySelector(".app-status-line");
   const folderFileCountElement = document.getElementById("folder-file-count");
   const folderDirectoryCountElement = document.getElementById("folder-directory-count");
@@ -297,6 +299,8 @@
     graphZoomPercentElement,
     graphPointsStatusElement,
     graphPointsCountElement,
+    graphSelectedNodesStatusElement,
+    graphSelectedNodesCountElement,
     editorTextpadStatusElement,
     editorTotalLengthElement,
     editorTotalLinesElement,
@@ -1861,6 +1865,7 @@
   const graphRepelForce = document.getElementById("graph-repel-force");
   const graphLinkForce = document.getElementById("graph-link-force");
   const graphLinkDistance = document.getElementById("graph-link-distance");
+  const graphGroupForce = document.getElementById("graph-group-force");
   const graphResetDefaultsButton = document.getElementById("graph-reset-defaults");
   const graphStaleModal = document.getElementById("graph-stale-modal");
   const graphStaleCloseButton = document.getElementById("graph-stale-close");
@@ -1899,6 +1904,7 @@
     editorWidthPercent: 50,
     folderSortMode: "name-asc",
     graphMagneticEnabled: true,
+    graphViewPreferences: {},
     showUnsupportedFolderFiles: false,
     sidebarDropzoneVisible: true,
     sidebarVisible: true,
@@ -2199,6 +2205,7 @@ Markdown content is processed client-side in your browser and sanitized before p
     hiddenNodeIds: [],
     selectedTagIds: [],
     groups: [],
+    collapsedClusters: [],
     searchQuery: "",
     showArrows: true,
     showOrphans: true,
@@ -2209,8 +2216,48 @@ Markdown content is processed client-side in your browser and sanitized before p
     centerForce: 1,
     repelForce: 650,
     linkForce: 0.4,
-    linkDistance: 170
+    linkDistance: 170,
+    groupForce: 0.18
   });
+  const GRAPH_VIEW_PREFERENCE_KEYS = Object.freeze([
+    "showArrows",
+    "showOrphans",
+    "showLabels",
+    "textFadeThreshold",
+    "nodeSize",
+    "linkThickness",
+    "centerForce",
+    "repelForce",
+    "linkForce",
+    "linkDistance",
+    "groupForce"
+  ]);
+
+  function getGraphViewPreferenceDefaults() {
+    const savedPreferences = loadGlobalState().graphViewPreferences;
+    if (!savedPreferences || typeof savedPreferences !== "object") return {};
+    return GRAPH_VIEW_PREFERENCE_KEYS.reduce((preferences, key) => {
+      if (Object.prototype.hasOwnProperty.call(savedPreferences, key)) {
+        preferences[key] = savedPreferences[key];
+      }
+      return preferences;
+    }, {});
+  }
+
+  function saveGraphViewPreferenceDefaults(patch) {
+    if (!patch || typeof patch !== "object") return;
+    const currentPreferences = getGraphViewPreferenceDefaults();
+    const nextPreferences = GRAPH_VIEW_PREFERENCE_KEYS.reduce((preferences, key) => {
+      if (Object.prototype.hasOwnProperty.call(currentPreferences, key)) {
+        preferences[key] = currentPreferences[key];
+      }
+      if (Object.prototype.hasOwnProperty.call(patch, key)) {
+        preferences[key] = patch[key];
+      }
+      return preferences;
+    }, {});
+    saveGlobalState({ graphViewPreferences: nextPreferences });
+  }
 
   const graphPersistence = window.registerMarkdownViewerGraphPersistence(app, {
     GRAPH_GROUP_DEFAULT_COLORS,
@@ -2220,6 +2267,7 @@ Markdown content is processed client-side in your browser and sanitized before p
     GRAPH_DOCUMENT_TYPE_EXPORT,
     GRAPH_DOCUMENT_TYPES,
     LARGE_GRAPH_DISPLAY_NODE_LIMIT,
+    getGraphViewPreferenceDefaults,
     STORAGE_KEY,
     ACTIVE_TAB_KEY,
     get activeTabId() { return activeTabId; },
@@ -2573,6 +2621,7 @@ Markdown content is processed client-side in your browser and sanitized before p
     normalizeEditorContent,
     DEFAULT_GRAPH_VIEW_CONFIG,
     LARGE_GRAPH_DISPLAY_NODE_LIMIT,
+    getGraphViewPreferenceDefaults,
     normalizeGraphDocument,
     deserializeGraphDocument,
     serializeGraphTab,
@@ -3167,10 +3216,16 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
     newFolder: { label: "New folder ...", icon: "bi bi-folder-plus" },
     removePoint: { label: "Remove this point", icon: "bi bi-eye-slash" },
     removeLeafNodes: { label: "Remove Leaf Nodes", icon: "bi bi-diagram-2" },
+    collapseToCluster: { label: "Collapse to Cluster", icon: "bi bi-collection" },
+    collapseFullOutgoingToCluster: { label: "Collapse Full Outgoing Tree", icon: "bi bi-diagram-3" },
+    collapseDetectedCommunity: { label: "Collapse Detected Community", icon: "bi bi-bounding-box-circles" },
+    expandCluster: { label: "Expand Cluster", icon: "bi bi-arrows-angle-expand" },
+    showGraph: { label: "Show graph", icon: "bi bi-diagram-3" },
     showLocalGraph: { label: "Show local graph", icon: "bi bi-diagram-2" },
     showFullLocalGraph: { label: "Show full local graph", icon: "bi bi-diagram-3" },
     showFullNetwork: { label: "Show full network", icon: "bi bi-diagram-3" },
     tags: { label: "Tags", icon: "bi bi-tags" },
+    tagLocalGraph: { label: "Tag Local Graph", icon: "bi bi-tags" },
     addTag: { label: "Add tag…", icon: "bi bi-tag" },
     removeTag: { label: "Remove tag…", icon: "bi bi-tag-fill" },
     deleteTag: { label: "Delete tag", icon: "bi bi-trash3" },
@@ -3971,6 +4026,7 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
 
   const graphToolbar = window.registerMarkdownViewerGraphToolbar(app, {
     DEFAULT_GRAPH_VIEW_CONFIG,
+    GRAPH_VIEW_PREFERENCE_KEYS,
     GRAPH_GROUP_QUERY_UPDATE_DELAY,
     LIGHTWEIGHT_SAVED_GRAPH_TEXT_SEARCH_MESSAGE,
     get activeFolderPath() { return activeFolderPath; },
@@ -3997,6 +4053,7 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
     get graphRepelForce() { return graphRepelForce; },
     get graphLinkForce() { return graphLinkForce; },
     get graphLinkDistance() { return graphLinkDistance; },
+    get graphGroupForce() { return graphGroupForce; },
     get graphResetDefaultsButton() { return graphResetDefaultsButton; },
     get graphStaleCloseButton() { return graphStaleCloseButton; },
     get graphStaleKeepButton() { return graphStaleKeepButton; },
@@ -4035,6 +4092,7 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
     saveTabsToStorage,
     get renderGraphView() { return renderGraphView; },
     saveGlobalState,
+    saveGraphViewPreferenceDefaults,
     getGraphDisplayLabel,
     openGraphStaleComparisonDetailsModal,
     keepSavedGraphFromStaleModal,
@@ -4089,6 +4147,7 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
     get NL_VERSION() { return typeof NL_VERSION !== "undefined" ? NL_VERSION : undefined; },
     DEFAULT_GRAPH_VIEW_CONFIG,
     LARGE_GRAPH_DISPLAY_NODE_LIMIT,
+    getGraphViewPreferenceDefaults,
     normalizeGraphViewConfig,
     hideInactiveGraphRenders,
     updateStatusLine,
@@ -4101,6 +4160,7 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
     getGraphZoomScaleFromLayout,
     removeGraphRenderForTab,
     parseGraphGroupQuery,
+    createGraphGroupId,
     graphFileMatchesGroupQuery,
     normalizeGraphTagNodeIds,
     getGraphGroupMatch,
@@ -4112,6 +4172,9 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
     saveGlobalState,
     getKnownTags,
     saveKnownTags,
+    getAllKnownAndReferencedTags,
+    createTag,
+    getNextDefaultGraphGroupColor,
     getGraphDisplayLabel,
     getGraphContextMenuTitle,
     getFolderMarkdownEntryForTab,

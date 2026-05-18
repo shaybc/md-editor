@@ -2061,6 +2061,13 @@ body {
   stroke-width: 1.5px;
 }
 
+.graph-node-cluster {
+  fill: #f59e0b;
+  stroke: var(--preview-bg);
+  stroke-width: 3px;
+  stroke-dasharray: 3 2;
+}
+
 .graph-node-status-saved-only {
   opacity: 0.45;
   stroke: var(--disabled-text-color);
@@ -2103,8 +2110,17 @@ body {
   font-weight: 600;
 }
 
+.graph-label-cluster {
+  fill: #b45309;
+  font-weight: 700;
+}
+
 [data-theme="dark"] .graph-label-tag {
   fill: #5eead4;
+}
+
+[data-theme="dark"] .graph-label-cluster {
+  fill: #fbbf24;
 }
 
 .graph-node.dimmed,
@@ -2272,6 +2288,79 @@ body {
 
 .tags-context-menu-item[aria-checked="true"] i {
   color: var(--accent-color);
+}
+
+.graph-tag-picker-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 35;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.18);
+}
+
+.graph-tag-picker-panel {
+  display: flex;
+  flex-direction: column;
+  width: min(18rem, calc(100% - 2rem));
+  max-height: min(24rem, calc(100% - 2rem));
+  background: var(--bg-color);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.28);
+  padding: 0.35rem;
+}
+
+.graph-tag-picker-title {
+  color: var(--accent-color);
+  font-size: 0.82rem;
+  font-weight: 600;
+  padding: 0.35rem 0.45rem;
+}
+
+.graph-tag-picker-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  overflow: auto;
+}
+
+.graph-tag-picker-item {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  border: none;
+  background: transparent;
+  color: var(--text-color);
+  text-align: left;
+  padding: 0.35rem 0.45rem;
+  border-radius: 4px;
+  white-space: nowrap;
+}
+
+.graph-tag-picker-item i {
+  flex: 0 0 1rem;
+  width: 1rem;
+  color: var(--accent-color);
+  text-align: center;
+}
+
+.graph-tag-picker-item:hover {
+  background: var(--hover-bg);
+}
+
+.graph-tag-picker-create {
+  color: var(--accent-color);
+  border-top: 1px solid var(--border-color);
+  border-radius: 0;
+  margin-top: 0.2rem;
+  padding-top: 0.45rem;
+}
+
+.graph-tag-picker-empty {
+  color: var(--secondary-text);
+  padding: 0.35rem 0.45rem;
 }
 
 .graph-context-menu-tooltip::after {

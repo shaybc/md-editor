@@ -841,7 +841,7 @@
               <div id="status-tip" class="status-tip">Drop a Markdown file or open a folder to start.</div>
               <div class="status-section status-right">
                 <span id="graph-zoom-status" class="status-item graph-zoom-status hidden">Zoom: <span id="graph-zoom-percent">100%</span></span>
-                <span id="graph-points-status" class="status-item graph-points-status hidden"># of points: <span id="graph-points-count">0</span></span>
+                <span id="graph-points-status" class="status-item graph-points-status hidden"><span id="graph-selected-nodes-status" class="hidden"># Selected Nodes: <span id="graph-selected-nodes-count">0</span> <span aria-hidden="true">|</span> </span># Nodes: <span id="graph-points-count">0</span></span>
                 <span id="editor-textpad-status" class="status-item editor-textpad-status hidden" aria-live="polite">
                     <span>length: <span id="editor-total-length">0</span></span>
                     <span>lines: <span id="editor-total-lines">1</span></span>
@@ -1020,6 +1020,10 @@
                   <label class="graph-slider-control" for="graph-link-distance">
                     <span>Link distance</span>
                     <input id="graph-link-distance" type="range" min="40" max="320" step="5" aria-label="Link distance">
+                  </label>
+                  <label class="graph-slider-control" for="graph-group-force">
+                    <span>Group force</span>
+                    <input id="graph-group-force" type="range" min="0" max="1" step="0.05" aria-label="Group force">
                   </label>
                   <button id="graph-reset-defaults" class="tool-button graph-reset-defaults-button" type="button" title="Reset graph filters, display, and force settings to defaults">
                     <i class="bi bi-arrow-counterclockwise"></i> Reset to defaults

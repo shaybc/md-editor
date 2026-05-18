@@ -118,8 +118,12 @@
       ? currentEntry.content
       : (typeof snapshotFile?.content === "string" ? snapshotFile.content : "");
     const content = options.allowContentSearch ? rawContent : "";
-    const sourceTags = Array.isArray(metadataSource.tags) ? metadataSource.tags : [];
-    const tags = sourceTags.length ? sourceTags : (content ? getFileTagsFromContent(content) : []);
+    const tags = normalizeFileTagList([
+      ...(Array.isArray(metadataSource.tags) ? metadataSource.tags : []),
+      ...(Array.isArray(snapshotFile?.tags) ? snapshotFile.tags : []),
+      ...(Array.isArray(nodeData?.tags) ? nodeData.tags : []),
+      ...(content ? getFileTagsFromContent(content) : [])
+    ]);
 
     return {
       id: metadataSource.id || nodeData?.id || "",
@@ -146,7 +150,10 @@
     const fullPath = String(fileData.fullPath || "").toLowerCase();
     const content = String(fileData.content || "").toLowerCase();
     const tagText = (Array.isArray(fileData.tags) ? fileData.tags : [])
-      .map((tag) => String(tag || "").toLowerCase())
+      .flatMap((tag) => {
+        const normalizedTag = String(tag || "").toLowerCase();
+        return normalizedTag ? [normalizedTag, `#${normalizedTag}`, `tag:${normalizedTag}`] : [];
+      })
       .filter(Boolean)
       .join(" ");
     const linkText = String(fileData.linkText || "").toLowerCase();
@@ -352,15 +359,16 @@
       .sort((a, b) => a.value.localeCompare(b.value, undefined, { sensitivity: "base" }));
   }
 
-  function attachGraphGroupQuerySuggestions(row, queryInput, group, sourceTab) {
+  function attachGraphGroupQuerySuggestions(row, queryInput, group, sourceTab, options = {}) {
     const popover = document.createElement("div");
     popover.className = "graph-group-query-suggestions hidden";
     popover.setAttribute("role", "listbox");
-    popover.setAttribute("aria-label", "Graph group query suggestions");
+    popover.setAttribute("aria-label", options.ariaLabel || "Graph group query suggestions");
     row.appendChild(popover);
 
     let selectedIndex = 0;
     let isPointerSelectingSuggestion = false;
+    const suggestionIdPrefix = options.idPrefix || group?.id || "query";
 
     const closePopover = () => {
       popover.classList.add("hidden");
@@ -393,7 +401,11 @@
       queryInput.focus();
       queryInput.setSelectionRange(cursor, cursor);
       closePopover();
-      updateGraphGroup(group.id, { query: nextValue }, { skipToolbar: true });
+      if (typeof options.onApply === "function") {
+        options.onApply(nextValue, { skipToolbar: true });
+      } else if (group?.id) {
+        updateGraphGroup(group.id, { query: nextValue }, { skipToolbar: true });
+      }
       if (shouldShowNextSuggestions) window.setTimeout(renderPopover, 0);
     };
 
@@ -425,13 +437,13 @@
       if (!suggestions.length) {
         const empty = document.createElement("div");
         empty.className = "graph-group-query-suggestion-empty";
-        empty.textContent = context.prefix ? `No ${context.prefix}: suggestions.` : "No group type suggestions.";
+        empty.textContent = context.prefix ? `No ${context.prefix}: suggestions.` : (options.emptyLabel || "No group type suggestions.");
         popover.appendChild(empty);
       } else {
         suggestions.forEach((suggestion, index) => {
           const button = document.createElement("button");
           button.type = "button";
-          button.id = `graph-group-query-suggestion-${group.id}-${index}`;
+          button.id = `graph-group-query-suggestion-${suggestionIdPrefix}-${index}`;
           button.className = `graph-group-query-suggestion${index === selectedIndex ? " active" : ""}`;
           button.setAttribute("role", "option");
           button.setAttribute("aria-selected", index === selectedIndex ? "true" : "false");
@@ -455,11 +467,11 @@
               option.classList.toggle("active", isSelected);
               option.setAttribute("aria-selected", isSelected ? "true" : "false");
             });
-            queryInput.setAttribute("aria-activedescendant", `graph-group-query-suggestion-${group.id}-${selectedIndex}`);
+            queryInput.setAttribute("aria-activedescendant", `graph-group-query-suggestion-${suggestionIdPrefix}-${selectedIndex}`);
           });
           popover.appendChild(button);
         });
-        queryInput.setAttribute("aria-activedescendant", `graph-group-query-suggestion-${group.id}-${selectedIndex}`);
+        queryInput.setAttribute("aria-activedescendant", `graph-group-query-suggestion-${suggestionIdPrefix}-${selectedIndex}`);
       }
 
       if (activeGraphGroupSuggestionClose && activeGraphGroupSuggestionClose !== closePopover) activeGraphGroupSuggestionClose();
@@ -722,7 +734,8 @@
       graphCenterForce,
       graphRepelForce,
       graphLinkForce,
-      graphLinkDistance
+      graphLinkDistance,
+      graphGroupForce
     ].filter(Boolean);
     graphControlInputs.forEach((input) => { input.disabled = !isGraphTab; });
     if (graphDisplayArrows) graphDisplayArrows.checked = graphViewConfig.showArrows;
@@ -735,6 +748,7 @@
     if (graphRepelForce) graphRepelForce.value = graphViewConfig.repelForce;
     if (graphLinkForce) graphLinkForce.value = graphViewConfig.linkForce;
     if (graphLinkDistance) graphLinkDistance.value = graphViewConfig.linkDistance;
+    if (graphGroupForce) graphGroupForce.value = graphViewConfig.groupForce;
     if (graphResetDefaultsButton) graphResetDefaultsButton.disabled = !isGraphTab;
   }
 
@@ -745,6 +759,7 @@
       selectedTagIds: [],
       searchQuery: DEFAULT_GRAPH_VIEW_CONFIG.searchQuery,
       groups: currentConfig.groups.map((group) => ({ ...group, enabled: false, hidden: false })),
+      collapsedClusters: [],
       showArrows: DEFAULT_GRAPH_VIEW_CONFIG.showArrows,
       showOrphans: DEFAULT_GRAPH_VIEW_CONFIG.showOrphans,
       showLabels: DEFAULT_GRAPH_VIEW_CONFIG.showLabels,
@@ -754,8 +769,19 @@
       centerForce: DEFAULT_GRAPH_VIEW_CONFIG.centerForce,
       repelForce: DEFAULT_GRAPH_VIEW_CONFIG.repelForce,
       linkForce: DEFAULT_GRAPH_VIEW_CONFIG.linkForce,
-      linkDistance: DEFAULT_GRAPH_VIEW_CONFIG.linkDistance
-    });
+      linkDistance: DEFAULT_GRAPH_VIEW_CONFIG.linkDistance,
+      groupForce: DEFAULT_GRAPH_VIEW_CONFIG.groupForce
+    }, { persistGraphPreferences: true });
+  }
+
+  function persistGraphViewPreferencePatch(patch) {
+    if (!patch || typeof patch !== "object" || typeof saveGraphViewPreferenceDefaults !== "function") return;
+    const preferenceKeys = new Set(Array.isArray(GRAPH_VIEW_PREFERENCE_KEYS) ? GRAPH_VIEW_PREFERENCE_KEYS : []);
+    const preferencePatch = Object.keys(patch).reduce((result, key) => {
+      if (preferenceKeys.has(key)) result[key] = patch[key];
+      return result;
+    }, {});
+    if (Object.keys(preferencePatch).length) saveGraphViewPreferenceDefaults(preferencePatch);
   }
 
   function updateActiveGraphViewConfig(patch, options = {}) {
@@ -773,6 +799,7 @@
     if (!options.skipToolbar) updateGraphTagToolbar(activeGraphTab, activeGraphTab.graphSnapshot || null);
     markGraphTabAsChanged(activeGraphTab);
     saveTabsToStorage(tabs);
+    if (options.persistGraphPreferences) persistGraphViewPreferencePatch(patch);
     renderGraphView({ skipToolbar: options.skipToolbar });
   }
 
@@ -798,6 +825,19 @@
   if (graphShowTagsButton) graphShowTagsButton.addEventListener("click", () => updateActiveGraphViewConfig({ showTags: true }));
   if (graphHideTagsButton) graphHideTagsButton.addEventListener("click", () => updateActiveGraphViewConfig({ showTags: false }));
   if (graphFileSearchFilter) {
+    graphFileSearchFilter.placeholder = "Search files, path:classes, tag:test1...";
+    attachGraphGroupQuerySuggestions(
+      graphFileSearchFilter.parentElement || graphFileSearchFilter,
+      graphFileSearchFilter,
+      { id: "file-search" },
+      null,
+      {
+        idPrefix: "file-search",
+        ariaLabel: "Graph search query suggestions",
+        emptyLabel: "No search type suggestions.",
+        onApply: (searchQuery, options = {}) => updateActiveGraphViewConfig({ searchQuery }, options)
+      }
+    );
     graphFileSearchFilter.addEventListener("input", () => {
       const activeGraphTab = getActiveGraphTab();
       if (isLightweightSavedGraphView(activeGraphTab, activeGraphTab?.graphSnapshot) && graphQueryRequiresFileContent(graphFileSearchFilter.value)) {
@@ -848,12 +888,12 @@
       updateActiveGraphViewConfig({ groups: [...currentConfig.groups, group] });
     });
   }
-  if (graphDisplayArrows) graphDisplayArrows.addEventListener("change", () => updateActiveGraphViewConfig({ showArrows: graphDisplayArrows.checked }));
-  if (graphDisplayOrphans) graphDisplayOrphans.addEventListener("change", () => updateActiveGraphViewConfig({ showOrphans: graphDisplayOrphans.checked }));
-  if (graphDisplayLabels) graphDisplayLabels.addEventListener("change", () => updateActiveGraphViewConfig({ showLabels: graphDisplayLabels.checked }));
+  if (graphDisplayArrows) graphDisplayArrows.addEventListener("change", () => updateActiveGraphViewConfig({ showArrows: graphDisplayArrows.checked }, { persistGraphPreferences: true }));
+  if (graphDisplayOrphans) graphDisplayOrphans.addEventListener("change", () => updateActiveGraphViewConfig({ showOrphans: graphDisplayOrphans.checked }, { persistGraphPreferences: true }));
+  if (graphDisplayLabels) graphDisplayLabels.addEventListener("change", () => updateActiveGraphViewConfig({ showLabels: graphDisplayLabels.checked }, { persistGraphPreferences: true }));
   const bindGraphRangeControl = (input, configKey) => {
     if (!input) return;
-    input.addEventListener("input", () => updateActiveGraphViewConfig({ [configKey]: Number(input.value) }));
+    input.addEventListener("input", () => updateActiveGraphViewConfig({ [configKey]: Number(input.value) }, { persistGraphPreferences: true }));
   };
   bindGraphRangeControl(graphTextFadeThreshold, "textFadeThreshold");
   bindGraphRangeControl(graphNodeSize, "nodeSize");
@@ -862,6 +902,7 @@
   bindGraphRangeControl(graphRepelForce, "repelForce");
   bindGraphRangeControl(graphLinkForce, "linkForce");
   bindGraphRangeControl(graphLinkDistance, "linkDistance");
+  bindGraphRangeControl(graphGroupForce, "groupForce");
   if (graphResetDefaultsButton) graphResetDefaultsButton.addEventListener("click", resetActiveGraphViewToDefaults);
   graphStaleCloseButton?.addEventListener("click", keepSavedGraphFromStaleModal);
   graphStaleKeepButton?.addEventListener("click", keepSavedGraphFromStaleModal);
@@ -896,6 +937,7 @@
       ["#graph-repel-force", "Push points away from each other. Higher values spread the graph out more."],
       ["#graph-link-force", "Control how strongly linked points pull toward their target link distance."],
       ["#graph-link-distance", "Set the preferred distance between connected points."],
+      ["#graph-group-force", "Pull points in the same color group closer together. Higher values make grouped clusters more visually distinct."],
       ["#graph-reset-defaults", "Reset search, selected tag, group toggles, display options, and force settings to defaults."],
       ["#graph-view-close", "Close graph view and return to the document view."],
       [".graph-collapsible-summary", "Expand or collapse this section of graph filters."],

@@ -39,7 +39,7 @@
     return { submenu, submenuBtn, submenuPanel };
   }
 
-  function renderTagsContextSubmenu(submenuPanel, currentTags, onToggleTag) {
+  function renderTagsContextSubmenu(submenuPanel, currentTags, onToggleTag, options = {}) {
     if (!submenuPanel) return;
     const fileTags = new Set(normalizeFileTagList(currentTags || []));
     const tags = Array.from(new Set([...getAvailableTags(), ...fileTags])).sort((a, b) => a.localeCompare(b));
@@ -50,26 +50,43 @@
       empty.className = "graph-context-menu-empty";
       empty.textContent = "No available tags";
       submenuPanel.appendChild(empty);
-      return;
+    } else {
+      tags.forEach((tag) => {
+        const isChecked = fileTags.has(tag);
+        const button = createFileContextMenuButton(
+          `#${tag}`,
+          isChecked ? "bi bi-check-lg" : "bi",
+          isChecked ? `Remove #${tag} from this file.` : `Add #${tag} to this file.`
+        );
+        button.classList.add("tags-context-menu-item");
+        button.dataset.tagName = tag;
+        button.setAttribute("aria-checked", isChecked ? "true" : "false");
+        button.addEventListener("click", async (event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          await onToggleTag(tag, !isChecked);
+        });
+        submenuPanel.appendChild(button);
+      });
     }
 
-    tags.forEach((tag) => {
-      const isChecked = fileTags.has(tag);
+    if (typeof options.onTagLocalGraph === "function") {
+      const separator = document.createElement("div");
+      separator.className = "graph-context-menu-separator";
+      submenuPanel.appendChild(separator);
+
       const button = createFileContextMenuButton(
-        `#${tag}`,
-        isChecked ? "bi bi-check-lg" : "bi",
-        isChecked ? `Remove #${tag} from this file.` : `Add #${tag} to this file.`
+        options.tagLocalGraphLabel || CONTEXT_MENU_ACTIONS.tagLocalGraph?.label || "Tag Local Graph",
+        options.tagLocalGraphIcon || CONTEXT_MENU_ACTIONS.tagLocalGraph?.icon || "bi bi-tags",
+        options.tagLocalGraphTooltip || "Add a tag to this file and its direct outgoing linked files."
       );
-      button.classList.add("tags-context-menu-item");
-      button.dataset.tagName = tag;
-      button.setAttribute("aria-checked", isChecked ? "true" : "false");
-      button.addEventListener("click", async (event) => {
+      button.addEventListener("click", (event) => {
         event.preventDefault();
         event.stopPropagation();
-        await onToggleTag(tag, !isChecked);
+        options.onTagLocalGraph();
       });
       submenuPanel.appendChild(button);
-    });
+    }
   }
 
   function getSidebarNodeSource(node) {

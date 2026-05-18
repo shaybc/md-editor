@@ -85,29 +85,72 @@
       });
   }
 
+  function normalizeCollapsedGraphClusters(clusters) {
+    const seenIds = new Set();
+    const usedMemberIds = new Set();
+    return (Array.isArray(clusters) ? clusters : [])
+      .map((cluster) => {
+        const source = cluster && typeof cluster === "object" ? cluster : {};
+        const seedNodeId = String(source.seedNodeId || "").trim();
+        const memberNodeIds = Array.from(new Set((Array.isArray(source.memberNodeIds) ? source.memberNodeIds : [])
+          .map((nodeId) => String(nodeId || "").trim())
+          .filter(Boolean)));
+        if (!seedNodeId || memberNodeIds.length < 3 || !memberNodeIds.includes(seedNodeId)) return null;
+        if (memberNodeIds.some((nodeId) => usedMemberIds.has(nodeId))) return null;
+        const baseId = String(source.id || "").trim() || createGraphGroupId(`cluster:${seedNodeId}:${memberNodeIds.join(",")}`);
+        let id = baseId;
+        let suffix = 2;
+        while (seenIds.has(id)) {
+          id = `${baseId}-${suffix}`;
+          suffix += 1;
+        }
+        seenIds.add(id);
+        memberNodeIds.forEach((nodeId) => usedMemberIds.add(nodeId));
+        return {
+          id,
+          label: String(source.label || "").trim(),
+          mode: String(source.mode || "direct-outgoing").trim() || "direct-outgoing",
+          seedNodeId,
+          memberNodeIds,
+          createdAt: normalizeGraphTimestamp(source.createdAt) || Date.now()
+        };
+      })
+      .filter(Boolean);
+  }
+
   function normalizeGraphViewConfig(config) {
     const source = config && typeof config === "object" ? config : {};
-    return {
+    const preferenceDefaults = typeof getGraphViewPreferenceDefaults === "function" ? getGraphViewPreferenceDefaults() : {};
+    const baseConfig = {
       ...DEFAULT_GRAPH_VIEW_CONFIG,
-      ...source,
-      showTags: source.showTags === true,
-      hiddenTagIds: normalizeGraphTagNodeIds(source.hiddenTagIds),
-      hiddenNodeIds: Array.from(new Set((Array.isArray(source.hiddenNodeIds) ? source.hiddenNodeIds : [])
+      ...preferenceDefaults
+    };
+    const mergedSource = {
+      ...baseConfig,
+      ...source
+    };
+    return {
+      ...mergedSource,
+      showTags: mergedSource.showTags === true,
+      hiddenTagIds: normalizeGraphTagNodeIds(mergedSource.hiddenTagIds),
+      hiddenNodeIds: Array.from(new Set((Array.isArray(mergedSource.hiddenNodeIds) ? mergedSource.hiddenNodeIds : [])
         .map((nodeId) => String(nodeId || "").trim())
         .filter(Boolean))),
-      selectedTagIds: normalizeGraphTagNodeIds(source.selectedTagIds),
-      groups: normalizeGraphGroups(source.groups),
-      searchQuery: String(source.searchQuery || "").trim().toLowerCase(),
-      showArrows: source.showArrows !== false,
-      showOrphans: source.showOrphans !== false,
-      showLabels: source.showLabels !== false,
-      textFadeThreshold: clampGraphNumber(source.textFadeThreshold, DEFAULT_GRAPH_VIEW_CONFIG.textFadeThreshold, 0, 1),
-      nodeSize: clampGraphNumber(source.nodeSize, DEFAULT_GRAPH_VIEW_CONFIG.nodeSize, 0.4, 1.8),
-      linkThickness: clampGraphNumber(source.linkThickness, DEFAULT_GRAPH_VIEW_CONFIG.linkThickness, 0.5, 4),
-      centerForce: clampGraphNumber(source.centerForce, DEFAULT_GRAPH_VIEW_CONFIG.centerForce, 0, 2),
-      repelForce: clampGraphNumber(source.repelForce, DEFAULT_GRAPH_VIEW_CONFIG.repelForce, 0, 1200),
-      linkForce: clampGraphNumber(source.linkForce, DEFAULT_GRAPH_VIEW_CONFIG.linkForce, 0, 1),
-      linkDistance: clampGraphNumber(source.linkDistance, DEFAULT_GRAPH_VIEW_CONFIG.linkDistance, 40, 320)
+      selectedTagIds: normalizeGraphTagNodeIds(mergedSource.selectedTagIds),
+      groups: normalizeGraphGroups(mergedSource.groups),
+      collapsedClusters: normalizeCollapsedGraphClusters(mergedSource.collapsedClusters),
+      searchQuery: String(mergedSource.searchQuery || "").trim().toLowerCase(),
+      showArrows: mergedSource.showArrows !== false,
+      showOrphans: mergedSource.showOrphans !== false,
+      showLabels: mergedSource.showLabels !== false,
+      textFadeThreshold: clampGraphNumber(mergedSource.textFadeThreshold, baseConfig.textFadeThreshold, 0, 1),
+      nodeSize: clampGraphNumber(mergedSource.nodeSize, baseConfig.nodeSize, 0.4, 1.8),
+      linkThickness: clampGraphNumber(mergedSource.linkThickness, baseConfig.linkThickness, 0.5, 4),
+      centerForce: clampGraphNumber(mergedSource.centerForce, baseConfig.centerForce, 0, 2),
+      repelForce: clampGraphNumber(mergedSource.repelForce, baseConfig.repelForce, 0, 1200),
+      linkForce: clampGraphNumber(mergedSource.linkForce, baseConfig.linkForce, 0, 1),
+      linkDistance: clampGraphNumber(mergedSource.linkDistance, baseConfig.linkDistance, 40, 320),
+      groupForce: clampGraphNumber(mergedSource.groupForce, baseConfig.groupForce, 0, 1)
     };
   }
 

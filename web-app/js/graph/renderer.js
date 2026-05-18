@@ -41,13 +41,18 @@
       delete activeTab.graphComparisonSnapshot;
       if (activeTab.pendingLargeGraphDisplayDefaults) {
         if ((graphSnapshot.nodes || []).length > LARGE_GRAPH_DISPLAY_NODE_LIMIT) {
-          activeTab.graphViewConfig = normalizeGraphViewConfig({
-            ...(activeTab.graphViewConfig || {}),
-            showArrows: false,
-            showOrphans: false,
-            showLabels: false
-          });
-          graphViewConfig = activeTab.graphViewConfig;
+          const preferenceDefaults = typeof getGraphViewPreferenceDefaults === "function" ? getGraphViewPreferenceDefaults() : {};
+          const largeGraphDefaults = {};
+          if (!Object.prototype.hasOwnProperty.call(preferenceDefaults, "showArrows")) largeGraphDefaults.showArrows = false;
+          if (!Object.prototype.hasOwnProperty.call(preferenceDefaults, "showOrphans")) largeGraphDefaults.showOrphans = false;
+          if (!Object.prototype.hasOwnProperty.call(preferenceDefaults, "showLabels")) largeGraphDefaults.showLabels = false;
+          if (Object.keys(largeGraphDefaults).length) {
+            activeTab.graphViewConfig = normalizeGraphViewConfig({
+              ...(activeTab.graphViewConfig || {}),
+              ...largeGraphDefaults
+            });
+            graphViewConfig = activeTab.graphViewConfig;
+          }
         }
         delete activeTab.pendingLargeGraphDisplayDefaults;
       }
@@ -77,7 +82,8 @@
       hideInactiveGraphRenders(activeTab.id);
       activeTab.visiblePointCount = cachedRender.visiblePointCount || 0;
       activeTab.graphZoomScale = cachedRender.zoomScale || getGraphZoomScaleFromLayout(activeTab.graphLayout);
-      updateStatusLine({ visiblePointCount: activeTab.visiblePointCount, graphZoomScale: activeTab.graphZoomScale });
+      activeTab.selectedGraphNodeCount = 0;
+      updateStatusLine({ visiblePointCount: activeTab.visiblePointCount, graphZoomScale: activeTab.graphZoomScale, selectedGraphNodeCount: 0 });
       return;
     }
 
@@ -127,6 +133,7 @@
     const getGraphLinkType = (linkData) => linkData?.type || "link";
     const getGraphItemStatus = (itemData) => itemData?.status || "current";
     const isTagNode = (nodeData) => getGraphNodeType(nodeData) === "tag";
+    const isClusterNode = (nodeData) => getGraphNodeType(nodeData) === "cluster";
     const isTagLink = (linkData) => getGraphLinkType(linkData) === "tag";
     const isMarkdownLink = (linkData) => !isTagLink(linkData);
     const getGraphNodeLabel = (nodeData) => {
@@ -176,7 +183,7 @@
       const metric = getGraphLinksGroupMetric(parsedQuery);
       if (!metric) return new Set();
 
-      const candidateFileIds = new Set(candidateNodes.filter((node) => !isTagNode(node)).map((node) => node.id));
+      const candidateFileIds = new Set(candidateNodes.filter((node) => !isTagNode(node) && !isClusterNode(node)).map((node) => node.id));
       const countsByNodeId = new Map(Array.from(candidateFileIds).map((nodeId) => [nodeId, 0]));
       candidateLinks.filter(isMarkdownLink).forEach((link) => {
         const sourceId = getLinkSourceId(link);
@@ -206,7 +213,22 @@
       const linkMetricMatchIds = getGraphLinksGroupMetric(parsedQuery) ? getGraphLinksGroupNodeIds(parsedQuery) : null;
       return graphFileMatchesGroupQuery(nodeData, snapshotFile, parsedQuery, getGraphGroupMatchOptions(nodeData, snapshotFile, parsedQuery, linkMetricMatchIds));
     };
+    const getMatchingGraphGroupForNode = (nodeData, candidateGroups = graphViewConfig?.groups) => {
+      if (!nodeData || isTagNode(nodeData) || isClusterNode(nodeData)) return null;
+      const snapshotFile = snapshotFilesById.get(nodeData.id);
+      const groups = Array.isArray(candidateGroups) ? candidateGroups : [];
+      for (const group of groups) {
+        if (!group || group.enabled === false) continue;
+        const parsedQuery = parseGraphGroupQuery(group.query);
+        const linkMetricMatchIds = getGraphLinksGroupMetric(parsedQuery) ? getGraphLinksGroupNodeIds(parsedQuery) : null;
+        if (graphFileMatchesGroupQuery(nodeData, snapshotFile, parsedQuery, getGraphGroupMatchOptions(nodeData, snapshotFile, parsedQuery, linkMetricMatchIds))) {
+          return group;
+        }
+      }
+      return null;
+    };
 
+    const searchResultNodeIds = new Set();
     if (graphViewConfig && graphViewConfig.searchQuery) {
       const matchingFileIds = new Set(nodes
         .filter((node) => fileMatchesGraphSearchQuery(node, graphViewConfig.searchQuery))
@@ -219,6 +241,7 @@
         if (matchingFileIds.has(targetId) && String(sourceId || "").startsWith("tag:")) connectedTagIds.add(sourceId);
       });
       const searchableNodeIds = new Set([...matchingFileIds, ...connectedTagIds]);
+      searchableNodeIds.forEach((nodeId) => searchResultNodeIds.add(nodeId));
       const searchNodes = nodes.filter((node) => searchableNodeIds.has(node.id));
       const searchLinks = links.filter((link) => searchableNodeIds.has(getLinkSourceId(link)) && searchableNodeIds.has(getLinkTargetId(link)));
       nodes.length = 0;
@@ -329,7 +352,7 @@
         if (sourceId) connectedNodeIds.add(sourceId);
         if (targetId) connectedNodeIds.add(targetId);
       });
-      const visibleNodes = nodes.filter((n) => connectedNodeIds.has(n.id));
+      const visibleNodes = nodes.filter((n) => connectedNodeIds.has(n.id) || searchResultNodeIds.has(n.id));
       const visibleNodeIds = new Set(visibleNodes.map((n) => n.id));
       const visibleLinks = links.filter((l) => visibleNodeIds.has(getLinkSourceId(l)) && visibleNodeIds.has(getLinkTargetId(l)));
       nodes.length = 0;
@@ -405,35 +428,119 @@
       filterGraphToNodeIds(getFullNetworkNodeIds(graphViewConfig.focusNodeId));
     }
 
+    const getClusterNodeId = (cluster) => cluster?.id || `cluster:${cluster?.seedNodeId || ""}`;
+    const getClusterLabel = (cluster, memberNodes) => {
+      const seedNode = memberNodes.find((nodeData) => nodeData.id === cluster.seedNodeId) || memberNodes[0] || {};
+      const seedLabel = String(cluster.label || getGraphNodeLabel(seedNode) || "Cluster").replace(/\s+cluster$/i, "");
+      return `${seedLabel} (${memberNodes.length})`;
+    };
+    const getClusterGroup = (seedNode, memberNodes) => {
+      const seedGroup = getMatchingGraphGroupForNode(seedNode);
+      if (seedGroup) return seedGroup;
+
+      const groupCounts = new Map();
+      memberNodes.forEach((nodeData) => {
+        const group = getMatchingGraphGroupForNode(nodeData);
+        if (!group?.id) return;
+        const current = groupCounts.get(group.id) || { group, count: 0 };
+        current.count += 1;
+        groupCounts.set(group.id, current);
+      });
+      return Array.from(groupCounts.values())
+        .sort((a, b) => b.count - a.count || String(a.group.query || "").localeCompare(String(b.group.query || "")))[0]?.group || null;
+    };
+    const applyCollapsedClustersToGraph = () => {
+      const collapsedClusters = Array.isArray(graphViewConfig?.collapsedClusters) ? graphViewConfig.collapsedClusters : [];
+      if (!collapsedClusters.length) return;
+
+      const nodesById = new Map(nodes.map((nodeData) => [nodeData.id, nodeData]));
+      const memberToCluster = new Map();
+      const clusterNodes = [];
+      collapsedClusters.forEach((cluster) => {
+        const memberNodes = (cluster.memberNodeIds || [])
+          .map((nodeId) => nodesById.get(nodeId))
+          .filter(Boolean);
+        if (memberNodes.length < 2) return;
+        const clusterId = getClusterNodeId(cluster);
+        memberNodes.forEach((nodeData) => memberToCluster.set(nodeData.id, clusterId));
+        const seedNode = nodesById.get(cluster.seedNodeId) || memberNodes[0] || {};
+        const clusterGroup = getClusterGroup(seedNode, memberNodes);
+        clusterNodes.push({
+          id: clusterId,
+          label: getClusterLabel(cluster, memberNodes),
+          type: "cluster",
+          status: "current",
+          clusterId,
+          seedNodeId: cluster.seedNodeId,
+          memberNodeIds: memberNodes.map((nodeData) => nodeData.id),
+          collapsedCount: memberNodes.length,
+          groupId: clusterGroup?.id,
+          groupColor: clusterGroup?.color,
+          groupName: clusterGroup?.query,
+          x: seedNode.x,
+          y: seedNode.y,
+          fx: seedNode.fx,
+          fy: seedNode.fy
+        });
+      });
+      if (!memberToCluster.size) return;
+
+      const visibleNodes = nodes.filter((nodeData) => !memberToCluster.has(nodeData.id));
+      const visibleNodeIds = new Set(visibleNodes.map((nodeData) => nodeData.id));
+      const rewrittenLinksByKey = new Map();
+      links.forEach((linkData) => {
+        const sourceId = getLinkSourceId(linkData);
+        const targetId = getLinkTargetId(linkData);
+        const rewrittenSource = memberToCluster.get(sourceId) || sourceId;
+        const rewrittenTarget = memberToCluster.get(targetId) || targetId;
+        if (!rewrittenSource || !rewrittenTarget || rewrittenSource === rewrittenTarget) return;
+        const sourceVisible = visibleNodeIds.has(rewrittenSource) || clusterNodes.some((nodeData) => nodeData.id === rewrittenSource);
+        const targetVisible = visibleNodeIds.has(rewrittenTarget) || clusterNodes.some((nodeData) => nodeData.id === rewrittenTarget);
+        if (!sourceVisible || !targetVisible) return;
+        const key = `${rewrittenSource}->${rewrittenTarget}:${getGraphLinkType(linkData)}:${getGraphItemStatus(linkData)}`;
+        if (rewrittenLinksByKey.has(key)) return;
+        rewrittenLinksByKey.set(key, {
+          ...linkData,
+          source: rewrittenSource,
+          target: rewrittenTarget,
+          collapsedSourceId: rewrittenSource !== sourceId ? sourceId : undefined,
+          collapsedTargetId: rewrittenTarget !== targetId ? targetId : undefined
+        });
+      });
+
+      nodes.length = 0;
+      nodes.push(...visibleNodes, ...clusterNodes);
+      links.length = 0;
+      links.push(...rewrittenLinksByKey.values());
+    };
+
+    applyCollapsedClustersToGraph();
+
     nodes.forEach((nodeData) => {
       if (isTagNode(nodeData)) {
         delete nodeData.groupId;
         delete nodeData.groupColor;
+        delete nodeData.groupName;
         return;
       }
-      const snapshotFile = snapshotFilesById.get(nodeData.id);
-      const groups = Array.isArray(graphViewConfig?.groups) ? graphViewConfig.groups : [];
-      let matchingGroup = null;
-      for (const group of groups) {
-        if (!group || group.enabled === false) continue;
-        const parsedQuery = parseGraphGroupQuery(group.query);
-        const linkMetricMatchIds = getGraphLinksGroupMetric(parsedQuery) ? getGraphLinksGroupNodeIds(parsedQuery) : null;
-        if (graphFileMatchesGroupQuery(nodeData, snapshotFile, parsedQuery, getGraphGroupMatchOptions(nodeData, snapshotFile, parsedQuery, linkMetricMatchIds))) {
-          matchingGroup = group;
-          break;
-        }
+      if (isClusterNode(nodeData)) {
+        return;
       }
+      const matchingGroup = getMatchingGraphGroupForNode(nodeData);
       if (matchingGroup) {
         nodeData.groupId = matchingGroup.id;
         nodeData.groupColor = matchingGroup.color;
+        nodeData.groupName = matchingGroup.query;
       } else {
         delete nodeData.groupId;
         delete nodeData.groupColor;
+        delete nodeData.groupName;
       }
     });
 
     activeTab.visiblePointCount = nodes.length;
-    updateStatusLine({ visiblePointCount: nodes.length });
+    activeTab.selectedGraphNodeCount = 0;
+    updateStatusLine({ visiblePointCount: nodes.length, selectedGraphNodeCount: 0 });
 
     const activeGraphLayout = activeTab.graphComparisonSnapshot
       ? (activeTab.graphComparisonLayout || activeTab.graphLayout)
@@ -462,6 +569,8 @@
     const maxOutgoing = Math.max(1, ...Array.from(outgoingDegree.values()));
     const GRAPH_NODE_RADIUS_SCALE = graphViewConfig.nodeSize;
     const graphBaseNodeRadius = (nodeId) => {
+      const nodeData = graphNodesById.get(nodeId) || nodes.find((node) => node.id === nodeId);
+      if (isClusterNode(nodeData)) return 16 + Math.min(18, Math.sqrt(Math.max(1, nodeData.collapsedCount || 1)) * 2);
       const outCount = outgoingDegree.get(nodeId) || 0;
       return 6 + (outCount / maxOutgoing) * 12;
     };
@@ -527,13 +636,82 @@
     const baseCenterPullX = d3.forceX(width / 2).strength(centerForceStrength * 0.08);
     const baseCenterPullY = d3.forceY(height / 2).strength(centerForceStrength * 0.08);
     const baseCollisionForce = d3.forceCollide().radius((d) => nodeRadius(d.id) + 30).strength(0.9);
+    const createGroupClusterForce = () => {
+      const strength = Math.max(0, Number(graphViewConfig.groupForce) || 0);
+      const groupedNodes = nodes.filter((nodeData) => nodeData.groupId);
+      if (!strength || groupedNodes.length < 2) return null;
+
+      const groupIds = Array.from(new Set(groupedNodes.map((nodeData) => nodeData.groupId))).sort((a, b) => String(a).localeCompare(String(b)));
+      if (!groupIds.length) return null;
+      const groupNodesById = new Map(groupIds.map((groupId) => [groupId, groupedNodes.filter((nodeData) => nodeData.groupId === groupId)]));
+      const radius = Math.max(150, Math.min(width, height) * (0.26 + (strength * 0.18)));
+      const targetByGroupId = new Map(groupIds.map((groupId, index) => {
+        const angle = groupIds.length === 1 ? -Math.PI / 2 : ((Math.PI * 2 * index) / groupIds.length) - (Math.PI / 2);
+        return [groupId, {
+          x: (width / 2) + Math.cos(angle) * radius,
+          y: (height / 2) + Math.sin(angle) * radius
+        }];
+      }));
+
+      return (alpha) => {
+        const pull = strength * alpha * 0.42;
+        groupedNodes.forEach((nodeData) => {
+          const target = targetByGroupId.get(nodeData.groupId);
+          if (!target) return;
+          nodeData.vx += (target.x - nodeData.x) * pull;
+          nodeData.vy += (target.y - nodeData.y) * pull;
+        });
+
+        const groupCenters = groupIds.map((groupId) => {
+          const groupNodes = groupNodesById.get(groupId) || [];
+          const count = Math.max(1, groupNodes.length);
+          return {
+            groupId,
+            nodes: groupNodes,
+            x: groupNodes.reduce((sum, nodeData) => sum + (nodeData.x || width / 2), 0) / count,
+            y: groupNodes.reduce((sum, nodeData) => sum + (nodeData.y || height / 2), 0) / count
+          };
+        });
+        const minGroupDistance = Math.max(180, Math.min(width, height) * (0.22 + (strength * 0.16)));
+        const separationStrength = strength * alpha * 1.4;
+        for (let i = 0; i < groupCenters.length; i += 1) {
+          for (let j = i + 1; j < groupCenters.length; j += 1) {
+            const a = groupCenters[i];
+            const b = groupCenters[j];
+            let dx = b.x - a.x;
+            let dy = b.y - a.y;
+            let distance = Math.hypot(dx, dy);
+            if (!distance) {
+              const angle = ((i + 1) / groupCenters.length) * Math.PI * 2;
+              dx = Math.cos(angle);
+              dy = Math.sin(angle);
+              distance = 1;
+            }
+            if (distance >= minGroupDistance) continue;
+            const push = ((minGroupDistance - distance) / minGroupDistance) * separationStrength;
+            const pushX = (dx / distance) * push;
+            const pushY = (dy / distance) * push;
+            a.nodes.forEach((nodeData) => {
+              nodeData.vx -= pushX;
+              nodeData.vy -= pushY;
+            });
+            b.nodes.forEach((nodeData) => {
+              nodeData.vx += pushX;
+              nodeData.vy += pushY;
+            });
+          }
+        }
+      };
+    };
+    const baseGroupClusterForce = createGroupClusterForce();
     simulation
       .force("link", baseLinkForce)
       .force("charge", baseChargeForce)
       .force("center", baseCenterForce)
       .force("centerX", baseCenterPullX)
       .force("centerY", baseCenterPullY)
-      .force("collision", baseCollisionForce);
+      .force("collision", baseCollisionForce)
+      .force("groupCluster", baseGroupClusterForce);
     // Keep the former marker dimensions: 9x8 viewBox scaled into a 5x5 marker viewport.
     const arrowheadLength = 5;
     const arrowheadHalfHeight = 20 / 9;
@@ -582,6 +760,12 @@
     maxNodeRadius = Math.max(1, ...nodes.map((d) => nodeRadius(d.id)));
     const graphTooltipPathsById = new Map((graphSnapshot.files || []).map((file) => [file.id, file.fullPath || file.path]));
     const getGraphNodeTooltip = (nodeData) => {
+      if (isClusterNode(nodeData)) {
+        const collapsedCount = nodeData.collapsedCount || nodeData.memberNodeIds?.length || 0;
+        const groupName = String(nodeData.groupName || "").trim();
+        const groupPrefix = groupName ? `${groupName}. ` : "";
+        return `${groupPrefix}${collapsedCount} collapsed points. Right-click to expand this cluster.`;
+      }
       if (getGraphItemStatus(nodeData) === "saved-only" && !isTagNode(nodeData)) {
         return "Saved-only file. This file existed in the saved graph but is not part of the current folder graph.";
       }
@@ -689,24 +873,62 @@
       CONTEXT_MENU_ACTIONS.removeLeafNodes.icon,
       "Hide all visible file points that have no direct outgoing Markdown links."
     );
+    const collapseToClusterBtn = createContextMenuButton(
+      CONTEXT_MENU_ACTIONS.collapseToCluster.label,
+      CONTEXT_MENU_ACTIONS.collapseToCluster.icon,
+      "Replace this point and its direct outgoing linked points with one expandable cluster point."
+    );
+    collapseToClusterBtn.classList.add("hidden");
+    const collapseFullOutgoingToClusterBtn = createContextMenuButton(
+      CONTEXT_MENU_ACTIONS.collapseFullOutgoingToCluster.label,
+      CONTEXT_MENU_ACTIONS.collapseFullOutgoingToCluster.icon,
+      "Replace this point and every reachable outgoing linked point with one expandable cluster point."
+    );
+    collapseFullOutgoingToClusterBtn.classList.add("hidden");
+    const collapseDetectedCommunityBtn = createContextMenuButton(
+      CONTEXT_MENU_ACTIONS.collapseDetectedCommunity.label,
+      CONTEXT_MENU_ACTIONS.collapseDetectedCommunity.icon,
+      "Detect a dense linked community around this point and replace it with one expandable cluster point."
+    );
+    collapseDetectedCommunityBtn.classList.add("hidden");
+    const expandClusterBtn = createContextMenuButton(
+      CONTEXT_MENU_ACTIONS.expandCluster.label,
+      CONTEXT_MENU_ACTIONS.expandCluster.icon,
+      "Restore the original points hidden inside this cluster."
+    );
+    expandClusterBtn.classList.add("hidden");
+    const showGraphSubmenu = document.createElement("div");
+    showGraphSubmenu.className = "graph-context-menu-submenu hidden";
+    const showGraphSubmenuBtn = createContextMenuButton(
+      CONTEXT_MENU_ACTIONS.showGraph.label,
+      CONTEXT_MENU_ACTIONS.showGraph.icon,
+      "Open graph views focused on this point."
+    );
+    showGraphSubmenuBtn.setAttribute("aria-haspopup", "true");
+    const showGraphSubmenuArrow = document.createElement("span");
+    showGraphSubmenuArrow.className = "graph-context-menu-submenu-arrow";
+    showGraphSubmenuArrow.textContent = "›";
+    showGraphSubmenuBtn.appendChild(showGraphSubmenuArrow);
+    const showGraphSubmenuPanel = document.createElement("div");
+    showGraphSubmenuPanel.className = "graph-context-menu-submenu-panel";
     const localGraphBtn = createContextMenuButton(
       CONTEXT_MENU_ACTIONS.showLocalGraph.label,
       CONTEXT_MENU_ACTIONS.showLocalGraph.icon,
       "Open a graph focused on this point and the points it directly links to."
     );
-    localGraphBtn.classList.add("hidden");
     const fullLocalGraphBtn = createContextMenuButton(
       CONTEXT_MENU_ACTIONS.showFullLocalGraph.label,
       CONTEXT_MENU_ACTIONS.showFullLocalGraph.icon,
       "Open a graph that follows every outgoing dependency reachable from this point."
     );
-    fullLocalGraphBtn.classList.add("hidden");
     const fullNetworkBtn = createContextMenuButton(
       CONTEXT_MENU_ACTIONS.showFullNetwork.label,
       CONTEXT_MENU_ACTIONS.showFullNetwork.icon,
       "Open a graph containing every recursive backlink and outgoing dependency reachable from this point."
     );
-    fullNetworkBtn.classList.add("hidden");
+    [localGraphBtn, fullLocalGraphBtn, fullNetworkBtn].forEach((button) => showGraphSubmenuPanel.appendChild(button));
+    showGraphSubmenu.appendChild(showGraphSubmenuBtn);
+    showGraphSubmenu.appendChild(showGraphSubmenuPanel);
     const addTagBtn = createContextMenuButton(
       CONTEXT_MENU_ACTIONS.addTag.label,
       CONTEXT_MENU_ACTIONS.addTag.icon,
@@ -835,9 +1057,11 @@
     contextMenu.appendChild(contextMenuGraphSeparator);
     contextMenu.appendChild(hidePointBtn);
     contextMenu.appendChild(removeLeafNodesBtn);
-    contextMenu.appendChild(localGraphBtn);
-    contextMenu.appendChild(fullLocalGraphBtn);
-    contextMenu.appendChild(fullNetworkBtn);
+    contextMenu.appendChild(collapseToClusterBtn);
+    contextMenu.appendChild(collapseFullOutgoingToClusterBtn);
+    contextMenu.appendChild(collapseDetectedCommunityBtn);
+    contextMenu.appendChild(expandClusterBtn);
+    contextMenu.appendChild(showGraphSubmenu);
     contextMenu.appendChild(addTagBtn);
     contextMenu.appendChild(removeTagBtn);
     contextMenu.appendChild(deleteTagBtn);
@@ -1076,7 +1300,7 @@
       return openSidebarFileInPermanentTab(normalizeEditorContent(content), getNodeEditorTitle(graphNode), sourceFile);
     };
 
-    const getVisibleFileNodes = () => nodes.filter((graphNode) => !isTagNode(graphNode));
+    const getVisibleFileNodes = () => nodes.filter((graphNode) => !isTagNode(graphNode) && !isClusterNode(graphNode));
 
     const openAllVisibleGraphFiles = async () => {
       const fileNodes = getVisibleFileNodes();
@@ -1121,7 +1345,7 @@
     };
 
     const getVisibleLeafNodeIds = () => {
-      const visibleFileNodeIds = new Set(nodes.filter((n) => !isTagNode(n)).map((n) => n.id));
+      const visibleFileNodeIds = new Set(nodes.filter((n) => !isTagNode(n) && !isClusterNode(n)).map((n) => n.id));
       const nodesWithOutgoingLinks = new Set();
       links.filter(isMarkdownLink).forEach((link) => {
         const sourceId = getLinkSourceId(link);
@@ -1154,6 +1378,222 @@
       hideContextMenu();
       graphRenderWrapper.remove();
       renderGraphView();
+    };
+
+    const updateGraphCollapsedClusters = (collapsedClusters) => {
+      simulation.stop();
+      const activeGraphTab = getActiveGraphTab();
+      if (!activeGraphTab) return;
+      activeGraphTab.graphViewConfig = normalizeGraphViewConfig({
+        ...(activeGraphTab.graphViewConfig || {}),
+        collapsedClusters
+      });
+      markGraphTabAsChanged(activeGraphTab);
+      saveTabsToStorage(tabs);
+      graphRenderCache.delete(activeGraphTab.id);
+      hideContextMenu();
+      graphRenderWrapper.remove();
+      renderGraphView();
+    };
+
+    const getVisibleDirectOutgoingFileNodeIds = (nodeId) => {
+      const visibleFileNodeIds = new Set(nodes.filter((n) => !isTagNode(n) && !isClusterNode(n)).map((n) => n.id));
+      return Array.from(new Set(links
+        .filter((link) => isMarkdownLink(link) && getLinkSourceId(link) === nodeId)
+        .map(getLinkTargetId)
+        .filter((targetId) => targetId && targetId !== nodeId && visibleFileNodeIds.has(targetId))));
+    };
+
+    const getVisibleFullOutgoingFileNodeIds = (nodeId) => {
+      if (!nodeId) return [];
+      const visibleFileNodeIds = new Set(nodes.filter((n) => !isTagNode(n) && !isClusterNode(n)).map((n) => n.id));
+      if (!visibleFileNodeIds.has(nodeId)) return [];
+      const outgoingByNodeId = new Map();
+      links.filter(isMarkdownLink).forEach((link) => {
+        const sourceId = getLinkSourceId(link);
+        const targetId = getLinkTargetId(link);
+        if (!visibleFileNodeIds.has(sourceId) || !visibleFileNodeIds.has(targetId) || sourceId === targetId) return;
+        if (!outgoingByNodeId.has(sourceId)) outgoingByNodeId.set(sourceId, new Set());
+        outgoingByNodeId.get(sourceId).add(targetId);
+      });
+
+      const visited = new Set([nodeId]);
+      const queue = Array.from(outgoingByNodeId.get(nodeId) || []);
+      while (queue.length) {
+        const nextId = queue.shift();
+        if (!nextId || visited.has(nextId) || getNodeCollapsedCluster(nextId)) continue;
+        visited.add(nextId);
+        (outgoingByNodeId.get(nextId) || []).forEach((targetId) => {
+          if (!visited.has(targetId)) queue.push(targetId);
+        });
+      }
+      return Array.from(visited);
+    };
+
+    const getVisibleMarkdownFileAdjacency = () => {
+      const visibleFileNodeIds = new Set(nodes.filter((n) => !isTagNode(n) && !isClusterNode(n)).map((n) => n.id));
+      const adjacency = new Map(Array.from(visibleFileNodeIds).map((nodeId) => [nodeId, new Set()]));
+      links.filter(isMarkdownLink).forEach((link) => {
+        const sourceId = getLinkSourceId(link);
+        const targetId = getLinkTargetId(link);
+        if (!sourceId || !targetId || sourceId === targetId) return;
+        if (!visibleFileNodeIds.has(sourceId) || !visibleFileNodeIds.has(targetId)) return;
+        adjacency.get(sourceId).add(targetId);
+        adjacency.get(targetId).add(sourceId);
+      });
+      return adjacency;
+    };
+
+    const getConnectedCommunitySubset = (seedNodeId, candidateNodeIds, adjacency) => {
+      const candidates = new Set(candidateNodeIds);
+      if (!candidates.has(seedNodeId)) return [];
+      const visited = new Set([seedNodeId]);
+      const queue = [seedNodeId];
+      while (queue.length) {
+        const currentNodeId = queue.shift();
+        (adjacency.get(currentNodeId) || new Set()).forEach((nextNodeId) => {
+          if (!candidates.has(nextNodeId) || visited.has(nextNodeId)) return;
+          visited.add(nextNodeId);
+          queue.push(nextNodeId);
+        });
+      }
+      return Array.from(visited);
+    };
+
+    const getDetectedCommunityMemberIds = (nodeId) => {
+      if (!nodeId || getNodeCollapsedCluster(nodeId)) return [];
+      const adjacency = getVisibleMarkdownFileAdjacency();
+      if (!adjacency.has(nodeId) || (adjacency.get(nodeId)?.size || 0) < 2) return [];
+
+      const nodeIds = Array.from(adjacency.keys()).sort((a, b) => a.localeCompare(b));
+      const labels = new Map(nodeIds.map((id) => [id, id]));
+      const maxIterations = 20;
+      for (let iteration = 0; iteration < maxIterations; iteration += 1) {
+        let changed = false;
+        nodeIds.forEach((id) => {
+          const counts = new Map();
+          (adjacency.get(id) || new Set()).forEach((neighborId) => {
+            const label = labels.get(neighborId);
+            counts.set(label, (counts.get(label) || 0) + 1);
+          });
+          if (!counts.size) return;
+          const currentLabel = labels.get(id);
+          let bestLabel = currentLabel;
+          let bestCount = counts.get(currentLabel) || 0;
+          Array.from(counts.entries())
+            .sort((a, b) => b[1] - a[1] || String(a[0]).localeCompare(String(b[0])))
+            .forEach(([label, count]) => {
+              if (count > bestCount) {
+                bestLabel = label;
+                bestCount = count;
+              }
+            });
+          if (bestLabel !== currentLabel) {
+            labels.set(id, bestLabel);
+            changed = true;
+          }
+        });
+        if (!changed) break;
+      }
+
+      const seedLabel = labels.get(nodeId);
+      const sameLabelNodeIds = nodeIds.filter((id) => labels.get(id) === seedLabel && !getNodeCollapsedCluster(id));
+      const communityNodeIds = getConnectedCommunitySubset(nodeId, sameLabelNodeIds, adjacency);
+      const maxCommunitySize = Math.max(20, Math.min(250, Math.floor(nodeIds.length * 0.35)));
+      if (communityNodeIds.length < 3 || communityNodeIds.length > maxCommunitySize) return [];
+      return communityNodeIds;
+    };
+
+    const getNodeCollapsedCluster = (nodeId) => {
+      const collapsedClusters = normalizeGraphViewConfig(getActiveGraphTab()?.graphViewConfig).collapsedClusters;
+      return collapsedClusters.find((cluster) => (cluster.memberNodeIds || []).includes(nodeId)) || null;
+    };
+
+    const getCollapsibleClusterMemberIds = (nodeId, mode = "direct-outgoing") => {
+      if (!nodeId || getNodeCollapsedCluster(nodeId)) return [];
+      if (mode === "community") return getDetectedCommunityMemberIds(nodeId);
+      if (mode === "full-outgoing") {
+        const memberNodeIds = getVisibleFullOutgoingFileNodeIds(nodeId)
+          .filter((memberNodeId) => memberNodeId === nodeId || !getNodeCollapsedCluster(memberNodeId));
+        return memberNodeIds.length >= 3 ? memberNodeIds : [];
+      }
+      const outgoingNodeIds = getVisibleDirectOutgoingFileNodeIds(nodeId)
+        .filter((outgoingNodeId) => !getNodeCollapsedCluster(outgoingNodeId));
+      return outgoingNodeIds.length > 1 ? [nodeId, ...outgoingNodeIds] : [];
+    };
+
+    const getLocalGraphTagNodeIds = (nodeId) => {
+      if (!nodeId) return [];
+      return Array.from(new Set([nodeId, ...getVisibleDirectOutgoingFileNodeIds(nodeId)]));
+    };
+
+    const getLocalGraphTagNodes = (graphNode) => {
+      const tagNodeIds = new Set(getLocalGraphTagNodeIds(graphNode?.id));
+      return nodes.filter((node) => tagNodeIds.has(node.id) && !isTagNode(node) && !isClusterNode(node));
+    };
+
+    const getRandomGraphGroupColor = () => {
+      const value = Math.floor(Math.random() * 0xffffff).toString(16).padStart(6, "0");
+      return `#${value}`;
+    };
+
+    const ensureGraphTagGroup = (tag) => {
+      const activeGraphTab = getActiveGraphTab();
+      if (!activeGraphTab) return false;
+      const normalizedTag = normalizeTagName(tag);
+      if (!normalizedTag) return false;
+      const tagQuery = `tag:${normalizedTag}`;
+      const currentConfig = normalizeGraphViewConfig(activeGraphTab.graphViewConfig);
+      let changed = false;
+      const groups = currentConfig.groups.map((group) => {
+        if (String(group.query || "").trim().toLowerCase() !== tagQuery.toLowerCase()) return group;
+        if (group.enabled !== false && group.hidden !== true) return group;
+        changed = true;
+        return { ...group, enabled: true, hidden: false };
+      });
+
+      if (!groups.some((group) => String(group.query || "").trim().toLowerCase() === tagQuery.toLowerCase())) {
+        groups.push({
+          id: createGraphGroupId(`${tagQuery}:${Date.now()}`),
+          query: tagQuery,
+          color: getRandomGraphGroupColor(),
+          enabled: true,
+          hidden: false
+        });
+        changed = true;
+      }
+
+      if (!changed) return false;
+      activeGraphTab.graphViewConfig = normalizeGraphViewConfig({
+        ...currentConfig,
+        groups
+      });
+      markGraphTabAsChanged(activeGraphTab);
+      saveTabsToStorage(tabs);
+      return true;
+    };
+
+    const collapseGraphNodeToCluster = (graphNode, mode = "direct-outgoing") => {
+      if (!graphNode || isTagNode(graphNode) || isClusterNode(graphNode)) return;
+      const memberNodeIds = getCollapsibleClusterMemberIds(graphNode.id, mode);
+      if (memberNodeIds.length < 3) return;
+      const currentConfig = normalizeGraphViewConfig(getActiveGraphTab()?.graphViewConfig);
+      const cluster = {
+        id: createGraphGroupId(`cluster:${graphNode.id}:${Date.now()}`),
+        label: getGraphNodeLabel(graphNode),
+        mode,
+        seedNodeId: graphNode.id,
+        memberNodeIds,
+        createdAt: Date.now()
+      };
+      updateGraphCollapsedClusters([...(currentConfig.collapsedClusters || []), cluster]);
+    };
+
+    const expandGraphCluster = (clusterNode) => {
+      const clusterId = clusterNode?.clusterId || clusterNode?.id;
+      if (!clusterId) return;
+      const currentConfig = normalizeGraphViewConfig(getActiveGraphTab()?.graphViewConfig);
+      updateGraphCollapsedClusters((currentConfig.collapsedClusters || []).filter((cluster) => getClusterNodeId(cluster) !== clusterId));
     };
 
     const removeGraphPointFromSnapshot = (nodeId) => {
@@ -1261,30 +1701,30 @@
       return changedActiveGraph;
     };
 
-    const updateGraphNodeTagContent = async (graphNode, tag, action) => {
-      if (!graphNode || graphNode.type === "tag") return;
+    const updateGraphNodeTagContent = async (graphNode, tag, action, options = {}) => {
+      if (!graphNode || graphNode.type === "tag") return false;
       const activeGraphTab = getActiveGraphTab();
       const snapshotFile = getSnapshotFileForNode(graphNode);
       if (isKeepSavedGraphMode(activeGraphTab)) {
         alert("Saved graph mode does not update saved tags or links.");
-        return;
+        return false;
       }
       if (!activeGraphTab || !snapshotFile) {
         alert("Unable to find the selected file in this graph snapshot.");
-        return;
+        return false;
       }
 
       const currentContent = await readGraphNodeContent(graphNode);
       const currentTags = getFileTagsFromContent(currentContent);
       const normalizedTag = normalizeTagName(tag);
-      if (action === "add" && currentTags.includes(normalizedTag)) return;
-      if (action === "remove" && !currentTags.includes(normalizedTag)) return;
+      if (action === "add" && currentTags.includes(normalizedTag)) return false;
+      if (action === "remove" && !currentTags.includes(normalizedTag)) return false;
 
       const nextContent = action === "remove"
         ? removeTagFromContent(currentContent, normalizedTag)
         : addTagToContent(currentContent, normalizedTag);
 
-      if (nextContent === currentContent) return;
+      if (nextContent === currentContent) return false;
 
       await writeGraphNodeContent(graphNode, nextContent);
 
@@ -1319,6 +1759,7 @@
       saveTabsToStorage(tabs);
       renderTabBar(tabs, activeTabId);
       updateSaveCurrentFileButtons();
+      if (options.deferGraphRefresh) return true;
       await refreshFolderTagCounts();
       renderFilteredFolderTree();
       renderTagManagementList();
@@ -1327,6 +1768,134 @@
       graphRenderWrapper.remove();
       updateGraphTagToolbar(activeGraphTab, activeGraphTab.graphSnapshot || null);
       renderGraphView();
+      return true;
+    };
+
+    let localGraphTagPicker = null;
+
+    const closeLocalGraphTagPicker = () => {
+      if (!localGraphTagPicker) return;
+      localGraphTagPicker.remove();
+      localGraphTagPicker = null;
+    };
+
+    const getLocalGraphNodeTags = (graphNode) => {
+      const tagNodes = getLocalGraphTagNodes(graphNode);
+      const tagsByNodeId = new Map(tagNodes.map((tagNode) => {
+        const snapshotFile = getSnapshotFileForNode(tagNode);
+        return [tagNode.id, normalizeFileTagList(tagNode.tags?.length ? tagNode.tags : snapshotFile?.tags || [])];
+      }));
+      const allTags = Array.from(new Set(Array.from(tagsByNodeId.values()).flat())).sort((a, b) => a.localeCompare(b));
+      const appliedToAllTags = new Set(allTags.filter((tag) => tagNodes.every((tagNode) => (tagsByNodeId.get(tagNode.id) || []).includes(tag))));
+      return { tagNodes, allTags, appliedToAllTags };
+    };
+
+    const updateLocalGraphTags = async (seedNode, tag, action) => {
+      const normalizedTag = normalizeTagName(tag);
+      if (!seedNode || !normalizedTag) return;
+      const tagNodes = getLocalGraphTagNodes(seedNode);
+      if (!tagNodes.length) return;
+
+      if (action === "add" && typeof createTag === "function") createTag(normalizedTag);
+
+      let changedFiles = false;
+      for (const tagNode of tagNodes) {
+        changedFiles = await updateGraphNodeTagContent(tagNode, normalizedTag, action, { deferGraphRefresh: true }) || changedFiles;
+      }
+
+      const changedGroups = action === "add" ? ensureGraphTagGroup(normalizedTag) : false;
+      if (!changedFiles && !changedGroups) return;
+
+      const activeGraphTab = getActiveGraphTab();
+      await refreshFolderTagCounts();
+      renderFilteredFolderTree();
+      renderTagManagementList();
+      renderLinkAutocomplete();
+      if (activeGraphTab) updateGraphTagToolbar(activeGraphTab, activeGraphTab.graphSnapshot || null);
+      simulation.stop();
+      graphRenderWrapper.remove();
+      renderGraphView();
+    };
+
+    const tagLocalGraphNodes = (seedNode, tag) => updateLocalGraphTags(seedNode, tag, "add");
+
+    const showLocalGraphTagPicker = (seedNode) => {
+      closeLocalGraphTagPicker();
+      const overlay = document.createElement("div");
+      overlay.className = "graph-tag-picker-overlay";
+      const panel = document.createElement("div");
+      panel.className = "graph-tag-picker-panel";
+      panel.addEventListener("click", (event) => event.stopPropagation());
+
+      const title = document.createElement("div");
+      title.className = "graph-tag-picker-title";
+      title.textContent = "Tag Local Graph";
+      panel.appendChild(title);
+
+      const list = document.createElement("div");
+      list.className = "graph-tag-picker-list";
+      const localGraphTags = getLocalGraphNodeTags(seedNode);
+      const tags = Array.from(new Set((typeof getAllKnownAndReferencedTags === "function" ? getAllKnownAndReferencedTags() : getKnownTags())
+        .concat(localGraphTags.allTags)
+        .map(normalizeTagName)
+        .filter(Boolean)))
+        .sort((a, b) => a.localeCompare(b));
+
+      if (!tags.length) {
+        const empty = document.createElement("div");
+        empty.className = "graph-tag-picker-empty";
+        empty.textContent = "No available tags";
+        list.appendChild(empty);
+      }
+
+      tags.forEach((tag) => {
+        const isApplied = localGraphTags.appliedToAllTags.has(tag);
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = "graph-tag-picker-item";
+        button.setAttribute("aria-checked", isApplied ? "true" : "false");
+        const icon = document.createElement("i");
+        icon.className = isApplied ? "bi bi-check-lg" : "bi";
+        icon.setAttribute("aria-hidden", "true");
+        const label = document.createElement("span");
+        label.textContent = `#${tag}`;
+        button.appendChild(icon);
+        button.appendChild(label);
+        button.addEventListener("click", async () => {
+          closeLocalGraphTagPicker();
+          try {
+            await updateLocalGraphTags(seedNode, tag, isApplied ? "remove" : "add");
+          } catch (error) {
+            console.error("Failed to tag local graph:", error);
+            alert("Unable to tag the local graph.");
+          }
+        });
+        list.appendChild(button);
+      });
+
+      const createButton = document.createElement("button");
+      createButton.type = "button";
+      createButton.className = "graph-tag-picker-item graph-tag-picker-create";
+      createButton.textContent = "Create new tag ...";
+      createButton.addEventListener("click", async () => {
+        const tagName = window.prompt("New tag:");
+        const normalizedTag = normalizeTagName(tagName);
+        if (!normalizedTag) return;
+        closeLocalGraphTagPicker();
+        try {
+          await tagLocalGraphNodes(seedNode, normalizedTag);
+        } catch (error) {
+          console.error("Failed to tag local graph:", error);
+          alert("Unable to tag the local graph.");
+        }
+      });
+      list.appendChild(createButton);
+      panel.appendChild(list);
+
+      overlay.appendChild(panel);
+      overlay.addEventListener("click", closeLocalGraphTagPicker);
+      graphRenderWrapper.appendChild(overlay);
+      localGraphTagPicker = overlay;
     };
 
     const applyMagneticSetting = () => {
@@ -1338,6 +1907,7 @@
           .force("centerX", baseCenterPullX)
           .force("centerY", baseCenterPullY)
           .force("collision", baseCollisionForce)
+          .force("groupCluster", baseGroupClusterForce)
           .alpha(0.7)
           .restart();
       } else {
@@ -1348,6 +1918,7 @@
           .force("centerX", null)
           .force("centerY", null)
           .force("collision", null)
+          .force("groupCluster", null)
           .alphaTarget(0)
           .stop();
         renderGraphTick();
@@ -1369,9 +1940,11 @@
       sharePointBtn,
       contextMenuGraphSeparator,
       hidePointBtn,
-      localGraphBtn,
-      fullLocalGraphBtn,
-      fullNetworkBtn,
+      collapseToClusterBtn,
+      collapseFullOutgoingToClusterBtn,
+      collapseDetectedCommunityBtn,
+      expandClusterBtn,
+      showGraphSubmenu,
       tagsSubmenu,
       deleteTagBtn,
       contextMenuDeleteSeparator,
@@ -1400,6 +1973,7 @@
     };
 
     const hideContextMenu = () => {
+      closeLocalGraphTagPicker();
       contextMenu.classList.add("hidden");
       contextTargetNode = null;
       contextMenuTitle.classList.add("hidden");
@@ -1433,11 +2007,17 @@
       contextMenuActionSeparator.classList.add("hidden");
       setNodeContextItemsHidden(false);
       setGraphContextItemsHidden(true);
-      const isFileNode = (d.type || "file") !== "tag";
+      const isTag = isTagNode(d);
+      const isCluster = isClusterNode(d);
+      const isFileNode = !isTag && !isCluster;
       const keepSavedMode = isKeepSavedGraphMode(activeTab);
-      [openFileBtn, openDefaultAppBtn, revealFileBtn, revealTreeViewBtn, copySubmenu, sharePointBtn, localGraphBtn, fullLocalGraphBtn, fullNetworkBtn, exportSubmenu].forEach((item) => item.classList.toggle("hidden", !isFileNode));
+      [openFileBtn, openDefaultAppBtn, revealFileBtn, revealTreeViewBtn, copySubmenu, sharePointBtn, showGraphSubmenu, exportSubmenu].forEach((item) => item.classList.toggle("hidden", !isFileNode));
       [renameFileBtn, deleteFileBtn].forEach((item) => item.classList.toggle("hidden", !isFileNode || keepSavedMode));
       tagsSubmenu.classList.toggle("hidden", !isFileNode || keepSavedMode);
+      collapseToClusterBtn.classList.toggle("hidden", !isFileNode || getCollapsibleClusterMemberIds(d.id).length < 3);
+      collapseFullOutgoingToClusterBtn.classList.toggle("hidden", !isFileNode || getCollapsibleClusterMemberIds(d.id, "full-outgoing").length < 3);
+      collapseDetectedCommunityBtn.classList.toggle("hidden", !isFileNode || getCollapsibleClusterMemberIds(d.id, "community").length < 3);
+      expandClusterBtn.classList.toggle("hidden", !isCluster);
       if (isFileNode) {
         const snapshotFile = getSnapshotFileForNode(d);
         const currentTags = normalizeFileTagList(d.tags?.length ? d.tags : snapshotFile?.tags || []);
@@ -1451,9 +2031,16 @@
             console.error("Failed to update graph file tags:", error);
             alert("Unable to update this file's tags.");
           }
+        }, {
+          onTagLocalGraph: () => {
+            if (!contextTargetNode || isTagNode(contextTargetNode) || isClusterNode(contextTargetNode)) return;
+            const targetNode = contextTargetNode;
+            hideContextMenu();
+            showLocalGraphTagPicker(targetNode);
+          }
         });
       }
-      deleteTagBtn.classList.toggle("hidden", isFileNode);
+      deleteTagBtn.classList.toggle("hidden", !isTag);
       contextMenuDeleteSeparator.classList.toggle("hidden", !isFileNode);
       contextMenuDeleteEndSeparator.classList.toggle("hidden", !isFileNode);
       positionContextMenu(event);
@@ -1481,6 +2068,30 @@
     removeLeafNodesBtn.addEventListener("click", (event) => {
       event.stopPropagation();
       hideLeafGraphPoints();
+    });
+
+    collapseToClusterBtn.addEventListener("click", (event) => {
+      event.stopPropagation();
+      if (!contextTargetNode) return;
+      collapseGraphNodeToCluster(contextTargetNode);
+    });
+
+    collapseFullOutgoingToClusterBtn.addEventListener("click", (event) => {
+      event.stopPropagation();
+      if (!contextTargetNode) return;
+      collapseGraphNodeToCluster(contextTargetNode, "full-outgoing");
+    });
+
+    collapseDetectedCommunityBtn.addEventListener("click", (event) => {
+      event.stopPropagation();
+      if (!contextTargetNode) return;
+      collapseGraphNodeToCluster(contextTargetNode, "community");
+    });
+
+    expandClusterBtn.addEventListener("click", (event) => {
+      event.stopPropagation();
+      if (!contextTargetNode) return;
+      expandGraphCluster(contextTargetNode);
     });
 
     openFileBtn.addEventListener("click", async (event) => {
@@ -1832,6 +2443,7 @@
 
     let hoveredGraphNode = null;
     let hoveredGraphModifiers = { shiftKey: false, ctrlKey: false, altKey: false };
+    let hoverLabelNodeIds = new Set();
 
     const getGraphLinkSourceId = (linkData) => linkData?.source?.id || linkData?.source;
     const getGraphLinkTargetId = (linkData) => linkData?.target?.id || linkData?.target;
@@ -1886,6 +2498,45 @@
       return { highlightedNodes, highlightedLinks };
     };
 
+    const getRecursiveBacklinkHighlight = (focusNodeId, includeTagRelationships = false) => {
+      const highlightedNodes = new Set([focusNodeId]);
+      const highlightedLinks = new Set();
+      const visitedNodeIds = new Set([focusNodeId]);
+      const nodesToVisit = [focusNodeId];
+
+      while (nodesToVisit.length) {
+        const currentNodeId = nodesToVisit.shift();
+        links.forEach((linkData) => {
+          if (!shouldIncludeLinkInHoverHighlight(linkData, includeTagRelationships)) return;
+          if (getGraphLinkTargetId(linkData) !== currentNodeId) return;
+          highlightedLinks.add(linkData);
+          const sourceNodeId = getGraphLinkSourceId(linkData);
+          if (!sourceNodeId) return;
+          highlightedNodes.add(sourceNodeId);
+          if (!visitedNodeIds.has(sourceNodeId)) {
+            visitedNodeIds.add(sourceNodeId);
+            nodesToVisit.push(sourceNodeId);
+          }
+        });
+      }
+
+      return { highlightedNodes, highlightedLinks };
+    };
+
+    const setSelectedGraphNodeCount = (selectedNodeCount) => {
+      const safeSelectedNodeCount = Math.max(0, Number(selectedNodeCount) || 0);
+      activeTab.selectedGraphNodeCount = safeSelectedNodeCount;
+      updateStatusLine({
+        visiblePointCount: activeTab.visiblePointCount || nodes.length,
+        graphZoomScale: activeTab.graphZoomScale,
+        selectedGraphNodeCount: safeSelectedNodeCount
+      });
+      const selectedCountElement = document.getElementById("graph-selected-nodes-count");
+      const selectedStatusElement = document.getElementById("graph-selected-nodes-status");
+      if (selectedCountElement) selectedCountElement.textContent = safeSelectedNodeCount.toLocaleString();
+      if (selectedStatusElement) selectedStatusElement.classList.remove("hidden");
+    };
+
     function highlightNeighborhood(focusNode, modifiers = hoveredGraphModifiers) {
       if (!focusNode) return;
       const focusNodeId = focusNode.id;
@@ -1893,7 +2544,9 @@
       // Alt includes tag relationships for file nodes; tag nodes always show their direct file connections.
       const includeTagRelationships = Boolean(modifiers.altKey || isTagNode(focusNode));
       const highlight = isBacklinkHighlight
-        ? getBacklinkHighlight(focusNodeId, includeTagRelationships)
+        ? (modifiers.shiftKey
+          ? getRecursiveBacklinkHighlight(focusNodeId, includeTagRelationships)
+          : getBacklinkHighlight(focusNodeId, includeTagRelationships))
         : (modifiers.shiftKey
           ? getRecursiveOutgoingHighlight(focusNodeId, includeTagRelationships)
           : {
@@ -1909,9 +2562,13 @@
         });
       }
       const isHighlightedLink = (l) => highlight.highlightedLinks.has(l);
+      hoverLabelNodeIds = graphViewConfig.showLabels === false ? highlight.highlightedNodes : new Set();
+      const selectedNodeCount = nodes.reduce((count, graphNode) => count + (highlight.highlightedNodes.has(graphNode.id) ? 1 : 0), 0);
+      setSelectedGraphNodeCount(selectedNodeCount);
 
       node.classed("dimmed", (n) => !highlight.highlightedNodes.has(n.id));
       label.classed("dimmed", (n) => !highlight.highlightedNodes.has(n.id));
+      updateLabelVisibility();
       link
         .classed("dimmed", (l) => !isHighlightedLink(l))
         .classed("highlighted-direct", (l) => !isBacklinkHighlight && isHighlightedLink(l))
@@ -1923,8 +2580,11 @@
     }
 
     function clearNeighborhoodHighlight() {
+      hoverLabelNodeIds = new Set();
+      setSelectedGraphNodeCount(0);
       node.classed("dimmed", false);
       label.classed("dimmed", false);
+      updateLabelVisibility();
       link.classed("dimmed", false).classed("highlighted-direct", false).classed("highlighted-backlink", false);
       arrowhead.classed("dimmed", false).classed("highlighted-direct", false).classed("highlighted-backlink", false);
     }
@@ -1954,7 +2614,7 @@
     function updateLabelVisibility() {
       if (!label) return;
       if (graphViewConfig.showLabels === false) {
-        label.attr("opacity", 0);
+        label.attr("opacity", (d) => hoverLabelNodeIds.has(d.id) ? 1 : 0);
         return;
       }
       const threshold = graphViewConfig.textFadeThreshold;

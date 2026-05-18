@@ -437,6 +437,38 @@
     return changedActiveGraph;
   }
 
+  async function purgeDeletedTagFromOpenGraphSnapshots(tagName) {
+    const normalizedTag = normalizeTagName(tagName);
+    if (!normalizedTag) return false;
+    let changedActiveGraph = false;
+
+    for (const tab of tabs) {
+      if (tab?.type !== "graph" || !tab.graphSnapshot?.files || isKeepSavedGraphMode(tab)) continue;
+
+      let graphChanged = false;
+      tab.graphSnapshot.files.forEach((snapshotFile) => {
+        const currentContent = snapshotFile.content || "";
+        const nextContent = removeTagFromContent(currentContent, normalizedTag);
+        const currentTags = normalizeFileTagList(snapshotFile.tags || getFileTagsFromContent(currentContent));
+        const nextTags = currentTags.filter((tag) => tag !== normalizedTag);
+        if (nextContent === currentContent && nextTags.length === currentTags.length) return;
+        snapshotFile.content = nextContent;
+        snapshotFile.tags = nextTags;
+        graphChanged = true;
+      });
+
+      if (!graphChanged) continue;
+      const currentSnapshot = tab.graphSnapshot;
+      tab.graphSnapshot = await createGraphSnapshot(currentSnapshot.files || [], currentSnapshot.folderName || tab.folderName || tab.title);
+      if (currentSnapshot.createdAt) tab.graphSnapshot.createdAt = currentSnapshot.createdAt;
+      graphRenderCache.delete(tab.id);
+      markGraphTabAsChanged(tab);
+      changedActiveGraph = changedActiveGraph || tab.id === activeTabId;
+    }
+
+    return changedActiveGraph;
+  }
+
   async function deleteTag(tagName) {
     const normalizedTag = normalizeTagName(tagName);
     if (!normalizedTag) {
@@ -490,7 +522,7 @@
       }
     }
 
-    const activeGraphChanged = await updateOpenGraphSnapshotsForChangedTagFiles(changedEntries);
+    let activeGraphChanged = await updateOpenGraphSnapshotsForChangedTagFiles(changedEntries);
 
     if (selectedFolderTreeTags.has(normalizedTag)) {
       selectedFolderTreeTags = new Set(selectedFolderTreeTags);
@@ -500,6 +532,8 @@
     await refreshFolderTagCounts();
     if (!failedEntries.length) {
       saveKnownTags(getKnownTags().filter((tag) => tag !== normalizedTag));
+      saveCreatedTags(getCreatedTags().filter((tag) => tag !== normalizedTag));
+      activeGraphChanged = await purgeDeletedTagFromOpenGraphSnapshots(normalizedTag) || activeGraphChanged;
     }
     saveTabsToStorage(tabs);
     renderTabBar(tabs, activeTabId);
@@ -508,6 +542,7 @@
     renderTagManagementList();
     updateTagManagementMenuButtons();
     renderLinkAutocomplete();
+    updateGraphTagToolbar(getActiveGraphTab(), getActiveGraphTab()?.graphSnapshot || null);
 
     if (activeGraphChanged || (getActiveGraphTab() && activeTabId === getActiveGraphTab().id)) {
       renderGraphView();

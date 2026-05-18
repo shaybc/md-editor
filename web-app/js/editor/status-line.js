@@ -14,6 +14,8 @@
     const graphZoomPercentElement = deps.graphZoomPercentElement;
     const graphPointsStatusElement = deps.graphPointsStatusElement;
     const graphPointsCountElement = deps.graphPointsCountElement;
+    const graphSelectedNodesStatusElement = deps.graphSelectedNodesStatusElement;
+    const graphSelectedNodesCountElement = deps.graphSelectedNodesCountElement;
     const editorTextpadStatusElement = deps.editorTextpadStatusElement;
     const editorTotalLengthElement = deps.editorTotalLengthElement;
     const editorTotalLinesElement = deps.editorTotalLinesElement;
@@ -80,6 +82,9 @@
         : (typeof activeGraphTab?.graphZoomScale === "number"
           ? activeGraphTab.graphZoomScale
           : getGraphZoomScaleFromLayout(activeGraphTab?.graphLayout));
+      const selectedGraphNodeCount = typeof options.selectedGraphNodeCount === "number"
+        ? options.selectedGraphNodeCount
+        : (typeof activeGraphTab?.selectedGraphNodeCount === "number" ? activeGraphTab.selectedGraphNodeCount : 0);
 
       if (statusTipElement) {
         statusTipElement.textContent = getPreviewHoveredLinkUrl() || (activeGraphTab
@@ -95,6 +100,11 @@
       if (graphPointsStatusElement && graphPointsCountElement) {
         graphPointsCountElement.textContent = visiblePointCount.toLocaleString();
         graphPointsStatusElement.classList.toggle("hidden", !activeGraphTab);
+      }
+
+      if (graphSelectedNodesStatusElement && graphSelectedNodesCountElement) {
+        graphSelectedNodesCountElement.textContent = selectedGraphNodeCount.toLocaleString();
+        graphSelectedNodesStatusElement.classList.toggle("hidden", !activeGraphTab || selectedGraphNodeCount <= 0);
       }
 
       updateEditorTextpadStatus(activeTab);
