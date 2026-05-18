@@ -458,11 +458,11 @@
     }
 
     const LARGE_GRAPH_AUTO_CLUSTER_NODE_LIMIT = 500;
-    const LARGE_GRAPH_AUTO_CLUSTER_VERSION = 3;
-    const LARGE_GRAPH_RENDER_NODE_BUDGET = 900;
-    const getLargeGraphAutoClusterTarget = (nodeCount) => Math.min(LARGE_GRAPH_RENDER_NODE_BUDGET, Math.max(450, Math.floor(nodeCount * 0.08)));
-    const getLargeGraphAutoClusterMaxSize = (nodeCount) => Math.max(160, Math.min(900, Math.ceil(nodeCount / 18)));
-    const getLargeGraphHubBudget = (nodeCount) => Math.max(100, Math.min(320, Math.floor(getLargeGraphAutoClusterTarget(nodeCount) * 0.35)));
+    const LARGE_GRAPH_AUTO_CLUSTER_VERSION = 4;
+    const LARGE_GRAPH_RENDER_NODE_BUDGET = 650;
+    const getLargeGraphAutoClusterTarget = (nodeCount) => Math.min(LARGE_GRAPH_RENDER_NODE_BUDGET, Math.max(350, Math.floor(nodeCount * 0.05)));
+    const getLargeGraphAutoClusterMaxSize = (nodeCount) => Math.max(220, Math.min(1200, Math.ceil(nodeCount / 14)));
+    const getLargeGraphHubBudget = (nodeCount) => Math.max(45, Math.min(140, Math.floor(getLargeGraphAutoClusterTarget(nodeCount) * 0.22)));
     const getVisibleFileNodeIdsForClustering = () => new Set(nodes
       .filter((nodeData) => !isTagNode(nodeData) && !isClusterNode(nodeData))
       .map((nodeData) => nodeData.id));
@@ -540,6 +540,13 @@
         }
       }
 
+      return chunks;
+    };
+    const chunkNodeIdsBySize = (nodeIds, chunkSize) => {
+      const chunks = [];
+      for (let index = 0; index < nodeIds.length; index += chunkSize) {
+        chunks.push(nodeIds.slice(index, index + chunkSize));
+      }
       return chunks;
     };
     const detectGraphCommunities = async () => {
@@ -629,6 +636,7 @@
       const targetNodeCount = getLargeGraphAutoClusterTarget(visibleFileNodeIds.size);
       const requiredReduction = Math.max(0, visibleFileNodeIds.size - targetNodeCount);
       let currentReduction = 0;
+      let preservedHubNodeIds = new Set();
       const addClusterCandidate = (communityNodeIds, index, source = "community") => {
         const memberNodeIds = communityNodeIds.filter((nodeId) => nodesById.has(nodeId) && !usedNodeIds.has(nodeId));
         if (memberNodeIds.length < 3) return;
@@ -672,12 +680,12 @@
 
       if (currentReduction < requiredReduction) {
         await yieldGraphRenderWork();
-        const hubNodeIds = new Set(Array.from(visibleFileNodeIds)
+        preservedHubNodeIds = new Set(Array.from(visibleFileNodeIds)
           .filter((nodeId) => !usedNodeIds.has(nodeId))
           .sort((a, b) => importanceOf(b) - importanceOf(a) || a.localeCompare(b))
           .slice(0, getLargeGraphHubBudget(visibleFileNodeIds.size)));
         const detailNodeIds = Array.from(visibleFileNodeIds)
-          .filter((nodeId) => !usedNodeIds.has(nodeId) && !hubNodeIds.has(nodeId));
+          .filter((nodeId) => !usedNodeIds.has(nodeId) && !preservedHubNodeIds.has(nodeId));
         const detailChunks = getConnectedClusterSubsets(detailNodeIds, adjacency)
           .sort((a, b) => b.length - a.length || String(a[0] || "").localeCompare(String(b[0] || "")))
           .flatMap((componentNodeIds) => getBudgetedClusterChunks(componentNodeIds, adjacency, {
@@ -688,6 +696,57 @@
           if (currentReduction >= requiredReduction) return;
           addClusterCandidate(chunkNodeIds, index, "detail");
         });
+      }
+
+      if (currentReduction < requiredReduction) {
+        await yieldGraphRenderWork();
+        if (!preservedHubNodeIds.size) {
+          preservedHubNodeIds = new Set(Array.from(visibleFileNodeIds)
+            .filter((nodeId) => !usedNodeIds.has(nodeId))
+            .sort((a, b) => importanceOf(b) - importanceOf(a) || a.localeCompare(b))
+            .slice(0, getLargeGraphHubBudget(visibleFileNodeIds.size)));
+        }
+        const spokeNodeIdsByHubId = new Map();
+        Array.from(visibleFileNodeIds)
+          .filter((nodeId) => !usedNodeIds.has(nodeId) && !preservedHubNodeIds.has(nodeId))
+          .forEach((nodeId) => {
+            const hubId = Array.from(adjacency.get(nodeId) || [])
+              .filter((neighborId) => preservedHubNodeIds.has(neighborId))
+              .sort((a, b) => importanceOf(b) - importanceOf(a) || a.localeCompare(b))[0] || "__overview__";
+            if (!spokeNodeIdsByHubId.has(hubId)) spokeNodeIdsByHubId.set(hubId, []);
+            spokeNodeIdsByHubId.get(hubId).push(nodeId);
+          });
+        let hubGroupIndex = 0;
+        Array.from(spokeNodeIdsByHubId.entries())
+          .sort((a, b) => b[1].length - a[1].length || String(a[0]).localeCompare(String(b[0])))
+          .forEach(([, spokeNodeIds]) => {
+            if (currentReduction >= requiredReduction) return;
+            const sortedSpokeNodeIds = spokeNodeIds
+              .filter((nodeId) => !usedNodeIds.has(nodeId))
+              .sort((a, b) => importanceOf(b) - importanceOf(a) || a.localeCompare(b));
+            chunkNodeIdsBySize(sortedSpokeNodeIds, getLargeGraphAutoClusterMaxSize(visibleFileNodeIds.size))
+              .forEach((chunkNodeIds) => {
+                if (currentReduction >= requiredReduction) return;
+                addClusterCandidate(chunkNodeIds, hubGroupIndex, "hub-neighborhood");
+                hubGroupIndex += 1;
+              });
+          });
+      }
+
+      if (currentReduction < requiredReduction) {
+        await yieldGraphRenderWork();
+        const emergencyProtectedHubIds = new Set(Array.from(visibleFileNodeIds)
+          .filter((nodeId) => !usedNodeIds.has(nodeId))
+          .sort((a, b) => importanceOf(b) - importanceOf(a) || a.localeCompare(b))
+          .slice(0, Math.max(20, Math.floor(getLargeGraphHubBudget(visibleFileNodeIds.size) * 0.45))));
+        const remainingNodeIds = Array.from(visibleFileNodeIds)
+          .filter((nodeId) => !usedNodeIds.has(nodeId) && !emergencyProtectedHubIds.has(nodeId))
+          .sort((a, b) => importanceOf(a) - importanceOf(b) || a.localeCompare(b));
+        chunkNodeIdsBySize(remainingNodeIds, getLargeGraphAutoClusterMaxSize(visibleFileNodeIds.size))
+          .forEach((chunkNodeIds, index) => {
+            if (currentReduction >= requiredReduction) return;
+            addClusterCandidate(chunkNodeIds, index, "overview");
+          });
       }
 
       return clusters;
