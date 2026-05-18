@@ -2788,7 +2788,10 @@ Markdown content is processed client-side in your browser and sanitized before p
 
   async function listMarkdownTree(dirHandle, parentPath = "") {
     const entries = [];
+    let processedEntries = 0;
     for await (const entry of dirHandle.values()) {
+      processedEntries += 1;
+      if (processedEntries % 50 === 0) await new Promise((resolve) => setTimeout(resolve, 0));
       if (entry.kind === "directory") {
         const currentPath = parentPath ? `${parentPath}/${entry.name}` : entry.name;
         const children = await listMarkdownTree(entry, currentPath);
@@ -2811,7 +2814,10 @@ Markdown content is processed client-side in your browser and sanitized before p
 
   async function collectMarkdownFilesFromTree(nodes, parentPath = "") {
     const files = [];
+    let processedNodes = 0;
     for (const node of (nodes || [])) {
+      processedNodes += 1;
+      if (processedNodes % 100 === 0) await new Promise((resolve) => setTimeout(resolve, 0));
       const currentPath = parentPath ? `${parentPath}/${node.name}` : node.name;
       if (node.kind === "directory") {
         const nestedFiles = await collectMarkdownFilesFromTree(node.children || [], currentPath);
@@ -3175,7 +3181,9 @@ async function listMarkdownTreeNeutralino(dirPath) {
   const entries = [];
   try {
     const items = await Neutralino.filesystem.readDirectory(dirPath);
-    for (const item of items) {
+    for (let index = 0; index < items.length; index += 1) {
+      const item = items[index];
+      if (index > 0 && index % 50 === 0) await new Promise((resolve) => setTimeout(resolve, 0));
       if (item.entry === "." || item.entry === "..") continue;
       const fullPath = `${dirPath}/${item.entry}`;
       let stats = null;
@@ -3200,7 +3208,9 @@ async function listMarkdownTreeNeutralino(dirPath) {
 
 async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
   const files = [];
-  for (const node of (nodes || [])) {
+  for (let index = 0; index < (nodes || []).length; index += 1) {
+    const node = (nodes || [])[index];
+    if (index > 0 && index % 50 === 0) await new Promise((resolve) => setTimeout(resolve, 0));
     const currentPath = parentPath ? `${parentPath}/${node.name}` : node.name;
     if (node.kind === "directory") {
       const nestedFiles = await collectMarkdownFilesFromTreeNeutralino(node.children || [], currentPath);

@@ -500,6 +500,7 @@
       });
       return subsets;
     };
+    const yieldGraphRenderWork = () => new Promise((resolve) => setTimeout(resolve, 0));
     const getBudgetedClusterChunks = (candidateNodeIds, adjacency, options = {}) => {
       const maxClusterSize = Math.max(3, options.maxClusterSize || 160);
       const minClusterSize = Math.max(3, options.minClusterSize || 3);
@@ -541,10 +542,11 @@
 
       return chunks;
     };
-    const detectGraphCommunities = () => {
+    const detectGraphCommunities = async () => {
       const visibleFileNodeIds = getVisibleFileNodeIdsForClustering();
       if (visibleFileNodeIds.size <= LARGE_GRAPH_AUTO_CLUSTER_NODE_LIMIT) return { visibleFileNodeIds, adjacency: new Map(), communities: [] };
       const adjacency = getMarkdownFileAdjacencyForNodes(visibleFileNodeIds);
+      await yieldGraphRenderWork();
       const nodeIds = Array.from(adjacency.keys())
         .filter((nodeId) => (adjacency.get(nodeId)?.size || 0) >= 1)
         .sort((a, b) => a.localeCompare(b));
@@ -553,6 +555,7 @@
       const labels = new Map(nodeIds.map((id) => [id, id]));
       const maxIterations = 20;
       for (let iteration = 0; iteration < maxIterations; iteration += 1) {
+        await yieldGraphRenderWork();
         let changed = false;
         nodeIds.forEach((id) => {
           const counts = new Map();
@@ -589,6 +592,7 @@
       });
 
       const maxCommunitySize = getLargeGraphAutoClusterMaxSize(visibleFileNodeIds.size);
+      await yieldGraphRenderWork();
       const communities = Array.from(nodeIdsByLabel.values())
         .flatMap((labelNodeIds) => getConnectedClusterSubsets(labelNodeIds, adjacency))
         .flatMap((communityNodeIds) => {
@@ -599,12 +603,12 @@
         .sort((a, b) => b.length - a.length || String(a[0] || "").localeCompare(String(b[0] || "")));
       return { visibleFileNodeIds, adjacency, communities };
     };
-    const createAutoCollapsedClustersForLargeGraph = () => {
+    const createAutoCollapsedClustersForLargeGraph = async () => {
       const currentConfig = normalizeGraphViewConfig(activeTab.graphViewConfig);
       const existingAutoClusterVersion = Number(currentConfig.autoCollapsedLargeGraphVersion || 0);
       if (currentConfig.autoCollapsedLargeGraph === true && existingAutoClusterVersion >= LARGE_GRAPH_AUTO_CLUSTER_VERSION) return null;
       if ((currentConfig.collapsedClusters || []).length && currentConfig.autoCollapsedLargeGraph !== true) return null;
-      const { visibleFileNodeIds, adjacency, communities } = detectGraphCommunities();
+      const { visibleFileNodeIds, adjacency, communities } = await detectGraphCommunities();
       if (visibleFileNodeIds.size <= LARGE_GRAPH_AUTO_CLUSTER_NODE_LIMIT) return null;
 
       const nodesById = new Map(nodes.map((nodeData) => [nodeData.id, nodeData]));
@@ -651,6 +655,7 @@
       });
 
       if (currentReduction < requiredReduction) {
+        await yieldGraphRenderWork();
         const remainingConnectedNodeIds = Array.from(visibleFileNodeIds)
           .filter((nodeId) => !usedNodeIds.has(nodeId) && (adjacency.get(nodeId)?.size || 0) > 0);
         const fallbackChunks = getConnectedClusterSubsets(remainingConnectedNodeIds, adjacency)
@@ -666,6 +671,7 @@
       }
 
       if (currentReduction < requiredReduction) {
+        await yieldGraphRenderWork();
         const hubNodeIds = new Set(Array.from(visibleFileNodeIds)
           .filter((nodeId) => !usedNodeIds.has(nodeId))
           .sort((a, b) => importanceOf(b) - importanceOf(a) || a.localeCompare(b))
@@ -686,8 +692,8 @@
 
       return clusters;
     };
-    const applyAutoCollapsedClustersForLargeGraph = () => {
-      const autoCollapsedClusters = createAutoCollapsedClustersForLargeGraph();
+    const applyAutoCollapsedClustersForLargeGraph = async () => {
+      const autoCollapsedClusters = await createAutoCollapsedClustersForLargeGraph();
       if (!autoCollapsedClusters) return;
       graphViewConfig = normalizeGraphViewConfig({
         ...(activeTab.graphViewConfig || {}),
@@ -704,7 +710,7 @@
       saveTabsToStorage(tabs);
     };
 
-    applyAutoCollapsedClustersForLargeGraph();
+    await applyAutoCollapsedClustersForLargeGraph();
     graphSignature = getGraphSnapshotSignature(graphSnapshot, graphViewConfig);
 
     const getClusterNodeId = (cluster) => cluster?.id || `cluster:${cluster?.seedNodeId || ""}`;

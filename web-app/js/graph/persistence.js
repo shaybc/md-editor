@@ -1158,7 +1158,10 @@
     const nodeIndex = new Map();
     const snapshotFiles = [];
 
-    for (const fileEntry of (files || [])) {
+    const sourceFiles = files || [];
+    for (let index = 0; index < sourceFiles.length; index += 1) {
+      const fileEntry = sourceFiles[index];
+      if (index > 0 && index % 25 === 0) await new Promise((resolve) => setTimeout(resolve, 0));
       const path = fileEntry.path || fileEntry.file?.webkitRelativePath || fileEntry.file?.name || "";
       const name = getFileName(path || fileEntry.file?.name || "document.md");
       const content = await readFolderMarkdownFileContent(fileEntry);
@@ -1180,7 +1183,9 @@
 
     const tagIndex = new Map();
 
-    for (const snapshotFile of snapshotFiles) {
+    for (let index = 0; index < snapshotFiles.length; index += 1) {
+      if (index > 0 && index % 250 === 0) await new Promise((resolve) => setTimeout(resolve, 0));
+      const snapshotFile = snapshotFiles[index];
       const source = snapshotFile.id;
       (snapshotFile.tags || []).forEach((tag) => {
         const normalizedTag = normalizeTagName(tag);
@@ -1203,7 +1208,9 @@
       });
     }
 
-    for (const snapshotFile of snapshotFiles) {
+    for (let index = 0; index < snapshotFiles.length; index += 1) {
+      if (index > 0 && index % 50 === 0) await new Promise((resolve) => setTimeout(resolve, 0));
+      const snapshotFile = snapshotFiles[index];
       const source = snapshotFile.id;
       extractMarkdownLinks(snapshotFile.content).forEach((ref) => {
         const target = resolveGraphTargetId(ref, snapshotFile.path, nodeIndex);
