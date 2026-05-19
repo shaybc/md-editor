@@ -522,6 +522,7 @@ test("settings menu updates graph auto-clustering threshold", async ({ page }) =
   await expect(page.locator("#settings-modal")).toBeVisible();
   await expect(page.locator("#settings-graph-auto-cluster-threshold")).toHaveValue("1000");
   await expect(page.locator("#settings-graph-render-warning-threshold")).toHaveValue("1500");
+  await expect(page.locator("#settings-graph-most-referenced-percent")).toHaveValue("10");
   await expect(page.locator("#settings-graph-show-file-extensions")).not.toBeChecked();
   await expect(page.locator("#settings-confirm-open-many-graph-nodes")).toBeChecked();
   await expect(page.locator("#settings-confirm-delete-files")).toBeChecked();
@@ -532,6 +533,7 @@ test("settings menu updates graph auto-clustering threshold", async ({ page }) =
 
   await page.locator("#settings-graph-auto-cluster-threshold").fill("1200");
   await page.locator("#settings-graph-render-warning-threshold").fill("1800");
+  await page.locator("#settings-graph-most-referenced-percent").fill("25");
   await page.locator("#settings-graph-show-file-extensions").check();
   await page.locator("#settings-confirm-open-many-graph-nodes").uncheck();
   await page.locator("#settings-confirm-delete-files").uncheck();
@@ -546,6 +548,7 @@ test("settings menu updates graph auto-clustering threshold", async ({ page }) =
     return {
       threshold: state.graphAutoClusterThreshold,
       renderWarningThreshold: state.graphRenderWarningThreshold,
+      mostReferencedPercent: state.graphMostReferencedPercent,
       showFileExtensions: state.graphShowFileExtensions,
       confirmOpenManyGraphNodes: state.confirmOpenManyGraphNodes,
       confirmDeleteFiles: state.confirmDeleteFiles,
@@ -557,6 +560,7 @@ test("settings menu updates graph auto-clustering threshold", async ({ page }) =
   })).toEqual({
     threshold: 1200,
     renderWarningThreshold: 1800,
+    mostReferencedPercent: 25,
     showFileExtensions: true,
     confirmOpenManyGraphNodes: false,
     confirmDeleteFiles: false,
@@ -570,6 +574,7 @@ test("settings menu updates graph auto-clustering threshold", async ({ page }) =
   await page.locator(".open-settings-dialog").first().click();
   await expect(page.locator("#settings-graph-auto-cluster-threshold")).toHaveValue("1200");
   await expect(page.locator("#settings-graph-render-warning-threshold")).toHaveValue("1800");
+  await expect(page.locator("#settings-graph-most-referenced-percent")).toHaveValue("25");
   await expect(page.locator("#settings-graph-show-file-extensions")).toBeChecked();
   await expect(page.locator("#settings-confirm-open-many-graph-nodes")).not.toBeChecked();
   await expect(page.locator("#settings-confirm-delete-files")).not.toBeChecked();
@@ -1795,6 +1800,202 @@ test("graph hidden link metric groups remove ranked points", async ({ page }) =>
   })).toEqual(["hub.md"]);
 });
 
+test("graph quick action groups most referenced files by percentile", async ({ page }) => {
+  await page.addInitScript(() => {
+    window.NL_VERSION = "test";
+    window.NL_OS = "Windows";
+    window.__alerts = [];
+    window.__writes = [];
+    window.alert = (message) => window.__alerts.push(String(message));
+    window.prompt = () => "infra";
+
+    const files = new Map();
+    const nodes = [];
+    const snapshotFiles = [];
+    for (let index = 1; index <= 20; index += 1) {
+      const id = `file-${index}.md`;
+      const fullPath = `C:/vault/${id}`;
+      const content = `# File ${index}`;
+      files.set(fullPath, content);
+      nodes.push({ id, label: id, fullPath, type: "file", status: "current", tags: [] });
+      snapshotFiles.push({ id, path: id, name: id, fullPath, content, status: "current", tags: [] });
+    }
+
+    window.Neutralino = {
+      filesystem: {
+        readFile: async (path) => files.get(path) || "",
+        writeFile: async (path, content) => {
+          await new Promise((resolve) => setTimeout(resolve, 120));
+          files.set(path, content);
+          window.__writes.push({ path, content });
+        }
+      },
+      clipboard: { writeText: async () => {} },
+      os: { open: async () => {}, execCommand: async () => {} }
+    };
+
+    const graphTab = {
+      id: "most_referenced_graph_e2e",
+      title: "Most Referenced Graph E2E",
+      content: "",
+      scrollPos: 0,
+      viewMode: "preview",
+      createdAt: Date.now(),
+      isTemporary: false,
+      type: "graph",
+      folderName: "Most Referenced Graph E2E",
+      graphScopeKey: "root-folder:c:/vault",
+      graphViewConfig: {
+        showTags: false,
+        hiddenTagIds: [],
+        hiddenNodeIds: [],
+        selectedTagIds: [],
+        groups: [],
+        searchQuery: "",
+        showArrows: true,
+        showOrphans: true,
+        showLabels: true,
+        textFadeThreshold: 0.35,
+        nodeSize: 0.8,
+        linkThickness: 1,
+        centerForce: 1,
+        repelForce: 650,
+        linkForce: 0.4,
+        linkDistance: 170,
+        groupForce: 0.18
+      },
+      graphSnapshot: {
+        version: 1,
+        folderName: "Most Referenced Graph E2E",
+        createdAt: Date.now(),
+        nodes,
+        links: [
+          { source: "file-3.md", target: "file-1.md", type: "link", status: "current" },
+          { source: "file-4.md", target: "file-1.md", type: "link", status: "current" },
+          { source: "file-5.md", target: "file-1.md", type: "link", status: "current" },
+          { source: "file-6.md", target: "file-1.md", type: "link", status: "current" },
+          { source: "file-7.md", target: "file-1.md", type: "link", status: "current" },
+          { source: "file-8.md", target: "file-2.md", type: "link", status: "current" },
+          { source: "file-9.md", target: "file-2.md", type: "link", status: "current" },
+          { source: "file-10.md", target: "file-2.md", type: "link", status: "current" },
+          { source: "file-11.md", target: "file-2.md", type: "link", status: "current" },
+          { source: "file-12.md", target: "file-3.md", type: "link", status: "current" }
+        ],
+        files: snapshotFiles
+      }
+    };
+
+    localStorage.setItem("markdownViewerGlobalState", JSON.stringify({
+      knownTags: ["infra"],
+      graphMostReferencedPercent: 10,
+      graphMagneticEnabled: true
+    }));
+    localStorage.setItem("markdownViewerTabs", JSON.stringify([graphTab]));
+    localStorage.setItem("markdownViewerActiveTab", graphTab.id);
+  });
+
+  await page.goto("/");
+  await expect(page.locator(".graph-node-file")).toHaveCount(20);
+  await page.locator(".graph-quick-action-button").click();
+  await page.locator(".graph-quick-action-menu-item", { hasText: "Group most referenced" }).click();
+  await expect(page.locator(".graph-quick-action-status")).toBeVisible();
+  await expect(page.locator(".graph-quick-action-status")).toHaveText(/Detecting most referenced|Tagging|Creating hidden group|Refreshing graph/);
+
+  await expect.poll(() => page.evaluate(() => window.__alerts)).toEqual([]);
+  await expect.poll(() => page.evaluate(() => window.__writes.map((write) => write.path).sort())).toEqual([
+    "C:/vault/file-1.md",
+    "C:/vault/file-2.md"
+  ]);
+  await expect.poll(() => page.evaluate(() => {
+    const graphTab = JSON.parse(localStorage.getItem("markdownViewerTabs")).find((tab) => tab.id === "most_referenced_graph_e2e");
+    return {
+      tagged: graphTab.graphSnapshot.files
+        .filter((file) => (file.tags || []).includes("infra"))
+        .map((file) => file.id)
+        .sort(),
+      groups: graphTab.graphViewConfig.groups.map((group) => ({
+        query: group.query,
+        enabled: group.enabled,
+        hidden: group.hidden,
+        hasColor: /^#[0-9a-f]{6}$/i.test(group.color || "")
+      }))
+    };
+  })).toEqual({
+    tagged: ["file-1", "file-2"],
+    groups: [{ query: "tag:infra", enabled: true, hidden: true, hasColor: true }]
+  });
+  await expect(page.locator(".graph-node-file")).toHaveCount(18);
+  await expect(page.locator(".graph-quick-action-status")).toBeHidden();
+});
+
+test("graph quick action blocks most referenced grouping in saved graph mode", async ({ page }) => {
+  await page.addInitScript(() => {
+    window.__alerts = [];
+    window.alert = (message) => window.__alerts.push(String(message));
+    window.prompt = () => "infra";
+    const graphTab = {
+      id: "saved_most_referenced_graph_e2e",
+      title: "Saved Most Referenced Graph E2E",
+      content: "",
+      scrollPos: 0,
+      viewMode: "preview",
+      createdAt: Date.now(),
+      isTemporary: false,
+      type: "graph",
+      folderName: "Saved Most Referenced Graph E2E",
+      keepSavedGraphMode: true,
+      graphViewConfig: {
+        showTags: false,
+        hiddenTagIds: [],
+        hiddenNodeIds: [],
+        selectedTagIds: [],
+        groups: [],
+        searchQuery: "",
+        showArrows: true,
+        showOrphans: true,
+        showLabels: true,
+        textFadeThreshold: 0.35,
+        nodeSize: 0.8,
+        linkThickness: 1,
+        centerForce: 1,
+        repelForce: 650,
+        linkForce: 0.4,
+        linkDistance: 170,
+        groupForce: 0.18
+      },
+      graphSnapshot: {
+        version: 1,
+        folderName: "Saved Most Referenced Graph E2E",
+        createdAt: Date.now(),
+        nodes: [
+          { id: "alpha.md", label: "alpha.md", type: "file", status: "current", tags: [] },
+          { id: "beta.md", label: "beta.md", type: "file", status: "current", tags: [] }
+        ],
+        links: [{ source: "beta.md", target: "alpha.md", type: "link", status: "current" }],
+        files: [
+          { id: "alpha.md", path: "alpha.md", name: "alpha.md", content: "# Alpha", status: "current", tags: [] },
+          { id: "beta.md", path: "beta.md", name: "beta.md", content: "# Beta", status: "current", tags: [] }
+        ]
+      }
+    };
+    localStorage.setItem("markdownViewerTabs", JSON.stringify([graphTab]));
+    localStorage.setItem("markdownViewerActiveTab", graphTab.id);
+  });
+
+  await page.goto("/");
+  await page.locator(".graph-quick-action-button").click();
+  await page.locator(".graph-quick-action-menu-item", { hasText: "Group most referenced" }).click();
+
+  await expect.poll(() => page.evaluate(() => window.__alerts)).toEqual(["Saved graph mode does not update saved tags or links."]);
+  await expect.poll(() => page.evaluate(() => {
+    const graphTab = JSON.parse(localStorage.getItem("markdownViewerTabs")).find((tab) => tab.id === "saved_most_referenced_graph_e2e");
+    return {
+      groups: graphTab.graphViewConfig.groups,
+      tags: graphTab.graphSnapshot.files.map((file) => file.tags || [])
+    };
+  })).toEqual({ groups: [], tags: [[], []] });
+});
+
 test("graph display can hide and show orphan points", async ({ page }) => {
   await page.addInitScript(() => {
     const graphTab = {
@@ -2709,6 +2910,7 @@ test("settings reset all clears cache preferences and recent history", async ({ 
   await page.locator("#settings-reset-all").click();
 
   await expect(page.locator("#settings-graph-auto-cluster-threshold")).toHaveValue("1000");
+  await expect(page.locator("#settings-graph-most-referenced-percent")).toHaveValue("10");
   await expect(page.locator("#settings-graph-show-file-extensions")).not.toBeChecked();
   await expect(page.locator("#settings-max-recent-files")).toHaveValue("10");
   await expect(page.locator("#settings-max-recent-folders")).toHaveValue("10");

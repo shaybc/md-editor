@@ -1880,6 +1880,7 @@
   const settingsModal = document.getElementById("settings-modal");
   const settingsGraphAutoClusterThresholdInput = document.getElementById("settings-graph-auto-cluster-threshold");
   const settingsGraphRenderWarningThresholdInput = document.getElementById("settings-graph-render-warning-threshold");
+  const settingsGraphMostReferencedPercentInput = document.getElementById("settings-graph-most-referenced-percent");
   const settingsGraphShowFileExtensionsInput = document.getElementById("settings-graph-show-file-extensions");
   const settingsConfirmOpenManyGraphNodesInput = document.getElementById("settings-confirm-open-many-graph-nodes");
   const settingsConfirmDeleteFilesInput = document.getElementById("settings-confirm-delete-files");
@@ -1966,6 +1967,7 @@
   const GLOBAL_STATE_KEY = 'markdownViewerGlobalState';
   const DEFAULT_GRAPH_AUTO_CLUSTER_THRESHOLD = 1000;
   const DEFAULT_GRAPH_RENDER_WARNING_THRESHOLD = 1500;
+  const DEFAULT_GRAPH_MOST_REFERENCED_PERCENT = 10;
   const DEFAULT_CONTEXT_MENU_TOOLTIP_DELAY_MS = 3000;
   const DEFAULT_MAX_RECENT_FILES = 10;
   const DEFAULT_MAX_RECENT_FOLDERS = 10;
@@ -1979,6 +1981,7 @@
     contextMenuTooltipDelayMs: DEFAULT_CONTEXT_MENU_TOOLTIP_DELAY_MS,
     graphAutoClusterThreshold: DEFAULT_GRAPH_AUTO_CLUSTER_THRESHOLD,
     graphRenderWarningThreshold: DEFAULT_GRAPH_RENDER_WARNING_THRESHOLD,
+    graphMostReferencedPercent: DEFAULT_GRAPH_MOST_REFERENCED_PERCENT,
     graphShowFileExtensions: false,
     graphMagneticEnabled: true,
     graphViewPreferences: {},
@@ -2014,6 +2017,12 @@
     const value = Number(loadGlobalState().graphRenderWarningThreshold);
     if (!Number.isFinite(value)) return DEFAULT_GRAPH_RENDER_WARNING_THRESHOLD;
     return Math.max(0, Math.min(100000, Math.floor(value)));
+  }
+
+  function getGraphMostReferencedPercent() {
+    const value = Number(loadGlobalState().graphMostReferencedPercent);
+    if (!Number.isFinite(value)) return DEFAULT_GRAPH_MOST_REFERENCED_PERCENT;
+    return Math.max(1, Math.min(100, Math.floor(value)));
   }
 
   function getGraphShowFileExtensions() {
@@ -2980,6 +2989,9 @@ Markdown content is processed client-side in your browser and sanitized before p
     if (settingsGraphRenderWarningThresholdInput) {
       settingsGraphRenderWarningThresholdInput.value = String(getGraphRenderWarningThreshold());
     }
+    if (settingsGraphMostReferencedPercentInput) {
+      settingsGraphMostReferencedPercentInput.value = String(getGraphMostReferencedPercent());
+    }
     if (settingsGraphShowFileExtensionsInput) {
       settingsGraphShowFileExtensionsInput.checked = getGraphShowFileExtensions();
     }
@@ -3022,6 +3034,11 @@ Markdown content is processed client-side in your browser and sanitized before p
       alert("Enter a graph render node warning threshold of 0 or higher.");
       return;
     }
+    const graphMostReferencedPercent = Number(settingsGraphMostReferencedPercentInput?.value);
+    if (!Number.isFinite(graphMostReferencedPercent) || graphMostReferencedPercent < 1 || graphMostReferencedPercent > 100) {
+      alert("Enter a most referenced group size between 1 and 100.");
+      return;
+    }
     const maxRecentFiles = Number(settingsMaxRecentFilesInput?.value);
     if (!Number.isFinite(maxRecentFiles) || maxRecentFiles < 0) {
       alert("Enter a maximum recent files value of 0 or higher.");
@@ -3040,6 +3057,7 @@ Markdown content is processed client-side in your browser and sanitized before p
     saveGlobalState({
       graphAutoClusterThreshold: Math.min(100000, Math.floor(threshold)),
       graphRenderWarningThreshold: Math.min(100000, Math.floor(graphRenderWarningThreshold)),
+      graphMostReferencedPercent: Math.max(1, Math.min(100, Math.floor(graphMostReferencedPercent))),
       graphShowFileExtensions: !!settingsGraphShowFileExtensionsInput?.checked,
       confirmOpenManyGraphNodes: !!settingsConfirmOpenManyGraphNodesInput?.checked,
       confirmDeleteFiles: !!settingsConfirmDeleteFilesInput?.checked,
@@ -4767,6 +4785,7 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
     getGraphViewPreferenceDefaults,
     getGraphAutoClusterThreshold,
     getGraphRenderWarningThreshold,
+    getGraphMostReferencedPercent,
     getGraphShowFileExtensions,
     shouldConfirmOpenManyGraphNodes,
     shouldConfirmDeleteFiles,

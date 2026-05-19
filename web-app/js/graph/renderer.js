@@ -2090,19 +2090,21 @@
       return `#${value}`;
     };
 
-    const ensureGraphTagGroup = (tag) => {
+    const ensureGraphTagGroup = (tag, options = {}) => {
       const activeGraphTab = getActiveGraphTab();
       if (!activeGraphTab) return false;
       const normalizedTag = normalizeTagName(tag);
       if (!normalizedTag) return false;
       const tagQuery = `tag:${normalizedTag}`;
       const currentConfig = normalizeGraphViewConfig(activeGraphTab.graphViewConfig);
+      const shouldHide = options.hidden === true;
       let changed = false;
       const groups = currentConfig.groups.map((group) => {
         if (String(group.query || "").trim().toLowerCase() !== tagQuery.toLowerCase()) return group;
-        if (group.enabled !== false && group.hidden !== true) return group;
+        const nextHidden = shouldHide ? true : group.hidden === true;
+        if (group.enabled !== false && group.hidden === nextHidden) return group;
         changed = true;
-        return { ...group, enabled: true, hidden: false };
+        return { ...group, enabled: true, hidden: nextHidden };
       });
 
       if (!groups.some((group) => String(group.query || "").trim().toLowerCase() === tagQuery.toLowerCase())) {
@@ -2111,7 +2113,7 @@
           query: tagQuery,
           color: getRandomGraphGroupColor(),
           enabled: true,
-          hidden: false
+          hidden: shouldHide
         });
         changed = true;
       }
@@ -2124,6 +2126,110 @@
       markGraphTabAsChanged(activeGraphTab);
       saveTabsToStorage(tabs);
       return true;
+    };
+
+    const getMostReferencedGraphNodes = () => {
+      const percent = typeof getGraphMostReferencedPercent === "function" ? getGraphMostReferencedPercent() : 10;
+      const sourceNodes = (graphSnapshot.nodes || [])
+        .map((node) => ({ ...node, type: node?.type || "file" }))
+        .filter((node) => !isTagNode(node) && !isClusterNode(node));
+      const fileIds = new Set(sourceNodes.map((node) => node.id).filter(Boolean));
+      const incomingCounts = new Map(Array.from(fileIds).map((nodeId) => [nodeId, 0]));
+
+      (graphSnapshot.links || [])
+        .map((link) => ({ ...link, type: link?.type || "link" }))
+        .filter(isMarkdownLink)
+        .forEach((link) => {
+          const sourceId = getLinkSourceId(link);
+          const targetId = getLinkTargetId(link);
+          if (!fileIds.has(sourceId) || !fileIds.has(targetId)) return;
+          incomingCounts.set(targetId, (incomingCounts.get(targetId) || 0) + 1);
+        });
+
+      const rankedNodes = sourceNodes
+        .map((node) => ({ node, incomingCount: incomingCounts.get(node.id) || 0 }))
+        .filter((entry) => entry.incomingCount > 0)
+        .sort((a, b) => b.incomingCount - a.incomingCount || String(a.node.id).localeCompare(String(b.node.id), undefined, { sensitivity: "base" }));
+
+      if (!rankedNodes.length) return [];
+      const desiredCount = Math.max(1, Math.ceil(sourceNodes.length * percent / 100));
+      const cutoffIndex = Math.min(desiredCount, rankedNodes.length) - 1;
+      const cutoffCount = rankedNodes[cutoffIndex]?.incomingCount || 0;
+      return rankedNodes.filter((entry) => entry.incomingCount >= cutoffCount).map((entry) => entry.node);
+    };
+
+    const hasSnapshotTagForNode = (graphNode, tag) => {
+      const snapshotFile = getSnapshotFileForNode(graphNode);
+      return normalizeFileTagList([
+        ...(Array.isArray(graphNode?.tags) ? graphNode.tags : []),
+        ...(Array.isArray(snapshotFile?.tags) ? snapshotFile.tags : []),
+        ...(snapshotFile?.content ? getFileTagsFromContent(snapshotFile.content) : [])
+      ]).includes(tag);
+    };
+
+    const groupMostReferencedGraphNodes = async () => {
+      const activeGraphTab = getActiveGraphTab();
+      if (!activeGraphTab || !graphSnapshot?.nodes?.length) return;
+      if (isKeepSavedGraphMode(activeGraphTab)) {
+        alert("Saved graph mode does not update saved tags or links.");
+        return;
+      }
+
+      const tagName = window.prompt("Tag name for the most referenced files", "infrastructure");
+      const normalizedTag = normalizeTagName(tagName);
+      if (!normalizedTag) return;
+
+      setGraphQuickActionBusy(true, "Detecting most referenced...");
+      await new Promise((resolve) => requestAnimationFrame(resolve));
+      try {
+        const selectedNodes = getMostReferencedGraphNodes();
+        if (!selectedNodes.length) {
+          alert("No referenced files were found to tag.");
+          return;
+        }
+
+        if (typeof createTag === "function") createTag(normalizedTag);
+
+        setGraphQuickActionBusy(true, `Tagging ${selectedNodes.length} file${selectedNodes.length === 1 ? "" : "s"}...`);
+        let changedFiles = false;
+        let alreadyTaggedFiles = false;
+        const failedNodes = [];
+        for (const graphNode of selectedNodes) {
+          try {
+            alreadyTaggedFiles = hasSnapshotTagForNode(graphNode, normalizedTag) || alreadyTaggedFiles;
+            changedFiles = await updateGraphNodeTagContent(graphNode, normalizedTag, "add", { deferGraphRefresh: true }) || changedFiles;
+          } catch (error) {
+            failedNodes.push(graphNode);
+            console.error("Failed to tag most referenced graph file:", graphNode?.id, error);
+          }
+        }
+
+        setGraphQuickActionBusy(true, "Creating hidden group...");
+        const changedGroups = (changedFiles || alreadyTaggedFiles || failedNodes.length < selectedNodes.length)
+          ? ensureGraphTagGroup(normalizedTag, { hidden: true })
+          : false;
+        if (!changedFiles && !changedGroups) {
+          if (failedNodes.length) alert(`Unable to tag ${failedNodes.length} most referenced file${failedNodes.length === 1 ? "" : "s"}.`);
+          return;
+        }
+
+        setGraphQuickActionBusy(true, "Refreshing graph...");
+        const refreshedGraphTab = getActiveGraphTab();
+        await refreshFolderTagCounts();
+        renderFilteredFolderTree();
+        renderTagManagementList();
+        renderLinkAutocomplete();
+        if (refreshedGraphTab) updateGraphTagToolbar(refreshedGraphTab, refreshedGraphTab.graphSnapshot || null);
+        simulation.stop();
+        graphRenderWrapper.remove();
+        renderGraphView();
+
+        if (failedNodes.length) {
+          alert(`Tagged ${selectedNodes.length - failedNodes.length} most referenced file${selectedNodes.length - failedNodes.length === 1 ? "" : "s"}, but ${failedNodes.length} file${failedNodes.length === 1 ? "" : "s"} could not be updated.`);
+        }
+      } finally {
+        setGraphQuickActionBusy(false);
+      }
     };
 
     const collapseGraphNodeToCluster = (graphNode, mode = "direct-outgoing") => {
@@ -2450,6 +2556,75 @@
       graphRenderWrapper.appendChild(overlay);
       localGraphTagPicker = overlay;
     };
+
+    const quickActionWrapper = document.createElement("div");
+    quickActionWrapper.className = "graph-quick-action";
+    const quickActionButton = document.createElement("button");
+    quickActionButton.type = "button";
+    quickActionButton.className = "graph-quick-action-button";
+    quickActionButton.title = "Graph actions";
+    quickActionButton.setAttribute("aria-label", "Open graph actions");
+    quickActionButton.setAttribute("aria-expanded", "false");
+    quickActionButton.innerHTML = '<i class="bi bi-plus-lg" aria-hidden="true"></i>';
+
+    const quickActionStatus = document.createElement("div");
+    quickActionStatus.className = "graph-quick-action-status hidden";
+    quickActionStatus.setAttribute("role", "status");
+    quickActionStatus.setAttribute("aria-live", "polite");
+    const quickActionStatusSpinner = document.createElement("span");
+    quickActionStatusSpinner.className = "graph-quick-action-spinner";
+    quickActionStatusSpinner.setAttribute("aria-hidden", "true");
+    const quickActionStatusLabel = document.createElement("span");
+    quickActionStatusLabel.textContent = "";
+    quickActionStatus.append(quickActionStatusSpinner, quickActionStatusLabel);
+
+    const quickActionMenu = document.createElement("div");
+    quickActionMenu.className = "graph-quick-action-menu hidden";
+    quickActionMenu.setAttribute("role", "menu");
+    quickActionMenu.setAttribute("aria-label", "Graph actions");
+
+    const groupMostReferencedButton = document.createElement("button");
+    groupMostReferencedButton.type = "button";
+    groupMostReferencedButton.className = "graph-quick-action-menu-item";
+    groupMostReferencedButton.setAttribute("role", "menuitem");
+    groupMostReferencedButton.innerHTML = '<i class="bi bi-tags" aria-hidden="true"></i><span>Group most referenced</span>';
+    quickActionMenu.appendChild(groupMostReferencedButton);
+    quickActionWrapper.append(quickActionStatus, quickActionMenu, quickActionButton);
+    graphRenderWrapper.appendChild(quickActionWrapper);
+
+    const setGraphQuickActionBusy = (busy, message = "") => {
+      quickActionWrapper.classList.toggle("busy", !!busy);
+      quickActionButton.disabled = !!busy;
+      groupMostReferencedButton.disabled = !!busy;
+      quickActionButton.setAttribute("aria-busy", busy ? "true" : "false");
+      quickActionStatusLabel.textContent = busy ? message : "";
+      quickActionStatus.classList.toggle("hidden", !busy);
+      if (busy) closeGraphQuickActionMenu();
+    };
+
+    const closeGraphQuickActionMenu = () => {
+      quickActionMenu.classList.add("hidden");
+      quickActionButton.setAttribute("aria-expanded", "false");
+    };
+
+    quickActionButton.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      const isOpening = quickActionMenu.classList.contains("hidden");
+      quickActionMenu.classList.toggle("hidden", !isOpening);
+      quickActionButton.setAttribute("aria-expanded", isOpening ? "true" : "false");
+    });
+    quickActionWrapper.addEventListener("click", (event) => event.stopPropagation());
+    graphRenderWrapper.addEventListener("click", closeGraphQuickActionMenu);
+    groupMostReferencedButton.addEventListener("click", async () => {
+      closeGraphQuickActionMenu();
+      try {
+        await groupMostReferencedGraphNodes();
+      } catch (error) {
+        console.error("Failed to group most referenced graph nodes:", error);
+        alert("Unable to group the most referenced files.");
+      }
+    });
 
     const applyMagneticSetting = () => {
       if (graphSettings.magneticEnabled) {
