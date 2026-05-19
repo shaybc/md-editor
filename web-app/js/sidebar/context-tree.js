@@ -1199,6 +1199,7 @@
     });
 
     showFullGraphBtn.addEventListener("click", async (event) => {
+      event.preventDefault();
       event.stopPropagation();
       const target = sidebarContextTarget;
       hideSidebarFileContextMenu();
@@ -1396,35 +1397,88 @@
     return normalizeGraphNodeName(node?.path || node?.file?.webkitRelativePath || node?.fullPath || node?.name || "");
   }
 
+  function logSidebarFullGraph(message, details = {}) {
+    console.info("[Sidebar full graph]", message, details);
+  }
+
+  function failSidebarFullGraph(message, details = {}) {
+    console.warn("[Sidebar full graph]", message, details);
+    alert(message);
+  }
+
   async function openSidebarFileFullGraphView(node) {
-    if (!node || node.kind !== "file" || !isMarkdownPath(node.name || node.path || node.fullPath || "")) return;
+    logSidebarFullGraph("Requested full graph from tree context menu.", {
+      nodeName: node?.name || "",
+      nodePath: node?.path || "",
+      nodeFullPath: node?.fullPath || "",
+      nodeKind: node?.kind || "",
+      activeFolderName,
+      activeFolderPath
+    });
+
+    if (!node || node.kind !== "file") {
+      failSidebarFullGraph("Unable to open a full graph because no sidebar file is selected.", {
+        nodeKind: node?.kind || "",
+        nodeName: node?.name || ""
+      });
+      return;
+    }
+
+    const nodeGraphPath = node.name || node.path || node.fullPath || "";
+    if (!isMarkdownPath(nodeGraphPath)) {
+      failSidebarFullGraph("Show full graph is available only for Markdown files.", {
+        nodeGraphPath
+      });
+      return;
+    }
 
     const files = await getOpenFolderMarkdownFilesForGraph();
     if (!files.length) {
-      alert("Open a folder first to build a full graph for this file.");
+      failSidebarFullGraph("Open a folder first to build a full graph for this file.", {
+        currentFolderTreeNodeCount: (currentFolderTreeNodes || []).length,
+        folderMarkdownFileCount: (folderMarkdownFiles || []).length
+      });
       return;
     }
 
     const focusNodeId = getSidebarFileGraphNodeId(node, files);
     if (!focusNodeId) {
-      alert("Unable to match this file to a graph point.");
+      failSidebarFullGraph("Unable to match this file to a graph point.", {
+        nodeName: node.name || "",
+        nodePath: node.path || "",
+        nodeFullPath: node.fullPath || "",
+        markdownFileCount: files.length
+      });
       return;
     }
 
     const graphTitle = `Full Graph: ${node.name || focusNodeId}`;
     const scopeSeed = `${activeFolderPath || activeFolderName || "folder"}:${getSidebarNodeClipboardPath(node) || focusNodeId}`;
     const graphScopeKey = createFolderGraphScopeKey("sidebar-file-full-graph", scopeSeed);
-    if (focusExistingFolderGraphTab(graphScopeKey, graphTitle)) return;
+    if (focusExistingFolderGraphTab(graphScopeKey, graphTitle)) {
+      logSidebarFullGraph("Focused an existing full graph tab.", {
+        graphScopeKey,
+        graphTitle,
+        focusNodeId
+      });
+      return;
+    }
 
     if (tabs.length >= 20) {
-      alert('Maximum of 20 tabs reached. Please close an existing tab to open a new one.');
+      failSidebarFullGraph("Maximum of 20 tabs reached. Please close an existing tab to open a new one.", {
+        tabCount: tabs.length
+      });
       return;
     }
 
     const graphSnapshot = await createGraphSnapshot(files, activeFolderName || "Graph View");
     const snapshotNodeIds = new Set((graphSnapshot.nodes || []).map((graphNode) => graphNode.id));
     if (!snapshotNodeIds.has(focusNodeId)) {
-      alert("Unable to find this file in the current folder graph.");
+      failSidebarFullGraph("Unable to find this file in the current folder graph.", {
+        focusNodeId,
+        snapshotNodeCount: snapshotNodeIds.size,
+        markdownFileCount: files.length
+      });
       return;
     }
 
@@ -1437,10 +1491,25 @@
         hiddenNodeIds: []
       }
     });
-    if (!graphTab) return;
+    if (!graphTab) {
+      failSidebarFullGraph("Unable to create the full graph tab.", {
+        graphTitle,
+        graphScopeKey,
+        focusNodeId,
+        snapshotNodeCount: snapshotNodeIds.size
+      });
+      return;
+    }
     tabs.push(graphTab);
     switchTab(graphTab.id);
     saveTabsToStorage(tabs);
+    logSidebarFullGraph("Opened full graph tab.", {
+      graphTitle,
+      graphScopeKey,
+      focusNodeId,
+      snapshotNodeCount: snapshotNodeIds.size,
+      markdownFileCount: files.length
+    });
   }
 
   async function collectMarkdownFilesForSidebarFolder(node) {
@@ -2261,6 +2330,12 @@
         getSidebarFolderClipboardPath,
         getSidebarFolderFilesystemPath,
         getSidebarFolderGraphTitle,
+        getSidebarMarkdownFileEntry,
+        getOpenFolderMarkdownFilesForGraph,
+        getSidebarFileGraphNodeId,
+        logSidebarFullGraph,
+        failSidebarFullGraph,
+        openSidebarFileFullGraphView,
         collectMarkdownFilesForSidebarFolder,
         openSidebarFolderGraphView,
         exportSidebarFolderToGraph,
@@ -2286,6 +2361,7 @@
       });
     }
 
+    app.registerModule?.("sidebarContextTree", api);
     return api;
   };
 })(window);

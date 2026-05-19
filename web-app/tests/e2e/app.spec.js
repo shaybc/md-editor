@@ -2447,6 +2447,25 @@ test("tree file context menu opens a recursive full graph for that file", async 
   await expect.poll(() => page.evaluate(() => window.__alerts)).toEqual([]);
 });
 
+test("tree file full graph reports when no sidebar file is selected", async ({ page }) => {
+  const consoleMessages = [];
+  page.on("console", (message) => {
+    consoleMessages.push(`${message.type()}: ${message.text()}`);
+  });
+  await page.addInitScript(() => {
+    window.__alerts = [];
+    window.alert = (message) => window.__alerts.push(String(message));
+  });
+  await openApp(page);
+
+  await page.evaluate(() => window.markdownViewerApp.modules.sidebarContextTree.openSidebarFileFullGraphView(null));
+
+  await expect.poll(() => page.evaluate(() => window.__alerts)).toEqual([
+    "Unable to open a full graph because no sidebar file is selected."
+  ]);
+  await expect.poll(() => consoleMessages.some((message) => message.includes("[Sidebar full graph]"))).toBe(true);
+});
+
 test("renders recent files in the action menu", async ({ page }) => {
   await page.addInitScript(() => {
     localStorage.setItem("markdownViewerRecentFiles", JSON.stringify([

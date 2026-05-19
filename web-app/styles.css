@@ -2274,8 +2274,10 @@ body {
   display: none;
 }
 
-.graph-context-menu-item:hover {
-  background: var(--hover-bg);
+.graph-context-menu-item:hover,
+.graph-context-menu-item:focus-visible {
+  background: var(--tree-selection-bg, var(--button-hover));
+  outline: none;
 }
 
 .graph-context-menu-item:disabled,
@@ -2291,7 +2293,9 @@ body {
 }
 
 .graph-context-menu-item:disabled:hover,
-.graph-context-menu-item.disabled:hover {
+.graph-context-menu-item:disabled:focus-visible,
+.graph-context-menu-item.disabled:hover,
+.graph-context-menu-item.disabled:focus-visible {
   background: transparent;
 }
 
