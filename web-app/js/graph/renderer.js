@@ -34,6 +34,98 @@
     const updateGraphLoadingState = (message) => {
       if (graphLoadingLabel) graphLoadingLabel.textContent = message;
     };
+    const removeGraphProgressHud = () => {
+      graphViewCanvas.querySelectorAll(".graph-progress-hud").forEach((node) => node.remove());
+    };
+    const updateGraphProgressHud = (progress) => {
+      const total = Number(progress?.total || 0);
+      const completed = Number(progress?.completed || 0);
+      if (!total) {
+        removeGraphProgressHud();
+        return;
+      }
+      let hud = graphViewCanvas.querySelector(".graph-progress-hud");
+      if (!hud) {
+        hud = document.createElement("div");
+        hud.className = "graph-progress-hud";
+        hud.setAttribute("role", "status");
+        hud.setAttribute("aria-live", "polite");
+        hud.innerHTML = '<span class="graph-progress-spinner" aria-hidden="true"></span><span class="graph-progress-text"></span>';
+        graphViewCanvas.appendChild(hud);
+      }
+      const label = hud.querySelector(".graph-progress-text");
+      if (label) label.textContent = `Building graph ${completed.toLocaleString()} / ${total.toLocaleString()} files`;
+    };
+    const applyLargeGraphDisplayDefaults = (tab, snapshotNodeCount) => {
+      if (!tab?.pendingLargeGraphDisplayDefaults) return;
+      const largeGraphDisplayLimit = typeof getGraphRenderWarningThreshold === "function" ? getGraphRenderWarningThreshold() : LARGE_GRAPH_DISPLAY_NODE_LIMIT;
+      if (Number(snapshotNodeCount || 0) > largeGraphDisplayLimit) {
+        const preferenceDefaults = typeof getGraphViewPreferenceDefaults === "function" ? getGraphViewPreferenceDefaults() : {};
+        const largeGraphDefaults = {};
+        if (!Object.prototype.hasOwnProperty.call(preferenceDefaults, "showArrows")) largeGraphDefaults.showArrows = false;
+        if (!Object.prototype.hasOwnProperty.call(preferenceDefaults, "showOrphans")) largeGraphDefaults.showOrphans = false;
+        if (!Object.prototype.hasOwnProperty.call(preferenceDefaults, "showLabels")) largeGraphDefaults.showLabels = false;
+        if (Object.keys(largeGraphDefaults).length) {
+          tab.graphViewConfig = normalizeGraphViewConfig({
+            ...(tab.graphViewConfig || {}),
+            ...largeGraphDefaults
+          });
+          graphViewConfig = tab.graphViewConfig;
+        }
+      }
+      delete tab.pendingLargeGraphDisplayDefaults;
+    };
+    const isActiveGraphBuild = (tab, buildId) => tab && activeTabId === tab.id && tab.graphBuildId === buildId;
+    const startProgressiveGraphBuild = async (tab, snapshotFiles) => {
+      if (!tab || typeof createProgressiveGraphSnapshot !== "function") return false;
+      if (tab.graphBuildController) tab.graphBuildController.abort();
+      const buildId = `${Date.now()}:${Math.random().toString(36).slice(2)}`;
+      const controller = typeof AbortController !== "undefined" ? new AbortController() : { signal: { aborted: false }, abort() { this.signal.aborted = true; } };
+      tab.graphBuildId = buildId;
+      tab.graphBuildController = controller;
+      tab.graphBuildState = { status: "building", completed: 0, total: snapshotFiles.length };
+      updateGraphProgressHud(tab.graphBuildState);
+      createProgressiveGraphSnapshot(snapshotFiles, tab.folderName || tab.title, {
+        signal: controller.signal,
+        batchSize: 100,
+        minEmitInterval: 250,
+        async onSnapshot(snapshot, progress) {
+          if (!isActiveGraphBuild(tab, buildId)) return;
+          const completed = Number(progress?.completed || snapshot?.buildProgress?.completed || 0);
+          const total = Number(progress?.total || snapshot?.buildProgress?.total || snapshotFiles.length);
+          tab.graphBuildState = { status: progress?.complete ? "complete" : "building", completed, total };
+          tab.graphSnapshot = snapshot;
+          delete tab.graphComparisonSnapshot;
+          applyLargeGraphDisplayDefaults(tab, total);
+          updateGraphProgressHud(tab.graphBuildState);
+          if (!options.skipToolbar) updateGraphTagToolbar(tab, snapshot);
+          const cachedRender = graphRenderCache.get(tab.id);
+          if (cachedRender?.nodes) captureGraphLayout(tab, cachedRender.nodes, cachedRender.getZoomTransform?.());
+          graphRenderCache.delete(tab.id);
+          renderGraphView({ skipProgressiveBuild: true, skipLayoutLoadingState: true, progressiveRender: true });
+        }
+      }).then((finalSnapshot) => {
+        if (!isActiveGraphBuild(tab, buildId)) return;
+        tab.graphSnapshot = finalSnapshot;
+        delete tab.graphComparisonSnapshot;
+        delete tab.graphBuildController;
+        delete tab.graphBuildId;
+        delete tab.graphBuildState;
+        removeGraphProgressHud();
+        if (!options.skipToolbar) updateGraphTagToolbar(tab, finalSnapshot);
+        saveTabsToStorage(tabs);
+        graphRenderCache.delete(tab.id);
+        renderGraphView({ skipProgressiveBuild: true, skipLayoutLoadingState: true });
+      }).catch((error) => {
+        if (error?.name === "AbortError") return;
+        console.error("Failed to progressively build graph:", error);
+        if (!isActiveGraphBuild(tab, buildId)) return;
+        tab.graphBuildState = { status: "error", completed: tab.graphBuildState?.completed || 0, total: snapshotFiles.length };
+        updateGraphProgressHud(tab.graphBuildState);
+        alert("Unable to finish building the graph. The partial graph remains visible.");
+      });
+      return true;
+    };
     removeGraphLoadingState();
     if (!activeTab || activeTab.type !== "graph") {
       updateStatusLine({ visiblePointCount: 0, graphClusterCount: 0, graphCollapsedNodeCount: 0 });
@@ -45,13 +137,14 @@
     renderTagManagementList();
     let graphSnapshot = activeTab.graphComparisonSnapshot || activeTab.graphSnapshot || null;
     if (!options.skipToolbar) updateGraphTagToolbar(activeTab, graphSnapshot);
-    if (!graphSnapshot && folderMarkdownFiles.length && !isKeepSavedGraphMode(activeTab)) {
+    if (!graphSnapshot && folderMarkdownFiles.length && !isKeepSavedGraphMode(activeTab) && !options.skipProgressiveBuild) {
       const snapshotFiles = folderMarkdownFiles.slice();
       await showGraphLoadingState("Building graph view...");
       if (renderRequestId !== graphRenderRequestId || activeTabId !== activeTab.id) {
         removeGraphLoadingState();
         return;
       }
+      if (await startProgressiveGraphBuild(activeTab, snapshotFiles)) return;
       graphSnapshot = await createGraphSnapshot(snapshotFiles, activeTab.folderName || activeTab.title, {
         onProgress(progress) {
           if (!progress || progress.phase !== "reading") return;
@@ -69,24 +162,7 @@
       }
       activeTab.graphSnapshot = graphSnapshot;
       delete activeTab.graphComparisonSnapshot;
-      if (activeTab.pendingLargeGraphDisplayDefaults) {
-        const largeGraphDisplayLimit = typeof getGraphRenderWarningThreshold === "function" ? getGraphRenderWarningThreshold() : LARGE_GRAPH_DISPLAY_NODE_LIMIT;
-        if ((graphSnapshot.nodes || []).length > largeGraphDisplayLimit) {
-          const preferenceDefaults = typeof getGraphViewPreferenceDefaults === "function" ? getGraphViewPreferenceDefaults() : {};
-          const largeGraphDefaults = {};
-          if (!Object.prototype.hasOwnProperty.call(preferenceDefaults, "showArrows")) largeGraphDefaults.showArrows = false;
-          if (!Object.prototype.hasOwnProperty.call(preferenceDefaults, "showOrphans")) largeGraphDefaults.showOrphans = false;
-          if (!Object.prototype.hasOwnProperty.call(preferenceDefaults, "showLabels")) largeGraphDefaults.showLabels = false;
-          if (Object.keys(largeGraphDefaults).length) {
-            activeTab.graphViewConfig = normalizeGraphViewConfig({
-              ...(activeTab.graphViewConfig || {}),
-              ...largeGraphDefaults
-            });
-            graphViewConfig = activeTab.graphViewConfig;
-          }
-        }
-        delete activeTab.pendingLargeGraphDisplayDefaults;
-      }
+      applyLargeGraphDisplayDefaults(activeTab, (graphSnapshot.nodes || []).length);
       if (!options.skipToolbar) updateGraphTagToolbar(activeTab, graphSnapshot);
       saveTabsToStorage(tabs);
     }
@@ -129,13 +205,14 @@
     }
 
     if (cachedRender) {
+      if (cachedRender.nodes) captureGraphLayout(activeTab, cachedRender.nodes, cachedRender.getZoomTransform?.());
       if (cachedRender.simulation) cachedRender.simulation.stop();
       if (cachedRender.wrapper) cachedRender.wrapper.remove();
       graphRenderCache.delete(activeTab.id);
     }
 
     if (renderRequestId !== graphRenderRequestId || activeTabId !== activeTab.id) return;
-    await showGraphLoadingState("Laying out graph...");
+    if (!options.skipLayoutLoadingState) await showGraphLoadingState("Laying out graph...");
     if (renderRequestId !== graphRenderRequestId || activeTabId !== activeTab.id) {
       removeGraphLoadingState();
       return;
@@ -2172,6 +2249,10 @@
       if (!activeGraphTab || !graphSnapshot?.nodes?.length) return;
       if (isKeepSavedGraphMode(activeGraphTab)) {
         alert("Saved graph mode does not update saved tags or links.");
+        return;
+      }
+      if (activeGraphTab.graphBuildState?.status === "building" || graphSnapshot?.buildStatus === "building") {
+        alert("Wait for the graph to finish building before grouping the most referenced files.");
         return;
       }
 

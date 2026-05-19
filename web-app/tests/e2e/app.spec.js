@@ -1928,6 +1928,80 @@ test("graph quick action groups most referenced files by percentile", async ({ p
   await expect(page.locator(".graph-quick-action-status")).toBeHidden();
 });
 
+test("live graph renders parsed batches before all files finish loading", async ({ page }) => {
+  await page.addInitScript(() => {
+    window.NL_VERSION = "test";
+    window.NL_OS = "Windows";
+    window.__alerts = [];
+    window.__readCompletions = [];
+    window.alert = (message) => window.__alerts.push(String(message));
+    window.prompt = () => "infra";
+
+    const files = new Map([
+      ["alpha.md", "# Alpha"],
+      ["beta.md", "# Beta\n\n[[alpha]]"],
+      ["gamma.md", "# Gamma\n\n[[epsilon]]"],
+      ["delta.md", "# Delta"],
+      ["epsilon.md", "# Epsilon"]
+    ]);
+    const delays = new Map([
+      ["alpha.md", 0],
+      ["gamma.md", 50],
+      ["beta.md", 900],
+      ["delta.md", 900],
+      ["epsilon.md", 900]
+    ]);
+    const getName = (path) => String(path || "").split(/[\\/]/).pop();
+    window.Neutralino = {
+      os: {
+        showFolderDialog: async () => "C:/vault",
+        open: async () => {},
+        execCommand: async () => {}
+      },
+      filesystem: {
+        readDirectory: async (path) => {
+          if (path === "C:/vault") {
+            return Array.from(files.keys()).map((entry) => ({ entry, type: "FILE" }));
+          }
+          return [];
+        },
+        getStats: async () => ({ modifiedAt: 1, createdAt: 1 }),
+        readFile: async (path) => {
+          const name = getName(path);
+          await new Promise((resolve) => setTimeout(resolve, delays.get(name) || 0));
+          window.__readCompletions.push(name);
+          return files.get(name) || "";
+        }
+      },
+      clipboard: { writeText: async () => {} }
+    };
+  });
+  await openApp(page);
+
+  await page.locator("#import-from-folder").click();
+  await page.locator(".open-graph-view").first().click();
+
+  await expect(page.locator(".graph-progress-hud")).toBeVisible();
+  await expect.poll(() => page.evaluate(() => document.querySelectorAll(".graph-node-file").length)).toBeGreaterThan(0);
+  await expect.poll(() => page.evaluate(() => window.__readCompletions.length)).toBeLessThan(5);
+
+  await page.locator(".graph-quick-action-button").click();
+  await page.locator(".graph-quick-action-menu-item", { hasText: "Group most referenced" }).click();
+  await expect.poll(() => page.evaluate(() => window.__alerts)).toEqual([
+    "Wait for the graph to finish building before grouping the most referenced files."
+  ]);
+
+  await expect(page.locator(".graph-node-file")).toHaveCount(5);
+  await expect(page.locator(".graph-progress-hud")).toHaveCount(0);
+  await expect.poll(() => page.evaluate(() => {
+    const graphTab = JSON.parse(localStorage.getItem("markdownViewerTabs") || "[]").find((tab) => tab.type === "graph");
+    return (graphTab?.graphSnapshot?.links || [])
+      .filter((link) => link.type === "link")
+      .map((link) => `${link.source}->${link.target}`)
+      .sort();
+  })).toEqual(["beta->alpha", "gamma->epsilon"]);
+});
+
 test("graph quick action blocks most referenced grouping in saved graph mode", async ({ page }) => {
   await page.addInitScript(() => {
     window.__alerts = [];

@@ -1902,6 +1902,42 @@ body {
   animation: graph-loading-spin 0.8s linear infinite;
 }
 
+.graph-progress-hud {
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
+  z-index: 35;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+  max-width: min(360px, calc(100% - 2rem));
+  padding: 0.62rem 0.82rem;
+  border: 1px solid color-mix(in srgb, var(--accent-color) 34%, var(--border-color));
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--preview-bg) 94%, transparent);
+  color: var(--text-color);
+  box-shadow: 0 0.8rem 2rem color-mix(in srgb, #000 24%, transparent);
+  font-size: 0.88rem;
+  font-weight: 650;
+  pointer-events: none;
+}
+
+.graph-progress-spinner {
+  flex: 0 0 auto;
+  width: 1rem;
+  height: 1rem;
+  border: 2px solid color-mix(in srgb, var(--accent-color) 24%, transparent);
+  border-top-color: var(--accent-color);
+  border-radius: 50%;
+  animation: graph-loading-spin 0.75s linear infinite;
+}
+
+.graph-progress-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 @keyframes graph-loading-spin {
   to {
     transform: rotate(360deg);
@@ -1919,7 +1955,8 @@ body {
 
 @media (prefers-reduced-motion: reduce) {
   .graph-loading-state,
-  .graph-loading-spinner {
+  .graph-loading-spinner,
+  .graph-progress-spinner {
     animation: none;
   }
 }

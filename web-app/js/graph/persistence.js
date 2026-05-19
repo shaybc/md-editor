@@ -1070,13 +1070,14 @@
 
   function serializeGraphTab(tab, options) {
     const existingDocument = tab?.graphDocument && typeof tab.graphDocument === "object" ? tab.graphDocument : {};
+    const isBuildingSnapshot = tab?.graphBuildState?.status === "building" || tab?.graphSnapshot?.buildStatus === "building";
     return normalizeGraphDocument({
       ...existingDocument,
       documentType: options?.documentType || existingDocument.documentType,
       folderName: tab?.folderName || tab?.title || existingDocument.folderName || "Graph View",
       createdAt: existingDocument.createdAt || tab?.createdAt,
       updatedAt: Date.now(),
-      snapshot: tab?.graphSnapshot !== undefined ? tab.graphSnapshot : existingDocument.snapshot,
+      snapshot: isBuildingSnapshot ? existingDocument.snapshot : (tab?.graphSnapshot !== undefined ? tab.graphSnapshot : existingDocument.snapshot),
       viewConfig: tab?.graphViewConfig !== undefined ? tab.graphViewConfig : existingDocument.viewConfig,
       graphLayout: tab?.graphLayout !== undefined ? tab.graphLayout : (existingDocument.graphLayout !== undefined ? existingDocument.graphLayout : existingDocument.layout)
     });
@@ -1100,9 +1101,10 @@
 
   function syncGraphTabDocument(tab) {
     if (!tab || tab.type !== "graph") return tab;
+    const isBuildingSnapshot = tab.graphBuildState?.status === "building" || tab.graphSnapshot?.buildStatus === "building";
     const graphDocument = serializeGraphTab(tab);
     tab.folderName = graphDocument.folderName;
-    tab.graphSnapshot = graphDocument.snapshot;
+    if (!isBuildingSnapshot) tab.graphSnapshot = graphDocument.snapshot;
     tab.graphViewConfig = graphDocument.viewConfig;
     tab.graphDocument = graphDocument;
     if (Object.prototype.hasOwnProperty.call(graphDocument, "graphLayout")) tab.graphLayout = graphDocument.graphLayout;
@@ -1342,6 +1344,181 @@
     };
     rememberGraphSnapshot(snapshotCacheKey, snapshot);
     logGraphPerf("graph snapshot total", snapshotStart, { files: sourceFiles.length, nodes: nodes.length, links: links.length });
+    return snapshot;
+  }
+
+  async function createProgressiveGraphSnapshot(files, folderName, options = {}) {
+    const snapshotStart = typeof performance !== "undefined" ? performance.now() : 0;
+    const sourceFiles = files || [];
+    const total = sourceFiles.length;
+    const nodes = [];
+    const links = [];
+    const snapshotFiles = new Array(total);
+    const snapshotFilesById = new Map();
+    const nodeIndex = new Map();
+    const tagIndex = new Map();
+    const seenEdges = new Set();
+    const pendingLinkFiles = new Set();
+    const batchSize = Math.max(1, Number(options.batchSize) || 100);
+    const minEmitInterval = Math.max(0, Number(options.minEmitInterval) || 250);
+    const signal = options.signal || null;
+    let completed = 0;
+    let emittedCompleted = 0;
+    let lastEmitTime = 0;
+
+    const assertNotAborted = () => {
+      if (signal?.aborted) {
+        const error = new Error("Graph snapshot build was cancelled.");
+        error.name = "AbortError";
+        throw error;
+      }
+    };
+
+    const createSnapshot = (complete = false) => ({
+      version: 1,
+      folderName: folderName || "Graph View",
+      createdAt: Date.now(),
+      buildStatus: complete ? "complete" : "building",
+      buildProgress: { completed, total },
+      nodes: nodes.map((node) => ({ ...node, tags: Array.isArray(node.tags) ? node.tags.slice() : node.tags })),
+      links: links.map((link) => ({ ...link })),
+      files: snapshotFiles
+        .filter(Boolean)
+        .map(({ markdownLinks, ...snapshotFile }) => ({
+          ...snapshotFile,
+          tags: Array.isArray(snapshotFile.tags) ? snapshotFile.tags.slice() : snapshotFile.tags
+        }))
+    });
+
+    const emitSnapshot = async (complete = false, force = false) => {
+      if (typeof options.onSnapshot !== "function") return;
+      const now = typeof performance !== "undefined" ? performance.now() : Date.now();
+      const enoughFiles = completed - emittedCompleted >= batchSize;
+      const enoughTime = now - lastEmitTime >= minEmitInterval;
+      if (!complete && !force && !enoughFiles && !enoughTime) return;
+      emittedCompleted = completed;
+      lastEmitTime = now;
+      await options.onSnapshot(createSnapshot(complete), { phase: complete ? "complete" : "building", completed, total, complete });
+    };
+
+    const addTagRelations = (snapshotFile) => {
+      const source = snapshotFile.id;
+      (snapshotFile.tags || []).forEach((tag) => {
+        const normalizedTag = normalizeTagName(tag);
+        if (!normalizedTag) return;
+        const tagNodeId = `tag:${normalizedTag}`;
+        if (!tagIndex.has(tagNodeId)) {
+          tagIndex.set(tagNodeId, normalizedTag);
+          nodes.push({
+            id: tagNodeId,
+            label: `#${normalizedTag}`,
+            type: "tag",
+            status: "current",
+            tag: normalizedTag
+          });
+        }
+        const edgeKey = `${source}->${tagNodeId}:tag`;
+        if (seenEdges.has(edgeKey)) return;
+        seenEdges.add(edgeKey);
+        links.push({ source, target: tagNodeId, type: "tag", status: "current" });
+      });
+    };
+
+    const addResolvedLinksForFile = (snapshotFile) => {
+      if (!snapshotFile) return;
+      const source = snapshotFile.id;
+      let hasUnresolvedLinks = false;
+      (snapshotFile.markdownLinks || extractMarkdownLinks(snapshotFile.content)).forEach((ref) => {
+        const target = resolveGraphTargetId(ref, snapshotFile.path, nodeIndex);
+        if (!target) {
+          hasUnresolvedLinks = true;
+          return;
+        }
+        if (target === source) return;
+        const edgeKey = `${source}->${target}:link`;
+        if (seenEdges.has(edgeKey)) return;
+        seenEdges.add(edgeKey);
+        links.push({ source, target, type: "link", status: "current" });
+      });
+      if (hasUnresolvedLinks) pendingLinkFiles.add(source);
+      else pendingLinkFiles.delete(source);
+    };
+
+    const retryPendingLinks = () => {
+      Array.from(pendingLinkFiles).forEach((nodeId) => {
+        const snapshotFile = snapshotFilesById.get(nodeId);
+        if (snapshotFile) addResolvedLinksForFile(snapshotFile);
+      });
+    };
+
+    const readStart = typeof performance !== "undefined" ? performance.now() : 0;
+    await mapGraphFilesWithConcurrency(sourceFiles, async (fileEntry, index) => {
+      assertNotAborted();
+      const path = fileEntry.path || fileEntry.file?.webkitRelativePath || fileEntry.file?.name || "";
+      const name = getFileName(path || fileEntry.file?.name || "document.md");
+      const cacheKey = getGraphFileCacheKey(fileEntry, path);
+      let parsedFile = cacheKey ? graphParsedFileCache.get(cacheKey) : null;
+      if (!parsedFile) {
+        let content = "";
+        try {
+          content = await readFolderMarkdownFileContent(fileEntry);
+        } catch (error) {
+          console.warn("Failed to read graph file:", path, error);
+        }
+        const fileContent = content || "";
+        parsedFile = {
+          content: fileContent,
+          tags: getFileTagsFromContent(fileContent),
+          markdownLinks: extractMarkdownLinks(fileContent)
+        };
+        if (cacheKey) graphParsedFileCache.set(cacheKey, parsedFile);
+      }
+
+      assertNotAborted();
+      const id = normalizeGraphNodeName(path);
+      const snapshotFile = {
+        id,
+        path,
+        name,
+        content: parsedFile.content,
+        fullPath: fileEntry.fullPath || null,
+        status: "current",
+        tags: (parsedFile.tags || []).slice(),
+        markdownLinks: (parsedFile.markdownLinks || []).slice()
+      };
+      snapshotFiles[index] = snapshotFile;
+      snapshotFilesById.set(snapshotFile.id, snapshotFile);
+      nodeIndex.set(snapshotFile.id, snapshotFile.path);
+      nodes.push({
+        id: snapshotFile.id,
+        label: getGraphDisplayLabel(snapshotFile.path),
+        fullPath: snapshotFile.path,
+        type: "file",
+        status: "current",
+        tags: snapshotFile.tags
+      });
+      addTagRelations(snapshotFile);
+      addResolvedLinksForFile(snapshotFile);
+      retryPendingLinks();
+      completed += 1;
+      if (typeof options.onProgress === "function") {
+        options.onProgress({ phase: "reading", completed, total });
+      }
+      await emitSnapshot(false, completed === 1);
+      if (completed % 25 === 0) await new Promise((resolve) => setTimeout(resolve, 0));
+      return snapshotFile;
+    }, { ...options, onProgress: null });
+    logGraphPerf("progressive graph snapshot file reads", readStart, { files: sourceFiles.length });
+
+    assertNotAborted();
+    retryPendingLinks();
+    const snapshot = createSnapshot(true);
+    delete snapshot.buildStatus;
+    delete snapshot.buildProgress;
+    const snapshotCacheKey = options.skipSnapshotCache ? "" : getGraphSnapshotCacheKey(files, folderName);
+    rememberGraphSnapshot(snapshotCacheKey, snapshot);
+    await emitSnapshot(true, true);
+    logGraphPerf("progressive graph snapshot total", snapshotStart, { files: sourceFiles.length, nodes: nodes.length, links: links.length });
     return snapshot;
   }
 
@@ -1596,6 +1773,7 @@
       getGraphFileSignature,
       getGraphViewSignature,
       createGraphSnapshot,
+      createProgressiveGraphSnapshot,
       getGraphSnapshotSignature,
       toFiniteNumber,
       formatGraphZoomPercent,
