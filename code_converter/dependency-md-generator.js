@@ -2,6 +2,7 @@
 
 const fs = require("fs");
 const path = require("path");
+const crypto = require("crypto");
 
 const SOURCE_EXTENSIONS = new Set([
   ".js",
@@ -36,7 +37,17 @@ const IGNORED_DIRS = new Set([
 ]);
 
 function usage() {
-  console.error("Usage: node dependency-md-generator.js <source-root> <destination-root>");
+  console.error([
+    "Usage: node dependency-md-generator.js <source-root> <destination-root> [switches]",
+    "",
+    "Switches:",
+    "  --include-methods",
+    "  --include-accessors",
+    "  --include-signatures",
+    "  --include-return-codes",
+    "  --include-exceptions",
+    "  --include-package",
+  ].join("\n"));
 }
 
 function normalizePath(filePath) {
@@ -58,6 +69,36 @@ function stripComments(content, ext) {
   return content
     .replace(/\/\*[\s\S]*?\*\//g, "")
     .replace(/\/\/.*$/gm, "");
+}
+
+function parseArgs(argv) {
+  const options = {
+    includeMethods: false,
+    includeAccessors: false,
+    includeSignatures: false,
+    includeReturnCodes: false,
+    includeExceptions: false,
+    includePackage: false,
+  };
+  const positional = [];
+
+  for (const arg of argv) {
+    if (arg === "--include-methods") options.includeMethods = true;
+    else if (arg === "--include-accessors") options.includeAccessors = true;
+    else if (arg === "--include-signatures") options.includeSignatures = true;
+    else if (arg === "--include-return-codes") options.includeReturnCodes = true;
+    else if (arg === "--include-exceptions") options.includeExceptions = true;
+    else if (arg === "--include-package") options.includePackage = true;
+    else if (arg.startsWith("--")) {
+      console.error(`Unknown switch: ${arg}`);
+      usage();
+      process.exit(1);
+    } else {
+      positional.push(arg);
+    }
+  }
+
+  return { sourceArg: positional[0], destinationArg: positional[1], options };
 }
 
 function walkSourceFiles(root) {
@@ -315,15 +356,242 @@ function markdownLink(fromFile, toFile) {
   return `[${toMarkdownPath(toFile)}](${href})`;
 }
 
-function writeMarkdown(sourceRoot, destinationRoot, sourceFile, dependencies) {
+function sha256File(file) {
+  return crypto.createHash("sha256").update(fs.readFileSync(file)).digest("hex");
+}
+
+function yamlScalar(value) {
+  if (value === null || value === undefined || value === "") return "";
+  return String(value);
+}
+
+function getPackageName(content, ext, sourceRoot, sourceFile) {
+  if (ext === ".java") {
+    return content.match(/^\s*package\s+([\w.]+)\s*;/m)?.[1] || "";
+  }
+
+  if (ext === ".py") {
+    return path.relative(sourceRoot, sourceFile)
+      .slice(0, -ext.length)
+      .split(path.sep)
+      .filter((part) => part !== "__init__")
+      .join(".");
+  }
+
+  return "";
+}
+
+function getEntityInfo(content, ext, sourceRoot, sourceFile) {
+  const packageName = getPackageName(content, ext, sourceRoot, sourceFile);
+
+  if (ext === ".java") {
+    const declaration = content.match(/\b(class|interface|enum|record)\s+([A-Z]\w*)\b/);
+    const kind = declaration?.[1] || "class";
+    const name = declaration?.[2] || path.basename(sourceFile, ext);
+    return {
+      entityType: `java_${kind}`,
+      entityId: packageName ? `${packageName}.${name}` : name,
+      packageName,
+    };
+  }
+
+  const relativeNoExt = path.relative(sourceRoot, sourceFile).slice(0, -ext.length);
+  const moduleId = toMarkdownPath(relativeNoExt).replace(/\//g, ".");
+  if (ext === ".py") {
+    return { entityType: "python_module", entityId: packageName || moduleId, packageName };
+  }
+
+  if ([".ts", ".tsx"].includes(ext)) {
+    return { entityType: "typescript_module", entityId: moduleId, packageName };
+  }
+
+  return { entityType: "javascript_module", entityId: moduleId, packageName };
+}
+
+function compactSignature(signature) {
+  return signature.replace(/\s+/g, " ").replace(/\s*{\s*$/, "").trim();
+}
+
+function findMatchingBrace(content, openIndex) {
+  let depth = 0;
+  for (let index = openIndex; index < content.length; index += 1) {
+    const char = content[index];
+    if (char === "{") depth += 1;
+    else if (char === "}") {
+      depth -= 1;
+      if (depth === 0) return index;
+    }
+  }
+  return -1;
+}
+
+function getBlockAfterSignature(content, signatureIndex, signatureText) {
+  const openIndex = content.indexOf("{", signatureIndex + signatureText.length - 1);
+  if (openIndex === -1) return "";
+  const closeIndex = findMatchingBrace(content, openIndex);
+  if (closeIndex === -1) return "";
+  return content.slice(openIndex + 1, closeIndex);
+}
+
+function uniqueList(values) {
+  return [...new Set(values.map((value) => value.trim()).filter(Boolean))];
+}
+
+function extractReturnCodes(body, ext) {
+  const pattern = ext === ".py"
+    ? /^\s*return(?:\s+(.+?))?\s*$/gm
+    : /\breturn(?:\s+([^;]+))?\s*;/g;
+  return uniqueList([...body.matchAll(pattern)].map((match) => match[1] || "void"));
+}
+
+function extractThrownExceptions(body, ext) {
+  if (ext === ".py") {
+    return uniqueList([...body.matchAll(/^\s*raise\s+([\w.]+)/gm)].map((match) => match[1]));
+  }
+
+  return uniqueList([...body.matchAll(/\bthrow\s+new\s+([\w.]+)/g)].map((match) => match[1]));
+}
+
+function isAccessorName(name) {
+  return /^(get|set)[A-Z_]/.test(name) || /^(__get|__set)/.test(name);
+}
+
+function extractJavaMethods(content) {
+  const methods = [];
+  const pattern = /((?:public|protected|private|static|final|abstract|synchronized|native|strictfp|\s)+[\w<>\[\], ?.&]+\s+(\w+)\s*\([^;{}]*\)\s*(?:throws\s+[\w.,\s]+)?\s*)\{/g;
+
+  for (const match of content.matchAll(pattern)) {
+    const signature = compactSignature(match[1]);
+    if (/^(if|for|while|switch|catch)\b/.test(signature)) continue;
+    const name = match[2];
+    const body = getBlockAfterSignature(content, match.index, match[0]);
+    const declaredThrows = signature.match(/\bthrows\s+(.+)$/)?.[1]
+      ?.split(",")
+      .map((part) => part.trim()) || [];
+    methods.push({
+      name,
+      kind: isAccessorName(name) ? "accessor" : "method",
+      signature,
+      returnCodes: extractReturnCodes(body, ".java"),
+      exceptions: uniqueList([...declaredThrows, ...extractThrownExceptions(body, ".java")]),
+    });
+  }
+
+  return methods;
+}
+
+function extractPythonMethods(content) {
+  const methods = [];
+  const pattern = /^(\s*)def\s+(\w+)\s*(\([^)]*\)(?:\s*->\s*[^:]+)?)\s*:/gm;
+
+  for (const match of content.matchAll(pattern)) {
+    const indent = match[1] || "";
+    const name = match[2];
+    const start = match.index + match[0].length;
+    const rest = content.slice(start);
+    const nextSibling = rest.search(new RegExp(`\\n${indent}def\\s+|\\n${indent}class\\s+`));
+    const body = nextSibling === -1 ? rest : rest.slice(0, nextSibling);
+    const previous = content.slice(Math.max(0, match.index - 120), match.index);
+    const isProperty = /@\w*\.?setter\s*$|@property\s*$/m.test(previous);
+    methods.push({
+      name,
+      kind: isProperty || isAccessorName(name) ? "accessor" : "function",
+      signature: `def ${name}${compactSignature(match[3])}`,
+      returnCodes: extractReturnCodes(body, ".py"),
+      exceptions: extractThrownExceptions(body, ".py"),
+    });
+  }
+
+  return methods;
+}
+
+function extractJsMethods(content) {
+  const methods = [];
+  const patterns = [
+    /((?:export\s+)?(?:async\s+)?function\s+(\w+)\s*\([^)]*\))/g,
+    /((?:export\s+)?(?:const|let|var)\s+(\w+)\s*=\s*(?:async\s*)?\([^)]*\)\s*=>)/g,
+    /((?:async\s+)?(get|set)\s+(\w+)\s*\([^)]*\))/g,
+    /((?:async\s+)?(\w+)\s*\([^)]*\)\s*)\{/g,
+  ];
+
+  for (const pattern of patterns) {
+    for (const match of content.matchAll(pattern)) {
+      const rawName = match[3] || match[2];
+      if (!rawName || /^(if|for|while|switch|catch|function)$/.test(rawName)) continue;
+      const signature = compactSignature(match[1]);
+      if (methods.some((method) => method.name === rawName && method.signature === signature)) continue;
+      const body = getBlockAfterSignature(content, match.index, match[0]);
+      methods.push({
+        name: rawName,
+        kind: match[2] === "get" || match[2] === "set" || isAccessorName(rawName) ? "accessor" : "function",
+        signature,
+        returnCodes: extractReturnCodes(body, ".js"),
+        exceptions: extractThrownExceptions(body, ".js"),
+      });
+    }
+  }
+
+  return methods;
+}
+
+function extractCodeInfo(rawContent, ext) {
+  const content = stripComments(rawContent, ext);
+  if (ext === ".java") return extractJavaMethods(content);
+  if (ext === ".py") return extractPythonMethods(content);
+  if (JS_EXTENSIONS.includes(ext)) return extractJsMethods(content);
+  return [];
+}
+
+function appendMethodDocumentation(lines, methods, options, packageName) {
+  if (options.includePackage && packageName) {
+    lines.push("## Package", "", packageName, "");
+  }
+
+  const visibleMethods = methods.filter((method) => options.includeMethods || (options.includeAccessors && method.kind === "accessor"));
+  if (visibleMethods.length === 0) return;
+
+  lines.push("## Code Members", "");
+  for (const method of visibleMethods) {
+    lines.push(`### ${method.name}`, "");
+    if (options.includeAccessors) lines.push(`Type: ${method.kind}`, "");
+    if (options.includeSignatures) lines.push("Signature:", "", "```text", method.signature, "```", "");
+    if (options.includeReturnCodes) {
+      lines.push("Return codes:", "");
+      if (method.returnCodes.length === 0) lines.push("- None detected");
+      else method.returnCodes.forEach((returnCode) => lines.push(`- ${returnCode}`));
+      lines.push("");
+    }
+    if (options.includeExceptions) {
+      lines.push("Exceptions:", "");
+      if (method.exceptions.length === 0) lines.push("- None detected");
+      else method.exceptions.forEach((exceptionName) => lines.push(`- ${exceptionName}`));
+      lines.push("");
+    }
+  }
+}
+
+function writeMarkdown(sourceRoot, destinationRoot, sourceFile, dependencies, options) {
   const relativeSource = path.relative(sourceRoot, sourceFile);
   const parsed = path.parse(relativeSource);
   const outputDir = path.join(destinationRoot, parsed.dir);
   const outputFile = path.join(outputDir, `${parsed.base}.md`);
+  const rawContent = fs.readFileSync(sourceFile, "utf8");
+  const ext = path.extname(sourceFile);
+  const entity = getEntityInfo(rawContent, ext, sourceRoot, sourceFile);
+  const methods = extractCodeInfo(rawContent, ext);
 
   fs.mkdirSync(outputDir, { recursive: true });
 
   const lines = [
+    "---",
+    `entity_type: ${yamlScalar(entity.entityType)}`,
+    `entity_id: ${yamlScalar(entity.entityId)}`,
+    "conversion_status: not_started",
+    "shared: false",
+    `source_file: ${yamlScalar(sourceFile)}`,
+    `source_hash: ${sha256File(sourceFile)}`,
+    "---",
+    "",
     `# ${toMarkdownPath(relativeSource)}`,
     "",
     `Source: ${markdownLink(outputFile, sourceFile)}`,
@@ -343,11 +611,12 @@ function writeMarkdown(sourceRoot, destinationRoot, sourceFile, dependencies) {
   }
 
   lines.push("");
+  appendMethodDocumentation(lines, methods, options, entity.packageName);
   fs.writeFileSync(outputFile, lines.join("\n"), "utf8");
 }
 
 function main() {
-  const [, , sourceArg, destinationArg] = process.argv;
+  const { sourceArg, destinationArg, options } = parseArgs(process.argv.slice(2));
   if (!sourceArg || !destinationArg) {
     usage();
     process.exit(1);
@@ -369,7 +638,7 @@ function main() {
   for (const file of files) {
     const dependencies = findDependencies(file, sourceRoot, indexes);
     dependencies.delete(file);
-    writeMarkdown(sourceRoot, destinationRoot, file, dependencies);
+    writeMarkdown(sourceRoot, destinationRoot, file, dependencies, options);
   }
 
   console.log(`Created ${files.length} markdown file(s) in ${destinationRoot}`);

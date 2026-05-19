@@ -660,6 +660,12 @@ test("code converter dialog browses folders and runs converter", async ({ page }
   await expect(modal).toBeVisible();
   await expect(modal).toContainText("Generates Markdown files from a source code folder");
   await expect(modal).toContainText("Supported languages: JavaScript, TypeScript, Python, and Java");
+  await expect(page.locator("#code-converter-include-methods")).toBeChecked();
+  await expect(page.locator("#code-converter-include-accessors")).toBeChecked();
+  await expect(page.locator("#code-converter-include-signatures")).toBeChecked();
+  await expect(page.locator("#code-converter-include-return-codes")).toBeChecked();
+  await expect(page.locator("#code-converter-include-exceptions")).toBeChecked();
+  await expect(page.locator("#code-converter-include-package")).toBeChecked();
 
   await page.locator("#code-converter-source-browse").click();
   await page.locator("#code-converter-destination-browse").click();
@@ -668,13 +674,19 @@ test("code converter dialog browses folders and runs converter", async ({ page }
 
   await page.locator("#code-converter-run").click();
   await expect(page.locator("#code-converter-status")).toHaveText("Created 3 markdown file(s) in C:/docs/project-md");
+  await expect(page.locator("#code-converter-cancel")).toBeHidden();
+  await expect(page.locator("#code-converter-run")).toBeHidden();
+  await expect(page.locator("#code-converter-finish")).toBeVisible();
   await expect.poll(() => page.evaluate(() => ({
     titles: window.__folderDialogTitles,
     commands: window.__execCommands
   }))).toEqual({
     titles: ["Select source code root folder", "Select destination Markdown root folder"],
-    commands: ['node "C:/GitHub/shaybc/markdown-viewer/desktop-app/resources/code_converter/dependency-md-generator.js" "C:/src/project" "C:/docs/project-md"']
+    commands: ['node "C:/GitHub/shaybc/markdown-viewer/desktop-app/resources/code_converter/dependency-md-generator.js" "C:/src/project" "C:/docs/project-md" --include-methods --include-accessors --include-signatures --include-return-codes --include-exceptions --include-package']
   });
+
+  await page.locator("#code-converter-finish").click();
+  await expect(modal).toBeHidden();
 });
 
 test("toggles theme and persists it across reloads", async ({ page }) => {

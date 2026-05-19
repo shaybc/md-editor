@@ -4205,6 +4205,35 @@ a:focus {
   border-color: #b02a37;
 }
 
+.code-converter-finish-button {
+  min-width: 92px;
+  border-color: var(--accent-color);
+  background: var(--accent-color);
+  color: #fff;
+  font-weight: 700;
+}
+
+.code-converter-finish-button:hover {
+  background: color-mix(in srgb, var(--accent-color) 86%, #000);
+}
+
+.code-converter-options {
+  display: grid;
+  gap: 8px;
+  padding: 10px 0 2px;
+}
+
+.code-converter-options .editor-image-mode-option {
+  align-items: flex-start;
+  color: var(--disabled-text-color);
+  font-size: 12px;
+}
+
+.code-converter-options input {
+  flex: 0 0 auto;
+  margin-top: 1px;
+}
+
 /* ========================================
    SETTINGS MODAL
    ======================================== */

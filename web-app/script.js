@@ -1898,8 +1898,15 @@
   const codeConverterDestinationRootInput = document.getElementById("code-converter-destination-root");
   const codeConverterSourceBrowseButton = document.getElementById("code-converter-source-browse");
   const codeConverterDestinationBrowseButton = document.getElementById("code-converter-destination-browse");
+  const codeConverterIncludeMethodsInput = document.getElementById("code-converter-include-methods");
+  const codeConverterIncludeAccessorsInput = document.getElementById("code-converter-include-accessors");
+  const codeConverterIncludeSignaturesInput = document.getElementById("code-converter-include-signatures");
+  const codeConverterIncludeReturnCodesInput = document.getElementById("code-converter-include-return-codes");
+  const codeConverterIncludeExceptionsInput = document.getElementById("code-converter-include-exceptions");
+  const codeConverterIncludePackageInput = document.getElementById("code-converter-include-package");
   const codeConverterCancelButton = document.getElementById("code-converter-cancel");
   const codeConverterRunButton = document.getElementById("code-converter-run");
+  const codeConverterFinishButton = document.getElementById("code-converter-finish");
   const codeConverterStatus = document.getElementById("code-converter-status");
   const desktopOpenGraphButtons = document.querySelectorAll(".open-graph-view");
   const graphViewCanvas = document.getElementById("graph-view-canvas");
@@ -3027,9 +3034,16 @@ Markdown content is processed client-side in your browser and sanitized before p
     if (codeConverterStatus) codeConverterStatus.textContent = message || "";
   }
 
+  function setCodeConverterCompleteState(isComplete) {
+    if (codeConverterCancelButton) codeConverterCancelButton.hidden = !!isComplete;
+    if (codeConverterRunButton) codeConverterRunButton.hidden = !!isComplete;
+    if (codeConverterFinishButton) codeConverterFinishButton.hidden = !isComplete;
+  }
+
   function showCodeConverterDialog() {
     if (!codeConverterModal) return;
     setCodeConverterStatus("");
+    setCodeConverterCompleteState(false);
     codeConverterModal.style.display = "flex";
     codeConverterSourceRootInput?.focus();
   }
@@ -3064,6 +3078,19 @@ Markdown content is processed client-side in your browser and sanitized before p
     return `"${String(value || "").replace(/\\/g, "/").replace(/"/g, '\\"')}"`;
   }
 
+  function getCodeConverterSwitches() {
+    return [
+      [codeConverterIncludeMethodsInput, "--include-methods"],
+      [codeConverterIncludeAccessorsInput, "--include-accessors"],
+      [codeConverterIncludeSignaturesInput, "--include-signatures"],
+      [codeConverterIncludeReturnCodesInput, "--include-return-codes"],
+      [codeConverterIncludeExceptionsInput, "--include-exceptions"],
+      [codeConverterIncludePackageInput, "--include-package"],
+    ]
+      .filter(([input]) => input?.checked)
+      .map(([, flag]) => flag);
+  }
+
   async function runCodeConverter() {
     if (typeof Neutralino === "undefined" || !Neutralino.os?.execCommand) {
       alert("Code conversion requires the desktop app because it runs the local Node.js converter.");
@@ -3072,6 +3099,7 @@ Markdown content is processed client-side in your browser and sanitized before p
 
     const sourceRoot = (codeConverterSourceRootInput?.value || "").trim();
     const destinationRoot = (codeConverterDestinationRootInput?.value || "").trim();
+    setCodeConverterCompleteState(false);
     if (!sourceRoot) {
       setCodeConverterStatus("Choose a source root folder.");
       codeConverterSourceRootInput?.focus();
@@ -3087,7 +3115,8 @@ Markdown content is processed client-side in your browser and sanitized before p
       "node",
       quoteCommandArg(getCodeConverterScriptPath()),
       quoteCommandArg(sourceRoot),
-      quoteCommandArg(destinationRoot)
+      quoteCommandArg(destinationRoot),
+      ...getCodeConverterSwitches()
     ].join(" ");
 
     try {
@@ -3102,6 +3131,8 @@ Markdown content is processed client-side in your browser and sanitized before p
       }
       const output = result?.stdOut || result?.stdout || result?.output || `Markdown files created in ${destinationRoot}.`;
       setCodeConverterStatus(String(output).trim());
+      setCodeConverterCompleteState(true);
+      codeConverterFinishButton?.focus();
     } catch (error) {
       console.error("Failed to run code converter:", error);
       setCodeConverterStatus("Unable to run the code converter. Make sure Node.js is installed and available on PATH.");
@@ -4399,6 +4430,10 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
 
   if (codeConverterCancelButton) {
     codeConverterCancelButton.addEventListener("click", hideCodeConverterDialog);
+  }
+
+  if (codeConverterFinishButton) {
+    codeConverterFinishButton.addEventListener("click", hideCodeConverterDialog);
   }
 
   if (codeConverterRunButton) {
