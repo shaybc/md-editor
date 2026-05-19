@@ -1,0 +1,3 @@
+desktop-app/resources/vendor/** text eol=lf
+desktop-app/resources/vendor/**/*.woff binary
+desktop-app/resources/vendor/**/*.woff2 binary

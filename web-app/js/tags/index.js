@@ -1,6 +1,8 @@
 (function(global) {
   global.registerMarkdownViewerTags = function registerMarkdownViewerTags(app, deps) {
     const api = {};
+    const folderMarkdownContentCache = new Map();
+    const TAG_REFRESH_CONCURRENCY = 8;
 
     with (deps) {
   function getKnownTags() {
@@ -163,16 +165,40 @@
     return (folderMarkdownFiles || []).find((entry) => getGraphFileEntryNodeId(entry) === fileNodeId) || null;
   }
 
+  function getFolderMarkdownFileCacheKey(fileEntry) {
+    if (!fileEntry) return "";
+    const path = fileEntry.fullPath || fileEntry.path || fileEntry.file?.webkitRelativePath || fileEntry.file?.name || fileEntry.name || "";
+    if (!path) return "";
+    const size = Number(fileEntry.size ?? fileEntry.file?.size ?? 0) || 0;
+    const modifiedAt = Number(fileEntry.modifiedAt ?? fileEntry.file?.lastModified ?? 0) || 0;
+    return `${path}|${size}|${modifiedAt}`;
+  }
+
+  function rememberFolderMarkdownFileContent(fileEntry, content) {
+    const cacheKey = getFolderMarkdownFileCacheKey(fileEntry);
+    if (cacheKey) folderMarkdownContentCache.set(cacheKey, String(content || ""));
+  }
+
   async function readFolderMarkdownFileContent(fileEntry) {
     if (!fileEntry) return "";
     if (typeof fileEntry.content === "string") return fileEntry.content;
-    if (fileEntry.file?.text) return fileEntry.file.text();
+    const cacheKey = getFolderMarkdownFileCacheKey(fileEntry);
+    if (cacheKey && folderMarkdownContentCache.has(cacheKey)) return folderMarkdownContentCache.get(cacheKey);
+    if (fileEntry.file?.text) {
+      const content = await fileEntry.file.text();
+      rememberFolderMarkdownFileContent(fileEntry, content);
+      return content;
+    }
     if (fileEntry.handle?.getFile) {
       const file = await fileEntry.handle.getFile();
-      return file.text();
+      const content = await file.text();
+      rememberFolderMarkdownFileContent({ ...fileEntry, size: file.size, modifiedAt: file.lastModified }, content);
+      return content;
     }
     if (typeof NL_VERSION !== "undefined" && fileEntry.fullPath) {
-      return Neutralino.filesystem.readFile(fileEntry.fullPath);
+      const content = await Neutralino.filesystem.readFile(fileEntry.fullPath);
+      rememberFolderMarkdownFileContent(fileEntry, content);
+      return content;
     }
 
     const folderEntry = findFolderMarkdownEntryForGraphFile(fileEntry);
@@ -184,18 +210,27 @@
     const refreshId = ++folderTagCountsRefreshId;
     const counts = new Map();
     const files = (folderMarkdownFiles || []).slice();
+    let nextIndex = 0;
 
-    for (const fileEntry of files) {
-      try {
-        const content = await readFolderMarkdownFileContent(fileEntry);
-        if (refreshId !== folderTagCountsRefreshId) return;
-        fileEntry.content = content || "";
-        fileEntry.tags = getFileTagsFromContent(fileEntry.content);
-        addTagsToCountMap(counts, fileEntry.tags);
-      } catch (error) {
-        console.warn("Failed to read folder file tags:", fileEntry.path || fileEntry.fullPath || fileEntry.name, error);
+    async function refreshWorker() {
+      while (nextIndex < files.length) {
+        const fileEntry = files[nextIndex];
+        nextIndex += 1;
+        try {
+          const content = await readFolderMarkdownFileContent(fileEntry);
+          if (refreshId !== folderTagCountsRefreshId) return;
+          fileEntry.content = content || "";
+          fileEntry.tags = getFileTagsFromContent(fileEntry.content);
+          addTagsToCountMap(counts, fileEntry.tags);
+        } catch (error) {
+          console.warn("Failed to read folder file tags:", fileEntry.path || fileEntry.fullPath || fileEntry.name, error);
+        }
+        if (nextIndex % 25 === 0) await new Promise((resolve) => setTimeout(resolve, 0));
       }
     }
+
+    const workerCount = Math.max(1, Math.min(TAG_REFRESH_CONCURRENCY, files.length || 1));
+    await Promise.all(Array.from({ length: workerCount }, refreshWorker));
 
     if (refreshId !== folderTagCountsRefreshId) return;
     folderTagCounts = counts;

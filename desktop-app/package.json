@@ -4,7 +4,7 @@
   "private": true,
   "description": "Neutralinojs desktop port of MD-Editor",
   "scripts": {
-    "setup": "node setup-binaries.js",
+    "setup": "node setup-binaries.js && node download-vendor.js",
     "postsetup": "node prepare.js",
     "predev": "npm run setup",
     "dev": "npx -y @neutralinojs/neu@11.7.0 run",

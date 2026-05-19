@@ -10,8 +10,10 @@
     let graphViewConfig = activeTab && activeTab.type === "graph" ? normalizeGraphViewConfig(activeTab.graphViewConfig) : normalizeGraphViewConfig(null);
     if (activeTab && activeTab.type === "graph") activeTab.graphViewConfig = graphViewConfig;
     hideInactiveGraphRenders(activeTab?.id);
+    let graphLoadingLabel = null;
     const removeGraphLoadingState = () => {
       graphViewCanvas.querySelectorAll(".graph-loading-state, .folder-tree-placeholder").forEach((node) => node.remove());
+      graphLoadingLabel = null;
     };
     const showGraphLoadingState = async (message = "Building graph view...") => {
       removeGraphLoadingState();
@@ -24,9 +26,13 @@
       spinner.setAttribute("aria-hidden", "true");
       const label = document.createElement("span");
       label.textContent = message;
+      graphLoadingLabel = label;
       loadingState.append(spinner, label);
       graphViewCanvas.appendChild(loadingState);
       await new Promise((resolve) => requestAnimationFrame(resolve));
+    };
+    const updateGraphLoadingState = (message) => {
+      if (graphLoadingLabel) graphLoadingLabel.textContent = message;
     };
     removeGraphLoadingState();
     if (!activeTab || activeTab.type !== "graph") {
@@ -46,7 +52,17 @@
         removeGraphLoadingState();
         return;
       }
-      graphSnapshot = await createGraphSnapshot(snapshotFiles, activeTab.folderName || activeTab.title);
+      graphSnapshot = await createGraphSnapshot(snapshotFiles, activeTab.folderName || activeTab.title, {
+        onProgress(progress) {
+          if (!progress || progress.phase !== "reading") return;
+          const total = Number(progress.total || 0);
+          if (!total) return;
+          const completed = Number(progress.completed || 0);
+          if (completed === total || completed % 25 === 0) {
+            updateGraphLoadingState(`Reading graph files ${completed}/${total}...`);
+          }
+        }
+      });
       if (renderRequestId !== graphRenderRequestId || activeTabId !== activeTab.id) {
         removeGraphLoadingState();
         return;

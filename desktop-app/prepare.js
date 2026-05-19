@@ -18,6 +18,7 @@ const path = require("path");
 const ROOT_DIR = path.resolve(__dirname, "..");
 const WEB_APP_DIR = path.join(ROOT_DIR, "web-app");
 const RESOURCES_DIR = path.resolve(__dirname, "resources");
+const VENDOR_ASSETS = require("./vendor-assets.json");
 
 /** @section Copy shared files */
 
@@ -68,6 +69,15 @@ copyDirSync(path.join(ROOT_DIR, "wiki"), path.join(RESOURCES_DIR, "wiki"));
 console.log("Copied wiki/ -> resources/wiki/");
 
 let html = fs.readFileSync(path.join(WEB_APP_DIR, "index.html"), "utf-8");
+
+for (const asset of VENDOR_ASSETS) {
+  html = html.replace(asset.url, `/vendor/${asset.path.replace(/\\/g, "/")}`);
+}
+
+html = html.replace(
+  /<script src="\/vendor\/js\/pako\.min\.js"[^>]*><\/script>/,
+  '<script src="/vendor/js/pako.min.js"></script>',
+);
 
 /** Fix relative asset paths → absolute (Neutralinojs documentRoot is /resources/) */
 html = html.replace(/href="assets\//g, 'href="/assets/');

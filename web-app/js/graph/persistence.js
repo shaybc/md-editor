@@ -2,6 +2,8 @@
   global.registerMarkdownViewerGraphPersistence = function registerMarkdownViewerGraphPersistence(app, deps) {
     let graphLayoutSaveTimeout = null;
     const api = {};
+    const GRAPH_SNAPSHOT_READ_CONCURRENCY = 12;
+    const graphParsedFileCache = new Map();
 
     with (deps) {
   function normalizeGraphTagNodeId(value) {
@@ -1136,10 +1138,10 @@
     return (files || []).map((fileEntry) => {
       const file = fileEntry.file || fileEntry;
       return {
-        path: fileEntry.path || file?.webkitRelativePath || file?.name || "",
+        path: fileEntry.path || fileEntry.fullPath || file?.webkitRelativePath || file?.name || "",
         name: file?.name || "",
-        size: file?.size || 0,
-        lastModified: file?.lastModified || 0
+        size: fileEntry.size || file?.size || 0,
+        lastModified: fileEntry.modifiedAt || file?.lastModified || 0
       };
     });
   }
@@ -1151,35 +1153,103 @@
     });
   }
 
-  async function createGraphSnapshot(files, folderName) {
+  function isGraphPerfLoggingEnabled() {
+    return global.MD_VIEWER_PERF === true || global.localStorage?.getItem("MD_VIEWER_PERF") === "1";
+  }
+
+  function logGraphPerf(label, startTime, details = {}) {
+    if (!isGraphPerfLoggingEnabled() || typeof performance === "undefined") return;
+    const duration = Math.round((performance.now() - startTime) * 10) / 10;
+    console.info(`[Perf] ${label}: ${duration}ms`, details);
+  }
+
+  function getGraphFileCacheKey(fileEntry, path) {
+    const stablePath = fileEntry.fullPath || path || fileEntry.path || fileEntry.file?.webkitRelativePath || fileEntry.file?.name || "";
+    if (!stablePath) return "";
+    const size = Number(fileEntry.size ?? fileEntry.file?.size ?? 0) || 0;
+    const modifiedAt = Number(fileEntry.modifiedAt ?? fileEntry.file?.lastModified ?? 0) || 0;
+    return `${stablePath}|${size}|${modifiedAt}`;
+  }
+
+  async function mapGraphFilesWithConcurrency(files, worker, options = {}) {
+    const sourceFiles = files || [];
+    const results = new Array(sourceFiles.length);
+    let nextIndex = 0;
+    let completed = 0;
+    const concurrency = Math.max(1, Math.min(Number(options.concurrency) || GRAPH_SNAPSHOT_READ_CONCURRENCY, sourceFiles.length || 1));
+
+    async function runWorker() {
+      while (nextIndex < sourceFiles.length) {
+        const index = nextIndex;
+        nextIndex += 1;
+        results[index] = await worker(sourceFiles[index], index);
+        completed += 1;
+        if (typeof options.onProgress === "function") {
+          options.onProgress({ phase: "reading", completed, total: sourceFiles.length });
+        }
+        if (completed % 25 === 0) await new Promise((resolve) => setTimeout(resolve, 0));
+      }
+    }
+
+    await Promise.all(Array.from({ length: concurrency }, runWorker));
+    return results;
+  }
+
+  async function createGraphSnapshot(files, folderName, options = {}) {
+    const snapshotStart = typeof performance !== "undefined" ? performance.now() : 0;
     const nodes = [];
     const links = [];
     const seenEdges = new Set();
     const nodeIndex = new Map();
-    const snapshotFiles = [];
+    let snapshotFiles = [];
 
     const sourceFiles = files || [];
-    for (let index = 0; index < sourceFiles.length; index += 1) {
-      const fileEntry = sourceFiles[index];
-      if (index > 0 && index % 25 === 0) await new Promise((resolve) => setTimeout(resolve, 0));
+    const readStart = typeof performance !== "undefined" ? performance.now() : 0;
+    snapshotFiles = await mapGraphFilesWithConcurrency(sourceFiles, async (fileEntry) => {
       const path = fileEntry.path || fileEntry.file?.webkitRelativePath || fileEntry.file?.name || "";
       const name = getFileName(path || fileEntry.file?.name || "document.md");
-      const content = await readFolderMarkdownFileContent(fileEntry);
-      const fileContent = content || "";
-      const tags = getFileTagsFromContent(fileContent);
+      const cacheKey = getGraphFileCacheKey(fileEntry, path);
+      let parsedFile = cacheKey ? graphParsedFileCache.get(cacheKey) : null;
+      if (!parsedFile) {
+        let content = "";
+        try {
+          content = await readFolderMarkdownFileContent(fileEntry);
+        } catch (error) {
+          console.warn("Failed to read graph file:", path, error);
+        }
+        const fileContent = content || "";
+        parsedFile = {
+          content: fileContent,
+          tags: getFileTagsFromContent(fileContent),
+          markdownLinks: extractMarkdownLinks(fileContent)
+        };
+        if (cacheKey) graphParsedFileCache.set(cacheKey, parsedFile);
+      }
       const id = normalizeGraphNodeName(path);
-      nodeIndex.set(id, path);
-      nodes.push({ id, label: getGraphDisplayLabel(path), fullPath: path, type: "file", status: "current", tags });
-      snapshotFiles.push({
+      return {
         id,
         path,
         name,
-        content: fileContent,
+        content: parsedFile.content,
         fullPath: fileEntry.fullPath || null,
         status: "current",
-        tags
+        tags: (parsedFile.tags || []).slice(),
+        markdownLinks: (parsedFile.markdownLinks || []).slice()
+      };
+    }, options);
+    logGraphPerf("graph snapshot file reads", readStart, { files: sourceFiles.length });
+
+    snapshotFiles.forEach((snapshotFile) => {
+      nodeIndex.set(snapshotFile.id, snapshotFile.path);
+      nodes.push({
+        id: snapshotFile.id,
+        label: getGraphDisplayLabel(snapshotFile.path),
+        fullPath: snapshotFile.path,
+        type: "file",
+        status: "current",
+        tags: snapshotFile.tags
       });
-    }
+    });
 
     const tagIndex = new Map();
 
@@ -1212,7 +1282,7 @@
       if (index > 0 && index % 50 === 0) await new Promise((resolve) => setTimeout(resolve, 0));
       const snapshotFile = snapshotFiles[index];
       const source = snapshotFile.id;
-      extractMarkdownLinks(snapshotFile.content).forEach((ref) => {
+      (snapshotFile.markdownLinks || extractMarkdownLinks(snapshotFile.content)).forEach((ref) => {
         const target = resolveGraphTargetId(ref, snapshotFile.path, nodeIndex);
         if (!target || target === source) return;
         const edgeKey = `${source}->${target}:link`;
@@ -1222,14 +1292,16 @@
       });
     }
 
-    return {
+    const snapshot = {
       version: 1,
       folderName: folderName || "Graph View",
       createdAt: Date.now(),
       nodes,
       links,
-      files: snapshotFiles
+      files: snapshotFiles.map(({ markdownLinks, ...snapshotFile }) => snapshotFile)
     };
+    logGraphPerf("graph snapshot total", snapshotStart, { files: sourceFiles.length, nodes: nodes.length, links: links.length });
+    return snapshot;
   }
 
   function getGraphSnapshotSignature(snapshot, graphViewConfig) {

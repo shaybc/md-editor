@@ -2806,7 +2806,7 @@ Markdown content is processed client-side in your browser and sanitized before p
         }
         const modifiedAt = Number(file?.lastModified || 0) || 0;
         const isGraphDocumentFile = await fileContainsGraphDocument(file);
-        entries.push({ kind: "file", name: entry.name, path: currentPath, handle: entry, modifiedAt, createdAt: modifiedAt, isGraphDocumentFile });
+        entries.push({ kind: "file", name: entry.name, path: currentPath, handle: entry, file, size: Number(file?.size || 0), modifiedAt, createdAt: modifiedAt, isGraphDocumentFile });
       }
     }
     return sortFolderTreeNodes(entries);
@@ -2824,11 +2824,11 @@ Markdown content is processed client-side in your browser and sanitized before p
         files.push(...nestedFiles);
       } else if (node.kind === "file" && isMarkdownPath(node.name)) {
         if (node.file) {
-          files.push({ path: currentPath, file: node.file, handle: node.handle || null });
+          files.push({ path: currentPath, file: node.file, handle: node.handle || null, size: Number(node.file.size || node.size || 0), modifiedAt: Number(node.file.lastModified || node.modifiedAt || 0) });
         } else if (node.handle) {
           try {
             const file = await node.handle.getFile();
-            files.push({ path: currentPath, file, handle: node.handle });
+            files.push({ path: currentPath, file, handle: node.handle, size: Number(file.size || 0), modifiedAt: Number(file.lastModified || node.modifiedAt || 0) });
           } catch (error) {
             console.warn("Failed to read file handle for graph view:", currentPath, error);
           }
@@ -3194,10 +3194,10 @@ async function listMarkdownTreeNeutralino(dirPath) {
       }
       if (item.type === "DIRECTORY") {
         const children = await listMarkdownTreeNeutralino(fullPath);
-        entries.push({ kind: "directory", name: item.entry, children, fullPath, createdAt: Number(stats?.createdAt || 0), modifiedAt: Number(stats?.modifiedAt || 0) });
+        entries.push({ kind: "directory", name: item.entry, children, fullPath, createdAt: Number(stats?.createdAt || 0), modifiedAt: Number(stats?.modifiedAt || 0), size: Number(stats?.size || 0) });
       } else if (item.type === "FILE") {
         const isGraphDocumentFile = await neutralinoPathContainsGraphDocument(fullPath);
-        entries.push({ kind: "file", name: item.entry, fullPath, createdAt: Number(stats?.createdAt || stats?.modifiedAt || 0), modifiedAt: Number(stats?.modifiedAt || 0), isGraphDocumentFile });
+        entries.push({ kind: "file", name: item.entry, fullPath, createdAt: Number(stats?.createdAt || stats?.modifiedAt || 0), modifiedAt: Number(stats?.modifiedAt || 0), size: Number(stats?.size || 0), isGraphDocumentFile });
       }
     }
   } catch (error) {
@@ -3216,13 +3216,13 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
       const nestedFiles = await collectMarkdownFilesFromTreeNeutralino(node.children || [], currentPath);
       files.push(...nestedFiles);
     } else if (node.kind === "file" && isMarkdownPath(node.name)) {
-      try {
-        const content = await Neutralino.filesystem.readFile(node.fullPath);
-        const file = new File([content], node.name, { type: "text/markdown" });
-        files.push({ path: currentPath, fullPath: node.fullPath, file });
-      } catch (error) {
-        console.warn("Failed to read file:", currentPath, error);
-      }
+      files.push({
+        path: currentPath,
+        fullPath: node.fullPath,
+        name: node.name,
+        size: Number(node.size || 0),
+        modifiedAt: Number(node.modifiedAt || 0)
+      });
     }
   }
   return files;

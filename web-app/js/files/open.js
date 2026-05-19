@@ -1,19 +1,37 @@
 (function(window) {
   window.registerMarkdownViewerFileOpen = function registerMarkdownViewerFileOpen(app, deps) {
     with (deps) {
+  function isPerfLoggingEnabled() {
+    return window.MD_VIEWER_PERF === true || window.localStorage?.getItem("MD_VIEWER_PERF") === "1";
+  }
+
+  function logFolderPerf(label, startTime, details = {}) {
+    if (!isPerfLoggingEnabled() || typeof performance === "undefined") return;
+    const duration = Math.round((performance.now() - startTime) * 10) / 10;
+    console.info(`[Perf] ${label}: ${duration}ms`, details);
+  }
+
   async function openFolderTreeFromNeutralinoPath(selectedPath) {
     if (!selectedPath) return;
+    const folderOpenStart = typeof performance !== "undefined" ? performance.now() : 0;
     activeFolderName = selectedPath.split(/[\\/]/).pop() || "Graph View";
     activeFolderHandle = null;
     activeFolderPath = selectedPath;
     renderFolderLoadingState?.(`Loading ${activeFolderName}...`);
     await new Promise((resolve) => requestAnimationFrame(resolve));
     try {
+      const scanStart = typeof performance !== "undefined" ? performance.now() : 0;
       const nodes = await listMarkdownTreeNeutralino(selectedPath);
+      logFolderPerf("folder scan", scanStart, { folder: activeFolderName, rootCount: nodes.length });
+      const collectStart = typeof performance !== "undefined" ? performance.now() : 0;
       folderMarkdownFiles = await collectMarkdownFilesFromTreeNeutralino(nodes);
+      logFolderPerf("folder markdown index", collectStart, { files: folderMarkdownFiles.length });
+      const renderStart = typeof performance !== "undefined" ? performance.now() : 0;
       renderFolderTree(nodes);
+      logFolderPerf("folder tree render", renderStart);
       rememberRecentFolder({ name: activeFolderName, label: activeFolderName, path: selectedPath });
       await promptActiveSavedGraphForCurrentFolder?.();
+      logFolderPerf("open folder total", folderOpenStart, { folder: activeFolderName, files: folderMarkdownFiles.length });
     } catch (error) {
       renderFolderLoadingError?.("Unable to load this folder.");
       throw error;
