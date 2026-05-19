@@ -1195,8 +1195,11 @@
     const createContextMenuButton = (labelText, iconClass, tooltipText) => {
       const button = document.createElement("button");
       button.type = "button";
-      button.className = "graph-context-menu-item graph-context-menu-tooltip";
-      button.dataset.tooltip = tooltipText;
+      button.className = "graph-context-menu-item";
+      if (tooltipText) {
+        button.classList.add("graph-context-menu-tooltip");
+        button.dataset.tooltip = tooltipText;
+      }
       const icon = document.createElement("i");
       icon.className = iconClass;
       icon.setAttribute("aria-hidden", "true");
@@ -1206,6 +1209,11 @@
       button.appendChild(icon);
       button.appendChild(label);
       return button;
+    };
+
+    const disableContextMenuTooltip = (button) => {
+      button.classList.remove("graph-context-menu-tooltip", "tooltip-visible");
+      delete button.dataset.tooltip;
     };
 
     const setContextMenuButtonLabel = (button, labelText) => {
@@ -1308,6 +1316,7 @@
       "Open graph views focused on this point."
     );
     showGraphSubmenuBtn.setAttribute("aria-haspopup", "true");
+    disableContextMenuTooltip(showGraphSubmenuBtn);
     const showGraphSubmenuArrow = document.createElement("span");
     showGraphSubmenuArrow.className = "graph-context-menu-submenu-arrow";
     showGraphSubmenuArrow.textContent = "›";
@@ -1367,7 +1376,6 @@
       CONTEXT_MENU_ACTIONS.share.icon,
       "Copy a shareable URL containing this point's Markdown content."
     );
-    sharePointBtn.classList.add("hidden");
     const contextMenuDeleteSeparator = document.createElement("div");
     contextMenuDeleteSeparator.className = "graph-context-menu-separator hidden";
 
@@ -1379,6 +1387,7 @@
       "Open copy actions for this point, including its path, content, dependencies, and backlinks."
     );
     copySubmenuBtn.setAttribute("aria-haspopup", "true");
+    disableContextMenuTooltip(copySubmenuBtn);
     const copySubmenuArrow = document.createElement("span");
     copySubmenuArrow.className = "graph-context-menu-submenu-arrow";
     copySubmenuArrow.textContent = "›";
@@ -1425,9 +1434,11 @@
       CONTEXT_MENU_ACTIONS.copyFullNetwork.icon,
       "Copy this file plus recursive backlinks and recursive dependencies, one file path per line."
     );
-    [copyPathBtn, copyContentBtn, copyFrontmatterBtn, copyTagsBtn, copyDependenciesBtn, copyFullDependenciesBtn, copyBacklinksBtn, copyFullNetworkBtn].forEach((button) => {
-      copySubmenuPanel.appendChild(button);
-    });
+    const copyGraphOptionsSeparator = document.createElement("div");
+    copyGraphOptionsSeparator.className = "graph-context-menu-separator";
+    [copyPathBtn, copyContentBtn, copyFrontmatterBtn, copyTagsBtn].forEach((button) => copySubmenuPanel.appendChild(button));
+    copySubmenuPanel.appendChild(copyGraphOptionsSeparator);
+    [copyDependenciesBtn, copyFullDependenciesBtn, copyBacklinksBtn, copyFullNetworkBtn].forEach((button) => copySubmenuPanel.appendChild(button));
     copySubmenu.appendChild(copySubmenuBtn);
     copySubmenu.appendChild(copySubmenuPanel);
 
@@ -1439,6 +1450,7 @@
       "Open export actions for this point."
     );
     exportSubmenuBtn.setAttribute("aria-haspopup", "true");
+    disableContextMenuTooltip(exportSubmenuBtn);
     const exportSubmenuArrow = document.createElement("span");
     exportSubmenuArrow.className = "graph-context-menu-submenu-arrow";
     exportSubmenuArrow.textContent = "›";
@@ -1448,7 +1460,7 @@
     const exportMarkdownBtn = createContextMenuButton(CONTEXT_MENU_ACTIONS.exportMarkdown.label, CONTEXT_MENU_ACTIONS.exportMarkdown.icon, "Download this point as Markdown.");
     const exportHtmlBtn = createContextMenuButton(CONTEXT_MENU_ACTIONS.exportHtml.label, CONTEXT_MENU_ACTIONS.exportHtml.icon, "Download this point as HTML.");
     const exportPdfBtn = createContextMenuButton(CONTEXT_MENU_ACTIONS.exportPdf.label, CONTEXT_MENU_ACTIONS.exportPdf.icon, "Download this point as PDF.");
-    [exportMarkdownBtn, exportHtmlBtn, exportPdfBtn].forEach((button) => exportSubmenuPanel.appendChild(button));
+    [sharePointBtn, exportMarkdownBtn, exportHtmlBtn, exportPdfBtn].forEach((button) => exportSubmenuPanel.appendChild(button));
     exportSubmenu.appendChild(exportSubmenuBtn);
     exportSubmenu.appendChild(exportSubmenuPanel);
 
@@ -1462,7 +1474,6 @@
     contextMenu.appendChild(renameFileBtn);
     contextMenu.appendChild(tagsSubmenu);
     contextMenu.appendChild(copySubmenu);
-    contextMenu.appendChild(sharePointBtn);
     contextMenu.appendChild(contextMenuGraphSeparator);
     contextMenu.appendChild(hidePointBtn);
     contextMenu.appendChild(removeLeafNodesBtn);
@@ -1688,8 +1699,120 @@
       return graphNode ? getNodeClipboardPath(graphNode) : nodeId;
     };
 
-    const copyNodeFilePathList = async (nodeIds) => {
-      await copyGraphText(Array.from(new Set(nodeIds)).map(getNodeClipboardPathById).join("\n"));
+    const getPathParts = (path) => {
+      const value = String(path || "");
+      const separatorIndex = Math.max(value.lastIndexOf("/"), value.lastIndexOf("\\"));
+      const directory = separatorIndex >= 0 ? value.slice(0, separatorIndex) : "";
+      const separator = separatorIndex >= 0 ? value.charAt(separatorIndex) : "";
+      const leaf = separatorIndex >= 0 ? value.slice(separatorIndex + 1) : value;
+      const extensionIndex = leaf.lastIndexOf(".");
+      const hasExtension = extensionIndex > 0;
+      return {
+        directory,
+        separator,
+        fileName: hasExtension ? leaf.slice(0, extensionIndex) : leaf,
+        extension: hasExtension ? leaf.slice(extensionIndex) : "",
+        leaf
+      };
+    };
+
+    const formatCopyPath = (path, options) => {
+      const parts = getPathParts(path);
+      const leafParts = [];
+      if (options.fileName) leafParts.push(parts.fileName);
+      if (options.extension) leafParts.push(parts.extension);
+      const leaf = leafParts.join("");
+      if (!options.fullPath) return leaf || parts.leaf;
+      if (!leaf) return parts.directory || path;
+      return parts.directory ? `${parts.directory}${parts.separator || "/"}${leaf}` : leaf;
+    };
+
+    const getSourceFilePathFromMarkdown = (markdown) => {
+      const frontmatterMatch = String(markdown || "").match(/^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/);
+      if (!frontmatterMatch) return "";
+      const sourceFileMatch = frontmatterMatch[1].match(/^\s*source_file\s*:\s*(.+?)\s*$/im);
+      if (!sourceFileMatch) return "";
+      return sourceFileMatch[1].trim().replace(/^['"]|['"]$/g, "");
+    };
+
+    const getCopyPathForNode = async (nodeId, options) => {
+      const graphNode = nodes.find((n) => n.id === nodeId);
+      const markdownPath = graphNode ? getNodeClipboardPath(graphNode) : nodeId;
+      if (!options.sourceFile || !graphNode) return markdownPath;
+      try {
+        return getSourceFilePathFromMarkdown(await readGraphNodeContent(graphNode)) || markdownPath;
+      } catch (error) {
+        console.warn("Unable to read source_file frontmatter for graph copy:", error);
+        return markdownPath;
+      }
+    };
+
+    const showGraphCopyOptionsDialog = () => new Promise((resolve) => {
+      const modal = document.getElementById("graph-copy-options-modal");
+      const fileNameInput = document.getElementById("graph-copy-option-file-name");
+      const extensionInput = document.getElementById("graph-copy-option-extension");
+      const fullPathInput = document.getElementById("graph-copy-option-full-path");
+      const sourceFileInput = document.getElementById("graph-copy-option-source-file");
+      const okBtn = document.getElementById("graph-copy-options-ok");
+      const cancelBtn = document.getElementById("graph-copy-options-cancel");
+      if (!modal || !fileNameInput || !extensionInput || !fullPathInput || !sourceFileInput || !okBtn || !cancelBtn) {
+        resolve({ fileName: true, extension: true, fullPath: true, sourceFile: false });
+        return;
+      }
+
+      fileNameInput.checked = true;
+      extensionInput.checked = true;
+      fullPathInput.checked = true;
+      sourceFileInput.checked = false;
+
+      const updateOkState = () => {
+        okBtn.disabled = !(fileNameInput.checked || extensionInput.checked || fullPathInput.checked);
+      };
+      const cleanup = () => {
+        modal.style.display = "none";
+        okBtn.removeEventListener("click", onOk);
+        cancelBtn.removeEventListener("click", onCancel);
+        modal.removeEventListener("click", onOverlayClick);
+        document.removeEventListener("keydown", onKeyDown);
+        [fileNameInput, extensionInput, fullPathInput].forEach((input) => input.removeEventListener("change", updateOkState));
+      };
+      const onOk = () => {
+        if (okBtn.disabled) return;
+        const options = {
+          fileName: fileNameInput.checked,
+          extension: extensionInput.checked,
+          fullPath: fullPathInput.checked,
+          sourceFile: sourceFileInput.checked
+        };
+        cleanup();
+        resolve(options);
+      };
+      const onCancel = () => {
+        cleanup();
+        resolve(null);
+      };
+      const onOverlayClick = (event) => {
+        if (event.target === modal) onCancel();
+      };
+      const onKeyDown = (event) => {
+        if (event.key === "Escape") onCancel();
+      };
+
+      [fileNameInput, extensionInput, fullPathInput].forEach((input) => input.addEventListener("change", updateOkState));
+      okBtn.addEventListener("click", onOk);
+      cancelBtn.addEventListener("click", onCancel);
+      modal.addEventListener("click", onOverlayClick);
+      document.addEventListener("keydown", onKeyDown);
+      updateOkState();
+      modal.style.display = "flex";
+    });
+
+    const copyNodeFilePathList = async (nodeIds, options = { fileName: true, extension: true, fullPath: true, sourceFile: false }) => {
+      const lines = [];
+      for (const nodeId of Array.from(new Set(nodeIds))) {
+        lines.push(formatCopyPath(await getCopyPathForNode(nodeId, options), options));
+      }
+      await copyGraphText(lines.join("\n"));
     };
 
     const openGraphNodeFileFromCurrentRender = async (graphNode) => {
@@ -2373,7 +2496,6 @@
       revealTreeViewBtn,
       renameFileBtn,
       copySubmenu,
-      sharePointBtn,
       contextMenuGraphSeparator,
       hidePointBtn,
       collapseToClusterBtn,
@@ -2402,10 +2524,34 @@
       graphContextMenuItems.forEach((item) => item.classList.toggle("hidden", hidden));
     };
 
+    const positionContextSubmenus = () => {
+      contextMenu.querySelectorAll(".graph-context-menu-submenu").forEach((submenu) => {
+        const panel = submenu.querySelector(".graph-context-menu-submenu-panel");
+        if (!panel) return;
+        submenu.classList.remove("open-left", "open-up");
+        const previousDisplay = panel.style.display;
+        const previousVisibility = panel.style.visibility;
+        panel.style.display = "inline-flex";
+        panel.style.visibility = "hidden";
+        const wrapperRect = graphRenderWrapper.getBoundingClientRect();
+        const submenuRect = submenu.getBoundingClientRect();
+        const panelRect = panel.getBoundingClientRect();
+        if (submenuRect.right + panelRect.width + 4 > wrapperRect.right) submenu.classList.add("open-left");
+        if (submenuRect.top + panelRect.height > wrapperRect.bottom - 8) submenu.classList.add("open-up");
+        panel.style.display = previousDisplay;
+        panel.style.visibility = previousVisibility;
+      });
+    };
+
     const positionContextMenu = (event) => {
       const bounds = graphViewCanvas.getBoundingClientRect();
-      contextMenu.style.left = `${Math.max(0, Math.min(event.clientX - bounds.left, bounds.width - 230))}px`;
-      contextMenu.style.top = `${Math.max(0, Math.min(event.clientY - bounds.top, bounds.height - 280))}px`;
+      const menuWidth = contextMenu.offsetWidth || 230;
+      const menuHeight = contextMenu.offsetHeight || 280;
+      const left = Math.max(8, Math.min(event.clientX - bounds.left, Math.max(8, bounds.width - menuWidth - 8)));
+      const top = Math.max(8, Math.min(event.clientY - bounds.top, Math.max(8, bounds.height - menuHeight - 8)));
+      contextMenu.style.left = `${left}px`;
+      contextMenu.style.top = `${top}px`;
+      positionContextSubmenus();
     };
 
     const hideContextMenu = () => {
@@ -2429,8 +2575,8 @@
       contextMenuActionSeparator.classList.add("hidden");
       setNodeContextItemsHidden(true);
       setGraphContextItemsHidden(false);
-      positionContextMenu(event);
       contextMenu.classList.remove("hidden");
+      positionContextMenu(event);
     });
 
     node.on("contextmenu", (event, d) => {
@@ -2447,7 +2593,7 @@
       const isCluster = isClusterNode(d);
       const isFileNode = !isTag && !isCluster;
       const keepSavedMode = isKeepSavedGraphMode(activeTab);
-      [openFileBtn, openDefaultAppBtn, revealFileBtn, revealTreeViewBtn, copySubmenu, sharePointBtn, exportSubmenu].forEach((item) => item.classList.toggle("hidden", !isFileNode));
+      [openFileBtn, openDefaultAppBtn, revealFileBtn, revealTreeViewBtn, copySubmenu, exportSubmenu].forEach((item) => item.classList.toggle("hidden", !isFileNode));
       showGraphSubmenu.classList.toggle("hidden", !(isFileNode || isCluster));
       [localGraphBtn, fullLocalGraphBtn, fullNetworkBtn].forEach((item) => item.classList.toggle("hidden", !isFileNode));
       expandedClusterGraphBtn.classList.toggle("hidden", !isCluster);
@@ -2482,8 +2628,8 @@
       deleteTagBtn.classList.toggle("hidden", !isTag);
       contextMenuDeleteSeparator.classList.toggle("hidden", !isFileNode);
       contextMenuDeleteEndSeparator.classList.toggle("hidden", !isFileNode);
-      positionContextMenu(event);
       contextMenu.classList.remove("hidden");
+      positionContextMenu(event);
     });
 
     graphRenderWrapper.addEventListener("click", hideContextMenu);
@@ -2726,7 +2872,9 @@
       if (!contextTargetNode) return;
       const nodeId = contextTargetNode.id;
       hideContextMenu();
-      await copyNodeFilePathList(getDirectOutgoingDependencyIds(nodeId));
+      const copyOptions = await showGraphCopyOptionsDialog();
+      if (!copyOptions) return;
+      await copyNodeFilePathList(getDirectOutgoingDependencyIds(nodeId), copyOptions);
     });
 
     copyFullDependenciesBtn.addEventListener("click", async (event) => {
@@ -2734,7 +2882,9 @@
       if (!contextTargetNode) return;
       const nodeId = contextTargetNode.id;
       hideContextMenu();
-      await copyNodeFilePathList([nodeId, ...getFullOutgoingDependencyIds(nodeId)]);
+      const copyOptions = await showGraphCopyOptionsDialog();
+      if (!copyOptions) return;
+      await copyNodeFilePathList([nodeId, ...getFullOutgoingDependencyIds(nodeId)], copyOptions);
     });
 
     copyBacklinksBtn.addEventListener("click", async (event) => {
@@ -2742,7 +2892,9 @@
       if (!contextTargetNode) return;
       const nodeId = contextTargetNode.id;
       hideContextMenu();
-      await copyNodeFilePathList(getBacklinkIds(nodeId));
+      const copyOptions = await showGraphCopyOptionsDialog();
+      if (!copyOptions) return;
+      await copyNodeFilePathList(getBacklinkIds(nodeId), copyOptions);
     });
 
     copyFullNetworkBtn.addEventListener("click", async (event) => {
@@ -2750,7 +2902,9 @@
       if (!contextTargetNode) return;
       const nodeId = contextTargetNode.id;
       hideContextMenu();
-      await copyNodeFilePathList(getFullNetworkIds(nodeId));
+      const copyOptions = await showGraphCopyOptionsDialog();
+      if (!copyOptions) return;
+      await copyNodeFilePathList(getFullNetworkIds(nodeId), copyOptions);
     });
 
     hidePointBtn.addEventListener("click", () => {

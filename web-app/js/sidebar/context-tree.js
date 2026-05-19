@@ -6,8 +6,11 @@
   function createFileContextMenuButton(labelText, iconClass, tooltipText) {
     const button = document.createElement("button");
     button.type = "button";
-    button.className = "graph-context-menu-item graph-context-menu-tooltip";
-    button.dataset.tooltip = tooltipText;
+    button.className = "graph-context-menu-item";
+    if (tooltipText) {
+      button.classList.add("graph-context-menu-tooltip");
+      button.dataset.tooltip = tooltipText;
+    }
     const icon = document.createElement("i");
     icon.className = iconClass;
     icon.setAttribute("aria-hidden", "true");
@@ -19,6 +22,11 @@
     return button;
   }
 
+  function disableContextMenuTooltip(button) {
+    button.classList.remove("graph-context-menu-tooltip", "tooltip-visible");
+    delete button.dataset.tooltip;
+  }
+
   function createTagsContextSubmenu(tooltipText) {
     const submenu = document.createElement("div");
     submenu.className = "graph-context-menu-submenu tags-context-submenu";
@@ -28,6 +36,7 @@
       tooltipText || "Add or remove frontmatter tags for this file."
     );
     submenuBtn.setAttribute("aria-haspopup", "true");
+    disableContextMenuTooltip(submenuBtn);
     const submenuArrow = document.createElement("span");
     submenuArrow.className = "graph-context-menu-submenu-arrow";
     submenuArrow.textContent = "›";
@@ -266,6 +275,11 @@
     await copyToClipboard(text || "");
   }
 
+  function getMarkdownFrontmatterText(markdown) {
+    const match = String(markdown || "").match(/^---\r?\n[\s\S]*?\r?\n---(?:\r?\n|$)/);
+    return match ? match[0].trimEnd() : "";
+  }
+
   function hideSidebarFileContextMenu() {
     if (!sidebarFileContextMenu) return;
     sidebarFileContextMenu.classList.add("hidden");
@@ -292,12 +306,35 @@
 
   function positionSidebarContextMenu(menu, event, fallbackHeight) {
     if (!menu) return;
+    menu.querySelectorAll(".graph-context-menu-submenu").forEach((submenu) => {
+      submenu.classList.remove("open-left", "open-up");
+    });
     const menuWidth = menu.offsetWidth || 230;
     const menuHeight = menu.offsetHeight || fallbackHeight || 280;
-    const left = Math.max(0, Math.min(event.clientX, window.innerWidth - menuWidth - 8));
-    const top = Math.max(0, Math.min(event.clientY, window.innerHeight - menuHeight - 8));
+    const left = Math.max(8, Math.min(event.clientX, Math.max(8, window.innerWidth - menuWidth - 8)));
+    const top = Math.max(8, Math.min(event.clientY, Math.max(8, window.innerHeight - menuHeight - 8)));
     menu.style.left = `${left}px`;
     menu.style.top = `${top}px`;
+    positionContextSubmenus(menu);
+  }
+
+  function positionContextSubmenus(menu) {
+    if (!menu) return;
+    menu.querySelectorAll(".graph-context-menu-submenu").forEach((submenu) => {
+      const panel = submenu.querySelector(".graph-context-menu-submenu-panel");
+      if (!panel) return;
+      submenu.classList.remove("open-left", "open-up");
+      const previousDisplay = panel.style.display;
+      const previousVisibility = panel.style.visibility;
+      panel.style.display = "inline-flex";
+      panel.style.visibility = "hidden";
+      const submenuRect = submenu.getBoundingClientRect();
+      const panelRect = panel.getBoundingClientRect();
+      if (submenuRect.right + panelRect.width + 4 > window.innerWidth) submenu.classList.add("open-left");
+      if (submenuRect.top + panelRect.height > window.innerHeight - 8) submenu.classList.add("open-up");
+      panel.style.display = previousDisplay;
+      panel.style.visibility = previousVisibility;
+    });
   }
 
   function positionSidebarFileContextMenu(event) {
@@ -1061,6 +1098,7 @@
       "Open copy actions for this file, including its path and content."
     );
     copySubmenuBtn.setAttribute("aria-haspopup", "true");
+    disableContextMenuTooltip(copySubmenuBtn);
     const copySubmenuArrow = document.createElement("span");
     copySubmenuArrow.className = "graph-context-menu-submenu-arrow";
     copySubmenuArrow.textContent = "›";
@@ -1077,8 +1115,20 @@
       CONTEXT_MENU_ACTIONS.copyContent.icon,
       "Copy the entire content of this file to the clipboard."
     );
+    const copyFrontmatterBtn = createFileContextMenuButton(
+      CONTEXT_MENU_ACTIONS.copyFrontmatter.label,
+      CONTEXT_MENU_ACTIONS.copyFrontmatter.icon,
+      "Copy this file's YAML frontmatter block to the clipboard."
+    );
+    const copyTagsBtn = createFileContextMenuButton(
+      CONTEXT_MENU_ACTIONS.copyTags.label,
+      CONTEXT_MENU_ACTIONS.copyTags.icon,
+      "Copy this file's frontmatter tags, one tag per line."
+    );
     copySubmenuPanel.appendChild(copyPathBtn);
     copySubmenuPanel.appendChild(copyContentBtn);
+    copySubmenuPanel.appendChild(copyFrontmatterBtn);
+    copySubmenuPanel.appendChild(copyTagsBtn);
     copySubmenu.appendChild(copySubmenuBtn);
     copySubmenu.appendChild(copySubmenuPanel);
 
@@ -1103,6 +1153,7 @@
       "Open export actions for this file."
     );
     exportSubmenuBtn.setAttribute("aria-haspopup", "true");
+    disableContextMenuTooltip(exportSubmenuBtn);
     const exportSubmenuArrow = document.createElement("span");
     exportSubmenuArrow.className = "graph-context-menu-submenu-arrow";
     exportSubmenuArrow.textContent = "›";
@@ -1112,7 +1163,7 @@
     const exportMarkdownBtn = createFileContextMenuButton(CONTEXT_MENU_ACTIONS.exportMarkdown.label, CONTEXT_MENU_ACTIONS.exportMarkdown.icon, "Download this file as Markdown.");
     const exportHtmlBtn = createFileContextMenuButton(CONTEXT_MENU_ACTIONS.exportHtml.label, CONTEXT_MENU_ACTIONS.exportHtml.icon, "Download this file as HTML.");
     const exportPdfBtn = createFileContextMenuButton(CONTEXT_MENU_ACTIONS.exportPdf.label, CONTEXT_MENU_ACTIONS.exportPdf.icon, "Download this file as PDF.");
-    [exportMarkdownBtn, exportHtmlBtn, exportPdfBtn].forEach((button) => exportSubmenuPanel.appendChild(button));
+    [shareFileBtn, exportMarkdownBtn, exportHtmlBtn, exportPdfBtn].forEach((button) => exportSubmenuPanel.appendChild(button));
     exportSubmenu.appendChild(exportSubmenuBtn);
     exportSubmenu.appendChild(exportSubmenuPanel);
 
@@ -1131,7 +1182,6 @@
       renameFileBtn,
       tagsSubmenu,
       copySubmenu,
-      shareFileBtn,
       deleteFileTopSeparator,
       deleteFileBtn,
       deleteFileBottomSeparator,
@@ -1246,6 +1296,32 @@
       } catch (error) {
         console.error("Failed to copy sidebar file content:", error);
         alert("Unable to copy this file content.");
+      }
+    });
+
+    copyFrontmatterBtn.addEventListener("click", async (event) => {
+      event.stopPropagation();
+      const target = sidebarContextTarget;
+      hideSidebarFileContextMenu();
+      if (!target) return;
+      try {
+        await copySidebarContextText(getMarkdownFrontmatterText(await readSidebarNodeContent(target)));
+      } catch (error) {
+        console.error("Failed to copy sidebar file frontmatter:", error);
+        alert("Unable to copy this file's frontmatter.");
+      }
+    });
+
+    copyTagsBtn.addEventListener("click", async (event) => {
+      event.stopPropagation();
+      const target = sidebarContextTarget;
+      hideSidebarFileContextMenu();
+      if (!target) return;
+      try {
+        await copySidebarContextText(normalizeFileTagList(getFileTagsFromContent(await readSidebarNodeContent(target))).join("\n"));
+      } catch (error) {
+        console.error("Failed to copy sidebar file tags:", error);
+        alert("Unable to copy this file's tags.");
       }
     });
 

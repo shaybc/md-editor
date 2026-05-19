@@ -361,6 +361,35 @@
           </div>
         </div>
 
+        <!-- Graph Copy Options Modal -->
+        <div id="graph-copy-options-modal" class="reset-modal-overlay" role="dialog" aria-modal="true" aria-labelledby="graph-copy-options-title" style="display:none;">
+          <div class="reset-modal-box graph-copy-options-modal-box">
+            <p id="graph-copy-options-title" class="reset-modal-message">Copy graph file list</p>
+            <div class="graph-copy-options-list" role="group" aria-label="Copy format options">
+              <label class="graph-copy-option-row" for="graph-copy-option-file-name">
+                <input type="checkbox" id="graph-copy-option-file-name" checked>
+                <span>File name</span>
+              </label>
+              <label class="graph-copy-option-row" for="graph-copy-option-extension">
+                <input type="checkbox" id="graph-copy-option-extension" checked>
+                <span>Extension</span>
+              </label>
+              <label class="graph-copy-option-row" for="graph-copy-option-full-path">
+                <input type="checkbox" id="graph-copy-option-full-path" checked>
+                <span>Full path</span>
+              </label>
+              <label class="graph-copy-option-row" for="graph-copy-option-source-file">
+                <input type="checkbox" id="graph-copy-option-source-file">
+                <span>Of source file</span>
+              </label>
+            </div>
+            <div class="reset-modal-actions">
+              <button class="reset-modal-btn reset-modal-cancel" id="graph-copy-options-cancel" type="button">Cancel</button>
+              <button class="reset-modal-btn reset-modal-confirm" id="graph-copy-options-ok" type="button">OK</button>
+            </div>
+          </div>
+        </div>
+
         <!-- GitHub Import Modal -->
         <div id="github-import-modal" class="reset-modal-overlay" role="dialog" aria-modal="true" aria-labelledby="github-import-title" style="display:none;">
           <div class="reset-modal-box">
@@ -442,6 +471,21 @@
                     <input type="number" id="settings-max-recent-folders" class="rename-modal-input settings-number-input" min="0" max="100" step="1" value="10" />
                   </label>
                 </div>
+              </section>
+
+              <section class="settings-panel" aria-labelledby="settings-interface-title">
+                <div class="settings-panel-heading">
+                  <span class="settings-panel-icon"><i class="bi bi-window-sidebar" aria-hidden="true"></i></span>
+                  <div>
+                    <h3 id="settings-interface-title" class="settings-panel-title">Interface</h3>
+                    <p class="settings-panel-description">Tune menu timing and interaction feedback.</p>
+                  </div>
+                </div>
+
+                <label class="settings-field" for="settings-context-menu-tooltip-delay">
+                  <span class="settings-field-label">Menu tooltip delay (ms)</span>
+                  <input type="number" id="settings-context-menu-tooltip-delay" class="rename-modal-input settings-number-input" min="0" max="10000" step="100" value="3000" />
+                </label>
               </section>
 
               <section class="settings-panel" aria-labelledby="settings-confirmation-title">

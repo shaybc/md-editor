@@ -528,6 +528,7 @@ test("settings menu updates graph auto-clustering threshold", async ({ page }) =
   await expect(page.locator("#settings-confirm-reset-state")).toBeChecked();
   await expect(page.locator("#settings-max-recent-files")).toHaveValue("10");
   await expect(page.locator("#settings-max-recent-folders")).toHaveValue("10");
+  await expect(page.locator("#settings-context-menu-tooltip-delay")).toHaveValue("3000");
 
   await page.locator("#settings-graph-auto-cluster-threshold").fill("1200");
   await page.locator("#settings-graph-render-warning-threshold").fill("1800");
@@ -537,6 +538,7 @@ test("settings menu updates graph auto-clustering threshold", async ({ page }) =
   await page.locator("#settings-confirm-reset-state").uncheck();
   await page.locator("#settings-max-recent-files").fill("7");
   await page.locator("#settings-max-recent-folders").fill("5");
+  await page.locator("#settings-context-menu-tooltip-delay").fill("900");
   await page.locator("#settings-modal-save").click();
   await expect(page.locator("#settings-modal")).toBeHidden();
   await expect.poll(() => page.evaluate(() => {
@@ -549,7 +551,8 @@ test("settings menu updates graph auto-clustering threshold", async ({ page }) =
       confirmDeleteFiles: state.confirmDeleteFiles,
       confirmResetState: state.confirmResetState,
       maxRecentFiles: state.maxRecentFiles,
-      maxRecentFolders: state.maxRecentFolders
+      maxRecentFolders: state.maxRecentFolders,
+      contextMenuTooltipDelayMs: state.contextMenuTooltipDelayMs
     };
   })).toEqual({
     threshold: 1200,
@@ -559,7 +562,8 @@ test("settings menu updates graph auto-clustering threshold", async ({ page }) =
     confirmDeleteFiles: false,
     confirmResetState: false,
     maxRecentFiles: 7,
-    maxRecentFolders: 5
+    maxRecentFolders: 5,
+    contextMenuTooltipDelayMs: 900
   });
 
   await page.locator("#desktopActionMenu").click();
@@ -572,6 +576,7 @@ test("settings menu updates graph auto-clustering threshold", async ({ page }) =
   await expect(page.locator("#settings-confirm-reset-state")).not.toBeChecked();
   await expect(page.locator("#settings-max-recent-files")).toHaveValue("7");
   await expect(page.locator("#settings-max-recent-folders")).toHaveValue("5");
+  await expect(page.locator("#settings-context-menu-tooltip-delay")).toHaveValue("900");
 });
 
 test("settings menu toggles graph node file extensions", async ({ page }) => {
@@ -1136,14 +1141,14 @@ test("saved graph remains interactive and filters only graph snapshot tags", asy
         ],
         files: [
           { id: "alpha.md", path: "alpha.md", name: "alpha.md", content: "---\ntags: [defined]\n---\n# Alpha\n\n[[beta]]", fullPath: "C:/vault/alpha.md", status: "current", tags: ["defined"] },
-          { id: "beta.md", path: "beta.md", name: "beta.md", content: "# Beta\n\n[[delta]]", fullPath: "C:/vault/beta.md", status: "current", tags: [] },
-          { id: "delta.md", path: "delta.md", name: "delta.md", content: "# Delta", fullPath: "C:/vault/delta.md", status: "current", tags: [] },
-          { id: "epsilon.md", path: "epsilon.md", name: "epsilon.md", content: "# Epsilon\n\n[[gamma]]", fullPath: "C:/vault/epsilon.md", status: "current", tags: [] },
-          { id: "gamma.md", path: "gamma.md", name: "gamma.md", content: "# Gamma\n\n[[alpha]]", fullPath: "C:/vault/gamma.md", status: "current", tags: [] }
+          { id: "beta.md", path: "beta.md", name: "beta.md", content: "---\nsource_file: C:\\src\\Beta.java\n---\n# Beta\n\n[[delta]]", fullPath: "C:/vault/beta.md", status: "current", tags: [] },
+          { id: "delta.md", path: "delta.md", name: "delta.md", content: "---\nsource_file: C:\\src\\nested\\Delta.java\n---\n# Delta", fullPath: "C:/vault/delta.md", status: "current", tags: [] },
+          { id: "epsilon.md", path: "epsilon.md", name: "epsilon.md", content: "---\nsource_file: C:\\src\\Epsilon.java\n---\n# Epsilon\n\n[[gamma]]", fullPath: "C:/vault/epsilon.md", status: "current", tags: [] },
+          { id: "gamma.md", path: "gamma.md", name: "gamma.md", content: "---\nsource_file: C:\\src\\Gamma.java\n---\n# Gamma\n\n[[alpha]]", fullPath: "C:/vault/gamma.md", status: "current", tags: [] }
         ]
       }
     };
-    localStorage.setItem("markdownViewerGlobalState", JSON.stringify({ knownTags: ["ghost", "archive"], graphMagneticEnabled: true }));
+    localStorage.setItem("markdownViewerGlobalState", JSON.stringify({ knownTags: ["ghost", "archive"], graphMagneticEnabled: true, contextMenuTooltipDelayMs: 0 }));
     localStorage.setItem("markdownViewerTabs", JSON.stringify([graphTab]));
     localStorage.setItem("markdownViewerActiveTab", graphTab.id);
   });
@@ -1172,6 +1177,47 @@ test("saved graph remains interactive and filters only graph snapshot tags", asy
   await expect(graphMenu.getByRole("button", { name: "Open all" })).toBeHidden();
   await expect(graphMenu.getByRole("button", { name: "Remove Leaf Nodes" })).toBeHidden();
   await expect(graphMenu.locator(".tags-context-menu-item")).toHaveText(["#defined"]);
+  await expect(graphMenu.evaluate((menu) => Array.from(menu.children).map((child) => child.textContent.trim()))).resolves.not.toContain("Share");
+  await graphMenu.locator(".graph-context-menu-submenu", { hasText: "Export" }).evaluate((submenu) => submenu.querySelector("button")?.focus());
+  await expect(graphMenu.locator(".graph-context-menu-submenu", { hasText: "Export" }).locator(".graph-context-menu-submenu-panel .graph-context-menu-item")).toHaveText([
+    "Share",
+    "Export as Markdown",
+    "Export as HTML",
+    "Export as PDF"
+  ]);
+  await expect.poll(() => graphMenu.evaluate(async (menu) => {
+    const getMenuButton = (label) => Array.from(menu.querySelectorAll(".graph-context-menu-item"))
+      .find((button) => button.querySelector(".graph-context-menu-item-label")?.textContent?.trim() === label);
+    const openInNewTabItem = getMenuButton("Open in a new tab");
+    const renameItem = getMenuButton("Rename");
+    const copyItem = getMenuButton("Copy");
+    openInNewTabItem.dispatchEvent(new PointerEvent("pointerover", { bubbles: true }));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    const openVisibleAfterEnter = openInNewTabItem.classList.contains("tooltip-visible");
+    renameItem.dispatchEvent(new PointerEvent("pointerover", { bubbles: true }));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    const openHiddenAfterRenameEnter = !openInNewTabItem.classList.contains("tooltip-visible");
+    const renameVisibleAfterEnter = renameItem.classList.contains("tooltip-visible");
+    copyItem.dispatchEvent(new PointerEvent("pointerover", { bubbles: true }));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    const renameHiddenAfterSubmenuEnter = !renameItem.classList.contains("tooltip-visible");
+    const copySubmenuHasNoTooltip = !copyItem.classList.contains("graph-context-menu-tooltip")
+      && !copyItem.classList.contains("tooltip-visible")
+      && !copyItem.dataset.tooltip;
+    return {
+      openVisibleAfterEnter,
+      openHiddenAfterRenameEnter,
+      renameVisibleAfterEnter,
+      renameHiddenAfterSubmenuEnter,
+      copySubmenuHasNoTooltip
+    };
+  })).toEqual({
+    openVisibleAfterEnter: true,
+    openHiddenAfterRenameEnter: true,
+    renameVisibleAfterEnter: true,
+    renameHiddenAfterSubmenuEnter: true,
+    copySubmenuHasNoTooltip: true
+  });
 
   await page.locator(".graph-tab-render").dispatchEvent("contextmenu", {
     bubbles: true,
@@ -1205,6 +1251,22 @@ test("saved graph remains interactive and filters only graph snapshot tags", asy
     clientY: 220
   });
   await page.locator(".graph-context-menu-submenu", { hasText: "Copy" }).hover();
+  await expect.poll(() => page.locator(".graph-context-menu-submenu", { hasText: "Copy" }).locator(".graph-context-menu-submenu-panel").evaluate((panel) => {
+    return Array.from(panel.children).map((child) => {
+      if (child.classList.contains("graph-context-menu-separator")) return "separator";
+      return child.textContent.trim();
+    });
+  })).toEqual([
+    "Copy path",
+    "Copy content",
+    "Copy frontmatter",
+    "Copy tags",
+    "separator",
+    "Copy dependencies",
+    "Copy full dependencies",
+    "Copy backlinks",
+    "Copy full network"
+  ]);
   await page.locator(".graph-context-menu-item", { hasText: "Copy path" }).dispatchEvent("click");
   await expect.poll(async () => page.evaluate(() => navigator.clipboard.readText())).toBe("C:/vault/alpha.md");
 
@@ -1250,6 +1312,20 @@ test("saved graph remains interactive and filters only graph snapshot tags", asy
   });
   await page.locator(".graph-context-menu-submenu", { hasText: "Copy" }).hover();
   await page.locator(".graph-context-menu-item", { hasText: "Copy full dependencies" }).dispatchEvent("click");
+  const copyOptionsModal = page.locator("#graph-copy-options-modal");
+  await expect(copyOptionsModal).toBeVisible();
+  await expect(page.locator("#graph-copy-option-file-name")).toBeChecked();
+  await expect(page.locator("#graph-copy-option-extension")).toBeChecked();
+  await expect(page.locator("#graph-copy-option-full-path")).toBeChecked();
+  await expect(page.locator("#graph-copy-option-source-file")).not.toBeChecked();
+  await page.locator("#graph-copy-option-file-name").uncheck();
+  await page.locator("#graph-copy-option-extension").uncheck();
+  await page.locator("#graph-copy-option-full-path").uncheck();
+  await expect(page.locator("#graph-copy-options-ok")).toBeDisabled();
+  await page.locator("#graph-copy-option-file-name").check();
+  await page.locator("#graph-copy-option-extension").check();
+  await page.locator("#graph-copy-option-full-path").check();
+  await page.locator("#graph-copy-options-ok").click();
   await expect.poll(async () => page.evaluate(async () => (await navigator.clipboard.readText()).replace(/\r\n/g, "\n"))).toBe("C:/vault/alpha.md\nC:/vault/beta.md\nC:/vault/delta.md");
 
   await page.locator(".graph-node").first().dispatchEvent("contextmenu", {
@@ -1261,7 +1337,11 @@ test("saved graph remains interactive and filters only graph snapshot tags", asy
   });
   await page.locator(".graph-context-menu-submenu", { hasText: "Copy" }).hover();
   await page.locator(".graph-context-menu-item", { hasText: "Copy full network" }).dispatchEvent("click");
-  await expect.poll(async () => page.evaluate(async () => (await navigator.clipboard.readText()).replace(/\r\n/g, "\n"))).toBe("C:/vault/alpha.md\nC:/vault/gamma.md\nC:/vault/epsilon.md\nC:/vault/beta.md\nC:/vault/delta.md");
+  await expect(copyOptionsModal).toBeVisible();
+  await page.locator("#graph-copy-option-full-path").uncheck();
+  await page.locator("#graph-copy-option-source-file").check();
+  await page.locator("#graph-copy-options-ok").click();
+  await expect.poll(async () => page.evaluate(async () => (await navigator.clipboard.readText()).replace(/\r\n/g, "\n"))).toBe("alpha.md\nGamma.java\nEpsilon.java\nBeta.java\nDelta.java");
 
   await page.locator(".graph-node").first().dispatchEvent("contextmenu", {
     bubbles: true,
@@ -2320,6 +2400,7 @@ test("desktop tree context menu can update file tags", async ({ page }) => {
     window.NL_OS = "Windows";
     window.__alerts = [];
     window.__writes = [];
+    window.__clipboard = "";
     window.alert = (message) => window.__alerts.push(String(message));
     const files = new Map([
       ["alpha.md", "---\ntags: [defined]\n---\n# Alpha"],
@@ -2350,7 +2431,7 @@ test("desktop tree context menu can update file tags", async ({ page }) => {
           window.__writes.push({ path, content: String(content) });
         }
       },
-      clipboard: { writeText: async () => {} }
+      clipboard: { writeText: async (text) => { window.__clipboard = String(text || ""); } }
     };
   });
   await openApp(page);
@@ -2369,6 +2450,44 @@ test("desktop tree context menu can update file tags", async ({ page }) => {
   });
 
   const treeMenu = page.locator(".sidebar-file-context-menu:not(.hidden)");
+  await expect(treeMenu.evaluate((menu) => Array.from(menu.children).map((child) => child.textContent.trim()))).resolves.not.toContain("Share");
+  const treeExportSubmenu = treeMenu.locator(".graph-context-menu-submenu", { hasText: "Export" });
+  await treeExportSubmenu.evaluate((submenu) => submenu.querySelector("button")?.focus());
+  await expect(treeExportSubmenu.locator(".graph-context-menu-submenu-panel .graph-context-menu-item")).toHaveText([
+    "Share",
+    "Export as Markdown",
+    "Export as HTML",
+    "Export as PDF"
+  ]);
+  const treeCopySubmenu = treeMenu.locator(".graph-context-menu-submenu", { hasText: "Copy" });
+  await treeCopySubmenu.evaluate((submenu) => submenu.querySelector("button")?.focus());
+  await expect(treeCopySubmenu.locator(".graph-context-menu-submenu-panel .graph-context-menu-item")).toHaveText([
+    "Copy path",
+    "Copy content",
+    "Copy frontmatter",
+    "Copy tags"
+  ]);
+  await treeMenu.locator(".graph-context-menu-item", { hasText: "Copy frontmatter" }).dispatchEvent("click");
+  await expect.poll(() => page.evaluate(() => window.__clipboard.replace(/\r\n/g, "\n"))).toBe("---\ntags: [defined]\n---");
+
+  await page.locator(".folder-tree-file", { hasText: "alpha.md" }).dispatchEvent("contextmenu", {
+    bubbles: true,
+    cancelable: true,
+    button: 2,
+    clientX: 90,
+    clientY: 180
+  });
+  await treeCopySubmenu.evaluate((submenu) => submenu.querySelector("button")?.focus());
+  await treeMenu.locator(".graph-context-menu-item", { hasText: "Copy tags" }).dispatchEvent("click");
+  await expect.poll(() => page.evaluate(() => window.__clipboard)).toBe("defined");
+
+  await page.locator(".folder-tree-file", { hasText: "alpha.md" }).dispatchEvent("contextmenu", {
+    bubbles: true,
+    cancelable: true,
+    button: 2,
+    clientX: 90,
+    clientY: 180
+  });
   await expect(treeMenu.locator(".tags-context-menu-item")).toHaveText(["#defined", "#other"]);
   await treeMenu.locator(".tags-context-menu-item", { hasText: "#other" }).evaluate((button) => button.click());
 
@@ -2423,7 +2542,7 @@ test("tree file context menu opens a recursive full graph for that file", async 
           throw new Error("Unexpected read path: " + path);
         }
       },
-      clipboard: { writeText: async () => {} }
+      clipboard: { writeText: async (text) => { window.__clipboard = String(text || ""); } }
     };
   });
   await openApp(page);

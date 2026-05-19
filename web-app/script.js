@@ -1886,6 +1886,7 @@
   const settingsConfirmResetStateInput = document.getElementById("settings-confirm-reset-state");
   const settingsMaxRecentFilesInput = document.getElementById("settings-max-recent-files");
   const settingsMaxRecentFoldersInput = document.getElementById("settings-max-recent-folders");
+  const settingsContextMenuTooltipDelayInput = document.getElementById("settings-context-menu-tooltip-delay");
   const settingsModalClose = document.getElementById("settings-modal-close");
   const settingsModalCancel = document.getElementById("settings-modal-cancel");
   const settingsModalSave = document.getElementById("settings-modal-save");
@@ -1965,6 +1966,7 @@
   const GLOBAL_STATE_KEY = 'markdownViewerGlobalState';
   const DEFAULT_GRAPH_AUTO_CLUSTER_THRESHOLD = 1000;
   const DEFAULT_GRAPH_RENDER_WARNING_THRESHOLD = 1500;
+  const DEFAULT_CONTEXT_MENU_TOOLTIP_DELAY_MS = 3000;
   const DEFAULT_MAX_RECENT_FILES = 10;
   const DEFAULT_MAX_RECENT_FOLDERS = 10;
   const DEFAULT_GLOBAL_STATE = Object.freeze({
@@ -1974,6 +1976,7 @@
     confirmDeleteFiles: true,
     confirmOpenManyGraphNodes: true,
     confirmResetState: true,
+    contextMenuTooltipDelayMs: DEFAULT_CONTEXT_MENU_TOOLTIP_DELAY_MS,
     graphAutoClusterThreshold: DEFAULT_GRAPH_AUTO_CLUSTER_THRESHOLD,
     graphRenderWarningThreshold: DEFAULT_GRAPH_RENDER_WARNING_THRESHOLD,
     graphShowFileExtensions: false,
@@ -2017,6 +2020,12 @@
     return loadGlobalState().graphShowFileExtensions === true;
   }
 
+  function getContextMenuTooltipDelayMs() {
+    const value = Number(loadGlobalState().contextMenuTooltipDelayMs);
+    if (!Number.isFinite(value)) return DEFAULT_CONTEXT_MENU_TOOLTIP_DELAY_MS;
+    return Math.max(0, Math.min(10000, Math.floor(value)));
+  }
+
   function shouldConfirmOpenManyGraphNodes() {
     return loadGlobalState().confirmOpenManyGraphNodes !== false;
   }
@@ -2040,6 +2049,71 @@
     if (!Number.isFinite(value)) return DEFAULT_MAX_RECENT_FOLDERS;
     return Math.max(0, Math.min(100, Math.floor(value)));
   }
+
+  function initializeContextMenuTooltips() {
+    let tooltipTimer = null;
+    let tooltipTarget = null;
+
+    const hideTooltip = () => {
+      if (tooltipTimer) {
+        window.clearTimeout(tooltipTimer);
+        tooltipTimer = null;
+      }
+      if (tooltipTarget) tooltipTarget.classList.remove("tooltip-visible");
+      tooltipTarget = null;
+    };
+
+    const scheduleTooltip = (target) => {
+      if (!target?.dataset?.tooltip) return;
+      if (tooltipTarget === target) return;
+      hideTooltip();
+      tooltipTarget = target;
+      tooltipTimer = window.setTimeout(() => {
+        if (tooltipTarget !== target) return;
+        target.classList.add("tooltip-visible");
+        tooltipTimer = null;
+      }, getContextMenuTooltipDelayMs());
+    };
+
+    document.addEventListener("pointerover", (event) => {
+      const target = event.target.closest?.(".graph-context-menu-tooltip");
+      if (!target) {
+        if (event.target.closest?.(".graph-context-menu-item")) hideTooltip();
+        return;
+      }
+      if (event.relatedTarget && target.contains(event.relatedTarget)) return;
+      scheduleTooltip(target);
+    });
+
+    document.addEventListener("pointerout", (event) => {
+      if (!tooltipTarget) return;
+      const target = event.target.closest?.(".graph-context-menu-tooltip");
+      if (target !== tooltipTarget) return;
+      if (event.relatedTarget && target.contains(event.relatedTarget)) return;
+      hideTooltip();
+    });
+
+    document.addEventListener("focusin", (event) => {
+      const target = event.target.closest?.(".graph-context-menu-tooltip");
+      if (target) scheduleTooltip(target);
+      else hideTooltip();
+    });
+
+    document.addEventListener("focusout", (event) => {
+      if (!tooltipTarget) return;
+      if (event.relatedTarget?.closest?.(".graph-context-menu-tooltip") === tooltipTarget) return;
+      hideTooltip();
+    });
+
+    document.addEventListener("pointerdown", (event) => {
+      if (!tooltipTarget || tooltipTarget.contains(event.target)) return;
+      hideTooltip();
+    }, true);
+    document.addEventListener("scroll", hideTooltip, true);
+    window.addEventListener("blur", hideTooltip);
+  }
+
+  initializeContextMenuTooltips();
 
   const rendererConfig = window.registerMarkdownViewerRendererConfig(app, {
     marked,
@@ -2924,6 +2998,9 @@ Markdown content is processed client-side in your browser and sanitized before p
     if (settingsMaxRecentFoldersInput) {
       settingsMaxRecentFoldersInput.value = String(getMaxRecentFolders());
     }
+    if (settingsContextMenuTooltipDelayInput) {
+      settingsContextMenuTooltipDelayInput.value = String(getContextMenuTooltipDelayMs());
+    }
     settingsModal.style.display = "flex";
     settingsGraphAutoClusterThresholdInput?.focus();
     settingsGraphAutoClusterThresholdInput?.select();
@@ -2955,6 +3032,11 @@ Markdown content is processed client-side in your browser and sanitized before p
       alert("Enter a maximum recent folders value of 0 or higher.");
       return;
     }
+    const contextMenuTooltipDelayMs = Number(settingsContextMenuTooltipDelayInput?.value);
+    if (!Number.isFinite(contextMenuTooltipDelayMs) || contextMenuTooltipDelayMs < 0) {
+      alert("Enter a menu tooltip delay of 0 or higher.");
+      return;
+    }
     saveGlobalState({
       graphAutoClusterThreshold: Math.min(100000, Math.floor(threshold)),
       graphRenderWarningThreshold: Math.min(100000, Math.floor(graphRenderWarningThreshold)),
@@ -2962,6 +3044,7 @@ Markdown content is processed client-side in your browser and sanitized before p
       confirmOpenManyGraphNodes: !!settingsConfirmOpenManyGraphNodesInput?.checked,
       confirmDeleteFiles: !!settingsConfirmDeleteFilesInput?.checked,
       confirmResetState: !!settingsConfirmResetStateInput?.checked,
+      contextMenuTooltipDelayMs: Math.min(10000, Math.floor(contextMenuTooltipDelayMs)),
       maxRecentFiles: Math.min(100, Math.floor(maxRecentFiles)),
       maxRecentFolders: Math.min(100, Math.floor(maxRecentFolders))
     });
