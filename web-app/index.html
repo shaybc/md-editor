@@ -81,6 +81,9 @@
                                 <i class="bi bi-file-earmark-plus me-2"></i> New document
                             </button>
                             <hr class="dropdown-divider">
+                            <button class="dropdown-item action-menu-item" id="import-from-github" title="Open Markdown from GitHub">
+                                <i class="bi bi-github me-2"></i> Open from GitHub
+                            </button>
                             <button class="dropdown-item action-menu-item" id="import-from-file" title="Open text or graph file">
                                 <i class="bi bi-upload me-2"></i> Open file ...
                             </button>
@@ -90,9 +93,19 @@
                             <button class="dropdown-item action-menu-item close-folder-button" type="button" title="Close the currently open folder" disabled>
                                 <i class="bi bi-folder-x me-2"></i> Close Folder
                             </button>
-                            <button class="dropdown-item action-menu-item" id="import-from-github" title="Import Markdown from GitHub">
-                                <i class="bi bi-github me-2"></i> Import from GitHub
-                            </button>
+                            <hr class="dropdown-divider">
+                            <div class="dropdown-submenu action-menu-submenu recent-files-submenu">
+                                <button class="dropdown-item action-menu-item dropdown-toggle" type="button" aria-haspopup="true" aria-expanded="false">
+                                    <i class="bi bi-clock-history me-2"></i> Recent files
+                                </button>
+                                <div class="dropdown-menu action-submenu recent-files-menu" aria-label="Recent files"></div>
+                            </div>
+                            <div class="dropdown-submenu action-menu-submenu recent-folders-submenu">
+                                <button class="dropdown-item action-menu-item dropdown-toggle" type="button" aria-haspopup="true" aria-expanded="false">
+                                    <i class="bi bi-clock-history me-2"></i> Recent folders
+                                </button>
+                                <div class="dropdown-menu action-submenu recent-folders-menu" aria-label="Recent folders"></div>
+                            </div>
                             <hr class="dropdown-divider">
                             <button class="dropdown-item action-menu-item save-current-file-button" type="button" title="Save changes to current file" disabled>
                                 <i class="bi bi-save me-2"></i> Save Changes
@@ -100,6 +113,18 @@
                             <button class="dropdown-item action-menu-item save-all-files-button" type="button" title="Save all unsaved changes" disabled>
                                 <i class="bi bi-save2 me-2"></i> Save All
                             </button>
+                            <hr class="dropdown-divider">
+                            <button class="dropdown-item action-menu-item open-graph-view" title="Open Graph View">
+                                <i class="bi bi-diagram-3 me-2"></i> Graph View
+                            </button>
+                            <button class="dropdown-item action-menu-item export-folder-to-graph" type="button" title="Create a portable graph archive that includes Markdown file contents." disabled aria-disabled="true">
+                                <i class="bi bi-download me-2"></i> Export Folder to Graph
+                            </button>
+                            <hr class="dropdown-divider">
+                            <button class="dropdown-item action-menu-item open-code-converter-dialog" type="button" title="Convert code dependencies to Markdown">
+                                <i class="bi bi-filetype-md me-2"></i> Convert Code to MD
+                            </button>
+                            <hr class="dropdown-divider">
                             <div class="dropdown-submenu action-menu-submenu">
                                 <button class="dropdown-item action-menu-item dropdown-toggle" type="button" aria-haspopup="true" aria-expanded="false">
                                     <i class="bi bi-eye me-2"></i> View
@@ -127,18 +152,8 @@
                                 </div>
                             </div>
                             <button class="dropdown-item action-menu-item open-settings-dialog" type="button" title="Open settings">
-                                <i class="bi bi-gear me-2"></i> Settings
+                                <i class="bi bi-gear me-2"></i> Settings ...
                             </button>
-                            <button class="dropdown-item action-menu-item open-code-converter-dialog" type="button" title="Convert code dependencies to Markdown">
-                                <i class="bi bi-filetype-md me-2"></i> Convert Code to MD
-                            </button>
-                            <button class="dropdown-item action-menu-item open-graph-view" title="Open Graph View">
-                                <i class="bi bi-diagram-3 me-2"></i> Graph View
-                            </button>
-                            <button class="dropdown-item action-menu-item export-folder-to-graph" type="button" title="Create a portable graph archive that includes Markdown file contents." disabled aria-disabled="true">
-                                <i class="bi bi-download me-2"></i> Export Folder to Graph
-                            </button>
-                            <hr class="dropdown-divider">
                             <div class="dropdown-submenu action-menu-submenu help-menu-submenu">
                                 <button class="dropdown-item action-menu-item dropdown-toggle" type="button" aria-haspopup="true" aria-expanded="false">
                                     <i class="bi bi-question-circle me-2"></i> Help
@@ -155,6 +170,10 @@
                                     </button>
                                 </div>
                             </div>
+                            <hr class="dropdown-divider">
+                            <button class="dropdown-item action-menu-item exit-app-button" type="button" title="Exit MD-Editor">
+                                <i class="bi bi-box-arrow-right me-2"></i> Exit MD-Editor
+                            </button>
                         </div>
                     </div>
                     <!-- Hamburger menu for mobile -->
@@ -422,7 +441,7 @@
             </div>
 
             <div class="settings-modal-body">
-              <section class="settings-panel" aria-labelledby="settings-graph-title">
+              <section class="settings-panel settings-graph-panel" aria-labelledby="settings-graph-title">
                 <div class="settings-panel-heading">
                   <span class="settings-panel-icon"><i class="bi bi-diagram-3" aria-hidden="true"></i></span>
                   <div>
@@ -446,50 +465,52 @@
                   </label>
                 </div>
 
-                <label class="settings-switch-row" for="settings-graph-auto-cluster-large-maps">
-                  <span>
-                    <span class="settings-switch-title">Auto-collapse large graph clusters</span>
-                    <span class="settings-switch-description">Detect and collapse clusters when graph nodes exceed the threshold.</span>
-                  </span>
-                  <input type="checkbox" id="settings-graph-auto-cluster-large-maps" class="settings-switch-input" checked />
-                  <span class="settings-switch" aria-hidden="true"></span>
-                </label>
+                <div class="settings-switch-grid">
+                  <label class="settings-switch-row" for="settings-graph-auto-cluster-large-maps">
+                    <span>
+                      <span class="settings-switch-title">Auto-collapse large graph clusters</span>
+                      <span class="settings-switch-description">Detect and collapse clusters above the threshold.</span>
+                    </span>
+                    <input type="checkbox" id="settings-graph-auto-cluster-large-maps" class="settings-switch-input" />
+                    <span class="settings-switch" aria-hidden="true"></span>
+                  </label>
 
-                <label class="settings-switch-row" for="settings-graph-large-hover-dim">
-                  <span>
-                    <span class="settings-switch-title">Dim other nodes on large maps</span>
-                    <span class="settings-switch-description">Fade unrelated nodes during hover when the graph exceeds the threshold.</span>
-                  </span>
-                  <input type="checkbox" id="settings-graph-large-hover-dim" class="settings-switch-input" />
-                  <span class="settings-switch" aria-hidden="true"></span>
-                </label>
+                  <label class="settings-switch-row" for="settings-graph-large-hover-dim">
+                    <span>
+                      <span class="settings-switch-title">Dim other nodes on large maps</span>
+                      <span class="settings-switch-description">Fade unrelated nodes during hover.</span>
+                    </span>
+                    <input type="checkbox" id="settings-graph-large-hover-dim" class="settings-switch-input" />
+                    <span class="settings-switch" aria-hidden="true"></span>
+                  </label>
 
-                <label class="settings-switch-row" for="settings-graph-large-hover-labels">
-                  <span>
-                    <span class="settings-switch-title">Show connected labels on large maps</span>
-                    <span class="settings-switch-description">Show hovered and connected node labels during large-map hover.</span>
-                  </span>
-                  <input type="checkbox" id="settings-graph-large-hover-labels" class="settings-switch-input" checked />
-                  <span class="settings-switch" aria-hidden="true"></span>
-                </label>
+                  <label class="settings-switch-row" for="settings-graph-large-hover-labels">
+                    <span>
+                      <span class="settings-switch-title">Show connected labels on large maps</span>
+                      <span class="settings-switch-description">Reveal hovered and connected labels.</span>
+                    </span>
+                    <input type="checkbox" id="settings-graph-large-hover-labels" class="settings-switch-input" checked />
+                    <span class="settings-switch" aria-hidden="true"></span>
+                  </label>
 
-                <label class="settings-switch-row" for="settings-graph-large-hover-lines">
-                  <span>
-                    <span class="settings-switch-title">Highlight connected lines on large maps</span>
-                    <span class="settings-switch-description">Color connected hover lines purple on large maps.</span>
-                  </span>
-                  <input type="checkbox" id="settings-graph-large-hover-lines" class="settings-switch-input" checked />
-                  <span class="settings-switch" aria-hidden="true"></span>
-                </label>
+                  <label class="settings-switch-row" for="settings-graph-large-hover-lines">
+                    <span>
+                      <span class="settings-switch-title">Highlight connected lines on large maps</span>
+                      <span class="settings-switch-description">Color connected hover lines purple.</span>
+                    </span>
+                    <input type="checkbox" id="settings-graph-large-hover-lines" class="settings-switch-input" checked />
+                    <span class="settings-switch" aria-hidden="true"></span>
+                  </label>
 
-                <label class="settings-switch-row" for="settings-graph-show-file-extensions">
-                  <span>
-                    <span class="settings-switch-title">Show file extensions</span>
-                    <span class="settings-switch-description">Include extensions in graph node labels.</span>
-                  </span>
-                  <input type="checkbox" id="settings-graph-show-file-extensions" class="settings-switch-input" />
-                  <span class="settings-switch" aria-hidden="true"></span>
-                </label>
+                  <label class="settings-switch-row" for="settings-graph-show-file-extensions">
+                    <span>
+                      <span class="settings-switch-title">Show file extensions</span>
+                      <span class="settings-switch-description">Include extensions in graph labels.</span>
+                    </span>
+                    <input type="checkbox" id="settings-graph-show-file-extensions" class="settings-switch-input" />
+                    <span class="settings-switch" aria-hidden="true"></span>
+                  </label>
+                </div>
               </section>
 
               <section class="settings-panel" aria-labelledby="settings-recent-title">

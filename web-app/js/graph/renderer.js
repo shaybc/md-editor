@@ -1372,6 +1372,10 @@
     label = labelLayer.selectAll("text").data(nodes).enter().append("text")
       .text(getGraphNodeLabel)
       .attr("class", (d) => `graph-label graph-label-${getGraphNodeType(d)} graph-label-status-${getGraphItemStatus(d)}`);
+    const labelElementByNodeId = new Map();
+    label.each(function(d) {
+      if (d?.id) labelElementByNodeId.set(d.id, this);
+    });
 
     const contextMenu = document.createElement("div");
     contextMenu.className = "graph-context-menu hidden";
@@ -3725,9 +3729,22 @@
       const addClass = isBacklinkHighlight ? "highlighted-backlink" : "highlighted-direct";
       highlightedLineLinkData.forEach((linkData) => {
         const linkElement = linkElementByData.get(linkData);
-        if (linkElement) linkElement.classList.add(addClass);
+        if (linkElement) {
+          linkElement.classList.add(addClass);
+          linkElement.parentNode?.appendChild(linkElement);
+        }
         const arrowheadElement = arrowheadElementByData.get(linkData);
-        if (arrowheadElement) arrowheadElement.classList.add(addClass);
+        if (arrowheadElement) {
+          arrowheadElement.classList.add(addClass);
+          arrowheadElement.parentNode?.appendChild(arrowheadElement);
+        }
+      });
+    };
+
+    const raiseHoverLabels = (highlightedNodeIds) => {
+      highlightedNodeIds.forEach((nodeId) => {
+        const labelElement = labelElementByNodeId.get(nodeId);
+        if (labelElement) labelElement.parentNode?.appendChild(labelElement);
       });
     };
 
@@ -3851,6 +3868,7 @@
           .classed("dimmed", (n) => !highlight.highlightedNodes.has(n.id))
           .classed("hover-hidden", (n) => !highlight.highlightedNodes.has(n.id));
         updateLabelVisibility();
+        raiseHoverLabels(highlight.highlightedNodes);
       }
       if (shouldHighlightConnectedLinesOnHover) {
         if (shouldDimOtherLinesOnHover) {
@@ -3862,6 +3880,8 @@
             .classed("dimmed", (l) => !isHighlightedLink(l))
             .classed("highlighted-direct", (l) => !isBacklinkHighlight && isHighlightedLink(l))
             .classed("highlighted-backlink", (l) => isBacklinkHighlight && isHighlightedLink(l));
+          link.filter((l) => isHighlightedLink(l)).raise();
+          arrowhead.filter((l) => isHighlightedLink(l)).raise();
         } else {
           applyLargeMapHighlightedLineClasses(highlight.highlightedLinks, isBacklinkHighlight);
         }

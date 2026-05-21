@@ -45,31 +45,6 @@ function exitDesktopApp() {
   }
 }
 
-function addDesktopExitMenuButton() {
-  const desktopActionMenu = document.querySelector(
-    ".header-action-menu .action-menu",
-  );
-
-  if (!desktopActionMenu || document.getElementById("desktop-exit-app-button")) {
-    return;
-  }
-
-  const separator = document.createElement("hr");
-  separator.className = "dropdown-divider";
-  separator.dataset.desktopExitSeparator = "true";
-
-  const exitButton = document.createElement("button");
-  exitButton.id = "desktop-exit-app-button";
-  exitButton.className = "dropdown-item action-menu-item";
-  exitButton.type = "button";
-  exitButton.title = "Close MD-Editor";
-  exitButton.innerHTML =
-    '<i class="bi bi-box-arrow-right me-2"></i> Exit MD-Editor';
-  exitButton.addEventListener("click", exitDesktopApp);
-
-  desktopActionMenu.append(separator, exitButton);
-}
-
 /*
     Function to set up a system tray menu with options specific to the window mode.
     This function checks if the application is running in window mode, and if so,
@@ -152,8 +127,6 @@ function rememberInitialRecentFile(filePath) {
 
 // Initialize Neutralino
 Neutralino.init();
-
-addDesktopExitMenuButton();
 
 // Register event listeners
 Neutralino.events.on("trayMenuItemClicked", onTrayMenuItemClicked);

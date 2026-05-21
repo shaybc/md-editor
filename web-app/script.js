@@ -1919,6 +1919,7 @@
   const codeConverterFinishButton = document.getElementById("code-converter-finish");
   const codeConverterStatus = document.getElementById("code-converter-status");
   const desktopOpenGraphButtons = document.querySelectorAll(".open-graph-view");
+  const exitAppButtons = document.querySelectorAll(".exit-app-button");
   const graphViewCanvas = document.getElementById("graph-view-canvas");
   const graphViewToolbar = document.querySelector(".graph-view-toolbar");
   const graphFilterPanelToggle = document.getElementById("graph-filter-panel-toggle");
@@ -1987,7 +1988,7 @@
     confirmOpenManyGraphNodes: true,
     confirmResetState: true,
     contextMenuTooltipDelayMs: DEFAULT_CONTEXT_MENU_TOOLTIP_DELAY_MS,
-    graphAutoClusterLargeMapsEnabled: true,
+    graphAutoClusterLargeMapsEnabled: false,
     graphAutoClusterThreshold: DEFAULT_GRAPH_AUTO_CLUSTER_THRESHOLD,
     graphLargeMapHoverDimOtherNodes: false,
     graphLargeMapHoverShowConnectedLabels: true,
@@ -3007,6 +3008,25 @@ Markdown content is processed client-side in your browser and sanitized before p
   function hideAboutDialog() {
     if (!aboutModal) return;
     aboutModal.style.display = "none";
+  }
+
+  async function exitApplication() {
+    const confirmDiscardBeforeExit = window.markdownViewerConfirmDiscardUnsavedBeforeExit;
+    if (
+      typeof confirmDiscardBeforeExit === "function" &&
+      !confirmDiscardBeforeExit()
+    ) {
+      return;
+    }
+    try {
+      if (typeof Neutralino !== "undefined" && Neutralino?.app?.exit) {
+        await Neutralino.app.exit();
+        return;
+      }
+    } catch (error) {
+      console.error("Failed to exit the desktop app:", error);
+    }
+    window.close();
   }
 
   function showSettingsDialog() {
@@ -4529,6 +4549,13 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
       if (button.classList.contains("mobile-menu-item")) {
         closeMobileMenu();
       }
+    });
+  });
+
+  exitAppButtons.forEach(function(button) {
+    button.addEventListener("click", function(e) {
+      e.preventDefault();
+      exitApplication();
     });
   });
 
