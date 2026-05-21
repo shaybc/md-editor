@@ -141,7 +141,13 @@
     }
 
     const graphRendererType = GRAPH_RENDERER_D3;
-    let graphSignature = getGraphSnapshotSignature(graphSnapshot, graphViewConfig);
+    const autoClusterLargeMapsEnabled = typeof isGraphAutoClusterLargeMapsEnabled === "function" ? isGraphAutoClusterLargeMapsEnabled() : true;
+    const getGraphRenderSignature = () => JSON.stringify({
+      base: getGraphSnapshotSignature(graphSnapshot, graphViewConfig),
+      autoClusterLargeMapsEnabled,
+      largeMapHoverPreferences: typeof getLargeMapHoverPreferences === "function" ? getLargeMapHoverPreferences() : null
+    });
+    let graphSignature = getGraphRenderSignature();
     const cachedRender = graphRenderCache.get(activeTab.id);
     if (cachedRender && cachedRender.renderer === graphRendererType && cachedRender.signature === graphSignature && cachedRender.wrapper) {
       if (cachedRender.wrapper.parentElement !== graphViewCanvas) graphViewCanvas.appendChild(cachedRender.wrapper);
@@ -752,6 +758,9 @@
     const createAutoCollapsedClustersForLargeGraph = async () => {
       const currentConfig = normalizeGraphViewConfig(activeTab.graphViewConfig);
       if (currentConfig.mode === "cluster") return null;
+      if (typeof isGraphAutoClusterLargeMapsEnabled === "function" && !isGraphAutoClusterLargeMapsEnabled()) {
+        return currentConfig.autoCollapsedLargeGraph === true && (currentConfig.collapsedClusters || []).length ? [] : null;
+      }
       const { visibleFileNodeIds, adjacency, communities } = await detectGraphCommunities();
       if (visibleFileNodeIds.size < getLargeGraphAutoClusterMinNodeCount()) {
         return currentConfig.autoCollapsedLargeGraph === true && (currentConfig.collapsedClusters || []).length ? [] : null;
@@ -917,7 +926,7 @@
       collapsedClusters: graphViewConfig?.collapsedClusters?.length || 0,
       autoCollapsed: Boolean(graphViewConfig?.autoCollapsedLargeGraph)
     });
-    graphSignature = getGraphSnapshotSignature(graphSnapshot, graphViewConfig);
+    graphSignature = getGraphRenderSignature();
 
     const getClusterNodeId = (cluster) => cluster?.id || `cluster:${cluster?.seedNodeId || ""}`;
     const getClusterLabel = (cluster, memberNodes) => {
@@ -1086,12 +1095,21 @@
     });
 
     const outgoingAdjacency = new Map();
+    const outgoingMarkdownHoverLinks = new Map();
+    const relatedTagHoverLinks = new Map();
     const outgoingDegree = new Map();
-    nodes.forEach((n) => outgoingAdjacency.set(n.id, new Set([n.id])));
+    nodes.forEach((n) => {
+      outgoingAdjacency.set(n.id, new Set([n.id]));
+      outgoingMarkdownHoverLinks.set(n.id, []);
+      relatedTagHoverLinks.set(n.id, []);
+    });
     nodes.forEach((n) => outgoingDegree.set(n.id, 0));
     links.filter(isMarkdownLink).forEach((l) => {
-      outgoingAdjacency.get(l.source)?.add(l.target);
-      outgoingDegree.set(l.source, (outgoingDegree.get(l.source) || 0) + 1);
+      const sourceId = getLinkSourceId(l);
+      const targetId = getLinkTargetId(l);
+      outgoingAdjacency.get(sourceId)?.add(targetId);
+      outgoingMarkdownHoverLinks.get(sourceId)?.push(l);
+      outgoingDegree.set(sourceId, (outgoingDegree.get(sourceId) || 0) + 1);
     });
     links.filter(isTagLink).forEach((l) => {
       const sourceId = getLinkSourceId(l);
@@ -1099,6 +1117,8 @@
       if (sourceId && targetId) {
         outgoingAdjacency.get(sourceId)?.add(targetId);
         outgoingAdjacency.get(targetId)?.add(sourceId);
+        relatedTagHoverLinks.get(sourceId)?.push(l);
+        relatedTagHoverLinks.get(targetId)?.push(l);
       }
     });
     const maxOutgoing = Math.max(1, ...Array.from(outgoingDegree.values()));
@@ -1284,6 +1304,10 @@
       .style("stroke-width", (d) => `${(isTagLink(d) ? 1 : graphViewConfig.linkThickness)}px`);
     const arrowhead = arrowheadLayer.selectAll("path").data(graphViewConfig.showArrows ? links.filter(isMarkdownLink) : []).enter().append("path")
       .attr("class", (d) => `graph-arrowhead graph-arrowhead-status-${getGraphItemStatus(d)}`);
+    const linkElementByData = new Map();
+    const arrowheadElementByData = new Map();
+    link.each(function(d) { linkElementByData.set(d, this); });
+    arrowhead.each(function(d) { arrowheadElementByData.set(d, this); });
     const node = nodeLayer.selectAll("circle").data(nodes).enter().append("circle")
       .attr("r", (d) => nodeRadius(d.id))
       .attr("class", (d) => `graph-node graph-node-${getGraphNodeType(d)} graph-node-status-${getGraphItemStatus(d)}`)
@@ -2341,32 +2365,138 @@
       const normalizedTag = normalizeTagName(tagName);
       if (!normalizedTag) return;
 
+      const tagPerf = typeof createGraphPerfSession === "function"
+        ? createGraphPerfSession("group most referenced tagging", {
+          tag: normalizedTag,
+          tabId: activeGraphTab.id,
+          title: activeGraphTab.title || ""
+        })
+        : null;
       setGraphQuickActionBusy(true, "Detecting most referenced...");
       await new Promise((resolve) => requestAnimationFrame(resolve));
       try {
         const selectedNodes = getMostReferencedGraphNodes();
+        tagPerf?.mark("selected most referenced files", {
+          selectedFiles: selectedNodes.length,
+          graphNodes: nodes.length,
+          graphLinks: links.length,
+          percent: getGraphMostReferencedPercent()
+        });
         if (!selectedNodes.length) {
           alert("No referenced files were found to tag.");
           return;
         }
 
+        const batchTotals = {
+          changed: 0,
+          skippedOrAlreadyTagged: 0,
+          failed: 0,
+          readMs: 0,
+          parseTagsMs: 0,
+          updateContentMs: 0,
+          writeMs: 0,
+          localStateMs: 0,
+          snapshotRebuildMs: 0,
+          storageUiMs: 0,
+          totalMs: 0
+        };
         if (typeof createTag === "function") createTag(normalizedTag);
+        tagPerf?.mark("tag ensured", { tag: normalizedTag });
 
         setGraphQuickActionBusy(true, `Tagging ${selectedNodes.length} file${selectedNodes.length === 1 ? "" : "s"}...`);
         let changedFiles = false;
         let alreadyTaggedFiles = false;
         const failedNodes = [];
-        for (const graphNode of selectedNodes) {
+        const changedSnapshotFiles = [];
+        for (let index = 0; index < selectedNodes.length; index += 1) {
+          const graphNode = selectedNodes[index];
+          setGraphQuickActionBusy(true, `Tagging file ${index + 1} / ${selectedNodes.length}`);
+          if (index === 0 || index % 10 === 0) await new Promise((resolve) => requestAnimationFrame(resolve));
           try {
             alreadyTaggedFiles = hasSnapshotTagForNode(graphNode, normalizedTag) || alreadyTaggedFiles;
-            changedFiles = await updateGraphNodeTagContent(graphNode, normalizedTag, "add", { deferGraphRefresh: true }) || changedFiles;
+            const perfFileStart = nowForGraphPerf();
+            const beforeMarks = tagPerf?.marks?.length || 0;
+            const changedThisFile = await updateGraphNodeTagContent(graphNode, normalizedTag, "add", {
+              deferGraphRefresh: true,
+              perfSession: tagPerf,
+              perfDetails: {
+                index: index + 1,
+                total: selectedNodes.length
+              }
+            });
+            changedFiles = changedThisFile || changedFiles;
+            if (changedThisFile) {
+              batchTotals.changed += 1;
+              const changedSnapshotFile = getSnapshotFileForNode(graphNode);
+              if (changedSnapshotFile) changedSnapshotFiles.push(changedSnapshotFile);
+            }
+            else batchTotals.skippedOrAlreadyTagged += 1;
+            const fileTotalMs = elapsedGraphPerfMs(perfFileStart);
+            batchTotals.totalMs += fileTotalMs;
+            const latestMark = tagPerf?.marks?.[beforeMarks];
+            if (latestMark) {
+              batchTotals.readMs += Number(latestMark.readMs || 0);
+              batchTotals.parseTagsMs += Number(latestMark.parseTagsMs || 0);
+              batchTotals.updateContentMs += Number(latestMark.updateContentMs || 0);
+              batchTotals.writeMs += Number(latestMark.writeMs || 0);
+              batchTotals.localStateMs += Number(latestMark.localStateMs || 0);
+              batchTotals.snapshotRebuildMs += Number(latestMark.snapshotRebuildMs || 0);
+              batchTotals.storageUiMs += Number(latestMark.storageUiMs || 0);
+            }
+            if ((index + 1) % 50 === 0 || index + 1 === selectedNodes.length) {
+              tagPerf?.mark("tagging progress summary", {
+                tagged: index + 1,
+                total: selectedNodes.length,
+                changed: batchTotals.changed,
+                skippedOrAlreadyTagged: batchTotals.skippedOrAlreadyTagged,
+                failed: batchTotals.failed,
+                readMs: Math.round(batchTotals.readMs * 10) / 10,
+                parseTagsMs: Math.round(batchTotals.parseTagsMs * 10) / 10,
+                updateContentMs: Math.round(batchTotals.updateContentMs * 10) / 10,
+                writeMs: Math.round(batchTotals.writeMs * 10) / 10,
+                localStateMs: Math.round(batchTotals.localStateMs * 10) / 10,
+                snapshotRebuildMs: Math.round(batchTotals.snapshotRebuildMs * 10) / 10,
+                storageUiMs: Math.round(batchTotals.storageUiMs * 10) / 10,
+                totalFileMs: Math.round(batchTotals.totalMs * 10) / 10
+              });
+            }
           } catch (error) {
             failedNodes.push(graphNode);
+            batchTotals.failed += 1;
             console.error("Failed to tag most referenced graph file:", graphNode?.id, error);
+            tagPerf?.mark("tag file failed", {
+              index: index + 1,
+              total: selectedNodes.length,
+              nodeId: graphNode?.id || "",
+              message: error?.message || String(error)
+            });
           }
         }
 
         setGraphQuickActionBusy(true, "Creating hidden group...");
+        tagPerf?.mark("tagging loop complete", {
+          selectedFiles: selectedNodes.length,
+          changed: batchTotals.changed,
+          skippedOrAlreadyTagged: batchTotals.skippedOrAlreadyTagged,
+          failed: batchTotals.failed,
+          readMs: Math.round(batchTotals.readMs * 10) / 10,
+          parseTagsMs: Math.round(batchTotals.parseTagsMs * 10) / 10,
+          updateContentMs: Math.round(batchTotals.updateContentMs * 10) / 10,
+          writeMs: Math.round(batchTotals.writeMs * 10) / 10,
+          localStateMs: Math.round(batchTotals.localStateMs * 10) / 10,
+          snapshotRebuildMs: Math.round(batchTotals.snapshotRebuildMs * 10) / 10,
+          storageUiMs: Math.round(batchTotals.storageUiMs * 10) / 10,
+          totalFileMs: Math.round(batchTotals.totalMs * 10) / 10
+        });
+        if (changedSnapshotFiles.length) {
+          setGraphQuickActionBusy(true, `Rebuilding graph snapshot for ${changedSnapshotFiles.length} tagged file${changedSnapshotFiles.length === 1 ? "" : "s"}...`);
+          const batchSnapshotStart = nowForGraphPerf();
+          await rebuildOpenGraphSnapshotsAfterBatchTagChange(changedSnapshotFiles);
+          tagPerf?.mark("batch graph snapshot rebuild", {
+            changedFiles: changedSnapshotFiles.length,
+            snapshotRebuildMs: elapsedGraphPerfMs(batchSnapshotStart)
+          });
+        }
         const changedGroups = (changedFiles || alreadyTaggedFiles || failedNodes.length < selectedNodes.length)
           ? ensureGraphTagGroup(normalizedTag, { hidden: true })
           : false;
@@ -2375,7 +2505,16 @@
           return;
         }
 
+        const storageStart = nowForGraphPerf();
+        saveTabsToStorage(tabs);
+        renderTabBar(tabs, activeTabId);
+        updateSaveCurrentFileButtons();
+        tagPerf?.mark("batch state saved", {
+          storageUiMs: elapsedGraphPerfMs(storageStart)
+        });
+
         setGraphQuickActionBusy(true, "Refreshing graph...");
+        const refreshStart = nowForGraphPerf();
         const refreshedGraphTab = getActiveGraphTab();
         await refreshFolderTagCounts();
         renderFilteredFolderTree();
@@ -2385,11 +2524,16 @@
         simulation.stop();
         graphRenderWrapper.remove();
         renderGraphView();
+        tagPerf?.mark("final refresh queued", {
+          refreshMs: elapsedGraphPerfMs(refreshStart),
+          failed: failedNodes.length
+        });
 
         if (failedNodes.length) {
           alert(`Tagged ${selectedNodes.length - failedNodes.length} most referenced file${selectedNodes.length - failedNodes.length === 1 ? "" : "s"}, but ${failedNodes.length} file${failedNodes.length === 1 ? "" : "s"} could not be updated.`);
         }
       } finally {
+        tagPerf?.end({ completed: true });
         setGraphQuickActionBusy(false);
       }
     };
@@ -2495,6 +2639,12 @@
       return !!candidateFile.name && candidateFile.name === referenceFile.name;
     };
 
+    const nowForGraphPerf = () => (typeof performance !== "undefined" ? performance.now() : 0);
+    const elapsedGraphPerfMs = (startTime) => {
+      if (!startTime || typeof performance === "undefined") return 0;
+      return Math.round((performance.now() - startTime) * 10) / 10;
+    };
+
     const rebuildOpenGraphSnapshotsAfterTagChange = async (changedSnapshotFile) => {
       if (!changedSnapshotFile) return false;
       let changedActiveGraph = false;
@@ -2522,7 +2672,49 @@
       return changedActiveGraph;
     };
 
+    const rebuildOpenGraphSnapshotsAfterBatchTagChange = async (changedSnapshotFiles) => {
+      const changedFiles = Array.from(new Set((changedSnapshotFiles || []).filter(Boolean)));
+      if (!changedFiles.length) return false;
+      let changedActiveGraph = false;
+
+      for (const tab of tabs) {
+        if (tab?.type !== "graph" || !tab.graphSnapshot?.files || isKeepSavedGraphMode(tab)) continue;
+
+        let graphChanged = false;
+        tab.graphSnapshot.files.forEach((snapshotFile) => {
+          const changedFile = changedFiles.find((candidateFile) => graphSnapshotFileMatches(snapshotFile, candidateFile, tab, getActiveGraphTab()));
+          if (!changedFile) return;
+          snapshotFile.content = changedFile.content || "";
+          snapshotFile.tags = normalizeFileTagList(changedFile.tags || getFileTagsFromContent(snapshotFile.content));
+          graphChanged = true;
+        });
+
+        if (!graphChanged) continue;
+        const currentSnapshot = tab.graphSnapshot;
+        tab.graphSnapshot = await createGraphSnapshot(currentSnapshot.files || [], currentSnapshot.folderName || tab.folderName || tab.title);
+        if (currentSnapshot.createdAt) tab.graphSnapshot.createdAt = currentSnapshot.createdAt;
+        graphRenderCache.delete(tab.id);
+        markGraphTabAsChanged(tab);
+        changedActiveGraph = changedActiveGraph || tab.id === activeTabId;
+      }
+
+      return changedActiveGraph;
+    };
+
     const updateGraphNodeTagContent = async (graphNode, tag, action, options = {}) => {
+      const perfSession = options.perfSession || null;
+      const perfDetails = options.perfDetails || {};
+      const perfTimings = perfSession ? {
+        readMs: 0,
+        parseTagsMs: 0,
+        updateContentMs: 0,
+        writeMs: 0,
+        localStateMs: 0,
+        snapshotRebuildMs: 0,
+        storageUiMs: 0,
+        refreshMs: 0
+      } : null;
+      const perfTotalStart = nowForGraphPerf();
       if (!graphNode || graphNode.type === "tag") return false;
       const activeGraphTab = getActiveGraphTab();
       const snapshotFile = getSnapshotFileForNode(graphNode);
@@ -2535,20 +2727,57 @@
         return false;
       }
 
+      let perfStepStart = nowForGraphPerf();
       const currentContent = await readGraphNodeContent(graphNode);
+      if (perfTimings) perfTimings.readMs = elapsedGraphPerfMs(perfStepStart);
+
+      perfStepStart = nowForGraphPerf();
       const currentTags = getFileTagsFromContent(currentContent);
       const normalizedTag = normalizeTagName(tag);
-      if (action === "add" && currentTags.includes(normalizedTag)) return false;
-      if (action === "remove" && !currentTags.includes(normalizedTag)) return false;
+      if (perfTimings) perfTimings.parseTagsMs = elapsedGraphPerfMs(perfStepStart);
+      if (action === "add" && currentTags.includes(normalizedTag)) {
+        perfSession?.mark("tag file skipped", {
+          ...perfDetails,
+          nodeId: graphNode.id,
+          reason: "already-tagged",
+          fileTotalMs: elapsedGraphPerfMs(perfTotalStart),
+          ...perfTimings
+        });
+        return false;
+      }
+      if (action === "remove" && !currentTags.includes(normalizedTag)) {
+        perfSession?.mark("tag file skipped", {
+          ...perfDetails,
+          nodeId: graphNode.id,
+          reason: "tag-missing",
+          fileTotalMs: elapsedGraphPerfMs(perfTotalStart),
+          ...perfTimings
+        });
+        return false;
+      }
 
+      perfStepStart = nowForGraphPerf();
       const nextContent = action === "remove"
         ? removeTagFromContent(currentContent, normalizedTag)
         : addTagToContent(currentContent, normalizedTag);
+      if (perfTimings) perfTimings.updateContentMs = elapsedGraphPerfMs(perfStepStart);
 
-      if (nextContent === currentContent) return false;
+      if (nextContent === currentContent) {
+        perfSession?.mark("tag file skipped", {
+          ...perfDetails,
+          nodeId: graphNode.id,
+          reason: "unchanged-content",
+          fileTotalMs: elapsedGraphPerfMs(perfTotalStart),
+          ...perfTimings
+        });
+        return false;
+      }
 
+      perfStepStart = nowForGraphPerf();
       await writeGraphNodeContent(graphNode, nextContent);
+      if (perfTimings) perfTimings.writeMs = elapsedGraphPerfMs(perfStepStart);
 
+      perfStepStart = nowForGraphPerf();
       snapshotFile.content = nextContent;
       snapshotFile.tags = getFileTagsFromContent(nextContent);
       if (!snapshotFile.fullPath && graphNode.fullPath) snapshotFile.fullPath = graphNode.fullPath;
@@ -2574,13 +2803,30 @@
           renderMarkdown();
         }
       }
+      if (perfTimings) perfTimings.localStateMs = elapsedGraphPerfMs(perfStepStart);
 
+      if (options.deferGraphRefresh) {
+        markGraphTabAsChanged(activeGraphTab);
+        perfSession?.mark("tag file", {
+          ...perfDetails,
+          nodeId: graphNode.id,
+          fileTotalMs: elapsedGraphPerfMs(perfTotalStart),
+          ...perfTimings
+        });
+        return true;
+      }
+
+      perfStepStart = nowForGraphPerf();
       const changedActiveGraph = await rebuildOpenGraphSnapshotsAfterTagChange(snapshotFile);
+      if (perfTimings) perfTimings.snapshotRebuildMs = elapsedGraphPerfMs(perfStepStart);
+
+      perfStepStart = nowForGraphPerf();
       if (!changedActiveGraph) markGraphTabAsChanged(activeGraphTab);
       saveTabsToStorage(tabs);
       renderTabBar(tabs, activeTabId);
       updateSaveCurrentFileButtons();
-      if (options.deferGraphRefresh) return true;
+      if (perfTimings) perfTimings.storageUiMs = elapsedGraphPerfMs(perfStepStart);
+      perfStepStart = nowForGraphPerf();
       await refreshFolderTagCounts();
       renderFilteredFolderTree();
       renderTagManagementList();
@@ -2589,6 +2835,13 @@
       graphRenderWrapper.remove();
       updateGraphTagToolbar(activeGraphTab, activeGraphTab.graphSnapshot || null);
       renderGraphView();
+      if (perfTimings) perfTimings.refreshMs = elapsedGraphPerfMs(perfStepStart);
+      perfSession?.mark("tag file", {
+        ...perfDetails,
+        nodeId: graphNode.id,
+        fileTotalMs: elapsedGraphPerfMs(perfTotalStart),
+        ...perfTimings
+      });
       return true;
     };
 
@@ -3417,6 +3670,21 @@
     let hoveredGraphNode = null;
     let hoveredGraphModifiers = { shiftKey: false, ctrlKey: false, altKey: false };
     let hoverLabelNodeIds = new Set();
+    let highlightedLineLinkData = new Set();
+    let pendingHoverHighlightTimer = null;
+    const largeGraphHoverDelayMs = 1000;
+    const shouldDelayHoverHighlight = nodes.length >= getLargeGraphAutoClusterMinNodeCount();
+    const largeMapHoverPreferences = shouldDelayHoverHighlight && typeof getLargeMapHoverPreferences === "function"
+      ? getLargeMapHoverPreferences()
+      : {
+        dimOtherNodes: true,
+        showConnectedLabels: true,
+        highlightConnectedLines: true
+      };
+    const shouldDimOtherNodesOnHover = !shouldDelayHoverHighlight || largeMapHoverPreferences.dimOtherNodes === true;
+    const shouldShowConnectedLabelsOnHover = !shouldDelayHoverHighlight || largeMapHoverPreferences.showConnectedLabels !== false;
+    const shouldHighlightConnectedLinesOnHover = !shouldDelayHoverHighlight || largeMapHoverPreferences.highlightConnectedLines !== false;
+    const shouldDimOtherLinesOnHover = !shouldDelayHoverHighlight;
 
     const getGraphLinkSourceId = (linkData) => linkData?.source?.id || linkData?.source;
     const getGraphLinkTargetId = (linkData) => linkData?.target?.id || linkData?.target;
@@ -3429,6 +3697,38 @@
       if (!shouldIncludeLinkInHoverHighlight(linkData, includeTagRelationships)) return false;
       if (getGraphLinkSourceId(linkData) === focusNodeId) return true;
       return includeTagRelationships && isTagLink(linkData) && getGraphLinkTargetId(linkData) === focusNodeId;
+    };
+
+    const getDirectHoverLinks = (focusNodeId, includeTagRelationships = false) => {
+      const directLinks = outgoingMarkdownHoverLinks.get(focusNodeId) || [];
+      if (!includeTagRelationships) return directLinks;
+      return directLinks.concat(relatedTagHoverLinks.get(focusNodeId) || []);
+    };
+
+    const clearLargeMapHighlightedLineClasses = () => {
+      highlightedLineLinkData.forEach((linkData) => {
+        const linkElement = linkElementByData.get(linkData);
+        if (linkElement) {
+          linkElement.classList.remove("highlighted-direct", "highlighted-backlink");
+        }
+        const arrowheadElement = arrowheadElementByData.get(linkData);
+        if (arrowheadElement) {
+          arrowheadElement.classList.remove("highlighted-direct", "highlighted-backlink");
+        }
+      });
+      highlightedLineLinkData = new Set();
+    };
+
+    const applyLargeMapHighlightedLineClasses = (highlightedLinks, isBacklinkHighlight) => {
+      clearLargeMapHighlightedLineClasses();
+      highlightedLineLinkData = new Set(highlightedLinks);
+      const addClass = isBacklinkHighlight ? "highlighted-backlink" : "highlighted-direct";
+      highlightedLineLinkData.forEach((linkData) => {
+        const linkElement = linkElementByData.get(linkData);
+        if (linkElement) linkElement.classList.add(addClass);
+        const arrowheadElement = arrowheadElementByData.get(linkData);
+        if (arrowheadElement) arrowheadElement.classList.add(addClass);
+      });
     };
 
     const getRecursiveOutgoingHighlight = (focusNodeId, includeTagRelationships = false) => {
@@ -3517,6 +3817,7 @@
       const isBacklinkHighlight = Boolean(modifiers.ctrlKey);
       // Alt includes tag relationships for file nodes; tag nodes always show their direct file connections.
       const includeTagRelationships = Boolean(modifiers.altKey || isTagNode(focusNode));
+      const needsHighlightedLinks = shouldHighlightConnectedLinesOnHover || includeTagRelationships;
       const highlight = isBacklinkHighlight
         ? (modifiers.shiftKey
           ? getRecursiveBacklinkHighlight(focusNodeId, includeTagRelationships)
@@ -3525,7 +3826,9 @@
           ? getRecursiveOutgoingHighlight(focusNodeId, includeTagRelationships)
           : {
             highlightedNodes: outgoingAdjacency.get(focusNodeId) || new Set([focusNodeId]),
-            highlightedLinks: new Set(links.filter((l) => isDirectHoverLink(l, focusNodeId, includeTagRelationships)))
+            highlightedLinks: needsHighlightedLinks
+              ? new Set(getDirectHoverLinks(focusNodeId, includeTagRelationships))
+              : new Set()
           });
       if (includeTagRelationships) {
         highlight.highlightedLinks.forEach((linkData) => {
@@ -3536,33 +3839,57 @@
         });
       }
       const isHighlightedLink = (l) => highlight.highlightedLinks.has(l);
-      hoverLabelNodeIds = highlight.highlightedNodes;
+      hoverLabelNodeIds = shouldShowConnectedLabelsOnHover ? highlight.highlightedNodes : new Set();
       const selectedNodeCount = nodes.reduce((count, graphNode) => count + (highlight.highlightedNodes.has(graphNode.id) ? 1 : 0), 0);
       setSelectedGraphNodeCount(selectedNodeCount);
 
-      node.classed("dimmed", (n) => !highlight.highlightedNodes.has(n.id));
-      label
-        .classed("dimmed", (n) => !highlight.highlightedNodes.has(n.id))
-        .classed("hover-hidden", (n) => !highlight.highlightedNodes.has(n.id));
-      updateLabelVisibility();
-      link
-        .classed("dimmed", (l) => !isHighlightedLink(l))
-        .classed("highlighted-direct", (l) => !isBacklinkHighlight && isHighlightedLink(l))
-        .classed("highlighted-backlink", (l) => isBacklinkHighlight && isHighlightedLink(l));
-      arrowhead
-        .classed("dimmed", (l) => !isHighlightedLink(l))
-        .classed("highlighted-direct", (l) => !isBacklinkHighlight && isHighlightedLink(l))
-        .classed("highlighted-backlink", (l) => isBacklinkHighlight && isHighlightedLink(l));
+      if (shouldDimOtherNodesOnHover) {
+        node.classed("dimmed", (n) => !highlight.highlightedNodes.has(n.id));
+      }
+      if (shouldShowConnectedLabelsOnHover) {
+        label
+          .classed("dimmed", (n) => !highlight.highlightedNodes.has(n.id))
+          .classed("hover-hidden", (n) => !highlight.highlightedNodes.has(n.id));
+        updateLabelVisibility();
+      }
+      if (shouldHighlightConnectedLinesOnHover) {
+        if (shouldDimOtherLinesOnHover) {
+          link
+            .classed("dimmed", (l) => !isHighlightedLink(l))
+            .classed("highlighted-direct", (l) => !isBacklinkHighlight && isHighlightedLink(l))
+            .classed("highlighted-backlink", (l) => isBacklinkHighlight && isHighlightedLink(l));
+          arrowhead
+            .classed("dimmed", (l) => !isHighlightedLink(l))
+            .classed("highlighted-direct", (l) => !isBacklinkHighlight && isHighlightedLink(l))
+            .classed("highlighted-backlink", (l) => isBacklinkHighlight && isHighlightedLink(l));
+        } else {
+          applyLargeMapHighlightedLineClasses(highlight.highlightedLinks, isBacklinkHighlight);
+        }
+      }
     }
 
     function clearNeighborhoodHighlight() {
+      if (pendingHoverHighlightTimer) {
+        clearTimeout(pendingHoverHighlightTimer);
+        pendingHoverHighlightTimer = null;
+      }
       hoverLabelNodeIds = new Set();
       setSelectedGraphNodeCount(0);
-      node.classed("dimmed", false);
-      label.classed("dimmed", false).classed("hover-hidden", false);
-      updateLabelVisibility();
-      link.classed("dimmed", false).classed("highlighted-direct", false).classed("highlighted-backlink", false);
-      arrowhead.classed("dimmed", false).classed("highlighted-direct", false).classed("highlighted-backlink", false);
+      if (shouldDimOtherNodesOnHover) {
+        node.classed("dimmed", false);
+      }
+      if (shouldShowConnectedLabelsOnHover) {
+        label.classed("dimmed", false).classed("hover-hidden", false);
+        updateLabelVisibility();
+      }
+      if (shouldHighlightConnectedLinesOnHover) {
+        if (shouldDimOtherLinesOnHover) {
+          link.classed("dimmed", false).classed("highlighted-direct", false).classed("highlighted-backlink", false);
+          arrowhead.classed("dimmed", false).classed("highlighted-direct", false).classed("highlighted-backlink", false);
+        } else {
+          clearLargeMapHighlightedLineClasses();
+        }
+      }
     }
 
     const updateHoveredGraphHighlight = (event) => {
@@ -3571,14 +3898,43 @@
         ctrlKey: Boolean(event?.ctrlKey),
         altKey: Boolean(event?.altKey)
       };
+      if (pendingHoverHighlightTimer) {
+        clearTimeout(pendingHoverHighlightTimer);
+        pendingHoverHighlightTimer = null;
+      }
+      if (shouldDelayHoverHighlight && !hoverLabelNodeIds.size) {
+        scheduleHoveredGraphHighlight(event);
+        return;
+      }
       if (hoveredGraphNode) highlightNeighborhood(hoveredGraphNode, hoveredGraphModifiers);
+    };
+
+    const scheduleHoveredGraphHighlight = (event) => {
+      hoveredGraphModifiers = {
+        shiftKey: Boolean(event?.shiftKey),
+        ctrlKey: Boolean(event?.ctrlKey),
+        altKey: Boolean(event?.altKey)
+      };
+      if (!hoveredGraphNode) return;
+      if (pendingHoverHighlightTimer) clearTimeout(pendingHoverHighlightTimer);
+      if (!shouldDelayHoverHighlight) {
+        highlightNeighborhood(hoveredGraphNode, hoveredGraphModifiers);
+        return;
+      }
+      const scheduledNode = hoveredGraphNode;
+      const scheduledModifiers = { ...hoveredGraphModifiers };
+      pendingHoverHighlightTimer = setTimeout(() => {
+        pendingHoverHighlightTimer = null;
+        if (hoveredGraphNode !== scheduledNode) return;
+        highlightNeighborhood(scheduledNode, scheduledModifiers);
+      }, largeGraphHoverDelayMs);
     };
 
     node
       .on("mouseenter", (event, d) => {
         logGraphInteractionPerf("hover", { nodeId: d?.id || "" });
         hoveredGraphNode = d;
-        updateHoveredGraphHighlight(event);
+        scheduleHoveredGraphHighlight(event);
       })
       .on("mouseleave", () => {
         hoveredGraphNode = null;

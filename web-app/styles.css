@@ -4420,16 +4420,17 @@ a:focus {
    ======================================== */
 
 .settings-modal-overlay {
-  padding: 24px;
+  padding: 16px;
   background:
     radial-gradient(circle at 50% 0%, color-mix(in srgb, var(--accent-color) 16%, transparent), transparent 34%),
     rgba(0, 0, 0, 0.58);
 }
 
 .settings-modal-box {
-  width: min(860px, calc(100vw - 32px));
-  max-width: min(860px, calc(100vw - 32px));
-  max-height: min(820px, calc(100vh - 32px));
+  position: relative;
+  width: min(1040px, calc(100vw - 32px));
+  max-width: min(1040px, calc(100vw - 32px));
+  max-height: calc(100vh - 32px);
   gap: 0;
   padding: 0;
   overflow: hidden;
@@ -4441,12 +4442,54 @@ a:focus {
   box-shadow: 0 24px 80px rgba(0, 0, 0, 0.48);
 }
 
+.settings-modal-box::after {
+  content: "Saving settings...";
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  padding-top: 46px;
+  background: rgba(8, 13, 20, 0.68);
+  color: var(--text-color);
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.settings-modal-box::before {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: calc(50% - 20px);
+  z-index: 5;
+  display: none;
+  width: 30px;
+  height: 30px;
+  border: 3px solid color-mix(in srgb, var(--accent-color) 24%, transparent);
+  border-top-color: var(--accent-color);
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  animation: graph-quick-action-spin 0.85s linear infinite;
+}
+
+.settings-modal-saving .settings-modal-box::before,
+.settings-modal-saving .settings-modal-box::after {
+  display: flex;
+}
+
+.settings-modal-saving .settings-modal-body,
+.settings-modal-saving .settings-modal-header,
+.settings-modal-saving .settings-modal-footer {
+  pointer-events: none;
+}
+
 .settings-modal-header {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
   gap: 20px;
-  padding: 22px 28px 16px;
+  padding: 18px 26px 14px;
   border-bottom: 1px solid var(--border-color);
 }
 
@@ -4462,7 +4505,7 @@ a:focus {
 .settings-modal-title {
   margin: 0;
   color: var(--text-color);
-  font-size: 24px;
+  font-size: 23px;
   font-weight: 700;
   line-height: 1.15;
 }
@@ -4496,18 +4539,19 @@ a:focus {
 .settings-modal-body {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  gap: 12px;
-  max-height: calc(100vh - 178px);
-  padding: 14px 20px;
+  gap: 10px;
+  max-height: calc(100vh - 154px);
+  padding: 12px 20px;
   overflow: auto;
+  align-items: start;
 }
 
 .settings-panel {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 10px;
   min-width: 0;
-  padding: 14px 16px;
+  padding: 12px 16px;
   border: 1px solid var(--border-color);
   border-radius: 8px;
   background: color-mix(in srgb, var(--bg-color) 72%, var(--header-bg));
@@ -4515,7 +4559,7 @@ a:focus {
 
 .settings-panel-heading {
   display: grid;
-  grid-template-columns: 36px minmax(0, 1fr);
+  grid-template-columns: 34px minmax(0, 1fr);
   gap: 10px;
   align-items: flex-start;
 }
@@ -4524,8 +4568,8 @@ a:focus {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 36px;
-  height: 36px;
+  width: 34px;
+  height: 34px;
   border: 1px solid color-mix(in srgb, var(--accent-color) 42%, var(--border-color));
   border-radius: 8px;
   background: color-mix(in srgb, var(--accent-color) 14%, transparent);
@@ -4542,7 +4586,7 @@ a:focus {
 .settings-panel-title {
   margin: 0 0 4px;
   color: var(--text-color);
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 700;
   line-height: 1.2;
 }
@@ -4557,13 +4601,13 @@ a:focus {
 .settings-field-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
+  gap: 8px 10px;
 }
 
 .settings-field {
   display: flex;
   flex-direction: column;
-  gap: 7px;
+  gap: 5px;
   min-width: 0;
 }
 
@@ -4575,8 +4619,8 @@ a:focus {
 }
 
 .settings-number-input {
-  min-height: 36px;
-  padding: 8px 10px;
+  min-height: 34px;
+  padding: 7px 10px;
   border-color: color-mix(in srgb, var(--border-color) 88%, var(--accent-color));
   background: color-mix(in srgb, var(--bg-color) 92%, #000);
 }
@@ -4588,22 +4632,26 @@ a:focus {
 .settings-switch-list {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 7px;
 }
 
 .settings-switch-row {
   position: relative;
   display: grid;
   grid-template-columns: minmax(0, 1fr) 42px;
-  gap: 14px;
+  gap: 12px;
   align-items: center;
-  min-height: 44px;
-  padding: 9px 12px;
+  min-height: 42px;
+  padding: 8px 12px;
   border: 1px solid color-mix(in srgb, var(--border-color) 84%, transparent);
   border-radius: 8px;
   background: color-mix(in srgb, var(--header-bg) 64%, transparent);
   color: var(--text-color);
   cursor: pointer;
+}
+
+.settings-switch-row > span:first-child {
+  min-width: 0;
 }
 
 .settings-switch-row:hover {
@@ -4695,7 +4743,7 @@ a:focus {
   display: flex;
   justify-content: flex-end;
   gap: 10px;
-  padding: 14px 20px;
+  padding: 12px 20px;
   border-top: 1px solid var(--border-color);
   background: color-mix(in srgb, var(--header-bg) 88%, #000);
 }
@@ -4706,6 +4754,13 @@ a:focus {
   background: var(--accent-color);
   color: #fff;
   font-weight: 700;
+}
+
+.settings-primary-action:disabled,
+.settings-secondary-action:disabled,
+.settings-modal-close:disabled {
+  cursor: wait;
+  opacity: 0.72;
 }
 
 .settings-primary-action:hover {

@@ -1882,6 +1882,10 @@
   const aboutModalClose = document.getElementById("about-modal-close");
   const settingsModal = document.getElementById("settings-modal");
   const settingsGraphAutoClusterThresholdInput = document.getElementById("settings-graph-auto-cluster-threshold");
+  const settingsGraphAutoClusterLargeMapsInput = document.getElementById("settings-graph-auto-cluster-large-maps");
+  const settingsGraphLargeHoverDimInput = document.getElementById("settings-graph-large-hover-dim");
+  const settingsGraphLargeHoverLabelsInput = document.getElementById("settings-graph-large-hover-labels");
+  const settingsGraphLargeHoverLinesInput = document.getElementById("settings-graph-large-hover-lines");
   const settingsGraphRenderWarningThresholdInput = document.getElementById("settings-graph-render-warning-threshold");
   const settingsGraphMostReferencedPercentInput = document.getElementById("settings-graph-most-referenced-percent");
   const settingsGraphShowFileExtensionsInput = document.getElementById("settings-graph-show-file-extensions");
@@ -1894,6 +1898,7 @@
   const settingsModalClose = document.getElementById("settings-modal-close");
   const settingsModalCancel = document.getElementById("settings-modal-cancel");
   const settingsModalSave = document.getElementById("settings-modal-save");
+  const settingsModalSaveDefaultText = settingsModalSave?.textContent || "Save settings";
   const settingsResetCacheButton = document.getElementById("settings-reset-cache");
   const settingsResetPreferencesButton = document.getElementById("settings-reset-preferences");
   const settingsResetRecentHistoryButton = document.getElementById("settings-reset-recent-history");
@@ -1982,7 +1987,11 @@
     confirmOpenManyGraphNodes: true,
     confirmResetState: true,
     contextMenuTooltipDelayMs: DEFAULT_CONTEXT_MENU_TOOLTIP_DELAY_MS,
+    graphAutoClusterLargeMapsEnabled: true,
     graphAutoClusterThreshold: DEFAULT_GRAPH_AUTO_CLUSTER_THRESHOLD,
+    graphLargeMapHoverDimOtherNodes: false,
+    graphLargeMapHoverShowConnectedLabels: true,
+    graphLargeMapHoverHighlightConnectedLines: true,
     graphRenderWarningThreshold: DEFAULT_GRAPH_RENDER_WARNING_THRESHOLD,
     graphMostReferencedPercent: DEFAULT_GRAPH_MOST_REFERENCED_PERCENT,
     graphShowFileExtensions: false,
@@ -1996,6 +2005,7 @@
     syncScrollingEnabled: true,
     viewMode: "split"
   });
+  let settingsDialogSaving = false;
   const themePreferences = window.registerMarkdownViewerThemePreferences(app, {
     defaultState: DEFAULT_GLOBAL_STATE,
     mobileThemeToggle,
@@ -2016,6 +2026,10 @@
     return Math.max(0, Math.min(100000, Math.floor(value)));
   }
 
+  function isGraphAutoClusterLargeMapsEnabled() {
+    return loadGlobalState().graphAutoClusterLargeMapsEnabled !== false;
+  }
+
   function getGraphRenderWarningThreshold() {
     const value = Number(loadGlobalState().graphRenderWarningThreshold);
     if (!Number.isFinite(value)) return DEFAULT_GRAPH_RENDER_WARNING_THRESHOLD;
@@ -2030,6 +2044,15 @@
 
   function getGraphShowFileExtensions() {
     return loadGlobalState().graphShowFileExtensions === true;
+  }
+
+  function getLargeMapHoverPreferences() {
+    const state = loadGlobalState();
+    return {
+      dimOtherNodes: state.graphLargeMapHoverDimOtherNodes === true,
+      showConnectedLabels: state.graphLargeMapHoverShowConnectedLabels !== false,
+      highlightConnectedLines: state.graphLargeMapHoverHighlightConnectedLines !== false
+    };
   }
 
   function getContextMenuTooltipDelayMs() {
@@ -2991,6 +3014,19 @@ Markdown content is processed client-side in your browser and sanitized before p
     if (settingsGraphAutoClusterThresholdInput) {
       settingsGraphAutoClusterThresholdInput.value = String(getGraphAutoClusterThreshold());
     }
+    if (settingsGraphAutoClusterLargeMapsInput) {
+      settingsGraphAutoClusterLargeMapsInput.checked = isGraphAutoClusterLargeMapsEnabled();
+    }
+    const largeMapHoverPreferences = getLargeMapHoverPreferences();
+    if (settingsGraphLargeHoverDimInput) {
+      settingsGraphLargeHoverDimInput.checked = largeMapHoverPreferences.dimOtherNodes;
+    }
+    if (settingsGraphLargeHoverLabelsInput) {
+      settingsGraphLargeHoverLabelsInput.checked = largeMapHoverPreferences.showConnectedLabels;
+    }
+    if (settingsGraphLargeHoverLinesInput) {
+      settingsGraphLargeHoverLinesInput.checked = largeMapHoverPreferences.highlightConnectedLines;
+    }
     if (settingsGraphRenderWarningThresholdInput) {
       settingsGraphRenderWarningThresholdInput.value = String(getGraphRenderWarningThreshold());
     }
@@ -3025,10 +3061,27 @@ Markdown content is processed client-side in your browser and sanitized before p
 
   function hideSettingsDialog() {
     if (!settingsModal) return;
+    if (settingsDialogSaving) return;
     settingsModal.style.display = "none";
   }
 
-  function saveSettingsDialog() {
+  function setSettingsDialogSaving(isSaving) {
+    settingsDialogSaving = !!isSaving;
+    if (settingsModal) {
+      settingsModal.classList.toggle("settings-modal-saving", settingsDialogSaving);
+      settingsModal.setAttribute("aria-busy", settingsDialogSaving ? "true" : "false");
+    }
+    const controls = settingsModal?.querySelectorAll("input, button") || [];
+    controls.forEach((control) => {
+      control.disabled = settingsDialogSaving;
+    });
+    if (settingsModalSave) {
+      settingsModalSave.textContent = settingsDialogSaving ? "Saving..." : settingsModalSaveDefaultText;
+    }
+  }
+
+  async function saveSettingsDialog() {
+    if (settingsDialogSaving) return;
     const threshold = Number(settingsGraphAutoClusterThresholdInput?.value);
     if (!Number.isFinite(threshold) || threshold < 0) {
       alert("Enter a graph auto-clustering threshold of 0 or higher.");
@@ -3059,24 +3112,33 @@ Markdown content is processed client-side in your browser and sanitized before p
       alert("Enter a menu tooltip delay of 0 or higher.");
       return;
     }
-    saveGlobalState({
-      graphAutoClusterThreshold: Math.min(100000, Math.floor(threshold)),
-      graphRenderWarningThreshold: Math.min(100000, Math.floor(graphRenderWarningThreshold)),
-      graphMostReferencedPercent: Math.max(1, Math.min(100, Math.floor(graphMostReferencedPercent))),
-      graphShowFileExtensions: !!settingsGraphShowFileExtensionsInput?.checked,
-      confirmOpenManyGraphNodes: !!settingsConfirmOpenManyGraphNodesInput?.checked,
-      confirmDeleteFiles: !!settingsConfirmDeleteFilesInput?.checked,
-      confirmResetState: !!settingsConfirmResetStateInput?.checked,
-      contextMenuTooltipDelayMs: Math.min(10000, Math.floor(contextMenuTooltipDelayMs)),
-      maxRecentFiles: Math.min(100, Math.floor(maxRecentFiles)),
-      maxRecentFolders: Math.min(100, Math.floor(maxRecentFolders))
-    });
-    hideSettingsDialog();
-    applyRecentItemLimits();
-    const activeGraphTab = tabs.find((tab) => tab.id === activeTabId && tab.type === "graph");
-    if (activeGraphTab) {
-      graphRenderCache.delete(activeGraphTab.id);
-      renderGraphView();
+    setSettingsDialogSaving(true);
+    try {
+      saveGlobalState({
+        graphAutoClusterLargeMapsEnabled: !!settingsGraphAutoClusterLargeMapsInput?.checked,
+        graphAutoClusterThreshold: Math.min(100000, Math.floor(threshold)),
+        graphLargeMapHoverDimOtherNodes: !!settingsGraphLargeHoverDimInput?.checked,
+        graphLargeMapHoverShowConnectedLabels: !!settingsGraphLargeHoverLabelsInput?.checked,
+        graphLargeMapHoverHighlightConnectedLines: !!settingsGraphLargeHoverLinesInput?.checked,
+        graphRenderWarningThreshold: Math.min(100000, Math.floor(graphRenderWarningThreshold)),
+        graphMostReferencedPercent: Math.max(1, Math.min(100, Math.floor(graphMostReferencedPercent))),
+        graphShowFileExtensions: !!settingsGraphShowFileExtensionsInput?.checked,
+        confirmOpenManyGraphNodes: !!settingsConfirmOpenManyGraphNodesInput?.checked,
+        confirmDeleteFiles: !!settingsConfirmDeleteFilesInput?.checked,
+        confirmResetState: !!settingsConfirmResetStateInput?.checked,
+        contextMenuTooltipDelayMs: Math.min(10000, Math.floor(contextMenuTooltipDelayMs)),
+        maxRecentFiles: Math.min(100, Math.floor(maxRecentFiles)),
+        maxRecentFolders: Math.min(100, Math.floor(maxRecentFolders))
+      });
+      applyRecentItemLimits();
+      const activeGraphTab = tabs.find((tab) => tab.id === activeTabId && tab.type === "graph");
+      if (activeGraphTab) {
+        removeGraphRenderForTab(activeGraphTab.id);
+        await renderGraphView();
+      }
+      settingsModal.style.display = "none";
+    } finally {
+      setSettingsDialogSaving(false);
     }
   }
 
@@ -4804,6 +4866,8 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
     LARGE_GRAPH_DISPLAY_NODE_LIMIT,
     getGraphViewPreferenceDefaults,
     getGraphAutoClusterThreshold,
+    isGraphAutoClusterLargeMapsEnabled,
+    getLargeMapHoverPreferences,
     getGraphRenderWarningThreshold,
     getGraphMostReferencedPercent,
     getGraphShowFileExtensions,

@@ -1190,6 +1190,9 @@
     const marks = [];
     const roundMs = (value) => Math.round(value * 10) / 10;
     return {
+      get marks() {
+        return marks;
+      },
       mark(name, markDetails = {}) {
         if (ended) return;
         const now = performance.now();
