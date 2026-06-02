@@ -524,6 +524,7 @@ test("settings menu updates graph auto-clustering threshold", async ({ page }) =
   await expect(page.locator("#settings-graph-render-warning-threshold")).toHaveValue("1500");
   await expect(page.locator("#settings-graph-most-referenced-percent")).toHaveValue("10");
   await expect(page.locator("#settings-graph-show-file-extensions")).not.toBeChecked();
+  await expect(page.locator("#settings-graph-node-default-color")).toHaveValue("#58a6ff");
   await expect(page.locator("#settings-confirm-open-many-graph-nodes")).toBeChecked();
   await expect(page.locator("#settings-confirm-delete-files")).toBeChecked();
   await expect(page.locator("#settings-confirm-reset-state")).toBeChecked();
@@ -535,6 +536,7 @@ test("settings menu updates graph auto-clustering threshold", async ({ page }) =
   await page.locator("#settings-graph-render-warning-threshold").fill("1800");
   await page.locator("#settings-graph-most-referenced-percent").fill("25");
   await page.locator("#settings-graph-show-file-extensions").check();
+  await page.locator("#settings-graph-node-default-color").fill("#ff66cc");
   await page.locator("#settings-confirm-open-many-graph-nodes").uncheck();
   await page.locator("#settings-confirm-delete-files").uncheck();
   await page.locator("#settings-confirm-reset-state").uncheck();
@@ -550,6 +552,7 @@ test("settings menu updates graph auto-clustering threshold", async ({ page }) =
       renderWarningThreshold: state.graphRenderWarningThreshold,
       mostReferencedPercent: state.graphMostReferencedPercent,
       showFileExtensions: state.graphShowFileExtensions,
+      nodeDefaultColor: state.graphNodeDefaultColor,
       confirmOpenManyGraphNodes: state.confirmOpenManyGraphNodes,
       confirmDeleteFiles: state.confirmDeleteFiles,
       confirmResetState: state.confirmResetState,
@@ -562,6 +565,7 @@ test("settings menu updates graph auto-clustering threshold", async ({ page }) =
     renderWarningThreshold: 1800,
     mostReferencedPercent: 25,
     showFileExtensions: true,
+    nodeDefaultColor: "#ff66cc",
     confirmOpenManyGraphNodes: false,
     confirmDeleteFiles: false,
     confirmResetState: false,
@@ -576,6 +580,7 @@ test("settings menu updates graph auto-clustering threshold", async ({ page }) =
   await expect(page.locator("#settings-graph-render-warning-threshold")).toHaveValue("1800");
   await expect(page.locator("#settings-graph-most-referenced-percent")).toHaveValue("25");
   await expect(page.locator("#settings-graph-show-file-extensions")).toBeChecked();
+  await expect(page.locator("#settings-graph-node-default-color")).toHaveValue("#ff66cc");
   await expect(page.locator("#settings-confirm-open-many-graph-nodes")).not.toBeChecked();
   await expect(page.locator("#settings-confirm-delete-files")).not.toBeChecked();
   await expect(page.locator("#settings-confirm-reset-state")).not.toBeChecked();
@@ -636,10 +641,12 @@ test("settings menu toggles graph node file extensions", async ({ page }) => {
 
   await page.locator("#desktopActionMenu").click();
   await page.locator(".open-settings-dialog").first().click();
+  await page.locator("#settings-graph-node-default-color").fill("#ff66cc");
   await page.locator("#settings-graph-show-file-extensions").check();
   await page.locator("#settings-modal-save").click();
 
   await expect(page.locator(".graph-label-file")).toHaveText("alpha.md");
+  await expect.poll(() => page.locator(".graph-node-file").first().evaluate((node) => getComputedStyle(node).fill)).toBe("rgb(255, 102, 204)");
 });
 
 test("graph ctrl+f finds and highlights nodes without filtering the map", async ({ page }) => {

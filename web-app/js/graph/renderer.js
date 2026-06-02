@@ -4218,6 +4218,7 @@
       return { count: matchingNodes.length, cleared: false };
     }
 
+    graphRenderWrapper.style.setProperty("--graph-node-default-color", typeof getGraphNodeDefaultColor === "function" ? getGraphNodeDefaultColor() : "var(--accent-color)");
     graphRenderWrapper.style.setProperty("--graph-find-highlight-color", typeof getGraphFindHighlightColor === "function" ? getGraphFindHighlightColor() : "#ffff00");
 
     simulation.on("tick", renderGraphTick);
