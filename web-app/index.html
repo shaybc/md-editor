@@ -446,76 +446,90 @@
                   <span class="settings-panel-icon"><i class="bi bi-diagram-3" aria-hidden="true"></i></span>
                   <div>
                     <h3 id="settings-graph-title" class="settings-panel-title">Graph View</h3>
-                    <p class="settings-panel-description">Control graph density, warnings, and node labels.</p>
+                    <p class="settings-panel-description">Control graph density, colors, warnings, and node labels.</p>
+                  </div>
+                </div>
+                <div class="settings-subsection">
+                  <h4 class="settings-subsection-title">Limits</h4>
+                  <div class="settings-field-grid settings-field-grid-three">
+                    <label class="settings-field" for="settings-graph-auto-cluster-threshold">
+                      <span class="settings-field-label">Auto-clustering threshold</span>
+                      <input type="number" id="settings-graph-auto-cluster-threshold" class="rename-modal-input settings-number-input" min="0" max="100000" step="1" value="1000" />
+                    </label>
+                    <label class="settings-field" for="settings-graph-render-warning-threshold">
+                      <span class="settings-field-label">Render warning threshold</span>
+                      <input type="number" id="settings-graph-render-warning-threshold" class="rename-modal-input settings-number-input" min="0" max="100000" step="1" value="1500" />
+                    </label>
+                    <label class="settings-field" for="settings-graph-most-referenced-percent">
+                      <span class="settings-field-label">Most referenced group size (%)</span>
+                      <input type="number" id="settings-graph-most-referenced-percent" class="rename-modal-input settings-number-input" min="1" max="100" step="1" value="10" />
+                    </label>
                   </div>
                 </div>
 
-                <div class="settings-field-grid">
-                  <label class="settings-field" for="settings-graph-auto-cluster-threshold">
-                    <span class="settings-field-label">Auto-clustering threshold</span>
-                    <input type="number" id="settings-graph-auto-cluster-threshold" class="rename-modal-input settings-number-input" min="0" max="100000" step="1" value="1000" />
-                  </label>
-                  <label class="settings-field" for="settings-graph-render-warning-threshold">
-                    <span class="settings-field-label">Render warning threshold</span>
-                    <input type="number" id="settings-graph-render-warning-threshold" class="rename-modal-input settings-number-input" min="0" max="100000" step="1" value="1500" />
-                  </label>
-                  <label class="settings-field" for="settings-graph-most-referenced-percent">
-                    <span class="settings-field-label">Most referenced group size (%)</span>
-                    <input type="number" id="settings-graph-most-referenced-percent" class="rename-modal-input settings-number-input" min="1" max="100" step="1" value="10" />
-                  </label>
+                <div class="settings-subsection">
+                  <h4 class="settings-subsection-title">Behavior</h4>
+                  <div class="settings-switch-grid">
+                    <label class="settings-switch-row" for="settings-graph-auto-cluster-large-maps">
+                      <span>
+                        <span class="settings-switch-title">Auto-collapse clusters</span>
+                        <span class="settings-switch-description">Collapse clusters above the threshold.</span>
+                      </span>
+                      <input type="checkbox" id="settings-graph-auto-cluster-large-maps" class="settings-switch-input" />
+                      <span class="settings-switch" aria-hidden="true"></span>
+                    </label>
+
+                    <label class="settings-switch-row" for="settings-graph-large-hover-dim">
+                      <span>
+                        <span class="settings-switch-title">Dim other nodes</span>
+                        <span class="settings-switch-description">Fade unrelated nodes during hover.</span>
+                      </span>
+                      <input type="checkbox" id="settings-graph-large-hover-dim" class="settings-switch-input" />
+                      <span class="settings-switch" aria-hidden="true"></span>
+                    </label>
+
+                    <label class="settings-switch-row" for="settings-graph-large-hover-labels">
+                      <span>
+                        <span class="settings-switch-title">Show connected labels</span>
+                        <span class="settings-switch-description">Reveal hovered and connected labels.</span>
+                      </span>
+                      <input type="checkbox" id="settings-graph-large-hover-labels" class="settings-switch-input" checked />
+                      <span class="settings-switch" aria-hidden="true"></span>
+                    </label>
+
+                    <label class="settings-switch-row" for="settings-graph-large-hover-lines">
+                      <span>
+                        <span class="settings-switch-title">Highlight connected lines</span>
+                        <span class="settings-switch-description">Color connected hover lines purple.</span>
+                      </span>
+                      <input type="checkbox" id="settings-graph-large-hover-lines" class="settings-switch-input" checked />
+                      <span class="settings-switch" aria-hidden="true"></span>
+                    </label>
+
+                    <label class="settings-switch-row" for="settings-graph-show-file-extensions">
+                      <span>
+                        <span class="settings-switch-title">Show file extensions</span>
+                        <span class="settings-switch-description">Include extensions in graph labels.</span>
+                      </span>
+                      <input type="checkbox" id="settings-graph-show-file-extensions" class="settings-switch-input" />
+                      <span class="settings-switch" aria-hidden="true"></span>
+                    </label>
+                  </div>
                 </div>
 
-                <div class="settings-switch-grid">
-                  <label class="settings-switch-row" for="settings-graph-auto-cluster-large-maps">
-                    <span>
-                      <span class="settings-switch-title">Auto-collapse large graph clusters</span>
-                      <span class="settings-switch-description">Detect and collapse clusters above the threshold.</span>
-                    </span>
-                    <input type="checkbox" id="settings-graph-auto-cluster-large-maps" class="settings-switch-input" />
-                    <span class="settings-switch" aria-hidden="true"></span>
-                  </label>
-
-                  <label class="settings-switch-row" for="settings-graph-large-hover-dim">
-                    <span>
-                      <span class="settings-switch-title">Dim other nodes on large maps</span>
-                      <span class="settings-switch-description">Fade unrelated nodes during hover.</span>
-                    </span>
-                    <input type="checkbox" id="settings-graph-large-hover-dim" class="settings-switch-input" />
-                    <span class="settings-switch" aria-hidden="true"></span>
-                  </label>
-
-                  <label class="settings-switch-row" for="settings-graph-large-hover-labels">
-                    <span>
-                      <span class="settings-switch-title">Show connected labels on large maps</span>
-                      <span class="settings-switch-description">Reveal hovered and connected labels.</span>
-                    </span>
-                    <input type="checkbox" id="settings-graph-large-hover-labels" class="settings-switch-input" checked />
-                    <span class="settings-switch" aria-hidden="true"></span>
-                  </label>
-
-                  <label class="settings-switch-row" for="settings-graph-large-hover-lines">
-                    <span>
-                      <span class="settings-switch-title">Highlight connected lines on large maps</span>
-                      <span class="settings-switch-description">Color connected hover lines purple.</span>
-                    </span>
-                    <input type="checkbox" id="settings-graph-large-hover-lines" class="settings-switch-input" checked />
-                    <span class="settings-switch" aria-hidden="true"></span>
-                  </label>
-
-                  <label class="settings-switch-row" for="settings-graph-show-file-extensions">
-                    <span>
-                      <span class="settings-switch-title">Show file extensions</span>
-                      <span class="settings-switch-description">Include extensions in graph labels.</span>
-                    </span>
-                    <input type="checkbox" id="settings-graph-show-file-extensions" class="settings-switch-input" />
-                    <span class="settings-switch" aria-hidden="true"></span>
-                  </label>
+                <div class="settings-subsection">
+                  <h4 class="settings-subsection-title">Colors</h4>
+                  <div class="settings-color-grid">
+                    <label class="settings-color-row" for="settings-graph-node-default-color">
+                      <span class="settings-field-label">Default node color</span>
+                      <input type="color" id="settings-graph-node-default-color" class="settings-color-input" value="#58a6ff" aria-label="Graph default node color" />
+                    </label>
+                    <label class="settings-color-row" for="settings-graph-find-highlight-color">
+                      <span class="settings-field-label">Find highlight color</span>
+                      <input type="color" id="settings-graph-find-highlight-color" class="settings-color-input" value="#ffff00" aria-label="Graph find highlight color" />
+                    </label>
+                  </div>
                 </div>
-
-                <label class="settings-field settings-color-field" for="settings-graph-find-highlight-color">
-                  <span class="settings-field-label">Find highlight color</span>
-                  <input type="color" id="settings-graph-find-highlight-color" class="settings-color-input" value="#ffff00" aria-label="Graph find highlight color" />
-                </label>
               </section>
 
               <section class="settings-panel" aria-labelledby="settings-recent-title">
@@ -554,7 +568,7 @@
                 </label>
               </section>
 
-              <section class="settings-panel" aria-labelledby="settings-confirmation-title">
+              <section class="settings-panel settings-confirmation-panel" aria-labelledby="settings-confirmation-title">
                 <div class="settings-panel-heading">
                   <span class="settings-panel-icon"><i class="bi bi-shield-check" aria-hidden="true"></i></span>
                   <div>

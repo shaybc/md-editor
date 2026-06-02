@@ -1889,6 +1889,7 @@
   const settingsGraphRenderWarningThresholdInput = document.getElementById("settings-graph-render-warning-threshold");
   const settingsGraphMostReferencedPercentInput = document.getElementById("settings-graph-most-referenced-percent");
   const settingsGraphShowFileExtensionsInput = document.getElementById("settings-graph-show-file-extensions");
+  const settingsGraphNodeDefaultColorInput = document.getElementById("settings-graph-node-default-color");
   const settingsGraphFindHighlightColorInput = document.getElementById("settings-graph-find-highlight-color");
   const settingsConfirmOpenManyGraphNodesInput = document.getElementById("settings-confirm-open-many-graph-nodes");
   const settingsConfirmDeleteFilesInput = document.getElementById("settings-confirm-delete-files");
@@ -1983,6 +1984,7 @@
   const DEFAULT_GRAPH_AUTO_CLUSTER_THRESHOLD = 1000;
   const DEFAULT_GRAPH_RENDER_WARNING_THRESHOLD = 1500;
   const DEFAULT_GRAPH_MOST_REFERENCED_PERCENT = 10;
+  const DEFAULT_GRAPH_NODE_COLOR = "#58a6ff";
   const DEFAULT_GRAPH_FIND_HIGHLIGHT_COLOR = "#ffff00";
   const DEFAULT_CONTEXT_MENU_TOOLTIP_DELAY_MS = 3000;
   const DEFAULT_MAX_RECENT_FILES = 10;
@@ -2003,6 +2005,7 @@
     graphRenderWarningThreshold: DEFAULT_GRAPH_RENDER_WARNING_THRESHOLD,
     graphMostReferencedPercent: DEFAULT_GRAPH_MOST_REFERENCED_PERCENT,
     graphShowFileExtensions: false,
+    graphNodeDefaultColor: DEFAULT_GRAPH_NODE_COLOR,
     graphFindHighlightColor: DEFAULT_GRAPH_FIND_HIGHLIGHT_COLOR,
     graphMagneticEnabled: true,
     graphViewPreferences: {},
@@ -2061,6 +2064,14 @@
       return normalizeGraphGroupColor(savedColor, DEFAULT_GRAPH_FIND_HIGHLIGHT_COLOR);
     }
     return /^#[0-9a-f]{6}$/i.test(String(savedColor || "")) ? savedColor : DEFAULT_GRAPH_FIND_HIGHLIGHT_COLOR;
+  }
+
+  function getGraphNodeDefaultColor() {
+    const savedColor = loadGlobalState().graphNodeDefaultColor;
+    if (typeof normalizeGraphGroupColor === "function") {
+      return normalizeGraphGroupColor(savedColor, DEFAULT_GRAPH_NODE_COLOR);
+    }
+    return /^#[0-9a-f]{6}$/i.test(String(savedColor || "")) ? savedColor : DEFAULT_GRAPH_NODE_COLOR;
   }
 
   function getLargeMapHoverPreferences() {
@@ -2521,8 +2532,7 @@ Markdown content is processed client-side in your browser and sanitized before p
     get graphSettings() { return graphSettings; },
     get graphRenderCache() { return graphRenderCache; },
     get graphComparisonDetailsModal() { return graphComparisonDetailsModal; },
-    get graphComparisonDetailsTitle() { return graphComparisonDetailsTitle; },
-    get graphComparisonDetailsList() { return graphComparisonDetailsList; },
+    get graphComparisonDetailsContent() { return graphComparisonDetailsContent; },
     get graphStaleModal() { return graphStaleModal; },
     get graphStaleSummary() { return graphStaleSummary; },
     get graphStaleNewFilesCount() { return graphStaleNewFilesCount; },
@@ -2541,6 +2551,7 @@ Markdown content is processed client-side in your browser and sanitized before p
     resolveGraphTargetId,
     normalizeTagName,
     normalizeFileTagList,
+    escapeHtml,
     looksLikeGraphDocument,
     extractMarkdownLinks,
     getFileTagsFromContent,
@@ -3072,6 +3083,9 @@ Markdown content is processed client-side in your browser and sanitized before p
     if (settingsGraphShowFileExtensionsInput) {
       settingsGraphShowFileExtensionsInput.checked = getGraphShowFileExtensions();
     }
+    if (settingsGraphNodeDefaultColorInput) {
+      settingsGraphNodeDefaultColorInput.value = getGraphColorInputValue(getGraphNodeDefaultColor());
+    }
     if (settingsGraphFindHighlightColorInput) {
       settingsGraphFindHighlightColorInput.value = getGraphColorInputValue(getGraphFindHighlightColor());
     }
@@ -3151,6 +3165,7 @@ Markdown content is processed client-side in your browser and sanitized before p
       alert("Enter a menu tooltip delay of 0 or higher.");
       return;
     }
+    const graphNodeDefaultColor = getGraphColorInputValue(settingsGraphNodeDefaultColorInput?.value || DEFAULT_GRAPH_NODE_COLOR);
     const graphFindHighlightColor = getGraphColorInputValue(settingsGraphFindHighlightColorInput?.value || DEFAULT_GRAPH_FIND_HIGHLIGHT_COLOR);
     setSettingsDialogSaving(true);
     try {
@@ -3163,6 +3178,7 @@ Markdown content is processed client-side in your browser and sanitized before p
         graphRenderWarningThreshold: Math.min(100000, Math.floor(graphRenderWarningThreshold)),
         graphMostReferencedPercent: Math.max(1, Math.min(100, Math.floor(graphMostReferencedPercent))),
         graphShowFileExtensions: !!settingsGraphShowFileExtensionsInput?.checked,
+        graphNodeDefaultColor,
         graphFindHighlightColor,
         confirmOpenManyGraphNodes: !!settingsConfirmOpenManyGraphNodesInput?.checked,
         confirmDeleteFiles: !!settingsConfirmDeleteFilesInput?.checked,
@@ -4924,6 +4940,7 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
     getGraphRenderWarningThreshold,
     getGraphMostReferencedPercent,
     getGraphShowFileExtensions,
+    getGraphNodeDefaultColor,
     getGraphFindHighlightColor,
     shouldConfirmOpenManyGraphNodes,
     shouldConfirmDeleteFiles,

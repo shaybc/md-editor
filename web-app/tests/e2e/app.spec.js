@@ -524,6 +524,7 @@ test("settings menu updates graph auto-clustering threshold", async ({ page }) =
   await expect(page.locator("#settings-graph-render-warning-threshold")).toHaveValue("1500");
   await expect(page.locator("#settings-graph-most-referenced-percent")).toHaveValue("10");
   await expect(page.locator("#settings-graph-show-file-extensions")).not.toBeChecked();
+  await expect(page.locator("#settings-graph-node-default-color")).toHaveValue("#58a6ff");
   await expect(page.locator("#settings-confirm-open-many-graph-nodes")).toBeChecked();
   await expect(page.locator("#settings-confirm-delete-files")).toBeChecked();
   await expect(page.locator("#settings-confirm-reset-state")).toBeChecked();
@@ -535,6 +536,7 @@ test("settings menu updates graph auto-clustering threshold", async ({ page }) =
   await page.locator("#settings-graph-render-warning-threshold").fill("1800");
   await page.locator("#settings-graph-most-referenced-percent").fill("25");
   await page.locator("#settings-graph-show-file-extensions").check();
+  await page.locator("#settings-graph-node-default-color").fill("#ff66cc");
   await page.locator("#settings-confirm-open-many-graph-nodes").uncheck();
   await page.locator("#settings-confirm-delete-files").uncheck();
   await page.locator("#settings-confirm-reset-state").uncheck();
@@ -550,6 +552,7 @@ test("settings menu updates graph auto-clustering threshold", async ({ page }) =
       renderWarningThreshold: state.graphRenderWarningThreshold,
       mostReferencedPercent: state.graphMostReferencedPercent,
       showFileExtensions: state.graphShowFileExtensions,
+      nodeDefaultColor: state.graphNodeDefaultColor,
       confirmOpenManyGraphNodes: state.confirmOpenManyGraphNodes,
       confirmDeleteFiles: state.confirmDeleteFiles,
       confirmResetState: state.confirmResetState,
@@ -562,6 +565,7 @@ test("settings menu updates graph auto-clustering threshold", async ({ page }) =
     renderWarningThreshold: 1800,
     mostReferencedPercent: 25,
     showFileExtensions: true,
+    nodeDefaultColor: "#ff66cc",
     confirmOpenManyGraphNodes: false,
     confirmDeleteFiles: false,
     confirmResetState: false,
@@ -576,6 +580,7 @@ test("settings menu updates graph auto-clustering threshold", async ({ page }) =
   await expect(page.locator("#settings-graph-render-warning-threshold")).toHaveValue("1800");
   await expect(page.locator("#settings-graph-most-referenced-percent")).toHaveValue("25");
   await expect(page.locator("#settings-graph-show-file-extensions")).toBeChecked();
+  await expect(page.locator("#settings-graph-node-default-color")).toHaveValue("#ff66cc");
   await expect(page.locator("#settings-confirm-open-many-graph-nodes")).not.toBeChecked();
   await expect(page.locator("#settings-confirm-delete-files")).not.toBeChecked();
   await expect(page.locator("#settings-confirm-reset-state")).not.toBeChecked();
@@ -636,10 +641,12 @@ test("settings menu toggles graph node file extensions", async ({ page }) => {
 
   await page.locator("#desktopActionMenu").click();
   await page.locator(".open-settings-dialog").first().click();
+  await page.locator("#settings-graph-node-default-color").fill("#ff66cc");
   await page.locator("#settings-graph-show-file-extensions").check();
   await page.locator("#settings-modal-save").click();
 
   await expect(page.locator(".graph-label-file")).toHaveText("alpha.md");
+  await expect.poll(() => page.locator(".graph-node-file").first().evaluate((node) => getComputedStyle(node).fill)).toBe("rgb(255, 102, 204)");
 });
 
 test("graph ctrl+f finds and highlights nodes without filtering the map", async ({ page }) => {
@@ -1466,6 +1473,93 @@ test("saved graph remains interactive and filters only graph snapshot tags", asy
   const activeGraph = page.locator(".graph-tab-render:not(.hidden)");
   await expect(activeGraph.locator(".graph-node-file")).toHaveCount(5);
   await expect(activeGraph.locator(".graph-node-tag")).toHaveCount(0);
+});
+
+test("saved graph view details buttons open restored comparison details", async ({ page }) => {
+  await page.addInitScript(() => {
+    const savedGraphComparisonDetails = {
+      sections: [
+        { title: "New in current folder", items: ["current.md"] },
+        { title: "Only in saved graph", items: ["saved-only.md"] },
+        { title: "New connections", items: [] },
+        { title: "Saved-only connections", items: ["saved-only.md -> alpha.md"] }
+      ]
+    };
+    const graphTab = {
+      id: "saved_details_graph_e2e",
+      title: "Saved Details Graph",
+      content: "",
+      savedContent: "",
+      scrollPos: 0,
+      viewMode: "preview",
+      createdAt: Date.now(),
+      isTemporary: false,
+      type: "graph",
+      folderName: "Saved Details Graph",
+      keepSavedGraphMode: true,
+      savedGraphComparisonDetails,
+      graphViewConfig: {
+        showTags: false,
+        hiddenTagIds: [],
+        hiddenNodeIds: [],
+        selectedTagIds: [],
+        groups: [],
+        collapsedClusters: [],
+        searchQuery: "",
+        showArrows: true,
+        showOrphans: true,
+        showLabels: true,
+        textFadeThreshold: 0.35,
+        nodeSize: 0.8,
+        linkThickness: 1.2,
+        centerForce: 0.7,
+        repelForce: 240,
+        linkForce: 0.6,
+        linkDistance: 170,
+        groupForce: 0.18
+      },
+      graphSnapshot: {
+        version: 1,
+        folderName: "Saved Details Graph",
+        createdAt: Date.now(),
+        nodes: [
+          { id: "alpha.md", label: "alpha.md", fullPath: "C:/vault/alpha.md", type: "file", status: "current" }
+        ],
+        links: [],
+        files: [
+          { id: "alpha.md", name: "alpha.md", path: "alpha.md", fullPath: "C:/vault/alpha.md", content: "# Alpha" }
+        ]
+      }
+    };
+    localStorage.setItem("markdownViewerTabs", JSON.stringify([graphTab]));
+    localStorage.setItem("markdownViewerActiveTab", graphTab.id);
+  });
+
+  await page.goto("/");
+  await expect(page.locator(".graph-tab-render")).toBeVisible();
+  await expect(page.locator(".saved-graph-mode-details-button")).toBeVisible();
+
+  await page.locator(".saved-graph-mode-details-button").click();
+  await expect(page.locator("#graph-comparison-details-modal")).not.toHaveClass(/hidden/);
+  await expect(page.locator("#graph-comparison-details-content")).toContainText("Only in saved graph");
+  await expect(page.locator("#graph-comparison-details-content")).toContainText("saved-only.md");
+  await page.locator("#graph-comparison-details-done").click();
+  await expect(page.locator("#graph-comparison-details-modal")).toHaveClass(/hidden/);
+
+  await page.evaluate(() => {
+    const tab = JSON.parse(localStorage.getItem("markdownViewerTabs") || "[]")[0];
+    window.markdownViewerApp.modules.graphPersistence.showSavedGraphModeBanner(tab);
+  });
+  await expect(page.locator(".graph-update-banner-details-button")).toBeVisible();
+  await page.locator(".graph-update-banner-details-button").click();
+  await expect(page.locator("#graph-comparison-details-modal")).not.toHaveClass(/hidden/);
+  await expect(page.locator("#graph-comparison-details-content")).toContainText("current.md");
+
+  await expect.poll(() => page.evaluate(() => {
+    const tabs = JSON.parse(localStorage.getItem("markdownViewerTabs") || "[]");
+    window.markdownViewerApp.modules.graphPersistence.saveTabsToStorage(tabs);
+    return JSON.parse(localStorage.getItem("markdownViewerTabs") || "[]")[0]?.savedGraphComparisonDetails?.sections?.length || 0;
+  })).toBe(4);
 });
 
 test("creating a tag from the tag dialog shows the new tag", async ({ page }) => {
