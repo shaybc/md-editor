@@ -642,6 +642,111 @@ test("settings menu toggles graph node file extensions", async ({ page }) => {
   await expect(page.locator(".graph-label-file")).toHaveText("alpha.md");
 });
 
+test("graph ctrl+f finds and highlights nodes without filtering the map", async ({ page }) => {
+  await page.addInitScript(() => {
+    const graphTab = {
+      id: "graph_find_e2e",
+      title: "Find Graph",
+      content: "",
+      scrollPos: 0,
+      viewMode: "preview",
+      createdAt: Date.now(),
+      isTemporary: false,
+      type: "graph",
+      folderName: "Find Graph",
+      graphViewConfig: {
+        showTags: false,
+        hiddenTagIds: [],
+        hiddenNodeIds: [],
+        selectedTagIds: [],
+        groups: [],
+        collapsedClusters: [],
+        searchQuery: "",
+        showArrows: true,
+        showOrphans: true,
+        showLabels: true,
+        textFadeThreshold: 0.35,
+        nodeSize: 0.8,
+        linkThickness: 1.2,
+        centerForce: 0.7,
+        repelForce: 240,
+        linkForce: 0.6,
+        linkDistance: 170,
+        groupForce: 0.18
+      },
+      graphSnapshot: {
+        version: 1,
+        folderName: "Find Graph",
+        createdAt: Date.now(),
+        nodes: [
+          { id: "alpha.md", label: "Alpha Node", type: "file", status: "current" },
+          { id: "alpha-notes.md", label: "Alpha Notes", type: "file", status: "current" },
+          { id: "beta.md", label: "Beta Node", type: "file", status: "current" },
+          { id: "gamma.md", label: "Gamma Node", type: "file", status: "current" }
+        ],
+        links: [
+          { source: "alpha.md", target: "beta.md", type: "link", status: "current" },
+          { source: "alpha-notes.md", target: "gamma.md", type: "link", status: "current" }
+        ],
+        files: [
+          { id: "alpha.md", name: "Alpha Node.md", path: "alpha.md", fullPath: "C:/vault/alpha.md", content: "# Alpha" },
+          { id: "alpha-notes.md", name: "Alpha Notes.md", path: "alpha-notes.md", fullPath: "C:/vault/alpha-notes.md", content: "# Alpha Notes" },
+          { id: "beta.md", name: "Beta Node.md", path: "beta.md", fullPath: "C:/vault/beta.md", content: "# Beta" },
+          { id: "gamma.md", name: "Gamma Node.md", path: "gamma.md", fullPath: "C:/vault/gamma.md", content: "# Gamma" }
+        ]
+      }
+    };
+    localStorage.setItem("markdownViewerTabs", JSON.stringify([graphTab]));
+    localStorage.setItem("markdownViewerActiveTab", graphTab.id);
+  });
+
+  await page.goto("/");
+  await expect(page.locator(".graph-tab-render")).toBeVisible();
+  await expect(page.locator(".graph-node-file")).toHaveCount(4);
+
+  await page.locator(".graph-tab-render").click();
+  await page.keyboard.press("Control+F");
+  await expect(page.locator("#graph-find-dialog")).toBeVisible();
+
+  await page.locator("#graph-find-input").fill("Alpha");
+  await page.locator("#graph-find-ok").click();
+  await expect(page.locator(".graph-node-file")).toHaveCount(4);
+  await expect(page.locator(".graph-node-found")).toHaveCount(2);
+  await expect(page.locator("#graph-find-dialog")).toHaveClass(/transparent/);
+
+  await expect.poll(() => page.locator(".graph-tab-render:not(.hidden)").evaluate((render) => {
+    const graphLayer = render.querySelector(".graph-layer");
+    const transform = graphLayer?.getAttribute("transform") || "";
+    return /translate\([^)]+\)\s*scale\([^)]+\)/.test(transform);
+  })).toBe(true);
+
+  await page.locator("#graph-find-dialog").dispatchEvent("click");
+  await expect(page.locator("#graph-find-dialog")).not.toHaveClass(/transparent/);
+  await page.locator("#graph-find-input").fill("Gamma");
+  await page.locator("#graph-find-ok").click();
+  await expect(page.locator(".graph-node-found")).toHaveCount(1);
+  await expect(page.locator(".graph-label-found")).toHaveText("Gamma Node");
+
+  await page.locator("#graph-find-dialog").dispatchEvent("click");
+  await page.locator("#graph-find-cancel").click();
+  await expect(page.locator("#graph-find-dialog")).toBeHidden();
+  await expect(page.locator(".graph-node-found")).toHaveCount(0);
+
+  await page.locator("#desktopActionMenu").click();
+  await page.locator(".open-settings-dialog").first().click();
+  await page.locator("#settings-graph-find-highlight-color").fill("#ffea00");
+  await page.locator("#settings-modal-save").click();
+  await expect(page.locator("#settings-modal")).toBeHidden();
+  await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem("markdownViewerGlobalState") || "{}").graphFindHighlightColor)).toBe("#ffea00");
+
+  await page.locator(".graph-tab-render").click();
+  await page.keyboard.press("Control+F");
+  await page.locator("#graph-find-input").fill("Beta");
+  await page.locator("#graph-find-ok").click();
+  await expect(page.locator(".graph-node-found")).toHaveCount(1);
+  await expect.poll(() => page.locator(".graph-node-found").evaluate((node) => getComputedStyle(node).fill)).toBe("rgb(255, 234, 0)");
+});
+
 test("code converter dialog browses folders and runs converter", async ({ page }) => {
   await page.addInitScript(() => {
     window.NL_PATH = "C:/GitHub/shaybc/markdown-viewer/desktop-app";

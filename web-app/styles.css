@@ -1871,6 +1871,104 @@ body {
   position: relative;
   flex: 1;
   min-height: 560px;
+  --graph-find-highlight-color: #ffff00;
+}
+
+.graph-find-dialog {
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
+  z-index: 40;
+  width: min(280px, calc(100% - 2rem));
+  padding: 0.75rem;
+  border: 1px solid color-mix(in srgb, var(--border-color) 86%, var(--accent-color));
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--header-bg) 94%, transparent);
+  box-shadow: 0 16px 36px rgba(0, 0, 0, 0.28);
+  color: var(--text-color);
+  backdrop-filter: blur(10px);
+  pointer-events: auto;
+  transition: opacity 0.18s ease, background-color 0.18s ease, box-shadow 0.18s ease;
+}
+
+.graph-find-dialog.hidden {
+  display: none;
+}
+
+.graph-find-dialog.transparent {
+  opacity: 0.24;
+  background: color-mix(in srgb, var(--header-bg) 38%, transparent);
+  box-shadow: none;
+}
+
+.graph-find-dialog.transparent:hover,
+.graph-find-dialog.transparent:focus-within {
+  opacity: 1;
+  background: color-mix(in srgb, var(--header-bg) 94%, transparent);
+  box-shadow: 0 16px 36px rgba(0, 0, 0, 0.28);
+}
+
+.graph-find-title {
+  margin-bottom: 0.45rem;
+  font-size: 0.9rem;
+  font-weight: 700;
+}
+
+.graph-find-label {
+  display: block;
+  margin-bottom: 0.25rem;
+  color: var(--secondary-text);
+  font-size: 0.76rem;
+  font-weight: 700;
+}
+
+.graph-find-input {
+  width: 100%;
+  min-height: 2.1rem;
+  padding: 0.35rem 0.5rem;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  background: var(--button-bg);
+  color: var(--text-color);
+}
+
+.graph-find-input:focus {
+  border-color: var(--accent-color);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent-color) 20%, transparent);
+  outline: none;
+}
+
+.graph-find-status {
+  min-height: 1.1rem;
+  margin-top: 0.35rem;
+  color: var(--secondary-text);
+  font-size: 0.76rem;
+}
+
+.graph-find-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.45rem;
+  margin-top: 0.45rem;
+}
+
+.graph-find-actions .tool-button {
+  min-height: 2rem;
+  padding: 0.3rem 0.75rem;
+  justify-content: center;
+}
+
+.graph-node.graph-node-found {
+  fill: var(--graph-find-highlight-color) !important;
+  stroke: color-mix(in srgb, var(--graph-find-highlight-color) 68%, #000) !important;
+  stroke-width: 3px !important;
+  opacity: 1 !important;
+}
+
+.graph-label.graph-label-found {
+  fill: var(--graph-find-highlight-color) !important;
+  font-weight: 800;
+  opacity: 1 !important;
 }
 
 .graph-loading-state {
@@ -1926,6 +2024,7 @@ body {
 
 .graph-tab-render {
   position: relative;
+  z-index: 1;
   width: 100%;
   height: 100%;
   min-height: inherit;
@@ -4627,6 +4726,25 @@ a:focus {
 
 .settings-number-input:focus {
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent-color) 18%, transparent);
+}
+
+.settings-color-field {
+  margin-top: 8px;
+}
+
+.settings-color-input {
+  width: 54px;
+  height: 34px;
+  padding: 3px;
+  border: 1px solid color-mix(in srgb, var(--border-color) 88%, var(--accent-color));
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--bg-color) 92%, #000);
+  cursor: pointer;
+}
+
+.settings-color-input:focus {
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent-color) 18%, transparent);
+  outline: none;
 }
 
 .settings-switch-list {

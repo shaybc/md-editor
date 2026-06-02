@@ -511,6 +511,11 @@
                     <span class="settings-switch" aria-hidden="true"></span>
                   </label>
                 </div>
+
+                <label class="settings-field settings-color-field" for="settings-graph-find-highlight-color">
+                  <span class="settings-field-label">Find highlight color</span>
+                  <input type="color" id="settings-graph-find-highlight-color" class="settings-color-input" value="#ffff00" aria-label="Graph find highlight color" />
+                </label>
               </section>
 
               <section class="settings-panel" aria-labelledby="settings-recent-title">
@@ -1335,7 +1340,18 @@
             </div>
           </div>
         </div>
-        <div id="graph-view-canvas" class="graph-view-canvas"></div>
+        <div id="graph-view-canvas" class="graph-view-canvas">
+          <div id="graph-find-dialog" class="graph-find-dialog hidden" role="dialog" aria-modal="false" aria-labelledby="graph-find-title" aria-hidden="true">
+            <div class="graph-find-title" id="graph-find-title">Find node</div>
+            <label class="graph-find-label" for="graph-find-input">Name</label>
+            <input id="graph-find-input" class="graph-find-input" type="search" autocomplete="off" aria-describedby="graph-find-status">
+            <div id="graph-find-status" class="graph-find-status" aria-live="polite"></div>
+            <div class="graph-find-actions">
+              <button id="graph-find-ok" class="tool-button graph-find-ok" type="button">OK</button>
+              <button id="graph-find-cancel" class="tool-button" type="button">Cancel</button>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
 
