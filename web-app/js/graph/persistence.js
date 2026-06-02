@@ -584,6 +584,7 @@
 
   function showSavedGraphModeBanner(tab) {
     const detailsModel = tab?.savedGraphComparisonDetails || null;
+    if (detailsModel) activeGraphComparisonDetailsModel = detailsModel;
     showGraphBanner("Saved graph mode — current folder changes are ignored.", detailsModel);
   }
 
@@ -622,7 +623,11 @@
       detailsButton.className = "graph-update-banner-details-button";
       detailsButton.textContent = "View details";
       detailsButton.style.color = "#93c5fd";
-      detailsButton.addEventListener("click", () => openGraphComparisonDetailsModal(detailsModel));
+      detailsButton.addEventListener("click", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        openGraphComparisonDetailsModal(detailsModel);
+      });
       banner.appendChild(detailsButton);
     }
     banner.classList.remove("hidden");
@@ -668,11 +673,16 @@
     label.textContent = isCompareMode ? "Compare" : (isSavedMode ? "Saved graph" : "Current folder");
     pill.appendChild(label);
     if (isSavedMode && !isCompareMode && tab?.savedGraphComparisonDetails) {
+      activeGraphComparisonDetailsModel = tab.savedGraphComparisonDetails;
       const detailsButton = document.createElement("button");
       detailsButton.type = "button";
       detailsButton.className = "saved-graph-mode-details-button";
       detailsButton.textContent = "View details";
-      detailsButton.addEventListener("click", () => openGraphComparisonDetailsModal(tab.savedGraphComparisonDetails));
+      detailsButton.addEventListener("click", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        openGraphComparisonDetailsModal(tab.savedGraphComparisonDetails);
+      });
       pill.appendChild(detailsButton);
     }
   }
@@ -779,7 +789,8 @@
 
   function openGraphComparisonDetailsModal(model) {
     if (!graphComparisonDetailsModal || !graphComparisonDetailsContent) return;
-    activeGraphComparisonDetailsModel = model || activeGraphComparisonDetailsModel;
+    const activeSavedGraphDetails = getActiveGraphTab()?.savedGraphComparisonDetails || null;
+    activeGraphComparisonDetailsModel = model || activeSavedGraphDetails || activeGraphStaleComparison?.detailsModel || activeGraphComparisonDetailsModel;
     graphComparisonDetailsContent.innerHTML = renderGraphComparisonDetailsModel(activeGraphComparisonDetailsModel);
     graphComparisonDetailsModal.classList.remove("hidden");
     graphComparisonDetailsModal.setAttribute("aria-hidden", "false");
@@ -1567,7 +1578,6 @@
   function getPersistableTab(tab) {
     if (!tab || tab.type !== "graph") return tab;
     const persistedTab = { ...tab };
-    delete persistedTab.savedGraphComparisonDetails;
     if (persistedTab.graphSnapshot) persistedTab.graphSnapshot = stripGraphSnapshotContent(persistedTab.graphSnapshot, { preserveFullPath: false });
     if (persistedTab.graphComparisonSnapshot) persistedTab.graphComparisonSnapshot = stripGraphSnapshotContent(persistedTab.graphComparisonSnapshot, { preserveFullPath: false });
     if (persistedTab.graphDocument && typeof persistedTab.graphDocument === "object") {

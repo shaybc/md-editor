@@ -1468,6 +1468,93 @@ test("saved graph remains interactive and filters only graph snapshot tags", asy
   await expect(activeGraph.locator(".graph-node-tag")).toHaveCount(0);
 });
 
+test("saved graph view details buttons open restored comparison details", async ({ page }) => {
+  await page.addInitScript(() => {
+    const savedGraphComparisonDetails = {
+      sections: [
+        { title: "New in current folder", items: ["current.md"] },
+        { title: "Only in saved graph", items: ["saved-only.md"] },
+        { title: "New connections", items: [] },
+        { title: "Saved-only connections", items: ["saved-only.md -> alpha.md"] }
+      ]
+    };
+    const graphTab = {
+      id: "saved_details_graph_e2e",
+      title: "Saved Details Graph",
+      content: "",
+      savedContent: "",
+      scrollPos: 0,
+      viewMode: "preview",
+      createdAt: Date.now(),
+      isTemporary: false,
+      type: "graph",
+      folderName: "Saved Details Graph",
+      keepSavedGraphMode: true,
+      savedGraphComparisonDetails,
+      graphViewConfig: {
+        showTags: false,
+        hiddenTagIds: [],
+        hiddenNodeIds: [],
+        selectedTagIds: [],
+        groups: [],
+        collapsedClusters: [],
+        searchQuery: "",
+        showArrows: true,
+        showOrphans: true,
+        showLabels: true,
+        textFadeThreshold: 0.35,
+        nodeSize: 0.8,
+        linkThickness: 1.2,
+        centerForce: 0.7,
+        repelForce: 240,
+        linkForce: 0.6,
+        linkDistance: 170,
+        groupForce: 0.18
+      },
+      graphSnapshot: {
+        version: 1,
+        folderName: "Saved Details Graph",
+        createdAt: Date.now(),
+        nodes: [
+          { id: "alpha.md", label: "alpha.md", fullPath: "C:/vault/alpha.md", type: "file", status: "current" }
+        ],
+        links: [],
+        files: [
+          { id: "alpha.md", name: "alpha.md", path: "alpha.md", fullPath: "C:/vault/alpha.md", content: "# Alpha" }
+        ]
+      }
+    };
+    localStorage.setItem("markdownViewerTabs", JSON.stringify([graphTab]));
+    localStorage.setItem("markdownViewerActiveTab", graphTab.id);
+  });
+
+  await page.goto("/");
+  await expect(page.locator(".graph-tab-render")).toBeVisible();
+  await expect(page.locator(".saved-graph-mode-details-button")).toBeVisible();
+
+  await page.locator(".saved-graph-mode-details-button").click();
+  await expect(page.locator("#graph-comparison-details-modal")).not.toHaveClass(/hidden/);
+  await expect(page.locator("#graph-comparison-details-content")).toContainText("Only in saved graph");
+  await expect(page.locator("#graph-comparison-details-content")).toContainText("saved-only.md");
+  await page.locator("#graph-comparison-details-done").click();
+  await expect(page.locator("#graph-comparison-details-modal")).toHaveClass(/hidden/);
+
+  await page.evaluate(() => {
+    const tab = JSON.parse(localStorage.getItem("markdownViewerTabs") || "[]")[0];
+    window.markdownViewerApp.modules.graphPersistence.showSavedGraphModeBanner(tab);
+  });
+  await expect(page.locator(".graph-update-banner-details-button")).toBeVisible();
+  await page.locator(".graph-update-banner-details-button").click();
+  await expect(page.locator("#graph-comparison-details-modal")).not.toHaveClass(/hidden/);
+  await expect(page.locator("#graph-comparison-details-content")).toContainText("current.md");
+
+  await expect.poll(() => page.evaluate(() => {
+    const tabs = JSON.parse(localStorage.getItem("markdownViewerTabs") || "[]");
+    window.markdownViewerApp.modules.graphPersistence.saveTabsToStorage(tabs);
+    return JSON.parse(localStorage.getItem("markdownViewerTabs") || "[]")[0]?.savedGraphComparisonDetails?.sections?.length || 0;
+  })).toBe(4);
+});
+
 test("creating a tag from the tag dialog shows the new tag", async ({ page }) => {
   await page.addInitScript(() => {
     localStorage.setItem("markdownViewerGlobalState", JSON.stringify({ knownTags: ["stale-known"] }));
