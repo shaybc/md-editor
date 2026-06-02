@@ -1889,6 +1889,7 @@
   const settingsGraphRenderWarningThresholdInput = document.getElementById("settings-graph-render-warning-threshold");
   const settingsGraphMostReferencedPercentInput = document.getElementById("settings-graph-most-referenced-percent");
   const settingsGraphShowFileExtensionsInput = document.getElementById("settings-graph-show-file-extensions");
+  const settingsGraphFindHighlightColorInput = document.getElementById("settings-graph-find-highlight-color");
   const settingsConfirmOpenManyGraphNodesInput = document.getElementById("settings-confirm-open-many-graph-nodes");
   const settingsConfirmDeleteFilesInput = document.getElementById("settings-confirm-delete-files");
   const settingsConfirmResetStateInput = document.getElementById("settings-confirm-reset-state");
@@ -1921,6 +1922,11 @@
   const desktopOpenGraphButtons = document.querySelectorAll(".open-graph-view");
   const exitAppButtons = document.querySelectorAll(".exit-app-button");
   const graphViewCanvas = document.getElementById("graph-view-canvas");
+  const graphFindDialog = document.getElementById("graph-find-dialog");
+  const graphFindInput = document.getElementById("graph-find-input");
+  const graphFindStatus = document.getElementById("graph-find-status");
+  const graphFindOkButton = document.getElementById("graph-find-ok");
+  const graphFindCancelButton = document.getElementById("graph-find-cancel");
   const graphViewToolbar = document.querySelector(".graph-view-toolbar");
   const graphFilterPanelToggle = document.getElementById("graph-filter-panel-toggle");
   const graphShowTagsButton = document.getElementById("graph-show-tags");
@@ -1977,6 +1983,7 @@
   const DEFAULT_GRAPH_AUTO_CLUSTER_THRESHOLD = 1000;
   const DEFAULT_GRAPH_RENDER_WARNING_THRESHOLD = 1500;
   const DEFAULT_GRAPH_MOST_REFERENCED_PERCENT = 10;
+  const DEFAULT_GRAPH_FIND_HIGHLIGHT_COLOR = "#ffff00";
   const DEFAULT_CONTEXT_MENU_TOOLTIP_DELAY_MS = 3000;
   const DEFAULT_MAX_RECENT_FILES = 10;
   const DEFAULT_MAX_RECENT_FOLDERS = 10;
@@ -1996,6 +2003,7 @@
     graphRenderWarningThreshold: DEFAULT_GRAPH_RENDER_WARNING_THRESHOLD,
     graphMostReferencedPercent: DEFAULT_GRAPH_MOST_REFERENCED_PERCENT,
     graphShowFileExtensions: false,
+    graphFindHighlightColor: DEFAULT_GRAPH_FIND_HIGHLIGHT_COLOR,
     graphMagneticEnabled: true,
     graphViewPreferences: {},
     maxRecentFiles: DEFAULT_MAX_RECENT_FILES,
@@ -2045,6 +2053,14 @@
 
   function getGraphShowFileExtensions() {
     return loadGlobalState().graphShowFileExtensions === true;
+  }
+
+  function getGraphFindHighlightColor() {
+    const savedColor = loadGlobalState().graphFindHighlightColor;
+    if (typeof normalizeGraphGroupColor === "function") {
+      return normalizeGraphGroupColor(savedColor, DEFAULT_GRAPH_FIND_HIGHLIGHT_COLOR);
+    }
+    return /^#[0-9a-f]{6}$/i.test(String(savedColor || "")) ? savedColor : DEFAULT_GRAPH_FIND_HIGHLIGHT_COLOR;
   }
 
   function getLargeMapHoverPreferences() {
@@ -3056,6 +3072,9 @@ Markdown content is processed client-side in your browser and sanitized before p
     if (settingsGraphShowFileExtensionsInput) {
       settingsGraphShowFileExtensionsInput.checked = getGraphShowFileExtensions();
     }
+    if (settingsGraphFindHighlightColorInput) {
+      settingsGraphFindHighlightColorInput.value = getGraphColorInputValue(getGraphFindHighlightColor());
+    }
     if (settingsConfirmOpenManyGraphNodesInput) {
       settingsConfirmOpenManyGraphNodesInput.checked = shouldConfirmOpenManyGraphNodes();
     }
@@ -3132,6 +3151,7 @@ Markdown content is processed client-side in your browser and sanitized before p
       alert("Enter a menu tooltip delay of 0 or higher.");
       return;
     }
+    const graphFindHighlightColor = getGraphColorInputValue(settingsGraphFindHighlightColorInput?.value || DEFAULT_GRAPH_FIND_HIGHLIGHT_COLOR);
     setSettingsDialogSaving(true);
     try {
       saveGlobalState({
@@ -3143,6 +3163,7 @@ Markdown content is processed client-side in your browser and sanitized before p
         graphRenderWarningThreshold: Math.min(100000, Math.floor(graphRenderWarningThreshold)),
         graphMostReferencedPercent: Math.max(1, Math.min(100, Math.floor(graphMostReferencedPercent))),
         graphShowFileExtensions: !!settingsGraphShowFileExtensionsInput?.checked,
+        graphFindHighlightColor,
         confirmOpenManyGraphNodes: !!settingsConfirmOpenManyGraphNodesInput?.checked,
         confirmDeleteFiles: !!settingsConfirmDeleteFilesInput?.checked,
         confirmResetState: !!settingsConfirmResetStateInput?.checked,
@@ -4884,6 +4905,11 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
     get activeFolderName() { return activeFolderName; },
     get activeFolderPath() { return activeFolderPath; },
     get graphViewCanvas() { return graphViewCanvas; },
+    get graphFindDialog() { return graphFindDialog; },
+    get graphFindInput() { return graphFindInput; },
+    get graphFindStatus() { return graphFindStatus; },
+    get graphFindOkButton() { return graphFindOkButton; },
+    get graphFindCancelButton() { return graphFindCancelButton; },
     get graphRenderCache() { return graphRenderCache; },
     get graphSettings() { return graphSettings; },
     get folderTreeRoot() { return folderTreeRoot; },
@@ -4898,6 +4924,7 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
     getGraphRenderWarningThreshold,
     getGraphMostReferencedPercent,
     getGraphShowFileExtensions,
+    getGraphFindHighlightColor,
     shouldConfirmOpenManyGraphNodes,
     shouldConfirmDeleteFiles,
     createGraphPerfSession,
@@ -4975,6 +5002,7 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
     deleteTag
   });
   const renderGraphView = graphRenderer.renderGraphView;
+  const openGraphFindDialog = graphRenderer.openGraphFindDialog;
 
   initTabs();
   if (loadGlobalState().syncScrollingEnabled === false) toggleSyncScrolling();
@@ -5406,11 +5434,16 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
     closeMermaidModal,
     closeTab,
     copyMarkdownButton,
+    graphViewCanvas,
     getActiveTabId: function() { return activeTabId; },
+    getActiveTabType: function() {
+      return tabs.find((tab) => tab.id === activeTabId)?.type || "";
+    },
     getCurrentViewMode: function() { return currentViewMode; },
     hideGraphStaleModal,
     markdownEditor,
     newTab,
+    openGraphFindDialog,
     saveCurrentFileIfChanged,
     toggleSyncScrolling
   });

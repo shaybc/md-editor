@@ -1,9 +1,118 @@
 ﻿(function(global) {
   global.registerMarkdownViewerGraphRenderer = function registerMarkdownViewerGraphRenderer(app, deps) {
     let renderGraphView;
+    let openGraphFindDialog;
     const GRAPH_RENDERER_D3 = "d3";
 
     with (deps) {
+    let graphFindDialogBound = false;
+    let graphFindTabId = "";
+
+    const getActiveGraphRender = () => {
+      const activeTab = tabs.find((tab) => tab.id === activeTabId && tab.type === "graph");
+      if (!activeTab) return null;
+      return graphRenderCache.get(activeTab.id) || null;
+    };
+
+    const setGraphFindStatus = (message) => {
+      if (graphFindStatus) graphFindStatus.textContent = message || "";
+    };
+
+    const hideGraphFindDialog = () => {
+      if (!graphFindDialog) return;
+      graphFindDialog.classList.add("hidden");
+      graphFindDialog.classList.remove("transparent");
+      graphFindDialog.setAttribute("aria-hidden", "true");
+      graphFindTabId = "";
+      setGraphFindStatus("");
+    };
+
+    const restoreGraphFindDialogOpacity = () => {
+      if (!graphFindDialog || graphFindDialog.classList.contains("hidden")) return;
+      graphFindDialog.classList.remove("transparent");
+      graphFindInput?.focus();
+      graphFindInput?.select();
+    };
+
+    const getGraphFindRenderForDialog = () => {
+      const activeRender = getActiveGraphRender();
+      if (activeRender && (!graphFindTabId || activeRender.tabId === graphFindTabId)) return activeRender;
+      const dialogRender = graphFindTabId ? graphRenderCache.get(graphFindTabId) : null;
+      return dialogRender || activeRender;
+    };
+
+    const applyGraphFindFromDialog = () => {
+      const activeRender = getGraphFindRenderForDialog();
+      if (!activeRender) return;
+      const result = typeof activeRender.applyFind === "function" ? activeRender.applyFind(graphFindInput?.value || "") : { count: 0, cleared: true };
+      if (result.cleared) {
+        hideGraphFindDialog();
+        return;
+      }
+      if (result.count > 0) {
+        setGraphFindStatus(`${result.count.toLocaleString()} match${result.count === 1 ? "" : "es"}`);
+        graphFindDialog?.classList.add("transparent");
+      } else {
+        setGraphFindStatus("No matches");
+        graphFindDialog?.classList.remove("transparent");
+        graphFindInput?.focus();
+        graphFindInput?.select();
+      }
+    };
+
+    const cancelGraphFindFromDialog = () => {
+      const activeRender = getGraphFindRenderForDialog();
+      if (activeRender && typeof activeRender.clearFind === "function") activeRender.clearFind();
+      hideGraphFindDialog();
+    };
+
+    const bindGraphFindDialog = () => {
+      if (graphFindDialogBound || !graphFindDialog) return;
+      graphFindDialogBound = true;
+      graphFindOkButton?.addEventListener("click", (event) => {
+        event.stopPropagation();
+        applyGraphFindFromDialog();
+      });
+      graphFindCancelButton?.addEventListener("click", (event) => {
+        event.stopPropagation();
+        cancelGraphFindFromDialog();
+      });
+      graphFindInput?.addEventListener("keydown", (event) => {
+        if (event.key === "Enter") {
+          event.preventDefault();
+          applyGraphFindFromDialog();
+        }
+        if (event.key === "Escape") {
+          event.preventDefault();
+          cancelGraphFindFromDialog();
+        }
+      });
+      graphFindDialog.addEventListener("click", () => {
+        if (graphFindDialog.classList.contains("transparent")) restoreGraphFindDialogOpacity();
+      });
+    };
+
+    openGraphFindDialog = function openGraphFindDialog() {
+      const activeTab = tabs.find((tab) => tab.id === activeTabId && tab.type === "graph");
+      if (!activeTab || !graphFindDialog || !graphFindInput) return false;
+      bindGraphFindDialog();
+      graphFindTabId = activeTab.id;
+      const cachedRender = graphRenderCache.get(activeTab.id);
+      const showDialog = () => {
+        graphFindDialog.classList.remove("hidden", "transparent");
+        graphFindDialog.setAttribute("aria-hidden", "false");
+        setGraphFindStatus("");
+        graphFindInput.focus();
+        graphFindInput.select();
+      };
+      if (cachedRender) {
+        showDialog();
+      } else {
+        renderGraphView().then(showDialog).catch((error) => console.warn("Failed to prepare graph find dialog:", error));
+      }
+      return true;
+    };
+
     renderGraphView = async function renderGraphView(options = {}) {
     if (!graphViewCanvas) return;
     const renderRequestId = ++graphRenderRequestId;
@@ -1330,20 +1439,24 @@
           renderGraphTick();
           captureGraphLayout(activeTab, nodes, currentZoomTransform);
         })
-        .on("end", (event, d) => {
-          if (!useStaticLargeGraphLayout && graphSettings.magneticEnabled && !event.active) simulation.alphaTarget(0);
-          d.x = event.x;
-          d.y = event.y;
-          d.fx = null;
-          d.fy = null;
-          renderGraphTick();
-          captureGraphLayout(activeTab, nodes, currentZoomTransform);
-          markGraphTabAsChanged(activeTab);
-          saveTabsToStorage(tabs);
-        }));
-    graphPerf?.mark("d3 elements bound", {
-      nodes: nodes.length,
-      links: links.length,
+          .on("end", (event, d) => {
+            if (!useStaticLargeGraphLayout && graphSettings.magneticEnabled && !event.active) simulation.alphaTarget(0);
+            d.x = event.x;
+            d.y = event.y;
+            d.fx = null;
+            d.fy = null;
+            renderGraphTick();
+            captureGraphLayout(activeTab, nodes, currentZoomTransform);
+            markGraphTabAsChanged(activeTab);
+            saveTabsToStorage(tabs);
+          }));
+      const nodeElementByNodeId = new Map();
+      node.each(function(d) {
+        if (d?.id) nodeElementByNodeId.set(d.id, this);
+      });
+      graphPerf?.mark("d3 elements bound", {
+        nodes: nodes.length,
+        links: links.length,
       arrows: graphViewConfig.showArrows ? links.filter(isMarkdownLink).length : 0
     });
     maxNodeRadius = Math.max(1, ...nodes.map((d) => nodeRadius(d.id)));
@@ -4019,9 +4132,98 @@
       scheduleGraphLayoutStorageSave();
     }
 
+    let graphFindNodeIds = new Set();
+
+    function clearFind() {
+      graphFindNodeIds = new Set();
+      node.classed("graph-node-found", false);
+      if (label) {
+        label.classed("graph-label-found", false);
+        updateLabelVisibility();
+      }
+    }
+
+    function focusFoundNodes(matchingNodes) {
+      const focusNodes = Array.isArray(matchingNodes)
+        ? matchingNodes.filter((graphNode) => Number.isFinite(graphNode?.x) && Number.isFinite(graphNode?.y))
+        : [];
+      if (!focusNodes.length) return;
+
+      const padding = Math.min(140, Math.max(72, Math.min(width, height) * 0.16));
+      let minX = Infinity;
+      let minY = Infinity;
+      let maxX = -Infinity;
+      let maxY = -Infinity;
+      focusNodes.forEach((graphNode) => {
+        minX = Math.min(minX, graphNode.x);
+        minY = Math.min(minY, graphNode.y);
+        maxX = Math.max(maxX, graphNode.x);
+        maxY = Math.max(maxY, graphNode.y);
+      });
+
+      let targetScale;
+      let centerX;
+      let centerY;
+      if (focusNodes.length === 1 || Math.abs(maxX - minX) < 1 || Math.abs(maxY - minY) < 1) {
+        centerX = focusNodes[0].x;
+        centerY = focusNodes[0].y;
+        targetScale = Math.max(1.45, Math.min(2.1, currentZoomTransform?.k || 1.6));
+      } else {
+        const boxWidth = Math.max(1, maxX - minX);
+        const boxHeight = Math.max(1, maxY - minY);
+        centerX = minX + boxWidth / 2;
+        centerY = minY + boxHeight / 2;
+        const fitScale = Math.min((width - padding * 2) / boxWidth, (height - padding * 2) / boxHeight);
+        targetScale = Math.max(0.8, Math.min(2.2, fitScale));
+      }
+
+      const nextTransform = d3.zoomIdentity
+        .translate(width / 2 - centerX * targetScale, height / 2 - centerY * targetScale)
+        .scale(targetScale);
+      if (typeof svg.transition === "function") {
+        svg.transition().duration(420).call(zoomBehavior.transform, nextTransform);
+      } else {
+        currentZoomTransform = nextTransform;
+        activeTab.graphZoomScale = currentZoomTransform.k;
+        const cachedGraphRender = graphRenderCache.get(activeTab.id);
+        if (cachedGraphRender) cachedGraphRender.zoomScale = currentZoomTransform.k;
+        graphLayer.attr("transform", currentZoomTransform);
+        updateLabelVisibility();
+        updateStatusLine({
+          visiblePointCount: activeTab.visiblePointCount || nodes.length,
+          graphEdgeCount: activeTab.graphEdgeCount || graphEdgeCount,
+          graphZoomScale: currentZoomTransform.k
+        });
+        captureGraphLayout(activeTab, nodes, currentZoomTransform);
+        scheduleGraphLayoutStorageSave();
+      }
+    }
+
+    function applyFind(searchTerm) {
+      clearFind();
+      const normalizedTerm = String(searchTerm || "").trim().toLowerCase();
+      if (!normalizedTerm) return { count: 0, cleared: true };
+      const matchingNodes = nodes.filter((graphNode) => String(getGraphNodeLabel(graphNode) || "").toLowerCase().includes(normalizedTerm));
+      graphFindNodeIds = new Set(matchingNodes.map((graphNode) => graphNode.id));
+      node.classed("graph-node-found", (graphNode) => graphFindNodeIds.has(graphNode.id));
+      if (label) label.classed("graph-label-found", (graphNode) => graphFindNodeIds.has(graphNode.id));
+      graphFindNodeIds.forEach((nodeId) => {
+        const nodeElement = nodeElementByNodeId.get(nodeId);
+        if (nodeElement) nodeElement.parentNode?.appendChild(nodeElement);
+        const labelElement = labelElementByNodeId.get(nodeId);
+        if (labelElement) labelElement.parentNode?.appendChild(labelElement);
+      });
+      updateLabelVisibility();
+      if (matchingNodes.length) focusFoundNodes(matchingNodes);
+      return { count: matchingNodes.length, cleared: false };
+    }
+
+    graphRenderWrapper.style.setProperty("--graph-find-highlight-color", typeof getGraphFindHighlightColor === "function" ? getGraphFindHighlightColor() : "#ffff00");
+
     simulation.on("tick", renderGraphTick);
 
     graphRenderCache.set(activeTab.id, {
+      tabId: activeTab.id,
       renderer: graphRendererType,
       signature: graphSignature,
       wrapper: graphRenderWrapper,
@@ -4034,7 +4236,11 @@
       graphCollapsedNodeCount,
       zoomScale: currentZoomTransform.k,
       getZoomTransform: () => currentZoomTransform,
+      applyFind,
+      clearFind,
+      focusFoundNodes,
       destroy: () => {
+        clearFind();
         window.removeEventListener("keydown", updateHoveredGraphHighlight);
         window.removeEventListener("keyup", updateHoveredGraphHighlight);
         simulation.stop();
@@ -4070,6 +4276,6 @@
 
     }
 
-    return { renderGraphView };
+    return { renderGraphView, openGraphFindDialog };
   };
 })(window);

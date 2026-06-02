@@ -24,6 +24,20 @@
         return;
       }
 
+      if (isPrimaryModifier(event) && lowerKey === "f") {
+        var activeFindEl = document.activeElement;
+        var isFindTextControl = activeFindEl && (
+          activeFindEl.tagName === "TEXTAREA"
+          || activeFindEl.tagName === "INPUT"
+          || activeFindEl.isContentEditable
+        );
+        if (!isFindTextControl && deps.getActiveTabType && deps.getActiveTabType() === "graph" && deps.openGraphFindDialog) {
+          event.preventDefault();
+          deps.openGraphFindDialog();
+          return;
+        }
+      }
+
       if (isPrimaryModifier(event) && lowerKey === "c") {
         var activeEl = document.activeElement;
         var isTextControl = activeEl && (activeEl.tagName === "TEXTAREA" || activeEl.tagName === "INPUT");
