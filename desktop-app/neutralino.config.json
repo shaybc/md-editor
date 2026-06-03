@@ -19,6 +19,8 @@
     "filesystem.readFile",
     "filesystem.readBinaryFile",
     "filesystem.writeFile",
+    "filesystem.writeBinaryFile",
+    "filesystem.copy",
     "filesystem.readDirectory",
     "filesystem.getStats",
     "filesystem.createDirectory",
