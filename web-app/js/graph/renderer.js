@@ -685,18 +685,30 @@
       ...getFullOutgoingNodeIds(nodeId)
     ]);
 
+    const getGraphModeNodeIds = (mode, focusNodeId) => {
+      if (mode === "local") return new Set([focusNodeId, ...getDirectOutgoingNodeIds(focusNodeId)]);
+      if (mode === "full-local") return new Set([focusNodeId, ...getFullOutgoingNodeIds(focusNodeId)]);
+      if (mode === "full-network") return getFullNetworkNodeIds(focusNodeId);
+      return new Set([focusNodeId].filter(Boolean));
+    };
+
+    const getGraphModeNodeCount = (mode, focusNodeId) => {
+      const modeNodeIds = getGraphModeNodeIds(mode, focusNodeId);
+      return nodes.reduce((count, nodeData) => count + (modeNodeIds.has(nodeData.id) ? 1 : 0), 0);
+    };
+
     if (graphViewConfig && graphViewConfig.mode === "local" && graphViewConfig.focusNodeId) {
       const focusNodeId = graphViewConfig.focusNodeId;
-      filterGraphToNodeIds(new Set([focusNodeId, ...getDirectOutgoingNodeIds(focusNodeId)]));
+      filterGraphToNodeIds(getGraphModeNodeIds("local", focusNodeId));
     }
 
     if (graphViewConfig && graphViewConfig.mode === "full-local" && graphViewConfig.focusNodeId) {
       const focusNodeId = graphViewConfig.focusNodeId;
-      filterGraphToNodeIds(new Set([focusNodeId, ...getFullOutgoingNodeIds(focusNodeId)]));
+      filterGraphToNodeIds(getGraphModeNodeIds("full-local", focusNodeId));
     }
 
     if (graphViewConfig && graphViewConfig.mode === "full-network" && graphViewConfig.focusNodeId) {
-      filterGraphToNodeIds(getFullNetworkNodeIds(graphViewConfig.focusNodeId));
+      filterGraphToNodeIds(getGraphModeNodeIds("full-network", graphViewConfig.focusNodeId));
     }
 
     if (graphViewConfig && graphViewConfig.mode === "cluster" && Array.isArray(graphViewConfig.clusterNodeIds)) {
@@ -3720,6 +3732,7 @@
       const localTabTitle = `${titlePrefix}: ${contextTargetNode.label}`;
       const localGraphTab = createGraphTab(localTabTitle, {
         graphSnapshot: activeGraphTab?.graphSnapshot || null,
+        graphNodeCount: getGraphModeNodeCount(mode, focusNodeId),
         graphViewConfig: {
           mode,
           focusNodeId,

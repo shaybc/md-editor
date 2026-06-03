@@ -33,6 +33,9 @@
   }
 
   function getGraphNodeCountForDisplayDefaults(options = {}) {
+    if (Number.isFinite(Number(options.graphNodeCount))) {
+      return Math.max(0, Math.floor(Number(options.graphNodeCount)));
+    }
     const snapshot = options.graphSnapshot !== undefined ? options.graphSnapshot : options.graphDocument?.snapshot;
     return Array.isArray(snapshot?.nodes) ? snapshot.nodes.length : 0;
   }

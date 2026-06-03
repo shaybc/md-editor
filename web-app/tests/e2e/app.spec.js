@@ -754,6 +754,101 @@ test("graph ctrl+f finds and highlights nodes without filtering the map", async 
   await expect.poll(() => page.locator(".graph-node-found").evaluate((node) => getComputedStyle(node).fill)).toBe("rgb(255, 234, 0)");
 });
 
+test("local graph warning uses the subgraph node count", async ({ page }) => {
+  await page.addInitScript(() => {
+    window.__graphOpenConfirmMessages = [];
+    window.confirm = (message) => {
+      window.__graphOpenConfirmMessages.push(String(message));
+      return true;
+    };
+    const graphNodes = Array.from({ length: 12 }, (_, index) => ({
+      id: `node-${index}.md`,
+      label: `Node ${index}`,
+      type: "file",
+      status: "current"
+    }));
+    const graphFiles = graphNodes.map((node) => ({
+      id: node.id,
+      name: node.label,
+      path: node.id,
+      content: `# ${node.label}`,
+      status: "current"
+    }));
+    const graphTab = {
+      id: "local_warning_graph_e2e",
+      title: "Local Warning Graph",
+      content: "",
+      scrollPos: 0,
+      viewMode: "preview",
+      createdAt: Date.now(),
+      isTemporary: false,
+      type: "graph",
+      folderName: "Local Warning Graph",
+      graphViewConfig: {
+        showTags: false,
+        hiddenTagIds: [],
+        hiddenNodeIds: [],
+        selectedTagIds: [],
+        groups: [],
+        collapsedClusters: [],
+        searchQuery: "",
+        showArrows: true,
+        showOrphans: true,
+        showLabels: true,
+        textFadeThreshold: 0.35,
+        nodeSize: 0.8,
+        linkThickness: 1,
+        centerForce: 1,
+        repelForce: 650,
+        linkForce: 0.4,
+        linkDistance: 170
+      },
+      graphSnapshot: {
+        version: 1,
+        folderName: "Local Warning Graph",
+        createdAt: Date.now(),
+        nodes: graphNodes,
+        links: [
+          { source: "node-0.md", target: "node-1.md", type: "link", status: "current" },
+          { source: "node-0.md", target: "node-2.md", type: "link", status: "current" }
+        ],
+        files: graphFiles
+      }
+    };
+    localStorage.setItem("markdownViewerGlobalState", JSON.stringify({
+      graphRenderWarningThreshold: 5,
+      contextMenuTooltipDelayMs: 0
+    }));
+    localStorage.setItem("markdownViewerTabs", JSON.stringify([graphTab]));
+    localStorage.setItem("markdownViewerActiveTab", graphTab.id);
+  });
+
+  await page.goto("/");
+  await expect(page.locator(".graph-tab-render")).toBeVisible();
+  await expect(page.locator(".graph-node-file")).toHaveCount(12);
+
+  await page.evaluate(() => {
+    const node = Array.from(document.querySelectorAll(".graph-node-file"))
+      .find((candidate) => candidate.__data__?.id === "node-0.md");
+    node?.dispatchEvent(new MouseEvent("contextmenu", {
+      bubbles: true,
+      cancelable: true,
+      button: 2,
+      clientX: 420,
+      clientY: 280
+    }));
+  });
+
+  const graphMenu = page.locator(".graph-tab-render .graph-context-menu:not(.hidden)");
+  await expect(graphMenu).toBeVisible();
+  await graphMenu.locator(".graph-context-menu-submenu", { hasText: "Show graph" }).hover();
+  await graphMenu.locator(".graph-context-menu-item", { hasText: "Show local graph" }).click();
+
+  await expect(page.locator("#tab-list .tab-item.active")).toContainText("Local Graph: Node 0");
+  await expect(page.locator(".graph-tab-render:not(.hidden) .graph-node-file")).toHaveCount(3);
+  await expect.poll(() => page.evaluate(() => window.__graphOpenConfirmMessages)).toEqual([]);
+});
+
 test("code converter dialog browses folders and runs converter", async ({ page }) => {
   await page.addInitScript(() => {
     window.NL_PATH = "C:/GitHub/shaybc/markdown-viewer/desktop-app";
