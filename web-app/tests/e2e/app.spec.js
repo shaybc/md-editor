@@ -849,6 +849,121 @@ test("local graph warning uses the subgraph node count", async ({ page }) => {
   await expect.poll(() => page.evaluate(() => window.__graphOpenConfirmMessages)).toEqual([]);
 });
 
+test("map context menu exports visible original source files", async ({ page }) => {
+  await page.addInitScript(() => {
+    window.NL_VERSION = "test";
+    window.__alerts = [];
+    window.alert = (message) => window.__alerts.push(String(message));
+    const originalSources = new Map([
+      ["C:/src/a.java", "class A {}"],
+      ["C:/src/nested/b.java", "class B {}"]
+    ]);
+    const writtenFiles = new Map();
+    window.Neutralino = {
+      os: {
+        showFolderDialog: async (title) => {
+          window.__sourceExportDialogTitle = title;
+          return "D:/mySrc";
+        }
+      },
+      filesystem: {
+        createDirectory: async (path) => {
+          window.__sourceExportCreatedDirectories = window.__sourceExportCreatedDirectories || [];
+          window.__sourceExportCreatedDirectories.push(path);
+        },
+        readFile: async (path) => {
+          if (!originalSources.has(path)) throw new Error(`Missing source: ${path}`);
+          return originalSources.get(path);
+        },
+        writeFile: async (path, content) => {
+          writtenFiles.set(path, content);
+          window.__sourceExportWrittenFiles = Array.from(writtenFiles.entries());
+        }
+      }
+    };
+    const graphTab = {
+      id: "source_export_graph_e2e",
+      title: "Source Export Graph",
+      content: "",
+      scrollPos: 0,
+      viewMode: "preview",
+      createdAt: Date.now(),
+      isTemporary: false,
+      type: "graph",
+      folderName: "Source Export Graph",
+      graphViewConfig: {
+        showTags: false,
+        hiddenTagIds: [],
+        hiddenNodeIds: [],
+        selectedTagIds: [],
+        groups: [],
+        collapsedClusters: [],
+        searchQuery: "",
+        showArrows: true,
+        showOrphans: true,
+        showLabels: true,
+        textFadeThreshold: 0.35,
+        nodeSize: 0.8,
+        linkThickness: 1,
+        centerForce: 1,
+        repelForce: 650,
+        linkForce: 0.4,
+        linkDistance: 170
+      },
+      graphSnapshot: {
+        version: 1,
+        folderName: "Source Export Graph",
+        createdAt: Date.now(),
+        nodes: [
+          { id: "a.md", label: "a.md", type: "file", status: "current" },
+          { id: "b.md", label: "b.md", type: "file", status: "current" },
+          { id: "missing.md", label: "missing.md", type: "file", status: "current" }
+        ],
+        links: [
+          { source: "a.md", target: "b.md", type: "link", status: "current" }
+        ],
+        files: [
+          { id: "a.md", path: "a.md", name: "a.md", content: "---\nsource_file: C:/src/a.java\n---\n# A", status: "current" },
+          { id: "b.md", path: "b.md", name: "b.md", content: "---\nSource: C:/src/nested/b.java\n---\n# B", status: "current" },
+          { id: "missing.md", path: "missing.md", name: "missing.md", content: "# Missing", status: "current" }
+        ]
+      }
+    };
+    localStorage.setItem("markdownViewerTabs", JSON.stringify([graphTab]));
+    localStorage.setItem("markdownViewerActiveTab", graphTab.id);
+  });
+
+  await page.goto("/");
+  await expect(page.locator(".graph-tab-render")).toBeVisible();
+  await expect(page.locator(".graph-node-file")).toHaveCount(3);
+
+  await page.locator(".graph-tab-render").dispatchEvent("contextmenu", {
+    bubbles: true,
+    cancelable: true,
+    button: 2,
+    clientX: 420,
+    clientY: 280
+  });
+  const graphMenu = page.locator(".graph-tab-render .graph-context-menu:not(.hidden)");
+  await expect(graphMenu).toBeVisible();
+  await graphMenu.locator(".graph-context-menu-item", { hasText: "Export original sources" }).click();
+
+  await expect.poll(() => page.evaluate(() => ({
+    title: window.__sourceExportDialogTitle,
+    directories: window.__sourceExportCreatedDirectories || [],
+    written: window.__sourceExportWrittenFiles || [],
+    alerts: window.__alerts
+  }))).toEqual({
+    title: "Export original source files",
+    directories: ["D:/mySrc/src", "D:/mySrc/src/nested"],
+    written: [
+      ["D:/mySrc/src/a.java", "class A {}"],
+      ["D:/mySrc/src/nested/b.java", "class B {}"]
+    ],
+    alerts: ["Exported 2 source files to D:/mySrc.\nSkipped 1 visible node without a Source/source_file path."]
+  });
+});
+
 test("code converter dialog browses folders and runs converter", async ({ page }) => {
   await page.addInitScript(() => {
     window.NL_PATH = "C:/GitHub/shaybc/markdown-viewer/desktop-app";

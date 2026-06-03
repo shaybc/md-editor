@@ -1653,6 +1653,11 @@
       CONTEXT_MENU_ACTIONS.showFullNetwork.icon,
       "Open a graph containing every recursive backlink and outgoing dependency reachable from this point."
     );
+    const exportOriginalSourcesBtn = createContextMenuButton(
+      CONTEXT_MENU_ACTIONS.exportOriginalSources.label,
+      CONTEXT_MENU_ACTIONS.exportOriginalSources.icon,
+      "Copy source files referenced by visible graph nodes into a selected folder."
+    );
     const expandedClusterGraphBtn = createContextMenuButton(
       CONTEXT_MENU_ACTIONS.showExpandedCluster.label,
       CONTEXT_MENU_ACTIONS.showExpandedCluster.icon,
@@ -1782,6 +1787,7 @@
     contextMenu.appendChild(contextMenuTitle);
     contextMenu.appendChild(contextMenuTitleSeparator);
     contextMenu.appendChild(openAllBtn);
+    contextMenu.appendChild(exportOriginalSourcesBtn);
     contextMenu.appendChild(openFileBtn);
     contextMenu.appendChild(openDefaultAppBtn);
     contextMenu.appendChild(revealFileBtn);
@@ -2045,9 +2051,126 @@
     const getSourceFilePathFromMarkdown = (markdown) => {
       const frontmatterMatch = String(markdown || "").match(/^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/);
       if (!frontmatterMatch) return "";
-      const sourceFileMatch = frontmatterMatch[1].match(/^\s*source_file\s*:\s*(.+?)\s*$/im);
+      const sourceFileMatch = frontmatterMatch[1].match(/^\s*(source_file|source)\s*:\s*(.+?)\s*$/im);
       if (!sourceFileMatch) return "";
-      return sourceFileMatch[1].trim().replace(/^['"]|['"]$/g, "");
+      return sourceFileMatch[2].trim().replace(/^['"]|['"]$/g, "");
+    };
+
+    const getSourceExportRelativePath = (sourcePath) => {
+      const normalized = String(sourcePath || "")
+        .trim()
+        .replace(/^['"]|['"]$/g, "")
+        .replace(/\\/g, "/")
+        .replace(/^[a-z]:/i, "")
+        .replace(/^\/+/, "");
+      return normalized
+        .split("/")
+        .map((part) => part.trim())
+        .filter((part) => part && part !== "." && part !== "..")
+        .join("/");
+    };
+
+    const getVisibleExportSourceNodes = () => nodes.filter((nodeData) => !isTagNode(nodeData) && !isClusterNode(nodeData));
+
+    const getSourceExportTargetPath = (destinationFolder, sourcePath) => {
+      const relativePath = getSourceExportRelativePath(sourcePath);
+      return relativePath ? joinPath(destinationFolder, relativePath) : "";
+    };
+
+    const createdSourceExportDirectories = new Set();
+    const createDirectoryIfNeeded = async (dirPath) => {
+      if (!dirPath || !Neutralino?.filesystem?.createDirectory) return;
+      if (createdSourceExportDirectories.has(dirPath)) return;
+      createdSourceExportDirectories.add(dirPath);
+      try {
+        await Neutralino.filesystem.createDirectory(dirPath);
+      } catch (_) {
+        // Existing directories are fine; later file writes still surface real path problems.
+      }
+    };
+
+    const ensureSourceExportDirectory = async (destinationFolder, relativePath) => {
+      const relativeParts = String(relativePath || "").split("/").filter(Boolean);
+      if (relativeParts.length <= 1) return;
+      let currentPath = String(destinationFolder || "").replace(/[\\/]+$/, "");
+      for (const folderPart of relativeParts.slice(0, -1)) {
+        currentPath = joinPath(currentPath, folderPart);
+        await createDirectoryIfNeeded(currentPath);
+      }
+    };
+
+    const copySourceFileToDestination = async (sourcePath, targetPath) => {
+      if (Neutralino?.filesystem?.readBinaryFile && Neutralino?.filesystem?.writeBinaryFile) {
+        const content = await Neutralino.filesystem.readBinaryFile(sourcePath);
+        await Neutralino.filesystem.writeBinaryFile(targetPath, content);
+        return;
+      }
+      if (!Neutralino?.filesystem?.readFile || !Neutralino?.filesystem?.writeFile) {
+        throw new Error("No supported filesystem copy API is available.");
+      }
+      await Neutralino.filesystem.writeFile(targetPath, await Neutralino.filesystem.readFile(sourcePath));
+    };
+
+    const collectVisibleSourceExports = async () => {
+      const exportsByTargetPath = new Map();
+      const skippedNodes = [];
+
+      for (const graphNode of getVisibleExportSourceNodes()) {
+        let sourcePath = "";
+        try {
+          sourcePath = getSourceFilePathFromMarkdown(await readGraphNodeContent(graphNode));
+        } catch (error) {
+          console.warn("Unable to read source frontmatter for graph source export:", error);
+        }
+        const relativePath = getSourceExportRelativePath(sourcePath);
+        if (!sourcePath || !relativePath) {
+          skippedNodes.push(graphNode);
+          continue;
+        }
+        if (!exportsByTargetPath.has(relativePath)) {
+          exportsByTargetPath.set(relativePath, { graphNode, sourcePath, relativePath });
+        }
+      }
+
+      return { exports: Array.from(exportsByTargetPath.values()), skippedNodes };
+    };
+
+    const exportVisibleOriginalSources = async () => {
+      hideContextMenu();
+      if (!isNeutralinoRuntime() || !Neutralino?.os?.showFolderDialog || !Neutralino?.filesystem) {
+        alert("Exporting original source files is available only in the desktop app.");
+        return;
+      }
+      const { exports, skippedNodes } = await collectVisibleSourceExports();
+      if (!exports.length) {
+        alert("No visible graph nodes have a Source or source_file frontmatter path to export.");
+        return;
+      }
+      const destinationFolder = await Neutralino.os.showFolderDialog("Export original source files");
+      if (!destinationFolder) return;
+
+      const failedExports = [];
+      let exportedCount = 0;
+      for (const exportItem of exports) {
+        const targetPath = getSourceExportTargetPath(destinationFolder, exportItem.sourcePath);
+        if (!targetPath) {
+          failedExports.push(exportItem);
+          continue;
+        }
+        try {
+          await ensureSourceExportDirectory(destinationFolder, exportItem.relativePath);
+          await copySourceFileToDestination(exportItem.sourcePath, targetPath);
+          exportedCount += 1;
+        } catch (error) {
+          console.error("Failed to export original source file:", error);
+          failedExports.push(exportItem);
+        }
+      }
+
+      const summary = [`Exported ${exportedCount} source file${exportedCount === 1 ? "" : "s"} to ${destinationFolder}.`];
+      if (skippedNodes.length) summary.push(`Skipped ${skippedNodes.length} visible node${skippedNodes.length === 1 ? "" : "s"} without a Source/source_file path.`);
+      if (failedExports.length) summary.push(`Failed to copy ${failedExports.length} source file${failedExports.length === 1 ? "" : "s"}.`);
+      alert(summary.join("\n"));
     };
 
     const getCopyPathForNode = async (nodeId, options) => {
@@ -3231,6 +3354,7 @@
     ];
     const graphContextMenuItems = [
       openAllBtn,
+      exportOriginalSourcesBtn,
       removeLeafNodesBtn,
       magneticToggleBtn
     ];
@@ -3369,6 +3493,11 @@
       event.stopPropagation();
       hideContextMenu();
       await openAllVisibleGraphFiles();
+    });
+
+    exportOriginalSourcesBtn.addEventListener("click", async (event) => {
+      event.stopPropagation();
+      await exportVisibleOriginalSources();
     });
 
     removeLeafNodesBtn.addEventListener("click", (event) => {

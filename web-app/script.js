@@ -3852,6 +3852,7 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
     exportMarkdown: { label: "Export as Markdown", icon: "bi bi-file-earmark-text" },
     exportHtml: { label: "Export as HTML", icon: "bi bi-file-earmark-code" },
     exportPdf: { label: "Export as PDF", icon: "bi bi-file-earmark-pdf" },
+    exportOriginalSources: { label: "Export original sources", icon: "bi bi-folder-symlink" },
     exportFolderToGraph: { label: "Export Folder to Graph", icon: "bi bi-download" },
     showGraphView: { label: "Show graph view", icon: "bi bi-diagram-3" },
     refresh: { label: "Refresh", icon: "bi bi-arrow-clockwise" },
