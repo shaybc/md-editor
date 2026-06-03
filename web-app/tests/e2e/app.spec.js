@@ -859,6 +859,7 @@ test("map context menu exports visible original source files", async ({ page }) 
       ["C:/src/nested/b.java", "class B {}"]
     ]);
     const writtenFiles = new Map();
+    const copiedFiles = [];
     window.Neutralino = {
       os: {
         showFolderDialog: async (title) => {
@@ -867,6 +868,11 @@ test("map context menu exports visible original source files", async ({ page }) 
         }
       },
       filesystem: {
+        copy: async (source, destination) => {
+          if (!originalSources.has(source)) throw new Error(`Missing source: ${source}`);
+          copiedFiles.push([source, destination]);
+          window.__sourceExportCopiedFiles = copiedFiles;
+        },
         createDirectory: async (path) => {
           window.__sourceExportCreatedDirectories = window.__sourceExportCreatedDirectories || [];
           window.__sourceExportCreatedDirectories.push(path);
@@ -923,8 +929,8 @@ test("map context menu exports visible original source files", async ({ page }) 
           { source: "a.md", target: "b.md", type: "link", status: "current" }
         ],
         files: [
-          { id: "a.md", path: "a.md", name: "a.md", content: "---\nsource_file: C:/src/a.java\n---\n# A", status: "current" },
-          { id: "b.md", path: "b.md", name: "b.md", content: "---\nSource: C:/src/nested/b.java\n---\n# B", status: "current" },
+          { id: "a.md", path: "a.md", name: "a.md", content: "---\nsource_file: C:\\src\\a.java\n---\n# A", status: "current" },
+          { id: "b.md", path: "b.md", name: "b.md", content: "---\nSource: C:\\src\\nested\\b.java\n---\n# B", status: "current" },
           { id: "missing.md", path: "missing.md", name: "missing.md", content: "# Missing", status: "current" }
         ]
       }
@@ -951,15 +957,17 @@ test("map context menu exports visible original source files", async ({ page }) 
   await expect.poll(() => page.evaluate(() => ({
     title: window.__sourceExportDialogTitle,
     directories: window.__sourceExportCreatedDirectories || [],
+    copied: window.__sourceExportCopiedFiles || [],
     written: window.__sourceExportWrittenFiles || [],
     alerts: window.__alerts
   }))).toEqual({
     title: "Export original source files",
     directories: ["D:/mySrc/src", "D:/mySrc/src/nested"],
-    written: [
-      ["D:/mySrc/src/a.java", "class A {}"],
-      ["D:/mySrc/src/nested/b.java", "class B {}"]
+    copied: [
+      ["C:/src/a.java", "D:/mySrc/src/a.java"],
+      ["C:/src/nested/b.java", "D:/mySrc/src/nested/b.java"]
     ],
+    written: [],
     alerts: ["Exported 2 source files to D:/mySrc.\nSkipped 1 visible node without a Source/source_file path."]
   });
 });

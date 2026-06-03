@@ -2070,6 +2070,11 @@
         .join("/");
     };
 
+    const normalizeSourceExportFilesystemPath = (sourcePath) => String(sourcePath || "")
+      .trim()
+      .replace(/^['"]|['"]$/g, "")
+      .replace(/\\/g, "/");
+
     const getVisibleExportSourceNodes = () => nodes.filter((nodeData) => !isTagNode(nodeData) && !isClusterNode(nodeData));
 
     const getSourceExportTargetPath = (destinationFolder, sourcePath) => {
@@ -2081,11 +2086,12 @@
     const createDirectoryIfNeeded = async (dirPath) => {
       if (!dirPath || !Neutralino?.filesystem?.createDirectory) return;
       if (createdSourceExportDirectories.has(dirPath)) return;
-      createdSourceExportDirectories.add(dirPath);
       try {
         await Neutralino.filesystem.createDirectory(dirPath);
+        createdSourceExportDirectories.add(dirPath);
       } catch (_) {
         // Existing directories are fine; later file writes still surface real path problems.
+        createdSourceExportDirectories.add(dirPath);
       }
     };
 
@@ -2100,15 +2106,26 @@
     };
 
     const copySourceFileToDestination = async (sourcePath, targetPath) => {
-      if (Neutralino?.filesystem?.readBinaryFile && Neutralino?.filesystem?.writeBinaryFile) {
-        const content = await Neutralino.filesystem.readBinaryFile(sourcePath);
-        await Neutralino.filesystem.writeBinaryFile(targetPath, content);
+      const filesystem = Neutralino?.filesystem;
+      const normalizedSourcePath = normalizeSourceExportFilesystemPath(sourcePath);
+      const normalizedTargetPath = normalizeSourceExportFilesystemPath(targetPath);
+      if (filesystem?.copy) {
+        try {
+          await filesystem.copy(normalizedSourcePath, normalizedTargetPath);
+          return;
+        } catch (error) {
+          console.warn("Neutralino filesystem.copy failed, trying read/write source export fallback:", error);
+        }
+      }
+      if (filesystem?.readBinaryFile && filesystem?.writeBinaryFile) {
+        const content = await filesystem.readBinaryFile(normalizedSourcePath);
+        await filesystem.writeBinaryFile(normalizedTargetPath, content);
         return;
       }
-      if (!Neutralino?.filesystem?.readFile || !Neutralino?.filesystem?.writeFile) {
+      if (!filesystem?.readFile || !filesystem?.writeFile) {
         throw new Error("No supported filesystem copy API is available.");
       }
-      await Neutralino.filesystem.writeFile(targetPath, await Neutralino.filesystem.readFile(sourcePath));
+      await filesystem.writeFile(normalizedTargetPath, await filesystem.readFile(normalizedSourcePath));
     };
 
     const collectVisibleSourceExports = async () => {
