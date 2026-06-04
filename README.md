@@ -1,11 +1,48 @@
 # MD-Editor
 
-MD-Editor is a local-first Markdown workspace for writing, previewing, organizing, and exporting technical documents. It runs as a static web app and as a Neutralino-powered desktop app, with the same core editor experience in both places.
+<div align="center">
+  <img src="web-app/assets/icon.jpg" alt="MD-Editor Logo" width="140" />
 
-The project is no longer just a Markdown preview page. It includes multi-tab editing, folder import, graph visualization, Markdown export workflows, and a code-to-Markdown converter that can turn source trees into navigable dependency maps.
+  <p><strong>MD-Editor is a local Markdown workspace.</strong></p>
+  <p>Converts code to md representation, advanced MD editor, explore code dependecies, explore code as a graph .</p>
 
-![MD-Editor workspace](web-app/assets/readme-workspace.png)
+  <p>
+    <a href="wiki/Home.md" target="_blank" rel="noopener noreferrer">Documentation</a> ·
+    <a href="wiki/Markdown-Reference.md" target="_blank" rel="noopener noreferrer">Markdown Reference</a> ·
+    <a href="wiki/Release-Notes.md" target="_blank" rel="noopener noreferrer">Release Notes</a>
+  </p>
 
+  <p>
+    <img src="web-app/assets/badges/license.svg" alt="License: Apache 2.0" />
+    <img src="web-app/assets/badges/release.svg" alt="Release: v6.4" />
+    <img src="web-app/assets/badges/tests.svg" alt="Tests: 28 passing" />
+    <img src="web-app/assets/badges/app.svg" alt="App: web desktop" />
+    <img src="web-app/assets/badges/code-maps.svg" alt="Code maps: JS TS PY Java C#" />
+  </p>
+  
+</div>
+  
+MD-Editor is a local-first Markdown workspace for writing, previewing, organizing, and exporting technical documents.
+It runs as a static web app and as a Neutralino-powered desktop app, with the same core editor experience in both places.
+The project includes multi-tab editing, folder import, graph visualization, Markdown export workflows, and a code-to-Markdown converter that can turn source trees into navigable dependency maps.
+  
+---
+
+## Table of Contents
+
+- [What It Does](#what-it-does)
+- [Screenshots](#screenshots)
+- [Key Features](#key-features)
+- [Repository Layout](#repository-layout)
+- [Run The Web App](#run-the-web-app)
+- [Run The Desktop App](#run-the-desktop-app)
+- [Convert Code To Markdown](#convert-code-to-markdown)
+- [Development](#development)
+- [Privacy Model](#privacy-model)
+- [License](#license)
+
+---
+  
 ## What It Does
 
 - Write Markdown in a split editor with live GitHub-style preview.
@@ -18,6 +55,9 @@ The project is no longer just a Markdown preview page. It includes multi-tab edi
 - Convert source code folders into Markdown files with dependency links and optional member documentation.
 
 ## Screenshots
+  
+![MD-Editor workspace](web-app/assets/readme-workspace.png)
+  
 
 ### Graph View
 
@@ -148,6 +188,10 @@ npm run test:e2e
 ## Privacy Model
 
 MD-Editor is designed around local processing. Markdown rendering, tab state, graph state, and exports are handled in the browser or desktop app. The web build references public CDN libraries from `index.html`; for isolated or offline use, serve the vendored desktop resources or replace the CDN references with local assets.
+
+## Project Origin
+
+This project started as a fork of [ThisIs-Developer/Markdown-Viewer](https://github.com/ThisIs-Developer/Markdown-Viewer).
 
 ## License
 

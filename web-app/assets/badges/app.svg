@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="126" height="20" role="img" aria-label="app: web desktop">
+  <linearGradient id="s" x2="0" y2="100%">
+    <stop offset="0" stop-color="#bbb" stop-opacity=".1"/>
+    <stop offset="1" stop-opacity=".1"/>
+  </linearGradient>
+  <rect width="126" height="20" rx="3" fill="#555"/>
+  <rect x="34" width="92" height="20" rx="3" fill="#6f42c1"/>
+  <path fill="#6f42c1" d="M34 0h4v20h-4z"/>
+  <rect width="126" height="20" rx="3" fill="url(#s)"/>
+  <g fill="#fff" text-anchor="middle" font-family="Verdana,Geneva,sans-serif" font-size="11">
+    <text x="17" y="15" fill="#010101" fill-opacity=".3">app</text>
+    <text x="17" y="14">app</text>
+    <text x="80" y="15" fill="#010101" fill-opacity=".3">web desktop</text>
+    <text x="80" y="14">web desktop</text>
+  </g>
+</svg>

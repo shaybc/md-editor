@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="186" height="20" role="img" aria-label="code maps: JS TS PY Java C#">
+  <linearGradient id="s" x2="0" y2="100%">
+    <stop offset="0" stop-color="#bbb" stop-opacity=".1"/>
+    <stop offset="1" stop-opacity=".1"/>
+  </linearGradient>
+  <rect width="186" height="20" rx="3" fill="#555"/>
+  <rect x="72" width="114" height="20" rx="3" fill="#d73a49"/>
+  <path fill="#d73a49" d="M72 0h4v20h-4z"/>
+  <rect width="186" height="20" rx="3" fill="url(#s)"/>
+  <g fill="#fff" text-anchor="middle" font-family="Verdana,Geneva,sans-serif" font-size="11">
+    <text x="36" y="15" fill="#010101" fill-opacity=".3">code maps</text>
+    <text x="36" y="14">code maps</text>
+    <text x="129" y="15" fill="#010101" fill-opacity=".3">JS TS PY Java C#</text>
+    <text x="129" y="14">JS TS PY Java C#</text>
+  </g>
+</svg>

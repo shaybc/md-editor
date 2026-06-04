@@ -2296,14 +2296,14 @@ description: A client-side GitHub-flavored Markdown editor and previewer with ta
 author: ShayBC
 tags: ["markdown", "preview", "mermaid", "latex", "graph", "open-source"]
 updated: 2026-05-09
-repository: https://github.com/ThisIs-Developer/Markdown-Viewer
+repository: https://github.com/shaybc/markdown-viewer
 ---
 
 # Welcome to MD-Editor
 
 MD-Editor is a modern, client-side Markdown workspace for writing, previewing, importing, organizing, and exporting Markdown documents. This welcome document appears when the app starts with no saved tabs and when all tabs are reset.
 
-- **Repository:** [github.com/ThisIs-Developer/Markdown-Viewer](https://github.com/ThisIs-Developer/Markdown-Viewer)
+- **Repository:** [shaybc/markdown-viewer](https://github.com/shaybc/markdown-viewer)
 - **Privacy model:** Your Markdown is rendered in your browser; document tabs are saved locally in this browser with localStorage.
 - **Best for:** Notes, READMEs, technical docs, wiki pages, research snippets, diagrams, math-heavy docs, and quick export workflows.
 - **App info:** Updated May 9, 2026.
@@ -2401,7 +2401,7 @@ Keyboard shortcuts: <kbd>Ctrl</kbd>/<kbd>Cmd</kbd> + <kbd>S</kbd> to export Mark
 
 ## 🔗 Helpful Links
 
-- [MD-Editor repository](https://github.com/ThisIs-Developer/Markdown-Viewer)
+- [MD-Editor repository](https://github.com/shaybc/markdown-viewer)
 - [GitHub Flavored Markdown spec](https://github.github.com/gfm/)
 - [Mermaid documentation](https://mermaid.js.org/)
 - [MathJax documentation](https://docs.mathjax.org/)
