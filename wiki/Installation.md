@@ -1,161 +1,246 @@
 # Installation
 
-This page describes every way to install and run **Markdown Viewer**.
+This page describes the supported ways to install and run **MD-Editor** from this repository.
 
 ---
 
 ## Table of Contents
 
-- [Option 1 — Docker (Recommended)](#option-1--docker-recommended)
-- [Option 2 — Docker Compose](#option-2--docker-compose)
-- [Option 3 — Self-Hosted Static Web Server](#option-3--self-hosted-static-web-server)
-- [Option 4 — Desktop Application](#option-4--desktop-application)
+- [Option 1 - Run The Web App Locally](#option-1---run-the-web-app-locally)
+- [Option 2 - Docker Compose](#option-2---docker-compose)
+- [Option 3 - Docker Build](#option-3---docker-build)
+- [Option 4 - Desktop Application](#option-4---desktop-application)
+- [Option 5 - Self-Hosted Static Server](#option-5---self-hosted-static-server)
+- [Network And Offline Notes](#network-and-offline-notes)
 - [System Requirements](#system-requirements)
 
 ---
 
-## Option 1 — Docker (Recommended)
+## Option 1 - Run The Web App Locally
 
-The easiest way to run Markdown Viewer is with a single Docker command. The pre-built image is available from the **GitHub Container Registry (GHCR)**.
-
-```bash
-docker run -d \
-  --name markdown-viewer \
-  -p 8080:80 \
-  --restart unless-stopped \
-  ghcr.io/thisis-developer/markdown-viewer:latest
-```
-
-Then open **http://localhost:8080** in your browser.
-
-### Available Image Tags
-
-| Tag | Description |
-|-----|-------------|
-| `latest` | Latest stable build from the `main` branch |
-| `main` | Same as `latest` |
-| `<commit-sha>` | Pinned to a specific commit |
-
----
-
-## Option 2 — Docker Compose
-
-For a more reproducible local setup, clone the repository and use Docker Compose.
+MD-Editor is a static web app. You can run it from the repository root with any local static file server.
 
 ### 1. Clone the repository
 
 ```bash
-git clone https://github.com/ThisIs-Developer/Markdown-Viewer.git
-cd Markdown-Viewer/web-app
+git clone https://github.com/shaybc/md-editor.git
+cd md-editor
 ```
 
-### 2. Start the application
+### 2. Start a local server
+
+Using Python:
 
 ```bash
-docker compose up -d
+python -m http.server 9500 --directory web-app
 ```
 
-The application starts on **http://localhost:8080**.
+Then open:
 
-### 3. Stop the application
+```text
+http://localhost:9500/
+```
+
+On Windows, you can also use the helper script from the repository root. It pulls the latest changes, opens the browser, and starts the local server:
+
+```bat
+start_web.bat
+```
+
+> Note: Opening `web-app/index.html` directly with `file://` can work for simple editing, but some browser APIs are restricted from local files. A local server is recommended.
+
+---
+
+## Option 2 - Docker Compose
+
+Use Docker Compose when you want a repeatable local container setup.
+
+### 1. Clone the repository
+
+```bash
+git clone https://github.com/shaybc/md-editor.git
+cd md-editor/web-app
+```
+
+### 2. Build and start the container
+
+```bash
+docker compose up --build
+```
+
+The app starts on:
+
+```text
+http://localhost:8080/
+```
+
+### 3. Stop the container
 
 ```bash
 docker compose down
 ```
 
-### docker-compose.yml overview
+The included `web-app/docker-compose.yml` builds the local Dockerfile:
 
 ```yaml
 services:
-  markdown-viewer:
-    image: ghcr.io/thisis-developer/markdown-viewer:latest
-    container_name: markdown-viewer
+  md-editor:
+    build:
+      context: .
+      dockerfile: Dockerfile
     ports:
       - "8080:80"
+    container_name: md-editor
     restart: unless-stopped
 ```
 
-You can change the host port by modifying the left side of `8080:80` (e.g., `3000:80`).
+Change the host port by editing the left side of `8080:80`, for example `3000:80`.
 
 ---
 
-## Option 3 — Self-Hosted Static Web Server
+## Option 3 - Docker Build
 
-Because the application is 100% client-side, you can serve it from any static web server.
-
-### Clone the repository
+You can build and run the web app image directly.
 
 ```bash
-git clone https://github.com/ThisIs-Developer/Markdown-Viewer.git
-cd Markdown-Viewer/web-app
+cd web-app
+docker build -t md-editor:local .
+docker run --rm -p 8080:80 --name md-editor md-editor:local
 ```
 
-### Serve with Python (no dependencies)
+Then open:
 
-```bash
-python3 -m http.server 8080
+```text
+http://localhost:8080/
 ```
 
-### Serve with Node.js `serve`
-
-```bash
-npx serve . -p 8080
-```
-
-### Serve with VS Code Live Server
-
-Open the project folder in VS Code and click **Go Live** in the status bar.
-
-> **Note**: Opening `web-app/index.html` directly with `file://` may have limitations with some browser security policies. Using a local server is recommended.
+The Docker image serves the static files with Nginx. It does not run a backend application server.
 
 ---
 
-## Option 4 — Desktop Application
+## Option 4 - Desktop Application
 
-Markdown Viewer is also available as a cross-platform native desktop application powered by [Neutralinojs](https://neutralino.js.org/).
+MD-Editor also has a Neutralino-powered desktop app that uses the same core web UI.
 
-> **Transparency note**: The desktop app uses the same `web-app/index.html` and CDN-hosted libraries as the web app. It can run offline after assets are cached, or if you replace CDN links with local copies and run `node prepare.js`.
+### Run in development mode
 
-### Download a Pre-Built Binary
+```bash
+cd desktop-app
+npm run dev
+```
 
-Go to the [Releases page](https://github.com/ThisIs-Developer/Markdown-Viewer/releases) and download the appropriate binary for your platform:
+The `dev` script runs setup first. Setup downloads Neutralino platform binaries, downloads vendored desktop assets, prepares the shared web resources, and then starts the desktop app.
 
-| Platform | File |
-|----------|------|
-| Windows (x64) | `markdown-viewer-win_x64.exe` |
-| Linux (x64) | `markdown-viewer-linux_x64` |
-| Linux (ARM64) | `markdown-viewer-linux_arm64` |
-| macOS (Universal) | `markdown-viewer-mac_universal` |
+On Windows, you can also use the helper script from the repository root. It starts the desktop dev command without a network check, which is useful for offline machines:
 
-### Build from Source
+```bat
+start_desktop.bat
+```
 
-See the [Desktop App](Desktop-App) wiki page for full build instructions.
+To pull the latest repository changes before starting, run:
+
+```bat
+start_desktop.bat --pull
+```
+
+### Build desktop binaries
+
+```bash
+cd desktop-app
+npm run build
+```
+
+Build a portable resource-separated package:
+
+```bash
+npm run build:portable
+```
+
+Build both formats:
+
+```bash
+npm run build:all
+```
+
+Build output is written under `desktop-app/dist/`. Platform binaries are cached in `desktop-app/bin/` and are refreshed when the configured Neutralino binary version changes.
+
+### Pre-built binaries
+
+If this repository has GitHub Releases available, download desktop binaries from:
+
+[https://github.com/shaybc/md-editor/releases](https://github.com/shaybc/md-editor/releases)
+
+Expected asset names use the `md-editor` prefix, such as:
+
+| Platform | Example asset |
+|----------|---------------|
+| Windows x64 | `md-editor-win_x64.exe` |
+| Linux x64 | `md-editor-linux_x64.tar.gz` |
+| Linux ARM64 | `md-editor-linux_arm64.tar.gz` |
+| macOS | `md-editor-mac_*.tar.gz` |
+| Portable bundle | `md-editor-release.zip` |
+
+If no release is published yet, build from source with the commands above.
 
 ---
 
-## Transparency & Network Dependencies
+## Option 5 - Self-Hosted Static Server
 
-Markdown Viewer is a static client-side application, so there is no server-side processing or telemetry. However, the web build loads third-party libraries from public CDNs (cdnjs and jsDelivr) and GitHub imports use public GitHub APIs. If you require a fully offline or isolated environment, self-host the CDN assets and avoid GitHub import.
+For production or internal use, serve the contents of `web-app/` from any static web server.
 
-The Docker image contains only static assets and an Nginx server. There are no background services, analytics scripts, or external callbacks beyond the CDN libraries referenced by the app.
+Examples:
+
+```bash
+python -m http.server 8080 --directory web-app
+```
+
+```bash
+npx serve web-app -p 8080
+```
+
+You can also copy `web-app/` to an existing Nginx, Apache, Caddy, IIS, or static hosting setup.
+
+For fully offline deployments, review the CDN references in `web-app/index.html` and replace them with local assets or use the desktop vendoring flow as a reference.
+
+---
+
+## Network And Offline Notes
+
+MD-Editor is a static, local-first application:
+
+- Markdown rendering, tab state, graph state, and exports run locally in the browser or desktop app.
+- The web build references public CDN libraries from `web-app/index.html`.
+- GitHub import uses public GitHub APIs and raw file URLs.
+- Share links encode document content into the URL hash instead of uploading it.
+- The Docker image serves static files with Nginx and does not add analytics or a backend service.
+- The desktop setup scripts may need network access the first time they download Neutralino binaries and vendored assets.
+
+For isolated environments, vendor the CDN assets locally and avoid GitHub import.
 
 ---
 
 ## System Requirements
 
-### Web / Docker
+### Web App
 
 | Requirement | Minimum |
 |-------------|---------|
-| Browser | Chrome 90+, Firefox 90+, Edge 90+, Safari 15+ |
-| Docker | 20.10+ (for Docker option) |
+| Browser | Current Chrome, Edge, Firefox, or Safari |
+| RAM | 512 MB |
+
+### Docker
+
+| Requirement | Minimum |
+|-------------|---------|
+| Docker | 20.10+ |
+| Docker Compose | Compose v2 recommended |
 | RAM | 512 MB |
 
 ### Desktop App
 
 | Requirement | Minimum |
 |-------------|---------|
-| OS | Windows 10+, Ubuntu 20.04+, macOS 11+ |
+| OS | Windows 10+, Ubuntu 20.04+, or macOS 11+ |
 | Architecture | x64 or ARM64 |
-| Node.js | 16+ (only required for building from source) |
-| RAM | 256 MB |
+| Node.js | Current LTS recommended for running or building from source |
+| RAM | 512 MB |

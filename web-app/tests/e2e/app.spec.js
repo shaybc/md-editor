@@ -756,7 +756,7 @@ test("graph ctrl+f finds and highlights nodes without filtering the map", async 
 
 test("code converter dialog browses folders and runs converter", async ({ page }) => {
   await page.addInitScript(() => {
-    window.NL_PATH = "C:/GitHub/shaybc/markdown-viewer/desktop-app";
+    window.NL_PATH = "C:/GitHub/shaybc/md-editor/desktop-app";
     window.NL_VERSION = "test";
     window.__folderDialogTitles = [];
     window.__execCommands = [];
@@ -804,7 +804,7 @@ test("code converter dialog browses folders and runs converter", async ({ page }
     commands: window.__execCommands
   }))).toEqual({
     titles: ["Select source code root folder", "Select destination Markdown root folder"],
-    commands: ['node "C:/GitHub/shaybc/markdown-viewer/desktop-app/resources/code_converter/dependency-md-generator.js" "C:/src/project" "C:/docs/project-md" --include-methods --include-accessors --include-signatures --include-return-codes --include-exceptions --include-package']
+    commands: ['node "C:/GitHub/shaybc/md-editor/desktop-app/resources/code_converter/dependency-md-generator.js" "C:/src/project" "C:/docs/project-md" --include-methods --include-accessors --include-signatures --include-return-codes --include-exceptions --include-package']
   });
 
   await page.locator("#code-converter-finish").click();
@@ -3099,10 +3099,10 @@ test("settings reset all clears cache preferences and recent history", async ({ 
   });
   await openApp(page);
   await page.evaluate(async () => {
-    const cache = await caches.open("markdown-viewer-test-cache");
+    const cache = await caches.open("md-editor-test-cache");
     await cache.put("/cached-test", new Response("cached"));
   });
-  await expect.poll(() => page.evaluate(async () => (await caches.keys()).includes("markdown-viewer-test-cache"))).toBe(true);
+  await expect.poll(() => page.evaluate(async () => (await caches.keys()).includes("md-editor-test-cache"))).toBe(true);
 
   await page.locator("#desktopActionMenu").click();
   await page.locator(".open-settings-dialog").first().click();

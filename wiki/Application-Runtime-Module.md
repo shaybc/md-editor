@@ -1,255 +1,370 @@
-# Application Runtime Module (`web-app/script.js`)
+# Application Runtime Architecture
 
-This document describes the modules and logic parts implemented inside the **Application Runtime Module**, whose source file is `web-app/script.js`.
+This document explains how the **MD-Editor** browser runtime starts, how the split modules connect, and what a new developer needs to know before changing runtime behavior.
 
-`script.js` is the main client-side controller for Markdown Viewer. It is not split into ES modules or bundled framework components; instead, it runs after `DOMContentLoaded`, keeps the application state in closure-scoped variables, and coordinates UI controls, Markdown rendering, persistence, file operations, graph features, exports, and desktop/browser compatibility logic.
+The app is a static browser application. It does not use a bundler or ES module imports. Instead, `web-app/index.html` loads vendor libraries and local classic scripts in a fixed order. Each local module exposes a `window.registerMarkdownViewer...` registration function, and `web-app/script.js` composes those modules into the running app.
 
 ---
 
 ## Table of Contents
 
 - [Runtime Role](#runtime-role)
-- [Execution Model](#execution-model)
-- [Dependency Integration](#dependency-integration)
-- [State Model](#state-model)
-- [Logical Module Inventory](#logical-module-inventory)
+- [Load Order](#load-order)
+- [App Context](#app-context)
+- [Composition Layer](#composition-layer)
+- [Module Registration Pattern](#module-registration-pattern)
+- [Runtime State](#runtime-state)
+- [Registered Module Areas](#registered-module-areas)
 - [Core Workflows](#core-workflows)
-- [Browser and Desktop Compatibility Logic](#browser-and-desktop-compatibility-logic)
-- [Cross-Cutting Concerns](#cross-cutting-concerns)
-- [Script Function Reference](#script-function-reference)
-- [Guidance for Future Changes](#guidance-for-future-changes)
+- [Browser and Desktop Compatibility](#browser-and-desktop-compatibility)
+- [Storage and Persistence](#storage-and-persistence)
+- [Security and Sanitization](#security-and-sanitization)
+- [Performance Notes](#performance-notes)
+- [External Dependencies](#external-dependencies)
+- [Developer Change Guide](#developer-change-guide)
+- [Related References](#related-references)
 
 ---
 
 ## Runtime Role
 
-The Application Runtime Module is responsible for turning the static app shell from `index.html` into an interactive Markdown workspace.
+The runtime turns the static shell in `web-app/index.html` into an interactive Markdown workspace.
 
-It owns these high-level responsibilities:
+It coordinates:
 
-- Reading DOM elements and binding event listeners.
-- Managing tabs, the active document, and graph tabs.
-- Rendering Markdown into sanitized preview HTML.
-- Enhancing rendered content with syntax highlighting, Mermaid diagrams, MathJax math, alerts, frontmatter tables, heading anchors, emoji, and diagram controls.
-- Managing editor-specific behavior such as line numbers, selection highlights, autocomplete, context-menu formatting, indentation, and status text.
-- Opening files, folders, GitHub repository content, dropped documents, and saved graph archives.
-- Saving or exporting Markdown, HTML, PDF, graph JSON, Mermaid SVG/PNG, and share URLs.
-- Persisting preferences, recent items, tab state, layout state, and graph state locally.
-- Bridging browser APIs and Neutralinojs desktop APIs where their capabilities differ.
+- Markdown editing, live preview, syntax highlighting, Mermaid diagrams, MathJax math, frontmatter, emoji, alerts, and link handling.
+- Tabs for Markdown documents and saved graph documents.
+- File open/save flows in browsers and in the Neutralino desktop wrapper.
+- Folder browsing, folder tree actions, tag management, and recent files/folders.
+- Graph extraction, graph rendering, graph persistence, and graph exports.
+- Markdown, HTML, PDF, graph JSON, Mermaid SVG/PNG, clipboard, and share URL export paths.
+- User preferences for theme, layout, sidebar, dropzone, graph behavior, and render behavior.
+- Browser/desktop compatibility branches without requiring a backend service.
 
----
-
-## Execution Model
-
-`script.js` uses a single runtime entry point:
-
-1. The browser loads third-party libraries and `script.js` from `index.html`.
-2. `script.js` waits for `DOMContentLoaded` before reading DOM elements.
-3. Closure-scoped variables are initialized for rendering, scrolling, sidebar layout, folder data, tabs, graph state, and persistence.
-4. Library integrations are configured, especially Mermaid and Marked.js.
-5. Previously saved preferences and tab state are restored.
-6. Event listeners are attached to toolbar buttons, editor events, sidebar controls, tab controls, graph controls, modals, document-level clicks, keyboard shortcuts, and drag/drop handlers.
-7. The active tab is rendered, and subsequent user actions update state and re-render the affected UI.
-
-The module primarily follows an event-driven model: user input changes state, state updates trigger rendering or persistence, and platform-specific operations are routed through browser APIs or Neutralino APIs.
+`web-app/script.js` is no longer the only home for app behavior. It is the startup and composition layer, with many feature owners now living under `web-app/js/`.
 
 ---
 
-## Dependency Integration
+## Load Order
 
-The runtime depends on globals loaded by `index.html`.
+`web-app/index.html` controls runtime load order. This matters because the app uses global registration functions.
 
-| Dependency | Runtime Use |
-|------------|-------------|
-| `marked` | Parses Markdown into HTML and allows a custom renderer for code blocks and Mermaid fences. |
-| `hljs` | Highlights fenced code blocks after the language is normalized. |
-| `DOMPurify` | Sanitizes rendered preview HTML before it is inserted into the DOM. |
-| `MathJax` | Typesets inline and block math after preview updates. |
-| `mermaid` | Initializes diagram rendering and renders Mermaid code fences. |
-| `joypixels` | Converts emoji shortcodes and styles rendered emoji. |
-| `jsyaml` | Parses YAML frontmatter and extracts frontmatter tags/metadata. |
-| `d3` | Renders and interacts with graph view nodes, edges, force layout, zooming, and selection. |
-| `saveAs` / FileSaver.js | Downloads generated Markdown, HTML, JSON, SVG, PNG, and fallback exports. |
-| `html2pdf`, `jsPDF`, `html2canvas`, `pdfMake` | Support PDF and canvas/image export paths. |
-| `pako` | Compresses and decompresses Markdown content for share URLs. |
-| `Neutralino` | Used only when running in the desktop wrapper for native filesystem and OS operations. |
+1. Vendor libraries load first, including Markdown parsing, sanitization, diagrams, math, exports, compression, YAML parsing, graph rendering, Bootstrap, and icons/CSS.
+2. `web-app/js/core/context.js` defines `window.createMarkdownViewerApp`.
+3. `web-app/js/app.js` creates or reuses `window.markdownViewerApp` and records basic boot metadata after `DOMContentLoaded`.
+4. Focused modules under `web-app/js/` load and attach registration functions to `window`.
+5. `web-app/script.js` loads last, waits for `DOMContentLoaded`, collects DOM references, creates shared state, registers modules, and binds UI events.
 
-The runtime contains feature detection around APIs such as File System Access, drag/drop entries, Clipboard, and Neutralino so the same source file can run in browser and desktop environments.
+Because `script.js` runs last, it can call every `window.registerMarkdownViewer...` function exposed by earlier local scripts.
 
 ---
 
-## State Model
+## App Context
 
-The runtime uses a local-first state model. The most important state groups are:
+### `web-app/js/core/context.js`
 
-| State Group | What It Tracks | Persistence |
-|-------------|----------------|-------------|
-| Render state | Debounce timers, current render pass, Mermaid initialization, and preview refresh state. | In memory. |
-| Editor state | Current editor content, selection, line numbers, selection highlights, cursor status, and editor context-menu history. | Active tab plus in-memory UI state. |
-| View state | Split/editor/preview mode, pane widths, sidebar visibility, dropzone visibility, mobile menu state, and synchronized scrolling. | Browser storage/global preferences. |
-| Tab state | Markdown tabs, graph tabs, active tab ID, tab titles, source metadata, temporary tabs, dirty state, and saved graph metadata. | Browser storage. |
-| Recent item state | Recent files/folders, file handles, folder handles, labels, paths, and desktop profile entries. | localStorage, IndexedDB, and optional desktop profile files. |
-| Folder state | Open folder name/path/handle, folder tree nodes, Markdown files, unsupported files, sort mode, filter text, selected tags, and auto-select mode. | In memory plus preferences where useful. |
-| Tag state | Known tags, extracted tags, tag counts, selected tag filters, and tag updates propagated to tabs and graph snapshots. | Browser storage and file content. |
-| Graph state | Graph snapshots, graph tabs, layouts, zoom transform, hidden nodes, groups, filters, stale graph comparisons, and saved graph documents. | Tab state and graph JSON files. |
-| Export/share state | Temporary rendered content, export options, generated filenames, compressed share data, copy status, and Mermaid image conversion. | Mostly in memory, with generated downloads or clipboard output. |
+Creates the shared application object:
+
+```js
+{
+  constants: {},
+  dom: {},
+  state: {},
+  actions: {},
+  services: {},
+  modules: {},
+  registerModule(name, moduleApi) { ... }
+}
+```
+
+### `web-app/js/app.js`
+
+Creates `window.markdownViewerApp` if it does not already exist. It also records `app.bootedAt` and `app.documentReadyState` once the DOM is ready.
+
+### Context Containers
+
+| Container | Purpose |
+|-----------|---------|
+| `app.constants` | Shared constant values and storage keys. |
+| `app.dom` | Shared DOM references that modules need. |
+| `app.state` | Shared mutable state that modules need to read/write. |
+| `app.actions` | User-level commands exposed for reuse by menus, keyboard shortcuts, desktop code, and other modules. |
+| `app.services` | Cross-cutting service APIs such as clipboard, preferences, tabs, graph persistence, and folder picking. |
+| `app.modules` | Registered module APIs by name for diagnostics and controlled cross-module access. |
+
+New code should prefer explicit dependency objects passed during registration. Use `app.services` or `app.actions` when a capability must be reused across independent UI entry points.
 
 ---
 
-## Logical Module Inventory
+## Composition Layer
 
-The table below describes the major logic parts inside `web-app/script.js`.
+### `web-app/script.js`
 
-| Logic Part | Main Responsibility | Typical Inputs | Typical Outputs / Side Effects |
-|------------|---------------------|----------------|--------------------------------|
-| Boot and DOM references | Capture all important DOM nodes and initialize base runtime variables. | `DOMContentLoaded`, existing HTML elements. | Closure-scoped references and default state values. |
-| Theme and global preferences | Load, apply, save, and reset user preferences. | System color-scheme, saved global state, UI toggles. | `data-theme`, layout CSS variables, global state writes. |
-| Markdown renderer configuration | Configure Mermaid and Marked.js custom rendering behavior. | Library globals, current theme. | Renderer functions, Mermaid initialization, Markdown parser options. |
-| Preview rendering | Convert Markdown to sanitized HTML and enhance the preview. | Active Markdown text. | Updated preview DOM, MathJax typesetting, Mermaid diagrams, statistics. |
-| Editor enhancements | Maintain line numbers, current-line highlight, selection highlights, caret status, indentation, and editor keyboard interactions. | Editor input, selection, scroll, keyboard events. | Updated editor overlays/status text and modified editor content. |
-| Link and tag autocomplete | Suggest folder-relative links, wiki links, Markdown tags, and frontmatter tags. | Cursor position, active folder files, known tags, graph snapshots. | Autocomplete menu and inserted replacement text. |
-| Editor context menu formatting | Convert selected text into Markdown structures. | Selection range and selected command. | Replaced editor text plus undo/redo history for conversions. |
-| Tab management | Create, switch, rename, duplicate, close, reorder, persist, and restore tabs. | Tab actions, imported content, files, graph snapshots. | Updated tab arrays, active tab, local storage, tab UI. |
-| Unsaved-change tracking | Detect dirty Markdown and graph tabs and protect destructive actions. | Current content, source content, graph document content. | Dirty indicators and confirmation prompts. |
-| Save logic | Save active/current tabs to their source or through a save dialog/download fallback. | Active tab, source metadata, platform capabilities. | Updated files, graph documents, source metadata, dirty state. |
-| Recent files and folders | Normalize, persist, hydrate, and render recent files/folders. | File handles, folder handles, paths, labels, desktop profile data. | Recent menus, localStorage/IndexedDB/profile writes. |
-| Folder opening and tree building | Open local folders, read supported files, build nested tree data, and render sidebar entries. | Directory handles, drag/drop entries, Neutralino paths, file lists. | Folder tree DOM, folder file arrays, active folder metadata. |
-| Folder tree filtering/sorting | Filter, tag-filter, sort, expand/collapse, and highlight folder tree entries. | Filter text, selected tags, sort mode, unsupported-file toggle. | Rerendered sidebar tree and toolbar state. |
-| Sidebar file/folder operations | Provide open, reveal, rename, create, delete, copy, share, export, tag, and graph actions from context menus. | Sidebar node metadata and selected menu action. | Filesystem writes/deletes/renames, tab updates, graph updates, clipboard writes. |
-| Rename and link maintenance | Keep internal references valid after file/folder renames. | Old/new paths and node indexes. | Updated open tabs, folder entries, Markdown links, graph snapshots, graph layouts. |
-| GitHub import | Parse GitHub URLs, list repository Markdown files, select files, and import content. | Repository URL and selected paths. | New Markdown tabs populated with fetched public content. |
-| Drag and drop import | Accept dropped files or folders and route them to document/folder import logic. | DataTransfer items, files, handles, entries. | New tabs, folder tree, imported graph documents, hidden dropzone. |
-| View mode and layout controls | Switch editor-only/split/preview modes and resize editor, preview, sidebar, and dropzone panes. | Toolbar clicks, pointer/touch/keyboard resize events, mobile menu actions. | CSS layout changes and persisted layout preferences. |
-| Scroll synchronization | Keep editor and preview scrolling together when enabled. | Editor/preview scroll events. | Scroll position updates and sync-toggle UI state. |
-| Markdown metadata and tags | Extract frontmatter, inline tags, YAML tags, and update known tag counts. | Markdown content and folder files. | Tag lists, tag counts, frontmatter metadata display, file content updates. |
-| Graph extraction | Convert folder Markdown files into graph-ready nodes, links, tags, and labels. | Folder Markdown content, wiki links, Markdown links, tags. | Graph snapshot objects and graph tab data. |
-| Graph persistence and comparison | Serialize/deserialize graph documents, save graph layouts, and compare saved graphs to current folder state. | Graph tab state, saved graph JSON, current folder snapshot. | Graph JSON documents, stale graph banners/modals, comparison details. |
-| Graph rendering and interaction | Render graph nodes/links, zoom, drag, filter, group, hide, highlight, and context-menu actions. | Graph snapshot, graph config, D3 events, filter controls. | Interactive SVG graph, graph toolbar state, persisted layout/config changes. |
-| Export logic | Export Markdown, standalone HTML, PDF, graph JSON, Mermaid SVG/PNG, and copied rendered HTML/images. | Active content, rendered preview, graph data, selected diagram. | Downloaded files, clipboard data, save dialogs. |
-| Share URL logic | Encode Markdown into compressed URL hashes and decode shared documents on load. | Markdown text or URL hash. | Clipboard share URL or restored document content. |
-| Keyboard shortcuts | Handle app-level shortcuts for save/export, copy, tabs, sync scroll, indentation, and modal behavior. | `keydown` events and current focus. | Invoked actions or modified editor content. |
-| Modal and menu lifecycle | Open, close, position, and reset modals, dropdown-style panels, context menus, graph detail dialogs, and mobile panels. | Button clicks, outside clicks, escape key, blur events. | Visible/hidden UI overlays and reset local UI state. |
-| Desktop compatibility bridges | Detect Neutralino runtime and route operations through native dialogs/filesystem where available. | `NL_VERSION`, `Neutralino`, file paths, command-line-loaded files. | Native save/open/reveal operations and desktop profile persistence. |
+`script.js` is responsible for startup and orchestration:
+
+- Waits for `DOMContentLoaded`.
+- Creates or reuses `window.markdownViewerApp`.
+- Collects DOM references from `index.html`.
+- Initializes runtime variables for rendering, scrolling, folder state, tab state, graph state, editor modal state, and compatibility branches.
+- Calls module registration functions in dependency order.
+- Stores returned module APIs in local constants where legacy runtime functions still need them.
+- Bridges older inline functions with newer modules while migration continues.
+- Binds toolbar, menu, modal, editor, sidebar, graph, export, drag/drop, and keyboard events.
+- Runs startup restore flows for preferences, recent items, tabs, shared URL hashes, and initial desktop files.
+
+Think of `script.js` as the runtime conductor. Feature logic that can stand alone should live in a focused module under `web-app/js/`.
+
+---
+
+## Module Registration Pattern
+
+Most module files follow this shape:
+
+```js
+(function (window) {
+  "use strict";
+
+  function registerMarkdownViewerExample(app, deps) {
+    function doWork() {
+      // use app, deps, and local helpers
+    }
+
+    const api = { doWork };
+    app.registerModule("example", api);
+    return api;
+  }
+
+  window.registerMarkdownViewerExample = registerMarkdownViewerExample;
+})(window);
+```
+
+Current conventions:
+
+- Registration functions are named with the historical `MarkdownViewer` prefix even though the app is now MD-Editor.
+- Modules receive `app` plus a dependency object from `script.js`.
+- Dependency objects often use getters so modules always read the current runtime value.
+- Modules return a small API.
+- Some modules also publish shared capabilities through `app.services` or `app.actions`.
+- Not every module owns DOM binding directly. Many expose APIs that `script.js` binds to existing controls.
+
+When moving code out of `script.js`, follow the local notes in `web-app/js/MIGRATION.md`.
+
+---
+
+## Runtime State
+
+The app is local-first and event-driven. User actions update in-memory state, then the affected UI and persistence layers are refreshed.
+
+| State Area | What It Tracks | Main Owners |
+|------------|----------------|-------------|
+| Editor | Current text, selection, line numbers, status text, syntax overlay, autocomplete, editor modals. | `script.js`, `editor/*.js`, `markdown/render.js` |
+| Preview | Render debounce state, sanitized HTML, post-render Mermaid/MathJax/frontmatter/link enhancements, reading stats. | `script.js`, `markdown/*.js` |
+| View layout | Editor/split/preview modes, sidebar state, dropzone state, pane sizes, mobile menu, sync scroll. | `ui/*.js`, `scroll-sync.js`, `script.js` |
+| Tabs | Markdown tabs, graph tabs, active tab, source metadata, dirty state, untitled counters. | `tabs/*.js`, `unsaved-changes.js`, `graph/persistence.js` |
+| Files/folders | Active folder, folder tree nodes, Markdown file entries, unsupported entries, sort/filter/tag filters. | `files/*.js`, `platform/folder-picker.js`, `sidebar/*.js` |
+| Recent items | Recent files/folders, browser handles, desktop paths, profile sync. | `recent/*.js` |
+| Tags | YAML tags, inline tags, known tags, selected filters, tag writes to files/tabs. | `tags/index.js`, `graph/extraction.js` |
+| Graphs | Extracted nodes/links/tags, graph tabs, saved layouts, filters, groups, hidden nodes, stale comparisons. | `graph/*.js` |
+| Exports | Current rendered output, graph export data, PDF/page-break state, Mermaid export state, clipboard output. | `script.js`, `export/page-breaks.js`, `clipboard.js`, `markdown/mermaid-tools.js` |
+
+State that must survive reloads is stored in browser storage, IndexedDB, desktop profile files, or saved graph files. Temporary UI state stays in memory.
+
+---
+
+## Registered Module Areas
+
+The current split modules are grouped by feature area.
+
+| Area | Files | Runtime Responsibility |
+|------|-------|------------------------|
+| App context | `js/core/context.js`, `js/app.js` | Shared app object and boot metadata. |
+| File platform | `js/platform/folder-picker.js`, `js/files/types.js`, `js/files/open.js`, `js/files/save.js` | File classification, browser/desktop open flows, folder picking, and save paths. |
+| Preferences/layout | `js/ui/theme-preferences.js`, `js/ui/layout-preferences.js`, `js/ui/view-layout.js`, `js/ui/mobile-menu.js` | Theme, settings persistence, view modes, pane layout, and mobile controls. |
+| Recent state | `js/recent/index.js`, `js/recent/actions.js` | Recent files/folders, handles, profile files, and recent item commands. |
+| Editor | `js/editor/line-status.js`, `js/editor/status-line.js`, `js/editor/context-menu.js`, `js/editor/autocomplete.js`, `js/editor/syntax-highlight.js` | Editor overlays, status, formatting actions, autocomplete, and syntax highlighting. |
+| Markdown | `js/markdown/frontmatter.js`, `js/markdown/renderer-config.js`, `js/markdown/links.js`, `js/markdown/mermaid-tools.js`, `js/markdown/render.js` | Render configuration, sanitized preview, links, frontmatter, diagrams, and post-render tools. |
+| Graph | `js/graph/extraction.js`, `js/graph/persistence.js`, `js/graph/documents.js`, `js/graph/toolbar.js`, `js/graph/renderer.js` | Graph extraction, graph tabs/documents, persistence, toolbar state, and D3 rendering. |
+| Tabs/tags | `js/tabs/counter.js`, `js/tabs/index.js`, `js/tags/index.js` | Tab lifecycle, tab counters, tag extraction, tag edits, and tag filters. |
+| Sidebar | `js/sidebar/folder-toolbar.js`, `js/sidebar/context-tree.js` | Folder toolbar, folder tree rendering, and file/folder context actions. |
+| Import | `js/import/dropped-items.js`, `js/import/drag-drop.js`, `js/import/github.js` | Dropped files/folders/text/graph data and GitHub Markdown import. |
+| Utilities | `js/clipboard.js`, `js/scroll-sync.js`, `js/unsaved-changes.js`, `js/share-url.js`, `js/keyboard-shortcuts.js` | Clipboard, synchronized scrolling, dirty-state protection, compressed share URLs, and app shortcuts. |
+| Export helpers | `js/export/page-breaks.js` | PDF page-break UI/state used by export workflows. |
+
+`script.js` still contains runtime functions for modal lifecycles, export commands, desktop bridge helpers, code converter dialog wiring, and compatibility glue that has not been moved into focused modules yet.
 
 ---
 
 ## Core Workflows
 
-### 1. Editing and Preview Rendering
+### Editing and Rendering
 
 1. The editor receives input.
-2. The active Markdown tab is updated and marked dirty if its content differs from the saved source.
-3. Rendering is debounced to avoid expensive work on every keystroke.
-4. The runtime converts Markdown to HTML with Marked.js and the custom renderer.
-5. DOMPurify sanitizes the generated HTML.
-6. The preview is updated.
-7. Post-render enhancers run: alerts, headings, frontmatter, task lists, emoji, Mermaid, MathJax, and diagram toolbars.
-8. Statistics, tab indicators, and save controls are refreshed.
+2. The active Markdown tab content is updated.
+3. Unsaved-change logic compares the active content with its saved source.
+4. Rendering is debounced.
+5. Markdown is parsed with Marked.js and sanitized with DOMPurify.
+6. Preview enhancers run for frontmatter, links, heading anchors, task lists, alerts, emoji, Mermaid, MathJax, and code highlighting.
+7. Editor overlays, line/status UI, tab indicators, statistics, and save controls refresh.
 
-### 2. Opening a File
+### Opening Files
 
-1. A file enters through picker, drag/drop, recent item, GitHub import, sidebar selection, or desktop startup arguments.
-2. The runtime determines whether the file is Markdown, graph JSON, or another supported text file.
-3. Markdown/text files become Markdown tabs.
-4. Saved graph files become graph tabs.
-5. Source metadata is stored so save actions know whether direct write-back is possible.
-6. The active tab changes and the preview/graph view renders.
+1. A file enters through the file picker, drag/drop, recent item, GitHub import, sidebar selection, shared URL, or desktop startup argument.
+2. File type detection determines whether it is Markdown/text or a graph document.
+3. Markdown/text files open as Markdown tabs.
+4. `.mdviewer-graph.json`, `.mdgraph.json`, and compatible JSON graph files open as graph tabs.
+5. Source metadata is attached so save behavior knows whether direct write-back is possible.
 
-### 3. Opening a Folder
+### Opening Folders
 
-1. The runtime opens a folder using File System Access API, drag/drop entries, a fallback file list, or Neutralino filesystem APIs.
-2. It scans supported files and builds a nested tree model.
-3. Folder toolbar controls are enabled.
-4. The folder tree is rendered into the sidebar.
-5. Markdown files become available for link autocomplete, tag management, graph generation, and auto-selection.
+1. Folder selection is routed through File System Access APIs, drag/drop entries, fallback folder input, or Neutralino filesystem APIs.
+2. Supported files are scanned into a nested tree model.
+3. Folder toolbar and sidebar modules render the tree.
+4. Folder files feed link autocomplete, tag lists, graph extraction, context actions, and auto-selection behavior.
 
-### 4. Saving Content
+### Saving
 
-1. The save command identifies the active tab and whether it is Markdown or graph data.
-2. If the tab has a writable source, the runtime writes back directly.
-3. If direct write-back is unavailable, the runtime opens a platform save dialog where supported.
-4. If no native/browser save dialog is available, the runtime downloads a generated file.
-5. Source metadata and dirty indicators are updated after a successful save.
+1. Save commands ask the tabs/dirty-state logic for the active tab and source metadata.
+2. If a writable file handle or desktop path exists, the app writes directly.
+3. If direct save is unavailable, the runtime uses a browser or desktop save dialog when possible.
+4. If no direct save path exists, the app downloads a generated file.
+5. Source metadata, dirty state, recent items, and tab UI are updated after success.
 
-### 5. Building and Using Graph View
+### Graph View
 
-1. The runtime reads Markdown files from the open folder or graph archive.
-2. It extracts normalized links, wiki links, inline tags, and frontmatter tags.
-3. It creates a graph snapshot containing files, tag relations, and link relations.
-4. A graph tab stores the snapshot plus layout/configuration state.
-5. D3 renders the graph and manages interactions such as zoom, drag, filters, groups, hidden nodes, context menus, and layout persistence.
-6. Graph views can be saved as layout-only graph documents or exported as portable graph archives with included Markdown content.
+1. Graph extraction reads Markdown files from the open folder or saved graph archive.
+2. It normalizes Markdown links, wiki links, headings, frontmatter tags, and inline tags.
+3. Graph documents store nodes, links, tags, included content, layout, and configuration.
+4. D3 renders the graph with zoom, drag, filters, grouping, hidden nodes, selected nodes, and context menus.
+5. Persistence compares saved graphs to current folder state and can export graph archives for later work or refactoring.
 
-### 6. Exporting and Sharing
+### Exporting and Sharing
 
-1. Export actions select the correct content source: raw Markdown, rendered preview, active graph document, or selected Mermaid diagram.
-2. The runtime generates the target format, including standalone HTML, PDF, JSON, SVG, PNG, Markdown, or compressed share URL.
-3. The result is written through a save dialog, downloaded through FileSaver, or copied to the clipboard.
+1. Export actions select raw Markdown, rendered preview HTML, active graph data, or selected Mermaid diagram data.
+2. The runtime generates Markdown, standalone HTML, PDF, graph JSON, Mermaid SVG/PNG, copied HTML/image data, or a compressed share URL.
+3. Results are saved through native/browser dialogs, downloaded with FileSaver, or written to the clipboard.
 
----
+### Desktop Startup and Exit
 
-## Browser and Desktop Compatibility Logic
-
-`script.js` deliberately contains compatibility branches because the same source powers both the browser and Neutralino desktop builds.
-
-| Capability | Browser Path | Desktop Path |
-|------------|--------------|--------------|
-| Open/save file | File System Access API, file inputs, drag/drop, downloads. | Neutralino filesystem and OS dialogs. |
-| Open folder | Directory picker, drag/drop entries, or file-list fallback. | Neutralino directory reads. |
-| Recent items | localStorage and IndexedDB handles. | localStorage plus optional profile files and filesystem paths. |
-| Reveal/open in OS | Limited browser support. | Neutralino OS commands. |
-| Clipboard | Browser Clipboard API with fallbacks. | Browser Clipboard API and Neutralino allow-listed clipboard support where available. |
-| Startup file | Not applicable in normal browser use. | Desktop wrapper can pass command-line file paths into the shared runtime. |
-
-The runtime checks feature availability before using APIs instead of assuming one platform.
+1. The Neutralino wrapper loads the same web resources as the browser app.
+2. `desktop-app/resources/js/main.js` initializes Neutralino and adds desktop-specific lifecycle behavior.
+3. Startup file paths can be passed into the shared runtime.
+4. Exit and window-close flows call the shared unsaved-change guard before closing.
 
 ---
 
-## Cross-Cutting Concerns
+## Browser and Desktop Compatibility
 
-### Security
+The same app code runs in normal browsers and in the Neutralino desktop wrapper. Runtime code uses feature detection before calling platform APIs.
 
-- Rendered HTML is sanitized before it is inserted into the preview.
-- Mermaid is initialized in a controlled rendering flow.
-- Native desktop capabilities are constrained by Neutralino configuration.
-- Share URLs encode content locally instead of uploading it.
+| Capability | Browser Runtime | Desktop Runtime |
+|------------|-----------------|-----------------|
+| Open files | File input, File System Access API, drag/drop. | Neutralino filesystem and OS dialogs. |
+| Save files | File System Access API, save picker, generated downloads. | Neutralino filesystem and OS dialogs. |
+| Open folders | Directory picker, folder input fallback, drag/drop entries. | Neutralino directory reads and folder dialogs. |
+| Recent items | localStorage plus IndexedDB handles where supported. | localStorage plus optional `.mdviewer` profile files and filesystem paths. |
+| Reveal/open externally | Limited browser support for links/downloads. | Neutralino OS commands for reveal/open operations. |
+| Clipboard | Browser Clipboard API with fallback copy behavior. | Browser Clipboard API plus desktop-capable fallback paths where allowed. |
+| Startup file | URL hash/shared content or manual file open. | Command-line/OS file handoff through desktop wrapper. |
 
-### Persistence
-
-- Browser storage is used for preferences, tabs, recent items, and layout state.
-- IndexedDB is used where persistent file/folder handles are supported.
-- Desktop profile files are used when running under Neutralino and a profile path is available.
-
-### Performance
-
-- Markdown rendering is debounced.
-- Scroll synchronization is throttled with short timers.
-- Expensive graph and folder operations are separated from normal typing paths.
-- Graph layout state can be captured and reused to avoid losing manual positioning.
-
-### Accessibility and Responsiveness
-
-- The runtime updates ARIA states for toggles, selected folder files, menus, and autocomplete where applicable.
-- Desktop and mobile controls are both wired to shared actions.
-- Keyboard shortcuts and Escape/outside-click handlers close menus and dialogs consistently.
+Desktop-specific APIs must always be guarded with checks such as `typeof Neutralino !== "undefined"` and capability checks for the API being called.
 
 ---
 
-## Script Function Reference
+## Storage and Persistence
 
-For a complete numbered list of named functions in `web-app/script.js`, including source line, function signature, logical module participation, and a short logic note, see [Script Function Reference](Script-Functions).
+The app stores state locally and does not require a server database.
+
+| Storage | Keys / Files | Purpose |
+|---------|--------------|---------|
+| localStorage | `markdownViewerGlobalState` | Theme, layout, sidebar, dropzone, graph, and render preferences. |
+| localStorage | `markdownViewerTabs`, `markdownViewerActiveTab` | Restored Markdown/graph tab state and active tab ID. |
+| localStorage | `markdownViewerUntitledCounter` | Stable untitled document numbering. |
+| localStorage | `markdownViewerRecentFiles`, `markdownViewerRecentFolders` | Recent item menus. |
+| IndexedDB | `markdownViewerRecentHandles` | Browser File System Access handles for recent files/folders. |
+| Desktop profile | `.mdviewer/recent-items.json`, `.mdviewer/preferences.json` | Desktop-friendly recent/preference sync when profile paths are available. |
+| Graph files | `.mdviewer-graph.json`, `.mdgraph.json`, `.json` | Saved graph layouts, graph snapshots, and portable graph archives. |
+| URL hash | Compressed pako payload | Share URL content loaded without a backend. |
+
+When changing persistence shape, update both save and restore paths. Tabs, recent items, and graph documents often need migration-friendly defaults because users may already have older saved data.
 
 ---
 
-## Guidance for Future Changes
+## Security and Sanitization
 
-When adding new logic to `web-app/script.js`, prefer these conventions:
+Important runtime security rules:
 
-1. **Reuse existing state owners.** Add tab fields to tab creation/serialization helpers instead of storing detached state.
-2. **Keep browser and desktop paths together.** If a feature touches files or OS behavior, add both browser and Neutralino handling or explicitly document unsupported platforms.
-3. **Sanitize before preview insertion.** Any rendered Markdown-derived HTML should pass through the existing sanitization flow.
-4. **Update persistence intentionally.** If a feature changes tabs, preferences, graph configuration, or source metadata, update the matching save/load helper.
-5. **Protect unsaved work.** Add dirty-state checks before destructive operations such as closing, replacing content, deleting files, or exiting.
-6. **Prefer shared actions for duplicate UI controls.** Desktop, mobile, toolbar, sidebar, and context-menu controls should call the same underlying function where possible.
-7. **Keep graph updates synchronized.** File rename, tag edits, and content writes should update open graph snapshots and graph tabs when those files are represented there.
-8. **Test Markdown, folder, and graph paths separately.** A change that is safe for a single Markdown tab can still affect folder navigation, saved graph archives, or desktop save behavior.
+- Markdown-derived HTML must be sanitized before insertion into preview DOM.
+- Link handling distinguishes internal Markdown links, wiki links, same-origin Markdown URLs, local filesystem paths, and external web links.
+- Mermaid rendering is performed through controlled post-render flows.
+- Share URLs compress local content into the hash; they do not upload data.
+- Desktop filesystem and OS access is constrained by Neutralino configuration and guarded runtime checks.
+- GitHub import reads public repository content selected by the user; imported content is opened as local tabs.
+
+Do not bypass the existing render/sanitize/link helpers when adding Markdown-facing features.
+
+---
+
+## Performance Notes
+
+The runtime avoids unnecessary expensive work:
+
+- Markdown rendering is debounced after editor input.
+- Scroll synchronization uses short guard windows to avoid scroll feedback loops.
+- Graph generation and folder scans are separated from normal typing paths.
+- Graph layout and hidden/grouped node state can be persisted so manual graph work is not lost.
+- Editor syntax highlighting and line overlays update from editor events rather than full app refreshes where possible.
+- Large exports render from current content/preview data instead of forcing unrelated state rebuilds.
+
+When adding a feature that runs on every keystroke, scroll, mousemove, graph tick, or folder scan, keep the hot path small.
+
+---
+
+## External Dependencies
+
+The runtime depends on globals loaded by `index.html`.
+
+| Dependency | Runtime Use |
+|------------|-------------|
+| `marked` | Markdown parsing and custom renderer behavior. |
+| `hljs` | Preview code syntax highlighting. |
+| `DOMPurify` | HTML sanitization before preview insertion. |
+| `MathJax` | Inline and block math rendering. |
+| `mermaid` | Mermaid diagram rendering and diagram export support. |
+| `joypixels` | Emoji shortcode rendering. |
+| `jsyaml` | YAML frontmatter parsing and tag extraction. |
+| `d3` | Graph visualization, force layout, zooming, dragging, and selection. |
+| `saveAs` | FileSaver download fallback for generated files. |
+| `html2pdf`, `jsPDF`, `html2canvas`, `pdfMake` | PDF and image-based export paths. |
+| `pako` | Share URL compression/decompression. |
+| `Neutralino` | Desktop filesystem, dialogs, OS commands, and lifecycle integration when running in the desktop wrapper. |
+
+The desktop build vendors these dependencies into `desktop-app/resources/vendor/` so the Neutralino app can run with local assets.
+
+---
+
+## Developer Change Guide
+
+Use these rules of thumb when changing runtime behavior:
+
+1. Add new feature logic to a focused `web-app/js/` module when it can be isolated.
+2. Keep `script.js` responsible for composition, DOM event wiring, and compatibility glue.
+3. Pass dependencies explicitly from `script.js`; avoid hidden reads from unrelated module internals.
+4. Publish reusable cross-module capabilities through `app.services` or `app.actions`.
+5. Update dirty-state checks before destructive actions such as close, replace, delete, rename, reset, or exit.
+6. Keep browser and desktop behavior together for file/folder/OS operations.
+7. Sanitize rendered Markdown before DOM insertion.
+8. Update save and restore paths together for tabs, preferences, recent items, and graph documents.
+9. Keep graph snapshots synchronized when file paths, tags, document content, or folder state changes.
+10. Test the affected workflow through the browser UI when changing editor, folder, graph, export, or desktop-adjacent behavior.
+
+For a function-level inventory of what remains in `web-app/script.js`, see [Script Function Reference](Script-Functions).
+
+---
+
+## Related References
+
+- [Project Modules](Modules)
+- [Script Function Reference](Script-Functions)
+- [Configuration](Configuration)
+- [Desktop App](Desktop-App)
+- [Docker Deployment](Docker-Deployment)

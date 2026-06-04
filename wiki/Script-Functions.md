@@ -1,845 +1,265 @@
 # `web-app/script.js` Function Reference
 
-This document lists the named functions implemented in `web-app/script.js` in source order. Each entry includes a sequential number, the source line where the function starts, the function signature, the logical module it participates in, and a short explanation of its logic.
+This page documents the named functions that currently remain in `web-app/script.js`.
 
-> Note: This reference focuses on named function declarations and named arrow helpers because those are the stable function signatures in the runtime module. Inline anonymous callbacks passed directly to event listeners or array helpers are documented by the named function that owns the surrounding workflow.
+`script.js` used to be the main monolithic implementation file. Most runtime logic has since moved into modules under `web-app/js/`. The current `script.js` is primarily a composition layer: it gathers DOM references, wires modules together, owns a few UI dialogs, and keeps some app-level bridge logic close to startup state.
+
+This reference intentionally covers only functions still declared in `web-app/script.js`. Module functions implemented in `web-app/js/` are documented by their module pages and source files, not here.
 
 ---
 
-## Logical Module Summary
+## Table of Contents
 
-| Logical Module | Function Count |
-|----------------|----------------|
-| Autocomplete | 17 |
-| Boot and DOM references | 3 |
-| Desktop compatibility bridges | 6 |
-| Drag and drop import | 12 |
-| Editor context menu | 15 |
-| Editor line/status UI | 14 |
-| Export logic | 21 |
-| Folder tree | 53 |
-| GitHub import | 16 |
-| Graph extraction | 31 |
-| Graph persistence and comparison | 44 |
-| Graph rendering and interaction | 111 |
-| Keyboard shortcuts | 4 |
-| Markdown renderer configuration | 7 |
-| Markdown rendering | 61 |
-| Mermaid tools | 1 |
-| Modal and menu lifecycle | 28 |
-| Recent files and folders | 36 |
-| Rename and link maintenance | 46 |
-| Save logic | 9 |
-| Scroll synchronization | 3 |
-| Share URL logic | 2 |
-| Sidebar file/folder operations | 105 |
-| Tab management | 67 |
-| Tag management | 34 |
-| Theme and global preferences | 8 |
-| Unsaved-change tracking | 2 |
-| View mode and layout controls | 42 |
+- [Current Role](#current-role)
+- [Current Function Summary](#current-function-summary)
+- [Function List](#function-list)
+- [Moved Out Of script.js](#moved-out-of-scriptjs)
+
+---
+
+## Current Role
+
+Current `script.js` responsibilities:
+
+- Register and connect modular services from `web-app/js/`.
+- Manage editor toolbar dialogs that have not yet been moved into modules.
+- Bridge settings-screen values to persisted global state.
+- Own the code-to-Markdown converter dialog and Neutralino command launch.
+- Provide folder tree glue for browser and Neutralino folder reads.
+- Coordinate sidebar visibility and dropzone layout.
+- Expose a few compatibility wrappers used by existing modules.
+
+---
+
+## Current Function Summary
+
+| Area | Current functions |
+|------|------------------:|
+| Editor toolbar dialogs and helpers | 56 |
+| Folder tree pane and unsupported-file toggle | 3 |
+| Settings preference getters and tooltips | 15 |
+| Markdown render compatibility wrapper | 1 |
+| Graph preference defaults | 2 |
+| Help, welcome, about, and app exit | 6 |
+| Settings dialog actions | 8 |
+| Code converter dialog | 9 |
+| Folder loading, sorting, deletion cleanup | 24 |
+| Neutralino folder loading | 2 |
+| Sidebar/dropzone layout | 9 |
+| **Total** | **135** |
 
 ---
 
 ## Function List
 
-| # | Line | Function signature | Logical module | Function logic |
-|---:|---:|--------------------|----------------|----------------|
-| 1 | 78 | `function getLinkAutocompleteLayer()` | Autocomplete | Returns the current link autocomplete layer value or derives it from runtime state so other autocomplete functions can reuse a consistent representation. |
-| 2 | 90 | `function hideLinkAutocomplete()` | Autocomplete | Closes or hides link autocomplete and clears transient UI state associated with it. |
-| 3 | 99 | `function isCursorInsideMarkdownCode(value, cursor, lineBefore)` | Markdown rendering | Checks whether the cursor inside markdown code condition is true and returns a boolean that gates later markdown rendering behavior. |
-| 4 | 139 | `function getFrontmatterBoundsForCursor(value, cursor)` | Markdown rendering | Returns the current frontmatter bounds for cursor value or derives it from runtime state so other markdown rendering functions can reuse a consistent representation. |
-| 5 | 158 | `function isCursorInFrontmatterTagsList(frontmatterText, relativeCursor)` | Tag management | Checks whether the cursor in frontmatter tags list condition is true and returns a boolean that gates later tag management behavior. |
-| 6 | 180 | `function getFrontmatterTagAutocompleteContext(value, cursor, lineStart, lineBefore)` | Autocomplete | Returns the current frontmatter tag autocomplete context value or derives it from runtime state so other autocomplete functions can reuse a consistent representation. |
-| 7 | 234 | `function getTagAutocompleteContext(value, cursor, lineStart, lineBefore)` | Autocomplete | Returns the current tag autocomplete context value or derives it from runtime state so other autocomplete functions can reuse a consistent representation. |
-| 8 | 261 | `function getLinkAutocompleteContext()` | Autocomplete | Returns the current link autocomplete context value or derives it from runtime state so other autocomplete functions can reuse a consistent representation. |
-| 9 | 330 | `function getMarkdownLinkAutocompleteEntries()` | Autocomplete | Returns the current markdown link autocomplete entries value or derives it from runtime state so other autocomplete functions can reuse a consistent representation. |
-| 10 | 342 | `function getRootRelativeMarkdownLinkTarget(targetPath)` | Markdown rendering | Returns the current root relative markdown link target value or derives it from runtime state so other markdown rendering functions can reuse a consistent representation. |
-| 11 | 347 | `function getActiveFolderGraphSnapshots()` | Graph extraction | Returns the current active folder graph snapshots value or derives it from runtime state so other graph extraction functions can reuse a consistent representation. |
-| 12 | 364 | `function getGraphSnapshotAutocompleteTags()` | Autocomplete | Returns the current graph snapshot autocomplete tags value or derives it from runtime state so other autocomplete functions can reuse a consistent representation. |
-| 13 | 383 | `function getTagAutocompleteEntries()` | Autocomplete | Returns the current tag autocomplete entries value or derives it from runtime state so other autocomplete functions can reuse a consistent representation. |
-| 14 | 394 | `function getLinkAutocompleteInsertText(item)` | Autocomplete | Returns the current link autocomplete insert text value or derives it from runtime state so other autocomplete functions can reuse a consistent representation. |
-| 15 | 400 | `function getFilteredLinkAutocompleteItems(context)` | Autocomplete | Returns the current filtered link autocomplete items value or derives it from runtime state so other autocomplete functions can reuse a consistent representation. |
-| 16 | 421 | `function getTextareaCaretClientPosition(textarea, position)` | Autocomplete | Returns the current textarea caret client position value or derives it from runtime state so other autocomplete functions can reuse a consistent representation. |
-| 17 | 454 | `function positionLinkAutocompleteLayer()` | Autocomplete | Coordinates link autocomplete layer behavior within the Autocomplete logical module and updates the relevant runtime state or UI. |
-| 18 | 474 | `function scrollLinkAutocompleteSelectionIntoView()` | Autocomplete | Coordinates link autocomplete selection into view behavior within the Autocomplete logical module and updates the relevant runtime state or UI. |
-| 19 | 491 | `function renderLinkAutocomplete()` | Autocomplete | Builds or refreshes the DOM for link autocomplete using the current runtime state. |
-| 20 | 542 | `function acceptLinkAutocomplete(index = linkAutocompleteState?.selectedIndex \|\| 0)` | Autocomplete | Coordinates link autocomplete behavior within the Autocomplete logical module and updates the relevant runtime state or UI. |
-| 21 | 563 | `function moveLinkAutocompleteSelection(delta)` | Autocomplete | Coordinates link autocomplete selection behavior within the Autocomplete logical module and updates the relevant runtime state or UI. |
-| 22 | 577 | `function rememberEditorContextMenuConversion(undoState)` | Editor context menu | Coordinates editor context menu conversion behavior within the Editor context menu logical module and updates the relevant runtime state or UI. |
-| 23 | 585 | `function applyEditorContextMenuHistoryState(value, selectionStart, selectionEnd)` | Editor context menu | Applies or synchronizes editor context menu history state across related runtime state, UI elements, and stored data. |
-| 24 | 597 | `function undoEditorContextMenuConversion()` | Editor context menu | Coordinates undo editor context menu conversion behavior within the Editor context menu logical module and updates the relevant runtime state or UI. |
-| 25 | 608 | `function redoEditorContextMenuConversion()` | Editor context menu | Coordinates redo editor context menu conversion behavior within the Editor context menu logical module and updates the relevant runtime state or UI. |
-| 26 | 619 | `function replaceEditorSelectionPreservingUndo(start, end, replacement)` | Boot and DOM references | Transforms editor selection preserving undo into the target Markdown, path, or UI representation and returns or applies the result. |
-| 27 | 675 | `function getEditorContextMenu()` | Editor context menu | Returns the current editor context menu value or derives it from runtime state so other editor context menu functions can reuse a consistent representation. |
-| 28 | 687 | `function hideEditorContextMenu()` | Editor context menu | Closes or hides editor context menu and clears transient UI state associated with it. |
-| 29 | 693 | `function positionEditorContextMenu(menu, clientX, clientY)` | Editor context menu | Coordinates editor context menu behavior within the Editor context menu logical module and updates the relevant runtime state or UI. |
-| 30 | 707 | `function convertLines(text, callback)` | Editor context menu | Transforms lines into the target Markdown, path, or UI representation and returns or applies the result. |
-| 31 | 711 | `function toggleLinePrefix(text, prefix)` | Editor context menu | Toggles line prefix between enabled/disabled or visible/hidden states and refreshes dependent controls. |
-| 32 | 717 | `function convertSelectionToMarkdown(type, selectedText)` | Editor context menu | Transforms selection to markdown into the target Markdown, path, or UI representation and returns or applies the result. |
-| 33 | 759 | `function splitTableRow(line)` | Editor context menu | Coordinates table row behavior within the Editor context menu logical module and updates the relevant runtime state or UI. |
-| 34 | 773 | `function convertSelectionToMarkdownTable(text)` | Editor context menu | Transforms selection to markdown table into the target Markdown, path, or UI representation and returns or applies the result. |
-| 35 | 787 | `function replaceEditorSelectionWithMarkdown(type)` | Editor context menu | Transforms editor selection with markdown into the target Markdown, path, or UI representation and returns or applies the result. |
-| 36 | 799 | `function renderEditorContextMenu(clientX, clientY)` | Editor context menu | Builds or refreshes the DOM for editor context menu using the current runtime state. |
-| 37 | 826 | `function handleEditorContextMenu(event)` | Editor context menu | Handles the editor context menu event/action, normalizes event data, and delegates to lower-level runtime helpers. |
-| 38 | 841 | `function handleLinkAutocompleteKeydown(event)` | Autocomplete | Handles the link autocomplete keydown event/action, normalizes event data, and delegates to lower-level runtime helpers. |
-| 39 | 870 | `function supportsNativeDirectoryPicker()` | Folder tree | Coordinates supports native directory picker behavior within the Folder tree logical module and updates the relevant runtime state or UI. |
-| 40 | 874 | `function getFolderPickerFallbackMessage()` | Folder tree | Returns the current folder picker fallback message value or derives it from runtime state so other folder tree functions can reuse a consistent representation. |
-| 41 | 882 | `function getEditorLineHeight(computedStyle)` | Boot and DOM references | Returns the current editor line height value or derives it from runtime state so other boot and dom references functions can reuse a consistent representation. |
-| 42 | 890 | `function getEditorLineMeasure()` | Editor line/status UI | Returns the current editor line measure value or derives it from runtime state so other editor line/status ui functions can reuse a consistent representation. |
-| 43 | 903 | `function syncEditorLineMeasureStyles(measure, computedStyle)` | Editor line/status UI | Applies or synchronizes editor line measure styles across related runtime state, UI elements, and stored data. |
-| 44 | 933 | `function getEditorWrappedLineHeights(lines, computedStyle, lineHeight)` | Editor line/status UI | Returns the current editor wrapped line heights value or derives it from runtime state so other editor line/status ui functions can reuse a consistent representation. |
-| 45 | 947 | `function getCurrentEditorLine()` | Boot and DOM references | Returns the current current editor line value or derives it from runtime state so other boot and dom references functions can reuse a consistent representation. |
-| 46 | 951 | `function updateEditorCurrentLineHighlight(activeLine, wrappedLineHeights, computedStyle)` | Editor line/status UI | Refreshes editor current line highlight from the latest application state and keeps the related UI, cached data, or saved state in sync. |
-| 47 | 968 | `function updateEditorLineNumbers()` | Editor line/status UI | Refreshes editor line numbers from the latest application state and keeps the related UI, cached data, or saved state in sync. |
-| 48 | 988 | `function scheduleEditorLineNumbersUpdate()` | Editor line/status UI | Coordinates editor line numbers update behavior within the Editor line/status UI logical module and updates the relevant runtime state or UI. |
-| 49 | 997 | `function updateEditorSelectionHighlights()` | Editor line/status UI | Refreshes editor selection highlights from the latest application state and keeps the related UI, cached data, or saved state in sync. |
-| 50 | 1026 | `function syncEditorSelectionHighlightsScroll()` | Editor line/status UI | Applies or synchronizes editor selection highlights scroll across related runtime state, UI elements, and stored data. |
-| 51 | 1035 | `function syncEditorCurrentLineScroll()` | Editor line/status UI | Applies or synchronizes editor current line scroll across related runtime state, UI elements, and stored data. |
-| 52 | 1040 | `function syncEditorLineNumberScroll()` | Editor line/status UI | Applies or synchronizes editor line number scroll across related runtime state, UI elements, and stored data. |
-| 53 | 1050 | `function shouldUseNativeDirectoryPicker(event)` | Folder tree | Checks whether the use native directory picker condition is true and returns a boolean that gates later folder tree behavior. |
-| 54 | 1059 | `function updateFolderImportHint()` | Folder tree | Refreshes folder import hint from the latest application state and keeps the related UI, cached data, or saved state in sync. |
-| 55 | 1089 | `function isNeutralinoRuntime()` | Desktop compatibility bridges | Checks whether the neutralino runtime condition is true and returns a boolean that gates later desktop compatibility bridges behavior. |
-| 56 | 1093 | `function normalizeRecentItems(items)` | Recent files and folders | Converts recent items into a consistent internal format for comparisons, storage, or rendering. |
-| 57 | 1097 | `function readRecentItemsFromLocalStorage(storageKey)` | Recent files and folders | Loads recent items from local storage from storage, the filesystem, or runtime state and returns normalized data to callers. |
-| 58 | 1107 | `function writeRecentItemsToLocalStorage(storageKey, items)` | Recent files and folders | Writes recent items to local storage to the selected storage or filesystem target, handling platform-specific output details where required. |
-| 59 | 1115 | `function readRecentItems(storageKey)` | Recent files and folders | Loads recent items from storage, the filesystem, or runtime state and returns normalized data to callers. |
-| 60 | 1119 | `function writeRecentItems(storageKey, items)` | Recent files and folders | Writes recent items to the selected storage or filesystem target, handling platform-specific output details where required. |
-| 61 | 1125 | `function getRecentItemKey(item)` | Recent files and folders | Returns the current recent item key value or derives it from runtime state so other recent files and folders functions can reuse a consistent representation. |
-| 62 | 1129 | `function getRecentHandleStore(storageKey)` | Recent files and folders | Returns the current recent handle store value or derives it from runtime state so other recent files and folders functions can reuse a consistent representation. |
-| 63 | 1133 | `function getRecentHandleId(storageKey, key)` | Recent files and folders | Returns the current recent handle id value or derives it from runtime state so other recent files and folders functions can reuse a consistent representation. |
-| 64 | 1137 | `function openRecentHandlesDatabase()` | Recent files and folders | Opens recent handles database, prepares any required state, and routes the result into the matching application workflow. |
-| 65 | 1170 | `async function persistRecentHandle(storageKey, key, handle)` | Recent files and folders | Coordinates recent handle behavior within the Recent files and folders logical module and updates the relevant runtime state or UI. |
-| 66 | 1196 | `async function getPersistedRecentHandle(storageKey, key)` | Recent files and folders | Returns the current persisted recent handle value or derives it from runtime state so other recent files and folders functions can reuse a consistent representation. |
-| 67 | 1222 | `async function hydrateRecentHandlesFromIndexedDB()` | Recent files and folders | Coordinates recent handles from indexed db behavior within the Recent files and folders logical module and updates the relevant runtime state or UI. |
-| 68 | 1243 | `async function ensureFileSystemHandlePermission(handle, mode = "read")` | Desktop compatibility bridges | Ensures file system handle permission exists or is permitted before later logic depends on it. |
-| 69 | 1257 | `function mergeRecentItems(...itemGroups)` | Recent files and folders | Coordinates recent items behavior within the Recent files and folders logical module and updates the relevant runtime state or UI. |
-| 70 | 1275 | `function getProfileSeparator(profileDir)` | Recent files and folders | Returns the current profile separator value or derives it from runtime state so other recent files and folders functions can reuse a consistent representation. |
-| 71 | 1279 | `async function getUserProfileDir()` | Recent files and folders | Returns the current user profile dir value or derives it from runtime state so other recent files and folders functions can reuse a consistent representation. |
-| 72 | 1295 | `async function getProfileFilePath(fileName, cacheKey)` | Recent files and folders | Returns the current profile file path value or derives it from runtime state so other recent files and folders functions can reuse a consistent representation. |
-| 73 | 1320 | `async function getRecentProfilePath()` | Recent files and folders | Returns the current recent profile path value or derives it from runtime state so other recent files and folders functions can reuse a consistent representation. |
-| 74 | 1327 | `async function getGlobalProfilePath()` | Recent files and folders | Returns the current global profile path value or derives it from runtime state so other recent files and folders functions can reuse a consistent representation. |
-| 75 | 1334 | `function getRecentProfilePayload()` | Recent files and folders | Returns the current recent profile payload value or derives it from runtime state so other recent files and folders functions can reuse a consistent representation. |
-| 76 | 1343 | `async function writeRecentItemsToProfile()` | Recent files and folders | Writes recent items to profile to the selected storage or filesystem target, handling platform-specific output details where required. |
-| 77 | 1354 | `function scheduleRecentProfileWrite()` | Recent files and folders | Coordinates recent profile write behavior within the Recent files and folders logical module and updates the relevant runtime state or UI. |
-| 78 | 1363 | `async function hydrateRecentItemsFromProfile()` | Recent files and folders | Coordinates recent items from profile behavior within the Recent files and folders logical module and updates the relevant runtime state or UI. |
-| 79 | 1388 | `function getGlobalProfilePayload()` | Recent files and folders | Returns the current global profile payload value or derives it from runtime state so other recent files and folders functions can reuse a consistent representation. |
-| 80 | 1396 | `async function writeGlobalStateToProfile()` | Recent files and folders | Writes global state to profile to the selected storage or filesystem target, handling platform-specific output details where required. |
-| 81 | 1407 | `function scheduleGlobalProfileWrite()` | Recent files and folders | Coordinates global profile write behavior within the Recent files and folders logical module and updates the relevant runtime state or UI. |
-| 82 | 1416 | `async function hydrateGlobalStateFromProfile()` | Recent files and folders | Coordinates global state from profile behavior within the Recent files and folders logical module and updates the relevant runtime state or UI. |
-| 83 | 1434 | `function createRecentEntry(entry)` | Recent files and folders | Creates a new recent entry data structure or UI element and initializes the fields/events needed by downstream logic. |
-| 84 | 1448 | `function rememberRecentItem(storageKey, entry, handleStore)` | Recent files and folders | Coordinates recent item behavior within the Recent files and folders logical module and updates the relevant runtime state or UI. |
-| 85 | 1464 | `function rememberRecentFile(entry)` | Recent files and folders | Coordinates recent file behavior within the Recent files and folders logical module and updates the relevant runtime state or UI. |
-| 86 | 1468 | `function rememberRecentFolder(entry)` | Recent files and folders | Coordinates recent folder behavior within the Recent files and folders logical module and updates the relevant runtime state or UI. |
-| 87 | 1472 | `function getRecentSubmenuMarkup(kind, iconClass, title)` | Recent files and folders | Returns the current recent submenu markup value or derives it from runtime state so other recent files and folders functions can reuse a consistent representation. |
-| 88 | 1482 | `function ensureRecentMenuContainers()` | Recent files and folders | Ensures recent menu containers exists or is permitted before later logic depends on it. |
-| 89 | 1493 | `function renderRecentMenu(menu, items, emptyText, itemType)` | Recent files and folders | Builds or refreshes the DOM for recent menu using the current runtime state. |
-| 90 | 1518 | `function renderRecentMenus()` | Recent files and folders | Builds or refreshes the DOM for recent menus using the current runtime state. |
-| 91 | 1531 | `async function openRecentFile(key)` | Recent files and folders | Opens recent file, prepares any required state, and routes the result into the matching application workflow. |
-| 92 | 1568 | `async function openRecentFolder(key)` | Recent files and folders | Opens recent folder, prepares any required state, and routes the result into the matching application workflow. |
-| 93 | 1623 | `function ensureFolderTreePane()` | Folder tree | Ensures folder tree pane exists or is permitted before later logic depends on it. |
-| 94 | 1764 | `function getClosestUnsupportedFileToggleButton(target)` | Modal and menu lifecycle | Returns the current closest unsupported file toggle button value or derives it from runtime state so other modal and menu lifecycle functions can reuse a consistent representation. |
-| 95 | 1769 | `function handleUnsupportedFileToggleClick(event)` | Folder tree | Handles the unsupported file toggle click event/action, normalizes event data, and delegates to lower-level runtime helpers. |
-| 96 | 1893 | `function loadGlobalState()` | Theme and global preferences | Loads global state from storage, the filesystem, or runtime state and returns normalized data to callers. |
-| 97 | 1898 | `function saveGlobalState(patch)` | Theme and global preferences | Persists global state to the appropriate local, browser, or desktop target and updates dirty/source metadata after success. |
-| 98 | 1907 | `function getDefaultThemePreference()` | Theme and global preferences | Returns the current default theme preference value or derives it from runtime state so other theme and global preferences functions can reuse a consistent representation. |
-| 99 | 1913 | `function getDefaultGlobalState()` | Theme and global preferences | Returns the current default global state value or derives it from runtime state so other theme and global preferences functions can reuse a consistent representation. |
-| 100 | 1920 | `function resetSidebarDropzoneLayoutToDefault()` | Sidebar file/folder operations | Coordinates sidebar dropzone layout to default behavior within the Sidebar file/folder operations logical module and updates the relevant runtime state or UI. |
-| 101 | 1937 | `function restoreDefaultPreferences()` | Theme and global preferences | Coordinates default preferences behavior within the Theme and global preferences logical module and updates the relevant runtime state or UI. |
-| 102 | 1975 | `function applyGlobalPreferences(state = loadGlobalState()` | Theme and global preferences | Applies or synchronizes global preferences across related runtime state, UI elements, and stored data. |
-| 103 | 1994 | `function applySavedLayoutPreferences(state = loadGlobalState()` | Theme and global preferences | Applies or synchronizes saved layout preferences across related runtime state, UI elements, and stored data. |
-| 104 | 2005 | `function getKnownTags()` | Tag management | Returns the current known tags value or derives it from runtime state so other tag management functions can reuse a consistent representation. |
-| 105 | 2009 | `function saveKnownTags(tags)` | Tag management | Persists known tags to the appropriate local, browser, or desktop target and updates dirty/source metadata after success. |
-| 106 | 2013 | `function addTagsToCountMap(counts, tags)` | Tag management | Adds tags to count map to the relevant UI or state collection and wires any required behavior. |
-| 107 | 2019 | `function removeTagsFromCountMap(counts, tags)` | Tag management | Removes tags from count map from runtime state, UI, storage, or the filesystem while updating dependent references. |
-| 108 | 2030 | `function areTagListsEqual(firstTags, secondTags)` | Tag management | Coordinates are tag lists equal behavior within the Tag management logical module and updates the relevant runtime state or UI. |
-| 109 | 2036 | `function getComparableFolderEntryPath(entry)` | Folder tree | Returns the current comparable folder entry path value or derives it from runtime state so other folder tree functions can reuse a consistent representation. |
-| 110 | 2040 | `function getFolderMarkdownEntryForTab(tab)` | Markdown rendering | Returns the current folder markdown entry for tab value or derives it from runtime state so other markdown rendering functions can reuse a consistent representation. |
-| 111 | 2063 | `function updateFolderTreeNodeTagsForEntry(fileEntry, tags)` | Folder tree | Refreshes folder tree node tags for entry from the latest application state and keeps the related UI, cached data, or saved state in sync. |
-| 112 | 2067 | `updateNodes(nodes) =>` | Folder tree | Refreshes nodes from the latest application state and keeps the related UI, cached data, or saved state in sync. |
-| 113 | 2083 | `function syncMarkdownTabTagsToFolderState(tab, content)` | Tag management | Applies or synchronizes markdown tab tags to folder state across related runtime state, UI elements, and stored data. |
-| 114 | 2114 | `function getActiveGraphSnapshotTagCounts()` | Graph extraction | Returns the current active graph snapshot tag counts value or derives it from runtime state so other graph extraction functions can reuse a consistent representation. |
-| 115 | 2124 | `function getReferencedTagCounts()` | Tag management | Returns the current referenced tag counts value or derives it from runtime state so other tag management functions can reuse a consistent representation. |
-| 116 | 2130 | `function getAllKnownAndReferencedTags()` | Tag management | Returns the current all known and referenced tags value or derives it from runtime state so other tag management functions can reuse a consistent representation. |
-| 117 | 2136 | `function getGraphFileEntryNodeId(fileEntry)` | Graph rendering and interaction | Returns the current graph file entry node id value or derives it from runtime state so other graph rendering and interaction functions can reuse a consistent representation. |
-| 118 | 2141 | `function findFolderMarkdownEntryForGraphFile(fileEntry)` | Graph rendering and interaction | Locates folder markdown entry for graph file in runtime state or the DOM and optionally moves focus/selection to it. |
-| 119 | 2147 | `async function readFolderMarkdownFileContent(fileEntry)` | Markdown rendering | Loads folder markdown file content from storage, the filesystem, or runtime state and returns normalized data to callers. |
-| 120 | 2164 | `async function refreshFolderTagCounts()` | Tag management | Coordinates folder tag counts behavior within the Tag management logical module and updates the relevant runtime state or UI. |
-| 121 | 2190 | `function clearFolderTagCounts()` | Tag management | Coordinates folder tag counts behavior within the Tag management logical module and updates the relevant runtime state or UI. |
-| 122 | 2196 | `function renderTagManagementList()` | Tag management | Builds or refreshes the DOM for tag management list using the current runtime state. |
-| 123 | 2229 | `function createTag(tagName)` | Tag management | Creates a new tag data structure or UI element and initializes the fields/events needed by downstream logic. |
-| 124 | 2248 | `function snapshotFileMatchesTab(snapshotFile, tab)` | Tab management | Coordinates snapshot file matches tab behavior within the Tab management logical module and updates the relevant runtime state or UI. |
-| 125 | 2262 | `function updateOpenMarkdownTabsForSnapshotFile(snapshotFile)` | Markdown rendering | Refreshes open markdown tabs for snapshot file from the latest application state and keeps the related UI, cached data, or saved state in sync. |
-| 126 | 2276 | `function getOpenGraphSnapshotTagsForMarkdownTab(sourceTab)` | Graph extraction | Returns the current open graph snapshot tags for markdown tab value or derives it from runtime state so other graph extraction functions can reuse a consistent representation. |
-| 127 | 2288 | `function updateFolderMarkdownEntryForSnapshotFile(snapshotFile)` | Markdown rendering | Refreshes folder markdown entry for snapshot file from the latest application state and keeps the related UI, cached data, or saved state in sync. |
-| 128 | 2301 | `async function syncOpenGraphSnapshotsForMarkdownTabTagChange(sourceTab, content)` | Graph extraction | Applies or synchronizes open graph snapshots for markdown tab tag change across related runtime state, UI elements, and stored data. |
-| 129 | 2339 | `function getTagDeletionEntryKey(entry)` | Tag management | Returns the current tag deletion entry key value or derives it from runtime state so other tag management functions can reuse a consistent representation. |
-| 130 | 2343 | `function getActiveGraphSnapshotFileDeletionTargets(tagName, existingKeys)` | Graph extraction | Returns the current active graph snapshot file deletion targets value or derives it from runtime state so other graph extraction functions can reuse a consistent representation. |
-| 131 | 2360 | `function getNeutralinoTagDeletionWritePath(entry)` | Tag management | Returns the current neutralino tag deletion write path value or derives it from runtime state so other tag management functions can reuse a consistent representation. |
-| 132 | 2369 | `async function writeTagDeletionTargetContent(entry, content)` | Tag management | Writes tag deletion target content to the selected storage or filesystem target, handling platform-specific output details where required. |
-| 133 | 2387 | `async function updateOpenGraphSnapshotsForChangedTagFiles(changedEntries)` | Graph extraction | Refreshes open graph snapshots for changed tag files from the latest application state and keeps the related UI, cached data, or saved state in sync. |
-| 134 | 2415 | `async function deleteTag(tagName)` | Tag management | Removes tag from runtime state, UI, storage, or the filesystem while updating dependent references. |
-| 135 | 2498 | `function getComparableFilePath(path)` | Folder tree | Returns the current comparable file path value or derives it from runtime state so other folder tree functions can reuse a consistent representation. |
-| 136 | 2527 | `function getTabTreeFileCandidates(tab)` | Tab management | Returns the current tab tree file candidates value or derives it from runtime state so other tab management functions can reuse a consistent representation. |
-| 137 | 2534 | `function updateAutoSelectFileButtons()` | Folder tree | Refreshes auto select file buttons from the latest application state and keeps the related UI, cached data, or saved state in sync. |
-| 138 | 2555 | `function hasCollapsedFolderTreeDetails()` | Folder tree | Checks whether the collapsed folder tree details condition is true and returns a boolean that gates later folder tree behavior. |
-| 139 | 2561 | `function updateFolderTreeExpandToggleButtons()` | Folder tree | Refreshes folder tree expand toggle buttons from the latest application state and keeps the related UI, cached data, or saved state in sync. |
-| 140 | 2581 | `function setAllFolderTreeDetails(open)` | Folder tree | Sets the all folder tree details state and applies any related UI or persistence updates needed by the runtime. |
-| 141 | 2590 | `function getUnsupportedFileToggleButtons()` | Folder tree | Returns the current unsupported file toggle buttons value or derives it from runtime state so other folder tree functions can reuse a consistent representation. |
-| 142 | 2594 | `function getFolderTreeGraphViewButtons()` | Folder tree | Returns the current folder tree graph view buttons value or derives it from runtime state so other folder tree functions can reuse a consistent representation. |
-| 143 | 2598 | `function getFolderTreeGraphExportButtons()` | Folder tree | Returns the current folder tree graph export buttons value or derives it from runtime state so other folder tree functions can reuse a consistent representation. |
-| 144 | 2602 | `function getTagManagementMenuButtons()` | Tag management | Returns the current tag management menu buttons value or derives it from runtime state so other tag management functions can reuse a consistent representation. |
-| 145 | 2606 | `function getVisibleFolderTreeNodes(nodes)` | Folder tree | Returns the current visible folder tree nodes value or derives it from runtime state so other folder tree functions can reuse a consistent representation. |
-| 146 | 2621 | `function getFolderTreeNodePathKey(node)` | Folder tree | Returns the current folder tree node path key value or derives it from runtime state so other folder tree functions can reuse a consistent representation. |
-| 147 | 2625 | `function getFolderTreeNodeTags(node)` | Folder tree | Returns the current folder tree node tags value or derives it from runtime state so other folder tree functions can reuse a consistent representation. |
-| 148 | 2636 | `function getTagFilteredFolderTreeNodes(nodes)` | Folder tree | Returns the current tag filtered folder tree nodes value or derives it from runtime state so other folder tree functions can reuse a consistent representation. |
-| 149 | 2657 | `function toggleFolderTreeTagFilter(tagName)` | Folder tree | Toggles folder tree tag filter between enabled/disabled or visible/hidden states and refreshes dependent controls. |
-| 150 | 2670 | `function getFilteredFolderTreeNodes(nodes, filterText)` | Folder tree | Returns the current filtered folder tree nodes value or derives it from runtime state so other folder tree functions can reuse a consistent representation. |
-| 151 | 2692 | `function renderFilteredFolderTree()` | Folder tree | Builds or refreshes the DOM for filtered folder tree using the current runtime state. |
-| 152 | 2703 | `function updateFolderTreeFilterControls()` | Folder tree | Refreshes folder tree filter controls from the latest application state and keeps the related UI, cached data, or saved state in sync. |
-| 153 | 2723 | `function getFolderSortLabel(mode)` | Folder tree | Returns the current folder sort label value or derives it from runtime state so other folder tree functions can reuse a consistent representation. |
-| 154 | 2735 | `function updateFolderTreeSortControls()` | Folder tree | Refreshes folder tree sort controls from the latest application state and keeps the related UI, cached data, or saved state in sync. |
-| 155 | 2754 | `function updateUnsupportedFileToggleButtons()` | Folder tree | Refreshes unsupported file toggle buttons from the latest application state and keeps the related UI, cached data, or saved state in sync. |
-| 156 | 2774 | `function updateFolderTreeGraphViewButtons()` | Folder tree | Refreshes folder tree graph view buttons from the latest application state and keeps the related UI, cached data, or saved state in sync. |
-| 157 | 2785 | `function updateFolderTreeGraphExportButtons()` | Folder tree | Refreshes folder tree graph export buttons from the latest application state and keeps the related UI, cached data, or saved state in sync. |
-| 158 | 2798 | `function updateTagManagementMenuButtons()` | Tag management | Refreshes tag management menu buttons from the latest application state and keeps the related UI, cached data, or saved state in sync. |
-| 159 | 2814 | `function setShowUnsupportedFolderFiles(enabled)` | Folder tree | Sets the show unsupported folder files state and applies any related UI or persistence updates needed by the runtime. |
-| 160 | 2821 | `function updateFolderTreeToolbarState()` | Folder tree | Refreshes folder tree toolbar state from the latest application state and keeps the related UI, cached data, or saved state in sync. |
-| 161 | 2832 | `function setAutoSelectFileEnabled(enabled)` | Folder tree | Sets the auto select file enabled state and applies any related UI or persistence updates needed by the runtime. |
-| 162 | 2839 | `function findFolderTreeFileButtonForTab(tab)` | Folder tree | Locates folder tree file button for tab in runtime state or the DOM and optionally moves focus/selection to it. |
-| 163 | 2857 | `function syncFolderTreeSelectionToActiveTab(options = {})` | Folder tree | Applies or synchronizes folder tree selection to active tab across related runtime state, UI elements, and stored data. |
-| 164 | 2887 | `function updateThemeButtonLabels(theme)` | Theme and global preferences | Refreshes theme button labels from the latest application state and keeps the related UI, cached data, or saved state in sync. |
-| 165 | 2896 | `initMermaid() =>` | Markdown renderer configuration | Coordinates init mermaid behavior within the Markdown renderer configuration logical module and updates the relevant runtime state or UI. |
-| 166 | 2976 | `function enhanceGitHubAlerts(container)` | Markdown rendering | Coordinates enhance git hub alerts behavior within the Markdown rendering logical module and updates the relevant runtime state or UI. |
-| 167 | 3031 | `function parseFrontmatter(markdown)` | Markdown rendering | Parses frontmatter from text or structured input and returns normalized fields for later processing. |
-| 168 | 3043 | `function renderFrontmatterValue(value)` | Markdown rendering | Builds or refreshes the DOM for frontmatter value using the current runtime state. |
-| 169 | 3066 | `function renderFrontmatterTable(data)` | Markdown rendering | Builds or refreshes the DOM for frontmatter table using the current runtime state. |
-| 170 | 3073 | `function escapeHtml(str)` | Markdown renderer configuration | Coordinates escape html behavior within the Markdown renderer configuration logical module and updates the relevant runtime state or UI. |
-| 171 | 3081 | `function rangesOverlap(existingRanges, start, end)` | Markdown renderer configuration | Coordinates ranges overlap behavior within the Markdown renderer configuration logical module and updates the relevant runtime state or UI. |
-| 172 | 3088 | `function addInlineSyntaxRanges(line, regex, className, ranges)` | Markdown renderer configuration | Adds inline syntax ranges to the relevant UI or state collection and wires any required behavior. |
-| 173 | 3101 | `function renderInlineMarkdownSyntax(line)` | Markdown rendering | Builds or refreshes the DOM for inline markdown syntax using the current runtime state. |
-| 174 | 3127 | `function renderMarkdownSyntaxLine(line, state)` | Markdown rendering | Builds or refreshes the DOM for markdown syntax line using the current runtime state. |
-| 175 | 3168 | `function renderEditorSyntaxHighlights()` | Markdown renderer configuration | Builds or refreshes the DOM for editor syntax highlights using the current runtime state. |
-| 176 | 3183 | `function syncEditorSyntaxHighlightScroll()` | Scroll synchronization | Applies or synchronizes editor syntax highlight scroll across related runtime state, UI elements, and stored data. |
-| 177 | 3192 | `function getWikiLinkParts(rawLink)` | Rename and link maintenance | Returns the current wiki link parts value or derives it from runtime state so other rename and link maintenance functions can reuse a consistent representation. |
-| 178 | 3200 | `function isExternalOrSpecialLinkTarget(target)` | Rename and link maintenance | Checks whether the external or special link target condition is true and returns a boolean that gates later rename and link maintenance behavior. |
-| 179 | 3204 | `function isExternalWebLinkTarget(target)` | Rename and link maintenance | Checks whether the external web link target condition is true and returns a boolean that gates later rename and link maintenance behavior. |
-| 180 | 3208 | `function normalizeExternalWebLinkTarget(target)` | Rename and link maintenance | Converts external web link target into a consistent internal format for comparisons, storage, or rendering. |
-| 181 | 3213 | `async function openExternalWebLink(target)` | Rename and link maintenance | Opens external web link, prepares any required state, and routes the result into the matching application workflow. |
-| 182 | 3229 | `function getWikiLinkHref(target)` | Rename and link maintenance | Returns the current wiki link href value or derives it from runtime state so other rename and link maintenance functions can reuse a consistent representation. |
-| 183 | 3242 | `function splitLinkTarget(target)` | Rename and link maintenance | Coordinates link target behavior within the Rename and link maintenance logical module and updates the relevant runtime state or UI. |
-| 184 | 3254 | `function safeDecodeLinkPath(path)` | Rename and link maintenance | Coordinates safe decode link path behavior within the Rename and link maintenance logical module and updates the relevant runtime state or UI. |
-| 185 | 3262 | `function normalizeMarkdownLinkPath(path)` | Markdown rendering | Converts markdown link path into a consistent internal format for comparisons, storage, or rendering. |
-| 186 | 3284 | `function getDirectoryPath(path)` | Markdown renderer configuration | Returns the current directory path value or derives it from runtime state so other markdown renderer configuration functions can reuse a consistent representation. |
-| 187 | 3290 | `function getLinkPathExtension(path)` | Rename and link maintenance | Returns the current link path extension value or derives it from runtime state so other rename and link maintenance functions can reuse a consistent representation. |
-| 188 | 3296 | `function isMarkdownDocumentLinkPath(path)` | Markdown rendering | Checks whether the markdown document link path condition is true and returns a boolean that gates later markdown rendering behavior. |
-| 189 | 3303 | `function ensureMarkdownLinkExtension(path)` | Markdown rendering | Ensures markdown link extension exists or is permitted before later logic depends on it. |
-| 190 | 3308 | `function isSameOriginMarkdownUrl(target)` | Markdown rendering | Checks whether the same origin markdown url condition is true and returns a boolean that gates later markdown rendering behavior. |
-| 191 | 3317 | `function getSameOriginMarkdownUrlPath(target)` | Markdown rendering | Returns the current same origin markdown url path value or derives it from runtime state so other markdown rendering functions can reuse a consistent representation. |
-| 192 | 3322 | `function isAbsoluteFilesystemPath(path)` | Desktop compatibility bridges | Checks whether the absolute filesystem path condition is true and returns a boolean that gates later desktop compatibility bridges behavior. |
-| 193 | 3327 | `function normalizeFilesystemLinkPath(path)` | Rename and link maintenance | Converts filesystem link path into a consistent internal format for comparisons, storage, or rendering. |
-| 194 | 3335 | `function resolveMarkdownLinkPath(targetPath, basePath)` | Markdown rendering | Coordinates markdown link path behavior within the Markdown rendering logical module and updates the relevant runtime state or UI. |
-| 195 | 3353 | `function getActiveMarkdownSourcePath()` | Markdown rendering | Returns the current active markdown source path value or derives it from runtime state so other markdown rendering functions can reuse a consistent representation. |
-| 196 | 3358 | `function getFolderEntryPathCandidates(entry)` | Markdown renderer configuration | Returns the current folder entry path candidates value or derives it from runtime state so other markdown renderer configuration functions can reuse a consistent representation. |
-| 197 | 3370 | `function findOpenFolderMarkdownEntry(resolvedPath, rawTargetPath)` | Markdown rendering | Locates open folder markdown entry in runtime state or the DOM and optionally moves focus/selection to it. |
-| 198 | 3401 | `function getMarkdownLinkSourceFile(target)` | Markdown rendering | Returns the current markdown link source file value or derives it from runtime state so other markdown rendering functions can reuse a consistent representation. |
-| 199 | 3439 | `function scrollMarkdownPreviewToHash(hash)` | Markdown rendering | Coordinates markdown preview to hash behavior within the Markdown rendering logical module and updates the relevant runtime state or UI. |
-| 200 | 3451 | `async function openMarkdownLinkFromPreview(rawTarget)` | Markdown rendering | Opens markdown link from preview, prepares any required state, and routes the result into the matching application workflow. |
-| 201 | 3480 | `function annotatePreviewMarkdownLinks(container)` | Markdown rendering | Coordinates annotate preview markdown links behavior within the Markdown rendering logical module and updates the relevant runtime state or UI. |
-| 202 | 3503 | `function getPreviewLinkStatusUrl(anchor)` | Rename and link maintenance | Returns the current preview link status url value or derives it from runtime state so other rename and link maintenance functions can reuse a consistent representation. |
-| 203 | 3515 | `function handlePreviewLinkMouseOver(event)` | Rename and link maintenance | Handles the preview link mouse over event/action, normalizes event data, and delegates to lower-level runtime helpers. |
-| 204 | 3523 | `function handlePreviewLinkMouseOut(event)` | Rename and link maintenance | Handles the preview link mouse out event/action, normalizes event data, and delegates to lower-level runtime helpers. |
-| 205 | 3532 | `function handlePreviewLinkClick(event)` | Rename and link maintenance | Handles the preview link click event/action, normalizes event data, and delegates to lower-level runtime helpers. |
-| 206 | 3566 | `function createWikiLinkAnchor(rawLink)` | Rename and link maintenance | Creates a new wiki link anchor data structure or UI element and initializes the fields/events needed by downstream logic. |
-| 207 | 3577 | `function shouldSkipWikiLinkTextNode(node)` | Rename and link maintenance | Checks whether the skip wiki link text node condition is true and returns a boolean that gates later rename and link maintenance behavior. |
-| 208 | 3582 | `function enhanceWikiLinks(container)` | Rename and link maintenance | Coordinates enhance wiki links behavior within the Rename and link maintenance logical module and updates the relevant runtime state or UI. |
-| 209 | 3670 | `function renderMarkdown(markdown)` | Markdown rendering | Builds or refreshes the DOM for markdown using the current runtime state. |
-| 210 | 3803 | `function normalizeGraphTagNodeId(value)` | Graph rendering and interaction | Converts graph tag node id into a consistent internal format for comparisons, storage, or rendering. |
-| 211 | 3810 | `function normalizeGraphTagNodeIds(values)` | Graph rendering and interaction | Converts graph tag node ids into a consistent internal format for comparisons, storage, or rendering. |
-| 212 | 3816 | `function clampGraphNumber(value, fallback, min, max)` | Graph rendering and interaction | Coordinates clamp graph number behavior within the Graph rendering and interaction logical module and updates the relevant runtime state or UI. |
-| 213 | 3822 | `function createGraphGroupId(seed)` | Graph rendering and interaction | Creates a new graph group id data structure or UI element and initializes the fields/events needed by downstream logic. |
-| 214 | 3832 | `function normalizeGraphGroupColor(value, fallback)` | Graph rendering and interaction | Converts graph group color into a consistent internal format for comparisons, storage, or rendering. |
-| 215 | 3841 | `function getGraphColorInputValue(value)` | Graph rendering and interaction | Returns the current graph color input value value or derives it from runtime state so other graph rendering and interaction functions can reuse a consistent representation. |
-| 216 | 3850 | `function getNextDefaultGraphGroupColor(groups)` | Graph rendering and interaction | Returns the current next default graph group color value or derives it from runtime state so other graph rendering and interaction functions can reuse a consistent representation. |
-| 217 | 3855 | `function normalizeGraphGroups(groups)` | Graph rendering and interaction | Converts graph groups into a consistent internal format for comparisons, storage, or rendering. |
-| 218 | 3879 | `function normalizeGraphViewConfig(config)` | Graph rendering and interaction | Converts graph view config into a consistent internal format for comparisons, storage, or rendering. |
-| 219 | 3903 | `function cloneGraphPersistenceValue(value)` | Graph rendering and interaction | Coordinates clone graph persistence value behavior within the Graph rendering and interaction logical module and updates the relevant runtime state or UI. |
-| 220 | 3914 | `function normalizeGraphTimestamp(value, fallback)` | Graph rendering and interaction | Converts graph timestamp into a consistent internal format for comparisons, storage, or rendering. |
-| 221 | 3919 | `function normalizeGraphSnapshot(snapshot)` | Graph extraction | Converts graph snapshot into a consistent internal format for comparisons, storage, or rendering. |
-| 222 | 3942 | `function graphSnapshotHasEmbeddedFileContent(snapshot)` | Graph extraction | Coordinates graph snapshot has embedded file content behavior within the Graph extraction logical module and updates the relevant runtime state or UI. |
-| 223 | 3947 | `function getGraphFileKey(file)` | Graph rendering and interaction | Returns the current graph file key value or derives it from runtime state so other graph rendering and interaction functions can reuse a consistent representation. |
-| 224 | 3955 | `function getGraphLinkEndpointKey(endpoint)` | Rename and link maintenance | Returns the current graph link endpoint key value or derives it from runtime state so other rename and link maintenance functions can reuse a consistent representation. |
-| 225 | 3963 | `function getGraphLinkKey(link)` | Rename and link maintenance | Returns the current graph link key value or derives it from runtime state so other rename and link maintenance functions can reuse a consistent representation. |
-| 226 | 3971 | `function getGraphSnapshotFilesForComparison(snapshot)` | Graph extraction | Returns the current graph snapshot files for comparison value or derives it from runtime state so other graph extraction functions can reuse a consistent representation. |
-| 227 | 3978 | `function getGraphSnapshotLinksForComparison(snapshot)` | Rename and link maintenance | Returns the current graph snapshot links for comparison value or derives it from runtime state so other rename and link maintenance functions can reuse a consistent representation. |
-| 228 | 3983 | `function getGraphTagRelationKeys(snapshot)` | Graph rendering and interaction | Returns the current graph tag relation keys value or derives it from runtime state so other graph rendering and interaction functions can reuse a consistent representation. |
-| 229 | 4005 | `function compareGraphCollections(savedItems, currentItems, keyGetter)` | Graph rendering and interaction | Coordinates compare graph collections behavior within the Graph rendering and interaction logical module and updates the relevant runtime state or UI. |
-| 230 | 4029 | `function compareGraphViewToCurrentFolder(savedSnapshot, currentSnapshot)` | Graph rendering and interaction | Coordinates compare graph view to current folder behavior within the Graph rendering and interaction logical module and updates the relevant runtime state or UI. |
-| 231 | 4067 | `function hasGraphComparisonChanges(comparison)` | Graph persistence and comparison | Checks whether the graph comparison changes condition is true and returns a boolean that gates later graph persistence and comparison behavior. |
-| 232 | 4079 | `function buildCompareGraphSnapshot(savedSnapshot, currentSnapshot, comparison)` | Graph extraction | Builds or collects compare graph snapshot from available source data so the runtime can render or persist it. |
-| 233 | 4094 | `addNode(node, status = "current") =>` | Graph persistence and comparison | Adds node to the relevant UI or state collection and wires any required behavior. |
-| 234 | 4110 | `addFile(file, status = "current") =>` | Graph persistence and comparison | Adds file to the relevant UI or state collection and wires any required behavior. |
-| 235 | 4129 | `ensureNodeForEndpoint(endpointId, status = "saved-only") =>` | Graph persistence and comparison | Ensures node for endpoint exists or is permitted before later logic depends on it. |
-| 236 | 4149 | `addLink(link, status = "current") =>` | Rename and link maintenance | Adds link to the relevant UI or state collection and wires any required behavior. |
-| 237 | 4190 | `function isKeepSavedGraphMode(tab)` | Graph persistence and comparison | Checks whether the keep saved graph mode condition is true and returns a boolean that gates later graph persistence and comparison behavior. |
-| 238 | 4194 | `function getGraphNodeNormalizedPath(node)` | Graph extraction | Returns the current graph node normalized path value or derives it from runtime state so other graph extraction functions can reuse a consistent representation. |
-| 239 | 4201 | `function getGraphSnapshotNodeIds(snapshot)` | Graph extraction | Returns the current graph snapshot node ids value or derives it from runtime state so other graph extraction functions can reuse a consistent representation. |
-| 240 | 4207 | `function getGraphLayoutEntryByNormalizedPath(graphLayout, savedSnapshot, normalizedPath)` | View mode and layout controls | Returns the current graph layout entry by normalized path value or derives it from runtime state so other view mode and layout controls functions can reuse a consistent representation. |
-| 241 | 4219 | `function getGraphLayoutEntryForSnapshotNode(graphLayout, savedSnapshot, node)` | View mode and layout controls | Returns the current graph layout entry for snapshot node value or derives it from runtime state so other view mode and layout controls functions can reuse a consistent representation. |
-| 242 | 4227 | `function shouldPreserveGraphZoomTransform(savedZoomTransform, preservedNodeCount)` | Graph rendering and interaction | Checks whether the preserve graph zoom transform condition is true and returns a boolean that gates later graph rendering and interaction behavior. |
-| 243 | 4231 | `function preserveGraphLayoutForCurrentSnapshot(savedLayout, savedSnapshot, currentSnapshot)` | View mode and layout controls | Coordinates preserve graph layout for current snapshot behavior within the View mode and layout controls logical module and updates the relevant runtime state or UI. |
-| 244 | 4256 | `function preserveGraphLayoutForCompareSnapshot(savedLayout, savedSnapshot, compareSnapshot)` | View mode and layout controls | Coordinates preserve graph layout for compare snapshot behavior within the View mode and layout controls logical module and updates the relevant runtime state or UI. |
-| 245 | 4281 | `function preserveGraphConfigForCurrentSnapshot(savedConfig, currentSnapshot)` | Graph rendering and interaction | Coordinates preserve graph config for current snapshot behavior within the Graph rendering and interaction logical module and updates the relevant runtime state or UI. |
-| 246 | 4301 | `function applyCurrentFolderSnapshotToSavedGraphTab(tab, currentSnapshot, options = {})` | Graph persistence and comparison | Applies or synchronizes current folder snapshot to saved graph tab across related runtime state, UI elements, and stored data. |
-| 247 | 4322 | `function showGraphUpdatedBanner()` | Graph rendering and interaction | Displays graph updated banner and populates it with the latest contextual information. |
-| 248 | 4326 | `function showSavedGraphModeBanner(tab)` | Graph persistence and comparison | Displays saved graph mode banner and populates it with the latest contextual information. |
-| 249 | 4331 | `function showGraphBanner(message, detailsModel = null)` | Graph rendering and interaction | Displays graph banner and populates it with the latest contextual information. |
-| 250 | 4376 | `function ensureSavedGraphModePill()` | Graph persistence and comparison | Ensures saved graph mode pill exists or is permitted before later logic depends on it. |
-| 251 | 4394 | `function updateSavedGraphModePill(tab)` | Graph persistence and comparison | Refreshes saved graph mode pill from the latest application state and keeps the related UI, cached data, or saved state in sync. |
-| 252 | 4421 | `function getGraphComparisonSummaryCounts(comparison)` | Graph persistence and comparison | Returns the current graph comparison summary counts value or derives it from runtime state so other graph persistence and comparison functions can reuse a consistent representation. |
-| 253 | 4431 | `function getGraphFileDifferenceLabel(file)` | Graph rendering and interaction | Returns the current graph file difference label value or derives it from runtime state so other graph rendering and interaction functions can reuse a consistent representation. |
-| 254 | 4436 | `function createGraphComparisonLabelLookup(savedSnapshot, currentSnapshot)` | Graph persistence and comparison | Creates a new graph comparison label lookup data structure or UI element and initializes the fields/events needed by downstream logic. |
-| 255 | 4439 | `addLabel(id, label) =>` | Graph persistence and comparison | Adds label to the relevant UI or state collection and wires any required behavior. |
-| 256 | 4464 | `function getGraphComparisonEndpointLabel(endpoint, labels)` | Graph persistence and comparison | Returns the current graph comparison endpoint label value or derives it from runtime state so other graph persistence and comparison functions can reuse a consistent representation. |
-| 257 | 4471 | `function getGraphLinkDifferenceLabel(link, labels = new Map()` | Rename and link maintenance | Returns the current graph link difference label value or derives it from runtime state so other rename and link maintenance functions can reuse a consistent representation. |
-| 258 | 4478 | `function getGraphTagRelationDifferenceLabel(relationKey, labels = new Map()` | Graph rendering and interaction | Returns the current graph tag relation difference label value or derives it from runtime state so other graph rendering and interaction functions can reuse a consistent representation. |
-| 259 | 4486 | `function createGraphComparisonSection(title, items, formatter)` | Graph persistence and comparison | Creates a new graph comparison section data structure or UI element and initializes the fields/events needed by downstream logic. |
-| 260 | 4493 | `function buildGraphComparisonDetailsModel(comparison, savedSnapshot, currentSnapshot)` | Graph persistence and comparison | Builds or collects graph comparison details model from available source data so the runtime can render or persist it. |
-| 261 | 4507 | `function renderGraphComparisonDetailsModel(model)` | Graph persistence and comparison | Builds or refreshes the DOM for graph comparison details model using the current runtime state. |
-| 262 | 4521 | `function openGraphComparisonDetailsModal(model)` | Graph persistence and comparison | Opens graph comparison details modal, prepares any required state, and routes the result into the matching application workflow. |
-| 263 | 4530 | `function closeGraphComparisonDetailsModal()` | Graph persistence and comparison | Closes or hides graph comparison details modal and clears transient UI state associated with it. |
-| 264 | 4536 | `function hideGraphStaleModal()` | Graph persistence and comparison | Closes or hides graph stale modal and clears transient UI state associated with it. |
-| 265 | 4543 | `function showGraphStaleModal(tab, savedSnapshot, currentSnapshot, comparison)` | Graph persistence and comparison | Displays graph stale modal and populates it with the latest contextual information. |
-| 266 | 4558 | `async function promptForStaleSavedGraphIfNeeded(tab, options = {})` | Graph persistence and comparison | Coordinates prompt for stale saved graph if needed behavior within the Graph persistence and comparison logical module and updates the relevant runtime state or UI. |
-| 267 | 4575 | `function keepSavedGraphFromStaleModal()` | Graph persistence and comparison | Coordinates keep saved graph from stale modal behavior within the Graph persistence and comparison logical module and updates the relevant runtime state or UI. |
-| 268 | 4592 | `async function updateGraphFromStaleModal()` | Graph persistence and comparison | Refreshes graph from stale modal from the latest application state and keeps the related UI, cached data, or saved state in sync. |
-| 269 | 4617 | `function loadGraphComparisonFromStaleModal()` | Graph persistence and comparison | Loads graph comparison from stale modal from storage, the filesystem, or runtime state and returns normalized data to callers. |
-| 270 | 4645 | `function shouldPreserveGraphSnapshotFullPath(snapshotFile)` | Graph extraction | Checks whether the preserve graph snapshot full path condition is true and returns a boolean that gates later graph extraction behavior. |
-| 271 | 4649 | `function stripGraphSnapshotContent(snapshot)` | Graph extraction | Coordinates graph snapshot content behavior within the Graph extraction logical module and updates the relevant runtime state or UI. |
-| 272 | 4671 | `function serializeGraphViewDocument(tab)` | Graph persistence and comparison | Converts graph view document between in-memory runtime form and a saved document/storage representation. |
-| 273 | 4680 | `function serializeGraphExportDocument(tab)` | Graph persistence and comparison | Converts graph export document between in-memory runtime form and a saved document/storage representation. |
-| 274 | 4684 | `function getExplicitGraphDocumentType(source)` | Graph persistence and comparison | Returns the current explicit graph document type value or derives it from runtime state so other graph persistence and comparison functions can reuse a consistent representation. |
-| 275 | 4696 | `function inferLegacyGraphDocumentType(snapshot)` | Graph persistence and comparison | Coordinates infer legacy graph document type behavior within the Graph persistence and comparison logical module and updates the relevant runtime state or UI. |
-| 276 | 4703 | `function normalizeGraphDocumentType(source, snapshot)` | Graph persistence and comparison | Converts graph document type into a consistent internal format for comparisons, storage, or rendering. |
-| 277 | 4719 | `function getGraphDocumentKind(source, snapshot)` | Graph persistence and comparison | Returns the current graph document kind value or derives it from runtime state so other graph persistence and comparison functions can reuse a consistent representation. |
-| 278 | 4728 | `function validateParsedGraphDocument(document)` | Graph persistence and comparison | Validates parsed graph document and returns or raises feedback that prevents invalid runtime state. |
-| 279 | 4750 | `function normalizeGraphDocument(document)` | Graph persistence and comparison | Converts graph document into a consistent internal format for comparisons, storage, or rendering. |
-| 280 | 4779 | `function serializeGraphTab(tab, options)` | Graph persistence and comparison | Converts graph tab between in-memory runtime form and a saved document/storage representation. |
-| 281 | 4793 | `function deserializeGraphDocument(document)` | Graph persistence and comparison | Converts graph document between in-memory runtime form and a saved document/storage representation. |
-| 282 | 4809 | `function syncGraphTabDocument(tab)` | Graph rendering and interaction | Applies or synchronizes graph tab document across related runtime state, UI elements, and stored data. |
-| 283 | 4820 | `function getActiveGraphTab()` | Graph rendering and interaction | Returns the current active graph tab value or derives it from runtime state so other graph rendering and interaction functions can reuse a consistent representation. |
-| 284 | 4824 | `function getSuggestedGraphFileName(tab)` | Graph rendering and interaction | Returns the current suggested graph file name value or derives it from runtime state so other graph rendering and interaction functions can reuse a consistent representation. |
-| 285 | 4830 | `function isFileBackedGraphTab(tab)` | Graph rendering and interaction | Checks whether the file backed graph tab condition is true and returns a boolean that gates later graph rendering and interaction behavior. |
-| 286 | 4834 | `function markGraphTabAsChanged(tab)` | Graph rendering and interaction | Coordinates graph tab as changed behavior within the Graph rendering and interaction logical module and updates the relevant runtime state or UI. |
-| 287 | 4842 | `function clearGraphTabUnsavedChanges(tab)` | Unsaved-change tracking | Coordinates graph tab unsaved changes behavior within the Unsaved-change tracking logical module and updates the relevant runtime state or UI. |
-| 288 | 4847 | `function getGraphFileSignature(files)` | Graph rendering and interaction | Returns the current graph file signature value or derives it from runtime state so other graph rendering and interaction functions can reuse a consistent representation. |
-| 289 | 4859 | `function getGraphViewSignature(files, graphViewConfig)` | Graph rendering and interaction | Returns the current graph view signature value or derives it from runtime state so other graph rendering and interaction functions can reuse a consistent representation. |
-| 290 | 4866 | `async function createGraphSnapshot(files, folderName)` | Graph extraction | Creates a new graph snapshot data structure or UI element and initializes the fields/events needed by downstream logic. |
-| 291 | 4940 | `function getGraphSnapshotSignature(snapshot, graphViewConfig)` | Graph extraction | Returns the current graph snapshot signature value or derives it from runtime state so other graph extraction functions can reuse a consistent representation. |
-| 292 | 4953 | `function toFiniteNumber(value)` | Graph persistence and comparison | Coordinates to finite number behavior within the Graph persistence and comparison logical module and updates the relevant runtime state or UI. |
-| 293 | 4958 | `function formatGraphZoomPercent(zoomScale)` | Graph rendering and interaction | Coordinates graph zoom percent behavior within the Graph rendering and interaction logical module and updates the relevant runtime state or UI. |
-| 294 | 4963 | `function getGraphZoomScaleFromLayout(graphLayout)` | View mode and layout controls | Returns the current graph zoom scale from layout value or derives it from runtime state so other view mode and layout controls functions can reuse a consistent representation. |
-| 295 | 4967 | `function getSavedGraphNodeLayout(graphLayout, nodeId)` | View mode and layout controls | Returns the current saved graph node layout value or derives it from runtime state so other view mode and layout controls functions can reuse a consistent representation. |
-| 296 | 4976 | `function applySavedGraphLayout(nodes, graphLayout)` | View mode and layout controls | Applies or synchronizes saved graph layout across related runtime state, UI elements, and stored data. |
-| 297 | 4991 | `function getSavedGraphZoomTransform(graphLayout)` | Graph persistence and comparison | Returns the current saved graph zoom transform value or derives it from runtime state so other graph persistence and comparison functions can reuse a consistent representation. |
-| 298 | 5001 | `function captureGraphLayout(tab, nodes, zoomTransform, options)` | View mode and layout controls | Coordinates capture graph layout behavior within the View mode and layout controls logical module and updates the relevant runtime state or UI. |
-| 299 | 5046 | `function getGraphRenderWrappersForTab(tabId)` | Graph rendering and interaction | Returns the current graph render wrappers for tab value or derives it from runtime state so other graph rendering and interaction functions can reuse a consistent representation. |
-| 300 | 5052 | `function removeGraphRenderForTab(tabId)` | Graph rendering and interaction | Removes graph render for tab from runtime state, UI, storage, or the filesystem while updating dependent references. |
-| 301 | 5061 | `function hideInactiveGraphRenders(activeGraphTabId)` | Graph rendering and interaction | Closes or hides inactive graph renders and clears transient UI state associated with it. |
-| 302 | 5068 | `function suspendGraphRender(tabId)` | Graph rendering and interaction | Coordinates suspend graph render behavior within the Graph rendering and interaction logical module and updates the relevant runtime state or UI. |
-| 303 | 5073 | `function suspendActiveGraphRender()` | Graph rendering and interaction | Coordinates suspend active graph render behavior within the Graph rendering and interaction logical module and updates the relevant runtime state or UI. |
-| 304 | 5078 | `function loadTabsFromStorage()` | Tab management | Loads tabs from storage from storage, the filesystem, or runtime state and returns normalized data to callers. |
-| 305 | 5086 | `function saveTabsToStorage(tabsArr)` | Tab management | Persists tabs to storage to the appropriate local, browser, or desktop target and updates dirty/source metadata after success. |
-| 306 | 5095 | `function scheduleGraphLayoutStorageSave()` | View mode and layout controls | Coordinates graph layout storage save behavior within the View mode and layout controls logical module and updates the relevant runtime state or UI. |
-| 307 | 5103 | `function loadActiveTabId()` | Tab management | Loads active tab id from storage, the filesystem, or runtime state and returns normalized data to callers. |
-| 308 | 5107 | `function saveActiveTabId(id)` | Tab management | Persists active tab id to the appropriate local, browser, or desktop target and updates dirty/source metadata after success. |
-| 309 | 5111 | `function loadUntitledCounter()` | Tab management | Loads untitled counter from storage, the filesystem, or runtime state and returns normalized data to callers. |
-| 310 | 5115 | `function saveUntitledCounter(val)` | Save logic | Persists untitled counter to the appropriate local, browser, or desktop target and updates dirty/source metadata after success. |
-| 311 | 5119 | `function normalizeEditorContent(content)` | Tab management | Converts editor content into a consistent internal format for comparisons, storage, or rendering. |
-| 312 | 5125 | `function tabHasUnsavedChanges(tab, currentContent)` | Tab management | Coordinates tab has unsaved changes behavior within the Tab management logical module and updates the relevant runtime state or UI. |
-| 313 | 5134 | `function nextUntitledTitle()` | Tab management | Coordinates next untitled title behavior within the Tab management logical module and updates the relevant runtime state or UI. |
-| 314 | 5140 | `function createTab(content, title, viewMode)` | Tab management | Creates a new tab data structure or UI element and initializes the fields/events needed by downstream logic. |
-| 315 | 5163 | `function createGraphTab(folderName, options)` | Graph rendering and interaction | Creates a new graph tab data structure or UI element and initializes the fields/events needed by downstream logic. |
-| 316 | 5184 | `function normalizeGraphScopePath(value)` | Graph rendering and interaction | Converts graph scope path into a consistent internal format for comparisons, storage, or rendering. |
-| 317 | 5192 | `function createFolderGraphScopeKey(scope, value)` | Graph rendering and interaction | Creates a new folder graph scope key data structure or UI element and initializes the fields/events needed by downstream logic. |
-| 318 | 5197 | `function getRootFolderGraphScopeKey()` | Graph rendering and interaction | Returns the current root folder graph scope key value or derives it from runtime state so other graph rendering and interaction functions can reuse a consistent representation. |
-| 319 | 5201 | `function findExistingFolderGraphTab(scopeKey, fallbackTitle)` | Graph rendering and interaction | Locates existing folder graph tab in runtime state or the DOM and optionally moves focus/selection to it. |
-| 320 | 5210 | `function focusExistingFolderGraphTab(scopeKey, fallbackTitle)` | Graph rendering and interaction | Locates existing folder graph tab in runtime state or the DOM and optionally moves focus/selection to it. |
-| 321 | 5218 | `function getGraphTitleFromFileName(fileName)` | Graph rendering and interaction | Returns the current graph title from file name value or derives it from runtime state so other graph rendering and interaction functions can reuse a consistent representation. |
-| 322 | 5225 | `function getGraphTabTitle(tab)` | Graph rendering and interaction | Returns the current graph tab title value or derives it from runtime state so other graph rendering and interaction functions can reuse a consistent representation. |
-| 323 | 5232 | `function getTabDisplayName(tab)` | Tab management | Returns the current tab display name value or derives it from runtime state so other tab management functions can reuse a consistent representation. |
-| 324 | 5237 | `function getTabTooltipText(tab)` | Tab management | Returns the current tab tooltip text value or derives it from runtime state so other tab management functions can reuse a consistent representation. |
-| 325 | 5242 | `function updateTabScrollControls()` | Tab management | Refreshes tab scroll controls from the latest application state and keeps the related UI, cached data, or saved state in sync. |
-| 326 | 5257 | `function scrollTabsBy(delta)` | Tab management | Coordinates tabs by behavior within the Tab management logical module and updates the relevant runtime state or UI. |
-| 327 | 5265 | `function setupTabScrolling()` | Tab management | Sets the setup tab scrolling state and applies any related UI or persistence updates needed by the runtime. |
-| 328 | 5301 | `function renderTabBar(tabsArr, currentActiveTabId)` | Tab management | Builds or refreshes the DOM for tab bar using the current runtime state. |
-| 329 | 5415 | `function renderMobileTabList(tabsArr, currentActiveTabId)` | Tab management | Builds or refreshes the DOM for mobile tab list using the current runtime state. |
-| 330 | 5474 | `function ensureTabContextMenu()` | Tab management | Ensures tab context menu exists or is permitted before later logic depends on it. |
-| 331 | 5510 | `function positionTabContextMenu(menu, event)` | Tab management | Coordinates tab context menu behavior within the Tab management logical module and updates the relevant runtime state or UI. |
-| 332 | 5527 | `function setTabContextMenuActionEnabled(menu, action, enabled)` | Tab management | Sets the tab context menu action enabled state and applies any related UI or persistence updates needed by the runtime. |
-| 333 | 5535 | `function updateTabContextMenuActionStates(menu, tab)` | Tab management | Refreshes tab context menu action states from the latest application state and keeps the related UI, cached data, or saved state in sync. |
-| 334 | 5542 | `function showTabContextMenu(event, tab, options)` | Tab management | Displays tab context menu and populates it with the latest contextual information. |
-| 335 | 5563 | `function hideTabContextMenu()` | Tab management | Closes or hides tab context menu and clears transient UI state associated with it. |
-| 336 | 5580 | `function saveCurrentTabState()` | Tab management | Persists current tab state to the appropriate local, browser, or desktop target and updates dirty/source metadata after success. |
-| 337 | 5590 | `function getActiveMarkdownTab()` | Markdown rendering | Returns the current active markdown tab value or derives it from runtime state so other markdown rendering functions can reuse a consistent representation. |
-| 338 | 5596 | `function activeTabHasUnsavedChanges()` | Tab management | Coordinates active tab has unsaved changes behavior within the Tab management logical module and updates the relevant runtime state or UI. |
-| 339 | 5601 | `function getUnsavedTabs()` | Tab management | Returns the current unsaved tabs value or derives it from runtime state so other tab management functions can reuse a consistent representation. |
-| 340 | 5610 | `function confirmDiscardUnsavedChangesBeforeExit()` | Unsaved-change tracking | Coordinates confirm discard unsaved changes before exit behavior within the Unsaved-change tracking logical module and updates the relevant runtime state or UI. |
-| 341 | 5626 | `function updateSaveCurrentFileButtons()` | Tab management | Refreshes save current file buttons from the latest application state and keeps the related UI, cached data, or saved state in sync. |
-| 342 | 5661 | `async function saveChangedTab(tab)` | Tab management | Persists changed tab to the appropriate local, browser, or desktop target and updates dirty/source metadata after success. |
-| 343 | 5673 | `async function saveAllChangedTabs()` | Tab management | Persists all changed tabs to the appropriate local, browser, or desktop target and updates dirty/source metadata after success. |
-| 344 | 5712 | `async function saveCurrentFileIfChanged()` | Save logic | Persists current file if changed to the appropriate local, browser, or desktop target and updates dirty/source metadata after success. |
-| 345 | 5734 | `function getEditorLineColumn(text, position)` | Editor line/status UI | Returns the current editor line column value or derives it from runtime state so other editor line/status ui functions can reuse a consistent representation. |
-| 346 | 5744 | `function getSelectionLineCount(text, selectionStart, selectionEnd)` | Editor line/status UI | Returns the current selection line count value or derives it from runtime state so other editor line/status ui functions can reuse a consistent representation. |
-| 347 | 5749 | `function updateEditorTextpadStatus(activeTab)` | Editor line/status UI | Refreshes editor textpad status from the latest application state and keeps the related UI, cached data, or saved state in sync. |
-| 348 | 5777 | `function updateStatusLine(options = {})` | Editor line/status UI | Refreshes status line from the latest application state and keeps the related UI, cached data, or saved state in sync. |
-| 349 | 5808 | `function restoreViewMode(mode)` | View mode and layout controls | Coordinates view mode behavior within the View mode and layout controls logical module and updates the relevant runtime state or UI. |
-| 350 | 5813 | `function switchTab(tabId)` | Tab management | Coordinates switch tab behavior within the Tab management logical module and updates the relevant runtime state or UI. |
-| 351 | 5842 | `function pinTemporaryTab(tabId)` | Tab management | Coordinates temporary tab behavior within the Tab management logical module and updates the relevant runtime state or UI. |
-| 352 | 5854 | `function findTemporaryTab()` | Tab management | Locates temporary tab in runtime state or the DOM and optionally moves focus/selection to it. |
-| 353 | 5858 | `function applySidebarFileMetadata(tab, sourceFile)` | Sidebar file/folder operations | Applies or synchronizes sidebar file metadata across related runtime state, UI elements, and stored data. |
-| 354 | 5866 | `function isUnsupportedSourceFile(sourceFile)` | Tab management | Checks whether the unsupported source file condition is true and returns a boolean that gates later tab management behavior. |
-| 355 | 5873 | `function isUnsupportedFileTab(tab)` | Tab management | Checks whether the unsupported file tab condition is true and returns a boolean that gates later tab management behavior. |
-| 356 | 5880 | `function getActiveTab()` | Tab management | Returns the current active tab value or derives it from runtime state so other tab management functions can reuse a consistent representation. |
-| 357 | 5884 | `function getAllowedViewModeForActiveTab(mode)` | Tab management | Returns the current allowed view mode for active tab value or derives it from runtime state so other tab management functions can reuse a consistent representation. |
-| 358 | 5890 | `function getDefaultViewModeForOpenedFile(sourceFile)` | View mode and layout controls | Returns the current default view mode for opened file value or derives it from runtime state so other view mode and layout controls functions can reuse a consistent representation. |
-| 359 | 5894 | `function activateSidebarTab(tab)` | Tab management | Coordinates activate sidebar tab behavior within the Tab management logical module and updates the relevant runtime state or UI. |
-| 360 | 5912 | `function openSidebarFileInTab(content, title, sourceFile, options)` | Tab management | Opens sidebar file in tab, prepares any required state, and routes the result into the matching application workflow. |
-| 361 | 5946 | `function openSidebarFileInTemporaryTab(content, title, sourceFile)` | Tab management | Opens sidebar file in temporary tab, prepares any required state, and routes the result into the matching application workflow. |
-| 362 | 5950 | `function openSidebarFileInPermanentTab(content, title, sourceFile)` | Tab management | Opens sidebar file in permanent tab, prepares any required state, and routes the result into the matching application workflow. |
-| 363 | 5954 | `function findTabForSourceFile(sourceFile)` | Tab management | Locates tab for source file in runtime state or the DOM and optionally moves focus/selection to it. |
-| 364 | 5977 | `function findGraphTabForSourceFile(sourceFile)` | Graph rendering and interaction | Locates graph tab for source file in runtime state or the DOM and optionally moves focus/selection to it. |
-| 365 | 6000 | `function showSavedGraphMissingPathDialog()` | Graph persistence and comparison | Displays saved graph missing path dialog and populates it with the latest contextual information. |
-| 366 | 6018 | `cleanup(action) =>` | Tab management | Coordinates cleanup behavior within the Tab management logical module and updates the relevant runtime state or UI. |
-| 367 | 6038 | `async function locateReplacementMarkdownFileForSavedGraphNode()` | Graph extraction | Coordinates locate replacement markdown file for saved graph node behavior within the Graph extraction logical module and updates the relevant runtime state or UI. |
-| 368 | 6077 | `async function openLocatedSavedGraphFile(graphNode)` | Graph persistence and comparison | Opens located saved graph file, prepares any required state, and routes the result into the matching application workflow. |
-| 369 | 6094 | `function removeSavedGraphNodeFromActiveTab(nodeId)` | Graph extraction | Removes saved graph node from active tab from runtime state, UI, storage, or the filesystem while updating dependent references. |
-| 370 | 6114 | `async function handleMissingSavedGraphNodePath(graphNode)` | Graph extraction | Handles the missing saved graph node path event/action, normalizes event data, and delegates to lower-level runtime helpers. |
-| 371 | 6121 | `async function openGraphNodeFileInPermanentTab(graphNode)` | Graph extraction | Opens graph node file in permanent tab, prepares any required state, and routes the result into the matching application workflow. |
-| 372 | 6174 | `function newTab(content, title)` | Tab management | Coordinates new tab behavior within the Tab management logical module and updates the relevant runtime state or UI. |
-| 373 | 6187 | `function closeTab(tabId, options)` | Tab management | Closes or hides tab and clears transient UI state associated with it. |
-| 374 | 6245 | `function renameUnsourcedTabTitle(tab)` | Tab management | Coordinates rename unsourced tab title behavior within the Tab management logical module and updates the relevant runtime state or UI. |
-| 375 | 6260 | `function doRename()` | Rename and link maintenance | Coordinates do rename behavior within the Rename and link maintenance logical module and updates the relevant runtime state or UI. |
-| 376 | 6271 | `function cleanup()` | Tab management | Coordinates cleanup behavior within the Tab management logical module and updates the relevant runtime state or UI. |
-| 377 | 6277 | `function doCancel()` | Tab management | Coordinates do cancel behavior within the Tab management logical module and updates the relevant runtime state or UI. |
-| 378 | 6282 | `function onKey(e)` | Keyboard shortcuts | Coordinates on key behavior within the Keyboard shortcuts logical module and updates the relevant runtime state or UI. |
-| 379 | 6292 | `async function renameTab(tabId)` | Tab management | Coordinates rename tab behavior within the Tab management logical module and updates the relevant runtime state or UI. |
-| 380 | 6316 | `function duplicateTab(tabId)` | Tab management | Coordinates duplicate tab behavior within the Tab management logical module and updates the relevant runtime state or UI. |
-| 381 | 6333 | `function confirmCloseTabsIfNeeded(tabsToClose)` | Tab management | Coordinates confirm close tabs if needed behavior within the Tab management logical module and updates the relevant runtime state or UI. |
-| 382 | 6344 | `function closeTabsByIds(tabIds)` | Tab management | Closes or hides tabs by ids and clears transient UI state associated with it. |
-| 383 | 6355 | `function closeOtherTabs(tabId)` | Tab management | Closes or hides other tabs and clears transient UI state associated with it. |
-| 384 | 6366 | `function closeAllTabs()` | Tab management | Closes or hides all tabs and clears transient UI state associated with it. |
-| 385 | 6371 | `function resetAllTabs()` | Tab management | Coordinates all tabs behavior within the Tab management logical module and updates the relevant runtime state or UI. |
-| 386 | 6378 | `function doReset()` | Tab management | Coordinates do reset behavior within the Tab management logical module and updates the relevant runtime state or UI. |
-| 387 | 6397 | `function doCancel()` | Tab management | Coordinates do cancel behavior within the Tab management logical module and updates the relevant runtime state or UI. |
-| 388 | 6402 | `function cleanup()` | Tab management | Coordinates cleanup behavior within the Tab management logical module and updates the relevant runtime state or UI. |
-| 389 | 6411 | `function initTabs()` | Tab management | Coordinates init tabs behavior within the Tab management logical module and updates the relevant runtime state or UI. |
-| 390 | 6464 | `function renderMarkdown()` | Markdown rendering | Builds or refreshes the DOM for markdown using the current runtime state. |
-| 391 | 6518 | `async function listMarkdownTree(dirHandle, parentPath = "")` | Markdown rendering | Coordinates list markdown tree behavior within the Markdown rendering logical module and updates the relevant runtime state or UI. |
-| 392 | 6543 | `async function collectMarkdownFilesFromTree(nodes, parentPath = "")` | Markdown rendering | Builds or collects markdown files from tree from available source data so the runtime can render or persist it. |
-| 393 | 6566 | `function getClosedFolderPlaceholder()` | Modal and menu lifecycle | Returns the current closed folder placeholder value or derives it from runtime state so other modal and menu lifecycle functions can reuse a consistent representation. |
-| 394 | 6576 | `function updateCloseFolderButtons()` | Modal and menu lifecycle | Refreshes close folder buttons from the latest application state and keeps the related UI, cached data, or saved state in sync. |
-| 395 | 6584 | `function closeFolderTree()` | Folder tree | Closes or hides folder tree and clears transient UI state associated with it. |
-| 396 | 6609 | `function renderFolderTree(nodes, options = {})` | Folder tree | Builds or refreshes the DOM for folder tree using the current runtime state. |
-| 397 | 6648 | `async function reloadOpenFolderTree()` | Folder tree | Coordinates reload open folder tree behavior within the Folder tree logical module and updates the relevant runtime state or UI. |
-| 398 | 6667 | `async function refreshOpenFolderTreeAfterFileDelete(filePath)` | Folder tree | Coordinates open folder tree after file delete behavior within the Folder tree logical module and updates the relevant runtime state or UI. |
-| 399 | 6682 | `function isPathInsideFolder(filePath, folderPath)` | Sidebar file/folder operations | Checks whether the path inside folder condition is true and returns a boolean that gates later sidebar file/folder operations behavior. |
-| 400 | 6685 | `normalize(path) =>` | Sidebar file/folder operations | Converts normalize into a consistent internal format for comparisons, storage, or rendering. |
-| 401 | 6690 | `function normalizeDeletedPathComparison(path)` | Sidebar file/folder operations | Converts deleted path comparison into a consistent internal format for comparisons, storage, or rendering. |
-| 402 | 6694 | `function getDeletedPathCandidates(path)` | Sidebar file/folder operations | Returns the current deleted path candidates value or derives it from runtime state so other sidebar file/folder operations functions can reuse a consistent representation. |
-| 403 | 6698 | `addCandidate(candidate) =>` | Sidebar file/folder operations | Adds candidate to the relevant UI or state collection and wires any required behavior. |
-| 404 | 6715 | `function tabMatchesDeletedPath(tab, deletedPath, options = {})` | Tab management | Coordinates tab matches deleted path behavior within the Tab management logical module and updates the relevant runtime state or UI. |
-| 405 | 6738 | `function closeTabsForDeletedPath(deletedPath, options = {})` | Tab management | Closes or hides tabs for deleted path and clears transient UI state associated with it. |
-| 406 | 6747 | `function getValidFolderSortMode(mode)` | Sidebar file/folder operations | Returns the current valid folder sort mode value or derives it from runtime state so other sidebar file/folder operations functions can reuse a consistent representation. |
-| 407 | 6754 | `function getNodeTimestamp(node, field)` | Sidebar file/folder operations | Returns the current node timestamp value or derives it from runtime state so other sidebar file/folder operations functions can reuse a consistent representation. |
-| 408 | 6760 | `function compareFolderTreeNodes(a, b)` | Folder tree | Coordinates compare folder tree nodes behavior within the Folder tree logical module and updates the relevant runtime state or UI. |
-| 409 | 6777 | `function sortFolderTreeNodes(nodes)` | Folder tree | Coordinates sort folder tree nodes behavior within the Folder tree logical module and updates the relevant runtime state or UI. |
-| 410 | 6785 | `async function updateFolderMarkdownFileOrderFromTree()` | Markdown rendering | Refreshes folder markdown file order from tree from the latest application state and keeps the related UI, cached data, or saved state in sync. |
-| 411 | 6793 | `async function applyFolderSortMode(mode)` | Sidebar file/folder operations | Applies or synchronizes folder sort mode across related runtime state, UI elements, and stored data. |
-| 412 | 6802 | `async function openFolderTreeFromNeutralinoPath(selectedPath)` | Folder tree | Opens folder tree from neutralino path, prepares any required state, and routes the result into the matching application workflow. |
-| 413 | 6813 | `function getMarkdownTitleFromFileName(fileName)` | Markdown rendering | Returns the current markdown title from file name value or derives it from runtime state so other markdown rendering functions can reuse a consistent representation. |
-| 414 | 6817 | `async function openMarkdownSourceFile(sourceFile)` | Markdown rendering | Opens markdown source file, prepares any required state, and routes the result into the matching application workflow. |
-| 415 | 6856 | `function isGraphFilePath(path)` | Graph rendering and interaction | Checks whether the graph file path condition is true and returns a boolean that gates later graph rendering and interaction behavior. |
-| 416 | 6860 | `function isJsonPath(path)` | Sidebar file/folder operations | Checks whether the json path condition is true and returns a boolean that gates later sidebar file/folder operations behavior. |
-| 417 | 6864 | `function isPotentialGraphFilePath(path)` | Graph rendering and interaction | Checks whether the potential graph file path condition is true and returns a boolean that gates later graph rendering and interaction behavior. |
-| 418 | 6868 | `function getFileExtension(path)` | Sidebar file/folder operations | Returns the current file extension value or derives it from runtime state so other sidebar file/folder operations functions can reuse a consistent representation. |
-| 419 | 6873 | `function isKnownTextFilePath(path)` | Sidebar file/folder operations | Checks whether the known text file path condition is true and returns a boolean that gates later sidebar file/folder operations behavior. |
-| 420 | 6888 | `function isTextFileLike(file)` | Sidebar file/folder operations | Checks whether the text file like condition is true and returns a boolean that gates later sidebar file/folder operations behavior. |
-| 421 | 6899 | `function isTextDocumentPath(path)` | Sidebar file/folder operations | Checks whether the text document path condition is true and returns a boolean that gates later sidebar file/folder operations behavior. |
-| 422 | 6903 | `function isSidebarDocumentPath(path)` | Sidebar file/folder operations | Checks whether the sidebar document path condition is true and returns a boolean that gates later sidebar file/folder operations behavior. |
-| 423 | 6907 | `function isSidebarDocumentNode(node)` | Sidebar file/folder operations | Checks whether the sidebar document node condition is true and returns a boolean that gates later sidebar file/folder operations behavior. |
-| 424 | 6911 | `function isSupportedFolderTreeDocumentPath(path)` | Folder tree | Checks whether the supported folder tree document path condition is true and returns a boolean that gates later folder tree behavior. |
-| 425 | 6915 | `function isSupportedFolderTreeDocumentNode(node)` | Folder tree | Checks whether the supported folder tree document node condition is true and returns a boolean that gates later folder tree behavior. |
-| 426 | 6922 | `async function fileContainsGraphDocument(file)` | Graph persistence and comparison | Coordinates file contains graph document behavior within the Graph persistence and comparison logical module and updates the relevant runtime state or UI. |
-| 427 | 6931 | `async function neutralinoPathContainsGraphDocument(filePath)` | Graph persistence and comparison | Coordinates neutralino path contains graph document behavior within the Graph persistence and comparison logical module and updates the relevant runtime state or UI. |
-| 428 | 6940 | `function looksLikeGraphDocument(document)` | Graph persistence and comparison | Coordinates looks like graph document behavior within the Graph persistence and comparison logical module and updates the relevant runtime state or UI. |
-| 429 | 6953 | `async function readOpenFileSourceContent(sourceFile)` | Modal and menu lifecycle | Loads open file source content from storage, the filesystem, or runtime state and returns normalized data to callers. |
-| 430 | 6964 | `async function openDocumentSourceFile(sourceFile)` | Modal and menu lifecycle | Opens document source file, prepares any required state, and routes the result into the matching application workflow. |
-| 431 | 6993 | `async function openDocumentFileFromPicker()` | Modal and menu lifecycle | Opens document file from picker, prepares any required state, and routes the result into the matching application workflow. |
-| 432 | 7055 | `async function getFileSystemHandlesFromDrop(dataTransfer)` | Drag and drop import | Returns the current file system handles from drop value or derives it from runtime state so other drag and drop import functions can reuse a consistent representation. |
-| 433 | 7072 | `async function getDirectoryHandleFromDrop(dataTransfer, fileSystemHandles)` | Drag and drop import | Returns the current directory handle from drop value or derives it from runtime state so other drag and drop import functions can reuse a consistent representation. |
-| 434 | 7077 | `function getDirectoryEntryFromDrop(dataTransfer)` | Drag and drop import | Returns the current directory entry from drop value or derives it from runtime state so other drag and drop import functions can reuse a consistent representation. |
-| 435 | 7087 | `function readDirectoryEntries(directoryEntry)` | Sidebar file/folder operations | Loads directory entries from storage, the filesystem, or runtime state and returns normalized data to callers. |
-| 436 | 7093 | `function readNextBatch()` | Sidebar file/folder operations | Loads next batch from storage, the filesystem, or runtime state and returns normalized data to callers. |
-| 437 | 7107 | `function getFileFromEntry(fileEntry)` | Sidebar file/folder operations | Returns the current file from entry value or derives it from runtime state so other sidebar file/folder operations functions can reuse a consistent representation. |
-| 438 | 7113 | `async function listMarkdownTreeFromEntry(directoryEntry)` | Markdown rendering | Coordinates list markdown tree from entry behavior within the Markdown rendering logical module and updates the relevant runtime state or UI. |
-| 439 | 7136 | `async function getDocumentFileHandleFromDrop(dataTransfer, fileSystemHandles)` | Drag and drop import | Returns the current document file handle from drop value or derives it from runtime state so other drag and drop import functions can reuse a consistent representation. |
-| 440 | 7141 | `async function getDocumentFileFromEntryDrop(dataTransfer)` | Drag and drop import | Returns the current document file from entry drop value or derives it from runtime state so other drag and drop import functions can reuse a consistent representation. |
-| 441 | 7157 | `async function openDroppedDocumentFile(dataTransfer, fileSystemHandles)` | Drag and drop import | Opens dropped document file, prepares any required state, and routes the result into the matching application workflow. |
-| 442 | 7198 | `async function openDroppedFolder(dataTransfer, fileSystemHandles)` | Drag and drop import | Opens dropped folder, prepares any required state, and routes the result into the matching application workflow. |
-| 443 | 7235 | `async function listMarkdownTreeNeutralino(dirPath)` | Markdown rendering | Coordinates list markdown tree neutralino behavior within the Markdown rendering logical module and updates the relevant runtime state or UI. |
-| 444 | 7262 | `async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "")` | Markdown rendering | Builds or collects markdown files from tree neutralino from available source data so the runtime can render or persist it. |
-| 445 | 7322 | `function createFileContextMenuButton(labelText, iconClass, tooltipText)` | Modal and menu lifecycle | Creates a new file context menu button data structure or UI element and initializes the fields/events needed by downstream logic. |
-| 446 | 7338 | `function createTagsContextSubmenu(tooltipText)` | Tag management | Creates a new tags context submenu data structure or UI element and initializes the fields/events needed by downstream logic. |
-| 447 | 7358 | `function renderTagsContextSubmenu(submenuPanel, currentTags, onToggleTag)` | Tag management | Builds or refreshes the DOM for tags context submenu using the current runtime state. |
-| 448 | 7391 | `function getSidebarNodeSource(node)` | Sidebar file/folder operations | Returns the current sidebar node source value or derives it from runtime state so other sidebar file/folder operations functions can reuse a consistent representation. |
-| 449 | 7401 | `function getSidebarNodeClipboardPath(node)` | Sidebar file/folder operations | Returns the current sidebar node clipboard path value or derives it from runtime state so other sidebar file/folder operations functions can reuse a consistent representation. |
-| 450 | 7406 | `async function readSidebarNodeContent(node)` | Sidebar file/folder operations | Loads sidebar node content from storage, the filesystem, or runtime state and returns normalized data to callers. |
-| 451 | 7419 | `async function writeSidebarNodeContent(node, content)` | Save logic | Writes sidebar node content to the selected storage or filesystem target, handling platform-specific output details where required. |
-| 452 | 7436 | `function sidebarNodeMatchesSnapshotFile(node, snapshotFile)` | Sidebar file/folder operations | Coordinates sidebar node matches snapshot file behavior within the Sidebar file/folder operations logical module and updates the relevant runtime state or UI. |
-| 453 | 7448 | `async function updateGraphSnapshotsForSidebarFileTagChange(node, content)` | Sidebar file/folder operations | Refreshes graph snapshots for sidebar file tag change from the latest application state and keeps the related UI, cached data, or saved state in sync. |
-| 454 | 7470 | `function updateOpenMarkdownTabsForSidebarNode(node, content)` | Markdown rendering | Refreshes open markdown tabs for sidebar node from the latest application state and keeps the related UI, cached data, or saved state in sync. |
-| 455 | 7498 | `async function setSidebarNodeTags(node, nextTags)` | Tag management | Sets the sidebar node tags state and applies any related UI or persistence updates needed by the runtime. |
-| 456 | 7527 | `function runWithTemporaryEditorContent(content, action)` | Sidebar file/folder operations | Coordinates run with temporary editor content behavior within the Sidebar file/folder operations logical module and updates the relevant runtime state or UI. |
-| 457 | 7539 | `function exportMarkdownContent(content, name)` | Export logic | Generates an export for markdown content and sends it to a download, save dialog, or clipboard flow. |
-| 458 | 7544 | `function exportHtmlContent(content)` | Export logic | Generates an export for html content and sends it to a download, save dialog, or clipboard flow. |
-| 459 | 7548 | `function exportPdfContent(content)` | Export logic | Generates an export for pdf content and sends it to a download, save dialog, or clipboard flow. |
-| 460 | 7552 | `function getSidebarNodeFilesystemPath(node)` | Sidebar file/folder operations | Returns the current sidebar node filesystem path value or derives it from runtime state so other sidebar file/folder operations functions can reuse a consistent representation. |
-| 461 | 7559 | `async function copySidebarContextText(text)` | Sidebar file/folder operations | Copies sidebar context text to the clipboard or another target and updates user feedback when the operation completes. |
-| 462 | 7568 | `function hideSidebarFileContextMenu()` | Sidebar file/folder operations | Closes or hides sidebar file context menu and clears transient UI state associated with it. |
-| 463 | 7574 | `function hideSidebarFolderContextMenu()` | Sidebar file/folder operations | Closes or hides sidebar folder context menu and clears transient UI state associated with it. |
-| 464 | 7580 | `function hideSidebarClosedFolderContextMenu()` | Sidebar file/folder operations | Closes or hides sidebar closed folder context menu and clears transient UI state associated with it. |
-| 465 | 7586 | `function hideSidebarContextMenus()` | Sidebar file/folder operations | Closes or hides sidebar context menus and clears transient UI state associated with it. |
-| 466 | 7592 | `function positionSidebarContextMenu(menu, event, fallbackHeight)` | Sidebar file/folder operations | Coordinates sidebar context menu behavior within the Sidebar file/folder operations logical module and updates the relevant runtime state or UI. |
-| 467 | 7602 | `function positionSidebarFileContextMenu(event)` | Sidebar file/folder operations | Coordinates sidebar file context menu behavior within the Sidebar file/folder operations logical module and updates the relevant runtime state or UI. |
-| 468 | 7606 | `function positionSidebarFolderContextMenu(event)` | Sidebar file/folder operations | Coordinates sidebar folder context menu behavior within the Sidebar file/folder operations logical module and updates the relevant runtime state or UI. |
-| 469 | 7610 | `function positionSidebarClosedFolderContextMenu(event)` | Sidebar file/folder operations | Coordinates sidebar closed folder context menu behavior within the Sidebar file/folder operations logical module and updates the relevant runtime state or UI. |
-| 470 | 7614 | `function getOpenFolderMainMenuButton()` | Modal and menu lifecycle | Returns the current open folder main menu button value or derives it from runtime state so other modal and menu lifecycle functions can reuse a consistent representation. |
-| 471 | 7618 | `function getOpenFolderActionLabel()` | Modal and menu lifecycle | Returns the current open folder action label value or derives it from runtime state so other modal and menu lifecycle functions can reuse a consistent representation. |
-| 472 | 7624 | `function getOpenFolderActionTitle()` | Modal and menu lifecycle | Returns the current open folder action title value or derives it from runtime state so other modal and menu lifecycle functions can reuse a consistent representation. |
-| 473 | 7629 | `function getPathDirectory(path)` | Sidebar file/folder operations | Returns the current path directory value or derives it from runtime state so other sidebar file/folder operations functions can reuse a consistent representation. |
-| 474 | 7636 | `function getRenamedSiblingPath(path, newName)` | Rename and link maintenance | Returns the current renamed sibling path value or derives it from runtime state so other rename and link maintenance functions can reuse a consistent representation. |
-| 475 | 7641 | `function validateSidebarRenameName(name, kind)` | Sidebar file/folder operations | Validates sidebar rename name and returns or raises feedback that prevents invalid runtime state. |
-| 476 | 7652 | `function promptSidebarRename(node, kind)` | Sidebar file/folder operations | Coordinates prompt sidebar rename behavior within the Sidebar file/folder operations logical module and updates the relevant runtime state or UI. |
-| 477 | 7672 | `function cleanup(result)` | Sidebar file/folder operations | Coordinates cleanup behavior within the Sidebar file/folder operations logical module and updates the relevant runtime state or UI. |
-| 478 | 7680 | `function onConfirm()` | Modal and menu lifecycle | Coordinates on confirm behavior within the Modal and menu lifecycle logical module and updates the relevant runtime state or UI. |
-| 479 | 7691 | `function onCancel()` | Sidebar file/folder operations | Coordinates on cancel behavior within the Sidebar file/folder operations logical module and updates the relevant runtime state or UI. |
-| 480 | 7695 | `function onKey(event)` | Keyboard shortcuts | Coordinates on key behavior within the Keyboard shortcuts logical module and updates the relevant runtime state or UI. |
-| 481 | 7706 | `function promptSidebarNewFileName(parentNode)` | Sidebar file/folder operations | Coordinates prompt sidebar new file name behavior within the Sidebar file/folder operations logical module and updates the relevant runtime state or UI. |
-| 482 | 7726 | `function cleanup(result)` | Sidebar file/folder operations | Coordinates cleanup behavior within the Sidebar file/folder operations logical module and updates the relevant runtime state or UI. |
-| 483 | 7735 | `function onConfirm()` | Modal and menu lifecycle | Coordinates on confirm behavior within the Modal and menu lifecycle logical module and updates the relevant runtime state or UI. |
-| 484 | 7746 | `function onCancel()` | Sidebar file/folder operations | Coordinates on cancel behavior within the Sidebar file/folder operations logical module and updates the relevant runtime state or UI. |
-| 485 | 7750 | `function onKey(event)` | Keyboard shortcuts | Coordinates on key behavior within the Keyboard shortcuts logical module and updates the relevant runtime state or UI. |
-| 486 | 7761 | `function promptSidebarNewFolderName(parentNode)` | Sidebar file/folder operations | Coordinates prompt sidebar new folder name behavior within the Sidebar file/folder operations logical module and updates the relevant runtime state or UI. |
-| 487 | 7780 | `function cleanup(result)` | Sidebar file/folder operations | Coordinates cleanup behavior within the Sidebar file/folder operations logical module and updates the relevant runtime state or UI. |
-| 488 | 7789 | `function onConfirm()` | Modal and menu lifecycle | Coordinates on confirm behavior within the Modal and menu lifecycle logical module and updates the relevant runtime state or UI. |
-| 489 | 7805 | `function onCancel()` | Sidebar file/folder operations | Coordinates on cancel behavior within the Sidebar file/folder operations logical module and updates the relevant runtime state or UI. |
-| 490 | 7809 | `function onKey(event)` | Keyboard shortcuts | Coordinates on key behavior within the Keyboard shortcuts logical module and updates the relevant runtime state or UI. |
-| 491 | 7820 | `function updateTabsAfterSidebarFileRename(target, oldPath, newPath, newName)` | Tab management | Refreshes tabs after sidebar file rename from the latest application state and keeps the related UI, cached data, or saved state in sync. |
-| 492 | 7842 | `function stripMarkdownExtension(path)` | Markdown rendering | Coordinates markdown extension behavior within the Markdown rendering logical module and updates the relevant runtime state or UI. |
-| 493 | 7846 | `function splitMarkdownLinkSuffix(reference)` | Markdown rendering | Coordinates markdown link suffix behavior within the Markdown rendering logical module and updates the relevant runtime state or UI. |
-| 494 | 7860 | `function getRelativePathBetweenFiles(sourcePath, targetPath)` | Sidebar file/folder operations | Returns the current relative path between files value or derives it from runtime state so other sidebar file/folder operations functions can reuse a consistent representation. |
-| 495 | 7871 | `function getRenameReferenceTargetPath(referenceTarget, sourcePath, oldPath, newPath, kind, resolvedTargetPath)` | Rename and link maintenance | Returns the current rename reference target path value or derives it from runtime state so other rename and link maintenance functions can reuse a consistent representation. |
-| 496 | 7905 | `function updateMarkdownRenameLinks(content, sourcePath, nodeIndex, oldPath, newPath, kind)` | Markdown rendering | Refreshes markdown rename links from the latest application state and keeps the related UI, cached data, or saved state in sync. |
-| 497 | 7910 | `getResolvedRenameTarget(reference) =>` | Rename and link maintenance | Returns the current resolved rename target value or derives it from runtime state so other rename and link maintenance functions can reuse a consistent representation. |
-| 498 | 7916 | `renameReference(reference) =>` | Rename and link maintenance | Coordinates rename reference behavior within the Rename and link maintenance logical module and updates the relevant runtime state or UI. |
-| 499 | 7938 | `async function writeFolderMarkdownEntryContent(entry, content, oldPath, newPath, kind)` | Markdown rendering | Writes folder markdown entry content to the selected storage or filesystem target, handling platform-specific output details where required. |
-| 500 | 7960 | `function getEntryContent(entry)` | Sidebar file/folder operations | Returns the current entry content value or derives it from runtime state so other sidebar file/folder operations functions can reuse a consistent representation. |
-| 501 | 7968 | `function updateOpenTabsAfterMarkdownLinkRename(changedFiles)` | Markdown rendering | Refreshes open tabs after markdown link rename from the latest application state and keeps the related UI, cached data, or saved state in sync. |
-| 502 | 7994 | `async function updateOpenFolderLinksAfterSidebarRename(oldPath, newPath, kind)` | Sidebar file/folder operations | Refreshes open folder links after sidebar rename from the latest application state and keeps the related UI, cached data, or saved state in sync. |
-| 503 | 8028 | `function replacePathPrefix(path, oldPrefix, newPrefix)` | Sidebar file/folder operations | Transforms path prefix into the target Markdown, path, or UI representation and returns or applies the result. |
-| 504 | 8032 | `normalize(value) =>` | Sidebar file/folder operations | Converts normalize into a consistent internal format for comparisons, storage, or rendering. |
-| 505 | 8040 | `function getPathRelativeToFolder(path, folderPath)` | Sidebar file/folder operations | Returns the current path relative to folder value or derives it from runtime state so other sidebar file/folder operations functions can reuse a consistent representation. |
-| 506 | 8043 | `normalize(value) =>` | Sidebar file/folder operations | Converts normalize into a consistent internal format for comparisons, storage, or rendering. |
-| 507 | 8048 | `function renameGraphSnapshotPathReferences(snapshot, pathMappings)` | Rename and link maintenance | Coordinates rename graph snapshot path references behavior within the Rename and link maintenance logical module and updates the relevant runtime state or UI. |
-| 508 | 8053 | `getRenamedPath(path) =>` | Rename and link maintenance | Returns the current renamed path value or derives it from runtime state so other rename and link maintenance functions can reuse a consistent representation. |
-| 509 | 8110 | `function updateGraphTabConfigAfterNodeRename(tab, idMappings)` | Rename and link maintenance | Refreshes graph tab config after node rename from the latest application state and keeps the related UI, cached data, or saved state in sync. |
-| 510 | 8114 | `renameId(id) =>` | Rename and link maintenance | Coordinates rename id behavior within the Rename and link maintenance logical module and updates the relevant runtime state or UI. |
-| 511 | 8115 | `renameIds(ids) =>` | Rename and link maintenance | Coordinates rename ids behavior within the Rename and link maintenance logical module and updates the relevant runtime state or UI. |
-| 512 | 8142 | `function updateGraphTabsAfterPathRename(pathMappings)` | Rename and link maintenance | Refreshes graph tabs after path rename from the latest application state and keeps the related UI, cached data, or saved state in sync. |
-| 513 | 8159 | `function getSidebarRenamePathMappings(oldPath, newPath, kind)` | Sidebar file/folder operations | Returns the current sidebar rename path mappings value or derives it from runtime state so other sidebar file/folder operations functions can reuse a consistent representation. |
-| 514 | 8174 | `function updateTabsAfterSidebarFolderRename(oldPath, newPath)` | Tab management | Refreshes tabs after sidebar folder rename from the latest application state and keeps the related UI, cached data, or saved state in sync. |
-| 515 | 8192 | `async function sidebarFileExists(parentNode, fileName)` | Sidebar file/folder operations | Coordinates sidebar file exists behavior within the Sidebar file/folder operations logical module and updates the relevant runtime state or UI. |
-| 516 | 8215 | `async function createSidebarFileOnDisk(node)` | Sidebar file/folder operations | Creates a new sidebar file on disk data structure or UI element and initializes the fields/events needed by downstream logic. |
-| 517 | 8250 | `async function createSidebarFolderOnDisk(node)` | Sidebar file/folder operations | Creates a new sidebar folder on disk data structure or UI element and initializes the fields/events needed by downstream logic. |
-| 518 | 8272 | `async function renameSidebarNodeOnDisk(node, kind)` | Sidebar file/folder operations | Coordinates rename sidebar node on disk behavior within the Sidebar file/folder operations logical module and updates the relevant runtime state or UI. |
-| 519 | 8313 | `function ensureSidebarFileContextMenu()` | Sidebar file/folder operations | Ensures sidebar file context menu exists or is permitted before later logic depends on it. |
-| 520 | 8614 | `function isOpenFolderRootContextNode(node)` | Modal and menu lifecycle | Checks whether the open folder root context node condition is true and returns a boolean that gates later modal and menu lifecycle behavior. |
-| 521 | 8618 | `function getOpenFolderRootContextNode()` | Modal and menu lifecycle | Returns the current open folder root context node value or derives it from runtime state so other modal and menu lifecycle functions can reuse a consistent representation. |
-| 522 | 8629 | `function getSidebarFolderClipboardPath(node)` | Sidebar file/folder operations | Returns the current sidebar folder clipboard path value or derives it from runtime state so other sidebar file/folder operations functions can reuse a consistent representation. |
-| 523 | 8637 | `function getSidebarFolderFilesystemPath(node)` | Sidebar file/folder operations | Returns the current sidebar folder filesystem path value or derives it from runtime state so other sidebar file/folder operations functions can reuse a consistent representation. |
-| 524 | 8645 | `function getSidebarFolderGraphTitle(node)` | Sidebar file/folder operations | Returns the current sidebar folder graph title value or derives it from runtime state so other sidebar file/folder operations functions can reuse a consistent representation. |
-| 525 | 8650 | `async function collectMarkdownFilesForSidebarFolder(node)` | Markdown rendering | Builds or collects markdown files for sidebar folder from available source data so the runtime can render or persist it. |
-| 526 | 8659 | `async function openSidebarFolderGraphView(node)` | Sidebar file/folder operations | Opens sidebar folder graph view, prepares any required state, and routes the result into the matching application workflow. |
-| 527 | 8688 | `async function exportSidebarFolderToGraph(node)` | Sidebar file/folder operations | Generates an export for sidebar folder to graph and sends it to a download, save dialog, or clipboard flow. |
-| 528 | 8699 | `async function revealSidebarFolder(node)` | Sidebar file/folder operations | Coordinates sidebar folder behavior within the Sidebar file/folder operations logical module and updates the relevant runtime state or UI. |
-| 529 | 8708 | `async function deleteSidebarFolder(node)` | Sidebar file/folder operations | Removes sidebar folder from runtime state, UI, storage, or the filesystem while updating dependent references. |
-| 530 | 8725 | `function ensureSidebarFolderContextMenu()` | Sidebar file/folder operations | Ensures sidebar folder context menu exists or is permitted before later logic depends on it. |
-| 531 | 8926 | `function showSidebarFileContextMenu(event, node)` | Sidebar file/folder operations | Displays sidebar file context menu and populates it with the latest contextual information. |
-| 532 | 8941 | `renderSidebarTags(currentTags) =>` | Tag management | Builds or refreshes the DOM for sidebar tags using the current runtime state. |
-| 533 | 8965 | `function showSidebarFolderContextMenu(event, node)` | Sidebar file/folder operations | Displays sidebar folder context menu and populates it with the latest contextual information. |
-| 534 | 8982 | `function ensureSidebarClosedFolderContextMenu()` | Sidebar file/folder operations | Ensures sidebar closed folder context menu exists or is permitted before later logic depends on it. |
-| 535 | 9015 | `function showSidebarClosedFolderContextMenu(event)` | Sidebar file/folder operations | Displays sidebar closed folder context menu and populates it with the latest contextual information. |
-| 536 | 9032 | `function handleFolderTreeRootContextMenu(event)` | Folder tree | Handles the folder tree root context menu event/action, normalizes event data, and delegates to lower-level runtime helpers. |
-| 537 | 9043 | `async function handleFolderTreeRootClick(event)` | Folder tree | Handles the folder tree root click event/action, normalizes event data, and delegates to lower-level runtime helpers. |
-| 538 | 9053 | `function getFolderTreeChildrenContainer(details)` | Folder tree | Returns the current folder tree children container value or derives it from runtime state so other folder tree functions can reuse a consistent representation. |
-| 539 | 9057 | `function resetFolderTreeAnimation(details, childrenContainer)` | Folder tree | Coordinates folder tree animation behavior within the Folder tree logical module and updates the relevant runtime state or UI. |
-| 540 | 9071 | `function finishFolderTreeAnimation(details, childrenContainer, shouldOpen)` | Folder tree | Coordinates finish folder tree animation behavior within the Folder tree logical module and updates the relevant runtime state or UI. |
-| 541 | 9076 | `function prefersReducedFolderTreeMotion()` | Folder tree | Coordinates prefers reduced folder tree motion behavior within the Folder tree logical module and updates the relevant runtime state or UI. |
-| 542 | 9080 | `function toggleFolderTreeDetails(details)` | Folder tree | Toggles folder tree details between enabled/disabled or visible/hidden states and refreshes dependent controls. |
-| 543 | 9127 | `function getFileIconClass(fileName, options = {})` | Sidebar file/folder operations | Returns the current file icon class value or derives it from runtime state so other sidebar file/folder operations functions can reuse a consistent representation. |
-| 544 | 9158 | `function renderFolderTreeNode(node, parentPath = "")` | Folder tree | Builds or refreshes the DOM for folder tree node using the current runtime state. |
-| 545 | 9213 | `async function readSidebarFileContent()` | Sidebar file/folder operations | Loads sidebar file content from storage, the filesystem, or runtime state and returns normalized data to callers. |
-| 546 | 9224 | `function getSidebarFileSource()` | Sidebar file/folder operations | Returns the current sidebar file source value or derives it from runtime state so other sidebar file/folder operations functions can reuse a consistent representation. |
-| 547 | 9232 | `async function openSidebarFile(options)` | Sidebar file/folder operations | Opens sidebar file, prepares any required state, and routes the result into the matching application workflow. |
-| 548 | 9290 | `function findTabForSidebarFile(node)` | Tab management | Locates tab for sidebar file in runtime state or the DOM and optionally moves focus/selection to it. |
-| 549 | 9314 | `async function buildTreeFromFileList(fileList)` | Sidebar file/folder operations | Builds or collects tree from file list from available source data so the runtime can render or persist it. |
-| 550 | 9317 | `ensureDir(nodes, name) =>` | Sidebar file/folder operations | Ensures dir exists or is permitted before later logic depends on it. |
-| 551 | 9340 | `async function openFolderTree(event)` | Folder tree | Opens folder tree, prepares any required state, and routes the result into the matching application workflow. |
-| 552 | 9383 | `async function importDocumentFile(file)` | Sidebar file/folder operations | Coordinates document file behavior within the Sidebar file/folder operations logical module and updates the relevant runtime state or UI. |
-| 553 | 9395 | `function isSidebarDropzoneVisible()` | Sidebar file/folder operations | Checks whether the sidebar dropzone visible condition is true and returns a boolean that gates later sidebar file/folder operations behavior. |
-| 554 | 9399 | `function updateDropzoneToggleButtons()` | Drag and drop import | Refreshes dropzone toggle buttons from the latest application state and keeps the related UI, cached data, or saved state in sync. |
-| 555 | 9417 | `function hideSidebarDropzone(shouldPersist = true)` | Sidebar file/folder operations | Closes or hides sidebar dropzone and clears transient UI state associated with it. |
-| 556 | 9440 | `function showSidebarDropzone(shouldPersist = true)` | Sidebar file/folder operations | Displays sidebar dropzone and populates it with the latest contextual information. |
-| 557 | 9461 | `function toggleSidebarDropzone()` | Sidebar file/folder operations | Toggles sidebar dropzone between enabled/disabled or visible/hidden states and refreshes dependent controls. |
-| 558 | 9469 | `function isSidebarVisible()` | Sidebar file/folder operations | Checks whether the sidebar visible condition is true and returns a boolean that gates later sidebar file/folder operations behavior. |
-| 559 | 9473 | `function updateSidebarToggleButtons()` | Sidebar file/folder operations | Refreshes sidebar toggle buttons from the latest application state and keeps the related UI, cached data, or saved state in sync. |
-| 560 | 9490 | `function setSidebarVisible(isVisible, shouldPersist = true, shouldAnimate = shouldPersist)` | Sidebar file/folder operations | Sets the sidebar visible state and applies any related UI or persistence updates needed by the runtime. |
-| 561 | 9538 | `function toggleSidebar()` | Sidebar file/folder operations | Toggles sidebar between enabled/disabled or visible/hidden states and refreshes dependent controls. |
-| 562 | 9542 | `function isFirefoxBrowser()` | View mode and layout controls | Checks whether the firefox browser condition is true and returns a boolean that gates later view mode and layout controls behavior. |
-| 563 | 9546 | `function sanitizeMarkdownFileName(fileName)` | Markdown rendering | Coordinates markdown file name behavior within the Markdown rendering logical module and updates the relevant runtime state or UI. |
-| 564 | 9559 | `function getSuggestedMarkdownFileName(tab)` | Markdown rendering | Returns the current suggested markdown file name value or derives it from runtime state so other markdown rendering functions can reuse a consistent representation. |
-| 565 | 9563 | `function joinPath(dirPath, fileName)` | View mode and layout controls | Coordinates path behavior within the View mode and layout controls logical module and updates the relevant runtime state or UI. |
-| 566 | 9568 | `function updateTabAfterSave(tab, content, metadata)` | Tab management | Refreshes tab after save from the latest application state and keeps the related UI, cached data, or saved state in sync. |
-| 567 | 9586 | `function getMarkdownTabContentForSave(tab)` | Markdown rendering | Returns the current markdown tab content for save value or derives it from runtime state so other markdown rendering functions can reuse a consistent representation. |
-| 568 | 9591 | `async function saveMarkdownTabToSource(tab)` | Markdown rendering | Persists markdown tab to source to the appropriate local, browser, or desktop target and updates dirty/source metadata after success. |
-| 569 | 9620 | `async function saveMarkdownTabWithSaveDialog(tab)` | Markdown rendering | Persists markdown tab with save dialog to the appropriate local, browser, or desktop target and updates dirty/source metadata after success. |
-| 570 | 9687 | `async function saveActiveTabWithSaveDialog()` | Tab management | Persists active tab with save dialog to the appropriate local, browser, or desktop target and updates dirty/source metadata after success. |
-| 571 | 9692 | `async function saveActiveTabToSource()` | Tab management | Persists active tab to source to the appropriate local, browser, or desktop target and updates dirty/source metadata after success. |
-| 572 | 9697 | `function isMarkdownPath(path)` | Markdown rendering | Checks whether the markdown path condition is true and returns a boolean that gates later markdown rendering behavior. |
-| 573 | 9706 | `function getFileName(path)` | View mode and layout controls | Returns the current file name value or derives it from runtime state so other view mode and layout controls functions can reuse a consistent representation. |
-| 574 | 9710 | `function buildRawGitHubUrl(owner, repo, ref, filePath)` | GitHub import | Builds or collects raw git hub url from available source data so the runtime can render or persist it. |
-| 575 | 9718 | `async function fetchGitHubJson(url)` | GitHub import | Coordinates fetch git hub json behavior within the GitHub import logical module and updates the relevant runtime state or UI. |
-| 576 | 9736 | `async function fetchTextContent(url)` | View mode and layout controls | Coordinates fetch text content behavior within the View mode and layout controls logical module and updates the relevant runtime state or UI. |
-| 577 | 9744 | `function parseGitHubImportUrl(input)` | GitHub import | Parses git hub import url from text or structured input and returns normalized fields for later processing. |
-| 578 | 9794 | `async function getDefaultBranch(owner, repo)` | View mode and layout controls | Returns the current default branch value or derives it from runtime state so other view mode and layout controls functions can reuse a consistent representation. |
-| 579 | 9799 | `async function listMarkdownFiles(owner, repo, ref, basePath)` | Markdown rendering | Coordinates list markdown files behavior within the Markdown rendering logical module and updates the relevant runtime state or UI. |
-| 580 | 9810 | `function buildMarkdownFileTree(paths)` | Markdown rendering | Builds or collects markdown file tree from available source data so the runtime can render or persist it. |
-| 581 | 9828 | `function updateGitHubImportSelectedCount()` | GitHub import | Refreshes git hub import selected count from the latest application state and keeps the related UI, cached data, or saved state in sync. |
-| 582 | 9834 | `function updateGitHubSelectAllButtonLabel()` | GitHub import | Refreshes git hub select all button label from the latest application state and keeps the related UI, cached data, or saved state in sync. |
-| 583 | 9841 | `function syncGitHubSelectionToButtons()` | GitHub import | Applies or synchronizes git hub selection to buttons across related runtime state, UI elements, and stored data. |
-| 584 | 9850 | `function setGitHubSelectedPaths(paths)` | GitHub import | Sets the git hub selected paths state and applies any related UI or persistence updates needed by the runtime. |
-| 585 | 9858 | `function toggleGitHubSelectedPath(path)` | GitHub import | Toggles git hub selected path between enabled/disabled or visible/hidden states and refreshes dependent controls. |
-| 586 | 9870 | `function renderGitHubImportTree(paths)` | GitHub import | Builds or refreshes the DOM for git hub import tree using the current runtime state. |
-| 587 | 9913 | `function setGitHubImportLoading(isLoading)` | GitHub import | Sets the git hub import loading state and applies any related UI or persistence updates needed by the runtime. |
-| 588 | 9924 | `function setGitHubImportMessage(message, options = {})` | GitHub import | Sets the git hub import message state and applies any related UI or persistence updates needed by the runtime. |
-| 589 | 9937 | `function resetGitHubImportModal()` | GitHub import | Coordinates git hub import modal behavior within the GitHub import logical module and updates the relevant runtime state or UI. |
-| 590 | 9965 | `function openGitHubImportModal()` | GitHub import | Opens git hub import modal, prepares any required state, and routes the result into the matching application workflow. |
-| 591 | 9972 | `function closeGitHubImportModal()` | GitHub import | Closes or hides git hub import modal and clears transient UI state associated with it. |
-| 592 | 9978 | `async function handleGitHubImportSubmit()` | GitHub import | Handles the git hub import submit event/action, normalizes event data, and delegates to lower-level runtime helpers. |
-| 593 | 9981 | `setGitHubImportDialogDisabled(disabled) =>` | GitHub import | Sets the git hub import dialog disabled state and applies any related UI or persistence updates needed by the runtime. |
-| 594 | 10100 | `function processEmojis(element)` | Markdown rendering | Coordinates process emojis behavior within the Markdown rendering logical module and updates the relevant runtime state or UI. |
-| 595 | 10158 | `function debouncedRender()` | View mode and layout controls | Coordinates debounced render behavior within the View mode and layout controls logical module and updates the relevant runtime state or UI. |
-| 596 | 10163 | `function updateDocumentStats()` | View mode and layout controls | Refreshes document stats from the latest application state and keeps the related UI, cached data, or saved state in sync. |
-| 597 | 10176 | `function syncEditorToPreview()` | View mode and layout controls | Applies or synchronizes editor to preview across related runtime state, UI elements, and stored data. |
-| 598 | 10200 | `function syncPreviewToEditor()` | View mode and layout controls | Applies or synchronizes preview to editor across related runtime state, UI elements, and stored data. |
-| 599 | 10224 | `function updateSyncToggleButtons()` | View mode and layout controls | Refreshes sync toggle buttons from the latest application state and keeps the related UI, cached data, or saved state in sync. |
-| 600 | 10242 | `function toggleSyncScrolling()` | Scroll synchronization | Toggles sync scrolling between enabled/disabled or visible/hidden states and refreshes dependent controls. |
-| 601 | 10250 | `function updateViewModeButtons(mode)` | View mode and layout controls | Refreshes view mode buttons from the latest application state and keeps the related UI, cached data, or saved state in sync. |
-| 602 | 10254 | `function updateButton(btn)` | View mode and layout controls | Refreshes button from the latest application state and keeps the related UI, cached data, or saved state in sync. |
-| 603 | 10281 | `function setViewMode(mode, shouldPersist = true)` | View mode and layout controls | Sets the view mode state and applies any related UI or persistence updates needed by the runtime. |
-| 604 | 10323 | `function updateSyncToggleVisibility(mode)` | View mode and layout controls | Refreshes sync toggle visibility from the latest application state and keeps the related UI, cached data, or saved state in sync. |
-| 605 | 10333 | `function initResizer()` | View mode and layout controls | Coordinates init resizer behavior within the View mode and layout controls logical module and updates the relevant runtime state or UI. |
-| 606 | 10365 | `function startSidebarWidthResize(e)` | Sidebar file/folder operations | Coordinates start sidebar width resize behavior within the Sidebar file/folder operations logical module and updates the relevant runtime state or UI. |
-| 607 | 10373 | `function startSidebarWidthResizeTouch(e)` | Sidebar file/folder operations | Coordinates start sidebar width resize touch behavior within the Sidebar file/folder operations logical module and updates the relevant runtime state or UI. |
-| 608 | 10378 | `function getMaxSidebarWidth()` | Sidebar file/folder operations | Returns the current max sidebar width value or derives it from runtime state so other sidebar file/folder operations functions can reuse a consistent representation. |
-| 609 | 10383 | `function getClampedSidebarWidth(width)` | Sidebar file/folder operations | Returns the current clamped sidebar width value or derives it from runtime state so other sidebar file/folder operations functions can reuse a consistent representation. |
-| 610 | 10389 | `function getMaxSidebarDropzoneHeight()` | Sidebar file/folder operations | Returns the current max sidebar dropzone height value or derives it from runtime state so other sidebar file/folder operations functions can reuse a consistent representation. |
-| 611 | 10395 | `function getClampedSidebarDropzoneHeight(height)` | Sidebar file/folder operations | Returns the current clamped sidebar dropzone height value or derives it from runtime state so other sidebar file/folder operations functions can reuse a consistent representation. |
-| 612 | 10401 | `function applySidebarDropzoneHeight(height, shouldPersist = true)` | Sidebar file/folder operations | Applies or synchronizes sidebar dropzone height across related runtime state, UI elements, and stored data. |
-| 613 | 10413 | `function applySidebarWidth(width, shouldPersist = true)` | Sidebar file/folder operations | Applies or synchronizes sidebar width across related runtime state, UI elements, and stored data. |
-| 614 | 10426 | `function updateSidebarWidthResizerAccessibility(sidebarWidth)` | Sidebar file/folder operations | Refreshes sidebar width resizer accessibility from the latest application state and keeps the related UI, cached data, or saved state in sync. |
-| 615 | 10433 | `function updateSidebarWidthFromClientX(clientX, shouldPersist = false)` | Sidebar file/folder operations | Refreshes sidebar width from client x from the latest application state and keeps the related UI, cached data, or saved state in sync. |
-| 616 | 10440 | `function handleSidebarWidthResizeKeydown(e)` | Sidebar file/folder operations | Handles the sidebar width resize keydown event/action, normalizes event data, and delegates to lower-level runtime helpers. |
-| 617 | 10452 | `function handleSidebarWidthResize(e)` | Sidebar file/folder operations | Handles the sidebar width resize event/action, normalizes event data, and delegates to lower-level runtime helpers. |
-| 618 | 10457 | `function handleSidebarWidthResizeTouch(e)` | Sidebar file/folder operations | Handles the sidebar width resize touch event/action, normalizes event data, and delegates to lower-level runtime helpers. |
-| 619 | 10462 | `function stopSidebarWidthResize()` | Sidebar file/folder operations | Coordinates stop sidebar width resize behavior within the Sidebar file/folder operations logical module and updates the relevant runtime state or UI. |
-| 620 | 10470 | `function clampSidebarWidthToViewport()` | Sidebar file/folder operations | Coordinates clamp sidebar width to viewport behavior within the Sidebar file/folder operations logical module and updates the relevant runtime state or UI. |
-| 621 | 10475 | `function startSidebarDropzoneResize(e)` | Sidebar file/folder operations | Coordinates start sidebar dropzone resize behavior within the Sidebar file/folder operations logical module and updates the relevant runtime state or UI. |
-| 622 | 10482 | `function handleSidebarDropzoneResize(e)` | Sidebar file/folder operations | Handles the sidebar dropzone resize event/action, normalizes event data, and delegates to lower-level runtime helpers. |
-| 623 | 10492 | `function stopSidebarDropzoneResize()` | Sidebar file/folder operations | Coordinates stop sidebar dropzone resize behavior within the Sidebar file/folder operations logical module and updates the relevant runtime state or UI. |
-| 624 | 10499 | `function startResize(e)` | View mode and layout controls | Coordinates start resize behavior within the View mode and layout controls logical module and updates the relevant runtime state or UI. |
-| 625 | 10508 | `function startResizeTouch(e)` | View mode and layout controls | Coordinates start resize touch behavior within the View mode and layout controls logical module and updates the relevant runtime state or UI. |
-| 626 | 10517 | `function getResizePointerOffset(clientX)` | View mode and layout controls | Returns the current resize pointer offset value or derives it from runtime state so other view mode and layout controls functions can reuse a consistent representation. |
-| 627 | 10522 | `function getSplitResizeMetrics()` | View mode and layout controls | Returns the current split resize metrics value or derives it from runtime state so other view mode and layout controls functions can reuse a consistent representation. |
-| 628 | 10535 | `function getClampedEditorWidthPercent(percent)` | View mode and layout controls | Returns the current clamped editor width percent value or derives it from runtime state so other view mode and layout controls functions can reuse a consistent representation. |
-| 629 | 10541 | `function updateResizePosition(clientX)` | View mode and layout controls | Refreshes resize position from the latest application state and keeps the related UI, cached data, or saved state in sync. |
-| 630 | 10553 | `function handleResize(e)` | View mode and layout controls | Handles the resize event/action, normalizes event data, and delegates to lower-level runtime helpers. |
-| 631 | 10558 | `function handleResizeTouch(e)` | View mode and layout controls | Handles the resize touch event/action, normalizes event data, and delegates to lower-level runtime helpers. |
-| 632 | 10563 | `function stopResize()` | View mode and layout controls | Coordinates stop resize behavior within the View mode and layout controls logical module and updates the relevant runtime state or UI. |
-| 633 | 10571 | `function applyPaneWidths()` | View mode and layout controls | Applies or synchronizes pane widths across related runtime state, UI elements, and stored data. |
-| 634 | 10585 | `function resetPaneWidths()` | View mode and layout controls | Coordinates pane widths behavior within the View mode and layout controls logical module and updates the relevant runtime state or UI. |
-| 635 | 10591 | `function openMobileMenu()` | View mode and layout controls | Opens mobile menu, prepares any required state, and routes the result into the matching application workflow. |
-| 636 | 10596 | `function closeMobileMenu()` | View mode and layout controls | Closes or hides mobile menu and clears transient UI state associated with it. |
-| 637 | 10603 | `function updateMobileStats()` | View mode and layout controls | Refreshes mobile stats from the latest application state and keeps the related UI, cached data, or saved state in sync. |
-| 638 | 10926 | `function normalizeGraphNodeName(path)` | Graph extraction | Converts graph node name into a consistent internal format for comparisons, storage, or rendering. |
-| 639 | 10935 | `function getGraphDisplayLabel(path)` | Graph extraction | Returns the current graph display label value or derives it from runtime state so other graph extraction functions can reuse a consistent representation. |
-| 640 | 10941 | `function getGraphContextMenuTitle(node)` | Graph rendering and interaction | Returns the current graph context menu title value or derives it from runtime state so other graph rendering and interaction functions can reuse a consistent representation. |
-| 641 | 10948 | `function resolveGraphTargetId(reference, sourcePath, nodeIndex)` | Graph extraction | Coordinates graph target id behavior within the Graph extraction logical module and updates the relevant runtime state or UI. |
-| 642 | 10976 | `function stripMarkdownCodeForLinkExtraction(markdown)` | Markdown rendering | Coordinates markdown code for link extraction behavior within the Markdown rendering logical module and updates the relevant runtime state or UI. |
-| 643 | 10983 | `function getMarkdownLinkTarget(rawDestination)` | Markdown rendering | Returns the current markdown link target value or derives it from runtime state so other markdown rendering functions can reuse a consistent representation. |
-| 644 | 10994 | `function normalizeExtractedLinkTarget(link)` | Rename and link maintenance | Converts extracted link target into a consistent internal format for comparisons, storage, or rendering. |
-| 645 | 11005 | `function getMarkdownFrontmatterMatch(markdown)` | Markdown rendering | Returns the current markdown frontmatter match value or derives it from runtime state so other markdown rendering functions can reuse a consistent representation. |
-| 646 | 11009 | `function normalizeTagName(tag)` | Tag management | Converts tag name into a consistent internal format for comparisons, storage, or rendering. |
-| 647 | 11018 | `function collectNormalizedTags(tags, values)` | Tag management | Builds or collects normalized tags from available source data so the runtime can render or persist it. |
-| 648 | 11030 | `function extractYamlFrontmatterTags(frontmatterText)` | Tag management | Extracts yaml frontmatter tags from Markdown or graph data and returns normalized values for rendering, tags, or links. |
-| 649 | 11064 | `function getFileTagsFromContent(content)` | Tag management | Returns the current file tags from content value or derives it from runtime state so other tag management functions can reuse a consistent representation. |
-| 650 | 11072 | `function normalizeFileTagList(tags)` | Tag management | Converts file tag list into a consistent internal format for comparisons, storage, or rendering. |
-| 651 | 11086 | `function setFileTagsInContent(content, tags)` | Tag management | Sets the file tags in content state and applies any related UI or persistence updates needed by the runtime. |
-| 652 | 11120 | `function addTagToContent(content, tag)` | Tag management | Adds tag to content to the relevant UI or state collection and wires any required behavior. |
-| 653 | 11126 | `function removeTagFromContent(content, tag)` | Tag management | Removes tag from content from runtime state, UI, storage, or the filesystem while updating dependent references. |
-| 654 | 11135 | `function extractMarkdownTags(markdown)` | Tag management | Extracts markdown tags from Markdown or graph data and returns normalized values for rendering, tags, or links. |
-| 655 | 11156 | `function extractMarkdownLinks(markdown)` | Markdown rendering | Extracts markdown links from Markdown or graph data and returns normalized values for rendering, tags, or links. |
-| 656 | 11176 | `async function openGraphView()` | Graph rendering and interaction | Opens graph view, prepares any required state, and routes the result into the matching application workflow. |
-| 657 | 11197 | `function getGraphExportContent(graphSnapshot, folderName, graphViewConfig)` | Graph rendering and interaction | Returns the current graph export content value or derives it from runtime state so other graph rendering and interaction functions can reuse a consistent representation. |
-| 658 | 11207 | `async function writeGraphExportWithSaveDialog(content, suggestedName, options = {})` | Save logic | Writes graph export with save dialog to the selected storage or filesystem target, handling platform-specific output details where required. |
-| 659 | 11248 | `async function exportFolderFilesToGraph(folderFiles, folderName)` | Graph rendering and interaction | Generates an export for folder files to graph and sends it to a download, save dialog, or clipboard flow. |
-| 660 | 11260 | `async function exportActiveFolderToGraph()` | Graph rendering and interaction | Generates an export for active folder to graph and sends it to a download, save dialog, or clipboard flow. |
-| 661 | 11268 | `function getActiveGraphSaveContent(graphTab)` | Graph rendering and interaction | Returns the current active graph save content value or derives it from runtime state so other graph rendering and interaction functions can reuse a consistent representation. |
-| 662 | 11279 | `function updateGraphTabAfterSave(tab, metadata)` | Graph rendering and interaction | Refreshes graph tab after save from the latest application state and keeps the related UI, cached data, or saved state in sync. |
-| 663 | 11296 | `async function saveGraphTabToSource(graphTab)` | Save logic | Persists graph tab to source to the appropriate local, browser, or desktop target and updates dirty/source metadata after success. |
-| 664 | 11322 | `async function saveActiveGraphToSource()` | Save logic | Persists active graph to source to the appropriate local, browser, or desktop target and updates dirty/source metadata after success. |
-| 665 | 11326 | `async function saveGraphTabWithSaveDialog(graphTab)` | Save logic | Persists graph tab with save dialog to the appropriate local, browser, or desktop target and updates dirty/source metadata after success. |
-| 666 | 11347 | `async function saveActiveGraphWithSaveDialog()` | Save logic | Persists active graph with save dialog to the appropriate local, browser, or desktop target and updates dirty/source metadata after success. |
-| 667 | 11351 | `async function openSavedGraphDocument(source)` | Graph persistence and comparison | Opens saved graph document, prepares any required state, and routes the result into the matching application workflow. |
-| 668 | 11410 | `function setGraphFilterPanelCollapsed(collapsed)` | View mode and layout controls | Sets the graph filter panel collapsed state and applies any related UI or persistence updates needed by the runtime. |
-| 669 | 11418 | `function setGraphViewMode(enabled)` | View mode and layout controls | Sets the graph view mode state and applies any related UI or persistence updates needed by the runtime. |
-| 670 | 11453 | `function getGraphSnapshotTagNodeIds(graphSnapshot)` | Graph extraction | Returns the current graph snapshot tag node ids value or derives it from runtime state so other graph extraction functions can reuse a consistent representation. |
-| 671 | 11461 | `function getGraphFilterTagNodeIds(graphSnapshot)` | Graph rendering and interaction | Returns the current graph filter tag node ids value or derives it from runtime state so other graph rendering and interaction functions can reuse a consistent representation. |
-| 672 | 11470 | `function getGraphTagLabelFromId(tagNodeId)` | Graph rendering and interaction | Returns the current graph tag label from id value or derives it from runtime state so other graph rendering and interaction functions can reuse a consistent representation. |
-| 673 | 11474 | `function parseGraphGroupQuery(query)` | Graph rendering and interaction | Parses graph group query from text or structured input and returns normalized fields for later processing. |
-| 674 | 11493 | `function graphQueryRequiresFileContent(query)` | Graph rendering and interaction | Coordinates graph query requires file content behavior within the Graph rendering and interaction logical module and updates the relevant runtime state or UI. |
-| 675 | 11498 | `function isLightweightSavedGraphView(tab, graphSnapshot)` | Graph persistence and comparison | Checks whether the lightweight saved graph view condition is true and returns a boolean that gates later graph persistence and comparison behavior. |
-| 676 | 11502 | `function showLightweightSavedGraphTextSearchUnavailable()` | Graph persistence and comparison | Displays lightweight saved graph text search unavailable and populates it with the latest contextual information. |
-| 677 | 11506 | `function getGraphSnapshotFileCachedContent(snapshotFile)` | Graph extraction | Returns the current graph snapshot file cached content value or derives it from runtime state so other graph extraction functions can reuse a consistent representation. |
-| 678 | 11512 | `function getGraphFilterFileData(nodeData, snapshotFile, options = {})` | Graph rendering and interaction | Returns the current graph filter file data value or derives it from runtime state so other graph rendering and interaction functions can reuse a consistent representation. |
-| 679 | 11544 | `function graphFileMatchesGroupQuery(nodeData, snapshotFile, parsedQuery, options = {})` | Graph rendering and interaction | Coordinates graph file matches group query behavior within the Graph rendering and interaction logical module and updates the relevant runtime state or UI. |
-| 680 | 11560 | `allTermsMatchText(text) =>` | Graph rendering and interaction | Coordinates all terms match text behavior within the Graph rendering and interaction logical module and updates the relevant runtime state or UI. |
-| 681 | 11583 | `function getGraphGroupMatch(nodeData, snapshotFile, graphViewConfig, options = {})` | Graph rendering and interaction | Returns the current graph group match value or derives it from runtime state so other graph rendering and interaction functions can reuse a consistent representation. |
-| 682 | 11593 | `function updateGraphGroup(groupId, patch, options = {})` | Graph rendering and interaction | Refreshes graph group from the latest application state and keeps the related UI, cached data, or saved state in sync. |
-| 683 | 11601 | `function deleteGraphGroup(groupId)` | Graph rendering and interaction | Removes graph group from runtime state, UI, storage, or the filesystem while updating dependent references. |
-| 684 | 11618 | `function getGraphGroupQueryContext(input)` | Graph rendering and interaction | Returns the current graph group query context value or derives it from runtime state so other graph rendering and interaction functions can reuse a consistent representation. |
-| 685 | 11635 | `function isGraphGroupAbsolutePathSuggestion(path)` | Graph rendering and interaction | Checks whether the graph group absolute path suggestion condition is true and returns a boolean that gates later graph rendering and interaction behavior. |
-| 686 | 11640 | `function getGraphGroupRelativeFilePath(snapshotFile)` | Graph rendering and interaction | Returns the current graph group relative file path value or derives it from runtime state so other graph rendering and interaction functions can reuse a consistent representation. |
-| 687 | 11653 | `function addGraphGroupPathFolderSuggestions(snapshotFile, addEntry)` | Graph rendering and interaction | Adds graph group path folder suggestions to the relevant UI or state collection and wires any required behavior. |
-| 688 | 11666 | `function getGraphGroupSuggestionEntries(graphSnapshot, prefix, query, options = {})` | Graph rendering and interaction | Returns the current graph group suggestion entries value or derives it from runtime state so other graph rendering and interaction functions can reuse a consistent representation. |
-| 689 | 11670 | `addEntry(value, type, detail) =>` | Graph rendering and interaction | Adds entry to the relevant UI or state collection and wires any required behavior. |
-| 690 | 11716 | `function attachGraphGroupQuerySuggestions(row, queryInput, group, sourceTab)` | Graph rendering and interaction | Coordinates attach graph group query suggestions behavior within the Graph rendering and interaction logical module and updates the relevant runtime state or UI. |
-| 691 | 11726 | `closePopover() =>` | Modal and menu lifecycle | Closes or hides popover and clears transient UI state associated with it. |
-| 692 | 11734 | `function handleOutsideMouseDown(event)` | Graph rendering and interaction | Handles the outside mouse down event/action, normalizes event data, and delegates to lower-level runtime helpers. |
-| 693 | 11739 | `insertSuggestion(suggestion) =>` | Graph rendering and interaction | Coordinates suggestion behavior within the Graph rendering and interaction logical module and updates the relevant runtime state or UI. |
-| 694 | 11759 | `scrollSelectedSuggestionIntoView() =>` | Scroll synchronization | Coordinates selected suggestion into view behavior within the Scroll synchronization logical module and updates the relevant runtime state or UI. |
-| 695 | 11765 | `renderPopover() =>` | Graph rendering and interaction | Builds or refreshes the DOM for popover using the current runtime state. |
-| 696 | 11869 | `function renderGraphGroupsToolbar(tab)` | Graph rendering and interaction | Builds or refreshes the DOM for graph groups toolbar using the current runtime state. |
-| 697 | 11915 | `updateGroupQuery() =>` | Graph rendering and interaction | Refreshes group query from the latest application state and keeps the related UI, cached data, or saved state in sync. |
-| 698 | 11962 | `function updateGraphTagToolbar(tab, graphSnapshot)` | Graph rendering and interaction | Refreshes graph tag toolbar from the latest application state and keeps the related UI, cached data, or saved state in sync. |
-| 699 | 12023 | `function resetActiveGraphViewToDefaults()` | Graph rendering and interaction | Coordinates active graph view to defaults behavior within the Graph rendering and interaction logical module and updates the relevant runtime state or UI. |
-| 700 | 12041 | `function updateActiveGraphViewConfig(patch, options = {})` | Graph rendering and interaction | Refreshes active graph view config from the latest application state and keeps the related UI, cached data, or saved state in sync. |
-| 701 | 12059 | `function animateActiveGraphView()` | Graph rendering and interaction | Coordinates animate active graph view behavior within the Graph rendering and interaction logical module and updates the relevant runtime state or UI. |
-| 702 | 12075 | `async function renderGraphView(options = {})` | Graph rendering and interaction | Builds or refreshes the DOM for graph view using the current runtime state. |
-| 703 | 12179 | `getGraphNodeType(nodeData) =>` | Graph extraction | Returns the current graph node type value or derives it from runtime state so other graph extraction functions can reuse a consistent representation. |
-| 704 | 12180 | `getGraphLinkType(linkData) =>` | Rename and link maintenance | Returns the current graph link type value or derives it from runtime state so other rename and link maintenance functions can reuse a consistent representation. |
-| 705 | 12181 | `getGraphItemStatus(itemData) =>` | Graph rendering and interaction | Returns the current graph item status value or derives it from runtime state so other graph rendering and interaction functions can reuse a consistent representation. |
-| 706 | 12182 | `isTagNode(nodeData) =>` | Tag management | Checks whether the tag node condition is true and returns a boolean that gates later tag management behavior. |
-| 707 | 12183 | `isTagLink(linkData) =>` | Tag management | Checks whether the tag link condition is true and returns a boolean that gates later tag management behavior. |
-| 708 | 12184 | `isMarkdownLink(linkData) =>` | Markdown rendering | Checks whether the markdown link condition is true and returns a boolean that gates later markdown rendering behavior. |
-| 709 | 12185 | `getGraphNodeLabel(nodeData) =>` | Graph extraction | Returns the current graph node label value or derives it from runtime state so other graph extraction functions can reuse a consistent representation. |
-| 710 | 12191 | `getLinkSourceId(link) =>` | Rename and link maintenance | Returns the current link source id value or derives it from runtime state so other rename and link maintenance functions can reuse a consistent representation. |
-| 711 | 12192 | `getLinkTargetId(link) =>` | Rename and link maintenance | Returns the current link target id value or derives it from runtime state so other rename and link maintenance functions can reuse a consistent representation. |
-| 712 | 12196 | `appendFileLinkText(fileId, textParts) =>` | Rename and link maintenance | Coordinates append file link text behavior within the Rename and link maintenance logical module and updates the relevant runtime state or UI. |
-| 713 | 12214 | `getGraphSearchOptions(nodeData, snapshotFile, parsedQuery) =>` | Graph rendering and interaction | Returns the current graph search options value or derives it from runtime state so other graph rendering and interaction functions can reuse a consistent representation. |
-| 714 | 12222 | `fileMatchesGraphSearchQuery(nodeData, searchQuery) =>` | Graph rendering and interaction | Coordinates file matches graph search query behavior within the Graph rendering and interaction logical module and updates the relevant runtime state or UI. |
-| 715 | 12317 | `filterGraphToNodeIds(nodeIds) =>` | Graph rendering and interaction | Coordinates filter graph to node ids behavior within the Graph rendering and interaction logical module and updates the relevant runtime state or UI. |
-| 716 | 12326 | `getDirectOutgoingNodeIds(nodeId) =>` | Graph rendering and interaction | Returns the current direct outgoing node ids value or derives it from runtime state so other graph rendering and interaction functions can reuse a consistent representation. |
-| 717 | 12331 | `getFullOutgoingNodeIds(nodeId) =>` | Graph rendering and interaction | Returns the current full outgoing node ids value or derives it from runtime state so other graph rendering and interaction functions can reuse a consistent representation. |
-| 718 | 12394 | `graphBaseNodeRadius(nodeId) =>` | Graph rendering and interaction | Coordinates graph base node radius behavior within the Graph rendering and interaction logical module and updates the relevant runtime state or UI. |
-| 719 | 12398 | `nodeRadius(nodeId) =>` | Graph rendering and interaction | Coordinates node radius behavior within the Graph rendering and interaction logical module and updates the relevant runtime state or UI. |
-| 720 | 12401 | `getLinkEndpoint(d) =>` | Rename and link maintenance | Returns the current link endpoint value or derives it from runtime state so other rename and link maintenance functions can reuse a consistent representation. |
-| 721 | 12514 | `getGraphNodeTooltip(nodeData) =>` | Graph extraction | Returns the current graph node tooltip value or derives it from runtime state so other graph extraction functions can reuse a consistent representation. |
-| 722 | 12520 | `getGraphLinkTooltip(linkData) =>` | Rename and link maintenance | Returns the current graph link tooltip value or derives it from runtime state so other rename and link maintenance functions can reuse a consistent representation. |
-| 723 | 12537 | `createContextMenuButton(labelText, iconClass, tooltipText) =>` | Modal and menu lifecycle | Creates a new context menu button data structure or UI element and initializes the fields/events needed by downstream logic. |
-| 724 | 12553 | `setContextMenuButtonLabel(button, labelText) =>` | Modal and menu lifecycle | Sets the context menu button label state and applies any related UI or persistence updates needed by the runtime. |
-| 725 | 12742 | `getActiveGraphTab() =>` | Graph rendering and interaction | Returns the current active graph tab value or derives it from runtime state so other graph rendering and interaction functions can reuse a consistent representation. |
-| 726 | 12744 | `getFolderMarkdownEntryForNode(graphNode) =>` | Markdown rendering | Returns the current folder markdown entry for node value or derives it from runtime state so other markdown rendering functions can reuse a consistent representation. |
-| 727 | 12752 | `getSnapshotFileForNode(graphNode) =>` | Graph rendering and interaction | Returns the current snapshot file for node value or derives it from runtime state so other graph rendering and interaction functions can reuse a consistent representation. |
-| 728 | 12759 | `getNodeFileName(nodeId) =>` | Graph rendering and interaction | Returns the current node file name value or derives it from runtime state so other graph rendering and interaction functions can reuse a consistent representation. |
-| 729 | 12766 | `getNodeClipboardPath(graphNode) =>` | Export logic | Returns the current node clipboard path value or derives it from runtime state so other export logic functions can reuse a consistent representation. |
-| 730 | 12771 | `isAbsoluteFilesystemPath(path) =>` | Desktop compatibility bridges | Checks whether the absolute filesystem path condition is true and returns a boolean that gates later desktop compatibility bridges behavior. |
-| 731 | 12776 | `resolveFilesystemPath(path) =>` | Desktop compatibility bridges | Coordinates filesystem path behavior within the Desktop compatibility bridges logical module and updates the relevant runtime state or UI. |
-| 732 | 12782 | `getNodeFilesystemPath(graphNode) =>` | Desktop compatibility bridges | Returns the current node filesystem path value or derives it from runtime state so other desktop compatibility bridges functions can reuse a consistent representation. |
-| 733 | 12796 | `async readGraphNodeContent(graphNode) =>` | Graph extraction | Loads graph node content from storage, the filesystem, or runtime state and returns normalized data to callers. |
-| 734 | 12811 | `async writeGraphNodeContent(graphNode, content) =>` | Save logic | Writes graph node content to the selected storage or filesystem target, handling platform-specific output details where required. |
-| 735 | 12835 | `async copyGraphText(text) =>` | Graph rendering and interaction | Copies graph text to the clipboard or another target and updates user feedback when the operation completes. |
-| 736 | 12844 | `getDirectOutgoingDependencyIds(nodeId) =>` | Graph rendering and interaction | Returns the current direct outgoing dependency ids value or derives it from runtime state so other graph rendering and interaction functions can reuse a consistent representation. |
-| 737 | 12849 | `getFullOutgoingDependencyIds(nodeId) =>` | Graph rendering and interaction | Returns the current full outgoing dependency ids value or derives it from runtime state so other graph rendering and interaction functions can reuse a consistent representation. |
-| 738 | 12861 | `getBacklinkIds(nodeId) =>` | Rename and link maintenance | Returns the current backlink ids value or derives it from runtime state so other rename and link maintenance functions can reuse a consistent representation. |
-| 739 | 12866 | `async copyNodeFileNameList(nodeIds) =>` | Export logic | Copies node file name list to the clipboard or another target and updates user feedback when the operation completes. |
-| 740 | 12870 | `hideGraphPoint(nodeId) =>` | Graph rendering and interaction | Closes or hides graph point and clears transient UI state associated with it. |
-| 741 | 12888 | `removeGraphPointFromSnapshot(nodeId) =>` | Graph rendering and interaction | Removes graph point from snapshot from runtime state, UI, storage, or the filesystem while updating dependent references. |
-| 742 | 12910 | `findOpenMarkdownTabForSnapshotFile(snapshotFile, graphNode) =>` | Markdown rendering | Locates open markdown tab for snapshot file in runtime state or the DOM and optionally moves focus/selection to it. |
-| 743 | 12933 | `async rebuildActiveGraphSnapshotAfterTagChange(activeGraphTab) =>` | Graph extraction | Coordinates rebuild active graph snapshot after tag change behavior within the Graph extraction logical module and updates the relevant runtime state or UI. |
-| 744 | 12941 | `async updateGraphNodeTagContent(graphNode, tag, action) =>` | Graph extraction | Refreshes graph node tag content from the latest application state and keeps the related UI, cached data, or saved state in sync. |
-| 745 | 13005 | `applyMagneticSetting() =>` | Graph rendering and interaction | Applies or synchronizes magnetic setting across related runtime state, UI elements, and stored data. |
-| 746 | 13054 | `setNodeContextItemsHidden(hidden) =>` | Graph rendering and interaction | Sets the node context items hidden state and applies any related UI or persistence updates needed by the runtime. |
-| 747 | 13058 | `positionContextMenu(event) =>` | Modal and menu lifecycle | Coordinates context menu behavior within the Modal and menu lifecycle logical module and updates the relevant runtime state or UI. |
-| 748 | 13064 | `hideContextMenu() =>` | Modal and menu lifecycle | Closes or hides context menu and clears transient UI state associated with it. |
-| 749 | 13400 | `openLocalGraphTab(mode, titlePrefix) =>` | Graph rendering and interaction | Opens local graph tab, prepares any required state, and routes the result into the matching application workflow. |
-| 750 | 13436 | `getGraphLinkSourceId(linkData) =>` | Rename and link maintenance | Returns the current graph link source id value or derives it from runtime state so other rename and link maintenance functions can reuse a consistent representation. |
-| 751 | 13438 | `getGraphLinkTargetId(linkData) =>` | Rename and link maintenance | Returns the current graph link target id value or derives it from runtime state so other rename and link maintenance functions can reuse a consistent representation. |
-| 752 | 13439 | `shouldIncludeLinkInHoverHighlight(linkData, includeTagRelationships = false) =>` | Rename and link maintenance | Checks whether the include link in hover highlight condition is true and returns a boolean that gates later rename and link maintenance behavior. |
-| 753 | 13443 | `getRecursiveOutgoingHighlight(focusNodeId, includeTagRelationships = false) =>` | Graph rendering and interaction | Returns the current recursive outgoing highlight value or derives it from runtime state so other graph rendering and interaction functions can reuse a consistent representation. |
-| 754 | 13468 | `getBacklinkHighlight(focusNodeId, includeTagRelationships = false) =>` | Rename and link maintenance | Returns the current backlink highlight value or derives it from runtime state so other rename and link maintenance functions can reuse a consistent representation. |
-| 755 | 13483 | `function highlightNeighborhood(focusNode, modifiers = hoveredGraphModifiers)` | Graph rendering and interaction | Coordinates highlight neighborhood behavior within the Graph rendering and interaction logical module and updates the relevant runtime state or UI. |
-| 756 | 13504 | `isHighlightedLink(l) =>` | Rename and link maintenance | Checks whether the highlighted link condition is true and returns a boolean that gates later rename and link maintenance behavior. |
-| 757 | 13517 | `function clearNeighborhoodHighlight()` | Graph rendering and interaction | Coordinates neighborhood highlight behavior within the Graph rendering and interaction logical module and updates the relevant runtime state or UI. |
-| 758 | 13524 | `updateHoveredGraphHighlight(event) =>` | Graph rendering and interaction | Refreshes hovered graph highlight from the latest application state and keeps the related UI, cached data, or saved state in sync. |
-| 759 | 13546 | `function updateLabelVisibility()` | Graph rendering and interaction | Refreshes label visibility from the latest application state and keeps the related UI, cached data, or saved state in sync. |
-| 760 | 13564 | `function renderGraphTick()` | Graph rendering and interaction | Builds or refreshes the DOM for graph tick using the current runtime state. |
-| 761 | 13704 | `bindGraphRangeControl(input, configKey) =>` | Graph rendering and interaction | Coordinates bind graph range control behavior within the Graph rendering and interaction logical module and updates the relevant runtime state or UI. |
-| 762 | 13731 | `function initializeGraphFilterTooltips()` | Graph rendering and interaction | Coordinates initialize graph filter tooltips behavior within the Graph rendering and interaction logical module and updates the relevant runtime state or UI. |
-| 763 | 13772 | `hideTooltip() =>` | Modal and menu lifecycle | Closes or hides tooltip and clears transient UI state associated with it. |
-| 764 | 13779 | `positionTooltip(target) =>` | Modal and menu lifecycle | Coordinates tooltip behavior within the Modal and menu lifecycle logical module and updates the relevant runtime state or UI. |
-| 765 | 13785 | `getTooltipTarget(source) =>` | Modal and menu lifecycle | Returns the current tooltip target value or derives it from runtime state so other modal and menu lifecycle functions can reuse a consistent representation. |
-| 766 | 13799 | `scheduleTooltip(target) =>` | Modal and menu lifecycle | Coordinates tooltip behavior within the Modal and menu lifecycle logical module and updates the relevant runtime state or UI. |
-| 767 | 13982 | `function identifyGraphicElements(container)` | Graph rendering and interaction | Coordinates identify graphic elements behavior within the Graph rendering and interaction logical module and updates the relevant runtime state or UI. |
-| 768 | 14014 | `function calculateElementPositions(elements, container)` | Export logic | Inspects element positions and computes layout/export metadata used by later rendering or export steps. |
-| 769 | 14040 | `function calculatePageBoundaries(totalHeight, elementWidth, pageConfig)` | Export logic | Inspects page boundaries and computes layout/export metadata used by later rendering or export steps. |
-| 770 | 14064 | `function detectSplitElements(elements, pageBoundaries)` | Export logic | Inspects split elements and computes layout/export metadata used by later rendering or export steps. |
-| 771 | 14123 | `function analyzeGraphicsForPageBreaks(tempElement)` | Graph rendering and interaction | Inspects graphics for page breaks and computes layout/export metadata used by later rendering or export steps. |
-| 772 | 14197 | `function categorizeBySize(splitElements, pageHeightPx)` | Export logic | Inspects by size and computes layout/export metadata used by later rendering or export steps. |
-| 773 | 14217 | `function insertPageBreaks(fittingElements, pageHeightPx)` | Export logic | Coordinates page breaks behavior within the Export logic logical module and updates the relevant runtime state or UI. |
-| 774 | 14275 | `function applyPageBreaksWithCascade(tempElement, pageConfig, maxIterations = 10)` | Export logic | Applies or synchronizes page breaks with cascade across related runtime state, UI elements, and stored data. |
-| 775 | 14345 | `function calculateScaleFactor(elementHeight, availableHeight, buffer = 5)` | Export logic | Inspects scale factor and computes layout/export metadata used by later rendering or export steps. |
-| 776 | 14369 | `function applyGraphicScaling(element, scaleFactor, elementType)` | Graph rendering and interaction | Applies or synchronizes graphic scaling across related runtime state, UI elements, and stored data. |
-| 777 | 14396 | `function handleOversizedElements(oversizedElements, pageHeightPx)` | Export logic | Handles the oversized elements event/action, normalizes event data, and delegates to lower-level runtime helpers. |
-| 778 | 14603 | `async function copyToClipboard(text)` | Export logic | Copies to clipboard to the clipboard or another target and updates user feedback when the operation completes. |
-| 779 | 14630 | `function showCopiedMessage()` | Modal and menu lifecycle | Displays copied message and populates it with the latest contextual information. |
-| 780 | 14645 | `function encodeMarkdownForShare(text)` | Markdown rendering | Transforms markdown for share between runtime text and its encoded share/storage representation. |
-| 781 | 14655 | `function decodeMarkdownFromShare(encoded)` | Markdown rendering | Transforms markdown from share between runtime text and its encoded share/storage representation. |
-| 782 | 14662 | `function copyShareUrlFromText(markdownText, btn)` | Export logic | Copies share url from text to the clipboard or another target and updates user feedback when the operation completes. |
-| 783 | 14678 | `function onCopied()` | Share URL logic | Coordinates on copied behavior within the Share URL logic logical module and updates the relevant runtime state or UI. |
-| 784 | 14705 | `function copyShareUrl(btn)` | Export logic | Copies share url to the clipboard or another target and updates user feedback when the operation completes. |
-| 785 | 14712 | `function loadFromShareHash()` | Share URL logic | Loads from share hash from storage, the filesystem, or runtime state and returns normalized data to callers. |
-| 786 | 14739 | `function preventDefaults(e)` | Drag and drop import | Coordinates defaults behavior within the Drag and drop import logical module and updates the relevant runtime state or UI. |
-| 787 | 14752 | `function highlight()` | Drag and drop import | Coordinates highlight behavior within the Drag and drop import logical module and updates the relevant runtime state or UI. |
-| 788 | 14756 | `function unhighlight()` | Drag and drop import | Coordinates unhighlight behavior within the Drag and drop import logical module and updates the relevant runtime state or UI. |
-| 789 | 14787 | `async function handleDrop(e)` | Drag and drop import | Handles the drop event/action, normalizes event data, and delegates to lower-level runtime helpers. |
-| 790 | 14867 | `function svgToDataUrl(svgEl)` | Export logic | Coordinates svg to data url behavior within the Export logic logical module and updates the relevant runtime state or UI. |
-| 791 | 14880 | `function svgToCanvas(svgEl)` | Export logic | Coordinates svg to canvas behavior within the Export logic logical module and updates the relevant runtime state or UI. |
-| 792 | 14907 | `async function downloadMermaidPng(container, btn)` | Export logic | Generates an export for mermaid png and sends it to a download, save dialog, or clipboard flow. |
-| 793 | 14931 | `async function copyMermaidImage(container, btn)` | Export logic | Copies mermaid image to the clipboard or another target and updates user feedback when the operation completes. |
-| 794 | 14957 | `function downloadMermaidSvg(container, btn)` | Export logic | Generates an export for mermaid svg and sends it to a download, save dialog, or clipboard flow. |
-| 795 | 14984 | `function applyModalTransform()` | Modal and menu lifecycle | Applies or synchronizes modal transform across related runtime state, UI elements, and stored data. |
-| 796 | 14991 | `function closeMermaidModal()` | Modal and menu lifecycle | Closes or hides mermaid modal and clears transient UI state associated with it. |
-| 797 | 15003 | `function openMermaidZoomModal(container)` | Modal and menu lifecycle | Opens mermaid zoom modal, prepares any required state, and routes the result into the matching application workflow. |
-| 798 | 15137 | `function addMermaidToolbars()` | Mermaid tools | Adds mermaid toolbars to the relevant UI or state collection and wires any required behavior. |
+### Editor Toolbar Dialogs And Helpers
+
+| Line | Function | Current purpose |
+|-----:|----------|-----------------|
+| 526 | `runNativeEditorHistoryCommand(command)` | Runs native undo/redo commands for editor toolbar history actions. |
+| 534 | `undoEditorToolbarAction()` | Handles toolbar undo. |
+| 538 | `redoEditorToolbarAction()` | Handles toolbar redo. |
+| 542 | `stripMarkdownFormatting(text)` | Removes common Markdown formatting from selected text. |
+| 566 | `openEditorClearMarkdownModal()` | Opens the clear-formatting dialog. |
+| 580 | `closeEditorClearMarkdownModal()` | Closes the clear-formatting dialog. |
+| 585 | `applyEditorClearMarkdownModal()` | Applies clear-formatting to the current selection. |
+| 594 | `getEditorFindQuery()` | Reads the current find query. |
+| 597 | `collectEditorFindMatches(query)` | Finds all editor matches for a query. |
+| 608 | `updateEditorFindReplaceStatus()` | Updates find/replace match status text. |
+| 620 | `selectEditorFindMatch(index)` | Selects and scrolls to a find match. |
+| 634 | `refreshEditorFindMatches(options = {})` | Recomputes find matches and updates selection. |
+| 654 | `openEditorFindReplaceModal()` | Opens find/replace. |
+| 666 | `closeEditorFindReplaceModal()` | Closes find/replace. |
+| 671 | `goToNextEditorFindMatch()` | Moves to the next match. |
+| 675 | `goToPreviousEditorFindMatch()` | Moves to the previous match. |
+| 679 | `replaceCurrentEditorFindMatch()` | Replaces the selected match. |
+| 694 | `replaceAllEditorFindMatches()` | Replaces all matches. |
+| 712 | `getSelectedEditorText()` | Returns current editor selection text. |
+| 717 | `openEditorLinkModal()` | Opens the link insertion dialog. |
+| 731 | `closeEditorLinkModal()` | Closes the link dialog. |
+| 736 | `applyEditorLinkModal()` | Inserts or wraps a Markdown link. |
+| 750 | `normalizeReferenceNumber(value)` | Normalizes reference-link numbers. |
+| 755 | `getEditorReferenceDefinition(referenceNumber, url, title)` | Builds a Markdown reference definition. |
+| 760 | `openEditorReferenceModal()` | Opens the reference-link dialog. |
+| 775 | `closeEditorReferenceModal()` | Closes the reference-link dialog. |
+| 780 | `applyEditorReferenceModal()` | Inserts a reference link and definition. |
+| 805 | `getEditorImageSourceMode()` | Reads image source mode, file or URL. |
+| 809 | `setEditorImageSourceMode(mode)` | Switches image source mode. |
+| 815 | `updateEditorImageSourceFields()` | Shows the relevant image input fields. |
+| 820 | `escapeMarkdownImageAltText(value)` | Escapes image alt text. |
+| 823 | `escapeMarkdownImageTitle(value)` | Escapes image title text. |
+| 826 | `getMarkdownImageText(target, altText)` | Builds Markdown image syntax. |
+| 832 | `getRelativeImagePathForEditor(imagePath)` | Makes selected image paths relative where possible. |
+| 844 | `openEditorImageModal()` | Opens the image insertion dialog. |
+| 860 | `closeEditorImageModal()` | Closes the image dialog. |
+| 865 | `browseEditorImageFile()` | Uses Neutralino file browsing for image selection when available. |
+| 881 | `applyEditorImageModal()` | Inserts Markdown image syntax. |
+| 896 | `setEditorAlertType(alertType)` | Chooses the active GitHub alert type. |
+| 904 | `getMarkdownAlertBody(alertType, selectedText)` | Builds alert body content. |
+| 913 | `getMarkdownAlertText(alertType, selectedText)` | Builds full Markdown alert text. |
+| 916 | `openEditorAlertModal()` | Opens the alert insertion dialog. |
+| 929 | `closeEditorAlertModal()` | Closes the alert dialog. |
+| 934 | `applyEditorAlertModal()` | Inserts the selected alert block. |
+| 943 | `getFilteredEditorSymbols()` | Filters symbols and HTML entities. |
+| 950 | `setEditorSelectedSymbol(entity)` | Stores the selected symbol/entity. |
+| 959 | `renderEditorSymbolList()` | Renders the symbol picker list. |
+| 1006 | `openEditorSymbolModal()` | Opens the symbol picker. |
+| 1020 | `closeEditorSymbolModal()` | Closes the symbol picker. |
+| 1025 | `applyEditorSymbolModal()` | Inserts the selected symbol/entity. |
+| 1033 | `getFilteredEditorEmojis()` | Filters emoji shortcode choices. |
+| 1040 | `setEditorSelectedEmoji(shortcode)` | Stores the selected emoji shortcode. |
+| 1049 | `renderEditorEmojiList()` | Renders the emoji picker list. |
+| 1078 | `openEditorEmojiModal()` | Opens the emoji picker. |
+| 1092 | `closeEditorEmojiModal()` | Closes the emoji picker. |
+| 1097 | `applyEditorEmojiModal()` | Inserts the selected emoji shortcode. |
+
+### Folder Pane And Unsupported File Toggle
+
+| Line | Function | Current purpose |
+|-----:|----------|-----------------|
+| 1529 | `ensureFolderTreePane()` | Ensures the folder tree pane exists and creates it if needed. |
+| 1750 | `getClosestUnsupportedFileToggleButton(target)` | Finds the nearest unsupported-file toggle button. |
+| 1755 | `handleUnsupportedFileToggleClick(event)` | Toggles unsupported files in the folder tree. |
+
+### Settings Preference Getters And Tooltips
+
+| Line | Function | Current purpose |
+|-----:|----------|-----------------|
+| 2035 | `getGraphAutoClusterThreshold()` | Reads the graph auto-clustering threshold from global state. |
+| 2041 | `isGraphAutoClusterLargeMapsEnabled()` | Reads whether large graph auto-clustering is enabled. |
+| 2045 | `getGraphRenderWarningThreshold()` | Reads the large graph render warning threshold. |
+| 2051 | `getGraphMostReferencedPercent()` | Reads the most-referenced group percentage. |
+| 2057 | `getGraphShowFileExtensions()` | Reads graph label extension preference. |
+| 2061 | `getGraphFindHighlightColor()` | Reads graph find highlight color. |
+| 2069 | `getGraphNodeDefaultColor()` | Reads default graph node color. |
+| 2077 | `getLargeMapHoverPreferences()` | Reads large-map hover dimming, label, and line preferences. |
+| 2086 | `getContextMenuTooltipDelayMs()` | Reads menu tooltip delay. |
+| 2092 | `shouldConfirmOpenManyGraphNodes()` | Reads confirmation preference for many graph nodes. |
+| 2096 | `shouldConfirmDeleteFiles()` | Reads delete confirmation preference. |
+| 2100 | `shouldConfirmResetState()` | Reads reset confirmation preference. |
+| 2104 | `getMaxRecentFiles()` | Reads max recent file count. |
+| 2110 | `getMaxRecentFolders()` | Reads max recent folder count. |
+| 2116 | `initializeContextMenuTooltips()` | Attaches delayed tooltip behavior to context-menu items. |
+
+### Markdown Render Compatibility Wrapper
+
+| Line | Function | Current purpose |
+|-----:|----------|-----------------|
+| 2341 | `renderMarkdown(markdown)` | Delegates rendering to the registered Markdown render module while preserving the legacy function name used by other app code. |
+
+### Graph Preference Defaults
+
+| Line | Function | Current purpose |
+|-----:|----------|-----------------|
+| 2490 | `getGraphViewPreferenceDefaults()` | Builds the default graph view preference object. |
+| 2501 | `saveGraphViewPreferenceDefaults(patch)` | Persists graph view preference defaults. |
+
+### Help, Welcome, About, And Exit
+
+| Line | Function | Current purpose |
+|-----:|----------|-----------------|
+| 2999 | `fetchHelpHomeMarkdown()` | Loads the wiki home Markdown for in-app help. |
+| 3016 | `openHelpHome()` | Opens wiki help content in a tab. |
+| 3026 | `openWelcomePage()` | Opens the welcome document. |
+| 3030 | `showAboutDialog()` | Shows the About dialog. |
+| 3035 | `hideAboutDialog()` | Hides the About dialog. |
+| 3040 | `exitApplication()` | Exits through Neutralino when available, otherwise closes the window. |
+
+### Settings Dialog Actions
+
+| Line | Function | Current purpose |
+|-----:|----------|-----------------|
+| 3059 | `showSettingsDialog()` | Opens Settings and populates controls from global state. |
+| 3115 | `hideSettingsDialog()` | Closes Settings when not saving. |
+| 3121 | `setSettingsDialogSaving(isSaving)` | Toggles Settings busy/disabled state. |
+| 3136 | `saveSettingsDialog()` | Validates and persists Settings values. |
+| 3202 | `clearAppCacheFromSettings(options = {})` | Clears graph render cache and browser Cache Storage. |
+| 3232 | `clearPreferencesFromSettings(options = {})` | Restores default preferences. |
+| 3244 | `clearRecentHistoryFromSettings(options = {})` | Clears recent files/folders. |
+| 3252 | `resetAllFromSettings()` | Clears cache, recent history, and preferences. |
+
+### Code Converter Dialog
+
+| Line | Function | Current purpose |
+|-----:|----------|-----------------|
+| 3261 | `setCodeConverterStatus(message)` | Updates converter status text. |
+| 3265 | `setCodeConverterCompleteState(isComplete)` | Marks converter completion state. |
+| 3271 | `showCodeConverterDialog()` | Opens the code-to-Markdown converter dialog. |
+| 3279 | `hideCodeConverterDialog()` | Closes the converter dialog. |
+| 3284 | `browseCodeConverterFolder(input, title)` | Opens a Neutralino folder picker for converter paths. |
+| 3299 | `getCodeConverterScriptPath()` | Resolves the converter script path for browser/desktop runtime. |
+| 3305 | `quoteCommandArg(value)` | Quotes command-line arguments for converter execution. |
+| 3309 | `getCodeConverterSwitches()` | Builds converter CLI switches from dialog checkboxes. |
+| 3322 | `runCodeConverter()` | Runs the converter through Neutralino `os.execCommand`. |
+
+### Folder Loading, Sorting, And Delete Cleanup
+
+| Line | Function | Current purpose |
+|-----:|----------|-----------------|
+| 3372 | `listMarkdownTree(dirHandle, parentPath = "")` | Reads a browser folder handle into folder-tree nodes. |
+| 3398 | `collectMarkdownFilesFromTree(nodes, parentPath = "")` | Flattens folder-tree nodes into Markdown file entries. |
+| 3433 | `getClosedFolderPlaceholder()` | Creates the closed-folder sidebar placeholder. |
+| 3443 | `updateCloseFolderButtons()` | Syncs close-folder button enabled state. |
+| 3451 | `closeFolderTree()` | Closes the current folder tree and clears folder state. |
+| 3477 | `getFolderTreeStats(nodes)` | Counts files and folders in the tree. |
+| 3492 | `updateFolderStatusLine()` | Updates folder file/folder counts in the status line. |
+| 3498 | `renderFolderLoadingState(message = "Loading folder...")` | Renders folder loading UI. |
+| 3515 | `renderFolderLoadingError(message = "Unable to load this folder.")` | Renders folder loading error UI. |
+| 3525 | `renderFolderTree(nodes, options = {})` | Renders folder-tree nodes through the sidebar module. |
+| 3567 | `reloadOpenFolderTree()` | Reloads the currently open folder. |
+| 3590 | `refreshFolderFilesForGraphComparison()` | Refreshes folder files before graph stale comparison. |
+| 3642 | `refreshOpenFolderTreeAfterFileDelete(filePath)` | Refreshes folder state after deleting a file. |
+| 3657 | `isPathInsideFolder(filePath, folderPath)` | Checks whether a path is inside a folder path. |
+| 3665 | `normalizeDeletedPathComparison(path)` | Normalizes paths for delete comparisons. |
+| 3669 | `getDeletedPathCandidates(path)` | Builds candidate paths for deleted file/folder matching. |
+| 3690 | `tabMatchesDeletedPath(tab, deletedPath, options = {})` | Checks whether a tab points to deleted content. |
+| 3713 | `closeTabsForDeletedPath(deletedPath, options = {})` | Closes tabs affected by deleted content. |
+| 3723 | `getValidFolderSortMode(mode)` | Normalizes folder sort mode. |
+| 3729 | `getNodeTimestamp(node, field)` | Reads sortable timestamps from folder nodes. |
+| 3735 | `compareFolderTreeNodes(a, b)` | Sort comparator for folder tree nodes. |
+| 3752 | `sortFolderTreeNodes(nodes)` | Sorts folders and files recursively. |
+| 3760 | `updateFolderMarkdownFileOrderFromTree()` | Updates Markdown file order from current tree order. |
+| 3768 | `applyFolderSortMode(mode)` | Persists and applies a folder sort mode. |
+
+### Neutralino Folder Loading
+
+| Line | Function | Current purpose |
+|-----:|----------|-----------------|
+| 3777 | `listMarkdownTreeNeutralino(dirPath)` | Reads a folder through Neutralino filesystem APIs. |
+| 3799 | `collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "")` | Flattens Neutralino folder nodes into Markdown file entries. |
+
+### Sidebar And Dropzone Layout
+
+| Line | Function | Current purpose |
+|-----:|----------|-----------------|
+| 4109 | `isSidebarDropzoneVisible()` | Returns current dropzone visibility. |
+| 4113 | `updateDropzoneToggleButtons()` | Syncs dropzone toggle buttons. |
+| 4131 | `hideSidebarDropzone(shouldPersist = true)` | Hides and optionally persists dropzone state. |
+| 4154 | `showSidebarDropzone(shouldPersist = true)` | Shows and optionally persists dropzone state. |
+| 4175 | `toggleSidebarDropzone()` | Toggles the sidebar dropzone. |
+| 4183 | `isSidebarVisible()` | Returns current sidebar visibility. |
+| 4187 | `updateSidebarToggleButtons()` | Syncs sidebar toggle buttons. |
+| 4204 | `setSidebarVisible(isVisible, shouldPersist = true, shouldAnimate = shouldPersist)` | Applies sidebar visibility and layout state. |
+| 4256 | `toggleSidebar()` | Toggles the sidebar. |
+
+---
+
+## Moved Out Of script.js
+
+Large parts of the old `script.js` reference are no longer current because their implementation moved into modules. The main module directories are:
+
+| Directory | Current responsibility |
+|-----------|------------------------|
+| `web-app/js/editor/` | Editor context menu, line/status UI, syntax highlight, autocomplete. |
+| `web-app/js/markdown/` | Frontmatter, links, Mermaid tools, renderer config, render pipeline. |
+| `web-app/js/graph/` | Graph extraction, persistence, documents, toolbar, renderer. |
+| `web-app/js/sidebar/` | Folder toolbar and sidebar context tree. |
+| `web-app/js/tabs/` | Tab creation, persistence, switching, reset, rename, close. |
+| `web-app/js/files/` | File open/save helpers and file type detection. |
+| `web-app/js/import/` | Drag/drop, dropped items, and GitHub import flows. |
+| `web-app/js/export/` | Export page break helpers. |
+| `web-app/js/recent/` | Recent files/folders, profile sync, handle cache, recent actions. |
+| `web-app/js/ui/` | Theme, layout, view mode, mobile menu, and layout preferences. |
+| `web-app/js/tags/` | Tag parsing, state, management, and graph/folder tag sync. |
+
+When a function is not listed above, look for it in the corresponding `web-app/js/` module rather than in `web-app/script.js`.

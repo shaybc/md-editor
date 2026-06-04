@@ -1,104 +1,175 @@
 # MD-Editor Wiki
 
-Welcome to the **MD-Editor** wiki — your comprehensive reference for installation, configuration, and usage of the MD-Editor application.
+Welcome to the **MD-Editor** wiki. This is the documentation hub for installing, using, configuring, deploying, and developing the app.
 
-## What is MD-Editor?
-
-MD-Editor is a **professional, feature-rich, GitHub-style Markdown editor and live-preview application** that runs entirely in the browser. It provides real-time rendering, syntax highlighting, LaTeX math support, Mermaid diagrams, and much more — all without requiring any server-side processing, sign-up, or data uploads.
-
-> **Privacy First**: All content is processed locally in your browser. Nothing you type is ever sent to a server.
+MD-Editor is a local-first Markdown workspace for writing, previewing, organizing, graphing, and exporting technical documents. It runs as a static web app and as a Neutralino-powered desktop app, with shared editor, preview, graph, export, and code-converter workflows.
 
 ---
 
-## Quick Start
+## Table of Contents
 
-| Platform | Quick Command |
-|----------|--------------|
-| **Docker** | `docker run -p 8080:80 ghcr.io/thisis-developer/markdown-viewer:latest` |
-| **Docker Compose** | `cd web-app && docker compose up -d` |
-| **Desktop App** | Download the binary from [Releases](https://github.com/ThisIs-Developer/Markdown-Viewer/releases) |
-| **Web (self-hosted)** | Serve the `web-app/` directory with any static web server |
-
-Then open **http://localhost:8080** in your browser.
+- [Start Here](#start-here)
+- [User Guides](#user-guides)
+- [Setup And Deployment](#setup-and-deployment)
+- [Architecture And Development](#architecture-and-development)
+- [Reference](#reference)
+- [Project And Release Information](#project-and-release-information)
+- [Feature Highlights](#feature-highlights)
+- [Privacy And Data Handling](#privacy-and-data-handling)
+- [Technology Snapshot](#technology-snapshot)
+- [Repository Links](#repository-links)
 
 ---
 
-## Wiki Pages
+## Start Here
 
-| Page | Description |
-|------|-------------|
-| [Installation](Installation) | Set up the application on Web, Docker, or Desktop |
-| [Usage Guide](Usage-Guide) | Learn how to write, preview, import, and export |
-| [Features](Features) | Explore all supported features in detail |
-| [Markdown Reference](Markdown-Reference) | Complete syntax reference for all supported elements |
-| [Development Journey](Development-Journey) | Evolution of the project from the original prototype to today |
-| [Desktop App](Desktop-App) | Build and run the native desktop application |
-| [Docker Deployment](Docker-Deployment) | Deploy with Docker and Docker Compose |
-| [Configuration](Configuration) | Configure the application and its build tools |
-| [Architecture and Technology](Architecture-and-Technology) | Understand the runtime architecture, deployment model, data flow, and stack |
-| [Project Modules](Modules) | Review the repository modules and logical application modules |
-| [Application Runtime Module](Application-Runtime-Module) | Explore the modules and logic parts implemented in `web-app/script.js` |
-| [Script Function Reference](Script-Functions) | Review every named function signature in `web-app/script.js` with module mapping and logic notes |
-| [Contributing](Contributing) | How to contribute to the project |
-| [FAQ](FAQ) | Frequently asked questions |
+| Page | Use It For |
+|------|------------|
+| [Home](Home) | Return to this wiki index. |
+| [Installation](Installation) | Run MD-Editor locally, with Docker, as a self-hosted static app, or as a desktop app. |
+| [Usage Guide](Usage-Guide) | Learn the main workflows: editing, tabs, folders, graph view, tags, exports, settings, and desktop use. |
+| [Features](Features) | Review the complete current feature list. |
+| [FAQ](FAQ) | Find quick answers to common setup and usage questions. |
+
+---
+
+## User Guides
+
+| Page | Use It For |
+|------|------------|
+| [Markdown Reference](Markdown-Reference) | See supported Markdown syntax, Mermaid, math, frontmatter, alerts, tables, links, and other authoring patterns. |
+| [Configuration](Configuration) | Understand settings available in the UI and relevant app/build configuration files. |
+| [Desktop App](Desktop-App) | Run, build, and understand the Neutralino desktop app. |
+
+---
+
+## Setup And Deployment
+
+| Page | Use It For |
+|------|------------|
+| [Installation](Installation) | Choose the right installation path for web, Docker, desktop, or static hosting. |
+| [Docker Deployment](Docker-Deployment) | Build and run the Nginx-based static web container with Docker or Docker Compose. |
+| [Desktop App](Desktop-App) | Prepare desktop resources, run the desktop app, and build desktop artifacts. |
+
+Quick local web start:
+
+```bash
+python -m http.server 9500 --directory web-app
+```
+
+Then open:
+
+```text
+http://localhost:9500/
+```
+
+Quick Docker Compose start:
+
+```bash
+cd web-app
+docker compose up --build
+```
+
+Then open:
+
+```text
+http://localhost:8080/
+```
+
+Quick desktop start:
+
+```bash
+cd desktop-app
+npm run dev
+```
+
+---
+
+## Architecture And Development
+
+| Page | Use It For |
+|------|------------|
+| [Architecture and Technology](Architecture-and-Technology) | Learn the app architecture, technology stack, deployment model, testing setup, and data flow. |
+| [Project Modules](Modules) | See the current module map across `web-app/`, `web-app/js/`, `desktop-app/`, and support tooling. |
+| [Application Runtime Architecture](Application-Runtime-Module) | Understand runtime startup, load order, app context, module registration, state, and browser/desktop compatibility. |
+| [Script Function Reference](Script-Functions) | Review the named functions that still live in `web-app/script.js`. |
+| [Contributing](Contributing) | Follow contribution, testing, and project workflow guidance. |
+
+---
+
+## Reference
+
+| Page | Use It For |
+|------|------------|
+| [Markdown Reference](Markdown-Reference) | Authoring syntax and rendering examples. |
+| [Configuration](Configuration) | Settings, preferences, storage keys, desktop config, Docker config, and development scripts. |
+| [Script Function Reference](Script-Functions) | Function-level runtime reference for `web-app/script.js`. |
+| [FAQ](FAQ) | Common troubleshooting and behavior notes. |
+
+---
+
+## Project And Release Information
+
+| Page | Use It For |
+|------|------------|
+| [Release Notes](Release-Notes) | Track release history and notable changes. |
+| [Contributing](Contributing) | Understand how to work on the project safely. |
 
 ---
 
 ## Feature Highlights
 
-- 🖊️ **Live Split-Screen Editor** — Write on the left, see rendered output on the right in real-time
-- 🌙 **Dark / Light Mode** — Toggle themes instantly with CSS variables
-- 💡 **Syntax Highlighting** — 190+ programming languages via highlight.js
-- 📐 **LaTeX Math** — Inline and block mathematical expressions via MathJax
-- 📊 **Mermaid Diagrams** — Flowcharts, sequence diagrams, Gantt charts, and more
-- 📤 **Export Options** — Save as Markdown, HTML, or PDF
-- 📥 **File Import** — Drag & drop or file-picker import of `.md` files
-- 🔗 **Share via URL** — Share content by compressing it into the URL
-- 📋 **Copy to Clipboard** — One-click copy of the rendered HTML
-- 📊 **Content Statistics** — Word count, character count, and estimated reading time
-- 😀 **Emoji Support** — Full emoji set via JoyPixels
-- 📱 **Responsive Design** — Works on desktop, tablet, and mobile
-- 🔒 **Privacy Focused** — 100% client-side, no server required
+- Multi-tab Markdown editing with session restore.
+- GitHub-style live preview with syntax highlighting, Mermaid diagrams, MathJax math, emoji, frontmatter, alerts, and tables.
+- Local file open/save workflows, drag and drop, recent files, and recent folders.
+- Folder workspaces with filtering, sorting, context actions, tag workflows, and status counts.
+- GitHub import for public Markdown repositories, folders, and files.
+- Graph View for Markdown links, wiki links, tags, generated dependency maps, graph documents, and graph archives.
+- Code to Markdown conversion for JavaScript, TypeScript, Python, Java, and C# source folders.
+- Exports for Markdown, standalone HTML, PDF, graph documents, graph archives, Mermaid SVG/PNG, clipboard content, and compressed share URLs.
+- Settings for layout, graph behavior, colors, recent item limits, tooltip delay, confirmations, and reset actions.
+- Shared web and desktop experience through the static web app and Neutralino desktop wrapper.
 
 ---
 
-## 📈 Development Journey
+## Privacy And Data Handling
 
-MD-Editor has grown from a lightweight Markdown parser into a production-ready writing tool. Visit the [Development Journey](Development-Journey) page for a concise comparison between the original prototype and the current release.
+MD-Editor is designed around local processing:
 
----
-
-## Transparency & Data Handling
-
-MD-Editor is designed to be transparent about how your data is handled:
-
-- **Local-only processing**: Markdown rendering happens entirely in your browser.
-- **Local storage**: Content and preferences are saved in your browser's `localStorage` for autosave and session restore.
-- **Share links**: The Share feature encodes content into the URL hash; nothing is uploaded to a server.
-- **GitHub import**: Importing from GitHub uses public GitHub APIs (`api.github.com`) and raw content (`raw.githubusercontent.com`).
-- **CDN dependencies**: Third-party libraries load from public CDNs (cdnjs, jsDelivr). Self-hosting those assets eliminates external requests.
-- **No analytics**: The app does not include tracking scripts, analytics beacons, or advertising pixels.
+- Markdown rendering, tab state, graph state, and exports run in the browser or desktop app.
+- Tab state, preferences, recent items, and graph state are stored locally.
+- Browser file/folder handles may be stored in IndexedDB when supported.
+- Desktop recent items and preferences can use local `.mdviewer` profile files.
+- Share links encode Markdown content into the URL hash instead of uploading it.
+- GitHub import contacts public GitHub endpoints only when you request an import.
+- The web build loads third-party libraries from public CDNs unless you replace them with local assets.
+- The app does not require accounts, analytics, cookies, tracking scripts, or a backend document service.
 
 ---
 
-## Technology Stack
+## Technology Snapshot
 
-| Category | Technology |
-|----------|-----------|
-| Markup / Rendering | [marked.js](https://marked.js.org/) 9.1.6 |
-| Syntax Highlighting | [highlight.js](https://highlightjs.org/) 11.9.0 |
-| Math Rendering | [MathJax](https://www.mathjax.org/) 3.2.2 |
-| Diagram Rendering | [Mermaid](https://mermaid.js.org/) 11.6.0 |
-| HTML Sanitization | [DOMPurify](https://github.com/cure53/DOMPurify) 3.0.9 |
-| UI Framework | [Bootstrap](https://getbootstrap.com/) 5.3.2 |
-| Desktop Runtime | [Neutralinojs](https://neutralino.js.org/) 6.5.0 |
-| Containerization | [Docker](https://www.docker.com/) / [Nginx Alpine](https://hub.docker.com/_/nginx) |
+| Area | Technology |
+|------|------------|
+| App shell | Static HTML, CSS, and vanilla JavaScript |
+| Module style | Classic scripts with `window.registerMarkdownViewer...` registration functions |
+| Markdown | Marked.js, GitHub Markdown CSS |
+| Sanitization | DOMPurify |
+| Code highlighting | highlight.js |
+| Math | MathJax |
+| Diagrams | Mermaid |
+| Graphs | D3.js |
+| YAML | js-yaml |
+| Exports | FileSaver.js, html2pdf.js, jsPDF, html2canvas, pdfmake |
+| Share URLs | pako |
+| Web container | Docker and Nginx Alpine |
+| Desktop | Neutralinojs |
+| Tests | Node test runner and Playwright |
 
 ---
 
-## Links
+## Repository Links
 
-- 🏠 [GitHub Repository](https://github.com/ThisIs-Developer/Markdown-Viewer)
-- 🐳 [Docker Image (GHCR)](https://github.com/ThisIs-Developer/Markdown-Viewer/pkgs/container/markdown-viewer)
-- 📦 [Releases](https://github.com/ThisIs-Developer/Markdown-Viewer/releases)
-- 📄 [License (Apache 2.0)](https://github.com/ThisIs-Developer/Markdown-Viewer/blob/main/LICENSE)
+- [GitHub Repository](https://github.com/shaybc/md-editor)
+- [Releases](https://github.com/shaybc/md-editor/releases)
+- [License](https://github.com/shaybc/md-editor/blob/main/LICENSE)

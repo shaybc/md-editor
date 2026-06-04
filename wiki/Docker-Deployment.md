@@ -1,81 +1,79 @@
 # Docker Deployment
 
-This page covers all Docker-based deployment options for **Markdown Viewer**.
+This page covers Docker-based deployment for **MD-Editor** from this repository.
 
 ---
 
 ## Table of Contents
 
 - [Quick Start](#quick-start)
-- [Docker Run](#docker-run)
 - [Docker Compose](#docker-compose)
-- [Building the Image Locally](#building-the-image-locally)
+- [Docker Build And Run](#docker-build-and-run)
+- [Dockerfile Summary](#dockerfile-summary)
 - [Nginx Configuration](#nginx-configuration)
-- [Transparency & Security](#transparency--security)
-- [Environment & Customization](#environment--customization)
-- [Automated Image Publishing](#automated-image-publishing)
+- [Environment And Customization](#environment-and-customization)
+- [Publishing Your Own Image](#publishing-your-own-image)
 - [Reverse Proxy Setup](#reverse-proxy-setup)
+- [Transparency And Security](#transparency-and-security)
 
 ---
 
 ## Quick Start
 
-```bash
-docker run -d \
-  --name markdown-viewer \
-  -p 8080:80 \
-  --restart unless-stopped \
-  ghcr.io/thisis-developer/markdown-viewer:latest
-```
-
-Open **http://localhost:8080**.
-
----
-
-## Docker Run
-
-### Basic Usage
+The repository includes a Dockerfile and Docker Compose file in `web-app/`. Build and run the local image with:
 
 ```bash
-docker run -p 8080:80 ghcr.io/thisis-developer/markdown-viewer:latest
+cd web-app
+docker compose up --build
 ```
 
-### With a Custom Port
+Open:
+
+```text
+http://localhost:8080/
+```
+
+Stop the container with:
 
 ```bash
-docker run -p 3000:80 ghcr.io/thisis-developer/markdown-viewer:latest
+docker compose down
 ```
-
-### Named Container with Restart Policy
-
-```bash
-docker run -d \
-  --name markdown-viewer \
-  -p 8080:80 \
-  --restart unless-stopped \
-  ghcr.io/thisis-developer/markdown-viewer:latest
-```
-
-### Pull a Specific Version
-
-```bash
-docker pull ghcr.io/thisis-developer/markdown-viewer:<tag>
-docker run -p 8080:80 ghcr.io/thisis-developer/markdown-viewer:<tag>
-```
-
-Available tags: `latest`, `main`, and commit SHA tags (e.g., `abc1234`).
 
 ---
 
 ## Docker Compose
 
-The `web-app/` directory includes a ready-to-use `docker-compose.yml`.
+The included `web-app/docker-compose.yml` builds the app from the local `web-app/Dockerfile`.
+
+```yaml
+version: '3.8'
+
+services:
+  md-editor:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8080:80"
+    container_name: md-editor
+    restart: unless-stopped
+    environment:
+      - NGINX_HOST=localhost
+      - NGINX_PORT=80
+```
 
 ### Start
 
 ```bash
 cd web-app
-docker compose up -d
+docker compose up --build
+```
+
+### Start in the background
+
+```bash
+cd web-app
+docker compose up -d --build
 ```
 
 ### Stop
@@ -85,141 +83,164 @@ cd web-app
 docker compose down
 ```
 
-### Rebuild
+### Change the host port
+
+Change the left side of the port mapping:
+
+```yaml
+ports:
+  - "3000:80"
+```
+
+Then open `http://localhost:3000/`.
+
+---
+
+## Docker Build And Run
+
+You can build and run the image without Docker Compose.
+
+```bash
+cd web-app
+docker build -t md-editor:local .
+docker run --rm -p 8080:80 --name md-editor md-editor:local
+```
+
+Run in the background with a restart policy:
+
+```bash
+docker run -d \
+  --name md-editor \
+  -p 8080:80 \
+  --restart unless-stopped \
+  md-editor:local
+```
+
+Open:
+
+```text
+http://localhost:8080/
+```
+
+Remove the background container:
+
+```bash
+docker stop md-editor
+docker rm md-editor
+```
+
+---
+
+## Dockerfile Summary
+
+`web-app/Dockerfile` is based on `nginx:alpine` and:
+
+1. Copies the static web app files into `/usr/share/nginx/html/`.
+2. Writes an Nginx server configuration into `/etc/nginx/conf.d/default.conf`.
+3. Serves `index.html` as the fallback for app routes.
+4. Adds one-year cache headers for static assets.
+5. Adds basic browser security headers.
+6. Exposes container port `80`.
+
+The container serves static HTML, CSS, JavaScript, images, and app assets. It does not run a backend application server.
+
+---
+
+## Nginx Configuration
+
+The Dockerfile writes this Nginx configuration:
+
+```nginx
+server {
+    listen 80;
+    server_name localhost;
+    root /usr/share/nginx/html;
+    index index.html;
+
+    location / {
+        try_files $uri $uri/ /index.html;
+    }
+
+    location ~* \.(js|css|png|jpg|jpeg|gif|ico|svg)$ {
+        expires 1y;
+        add_header Cache-Control "public, immutable";
+    }
+
+    add_header X-Frame-Options "SAMEORIGIN" always;
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header X-XSS-Protection "1; mode=block" always;
+    add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+}
+```
+
+To change this behavior, edit `web-app/Dockerfile` and rebuild the image.
+
+---
+
+## Environment And Customization
+
+MD-Editor is a static client-side app, so the Docker container does not require runtime application environment variables.
+
+The current compose file includes:
+
+```yaml
+environment:
+  - NGINX_HOST=localhost
+  - NGINX_PORT=80
+```
+
+These values are informational in the current Dockerfile; the generated Nginx config is written at build time and does not template those variables automatically.
+
+Common customizations:
+
+- Change the exposed host port in `docker-compose.yml`.
+- Modify `web-app/Dockerfile` to adjust Nginx caching or headers.
+- Replace CDN references in `web-app/index.html` with local assets for isolated deployments.
+- Rebuild the image after source or configuration changes.
+
+### Serving from a sub-path
+
+To serve the app at a sub-path such as `/md-editor/`, update the Nginx `location` and fallback paths in `web-app/Dockerfile`, then rebuild the image. Test routing, asset URLs, and shared links after changing the base path.
+
+---
+
+## Publishing Your Own Image
+
+This checkout does not include a `.github/workflows/docker-publish.yml` workflow, so Docker image publishing is not configured here by default.
+
+To publish your own image manually:
+
+```bash
+cd web-app
+docker build -t ghcr.io/shaybc/md-editor:latest .
+docker push ghcr.io/shaybc/md-editor:latest
+```
+
+Replace `ghcr.io/shaybc/md-editor:latest` with your own registry, owner, image name, and tag.
+
+If you later add a GitHub Actions workflow, make sure the documentation matches the actual registry, tags, permissions, and trigger rules used by that workflow.
+
+---
+
+## Reverse Proxy Setup
+
+To run MD-Editor behind a reverse proxy, expose the container locally and proxy to the mapped host port.
+
+Example container:
 
 ```bash
 cd web-app
 docker compose up -d --build
 ```
 
-### docker-compose.yml
-
-```yaml
-services:
-  markdown-viewer:
-    image: ghcr.io/thisis-developer/markdown-viewer:latest
-    container_name: markdown-viewer
-    ports:
-      - "8080:80"
-    restart: unless-stopped
-```
-
-To change the host port, update the left value in `"8080:80"` to your desired port.
-
----
-
-## Building the Image Locally
-
-```bash
-# From the web app directory
-git clone https://github.com/ThisIs-Developer/Markdown-Viewer.git
-cd Markdown-Viewer/web-app
-
-docker build -t markdown-viewer:local .
-docker run -p 8080:80 markdown-viewer:local
-```
-
-### Dockerfile Summary
-
-The `web-app/Dockerfile` is based on `nginx:alpine` and:
-
-1. **Copies** all files from `web-app/` (`index.html`, `script.js`, `styles.css`, `assets/`) into `/usr/share/nginx/html`.
-2. **Configures Nginx** for SPA routing (all paths serve `index.html`).
-3. **Sets cache headers** for static assets (1-year max-age).
-4. **Adds security headers**:
-   - `X-Frame-Options: SAMEORIGIN`
-   - `X-Content-Type-Options: nosniff`
-   - `Referrer-Policy: strict-origin-when-cross-origin`
-
----
-
-## Nginx Configuration
-
-The embedded Nginx config (`/etc/nginx/conf.d/default.conf`) includes:
-
-```nginx
-server {
-    listen 80;
-    root /usr/share/nginx/html;
-    index index.html;
-
-    # SPA fallback routing
-    location / {
-        try_files $uri $uri/ /index.html;
-    }
-
-    # Static asset caching (1 year)
-    location ~* \.(js|css|png|jpg|jpeg|gif|ico|svg|woff2?)$ {
-        expires 1y;
-        add_header Cache-Control "public, immutable";
-    }
-
-    # Security headers
-    add_header X-Frame-Options "SAMEORIGIN";
-    add_header X-Content-Type-Options "nosniff";
-    add_header Referrer-Policy "strict-origin-when-cross-origin";
-}
-```
-
----
-
-## Transparency & Security
-
-The Docker image is intentionally minimal:
-
-- **Static assets only**: HTML, CSS, JavaScript, and images served by Nginx.
-- **No background services**: No analytics, telemetry, or server-side processing.
-- **External dependencies**: The app references CDN-hosted libraries unless you bundle them locally.
-- **Security headers**: Nginx applies `X-Frame-Options`, `X-Content-Type-Options`, and `Referrer-Policy`.
-
----
-
-## Environment & Customization
-
-Because the app is purely static, there are no runtime environment variables to configure. All customization is done at build time by modifying the source files.
-
-To serve the app at a **sub-path** (e.g., `/markdown-viewer/`), adjust the Nginx `location` directive in `web-app/Dockerfile` and rebuild the image.
-
----
-
-## Automated Image Publishing
-
-The GitHub Actions workflow `.github/workflows/docker-publish.yml` automatically builds and publishes Docker images to GHCR on every push:
-
-### Trigger Events
-
-| Event | Action |
-|-------|--------|
-| Push to `main` | Build and push `latest` tag |
-| Pull request | Build only (no push) |
-| Any push | Build and push with commit SHA tag |
-
-### Published Registry
-
-Images are published to:
-
-```
-ghcr.io/thisis-developer/markdown-viewer
-```
-
-You can pull the image without authentication (public repository):
-
-```bash
-docker pull ghcr.io/thisis-developer/markdown-viewer:latest
-```
-
----
-
-## Reverse Proxy Setup
-
-To run Markdown Viewer behind a reverse proxy (Nginx, Caddy, Traefik, Apache), proxy requests to the container's port 80.
+The examples below assume the app is reachable at `http://127.0.0.1:8080`.
 
 ### Nginx Reverse Proxy
 
 ```nginx
 server {
     listen 443 ssl;
-    server_name markdown.example.com;
+    server_name md-editor.example.com;
 
     ssl_certificate     /path/to/cert.pem;
     ssl_certificate_key /path/to/key.pem;
@@ -237,20 +258,39 @@ server {
 ### Caddy Reverse Proxy
 
 ```caddyfile
-markdown.example.com {
+md-editor.example.com {
     reverse_proxy localhost:8080
 }
 ```
 
-### Traefik Labels (docker-compose.yml)
+### Traefik Labels
+
+If you use Traefik, add labels to the compose service and keep the local build configuration:
 
 ```yaml
 services:
-  markdown-viewer:
-    image: ghcr.io/thisis-developer/markdown-viewer:latest
+  md-editor:
+    build:
+      context: .
+      dockerfile: Dockerfile
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.markdown.rule=Host(`markdown.example.com`)"
-      - "traefik.http.routers.markdown.entrypoints=websecure"
-      - "traefik.http.routers.markdown.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.md-editor.rule=Host(`md-editor.example.com`)"
+      - "traefik.http.routers.md-editor.entrypoints=websecure"
+      - "traefik.http.routers.md-editor.tls.certresolver=letsencrypt"
 ```
+
+---
+
+## Transparency And Security
+
+The Docker image is intentionally minimal:
+
+- It serves static files with Nginx.
+- It does not include a backend service, database, analytics, telemetry, cookies, or tracking scripts.
+- Markdown rendering, tab state, graph state, exports, and share-link encoding run in the browser.
+- GitHub import uses public GitHub APIs and raw file URLs.
+- The web build references public CDN libraries from `web-app/index.html` unless you replace them with local assets.
+- Nginx applies `X-Frame-Options`, `X-Content-Type-Options`, `X-XSS-Protection`, and `Referrer-Policy` headers.
+
+For fully offline or isolated deployments, vendor the CDN assets locally and avoid GitHub import.

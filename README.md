@@ -32,6 +32,12 @@ The project includes multi-tab editing, folder import, graph visualization, Mark
 
 - [What It Does](#what-it-does)
 - [Screenshots](#screenshots)
+  - [Split Editor And Live Preview](#split-editor-and-live-preview)
+  - [Folder Workspace And Rich Markdown](#folder-workspace-and-rich-markdown)
+  - [Graph View And File Actions](#graph-view-and-file-actions)
+  - [Navigation Menu And Graph Selection](#navigation-menu-and-graph-selection)
+  - [Settings](#settings)
+  - [Convert Code To MD](#convert-code-to-md)
 - [Key Features](#key-features)
 - [Repository Layout](#repository-layout)
 - [Run The Web App](#run-the-web-app)
@@ -39,6 +45,7 @@ The project includes multi-tab editing, folder import, graph visualization, Mark
 - [Convert Code To Markdown](#convert-code-to-markdown)
 - [Development](#development)
 - [Privacy Model](#privacy-model)
+- [Project Origin](#project-origin)
 - [License](#license)
 
 ---
@@ -55,23 +62,46 @@ The project includes multi-tab editing, folder import, graph visualization, Mark
 - Convert source code folders into Markdown files with dependency links and optional member documentation.
 
 ## Screenshots
-  
-![MD-Editor workspace](web-app/assets/readme-workspace.png)
-  
 
-### Graph View
+### Split Editor And Live Preview
 
-Graph View turns linked Markdown folders and generated code maps into an interactive relationship map.
+Write Markdown on the left and review the rendered document on the right without leaving the workspace. The preview supports syntax-highlighted code blocks, LaTeX math, Mermaid diagrams, and task lists.
 
-![Graph View](web-app/assets/readme-graph.png)
+![Split editor and live preview](web-app/assets/screenshots/screenshot-1.png)
+
+### Folder Workspace And Rich Markdown
+
+Open a folder to browse local Markdown files, switch between multiple tabs, and keep documents organized in a tree. The same preview renderer handles tables, inline formatting, keyboard tags, GitHub-style alerts, and helpful links.
+
+![Folder workspace and rich Markdown preview](web-app/assets/screenshots/screenshot-2.png)
+
+### Graph View And File Actions
+
+Graph View turns linked Markdown folders and generated code maps into an interactive relationship map. It helps you explore code structure visually, see dependency relationships that are hard to spot in a file tree, and export connected parts of the codebase for deeper analysis, follow-up work, or refactoring.
+
+![Graph view and file actions](web-app/assets/screenshots/screenshot-3.png)
+
+### Navigation Menu And Graph Selection
+
+The main menu keeps workspace actions close at hand, including GitHub import, local file and folder open, recent items, graph saving, folder-to-graph export, and code conversion. Selected graph nodes are highlighted with connected relationships so larger dependency maps stay readable.
+
+![Navigation menu and selected graph nodes](web-app/assets/screenshots/screenshot-4.png)
+
+### Settings
+
+Settings let you shape MD-Editor around the way you work. You can make graph exploration denser or calmer, adjust visual emphasis, control how much history the app remembers, and choose which high-impact actions should ask for confirmation.
+
+![Settings dialog](web-app/assets/screenshots/screenshot-5.png)
 
 ### Convert Code To MD
 
 The converter generates one Markdown file per source file and records local dependencies, metadata, signatures, return values, exceptions, and package/module names when requested.
+After conversion, generated Markdown files can be opened in the same folder tree and previewed like any other document. This lets source-code documentation become part of the same tabbed writing, reviewing, and graph exploration flow.
 
 Supported converter languages: JavaScript, TypeScript, Python, Java, and C#.
 
-![Convert Code to MD](web-app/assets/readme-code-converter.png)
+![Convert Code to MD dialog](web-app/assets/screenshots/screenshot-6.png)
+
 
 ## Key Features
 
@@ -191,7 +221,7 @@ MD-Editor is designed around local processing. Markdown rendering, tab state, gr
 
 ## Project Origin
 
-This project started as a fork of [ThisIs-Developer/Markdown-Viewer](https://github.com/ThisIs-Developer/Markdown-Viewer).
+This project started as a fork of [ThisIs-Developer/MD-Editor](https://github.com/ThisIs-Developer/Markdown-Viewer).
 
 ## License
 

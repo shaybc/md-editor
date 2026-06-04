@@ -1,6 +1,6 @@
 {
-  "name": "markdown-viewer-web",
-  "version": "1.0.0",
+  "name": "md-editor",
+  "version": "6.4.0",
   "private": true,
   "scripts": {
     "test": "node --test tests/*.test.js",

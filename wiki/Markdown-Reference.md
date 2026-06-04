@@ -1,6 +1,6 @@
 # Markdown Reference
 
-A complete reference for all Markdown syntax supported by **Markdown Viewer**, implementing [CommonMark](https://commonmark.org/) plus [GitHub Flavored Markdown (GFM)](https://github.github.com/gfm/) extensions.
+A complete reference for all Markdown syntax supported by **MD-Editor**, implementing [CommonMark](https://commonmark.org/) plus [GitHub Flavored Markdown (GFM)](https://github.github.com/gfm/) extensions.
 
 ---
 

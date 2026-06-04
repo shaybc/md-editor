@@ -70,7 +70,7 @@
     }
   },
   "cli": {
-    "binaryName": "markdown-viewer",
+    "binaryName": "md-editor",
     "resourcesPath": "/resources/",
     "extensionsPath": "/extensions/",
     "clientLibrary": "/resources/js/neutralino.js",

@@ -1,6 +1,6 @@
 # Desktop App
 
-This page covers the **Neutralinojs desktop application** port of Markdown Viewer — a lightweight, cross-platform native app built from the same source code as the web version.
+This page covers the **Neutralinojs desktop application** for **MD-Editor**.
 
 ---
 
@@ -10,117 +10,139 @@ This page covers the **Neutralinojs desktop application** port of Markdown Viewe
 - [Architecture](#architecture)
 - [Prerequisites](#prerequisites)
 - [Development Setup](#development-setup)
-- [Running in Development Mode](#running-in-development-mode)
-- [Building the Desktop App](#building-the-desktop-app)
+- [Running In Development Mode](#running-in-development-mode)
+- [Building The Desktop App](#building-the-desktop-app)
 - [Build Output](#build-output)
-- [Building with Docker](#building-with-docker)
-- [Automated Releases](#automated-releases)
+- [Building With Docker](#building-with-docker)
+- [Vendored Assets And Offline Use](#vendored-assets-and-offline-use)
+- [Neutralino Configuration](#neutralino-configuration)
+- [Release Status](#release-status)
 - [Platform Notes](#platform-notes)
+- [Troubleshooting](#troubleshooting)
 
 ---
 
 ## Overview
 
-The desktop application wraps the same HTML/CSS/JavaScript that powers the web app inside a native [Neutralinojs](https://neutralino.js.org/) window. It:
+The desktop app wraps the same HTML, CSS, JavaScript, graph workflows, editor, preview, export tools, and code-to-Markdown converter used by the web app inside a native [Neutralinojs](https://neutralino.js.org/) window.
 
-- Runs **without a browser**; by default it loads CDN libraries, so an internet connection is required on first run unless you bundle assets locally.
-- Produces a **single self-contained binary** that can be distributed without installers.
-- Shares **100% of the core code** (`web-app/script.js`, `web-app/styles.css`, `web-app/assets/`) with the web app — no duplication.
+It provides:
 
----
-
-## Network Dependencies & Offline Mode
-
-By default, the desktop app uses the same CDN-hosted libraries referenced in `web-app/index.html` (cdnjs, jsDelivr). To run fully offline:
-
-1. Download the CDN assets locally and update the `<script>`/`<link>` tags in `web-app/index.html`.
-2. Run `node prepare.js` to copy the updated file into `desktop-app/resources/`.
-3. Rebuild the app with `npm run build` or `npm run build:portable`.
-
-Once the assets are local, the desktop app runs without network access.
+- Native desktop window behavior.
+- Native file and folder dialogs.
+- Local filesystem access through the Neutralino allowlist.
+- Shared web UI resources prepared from `web-app/`.
+- Desktop-ready vendored third-party assets.
+- Embedded and portable build modes.
 
 ---
 
 ## Architecture
 
-```
+```text
 desktop-app/
-├── package.json              # NPM scripts (dev, build, setup)
-├── neutralino.config.json    # Neutralinojs window and API config
-├── setup-binaries.js         # Downloads Neutralinojs platform binaries
-├── prepare.js                # Copies shared files from web-app into resources/
+├── package.json              # npm scripts for setup, dev, and builds
+├── neutralino.config.json    # Neutralino runtime, window, API, and CLI config
+├── setup-binaries.js         # Downloads Neutralino platform binaries into bin/
+├── download-vendor.js        # Downloads desktop vendor assets listed in vendor-assets.json
+├── vendor-assets.json        # CDN asset manifest for desktop vendoring
+├── prepare.js                # Copies shared web resources into resources/
+├── Dockerfile                # Containerized desktop build
+├── docker-compose.yml        # Exports Docker build artifacts into output/
 └── resources/
-    ├── index.html            # Generated from web-app/index.html
+    ├── index.html            # Generated from web-app/index.html with desktop injections
     ├── styles.css            # Copied from web-app
+    ├── script.js             # Copied from web-app
     ├── js/
-    │   ├── main.js           # Neutralinojs lifecycle & tray menu
-    │   ├── script.js         # Copied from web-app
-    │   └── neutralino.js     # Neutralinojs client library
-    └── assets/               # Copied from web-app assets/
+    │   ├── main.js           # Neutralino lifecycle and desktop integrations
+    │   └── neutralino.js     # Neutralino client library
+    ├── assets/               # Copied web assets
+    ├── vendor/               # Downloaded third-party desktop assets
+    └── code_converter/       # Desktop copy of the code-to-Markdown converter
 ```
 
-The `prepare.js` script handles copying files from `web-app/` into `desktop-app/resources/` before each build so there is a single source of truth.
+`prepare.js` keeps the desktop resources in sync with `web-app/`, so the web and desktop versions share one core implementation.
 
 ---
 
 ## Prerequisites
 
-- **Node.js** 16 or later (with `npm`)
-- **Internet access** (required once to download Neutralinojs binaries)
+- Node.js current LTS recommended.
+- npm.
+- Internet access for first setup, unless required binaries and vendor assets are already cached.
+- Docker, only if you want to use the containerized desktop build.
 
 ---
 
 ## Development Setup
 
+Clone this repository:
+
 ```bash
-# 1. Clone the repository
-git clone https://github.com/ThisIs-Developer/Markdown-Viewer.git
-cd Markdown-Viewer/desktop-app
-
-# 2. Install npm dependencies
-npm install
-
-# 3. Download Neutralinojs platform binaries (one-time setup)
-node setup-binaries.js
-
-# 4. Prepare resource files (copies shared files from the root)
-node prepare.js
+git clone https://github.com/shaybc/md-editor.git
+cd md-editor/desktop-app
 ```
+
+Run setup:
+
+```bash
+npm run setup
+```
+
+The setup flow:
+
+1. Downloads Neutralino platform binaries with `setup-binaries.js`.
+2. Downloads desktop vendor assets with `download-vendor.js`.
+3. Runs `prepare.js` through the `postsetup` script.
+4. Copies shared web resources into `desktop-app/resources/`.
+
+Neutralino binaries are cached in `desktop-app/bin/` and are refreshed when `cli.binaryVersion` changes in `neutralino.config.json`.
 
 ---
 
-## Running in Development Mode
+## Running In Development Mode
 
 ```bash
-cd Markdown-Viewer/desktop-app
+cd desktop-app
 npm run dev
 ```
 
-This starts the app with **hot-reload**: editing source files in the `resources/` directory reloads the running window automatically.
+`npm run dev` automatically runs setup first through `predev`.
+
+To enable the browser inspector for desktop debugging, set this field in `desktop-app/neutralino.config.json`:
+
+```json
+"enableInspector": true
+```
 
 ---
 
-## Building the Desktop App
+## Building The Desktop App
 
-Three build modes are available:
+### Embedded Build
 
-### Embedded (single-file executable)
-
-All resources are embedded inside the binary. No additional files are needed at runtime.
+Build embedded executables:
 
 ```bash
+cd desktop-app
 npm run build
 ```
 
-### Portable (separate resources folder)
+This runs setup first through `prebuild` and then uses the local Neutralino runner:
 
-Resources remain in a separate folder alongside the binary, making it easier to update them without rebuilding.
+```bash
+node run-neutralino.js build --embed-resources
+```
+
+### Portable Build
+
+Build a resource-separated release package:
 
 ```bash
 npm run build:portable
 ```
 
-### Both
+### Build Both Formats
 
 ```bash
 npm run build:all
@@ -130,62 +152,119 @@ npm run build:all
 
 ## Build Output
 
-After building, output files are placed in `desktop-app/dist/`:
+Neutralino writes build artifacts under `desktop-app/dist/`.
 
-```
+Typical outputs use the configured binary prefix:
+
+```text
 dist/
-├── markdown-viewer-win_x64.exe       # Windows embedded binary
-├── markdown-viewer-linux_x64         # Linux x64 embedded binary
-├── markdown-viewer-linux_arm64       # Linux ARM64 embedded binary
-├── markdown-viewer-mac_universal     # macOS universal binary
-└── portable/                         # Portable builds (if built)
-    ├── markdown-viewer-win_x64/
-    ├── markdown-viewer-linux_x64/
-    └── …
+├── md-editor-win_x64.exe
+├── md-editor-linux_x64
+├── md-editor-linux_arm64
+├── md-editor-mac_*
+└── ...
 ```
+
+Exact file names can vary by Neutralino version, platform, and build mode. Portable builds include separate packaged resources instead of embedding everything into a single binary.
 
 ---
 
-## Building with Docker
+## Building With Docker
 
-If you don't want to install Node.js locally, use the provided Docker setup to build the binaries inside a container:
+The desktop Docker build uses `desktop-app/Dockerfile` with the repository root as build context.
 
 ```bash
-cd Markdown-Viewer/desktop-app
+cd desktop-app
 docker compose up --build
 ```
 
-The output binaries are written to `dist/` on the host machine via a volume mount.
+The compose file builds the desktop app and copies artifacts from the container into:
+
+```text
+desktop-app/output/
+```
+
+The current compose service is:
+
+```yaml
+services:
+  desktop-build:
+    build:
+      context: ..
+      dockerfile: desktop-app/Dockerfile
+    container_name: md-editor-desktop-build
+    volumes:
+      - ./output:/export
+```
+
+The Docker build runs `npm run build:all`, so it may need network access to download Neutralino binaries and vendor assets.
 
 ---
 
-## Automated Releases
+## Vendored Assets And Offline Use
 
-The CI/CD pipeline (`.github/workflows/desktop-build.yml`) automatically builds and publishes binaries when a tag matching `desktop-v*` is pushed:
+The desktop app has a vendoring flow for third-party browser assets:
 
-```bash
-git tag desktop-v1.2.0
-git push origin desktop-v1.2.0
-```
+- `vendor-assets.json` lists external CSS, JavaScript, fonts, MathJax, Mermaid, D3, Bootstrap, JoyPixels, export libraries, and other browser assets.
+- `download-vendor.js` downloads those assets into the desktop resources.
+- `prepare.js` rewrites the prepared desktop HTML so the Neutralino app can load local resources.
 
-This triggers a GitHub Actions workflow that:
+For fully offline desktop use:
 
-1. Sets up Node.js
-2. Runs `npm install` and `node setup-binaries.js`
-3. Runs `node prepare.js`
-4. Builds embedded binaries for all platforms
-5. Computes SHA-256 checksums
-6. Creates a GitHub Release with the binaries and checksums as assets
+1. Run `npm run setup` while online to download binaries and vendor assets.
+2. Confirm the required files exist under `desktop-app/resources/vendor/`.
+3. Rebuild with `npm run build` or `npm run build:portable`.
+4. Avoid workflows that intentionally require network access, such as public GitHub import.
 
-### Release Assets
+---
 
-| File | Platform |
-|------|----------|
-| `markdown-viewer-win_x64.exe` | Windows x64 |
-| `markdown-viewer-linux_x64` | Linux x64 |
-| `markdown-viewer-linux_arm64` | Linux ARM64 |
-| `markdown-viewer-mac_universal` | macOS (Apple Silicon + Intel) |
-| `checksums.sha256` | SHA-256 verification file |
+## Neutralino Configuration
+
+The desktop runtime is configured in `desktop-app/neutralino.config.json`.
+
+Important current values:
+
+| Field | Value | Purpose |
+|-------|-------|---------|
+| `defaultMode` | `window` | Runs as a native window. |
+| `documentRoot` | `/resources/` | Serves prepared desktop resources. |
+| `url` | `/` | Entry URL inside the Neutralino server. |
+| `enableNativeAPI` | `true` | Enables allowed native APIs. |
+| `tokenSecurity` | `one-time` | Uses one-time native API token security. |
+| `modes.window.title` | `MD-Editor` | Desktop window title. |
+| `modes.window.width` / `height` | `800` / `500` | Initial window size. |
+| `modes.window.minWidth` / `minHeight` | `400` / `200` | Minimum window size. |
+| `modes.window.icon` | `/resources/assets/icon.ico` | Desktop icon. |
+| `modes.window.enableInspector` | `false` | Set to `true` for debugging. |
+| `cli.binaryName` | `md-editor` | Output binary prefix. |
+| `cli.binaryVersion` | `6.5.0` | Neutralino binary runtime version. |
+| `cli.clientVersion` | `6.5.0` | Neutralino client version. |
+
+Allowed native APIs include app, selected filesystem methods, selected OS methods, clipboard text writing, and debug logging. See [Configuration](Configuration#desktop-app---neutralinoconfigjson) for the current allowlist.
+
+---
+
+## Release Status
+
+This checkout does not currently include a `.github/workflows/desktop-build.yml` workflow, so automated desktop releases are not configured here by default.
+
+If GitHub Releases exist for this repository, they are available at:
+
+[https://github.com/shaybc/md-editor/releases](https://github.com/shaybc/md-editor/releases)
+
+If no release is published yet, build from source with the commands above.
+
+Expected asset names use the `md-editor` prefix, for example:
+
+| Asset | Description |
+|-------|-------------|
+| `md-editor-win_x64.exe` | Windows x64 executable. |
+| `md-editor-linux_x64.tar.gz` | Linux x64 archive. |
+| `md-editor-linux_arm64.tar.gz` | Linux ARM64 archive. |
+| `md-editor-mac_*.tar.gz` | macOS archive. |
+| `md-editor-release.zip` | Portable bundle, if produced. |
+
+If release automation is added later, update this page to match the actual workflow triggers, artifacts, checksums, and publishing target.
 
 ---
 
@@ -193,26 +272,59 @@ This triggers a GitHub Actions workflow that:
 
 ### Windows
 
-- Run the `.exe` directly — no installation required.
-- Windows Defender SmartScreen may warn about an unsigned executable. Click "More info → Run anyway".
+- Run the `.exe` directly.
+- Windows Defender SmartScreen may warn about unsigned binaries. Choose **More info** and **Run anyway** only if you trust the build source.
+- Microsoft Edge WebView2 may be required by the platform runtime.
 
 ### Linux
 
-- Mark the binary as executable after downloading:
+Mark the binary as executable:
 
 ```bash
-chmod +x markdown-viewer-linux_x64
-./markdown-viewer-linux_x64
+chmod +x md-editor-linux_x64
+./md-editor-linux_x64
 ```
 
 ### macOS
 
-- macOS may block the binary because it is unsigned:
+macOS may block unsigned binaries:
 
 ```bash
-xattr -d com.apple.quarantine markdown-viewer-mac_universal
-chmod +x markdown-viewer-mac_universal
-./markdown-viewer-mac_universal
+xattr -d com.apple.quarantine md-editor-mac_universal
+chmod +x md-editor-mac_universal
+./md-editor-mac_universal
 ```
 
-Or right-click the binary in Finder, select **Open**, and confirm the security prompt.
+You can also right-click the binary in Finder, choose **Open**, and confirm the security prompt.
+
+---
+
+## Troubleshooting
+
+### Setup fails while downloading binaries or vendor assets
+
+Check network access and rerun:
+
+```bash
+cd desktop-app
+npm run setup
+```
+
+### Desktop resources look stale
+
+Run setup or prepare again after changing `web-app/` files:
+
+```bash
+cd desktop-app
+npm run setup
+```
+
+or:
+
+```bash
+node prepare.js
+```
+
+### The app opens but native file actions fail
+
+Check `nativeAllowList` in `neutralino.config.json`. Native file and OS actions only work when the matching Neutralino API is allowed.

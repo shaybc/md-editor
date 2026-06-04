@@ -1,6 +1,6 @@
 # MD-Editor Desktop App Port
 
-This is a desktop app port of [MD-Editor](https://github.com/ThisIs-Developer/Markdown-Viewer), see [README](../README.md). It is built using [Neutralinojs](https://github.com/neutralinojs/neutralinojs).
+This is a desktop app port of [MD-Editor](https://github.com/shaybc/md-Editor), see [README](../README.md). It is built using [Neutralinojs](https://github.com/neutralinojs/neutralinojs).
 
 ## Architecture
 
@@ -85,11 +85,11 @@ Each release includes:
 
 | Asset | Description |
 | ----- | ----------- |
-| `markdown-viewer-win_x64.exe` | Windows x64 executable |
-| `markdown-viewer-linux_x64.tar.gz` | Linux x64 executable (tarball) |
-| `markdown-viewer-linux_arm64.tar.gz` | Linux ARM64 executable (tarball) |
-| `markdown-viewer-mac_*.tar.gz` | macOS executables (tarball) |
-| `markdown-viewer-release.zip` | Portable bundle with `resources.neu` (all platforms) |
+| `md-editor-win_x64.exe` | Windows x64 executable |
+| `md-editor-linux_x64.tar.gz` | Linux x64 executable (tarball) |
+| `md-editor-linux_arm64.tar.gz` | Linux ARM64 executable (tarball) |
+| `md-editor-mac_*.tar.gz` | macOS executables (tarball) |
+| `md-editor-release.zip` | Portable bundle with `resources.neu` (all platforms) |
 | `source.tar.gz` | Desktop app source archive |
 | `SHA256SUMS.txt` | Checksums for all release assets |
 
@@ -100,8 +100,8 @@ Each release includes:
 The desktop version uses [Neutralinojs](https://github.com/neutralinojs/neutralinojs), which is also licensed under the MIT License.
 
 - [Neutralinojs](https://github.com/neutralinojs/neutralinojs): [LICENSE (MIT)](LICENSE)
-- [MD-Editor & Desktop Port](https://github.com/ThisIs-Developer/Markdown-Viewer): [LICENSE (MIT)](../LICENSE)
+- [MD-Editor & Desktop Port](https://github.com/shaybc/md-editor): [LICENSE (MIT)](../LICENSE)
 
 ## Contributors
 
-[![Contributors](https://contrib.rocks/image?repo=ThisIs-Developer/Markdown-Viewer)](https://github.com/ThisIs-Developer/Markdown-Viewer/graphs/contributors)
+[![Contributors](https://contrib.rocks/image?repo=shaybc/md-editor)](https://github.com/shaybc/md-editor/graphs/contributors)

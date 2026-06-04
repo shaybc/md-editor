@@ -1,5 +1,5 @@
 {
-  "name": "markdown-viewer-desktop",
+  "name": "md-editor-desktop",
   "version": "1.0.0",
   "private": true,
   "description": "Neutralinojs desktop port of MD-Editor",
@@ -7,10 +7,10 @@
     "setup": "node setup-binaries.js && node download-vendor.js",
     "postsetup": "node prepare.js",
     "predev": "npm run setup",
-    "dev": "npx -y @neutralinojs/neu@11.7.0 run",
+    "dev": "node run-neutralino.js run",
     "prebuild": "npm run setup",
-    "build": "npx -y @neutralinojs/neu@11.7.0 build --embed-resources",
-    "build:portable": "npx -y @neutralinojs/neu@11.7.0 build --release",
+    "build": "node run-neutralino.js build --embed-resources",
+    "build:portable": "node run-neutralino.js build --release",
     "build:all": "npm run build && npm run build:portable"
   },
   "dependencies": {}

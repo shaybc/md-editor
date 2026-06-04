@@ -3,7 +3,7 @@ services:
     build:
       context: ..
       dockerfile: desktop-app/Dockerfile
-    container_name: markdown-viewer-desktop-build
+    container_name: md-editor-desktop-build
     volumes:
       - ./output:/export
     entrypoint:

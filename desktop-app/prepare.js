@@ -24,7 +24,7 @@ const VENDOR_ASSETS = require("./vendor-assets.json");
 
 /**
  * Recursively copy a directory, creating target dirs as needed.
- * assets/ → resources/assets/ (excluding icon.jpg — maintained separately for desktop)
+ * assets/ → resources/assets/
  */
 function copyDirSync(src, dest, exclude = []) {
   fs.mkdirSync(dest, { recursive: true });
@@ -60,7 +60,7 @@ fs.copyFileSync(
 console.log("✓ Copied styles.css → resources/styles.css");
 
 /** assets/ → resources/assets/ */
-copyDirSync(path.join(WEB_APP_DIR, "assets"), path.join(RESOURCES_DIR, "assets"), ["icon.jpg"]);
+copyDirSync(path.join(WEB_APP_DIR, "assets"), path.join(RESOURCES_DIR, "assets"));
 console.log("✓ Copied assets/ → resources/assets/");
 
 /** @section Generate index.html with Neutralinojs injections */
