@@ -6,17 +6,29 @@ This page summarizes the tagged MD-Editor releases and the major user-facing fea
 
 Changes available on `main` after `v6.5`:
 
+- No unreleased changes are currently documented.
+
+## v6.5 - June 4, 2026
+
+- Added C# support to the Convert Code to MD workflow, including dependency detection, metadata, method signatures, properties, return values, exceptions, and regression coverage.
 - Added node search in Graph View.
 - Improved saved graph details links.
 - Reorganized settings and added graph node color configuration.
-- Rewrote the project README with current product positioning and app screenshots.
-- Added C# support to the Convert Code to MD workflow, including dependency detection, metadata, method signatures, properties, return values, exceptions, and regression coverage.
-
-## v6.5 - May 21, 2026
-
 - Refined graph hover behavior for smoother interaction.
 - Improved graph and app menu behavior.
 - Polished large graph interaction details after the v6.x performance work.
+- Rewrote the project README with current product positioning, updated screenshots, current feature descriptions, and refreshed project links.
+- Added six current README screenshots under `web-app/assets/screenshots/` and removed older unused README/image assets.
+- Updated the app version metadata to `6.5.0` for `md-editor` and `md-editor-desktop`, including package lock files and the release badge.
+- Renamed remaining `markdown-viewer` project naming references to `md-editor`, while preserving the original project URL in the README Project Origin section.
+- Reworked wiki documentation across features, usage, installation, Docker deployment, desktop app, configuration, FAQ, modules, runtime architecture, technology architecture, script function reference, and wiki home navigation.
+- Removed the stale `Development-Journey` wiki page and references to it.
+- Updated `wiki/Home.md` so every current wiki page is linked from a relevant section.
+- Added an offline-friendly desktop launch path that avoids `npx` network waits when cached Neutralino binaries are already available.
+- Added `desktop-app/undeploy_desktop.bat` and wired `start_desktop.bat` to clean generated desktop deployment resources before launching.
+- Preserved cached Neutralino binaries and vendored desktop assets during undeploy so enterprise/offline desktop machines can launch without downloading dependencies.
+- Updated desktop resource preparation so `icon.jpg` is redeployed from `web-app/assets/` with the rest of the prepared desktop assets.
+- Updated the Windows desktop launcher so `git pull` is optional through `start_desktop.bat --pull` instead of running before every offline launch.
 
 ## v6.3 - May 21, 2026
 
