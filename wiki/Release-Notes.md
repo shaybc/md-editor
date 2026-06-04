@@ -4,7 +4,7 @@ This page summarizes the tagged MD-Editor releases and the major user-facing fea
 
 ## Current Main
 
-Changes available on `main` after `v6.4`:
+Changes available on `main` after `v6.5`:
 
 - Added node search in Graph View.
 - Improved saved graph details links.
@@ -12,7 +12,7 @@ Changes available on `main` after `v6.4`:
 - Rewrote the project README with current product positioning and app screenshots.
 - Added C# support to the Convert Code to MD workflow, including dependency detection, metadata, method signatures, properties, return values, exceptions, and regression coverage.
 
-## v6.4 - May 21, 2026
+## v6.5 - May 21, 2026
 
 - Refined graph hover behavior for smoother interaction.
 - Improved graph and app menu behavior.
@@ -83,6 +83,6 @@ Changes available on `main` after `v6.4`:
 
 ## Notes
 
-- Tags use the historical names `ver1.0`, `v2`, and `v3.0` through `v6.4`.
+- Tags use the historical names `ver1.0`, `v2`, and `v3.0` through `v6.5`.
 - The desktop app has its own build and packaging flow, but shares the same core web application features.
 - Features listed under each version are grouped by outcome rather than every individual commit.

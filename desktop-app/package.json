@@ -1,6 +1,6 @@
 {
   "name": "md-editor-desktop",
-  "version": "1.0.0",
+  "version": "6.5.0",
   "private": true,
   "description": "Neutralinojs desktop port of MD-Editor",
   "scripts": {
