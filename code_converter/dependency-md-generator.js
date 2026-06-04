@@ -13,11 +13,13 @@ const SOURCE_EXTENSIONS = new Set([
   ".tsx",
   ".py",
   ".java",
+  ".cs",
 ]);
 
 const JS_EXTENSIONS = [".js", ".jsx", ".mjs", ".cjs", ".ts", ".tsx"];
 const PY_EXTENSIONS = [".py"];
 const JAVA_EXTENSIONS = [".java"];
+const CSHARP_EXTENSIONS = [".cs"];
 
 const IGNORED_DIRS = new Set([
   ".git",
@@ -127,6 +129,8 @@ function buildIndexes(sourceRoot, files) {
   const byPathNoExt = new Map();
   const javaByQualifiedName = new Map();
   const javaBySimpleName = new Map();
+  const csharpByQualifiedName = new Map();
+  const csharpBySimpleName = new Map();
   const pythonModules = new Map();
 
   for (const file of files) {
@@ -157,9 +161,26 @@ function buildIndexes(sourceRoot, files) {
         javaBySimpleName.get(className).push({ file, packageName, qualifiedName });
       }
     }
+
+    if (ext === ".cs") {
+      const content = fs.readFileSync(file, "utf8");
+      const namespaceName =
+        content.match(/^\s*namespace\s+([\w.]+)\s*;/m)?.[1] ||
+        content.match(/^\s*namespace\s+([\w.]+)\s*\{/m)?.[1] ||
+        "";
+      const typeName = content.match(/\b(?:class|interface|enum|record|struct)\s+([A-Z]\w*)\b/)?.[1];
+      if (typeName) {
+        const qualifiedName = namespaceName ? `${namespaceName}.${typeName}` : typeName;
+        csharpByQualifiedName.set(qualifiedName, file);
+        if (!csharpBySimpleName.has(typeName)) {
+          csharpBySimpleName.set(typeName, []);
+        }
+        csharpBySimpleName.get(typeName).push({ file, namespaceName, qualifiedName });
+      }
+    }
   }
 
-  return { byPathNoExt, javaByQualifiedName, javaBySimpleName, pythonModules };
+  return { byPathNoExt, javaByQualifiedName, javaBySimpleName, csharpByQualifiedName, csharpBySimpleName, pythonModules };
 }
 
 function resolveFileCandidates(basePath, extensions) {
@@ -330,6 +351,59 @@ function findJavaDependencies(content, file, indexes) {
   return dependencies;
 }
 
+function findCsharpDependencies(content, file, indexes) {
+  const dependencies = new Set();
+  const namespaceName =
+    content.match(/^\s*namespace\s+([\w.]+)\s*;/m)?.[1] ||
+    content.match(/^\s*namespace\s+([\w.]+)\s*\{/m)?.[1] ||
+    "";
+  const usingNamespaces = new Set();
+  const aliasTargets = new Map();
+
+  for (const match of content.matchAll(/^\s*using\s+(?:(\w+)\s*=\s*)?([\w.]+)\s*;/gm)) {
+    const alias = match[1] || "";
+    const usingName = match[2];
+
+    if (alias) {
+      aliasTargets.set(alias, usingName);
+      const dependency = indexes.csharpByQualifiedName.get(usingName);
+      if (dependency) {
+        dependencies.add(dependency);
+      }
+    } else {
+      usingNamespaces.add(usingName);
+      const dependency = indexes.csharpByQualifiedName.get(usingName);
+      if (dependency) {
+        dependencies.add(dependency);
+      }
+    }
+  }
+
+  for (const [alias, qualifiedName] of aliasTargets.entries()) {
+    const dependency = indexes.csharpByQualifiedName.get(qualifiedName);
+    if (dependency && new RegExp(`\\b${alias}\\b`).test(content)) {
+      dependencies.add(dependency);
+    }
+  }
+
+  for (const [simpleName, matches] of indexes.csharpBySimpleName.entries()) {
+    if (!new RegExp(`\\b${simpleName}\\b`).test(content)) {
+      continue;
+    }
+
+    for (const candidate of matches) {
+      if (
+        candidate.file !== file &&
+        (candidate.namespaceName === namespaceName || usingNamespaces.has(candidate.namespaceName))
+      ) {
+        dependencies.add(candidate.file);
+      }
+    }
+  }
+
+  return dependencies;
+}
+
 function findDependencies(file, sourceRoot, indexes) {
   const ext = path.extname(file);
   const rawContent = fs.readFileSync(file, "utf8");
@@ -345,6 +419,10 @@ function findDependencies(file, sourceRoot, indexes) {
 
   if (JAVA_EXTENSIONS.includes(ext)) {
     return findJavaDependencies(content, file, indexes);
+  }
+
+  if (CSHARP_EXTENSIONS.includes(ext)) {
+    return findCsharpDependencies(content, file, indexes);
   }
 
   return new Set();
@@ -370,6 +448,12 @@ function getPackageName(content, ext, sourceRoot, sourceFile) {
     return content.match(/^\s*package\s+([\w.]+)\s*;/m)?.[1] || "";
   }
 
+  if (ext === ".cs") {
+    return content.match(/^\s*namespace\s+([\w.]+)\s*;/m)?.[1] ||
+      content.match(/^\s*namespace\s+([\w.]+)\s*\{/m)?.[1] ||
+      "";
+  }
+
   if (ext === ".py") {
     return path.relative(sourceRoot, sourceFile)
       .slice(0, -ext.length)
@@ -390,6 +474,17 @@ function getEntityInfo(content, ext, sourceRoot, sourceFile) {
     const name = declaration?.[2] || path.basename(sourceFile, ext);
     return {
       entityType: `java_${kind}`,
+      entityId: packageName ? `${packageName}.${name}` : name,
+      packageName,
+    };
+  }
+
+  if (ext === ".cs") {
+    const declaration = content.match(/\b(class|interface|enum|record|struct)\s+([A-Z]\w*)\b/);
+    const kind = declaration?.[1] || "class";
+    const name = declaration?.[2] || path.basename(sourceFile, ext);
+    return {
+      entityType: `csharp_${kind}`,
       entityId: packageName ? `${packageName}.${name}` : name,
       packageName,
     };
@@ -480,6 +575,41 @@ function extractJavaMethods(content) {
   return methods;
 }
 
+function extractCsharpMethods(content) {
+  const methods = [];
+  const methodPattern = /((?:public|protected|private|internal|static|sealed|abstract|virtual|override|async|extern|partial|new|\s)+[\w<>\[\], ?.&]+\s+(\w+)\s*\([^;{}]*\)\s*)\{/g;
+  const propertyPattern = /((?:public|protected|private|internal|static|sealed|abstract|virtual|override|new|\s)+[\w<>\[\], ?.&]+\s+(\w+)\s*)\{\s*(?:get|set|init)\b/g;
+
+  for (const match of content.matchAll(methodPattern)) {
+    const signature = compactSignature(match[1]);
+    if (/^(if|for|foreach|while|switch|catch|using|lock)\b/.test(signature)) continue;
+    const name = match[2];
+    const body = getBlockAfterSignature(content, match.index, match[0]);
+    methods.push({
+      name,
+      kind: isAccessorName(name) ? "accessor" : "method",
+      signature,
+      returnCodes: extractReturnCodes(body, ".cs"),
+      exceptions: extractThrownExceptions(body, ".cs"),
+    });
+  }
+
+  for (const match of content.matchAll(propertyPattern)) {
+    const name = match[2];
+    const signature = compactSignature(match[1]);
+    if (methods.some((method) => method.name === name && method.signature === signature)) continue;
+    methods.push({
+      name,
+      kind: "accessor",
+      signature,
+      returnCodes: [],
+      exceptions: [],
+    });
+  }
+
+  return methods;
+}
+
 function extractPythonMethods(content) {
   const methods = [];
   const pattern = /^(\s*)def\s+(\w+)\s*(\([^)]*\)(?:\s*->\s*[^:]+)?)\s*:/gm;
@@ -537,6 +667,7 @@ function extractJsMethods(content) {
 function extractCodeInfo(rawContent, ext) {
   const content = stripComments(rawContent, ext);
   if (ext === ".java") return extractJavaMethods(content);
+  if (ext === ".cs") return extractCsharpMethods(content);
   if (ext === ".py") return extractPythonMethods(content);
   if (JS_EXTENSIONS.includes(ext)) return extractJsMethods(content);
   return [];

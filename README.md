@@ -1,226 +1,154 @@
-# MD-Editor (Forked by SBC)
+# MD-Editor
 
-<div align="center">
-  <img src="web-app/assets/icon.jpg" alt="MD-Editor Logo" width="140" />
+MD-Editor is a local-first Markdown workspace for writing, previewing, organizing, and exporting technical documents. It runs as a static web app and as a Neutralino-powered desktop app, with the same core editor experience in both places.
 
-  <p><strong>Professional GitHub-style Markdown editor and previewer</strong></p>
-  <p>Live preview, diagrams, math, export tools, and multi-document workflows — all in your browser.</p>
+The project is no longer just a Markdown preview page. It includes multi-tab editing, folder import, graph visualization, Markdown export workflows, and a code-to-Markdown converter that can turn source trees into navigable dependency maps.
 
-  <p>
-    <a href="https://markdownviewer.pages.dev/">Live Demo</a> ·
-    <a href="https://github.com/ThisIs-Developer/Markdown-Viewer/wiki">Documentation</a> ·
-    <a href="https://github.com/ThisIs-Developer/Markdown-Viewer/issues">Issues</a> ·
-    <a href="https://github.com/ThisIs-Developer/Markdown-Viewer/releases">Releases</a>
-  </p>
+![MD-Editor workspace](web-app/assets/readme-workspace.png)
 
-  <p>
-    <img alt="License" src="https://img.shields.io/github/license/ThisIs-Developer/Markdown-Viewer?color=2ea043" />
-    <img alt="Latest release" src="https://img.shields.io/github/v/release/ThisIs-Developer/Markdown-Viewer" />
-    <img alt="Last commit" src="https://img.shields.io/github/last-commit/ThisIs-Developer/Markdown-Viewer" />
-    <img alt="Stars" src="https://img.shields.io/github/stars/ThisIs-Developer/Markdown-Viewer?style=flat" />
-  </p>
+## What It Does
 
-  <p>
-    <a href="https://deepwiki.com/ThisIs-Developer/Markdown-Viewer"><img src="https://deepwiki.com/badge.svg" /></a>
-  </p>
-</div>
-
----
-
-## Table of Contents
-
-- [About the Project](#about-the-project)
-- [Features](#features)
-- [Screenshots](#screenshots)
-- [Getting Started](#getting-started)
-- [Usage](#usage)
-- [Documentation](#documentation)
-- [Built With](#built-with)
-- [Showcase](#showcase)
-- [Contributing](#contributing)
-- [Contributors](#contributors)
-- [Development Journey](#development-journey)
-- [License](#license)
-- [Contact](#contact)
-
----
-
-## About the Project
-
-MD-Editor is a full-featured Markdown editor and preview application that renders GitHub-flavored Markdown in real time. It is entirely client-side, lightweight, and optimized for a professional writing workflow — from quick notes to technical documentation with diagrams and LaTeX.
-
----
-
-## Features
-
-**Editor & Preview**
-- Live split-screen rendering with instant updates
-- GitHub-flavored Markdown (GFM) support
-- Syntax highlighting for 190+ languages
-- GitHub-style alerts/admonitions (`[!NOTE]`, `[!TIP]`, `[!WARNING]`, etc.)
-- Emoji shortcode rendering (JoyPixels) and native Unicode emoji support
-- YAML frontmatter parsing with a rendered metadata table
-
-**Diagrams & Math**
-- LaTeX math rendering via MathJax (inline + block)
-- Mermaid diagrams with an interactive toolbar (zoom, pan, copy, PNG/SVG export)
-
-**File & Sharing Tools**
-- Import from local files, drag & drop, or public GitHub URLs (multi-file selection)
-- Export as Markdown, HTML (standalone), or PDF
-- Share documents via URL with compressed content
-- Copy rendered HTML directly to clipboard
-
-**Productivity & Workflow**
-- Multiple document tabs (new, rename, duplicate, delete)
-- Reset all tabs in one action
-- Drag-and-drop tab reordering
-- Tab/session state saved in localStorage
-- View modes: editor-only, preview-only, or split
-- Resizable editor/preview panes
-- Synchronized scrolling (toggleable)
-- Live content statistics (words, characters, reading time)
-- Keyboard shortcuts (export, copy, new/close tab, sync toggle, indentation)
-
-**UI & Accessibility**
-- Responsive layout with a dedicated mobile menu
-- Light/dark themes with system preference support
-
-**Privacy & Security**
-- 100% client-side processing
-- Sanitized HTML rendering with DOMPurify
-- No tracking, no cookies, no server storage
-
----
+- Write Markdown in a split editor with live GitHub-style preview.
+- Render tables, code blocks, GitHub alerts, Mermaid diagrams, LaTeX math, emoji, and YAML frontmatter.
+- Work across multiple tabs with session restore, rename, duplicate, close, and reset actions.
+- Open individual text files or folders of Markdown documents.
+- Explore folder relationships in Graph View, including Markdown links, tags, and generated dependency maps.
+- Export documents as Markdown, HTML, or PDF.
+- Share compressed documents through URLs.
+- Convert source code folders into Markdown files with dependency links and optional member documentation.
 
 ## Screenshots
 
-### Code Syntax Highlighting
-![Code Syntax Highlighting](web-app/assets/code.png)
+### Graph View
 
-### Mathematical Expressions Support
-![Mathematical Expressions](web-app/assets/mathexp.png)
+Graph View turns linked Markdown folders and generated code maps into an interactive relationship map.
 
-### Mermaid Diagrams
-![Mermaid Diagrams](web-app/assets/mermaid.png)
+![Graph View](web-app/assets/readme-graph.png)
 
-### Tables Support
-![Tables Support](web-app/assets/table.png)
+### Convert Code To MD
 
----
+The converter generates one Markdown file per source file and records local dependencies, metadata, signatures, return values, exceptions, and package/module names when requested.
 
-## Getting Started
+Supported converter languages: JavaScript, TypeScript, Python, Java, and C#.
 
-### Option 1 — Docker (Recommended)
-```bash
-docker run -d \
-  --name markdown-viewer \
-  -p 8080:80 \
-  --restart unless-stopped \
-  ghcr.io/thisis-developer/markdown-viewer:latest
+![Convert Code to MD](web-app/assets/readme-code-converter.png)
+
+## Key Features
+
+| Area | Highlights |
+| --- | --- |
+| Editing | Multi-tab Markdown editing, formatting toolbar, find/replace, syntax-aware editor overlay |
+| Preview | GitHub-flavored Markdown, frontmatter table, Mermaid, MathJax, syntax highlighting, alerts |
+| Files | Local file open, folder import, drag and drop, recent files and folders |
+| Graphs | Folder graph view, tags, filters, node controls, saved graph documents |
+| Export | Markdown, standalone HTML, PDF, folder-to-graph archive |
+| Code maps | Dependency Markdown generation for JS/TS, Python, Java, and C# |
+| Desktop | Neutralino app sharing the same web UI, with native file dialogs and app lifecycle hooks |
+
+## Repository Layout
+
+```text
+.
+├── code_converter/                 # Source-to-Markdown dependency generator
+├── desktop-app/                    # Neutralino desktop app and packaged resources
+├── web-app/                        # Static browser app
+│   ├── assets/                     # App images and README screenshots
+│   ├── js/                         # Extracted app modules
+│   ├── tests/                      # Node and Playwright tests
+│   ├── index.html
+│   ├── script.js
+│   └── styles.css
+└── wiki/                           # Project documentation pages
 ```
-Open **http://localhost:8080**.
 
-### Option 2 — Docker Compose
+## Run The Web App
+
+Use any static file server from the repository root:
+
 ```bash
-git clone https://github.com/ThisIs-Developer/Markdown-Viewer.git
-cd Markdown-Viewer/web-app
-docker compose up -d
+python -m http.server 9500 --directory web-app
 ```
 
-### Option 3 — Static Web Server
-```bash
-git clone https://github.com/ThisIs-Developer/Markdown-Viewer.git
-cd Markdown-Viewer/web-app
-python3 -m http.server 8080
+Then open:
+
+```text
+http://localhost:9500/
 ```
 
-### Option 4 — Desktop App
-Download pre-built binaries from the [Releases](https://github.com/ThisIs-Developer/Markdown-Viewer/releases) page or build from source (see the [Desktop App](https://github.com/ThisIs-Developer/Markdown-Viewer/wiki/Desktop-App) guide).
+Or use Docker Compose:
 
----
+```bash
+cd web-app
+docker compose up --build
+```
 
-## Usage
+Then open:
 
-1. Write Markdown in the left editor pane.
-2. Preview the rendered output on the right.
-3. Import, export, share, or switch view modes using the toolbar.
-4. Use the tab bar to manage multiple documents.
+```text
+http://localhost:8080/
+```
 
-**Keyboard Shortcuts**
-- `Ctrl/Cmd + S` → Export Markdown
-- `Ctrl/Cmd + C` → Copy rendered HTML (when no text is selected)
-- `Ctrl/Cmd + Shift + S` → Toggle sync scrolling (split view)
-- `Ctrl/Cmd + T` → New tab
-- `Ctrl/Cmd + W` → Close tab
-- `Tab` → Insert indentation in editor
+## Run The Desktop App
 
----
+```bash
+cd desktop-app
+npm run dev
+```
 
-## Documentation
+The desktop dev command prepares the shared resources and starts the Neutralino app. Platform binaries are downloaded and cached by the desktop setup script when needed.
 
-Explore the full documentation on the wiki:
+## Convert Code To Markdown
 
-- [Features](https://github.com/ThisIs-Developer/Markdown-Viewer/wiki/Features)
-- [Usage Guide](https://github.com/ThisIs-Developer/Markdown-Viewer/wiki/Usage-Guide)
-- [Installation](https://github.com/ThisIs-Developer/Markdown-Viewer/wiki/Installation)
-- [Markdown Reference](https://github.com/ThisIs-Developer/Markdown-Viewer/wiki/Markdown-Reference)
-- [FAQ](https://github.com/ThisIs-Developer/Markdown-Viewer/wiki/FAQ)
-- [Configuration](https://github.com/ThisIs-Developer/Markdown-Viewer/wiki/Configuration)
+The converter is available from the app UI and can also be run directly:
 
----
+```bash
+node code_converter/dependency-md-generator.js <source-root> <destination-root> --include-methods --include-signatures
+```
 
-## Built With
+Useful switches:
 
-- HTML5, CSS3, JavaScript
-- [Bootstrap](https://getbootstrap.com/)
-- [Marked.js](https://marked.js.org/)
-- [highlight.js](https://highlightjs.org/)
-- [MathJax](https://www.mathjax.org/)
-- [Mermaid](https://mermaid.js.org/)
-- [DOMPurify](https://github.com/cure53/DOMPurify)
-- [FileSaver.js](https://github.com/eligrey/FileSaver.js)
-- [html2canvas](https://github.com/niklasvh/html2canvas) + [jsPDF](https://www.npmjs.com/package/jspdf)
-- [JoyPixels](https://www.joypixels.com/)
+```text
+--include-methods
+--include-accessors
+--include-signatures
+--include-return-codes
+--include-exceptions
+--include-package
+```
 
----
+Open the generated destination folder in MD-Editor to inspect the files as Markdown or graph them as a dependency map.
 
-## Showcase
+## Development
 
-**Built with MD-Editor**
+Install dependencies for the web app:
 
-| Project | Description |
-|---------|-------------|
-| [Markdown Desk](https://github.com/jhrepo/markdown-desk) | Native macOS wrapper built with [Tauri](https://tauri.app/), adding live reload and native file open/save. |
+```bash
+cd web-app
+npm install
+```
 
----
+Run the Node test suite:
 
-## Contributing
+```bash
+npm test
+```
 
-Contributions are welcome! Please review the [Contributing Guide](https://github.com/ThisIs-Developer/Markdown-Viewer/wiki/Contributing) and open a pull request.
+Run JavaScript syntax checks:
 
----
+```bash
+npm run check:js
+```
 
-## Contributors
+Run Playwright tests:
 
-Thanks to everyone who has contributed to MD-Editor.
+```bash
+npm run test:e2e
+```
 
-[![Contributors](https://contrib.rocks/image?repo=ThisIs-Developer/Markdown-Viewer)](https://github.com/ThisIs-Developer/Markdown-Viewer/graphs/contributors)
+## Privacy Model
 
----
-
-## 📈 Development Journey
-
-MD-Editor has grown from a lightweight Markdown parser into a full-featured, professional application with advanced rendering, workflow, and export capabilities. Compare the [current version](https://markdownviewer.pages.dev/) with the [original version](https://a1b91221.markdownviewer.pages.dev/) to see the progress in UI design, performance optimization, and feature depth.
-
----
+MD-Editor is designed around local processing. Markdown rendering, tab state, graph state, and exports are handled in the browser or desktop app. The web build references public CDN libraries from `index.html`; for isolated or offline use, serve the vendored desktop resources or replace the CDN references with local assets.
 
 ## License
 
-This project is licensed under the Apache License. See [LICENSE](LICENSE) for details.
-
----
-
-## Contact
-
-Developed and maintained by [ThisIs-Developer](https://github.com/ThisIs-Developer).
+This project is licensed under the Apache License 2.0. See [LICENSE](LICENSE) for details.

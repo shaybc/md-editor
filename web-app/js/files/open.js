@@ -122,7 +122,7 @@
       try {
         const selected = await Neutralino.os.showOpenDialog("Open file", {
           filters: [
-            { name: "Text-based files", extensions: ["md", "markdown", "mdviewer-graph.json", "mdgraph.json", "json", "txt", "java", "css", "js", "ts", "html", "xml", "csv", "yml", "yaml", "toml", "ini", "log"] }
+            { name: "Text-based files", extensions: ["md", "markdown", "mdviewer-graph.json", "mdgraph.json", "json", "txt", "java", "cs", "css", "js", "ts", "html", "xml", "csv", "yml", "yaml", "toml", "ini", "log"] }
           ]
         });
         const selectedPath = Array.isArray(selected) ? selected[0] : selected;
@@ -149,7 +149,7 @@
               description: "Text-based files",
               accept: {
                 "text/markdown": [".md", ".markdown"],
-                "text/plain": [".txt", ".text", ".java", ".css", ".js", ".ts", ".html", ".xml", ".csv", ".yml", ".yaml", ".toml", ".ini", ".log"],
+                "text/plain": [".txt", ".text", ".java", ".cs", ".css", ".js", ".ts", ".html", ".xml", ".csv", ".yml", ".yaml", ".toml", ".ini", ".log"],
                 "application/json": [".json"]
               }
             }

@@ -145,7 +145,7 @@ function isInitialMarkdownFilePath(filePath) {
 }
 
 function isInitialTextFilePath(filePath) {
-  return /\.(md|markdown|mdviewer-graph\.json|mdgraph\.json|json|txt|text|java|css|js|ts|html|htm|xml|csv|ya?ml|toml|ini|log|properties|conf|sh|bash|py|rb|php|sql)$/i.test(filePath || "")
+  return /\.(md|markdown|mdviewer-graph\.json|mdgraph\.json|json|txt|text|java|cs|css|js|ts|html|htm|xml|csv|ya?ml|toml|ini|log|properties|conf|sh|bash|py|rb|php|sql)$/i.test(filePath || "")
     || /(^|[\/])(dockerfile|makefile|license|readme|changelog)$/i.test(filePath || "");
 }
 

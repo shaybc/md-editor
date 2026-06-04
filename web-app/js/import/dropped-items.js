@@ -202,7 +202,7 @@
 
     const files = dt.files;
     if (files.length) {
-      alert("Please open a text-based file (for example .md, .txt, .java, .css, or .json), a saved graph file (.mdviewer-graph.json or .mdgraph.json), or a folder that contains text files.");
+      alert("Please open a text-based file (for example .md, .txt, .java, .cs, .css, or .json), a saved graph file (.mdviewer-graph.json or .mdgraph.json), or a folder that contains text files.");
     }
   }
 
