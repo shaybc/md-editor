@@ -4,9 +4,18 @@ This page summarizes the tagged MD-Editor releases and the major user-facing fea
 
 ## Current Main
 
-Changes available on `main` after `v6.5`:
+Changes available on `main` after `v6.7`:
 
 - No unreleased changes are currently documented.
+
+## v6.7 - June 8, 2026
+
+- Fixed local graph opening so large-graph warnings use the focused graph node count instead of the source graph size.
+- Added original source export actions for graph maps, graph nodes, sidebar folders, and sidebar files.
+- Added sidebar actions to open original source files and reveal original source folders from converted Markdown nodes.
+- Improved original export completion dialogs with an `Open Folder` action and corrected modal alignment/button styling.
+- Improved desktop startup sizing by using a larger default window, persisting resized dimensions, and centering restored windows.
+- Updated About dialog and app metadata for the v6.7 release.
 
 ## v6.5 - June 4, 2026
 
@@ -95,6 +104,6 @@ Changes available on `main` after `v6.5`:
 
 ## Notes
 
-- Tags use the historical names `ver1.0`, `v2`, and `v3.0` through `v6.5`.
+- Tags use the historical names `ver1.0`, `v2`, and `v3.0` through `v6.7`.
 - The desktop app has its own build and packaging flow, but shares the same core web application features.
 - Features listed under each version are grouped by outcome rather than every individual commit.

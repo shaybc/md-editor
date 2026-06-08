@@ -507,8 +507,8 @@ test("opens help and about from the action menu", async ({ page }) => {
   const aboutModal = page.locator("#about-modal");
   await expect(aboutModal).toBeVisible();
   await expect(aboutModal.getByText("MD-Editor", { exact: true })).toBeVisible();
-  await expect(aboutModal.locator("#about-app-version")).toHaveText("v6.5");
-  await expect(aboutModal.locator("#about-release-date")).toHaveText("June 4, 2026");
+  await expect(aboutModal.locator("#about-app-version")).toHaveText("v6.7");
+  await expect(aboutModal.locator("#about-release-date")).toHaveText("June 8, 2026");
   await expect(aboutModal.locator("#about-app-author")).toHaveText("ShayBC");
   await expect(aboutModal.getByText("Apache License 2.0")).toBeVisible();
   await expect(aboutModal.locator(".about-modal-logo")).toBeVisible();
