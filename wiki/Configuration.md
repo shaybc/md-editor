@@ -320,7 +320,7 @@ Desktop runtime configuration is in `desktop-app/neutralino.config.json`.
 {
   "$schema": "https://raw.githubusercontent.com/neutralinojs/neutralinojs/main/schemas/neutralino.config.schema.json",
   "applicationId": "js.neutralino.sample",
-  "version": "6.7.0",
+  "version": "6.8.0",
   "defaultMode": "window",
   "port": 0,
   "documentRoot": "/resources/",

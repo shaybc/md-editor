@@ -4,9 +4,14 @@ This page summarizes the tagged MD-Editor releases and the major user-facing fea
 
 ## Current Main
 
-Changes available on `main` after `v6.7`:
+Changes available on `main` after `v6.8`:
 
 - No unreleased changes are currently documented.
+
+## v6.8 - June 8, 2026
+
+- Fixed original source actions for converted Markdown nodes whose YAML frontmatter appears after the document title.
+- Updated About dialog and app metadata for the v6.8 release.
 
 ## v6.7 - June 8, 2026
 
@@ -104,6 +109,6 @@ Changes available on `main` after `v6.7`:
 
 ## Notes
 
-- Tags use the historical names `ver1.0`, `v2`, and `v3.0` through `v6.7`.
+- Tags use the historical names `ver1.0`, `v2`, and `v3.0` through `v6.8`.
 - The desktop app has its own build and packaging flow, but shares the same core web application features.
 - Features listed under each version are grouped by outcome rather than every individual commit.

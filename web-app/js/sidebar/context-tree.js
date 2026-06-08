@@ -1679,11 +1679,14 @@
   }
 
   function getSourceFilePathFromMarkdown(markdown) {
-    const frontmatterMatch = String(markdown || "").match(/^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/);
+    const frontmatterMatch = String(markdown || "").match(/(?:^|\r?\n)---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/);
     if (!frontmatterMatch) return "";
-    const sourceFileMatch = frontmatterMatch[1].match(/^\s*source_file\s*:\s*(.+?)\s*$/im);
-    if (!sourceFileMatch) return "";
-    return sourceFileMatch[1].trim().replace(/^['"]|['"]$/g, "");
+    const frontmatter = frontmatterMatch[1];
+    const inlineSourceFileMatch = frontmatter.match(/^[ \t]*source_file[ \t]*:[ \t]*(.+?)[ \t]*$/im);
+    if (inlineSourceFileMatch && inlineSourceFileMatch[1].trim()) {
+      return inlineSourceFileMatch[1].trim().replace(/^['"]|['"]$/g, "");
+    }
+    return "";
   }
 
   const normalizeOriginalSourcePath = (path) => String(path || "").trim().replace(/\\/g, "/").replace(/\/+/g, "/").replace(/^['"]|['"]$/g, "");

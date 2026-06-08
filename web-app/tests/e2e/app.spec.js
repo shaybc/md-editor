@@ -507,7 +507,7 @@ test("opens help and about from the action menu", async ({ page }) => {
   const aboutModal = page.locator("#about-modal");
   await expect(aboutModal).toBeVisible();
   await expect(aboutModal.getByText("MD-Editor", { exact: true })).toBeVisible();
-  await expect(aboutModal.locator("#about-app-version")).toHaveText("v6.7");
+  await expect(aboutModal.locator("#about-app-version")).toHaveText("v6.8");
   await expect(aboutModal.locator("#about-release-date")).toHaveText("June 8, 2026");
   await expect(aboutModal.locator("#about-app-author")).toHaveText("ShayBC");
   await expect(aboutModal.getByText("Apache License 2.0")).toBeVisible();
@@ -1953,7 +1953,7 @@ test("sidebar file context menu opens original source file", async ({ page }) =>
       filesystem: {
         readDirectory: async (path) => directoryEntries[path] || [],
         readFile: async (path) => {
-          if (path === "C:/vault/client/api/aboutApi.js.md") return "---\nsource_file: \"C:/workspace/my_project/client/api/aboutApi.js\"\n---\n# About API";
+          if (path === "C:/vault/client/api/aboutApi.js.md") return "# About API\n\n---\nsource_file: C:/workspace/my_project/client/api/aboutApi.js\n---\n\n## Details";
           throw new Error(`Unexpected read: ${path}`);
         }
       },
