@@ -1548,6 +1548,11 @@
       CONTEXT_MENU_ACTIONS.openAll.icon,
       "Open every visible file point in editor tabs."
     );
+    const exportOriginalNodesBtn = createContextMenuButton(
+      CONTEXT_MENU_ACTIONS.exportOriginalNodes.label,
+      CONTEXT_MENU_ACTIONS.exportOriginalNodes.icon,
+      "Copy the original source files referenced by visible graph points into a selected folder."
+    );
     const openDefaultAppBtn = createContextMenuButton(
       CONTEXT_MENU_ACTIONS.openWithDefaultApp.label,
       CONTEXT_MENU_ACTIONS.openWithDefaultApp.icon,
@@ -1763,13 +1768,19 @@
     const exportMarkdownBtn = createContextMenuButton(CONTEXT_MENU_ACTIONS.exportMarkdown.label, CONTEXT_MENU_ACTIONS.exportMarkdown.icon, "Download this point as Markdown.");
     const exportHtmlBtn = createContextMenuButton(CONTEXT_MENU_ACTIONS.exportHtml.label, CONTEXT_MENU_ACTIONS.exportHtml.icon, "Download this point as HTML.");
     const exportPdfBtn = createContextMenuButton(CONTEXT_MENU_ACTIONS.exportPdf.label, CONTEXT_MENU_ACTIONS.exportPdf.icon, "Download this point as PDF.");
-    [sharePointBtn, exportMarkdownBtn, exportHtmlBtn, exportPdfBtn].forEach((button) => exportSubmenuPanel.appendChild(button));
+    const exportOriginalNodeBtn = createContextMenuButton(
+      CONTEXT_MENU_ACTIONS.exportOriginalNode?.label || "Export original node",
+      CONTEXT_MENU_ACTIONS.exportOriginalNode?.icon || "bi bi-file-earmark-arrow-down",
+      "Copy the original source file referenced by this point into a selected folder."
+    );
+    [sharePointBtn, exportMarkdownBtn, exportHtmlBtn, exportPdfBtn, exportOriginalNodeBtn].forEach((button) => exportSubmenuPanel.appendChild(button));
     exportSubmenu.appendChild(exportSubmenuBtn);
     exportSubmenu.appendChild(exportSubmenuPanel);
 
     contextMenu.appendChild(contextMenuTitle);
     contextMenu.appendChild(contextMenuTitleSeparator);
     contextMenu.appendChild(openAllBtn);
+    contextMenu.appendChild(exportOriginalNodesBtn);
     contextMenu.appendChild(openFileBtn);
     contextMenu.appendChild(openDefaultAppBtn);
     contextMenu.appendChild(revealFileBtn);
@@ -2163,6 +2174,241 @@
       }
       if (failedNodeLabels.length) {
         alert(`Unable to open ${failedNodeLabels.length} file${failedNodeLabels.length === 1 ? "" : "s"}:\n${failedNodeLabels.join("\n")}`);
+      }
+    };
+
+    const normalizeOriginalSourcePath = (path) => String(path || "").trim().replace(/\\/g, "/").replace(/\/+/g, "/").replace(/^['"]|['"]$/g, "");
+
+    const stripMarkdownExportExtension = (path) => normalizeOriginalSourcePath(path)
+      .replace(/^\/+/, "")
+      .replace(/\.(md|markdown)$/i, "");
+
+    const getOriginalExportNodePathCandidates = (graphNode) => {
+      const snapshotFile = getSnapshotFileForNode(graphNode) || {};
+      return [
+        graphNode?.path,
+        graphNode?.id,
+        graphNode?.label,
+        graphNode?.fullPath,
+        snapshotFile.path,
+        snapshotFile.id,
+        snapshotFile.name,
+        snapshotFile.fullPath
+      ]
+        .map(stripMarkdownExportExtension)
+        .filter(Boolean);
+    };
+
+    const getOriginalExportRelativePath = (sourcePath, graphNode) => {
+      const normalizedSourcePath = normalizeOriginalSourcePath(sourcePath).replace(/^\/+/, "");
+      const sourceSegments = normalizedSourcePath.split("/").filter(Boolean);
+      const sourcePathKey = sourceSegments.join("/").toLowerCase();
+      if (!sourceSegments.length) return "";
+
+      const candidates = getOriginalExportNodePathCandidates(graphNode)
+        .map((candidate) => candidate.split("/").filter(Boolean))
+        .filter((segments) => segments.length);
+
+      for (const candidateSegments of candidates) {
+        const candidateKey = candidateSegments.join("/").toLowerCase();
+        if (!candidateKey || sourcePathKey !== candidateKey && !sourcePathKey.endsWith(`/${candidateKey}`)) continue;
+        const suffixLength = candidateSegments.length;
+        const projectName = sourceSegments[sourceSegments.length - suffixLength - 1];
+        if (!projectName) continue;
+        return [projectName, ...sourceSegments.slice(sourceSegments.length - suffixLength)].join("/");
+      }
+
+      const srcIndex = sourceSegments.findIndex((segment) => segment.toLowerCase() === "src");
+      if (srcIndex > 0) return sourceSegments.slice(srcIndex - 1).join("/");
+      return sourceSegments.slice(-2).join("/");
+    };
+
+    const getOriginalExportParentDirectories = (path) => {
+      const segments = normalizeOriginalSourcePath(path).split("/").filter(Boolean);
+      segments.pop();
+      const directories = [];
+      const startIndex = /^[a-z]:$/i.test(segments[0] || "") ? 2 : 1;
+      for (let index = startIndex; index <= segments.length; index += 1) {
+        directories.push(segments.slice(0, index).join("/"));
+      }
+      return directories;
+    };
+
+    const createOriginalExportDirectory = async (directoryPath) => {
+      if (!directoryPath || !Neutralino.filesystem?.createDirectory) return;
+      if (Neutralino.filesystem?.getStats) {
+        try {
+          await Neutralino.filesystem.getStats(directoryPath);
+          return;
+        } catch (_error) {
+          // Missing folders are created below; existing folders should not be recreated.
+        }
+      }
+      try {
+        await Neutralino.filesystem.createDirectory(directoryPath);
+      } catch (error) {
+        const message = String(error?.message || error || "").toLowerCase();
+        if (!message.includes("exist") && !message.includes("already")) throw error;
+      }
+    };
+
+    const ensureOriginalExportDirectories = async (destinationPath, createdDirectories) => {
+      const directories = getOriginalExportParentDirectories(destinationPath);
+      for (const directory of directories) {
+        if (createdDirectories.has(directory)) continue;
+        await createOriginalExportDirectory(directory);
+        createdDirectories.add(directory);
+      }
+    };
+
+    const showOriginalExportCompleteDialog = (message, destinationFolder) => new Promise((resolve) => {
+      const overlay = document.createElement("div");
+      overlay.className = "reset-modal-overlay";
+      overlay.setAttribute("role", "dialog");
+      overlay.setAttribute("aria-modal", "true");
+      overlay.setAttribute("aria-labelledby", "original-export-complete-title");
+      overlay.style.display = "flex";
+
+      const box = document.createElement("div");
+      box.className = "reset-modal-box original-export-complete-box";
+
+      const title = document.createElement("p");
+      title.id = "original-export-complete-title";
+      title.className = "reset-modal-message";
+      title.textContent = message;
+      title.style.whiteSpace = "pre-line";
+
+      const actions = document.createElement("div");
+      actions.className = "reset-modal-actions original-export-complete-actions";
+
+      const closeButton = document.createElement("button");
+      closeButton.type = "button";
+      closeButton.className = "reset-modal-btn reset-modal-cancel";
+      closeButton.textContent = "OK";
+
+      const openFolderButton = document.createElement("button");
+      openFolderButton.type = "button";
+      openFolderButton.className = "reset-modal-btn original-export-open-folder-btn";
+      openFolderButton.textContent = "Open Folder";
+
+      const closeDialog = () => {
+        document.removeEventListener("keydown", onKeyDown);
+        overlay.remove();
+        resolve();
+      };
+
+      const onKeyDown = (event) => {
+        if (event.key === "Escape") closeDialog();
+      };
+
+      closeButton.addEventListener("click", closeDialog);
+      openFolderButton.addEventListener("click", async () => {
+        try {
+          if (!Neutralino.os?.open) throw new Error("No supported folder opener is available.");
+          await Neutralino.os.open(destinationFolder);
+          closeDialog();
+        } catch (error) {
+          console.error("Failed to open exported original nodes folder:", error);
+          alert("Unable to open the destination folder.");
+        }
+      });
+      overlay.addEventListener("click", (event) => {
+        if (event.target === overlay) closeDialog();
+      });
+      document.addEventListener("keydown", onKeyDown);
+
+      actions.append(closeButton, openFolderButton);
+      box.append(title, actions);
+      overlay.appendChild(box);
+      document.body.appendChild(overlay);
+      openFolderButton.focus();
+    });
+
+    const exportOriginalGraphNodes = async () => {
+      if (!isNeutralinoRuntime() || !Neutralino.os?.showFolderDialog || !Neutralino.filesystem?.readFile || !Neutralino.filesystem?.writeFile || !Neutralino.filesystem?.createDirectory || !Neutralino.filesystem?.getStats) {
+        alert("Exporting original nodes is available only in the desktop app.");
+        return;
+      }
+
+      const fileNodes = getVisibleFileNodes();
+      if (!fileNodes.length) {
+        alert("There are no visible file points to export.");
+        return;
+      }
+
+      const destinationFolder = await Neutralino.os.showFolderDialog("Select destination folder");
+      if (!destinationFolder) return;
+
+      const createdDirectories = new Set();
+      const exportedPaths = [];
+      const failedItems = [];
+      for (const graphNode of fileNodes) {
+        try {
+          const markdown = await readGraphNodeContent(graphNode);
+          const sourcePath = getSourceFilePathFromMarkdown(markdown);
+          if (!sourcePath) {
+            failedItems.push(`${getNodeFileName(graphNode.id)}: missing source_file`);
+            continue;
+          }
+
+          const relativeExportPath = getOriginalExportRelativePath(sourcePath, graphNode);
+          if (!relativeExportPath) {
+            failedItems.push(`${getNodeFileName(graphNode.id)}: unable to derive export path`);
+            continue;
+          }
+
+          const sourceContent = await Neutralino.filesystem.readFile(sourcePath);
+          const destinationPath = joinPath(destinationFolder, relativeExportPath);
+          await ensureOriginalExportDirectories(destinationPath, createdDirectories);
+          await Neutralino.filesystem.writeFile(destinationPath, sourceContent);
+          exportedPaths.push(destinationPath);
+        } catch (error) {
+          console.error("Failed to export original graph node:", error);
+          failedItems.push(`${getNodeFileName(graphNode.id)}: ${error?.message || "export failed"}`);
+        }
+      }
+
+      if (!exportedPaths.length && failedItems.length) {
+        alert(`Unable to export original nodes.\n${failedItems.slice(0, 10).join("\n")}`);
+        return;
+      }
+
+      const message = [`Exported ${exportedPaths.length} original file${exportedPaths.length === 1 ? "" : "s"}.`];
+      if (failedItems.length) message.push(`Skipped ${failedItems.length} file${failedItems.length === 1 ? "" : "s"}:\n${failedItems.slice(0, 10).join("\n")}`);
+      await showOriginalExportCompleteDialog(message.join("\n\n"), destinationFolder);
+    };
+
+    const exportOriginalGraphNode = async (graphNode) => {
+      if (!graphNode || isTagNode(graphNode) || isClusterNode(graphNode)) return;
+      if (!isNeutralinoRuntime() || !Neutralino.os?.showFolderDialog || !Neutralino.filesystem?.readFile || !Neutralino.filesystem?.writeFile || !Neutralino.filesystem?.createDirectory || !Neutralino.filesystem?.getStats) {
+        alert("Exporting an original node is available only in the desktop app.");
+        return;
+      }
+
+      const destinationFolder = await Neutralino.os.showFolderDialog("Select destination folder");
+      if (!destinationFolder) return;
+
+      try {
+        const markdown = await readGraphNodeContent(graphNode);
+        const sourcePath = getSourceFilePathFromMarkdown(markdown);
+        if (!sourcePath) {
+          alert("This node does not have a source_file frontmatter value.");
+          return;
+        }
+
+        const relativeExportPath = getOriginalExportRelativePath(sourcePath, graphNode);
+        if (!relativeExportPath) {
+          alert("Unable to derive an export path for this original node.");
+          return;
+        }
+
+        const destinationPath = joinPath(destinationFolder, relativeExportPath);
+        await ensureOriginalExportDirectories(destinationPath, new Set());
+        await Neutralino.filesystem.writeFile(destinationPath, await Neutralino.filesystem.readFile(sourcePath));
+        await showOriginalExportCompleteDialog("Exported 1 original file.", destinationFolder);
+      } catch (error) {
+        console.error("Failed to export original graph node:", error);
+        alert("Unable to export this original node.");
       }
     };
 
@@ -3219,6 +3465,7 @@
     ];
     const graphContextMenuItems = [
       openAllBtn,
+      exportOriginalNodesBtn,
       removeLeafNodesBtn,
       magneticToggleBtn
     ];
@@ -3357,6 +3604,12 @@
       event.stopPropagation();
       hideContextMenu();
       await openAllVisibleGraphFiles();
+    });
+
+    exportOriginalNodesBtn.addEventListener("click", async (event) => {
+      event.stopPropagation();
+      hideContextMenu();
+      await exportOriginalGraphNodes();
     });
 
     removeLeafNodesBtn.addEventListener("click", (event) => {
@@ -3574,6 +3827,14 @@
         console.error("Failed to export point as PDF:", error);
         alert("Unable to export this point as PDF.");
       }
+    });
+
+    exportOriginalNodeBtn.addEventListener("click", async (event) => {
+      event.stopPropagation();
+      if (!contextTargetNode) return;
+      const targetNode = contextTargetNode;
+      hideContextMenu();
+      await exportOriginalGraphNode(targetNode);
     });
 
     copyDependenciesBtn.addEventListener("click", async (event) => {

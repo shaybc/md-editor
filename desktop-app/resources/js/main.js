@@ -39,10 +39,84 @@ function confirmDesktopExitWithoutSavingIfNeeded() {
   return true;
 }
 
-function exitDesktopApp() {
+async function exitDesktopApp() {
   if (confirmDesktopExitWithoutSavingIfNeeded()) {
+    await saveDesktopWindowState();
     Neutralino.app.exit();
   }
+}
+
+const DESKTOP_WINDOW_STATE_KEY = "markdownViewerDesktopWindowState";
+const DEFAULT_DESKTOP_WINDOW_SIZE = Object.freeze({ width: 1400, height: 900 });
+const MIN_DESKTOP_WINDOW_SIZE = Object.freeze({ width: 900, height: 600 });
+let saveDesktopWindowStateTimer = null;
+
+function normalizeDesktopWindowSize(size) {
+  const width = Math.round(Number(size && size.width) || 0);
+  const height = Math.round(Number(size && size.height) || 0);
+  if (width < MIN_DESKTOP_WINDOW_SIZE.width || height < MIN_DESKTOP_WINDOW_SIZE.height) return null;
+  if (width > 10000 || height > 10000) return null;
+  return { width, height };
+}
+
+async function centerDesktopWindow() {
+  try {
+    if (Neutralino.window?.center) await Neutralino.window.center();
+  } catch (error) {
+    console.warn("Could not center desktop window:", error);
+  }
+}
+
+async function restoreDesktopWindowState() {
+  if (!Neutralino.window || !Neutralino.storage) return;
+  try {
+    const rawState = await Neutralino.storage.getData(DESKTOP_WINDOW_STATE_KEY);
+    const savedState = JSON.parse(rawState || "{}");
+    const savedSize = normalizeDesktopWindowSize(savedState);
+    if (savedSize) {
+      await Neutralino.window.setSize(savedSize);
+      await centerDesktopWindow();
+      return;
+    }
+  } catch (error) {
+    const code = error && error.code;
+    if (code && code !== "NE_ST_NOSTKEX") {
+      console.warn("Could not restore desktop window size:", error);
+    }
+  }
+
+  try {
+    const currentSize = normalizeDesktopWindowSize(await Neutralino.window.getSize());
+    if (!currentSize) await Neutralino.window.setSize(DEFAULT_DESKTOP_WINDOW_SIZE);
+    await centerDesktopWindow();
+  } catch (error) {
+    console.warn("Could not apply default desktop window size:", error);
+  }
+}
+
+async function saveDesktopWindowState() {
+  if (!Neutralino.window || !Neutralino.storage) return;
+  try {
+    if (await Neutralino.window.isMinimized()) return;
+    const currentSize = normalizeDesktopWindowSize(await Neutralino.window.getSize());
+    if (!currentSize) return;
+    await Neutralino.storage.setData(DESKTOP_WINDOW_STATE_KEY, JSON.stringify(currentSize));
+  } catch (error) {
+    console.warn("Could not save desktop window size:", error);
+  }
+}
+
+function scheduleDesktopWindowStateSave() {
+  window.clearTimeout(saveDesktopWindowStateTimer);
+  saveDesktopWindowStateTimer = window.setTimeout(saveDesktopWindowState, 250);
+}
+
+function setupDesktopWindowStatePersistence() {
+  if (NL_MODE !== "window") return;
+  restoreDesktopWindowState();
+  window.addEventListener("resize", scheduleDesktopWindowStateSave);
+  window.addEventListener("beforeunload", saveDesktopWindowState);
+  window.setTimeout(saveDesktopWindowState, 1000);
 }
 
 /*
@@ -95,8 +169,8 @@ function onTrayMenuItemClicked(event) {
 /*
     Function to handle the window close event by gracefully exiting the Neutralino application.
 */
-function onWindowClose() {
-  exitDesktopApp();
+async function onWindowClose() {
+  await exitDesktopApp();
 }
 
 
@@ -134,6 +208,7 @@ Neutralino.events.on("windowClose", onWindowClose);
 
 // Conditional initialization: Set up system tray if not running on macOS
 Neutralino.events.on("ready", () => {
+  setupDesktopWindowStatePersistence();
 	if (NL_OS != "Darwin") {
 	  // TODO: Fix https://github.com/neutralinojs/neutralinojs/issues/615
 	  setTimeout(() => setTray(), 500);

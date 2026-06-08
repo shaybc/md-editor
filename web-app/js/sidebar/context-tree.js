@@ -1069,6 +1069,12 @@
       CONTEXT_MENU_ACTIONS.openWithDefaultApp.icon,
       "Ask the operating system to open this file with its configured default application."
     );
+    const openOriginalFileBtn = createFileContextMenuButton(
+      CONTEXT_MENU_ACTIONS.openOriginalFile?.label || "Open original file",
+      CONTEXT_MENU_ACTIONS.openOriginalFile?.icon || "bi bi-box-arrow-up-right",
+      "Open the original source file referenced by this Markdown node with the default system application."
+    );
+    openOriginalFileBtn.classList.add("sidebar-open-original-file");
     const revealFileBtn = createFileContextMenuButton(
       CONTEXT_MENU_ACTIONS.revealInFileExplorer.label,
       CONTEXT_MENU_ACTIONS.revealInFileExplorer.icon,
@@ -1163,7 +1169,13 @@
     const exportMarkdownBtn = createFileContextMenuButton(CONTEXT_MENU_ACTIONS.exportMarkdown.label, CONTEXT_MENU_ACTIONS.exportMarkdown.icon, "Download this file as Markdown.");
     const exportHtmlBtn = createFileContextMenuButton(CONTEXT_MENU_ACTIONS.exportHtml.label, CONTEXT_MENU_ACTIONS.exportHtml.icon, "Download this file as HTML.");
     const exportPdfBtn = createFileContextMenuButton(CONTEXT_MENU_ACTIONS.exportPdf.label, CONTEXT_MENU_ACTIONS.exportPdf.icon, "Download this file as PDF.");
-    [shareFileBtn, exportMarkdownBtn, exportHtmlBtn, exportPdfBtn].forEach((button) => exportSubmenuPanel.appendChild(button));
+    const exportOriginalNodeBtn = createFileContextMenuButton(
+      CONTEXT_MENU_ACTIONS.exportOriginalNode?.label || "Export original node",
+      CONTEXT_MENU_ACTIONS.exportOriginalNode?.icon || "bi bi-file-earmark-arrow-down",
+      "Copy the original source file referenced by this Markdown node into a selected folder."
+    );
+    exportOriginalNodeBtn.classList.add("sidebar-export-original-node");
+    [shareFileBtn, exportMarkdownBtn, exportHtmlBtn, exportPdfBtn, exportOriginalNodeBtn].forEach((button) => exportSubmenuPanel.appendChild(button));
     exportSubmenu.appendChild(exportSubmenuBtn);
     exportSubmenu.appendChild(exportSubmenuPanel);
 
@@ -1177,6 +1189,7 @@
       separator,
       openFileBtn,
       openDefaultAppBtn,
+      openOriginalFileBtn,
       revealFileBtn,
       showFullGraphBtn,
       renameFileBtn,
@@ -1245,6 +1258,19 @@
       } catch (error) {
         console.error("Failed to reveal sidebar file:", error);
         alert("Unable to reveal this file in the file explorer.");
+      }
+    });
+
+    openOriginalFileBtn.addEventListener("click", async (event) => {
+      event.stopPropagation();
+      const target = sidebarContextTarget;
+      hideSidebarFileContextMenu();
+      if (!target) return;
+      try {
+        await openSidebarOriginalFile(target);
+      } catch (error) {
+        console.error("Failed to open original sidebar file:", error);
+        alert("Unable to open this node's original file.");
       }
     });
 
@@ -1374,6 +1400,20 @@
       } catch (error) {
         console.error("Failed to export sidebar file as PDF:", error);
         alert("Unable to export this file as PDF.");
+      }
+    });
+
+    exportOriginalNodeBtn.addEventListener("click", async (event) => {
+      event.stopPropagation();
+      const target = sidebarContextTarget;
+      hideSidebarFileContextMenu();
+      if (!target) return;
+      try {
+        await exportSidebarFileOriginalNode(target);
+      } catch (error) {
+        if (error && error.name === "AbortError") return;
+        console.error("Failed to export original sidebar file node:", error);
+        alert("Unable to export the original file for this node.");
       }
     });
 
@@ -1638,6 +1678,337 @@
     return exportFolderFilesToGraph(folderFiles, folderName);
   }
 
+  function getSourceFilePathFromMarkdown(markdown) {
+    const frontmatterMatch = String(markdown || "").match(/^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/);
+    if (!frontmatterMatch) return "";
+    const sourceFileMatch = frontmatterMatch[1].match(/^\s*source_file\s*:\s*(.+?)\s*$/im);
+    if (!sourceFileMatch) return "";
+    return sourceFileMatch[1].trim().replace(/^['"]|['"]$/g, "");
+  }
+
+  const normalizeOriginalSourcePath = (path) => String(path || "").trim().replace(/\\/g, "/").replace(/\/+/g, "/").replace(/^['"]|['"]$/g, "");
+
+  const stripMarkdownExportExtension = (path) => normalizeOriginalSourcePath(path)
+    .replace(/^\/+/, "")
+    .replace(/\.(md|markdown)$/i, "");
+
+  function getOriginalExportActiveFolderRelativePath(fileEntry) {
+    if (!activeFolderPath || !fileEntry?.fullPath) return "";
+    const rootPath = normalizeOriginalSourcePath(activeFolderPath).replace(/\/+$/, "");
+    const fullPath = normalizeOriginalSourcePath(fileEntry.fullPath);
+    if (!rootPath || fullPath.toLowerCase() === rootPath.toLowerCase()) return "";
+    const rootPrefix = `${rootPath}/`;
+    if (!fullPath.toLowerCase().startsWith(rootPrefix.toLowerCase())) return "";
+    return fullPath.slice(rootPrefix.length);
+  }
+
+  function getOriginalExportFilePathCandidates(fileEntry) {
+    return [
+      fileEntry?.path,
+      fileEntry?.id,
+      fileEntry?.name,
+      fileEntry?.fullPath,
+      getOriginalExportActiveFolderRelativePath(fileEntry),
+      fileEntry?.file?.webkitRelativePath,
+      fileEntry?.file?.name
+    ]
+      .map(stripMarkdownExportExtension)
+      .filter(Boolean)
+      .sort((left, right) => right.split("/").filter(Boolean).length - left.split("/").filter(Boolean).length);
+  }
+
+  function getOriginalExportRelativePath(sourcePath, fileEntry) {
+    const normalizedSourcePath = normalizeOriginalSourcePath(sourcePath).replace(/^\/+/, "");
+    const sourceSegments = normalizedSourcePath.split("/").filter(Boolean);
+    const sourcePathKey = sourceSegments.join("/").toLowerCase();
+    if (!sourceSegments.length) return "";
+
+    const candidates = getOriginalExportFilePathCandidates(fileEntry)
+      .map((candidate) => candidate.split("/").filter(Boolean))
+      .filter((segments) => segments.length);
+
+    for (const candidateSegments of candidates) {
+      const candidateKey = candidateSegments.join("/").toLowerCase();
+      if (!candidateKey || sourcePathKey !== candidateKey && !sourcePathKey.endsWith(`/${candidateKey}`)) continue;
+      const suffixLength = candidateSegments.length;
+      const projectName = sourceSegments[sourceSegments.length - suffixLength - 1];
+      if (!projectName) continue;
+      return [projectName, ...sourceSegments.slice(sourceSegments.length - suffixLength)].join("/");
+    }
+
+    const srcIndex = sourceSegments.findIndex((segment) => segment.toLowerCase() === "src");
+    if (srcIndex > 0) return sourceSegments.slice(srcIndex - 1).join("/");
+    return sourceSegments.slice(-2).join("/");
+  }
+
+  function getSourceParentFolderPath(sourcePath) {
+    const normalizedSourcePath = normalizeOriginalSourcePath(sourcePath);
+    const separatorIndex = normalizedSourcePath.lastIndexOf("/");
+    return separatorIndex > 0 ? normalizedSourcePath.slice(0, separatorIndex) : "";
+  }
+
+  function getOriginalFolderPathCandidates(node) {
+    const candidates = [
+      node?.path,
+      node?.fullPath,
+      getOriginalExportActiveFolderRelativePath(node),
+      node?.name
+    ];
+    return candidates
+      .map((candidate) => normalizeOriginalSourcePath(candidate).replace(/^\/+/, "").replace(/\/+$/, ""))
+      .filter(Boolean)
+      .sort((left, right) => right.split("/").filter(Boolean).length - left.split("/").filter(Boolean).length);
+  }
+
+  function getOriginalFolderPathFromSource(sourcePath, node) {
+    const sourceSegments = normalizeOriginalSourcePath(sourcePath).replace(/^\/+/, "").split("/").filter(Boolean);
+    if (!sourceSegments.length) return "";
+    const sourceKeySegments = sourceSegments.map((segment) => segment.toLowerCase());
+    const candidates = getOriginalFolderPathCandidates(node)
+      .map((candidate) => candidate.split("/").filter(Boolean))
+      .filter((segments) => segments.length);
+
+    for (const candidateSegments of candidates) {
+      const candidateKeySegments = candidateSegments.map((segment) => segment.toLowerCase());
+      for (let startIndex = 0; startIndex <= sourceKeySegments.length - candidateKeySegments.length; startIndex += 1) {
+        const matchesCandidate = candidateKeySegments.every((segment, offset) => sourceKeySegments[startIndex + offset] === segment);
+        if (matchesCandidate) {
+          return sourceSegments.slice(0, startIndex + candidateSegments.length).join("/");
+        }
+      }
+    }
+
+    return getSourceParentFolderPath(sourcePath);
+  }
+
+  function getOriginalExportParentDirectories(path) {
+    const segments = normalizeOriginalSourcePath(path).split("/").filter(Boolean);
+    segments.pop();
+    const directories = [];
+    const startIndex = /^[a-z]:$/i.test(segments[0] || "") ? 2 : 1;
+    for (let index = startIndex; index <= segments.length; index += 1) {
+      directories.push(segments.slice(0, index).join("/"));
+    }
+    return directories;
+  }
+
+  async function createOriginalExportDirectory(directoryPath) {
+    if (!directoryPath || !Neutralino.filesystem?.createDirectory) return;
+    if (Neutralino.filesystem?.getStats) {
+      try {
+        await Neutralino.filesystem.getStats(directoryPath);
+        return;
+      } catch (_error) {
+        // Missing folders are created below; existing folders should not be recreated.
+      }
+    }
+    try {
+      await Neutralino.filesystem.createDirectory(directoryPath);
+    } catch (error) {
+      const message = String(error?.message || error || "").toLowerCase();
+      if (!message.includes("exist") && !message.includes("already")) throw error;
+    }
+  }
+
+  async function ensureOriginalExportDirectories(destinationPath, createdDirectories) {
+    const directories = getOriginalExportParentDirectories(destinationPath);
+    for (const directory of directories) {
+      if (createdDirectories.has(directory)) continue;
+      await createOriginalExportDirectory(directory);
+      createdDirectories.add(directory);
+    }
+  }
+
+  const showOriginalExportCompleteDialog = (message, destinationFolder) => new Promise((resolve) => {
+    const overlay = document.createElement("div");
+    overlay.className = "reset-modal-overlay";
+    overlay.setAttribute("role", "dialog");
+    overlay.setAttribute("aria-modal", "true");
+    overlay.setAttribute("aria-labelledby", "original-export-complete-title");
+    overlay.style.display = "flex";
+
+    const box = document.createElement("div");
+    box.className = "reset-modal-box original-export-complete-box";
+
+    const title = document.createElement("p");
+    title.id = "original-export-complete-title";
+    title.className = "reset-modal-message";
+    title.textContent = message;
+    title.style.whiteSpace = "pre-line";
+
+    const actions = document.createElement("div");
+    actions.className = "reset-modal-actions original-export-complete-actions";
+
+    const closeButton = document.createElement("button");
+    closeButton.type = "button";
+    closeButton.className = "reset-modal-btn reset-modal-cancel";
+    closeButton.textContent = "OK";
+
+    const openFolderButton = document.createElement("button");
+    openFolderButton.type = "button";
+    openFolderButton.className = "reset-modal-btn original-export-open-folder-btn";
+    openFolderButton.textContent = "Open Folder";
+
+    const closeDialog = () => {
+      document.removeEventListener("keydown", onKeyDown);
+      overlay.remove();
+      resolve();
+    };
+
+    const onKeyDown = (event) => {
+      if (event.key === "Escape") closeDialog();
+    };
+
+    closeButton.addEventListener("click", closeDialog);
+    openFolderButton.addEventListener("click", async () => {
+      try {
+        if (!Neutralino.os?.open) throw new Error("No supported folder opener is available.");
+        await Neutralino.os.open(destinationFolder);
+        closeDialog();
+      } catch (error) {
+        console.error("Failed to open exported original nodes folder:", error);
+        alert("Unable to open the destination folder.");
+      }
+    });
+    overlay.addEventListener("click", (event) => {
+      if (event.target === overlay) closeDialog();
+    });
+    document.addEventListener("keydown", onKeyDown);
+
+    actions.append(closeButton, openFolderButton);
+    box.append(title, actions);
+    overlay.appendChild(box);
+    document.body.appendChild(overlay);
+    openFolderButton.focus();
+  });
+
+  async function exportSidebarFolderOriginalNodes(node) {
+    if (!node || node.kind !== "directory") return;
+    if (!isNeutralinoRuntime() || !Neutralino.os?.showFolderDialog || !Neutralino.filesystem?.readFile || !Neutralino.filesystem?.writeFile || !Neutralino.filesystem?.createDirectory || !Neutralino.filesystem?.getStats) {
+      alert("Exporting original nodes is available only in the desktop app.");
+      return;
+    }
+
+    const folderFiles = isOpenFolderRootContextNode(node)
+      ? await getOpenFolderMarkdownFilesForGraph()
+      : await collectMarkdownFilesForSidebarFolder(node);
+    if (!folderFiles.length) {
+      alert("This folder does not contain Markdown files to export.");
+      return;
+    }
+
+    const destinationFolder = await Neutralino.os.showFolderDialog("Select destination folder");
+    if (!destinationFolder) return;
+
+    const createdDirectories = new Set();
+    const exportedPaths = [];
+    const failedItems = [];
+    for (const fileEntry of folderFiles) {
+      try {
+        const markdown = await readFolderMarkdownFileContent(fileEntry);
+        const sourcePath = getSourceFilePathFromMarkdown(markdown);
+        if (!sourcePath) {
+          failedItems.push(`${fileEntry.name || getFileName(fileEntry.path || "")}: missing source_file`);
+          continue;
+        }
+
+        const relativeExportPath = getOriginalExportRelativePath(sourcePath, fileEntry);
+        if (!relativeExportPath) {
+          failedItems.push(`${fileEntry.name || getFileName(fileEntry.path || "")}: unable to derive export path`);
+          continue;
+        }
+
+        const sourceContent = await Neutralino.filesystem.readFile(sourcePath);
+        const destinationPath = joinPath(destinationFolder, relativeExportPath);
+        await ensureOriginalExportDirectories(destinationPath, createdDirectories);
+        await Neutralino.filesystem.writeFile(destinationPath, sourceContent);
+        exportedPaths.push(destinationPath);
+      } catch (error) {
+        console.error("Failed to export original folder node:", error);
+        failedItems.push(`${fileEntry.name || getFileName(fileEntry.path || "")}: ${error?.message || "export failed"}`);
+      }
+    }
+
+    if (!exportedPaths.length && failedItems.length) {
+      alert(`Unable to export original nodes.\n${failedItems.slice(0, 10).join("\n")}`);
+      return;
+    }
+
+    const message = [`Exported ${exportedPaths.length} original file${exportedPaths.length === 1 ? "" : "s"}.`];
+    if (failedItems.length) message.push(`Skipped ${failedItems.length} file${failedItems.length === 1 ? "" : "s"}:\n${failedItems.slice(0, 10).join("\n")}`);
+    await showOriginalExportCompleteDialog(message.join("\n\n"), destinationFolder);
+  }
+
+  async function exportSidebarFileOriginalNode(node) {
+    if (!node || node.kind !== "file") return;
+    if (!isNeutralinoRuntime() || !Neutralino.os?.showFolderDialog || !Neutralino.filesystem?.readFile || !Neutralino.filesystem?.writeFile || !Neutralino.filesystem?.createDirectory || !Neutralino.filesystem?.getStats) {
+      alert("Exporting original nodes is available only in the desktop app.");
+      return;
+    }
+
+    const markdown = await readSidebarNodeContent(node);
+    const sourcePath = getSourceFilePathFromMarkdown(markdown);
+    if (!sourcePath) {
+      alert("This file does not have a source_file frontmatter field.");
+      return;
+    }
+
+    const relativeExportPath = getOriginalExportRelativePath(sourcePath, node);
+    if (!relativeExportPath) {
+      alert("Unable to derive an export path for this original file.");
+      return;
+    }
+
+    const destinationFolder = await Neutralino.os.showFolderDialog("Select destination folder");
+    if (!destinationFolder) return;
+
+    const sourceContent = await Neutralino.filesystem.readFile(sourcePath);
+    const destinationPath = joinPath(destinationFolder, relativeExportPath);
+    await ensureOriginalExportDirectories(destinationPath, new Set());
+    await Neutralino.filesystem.writeFile(destinationPath, sourceContent);
+    await showOriginalExportCompleteDialog("Exported 1 original file.", destinationFolder);
+  }
+
+  async function openSidebarOriginalFile(node) {
+    if (!node || node.kind !== "file") return;
+    if (!isNeutralinoRuntime() || !Neutralino.os?.open) {
+      alert("Opening original files is available only in the desktop app.");
+      return;
+    }
+
+    const markdown = await readSidebarNodeContent(node);
+    const sourcePath = getSourceFilePathFromMarkdown(markdown);
+    if (!sourcePath) {
+      alert("This file does not have a source_file frontmatter field.");
+      return;
+    }
+    await Neutralino.os.open(sourcePath);
+  }
+
+  async function revealSidebarOriginalFolder(node) {
+    if (!node || node.kind !== "directory") return;
+    if (!isNeutralinoRuntime() || !Neutralino.os?.open) {
+      alert("Revealing original folders is available only in the desktop app.");
+      return;
+    }
+
+    const folderFiles = isOpenFolderRootContextNode(node)
+      ? await getOpenFolderMarkdownFilesForGraph()
+      : await collectMarkdownFilesForSidebarFolder(node);
+    for (const fileEntry of folderFiles) {
+      const markdown = await readFolderMarkdownFileContent(fileEntry);
+      const sourcePath = getSourceFilePathFromMarkdown(markdown);
+      if (!sourcePath) continue;
+      const originalFolderPath = getOriginalFolderPathFromSource(sourcePath, node);
+      if (originalFolderPath) {
+        await Neutralino.os.open(originalFolderPath);
+        return;
+      }
+    }
+
+    alert("This folder does not contain Markdown nodes with a source_file frontmatter field.");
+  }
+
   async function revealSidebarFolder(node) {
     const folderPath = getSidebarFolderFilesystemPath(node);
     if (!folderPath || !isNeutralinoRuntime() || !Neutralino.os?.open) {
@@ -1687,6 +2058,11 @@
       CONTEXT_MENU_ACTIONS.exportFolderToGraph.icon,
       "Create a portable graph archive that includes Markdown file contents."
     );
+    const exportOriginalNodesBtn = createFileContextMenuButton(
+      CONTEXT_MENU_ACTIONS.exportOriginalNodes?.label || "Export original nodes",
+      CONTEXT_MENU_ACTIONS.exportOriginalNodes?.icon || "bi bi-files",
+      "Copy the original source files referenced by this folder's Markdown nodes into a selected folder."
+    );
     const refreshFolderTreeBtn = createFileContextMenuButton(
       CONTEXT_MENU_ACTIONS.refresh.label,
       CONTEXT_MENU_ACTIONS.refresh.icon,
@@ -1696,6 +2072,11 @@
       CONTEXT_MENU_ACTIONS.revealInFileExplorer.label,
       CONTEXT_MENU_ACTIONS.revealInFileExplorer.icon,
       "Open this folder in the system file explorer."
+    );
+    const revealOriginalFolderBtn = createFileContextMenuButton(
+      CONTEXT_MENU_ACTIONS.revealOriginalFolder?.label || "Reveal original folder",
+      CONTEXT_MENU_ACTIONS.revealOriginalFolder?.icon || "bi bi-folder-symlink",
+      "Open the original source folder represented by this converted Markdown folder."
     );
     const copyPathBtn = createFileContextMenuButton(
       CONTEXT_MENU_ACTIONS.copyPath.label,
@@ -1733,12 +2114,14 @@
       title,
       separator,
       revealFolderBtn,
+      revealOriginalFolderBtn,
       renameFolderBtn,
       copyPathBtn,
       newFileBtn,
       newFolderBtn,
       showGraphBtn,
       exportFolderToGraphBtn,
+      exportOriginalNodesBtn,
       refreshFolderTreeBtn,
       deleteFolderSeparator,
       deleteFolderBtn
@@ -1784,6 +2167,19 @@
       }
     });
 
+    exportOriginalNodesBtn.addEventListener("click", async (event) => {
+      event.stopPropagation();
+      const target = sidebarContextTarget;
+      hideSidebarFolderContextMenu();
+      try {
+        await exportSidebarFolderOriginalNodes(target);
+      } catch (error) {
+        if (error && error.name === "AbortError") return;
+        console.error("Failed to export original sidebar folder nodes:", error);
+        alert("Unable to export original nodes for this folder.");
+      }
+    });
+
     newFileBtn.addEventListener("click", async (event) => {
       event.stopPropagation();
       const target = sidebarContextTarget;
@@ -1817,6 +2213,18 @@
       } catch (error) {
         console.error("Failed to reveal sidebar folder:", error);
         alert("Unable to reveal this folder in the file explorer.");
+      }
+    });
+
+    revealOriginalFolderBtn.addEventListener("click", async (event) => {
+      event.stopPropagation();
+      const target = sidebarContextTarget;
+      hideSidebarFolderContextMenu();
+      try {
+        await revealSidebarOriginalFolder(target);
+      } catch (error) {
+        console.error("Failed to reveal original sidebar folder:", error);
+        alert("Unable to reveal this folder's original source folder.");
       }
     });
 
@@ -1879,8 +2287,12 @@
     const tagsSubmenu = menu.querySelector(".tags-context-submenu");
     const tagsSubmenuPanel = menu.querySelector(".tags-context-submenu-panel");
     const showFullGraphBtn = menu.querySelector(".sidebar-show-full-graph");
+    const openOriginalFileBtn = menu.querySelector(".sidebar-open-original-file");
+    const exportOriginalNodeBtn = menu.querySelector(".sidebar-export-original-node");
     const canManageTags = isMarkdownPath(node.name || node.path || node.fullPath || "");
     if (showFullGraphBtn) showFullGraphBtn.classList.toggle("hidden", !canManageTags);
+    if (openOriginalFileBtn) openOriginalFileBtn.classList.toggle("hidden", !canManageTags);
+    if (exportOriginalNodeBtn) exportOriginalNodeBtn.classList.toggle("hidden", !canManageTags);
     if (tagsSubmenu) tagsSubmenu.classList.toggle("hidden", !canManageTags);
     if (canManageTags) {
       const renderSidebarTags = (currentTags) => {

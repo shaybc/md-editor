@@ -34,7 +34,70 @@
 
   function getGraphNodeCountForDisplayDefaults(options = {}) {
     const snapshot = options.graphSnapshot !== undefined ? options.graphSnapshot : options.graphDocument?.snapshot;
-    return Array.isArray(snapshot?.nodes) ? snapshot.nodes.length : 0;
+    const viewConfig = options.graphViewConfig != null
+      ? options.graphViewConfig
+      : (options.graphDocument?.viewConfig != null ? options.graphDocument.viewConfig : options.graphDocument?.graphViewConfig);
+    return getGraphNodeCountForViewConfig(snapshot, viewConfig);
+  }
+
+  function getGraphLinkSourceIdForNodeCount(link) {
+    return link?.source?.id || link?.source;
+  }
+
+  function getGraphLinkTargetIdForNodeCount(link) {
+    return link?.target?.id || link?.target;
+  }
+
+  function isMarkdownGraphLinkForNodeCount(link) {
+    return (link?.type || "link") === "link";
+  }
+
+  function getGraphNodeCountForViewConfig(snapshot, viewConfig) {
+    const nodes = Array.isArray(snapshot?.nodes) ? snapshot.nodes : [];
+    if (!nodes.length) return 0;
+    const hiddenNodeIds = new Set(Array.isArray(viewConfig?.hiddenNodeIds) ? viewConfig.hiddenNodeIds : []);
+    const nodeIds = new Set(nodes.map((node) => node?.id).filter((nodeId) => nodeId && !hiddenNodeIds.has(nodeId)));
+    const config = viewConfig || {};
+    const focusNodeId = config.focusNodeId;
+
+    const getDirectOutgoingNodeIds = (nodeId) => (snapshot?.links || [])
+      .filter((link) => isMarkdownGraphLinkForNodeCount(link) && getGraphLinkSourceIdForNodeCount(link) === nodeId)
+      .map(getGraphLinkTargetIdForNodeCount)
+      .filter((nodeId) => nodeIds.has(nodeId));
+
+    const getDirectIncomingNodeIds = (nodeId) => (snapshot?.links || [])
+      .filter((link) => isMarkdownGraphLinkForNodeCount(link) && getGraphLinkTargetIdForNodeCount(link) === nodeId)
+      .map(getGraphLinkSourceIdForNodeCount)
+      .filter((nodeId) => nodeIds.has(nodeId));
+
+    const getRecursiveNodeIds = (nodeId, getNextNodeIds) => {
+      const collectedNodeIds = new Set();
+      const nodesToVisit = [...getNextNodeIds(nodeId)];
+      while (nodesToVisit.length) {
+        const currentNodeId = nodesToVisit.shift();
+        if (!currentNodeId || currentNodeId === nodeId || collectedNodeIds.has(currentNodeId)) continue;
+        collectedNodeIds.add(currentNodeId);
+        nodesToVisit.push(...getNextNodeIds(currentNodeId));
+      }
+      return collectedNodeIds;
+    };
+
+    if (config.mode === "local" && focusNodeId) {
+      return new Set([focusNodeId, ...getDirectOutgoingNodeIds(focusNodeId)].filter((nodeId) => nodeIds.has(nodeId))).size;
+    }
+    if (config.mode === "full-local" && focusNodeId) {
+      const outgoingNodeIds = getRecursiveNodeIds(focusNodeId, getDirectOutgoingNodeIds);
+      return new Set([focusNodeId, ...outgoingNodeIds].filter((nodeId) => nodeIds.has(nodeId))).size;
+    }
+    if (config.mode === "full-network" && focusNodeId) {
+      const outgoingNodeIds = getRecursiveNodeIds(focusNodeId, getDirectOutgoingNodeIds);
+      const incomingNodeIds = getRecursiveNodeIds(focusNodeId, getDirectIncomingNodeIds);
+      return new Set([focusNodeId, ...incomingNodeIds, ...outgoingNodeIds].filter((nodeId) => nodeIds.has(nodeId))).size;
+    }
+    if (config.mode === "cluster" && Array.isArray(config.clusterNodeIds)) {
+      return new Set(config.clusterNodeIds.filter((nodeId) => nodeIds.has(nodeId))).size;
+    }
+    return nodes.length;
   }
 
   function getDefaultGraphViewConfigForNodeCount(nodeCount) {

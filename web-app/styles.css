@@ -4486,6 +4486,29 @@ a:focus {
   border-color: #b02a37;
 }
 
+.original-export-complete-box {
+  align-items: center;
+  text-align: center;
+}
+
+.original-export-complete-actions {
+  justify-content: center;
+  width: 100%;
+}
+
+.original-export-open-folder-btn {
+  min-width: 112px;
+  border-color: var(--accent-color);
+  background: var(--accent-color);
+  color: #fff;
+  font-weight: 700;
+}
+
+.original-export-open-folder-btn:hover {
+  background: color-mix(in srgb, var(--accent-color) 86%, #000);
+  border-color: color-mix(in srgb, var(--accent-color) 86%, #000);
+}
+
 .code-converter-finish-button {
   min-width: 92px;
   border-color: var(--accent-color);

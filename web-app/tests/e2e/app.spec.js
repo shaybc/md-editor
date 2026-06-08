@@ -507,8 +507,8 @@ test("opens help and about from the action menu", async ({ page }) => {
   const aboutModal = page.locator("#about-modal");
   await expect(aboutModal).toBeVisible();
   await expect(aboutModal.getByText("MD-Editor", { exact: true })).toBeVisible();
-  await expect(aboutModal.getByText("1.0.0")).toBeVisible();
-  await expect(aboutModal.getByText("May 9, 2026")).toBeVisible();
+  await expect(aboutModal.locator("#about-app-version")).toHaveText("v6.5");
+  await expect(aboutModal.locator("#about-release-date")).toHaveText("June 4, 2026");
   await expect(aboutModal.locator("#about-app-author")).toHaveText("ShayBC");
   await expect(aboutModal.getByText("Apache License 2.0")).toBeVisible();
   await expect(aboutModal.locator(".about-modal-logo")).toBeVisible();
@@ -1473,6 +1473,572 @@ test("saved graph remains interactive and filters only graph snapshot tags", asy
   const activeGraph = page.locator(".graph-tab-render:not(.hidden)");
   await expect(activeGraph.locator(".graph-node-file")).toHaveCount(5);
   await expect(activeGraph.locator(".graph-node-tag")).toHaveCount(0);
+});
+
+test("local graph warning uses the focused graph node count", async ({ page }) => {
+  await page.addInitScript(() => {
+    window.__graphConfirmMessages = [];
+    window.confirm = (message) => {
+      window.__graphConfirmMessages.push(String(message));
+      return false;
+    };
+
+    const nodes = Array.from({ length: 12 }, (_, index) => {
+      const number = index + 1;
+      return {
+        id: `node-${number}.md`,
+        label: `node-${number}.md`,
+        type: "file",
+        status: "current",
+        fullPath: `C:/vault/node-${number}.md`
+      };
+    });
+    const links = [
+      { source: "node-1.md", target: "node-2.md", type: "link", status: "current" },
+      { source: "node-1.md", target: "node-3.md", type: "link", status: "current" },
+      { source: "node-4.md", target: "node-5.md", type: "link", status: "current" },
+      { source: "node-6.md", target: "node-7.md", type: "link", status: "current" }
+    ];
+    const graphTab = {
+      id: "local_warning_graph_e2e",
+      title: "Large Source Graph",
+      content: "",
+      scrollPos: 0,
+      viewMode: "preview",
+      createdAt: Date.now(),
+      isTemporary: false,
+      type: "graph",
+      folderName: "Large Source Graph",
+      graphViewConfig: {
+        showTags: false,
+        hiddenTagIds: [],
+        hiddenNodeIds: [],
+        selectedTagIds: [],
+        groups: [],
+        searchQuery: "",
+        showArrows: true,
+        showOrphans: true,
+        showLabels: true
+      },
+      graphSnapshot: {
+        version: 1,
+        folderName: "Large Source Graph",
+        createdAt: Date.now(),
+        nodes,
+        links,
+        files: nodes.map((node) => ({
+          id: node.id,
+          path: node.id,
+          name: node.id,
+          content: `# ${node.label}`,
+          fullPath: node.fullPath,
+          status: "current",
+          tags: []
+        }))
+      }
+    };
+    localStorage.setItem("markdownViewerGlobalState", JSON.stringify({
+      graphRenderWarningThreshold: 5,
+      confirmOpenManyGraphNodes: true,
+      contextMenuTooltipDelayMs: 0
+    }));
+    localStorage.setItem("markdownViewerTabs", JSON.stringify([graphTab]));
+    localStorage.setItem("markdownViewerActiveTab", graphTab.id);
+  });
+
+  await page.goto("/");
+  await expect(page.locator(".graph-tab-render")).toBeVisible();
+  await expect(page.locator(".graph-node-file")).toHaveCount(12);
+
+  const seedNode = page.locator(".graph-node-file").filter({ has: page.locator("title", { hasText: "node-1.md" }) }).first();
+  await seedNode.dispatchEvent("contextmenu", {
+    bubbles: true,
+    cancelable: true,
+    button: 2,
+    clientX: 220,
+    clientY: 220
+  });
+  await page.locator(".graph-context-menu-submenu", { hasText: "Show graph" }).hover();
+  await page.locator(".graph-context-menu-item", { hasText: "Show local graph" }).dispatchEvent("click");
+
+  await expect(page.locator("#tab-list .tab-item.active")).toContainText("Local Graph: node-1.md");
+  await expect(page.locator(".graph-tab-render:not(.hidden)").locator(".graph-node-file")).toHaveCount(3);
+  await expect.poll(() => page.evaluate(() => window.__graphConfirmMessages)).toEqual([]);
+});
+
+test("graph map context menu exports original source files for visible nodes", async ({ page }) => {
+  await page.addInitScript(() => {
+    window.NL_VERSION = "test";
+    window.NL_OS = "Windows";
+    window.__alerts = [];
+    window.__createdDirectories = [];
+    window.__writes = [];
+    window.__openedFolders = [];
+    window.alert = (message) => window.__alerts.push(String(message));
+    window.Neutralino = {
+      filesystem: {
+        readFile: async (path) => {
+          if (path === "C:/vault/src/util/a.java.md") return "---\nsource_file: \"C:/workspace/my_project/src/util/a.java\"\n---\n# A";
+          if (path === "C:/vault/src/util/b.java.md") return "---\nsource_file: \"C:/workspace/my_project/src/util/b.java\"\n---\n# B";
+          if (path === "C:/workspace/my_project/src/util/a.java") return "class A {}";
+          if (path === "C:/workspace/my_project/src/util/b.java") return "class B {}";
+          throw new Error(`Unexpected read: ${path}`);
+        },
+        createDirectory: async (path) => {
+          window.__createdDirectories.push(path);
+        },
+        getStats: async (path) => {
+          if (path === "C:/temp" || path === "C:/temp/sub_project") return { type: "DIRECTORY" };
+          throw new Error(`Missing path: ${path}`);
+        },
+        writeFile: async (path, content) => {
+          window.__writes.push({ path, content });
+        }
+      },
+      os: {
+        showFolderDialog: async () => "C:/temp/sub_project",
+        open: async (path) => {
+          window.__openedFolders.push(path);
+        }
+      }
+    };
+    const graphTab = {
+      id: "export_original_nodes_graph_e2e",
+      title: "Export Original Nodes Graph",
+      content: "",
+      scrollPos: 0,
+      viewMode: "preview",
+      createdAt: Date.now(),
+      isTemporary: false,
+      type: "graph",
+      folderName: "Export Original Nodes Graph",
+      graphViewConfig: {
+        showTags: false,
+        hiddenTagIds: [],
+        hiddenNodeIds: [],
+        selectedTagIds: [],
+        groups: [],
+        searchQuery: "",
+        showArrows: true,
+        showOrphans: true,
+        showLabels: true
+      },
+      graphSnapshot: {
+        version: 1,
+        folderName: "Export Original Nodes Graph",
+        createdAt: Date.now(),
+        nodes: [
+          { id: "src/util/a.java", label: "a.java", type: "file", status: "current", fullPath: "C:/vault/src/util/a.java.md" },
+          { id: "src/util/b.java", label: "b.java", type: "file", status: "current", fullPath: "C:/vault/src/util/b.java.md" }
+        ],
+        links: [],
+        files: [
+          { id: "src/util/a.java", path: "src/util/a.java.md", name: "a.java.md", fullPath: "C:/vault/src/util/a.java.md", status: "current" },
+          { id: "src/util/b.java", path: "src/util/b.java.md", name: "b.java.md", fullPath: "C:/vault/src/util/b.java.md", status: "current" }
+        ]
+      }
+    };
+    localStorage.setItem("markdownViewerTabs", JSON.stringify([graphTab]));
+    localStorage.setItem("markdownViewerActiveTab", graphTab.id);
+  });
+
+  await page.goto("/");
+  await expect(page.locator(".graph-tab-render")).toBeVisible();
+  await expect(page.locator(".graph-node-file")).toHaveCount(2);
+
+  await page.locator(".graph-tab-render").dispatchEvent("contextmenu", {
+    bubbles: true,
+    cancelable: true,
+    button: 2,
+    clientX: 260,
+    clientY: 260
+  });
+  await page.locator(".graph-context-menu-item", { hasText: "Export original nodes" }).click();
+
+  await expect.poll(() => page.evaluate(() => window.__writes)).toEqual([
+    { path: "C:/temp/sub_project/my_project/src/util/a.java", content: "class A {}" },
+    { path: "C:/temp/sub_project/my_project/src/util/b.java", content: "class B {}" }
+  ]);
+  await expect.poll(() => page.evaluate(() => window.__createdDirectories)).toEqual([
+    "C:/temp/sub_project/my_project",
+    "C:/temp/sub_project/my_project/src",
+    "C:/temp/sub_project/my_project/src/util"
+  ]);
+  const completeModal = page.locator(".reset-modal-overlay", { hasText: "Exported 2 original files." });
+  await expect(completeModal).toBeVisible();
+  await completeModal.getByRole("button", { name: "Open Folder" }).click();
+  await expect.poll(() => page.evaluate(() => window.__openedFolders)).toEqual(["C:/temp/sub_project"]);
+  await expect(completeModal).toBeHidden();
+});
+
+test("graph node export submenu exports only that original source file", async ({ page }) => {
+  await page.addInitScript(() => {
+    window.NL_VERSION = "test";
+    window.NL_OS = "Windows";
+    window.__writes = [];
+    window.__openedFolders = [];
+    window.Neutralino = {
+      filesystem: {
+        readFile: async (path) => {
+          if (path === "C:/vault/src/util/a.java.md") return "---\nsource_file: \"C:/workspace/my_project/src/util/a.java\"\n---\n# A";
+          if (path === "C:/vault/src/util/b.java.md") return "---\nsource_file: \"C:/workspace/my_project/src/util/b.java\"\n---\n# B";
+          if (path === "C:/workspace/my_project/src/util/a.java") return "class A {}";
+          if (path === "C:/workspace/my_project/src/util/b.java") return "class B {}";
+          throw new Error(`Unexpected read: ${path}`);
+        },
+        createDirectory: async () => {},
+        getStats: async (path) => {
+          if (path === "C:/temp" || path === "C:/temp/sub_project") return { type: "DIRECTORY" };
+          throw new Error(`Missing path: ${path}`);
+        },
+        writeFile: async (path, content) => {
+          window.__writes.push({ path, content });
+        }
+      },
+      os: {
+        showFolderDialog: async () => "C:/temp/sub_project",
+        open: async (path) => {
+          window.__openedFolders.push(path);
+        }
+      }
+    };
+    const graphTab = {
+      id: "export_original_node_graph_e2e",
+      title: "Export Original Node Graph",
+      content: "",
+      scrollPos: 0,
+      viewMode: "preview",
+      createdAt: Date.now(),
+      isTemporary: false,
+      type: "graph",
+      folderName: "Export Original Node Graph",
+      graphViewConfig: {
+        showTags: false,
+        hiddenTagIds: [],
+        hiddenNodeIds: [],
+        selectedTagIds: [],
+        groups: [],
+        searchQuery: "",
+        showArrows: true,
+        showOrphans: true,
+        showLabels: true
+      },
+      graphSnapshot: {
+        version: 1,
+        folderName: "Export Original Node Graph",
+        createdAt: Date.now(),
+        nodes: [
+          { id: "src/util/a.java", label: "a.java", type: "file", status: "current", fullPath: "C:/vault/src/util/a.java.md" },
+          { id: "src/util/b.java", label: "b.java", type: "file", status: "current", fullPath: "C:/vault/src/util/b.java.md" }
+        ],
+        links: [],
+        files: [
+          { id: "src/util/a.java", path: "src/util/a.java.md", name: "a.java.md", fullPath: "C:/vault/src/util/a.java.md", status: "current" },
+          { id: "src/util/b.java", path: "src/util/b.java.md", name: "b.java.md", fullPath: "C:/vault/src/util/b.java.md", status: "current" }
+        ]
+      }
+    };
+    localStorage.setItem("markdownViewerTabs", JSON.stringify([graphTab]));
+    localStorage.setItem("markdownViewerActiveTab", graphTab.id);
+  });
+
+  await page.goto("/");
+  await expect(page.locator(".graph-tab-render")).toBeVisible();
+  await expect(page.locator(".graph-node-file")).toHaveCount(2);
+
+  const nodeA = page.locator(".graph-node-file").filter({ has: page.locator("title", { hasText: "a.java" }) }).first();
+  await nodeA.dispatchEvent("contextmenu", {
+    bubbles: true,
+    cancelable: true,
+    button: 2,
+    clientX: 220,
+    clientY: 220
+  });
+  await page.locator(".graph-context-menu-submenu", { hasText: "Export" }).hover();
+  await page.locator(".graph-context-menu:not(.hidden) .graph-context-menu-submenu", { hasText: "Export" })
+    .locator(".graph-context-menu-submenu-panel .graph-context-menu-item", { hasText: "Export original node" })
+    .evaluate((button) => button.click());
+
+  await expect.poll(() => page.evaluate(() => window.__writes)).toEqual([
+    { path: "C:/temp/sub_project/my_project/src/util/a.java", content: "class A {}" }
+  ]);
+  const completeModal = page.locator(".reset-modal-overlay", { hasText: "Exported 1 original file." });
+  await expect(completeModal).toBeVisible();
+  await completeModal.getByRole("button", { name: "Open Folder" }).click();
+  await expect.poll(() => page.evaluate(() => window.__openedFolders)).toEqual(["C:/temp/sub_project"]);
+});
+
+test("sidebar folder context menu exports original source files for that subtree", async ({ page }) => {
+  await page.addInitScript(() => {
+    window.NL_VERSION = "test";
+    window.NL_OS = "Windows";
+    window.__createdDirectories = [];
+    window.__writes = [];
+    window.__openedFolders = [];
+    const folderSelections = ["C:/vault", "C:/temp/sub_project"];
+    const directoryEntries = {
+      "C:/vault": [
+        { entry: "client", type: "DIRECTORY" }
+      ],
+      "C:/vault/client": [
+        { entry: "api", type: "DIRECTORY" },
+        { entry: "editor", type: "DIRECTORY" }
+      ],
+      "C:/vault/client/api": [
+        { entry: "aboutApi.js.md", type: "FILE" },
+        { entry: "apiClient.js.md", type: "FILE" }
+      ],
+      "C:/vault/client/editor": [
+        { entry: "editor.js.md", type: "FILE" }
+      ]
+    };
+    window.Neutralino = {
+      filesystem: {
+        readDirectory: async (path) => directoryEntries[path] || [],
+        readFile: async (path) => {
+          if (path === "C:/vault/client/api/aboutApi.js.md") return "---\nsource_file: \"C:/workspace/my_project/client/api/aboutApi.js\"\n---\n# About API";
+          if (path === "C:/vault/client/api/apiClient.js.md") return "---\nsource_file: \"C:/workspace/my_project/client/api/apiClient.js\"\n---\n# API Client";
+          if (path === "C:/vault/client/editor/editor.js.md") return "---\nsource_file: \"C:/workspace/my_project/client/editor/editor.js\"\n---\n# Editor";
+          if (path === "C:/workspace/my_project/client/api/aboutApi.js") return "export const aboutApi = {};";
+          if (path === "C:/workspace/my_project/client/api/apiClient.js") return "export const apiClient = {};";
+          if (path === "C:/workspace/my_project/client/editor/editor.js") return "export const editor = {};";
+          throw new Error(`Unexpected read: ${path}`);
+        },
+        createDirectory: async (path) => {
+          window.__createdDirectories.push(path);
+        },
+        getStats: async (path) => {
+          if (path === "C:/temp" || path === "C:/temp/sub_project") return { type: "DIRECTORY" };
+          throw new Error(`Missing path: ${path}`);
+        },
+        writeFile: async (path, content) => {
+          window.__writes.push({ path, content });
+        }
+      },
+      os: {
+        showFolderDialog: async () => folderSelections.shift() || "C:/temp/sub_project",
+        open: async (path) => {
+          window.__openedFolders.push(path);
+        }
+      }
+    };
+  });
+
+  await page.goto("/");
+  await page.evaluate(() => window.markdownViewerApp.modules.sidebarContextTree.openFolderTree());
+  await expect(page.locator(".folder-tree-label", { hasText: "api" })).toBeVisible();
+  await expect(page.locator(".folder-tree-file", { hasText: "editor.js.md" })).toBeVisible();
+
+  await page.locator(".folder-tree-label", { hasText: "api" }).dispatchEvent("contextmenu", {
+    bubbles: true,
+    cancelable: true,
+    button: 2,
+    clientX: 120,
+    clientY: 220
+  });
+  await page.locator(".sidebar-folder-context-menu:not(.hidden) .graph-context-menu-item", { hasText: "Export original nodes" }).evaluate((button) => button.click());
+
+  await expect.poll(() => page.evaluate(() => window.__writes)).toEqual([
+    { path: "C:/temp/sub_project/my_project/client/api/aboutApi.js", content: "export const aboutApi = {};" },
+    { path: "C:/temp/sub_project/my_project/client/api/apiClient.js", content: "export const apiClient = {};" }
+  ]);
+  await expect.poll(() => page.evaluate(() => window.__createdDirectories)).toEqual([
+    "C:/temp/sub_project/my_project",
+    "C:/temp/sub_project/my_project/client",
+    "C:/temp/sub_project/my_project/client/api"
+  ]);
+  const completeModal = page.locator(".reset-modal-overlay", { hasText: "Exported 2 original files." });
+  await expect(completeModal).toBeVisible();
+  await completeModal.getByRole("button", { name: "Open Folder" }).click();
+  await expect.poll(() => page.evaluate(() => window.__openedFolders)).toEqual(["C:/temp/sub_project"]);
+});
+
+test("sidebar file context menu exports original source file for that node", async ({ page }) => {
+  await page.addInitScript(() => {
+    window.NL_VERSION = "test";
+    window.NL_OS = "Windows";
+    window.__createdDirectories = [];
+    window.__writes = [];
+    window.__openedFolders = [];
+    const folderSelections = ["C:/vault", "C:/temp/sub_project"];
+    const directoryEntries = {
+      "C:/vault": [
+        { entry: "client", type: "DIRECTORY" }
+      ],
+      "C:/vault/client": [
+        { entry: "api", type: "DIRECTORY" }
+      ],
+      "C:/vault/client/api": [
+        { entry: "aboutApi.js.md", type: "FILE" },
+        { entry: "apiClient.js.md", type: "FILE" }
+      ]
+    };
+    window.Neutralino = {
+      filesystem: {
+        readDirectory: async (path) => directoryEntries[path] || [],
+        readFile: async (path) => {
+          if (path === "C:/vault/client/api/aboutApi.js.md") return "---\nsource_file: \"C:/workspace/my_project/client/api/aboutApi.js\"\n---\n# About API";
+          if (path === "C:/vault/client/api/apiClient.js.md") return "---\nsource_file: \"C:/workspace/my_project/client/api/apiClient.js\"\n---\n# API Client";
+          if (path === "C:/workspace/my_project/client/api/aboutApi.js") return "export const aboutApi = {};";
+          if (path === "C:/workspace/my_project/client/api/apiClient.js") return "export const apiClient = {};";
+          throw new Error(`Unexpected read: ${path}`);
+        },
+        createDirectory: async (path) => {
+          window.__createdDirectories.push(path);
+        },
+        getStats: async (path) => {
+          if (path === "C:/temp" || path === "C:/temp/sub_project") return { type: "DIRECTORY" };
+          throw new Error(`Missing path: ${path}`);
+        },
+        writeFile: async (path, content) => {
+          window.__writes.push({ path, content });
+        }
+      },
+      os: {
+        showFolderDialog: async () => folderSelections.shift() || "C:/temp/sub_project",
+        open: async (path) => {
+          window.__openedFolders.push(path);
+        }
+      }
+    };
+  });
+
+  await page.goto("/");
+  await page.evaluate(() => window.markdownViewerApp.modules.sidebarContextTree.openFolderTree());
+  await expect(page.locator(".folder-tree-file", { hasText: "aboutApi.js.md" })).toBeVisible();
+
+  await page.locator(".folder-tree-file", { hasText: "aboutApi.js.md" }).dispatchEvent("contextmenu", {
+    bubbles: true,
+    cancelable: true,
+    button: 2,
+    clientX: 150,
+    clientY: 160
+  });
+  await page.locator(".sidebar-file-context-menu:not(.hidden) .graph-context-menu-submenu", { hasText: "Export" })
+    .locator(".graph-context-menu-submenu-panel .graph-context-menu-item", { hasText: "Export original node" })
+    .evaluate((button) => button.click());
+
+  await expect.poll(() => page.evaluate(() => window.__writes)).toEqual([
+    { path: "C:/temp/sub_project/my_project/client/api/aboutApi.js", content: "export const aboutApi = {};" }
+  ]);
+  await expect.poll(() => page.evaluate(() => window.__createdDirectories)).toEqual([
+    "C:/temp/sub_project/my_project",
+    "C:/temp/sub_project/my_project/client",
+    "C:/temp/sub_project/my_project/client/api"
+  ]);
+  const completeModal = page.locator(".reset-modal-overlay", { hasText: "Exported 1 original file." });
+  await expect(completeModal).toBeVisible();
+  await completeModal.getByRole("button", { name: "Open Folder" }).click();
+  await expect.poll(() => page.evaluate(() => window.__openedFolders)).toEqual(["C:/temp/sub_project"]);
+});
+
+test("sidebar file context menu opens original source file", async ({ page }) => {
+  await page.addInitScript(() => {
+    window.NL_VERSION = "test";
+    window.NL_OS = "Windows";
+    window.__openedPaths = [];
+    const folderSelections = ["C:/vault"];
+    const directoryEntries = {
+      "C:/vault": [
+        { entry: "client", type: "DIRECTORY" }
+      ],
+      "C:/vault/client": [
+        { entry: "api", type: "DIRECTORY" }
+      ],
+      "C:/vault/client/api": [
+        { entry: "aboutApi.js.md", type: "FILE" }
+      ]
+    };
+    window.Neutralino = {
+      filesystem: {
+        readDirectory: async (path) => directoryEntries[path] || [],
+        readFile: async (path) => {
+          if (path === "C:/vault/client/api/aboutApi.js.md") return "---\nsource_file: \"C:/workspace/my_project/client/api/aboutApi.js\"\n---\n# About API";
+          throw new Error(`Unexpected read: ${path}`);
+        }
+      },
+      os: {
+        showFolderDialog: async () => folderSelections.shift() || "C:/vault",
+        open: async (path) => {
+          window.__openedPaths.push(path);
+        }
+      }
+    };
+  });
+
+  await page.goto("/");
+  await page.evaluate(() => window.markdownViewerApp.modules.sidebarContextTree.openFolderTree());
+  await expect(page.locator(".folder-tree-file", { hasText: "aboutApi.js.md" })).toBeVisible();
+
+  await page.locator(".folder-tree-file", { hasText: "aboutApi.js.md" }).dispatchEvent("contextmenu", {
+    bubbles: true,
+    cancelable: true,
+    button: 2,
+    clientX: 150,
+    clientY: 160
+  });
+  await page.locator(".sidebar-file-context-menu:not(.hidden) .graph-context-menu-item", { hasText: "Open original file" }).evaluate((button) => button.click());
+
+  await expect.poll(() => page.evaluate(() => window.__openedPaths)).toEqual([
+    "C:/workspace/my_project/client/api/aboutApi.js"
+  ]);
+});
+
+test("sidebar folder context menu reveals original source folder", async ({ page }) => {
+  await page.addInitScript(() => {
+    window.NL_VERSION = "test";
+    window.NL_OS = "Windows";
+    window.__openedPaths = [];
+    const folderSelections = ["C:/vault"];
+    const directoryEntries = {
+      "C:/vault": [
+        { entry: "client", type: "DIRECTORY" }
+      ],
+      "C:/vault/client": [
+        { entry: "api", type: "DIRECTORY" },
+        { entry: "editor", type: "DIRECTORY" }
+      ],
+      "C:/vault/client/api": [
+        { entry: "aboutApi.js.md", type: "FILE" }
+      ],
+      "C:/vault/client/editor": [
+        { entry: "editor.js.md", type: "FILE" }
+      ]
+    };
+    window.Neutralino = {
+      filesystem: {
+        readDirectory: async (path) => directoryEntries[path] || [],
+        readFile: async (path) => {
+          if (path === "C:/vault/client/api/aboutApi.js.md") return "---\nsource_file: \"C:/workspace/my_project/client/api/aboutApi.js\"\n---\n# About API";
+          if (path === "C:/vault/client/editor/editor.js.md") return "---\nsource_file: \"C:/workspace/my_project/client/editor/editor.js\"\n---\n# Editor";
+          throw new Error(`Unexpected read: ${path}`);
+        }
+      },
+      os: {
+        showFolderDialog: async () => folderSelections.shift() || "C:/vault",
+        open: async (path) => {
+          window.__openedPaths.push(path);
+        }
+      }
+    };
+  });
+
+  await page.goto("/");
+  await page.evaluate(() => window.markdownViewerApp.modules.sidebarContextTree.openFolderTree());
+  await expect(page.locator(".folder-tree-label", { hasText: "client" })).toBeVisible();
+
+  await page.locator(".folder-tree-label", { hasText: "client" }).dispatchEvent("contextmenu", {
+    bubbles: true,
+    cancelable: true,
+    button: 2,
+    clientX: 120,
+    clientY: 160
+  });
+  await page.locator(".sidebar-folder-context-menu:not(.hidden) .graph-context-menu-item", { hasText: "Reveal original folder" }).evaluate((button) => button.click());
+
+  await expect.poll(() => page.evaluate(() => window.__openedPaths)).toEqual([
+    "C:/workspace/my_project/client"
+  ]);
 });
 
 test("saved graph view details buttons open restored comparison details", async ({ page }) => {

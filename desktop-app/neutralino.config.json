@@ -1,7 +1,7 @@
 {
   "$schema": "https://raw.githubusercontent.com/neutralinojs/neutralinojs/main/schemas/neutralino.config.schema.json",
   "applicationId": "js.neutralino.sample",
-  "version": "1.0.0",
+  "version": "6.5.0",
   "defaultMode": "window",
   "port": 0,
   "documentRoot": "/resources/",
@@ -15,7 +15,9 @@
   },
   "nativeAllowList": [
     "app.*",
+    "window.*",
     "os.*",
+    "storage.*",
     "filesystem.readFile",
     "filesystem.readBinaryFile",
     "filesystem.writeFile",
@@ -32,10 +34,10 @@
   "modes": {
     "window": {
       "title": "MD-Editor",
-      "width": 800,
-      "height": 500,
-      "minWidth": 400,
-      "minHeight": 200,
+      "width": 1400,
+      "height": 900,
+      "minWidth": 900,
+      "minHeight": 600,
       "center": true,
       "fullScreen": false,
       "alwaysOnTop": false,
