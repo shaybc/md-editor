@@ -3861,6 +3861,7 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
     refresh: { label: "Refresh", icon: "bi bi-arrow-clockwise" },
     newFile: { label: "New file ...", icon: "bi bi-file-earmark-plus" },
     newFolder: { label: "New folder ...", icon: "bi bi-folder-plus" },
+    centerGraph: { label: "Center Graph", icon: "bi bi-bullseye" },
     removePoint: { label: "Remove this point", icon: "bi bi-eye-slash" },
     removeLeafNodes: { label: "Remove Leaf Nodes", icon: "bi bi-diagram-2" },
     collapseToCluster: { label: "Collapse to Cluster", icon: "bi bi-collection" },

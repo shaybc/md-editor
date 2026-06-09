@@ -1548,6 +1548,11 @@
       CONTEXT_MENU_ACTIONS.openAll.icon,
       "Open every visible file point in editor tabs."
     );
+    const centerGraphBtn = createContextMenuButton(
+      CONTEXT_MENU_ACTIONS.centerGraph?.label || "Center Graph",
+      CONTEXT_MENU_ACTIONS.centerGraph?.icon || "bi bi-bullseye",
+      "Zoom and pan this graph so the current map's points are centered in view."
+    );
     const exportOriginalNodesBtn = createContextMenuButton(
       CONTEXT_MENU_ACTIONS.exportOriginalNodes.label,
       CONTEXT_MENU_ACTIONS.exportOriginalNodes.icon,
@@ -1780,6 +1785,7 @@
     contextMenu.appendChild(contextMenuTitle);
     contextMenu.appendChild(contextMenuTitleSeparator);
     contextMenu.appendChild(openAllBtn);
+    contextMenu.appendChild(centerGraphBtn);
     contextMenu.appendChild(exportOriginalNodesBtn);
     contextMenu.appendChild(openFileBtn);
     contextMenu.appendChild(openDefaultAppBtn);
@@ -2462,6 +2468,64 @@
       return Array.from(visibleFileNodeIds).filter((nodeId) => !nodesWithOutgoingLinks.has(nodeId));
     };
 
+    const applyGraphTransform = (nextTransform, options = {}) => {
+      if (!nextTransform) return;
+      if (options.animate !== false && typeof svg.transition === "function") {
+        svg.transition().duration(options.duration || 420).call(zoomBehavior.transform, nextTransform);
+      } else {
+        currentZoomTransform = nextTransform;
+        activeTab.graphZoomScale = currentZoomTransform.k;
+        const cachedGraphRender = graphRenderCache.get(activeTab.id);
+        if (cachedGraphRender) cachedGraphRender.zoomScale = currentZoomTransform.k;
+        graphLayer.attr("transform", currentZoomTransform);
+        updateLabelVisibility();
+        updateStatusLine({
+          visiblePointCount: activeTab.visiblePointCount || nodes.length,
+          graphEdgeCount: activeTab.graphEdgeCount || graphEdgeCount,
+          graphZoomScale: currentZoomTransform.k
+        });
+        captureGraphLayout(activeTab, nodes, currentZoomTransform);
+        scheduleGraphLayoutStorageSave();
+      }
+    };
+
+    const getGraphCenterTransform = (targetNodes = nodes) => {
+      const centerNodes = (Array.isArray(targetNodes) ? targetNodes : [])
+        .filter((graphNode) => Number.isFinite(graphNode?.x) && Number.isFinite(graphNode?.y));
+      if (!centerNodes.length) return null;
+
+      let minX = Infinity;
+      let minY = Infinity;
+      let maxX = -Infinity;
+      let maxY = -Infinity;
+      centerNodes.forEach((graphNode) => {
+        minX = Math.min(minX, graphNode.x);
+        minY = Math.min(minY, graphNode.y);
+        maxX = Math.max(maxX, graphNode.x);
+        maxY = Math.max(maxY, graphNode.y);
+      });
+
+      const padding = Math.min(160, Math.max(72, Math.min(width, height) * 0.14));
+      const boxWidth = Math.max(1, maxX - minX);
+      const boxHeight = Math.max(1, maxY - minY);
+      const centerX = minX + boxWidth / 2;
+      const centerY = minY + boxHeight / 2;
+      const fitScale = Math.min((width - padding * 2) / boxWidth, (height - padding * 2) / boxHeight);
+      const targetScale = centerNodes.length === 1
+        ? Math.max(1, Math.min(2, currentZoomTransform?.k || 1.4))
+        : Math.max(0.2, Math.min(2.2, fitScale));
+      return d3.zoomIdentity
+        .translate(width / 2 - centerX * targetScale, height / 2 - centerY * targetScale)
+        .scale(targetScale);
+    };
+
+    const centerGraphView = (options = {}) => {
+      const nextTransform = getGraphCenterTransform(nodes);
+      if (!nextTransform) return false;
+      applyGraphTransform(nextTransform, options);
+      return true;
+    };
+
     const hideLeafGraphPoints = () => {
       const leafNodeIds = getVisibleLeafNodeIds();
       if (!leafNodeIds.length) {
@@ -2483,6 +2547,12 @@
       hideContextMenu();
       graphRenderWrapper.remove();
       renderGraphView();
+    };
+
+    const getGraphLayoutWithoutZoom = (graphLayout) => {
+      if (!graphLayout || typeof graphLayout !== "object") return null;
+      const { zoom, transform, ...layoutWithoutZoom } = graphLayout;
+      return layoutWithoutZoom;
     };
 
     const updateGraphCollapsedClusters = (collapsedClusters) => {
@@ -3491,6 +3561,7 @@
     ];
     const graphContextMenuItems = [
       openAllBtn,
+      centerGraphBtn,
       exportOriginalNodesBtn,
       removeLeafNodesBtn,
       magneticToggleBtn
@@ -3659,6 +3730,12 @@
       event.stopPropagation();
       hideContextMenu();
       await openAllVisibleGraphFiles();
+    });
+
+    centerGraphBtn.addEventListener("click", (event) => {
+      event.stopPropagation();
+      hideContextMenu();
+      centerGraphView();
     });
 
     exportOriginalNodesBtn.addEventListener("click", async (event) => {
@@ -4041,7 +4118,7 @@
           focusNodeId,
           hiddenNodeIds: [...(parentConfig.hiddenNodeIds || [])]
         },
-        graphLayout: activeGraphTab?.graphLayout || null
+        graphLayout: getGraphLayoutWithoutZoom(activeGraphTab?.graphLayout)
       });
       if (!localGraphTab) return;
       tabs.push(localGraphTab);
@@ -4075,7 +4152,7 @@
           hiddenNodeIds,
           collapsedClusters
         },
-        graphLayout: activeGraphTab?.graphLayout || null
+        graphLayout: getGraphLayoutWithoutZoom(activeGraphTab?.graphLayout)
       });
       if (!clusterGraphTab) return;
       tabs.push(clusterGraphTab);
@@ -4496,23 +4573,7 @@
       const nextTransform = d3.zoomIdentity
         .translate(width / 2 - centerX * targetScale, height / 2 - centerY * targetScale)
         .scale(targetScale);
-      if (typeof svg.transition === "function") {
-        svg.transition().duration(420).call(zoomBehavior.transform, nextTransform);
-      } else {
-        currentZoomTransform = nextTransform;
-        activeTab.graphZoomScale = currentZoomTransform.k;
-        const cachedGraphRender = graphRenderCache.get(activeTab.id);
-        if (cachedGraphRender) cachedGraphRender.zoomScale = currentZoomTransform.k;
-        graphLayer.attr("transform", currentZoomTransform);
-        updateLabelVisibility();
-        updateStatusLine({
-          visiblePointCount: activeTab.visiblePointCount || nodes.length,
-          graphEdgeCount: activeTab.graphEdgeCount || graphEdgeCount,
-          graphZoomScale: currentZoomTransform.k
-        });
-        captureGraphLayout(activeTab, nodes, currentZoomTransform);
-        scheduleGraphLayoutStorageSave();
-      }
+      applyGraphTransform(nextTransform);
     }
 
     function applyFind(searchTerm) {

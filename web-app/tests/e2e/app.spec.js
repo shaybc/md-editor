@@ -1327,6 +1327,7 @@ test("saved graph remains interactive and filters only graph snapshot tags", asy
   await expect(graphMenu.getByRole("button", { name: "Turn magnetic forces off" })).toBeHidden();
   await expect(graphMenu.getByRole("button", { name: "Open all" })).toBeHidden();
   await expect(graphMenu.getByRole("button", { name: "Remove Leaf Nodes" })).toBeHidden();
+  await expect(graphMenu.getByRole("button", { name: "Center Graph" })).toBeHidden();
   await expect(graphMenu.locator(".tags-context-menu-item")).toHaveText(["#defined"]);
   await expect(graphMenu.evaluate((menu) => Array.from(menu.children).map((child) => child.textContent.trim()))).resolves.not.toContain("Share");
   await graphMenu.locator(".graph-context-menu-submenu", { hasText: "Export" }).evaluate((submenu) => submenu.querySelector("button")?.focus());
@@ -1334,7 +1335,8 @@ test("saved graph remains interactive and filters only graph snapshot tags", asy
     "Share",
     "Export as Markdown",
     "Export as HTML",
-    "Export as PDF"
+    "Export as PDF",
+    "Export original node"
   ]);
   await expect.poll(() => graphMenu.evaluate(async (menu) => {
     const getMenuButton = (label) => Array.from(menu.querySelectorAll(".graph-context-menu-item"))
@@ -1380,6 +1382,7 @@ test("saved graph remains interactive and filters only graph snapshot tags", asy
   const mapMenu = page.locator(".graph-tab-render .graph-context-menu:not(.hidden)");
   await expect(mapMenu).toContainText("Turn magnetic forces off");
   await expect(mapMenu).toContainText("Remove Leaf Nodes");
+  await expect(mapMenu.getByRole("button", { name: "Center Graph" })).toBeVisible();
   await expect(mapMenu.getByRole("button", { name: "Open in a new tab" })).toBeHidden();
 
   await mapMenu.getByText("Turn magnetic forces off").click();
@@ -1598,6 +1601,100 @@ test("local graph warning uses the focused graph node count", async ({ page }) =
   await expect(page.locator("#tab-list .tab-item.active")).toContainText("Local Graph: node-1.md");
   await expect(page.locator(".graph-tab-render:not(.hidden)").locator(".graph-node-file")).toHaveCount(3);
   await expect.poll(() => page.evaluate(() => window.__graphConfirmMessages)).toEqual([]);
+});
+
+test("center graph action restores nodes when saved pan is off screen", async ({ page }) => {
+  await page.addInitScript(() => {
+    const graphTab = {
+      id: "center_graph_e2e",
+      title: "Center Graph E2E",
+      content: "",
+      scrollPos: 0,
+      viewMode: "preview",
+      createdAt: Date.now(),
+      isTemporary: false,
+      type: "graph",
+      folderName: "Center Graph E2E",
+      graphViewConfig: {
+        showTags: false,
+        hiddenTagIds: [],
+        hiddenNodeIds: [],
+        selectedTagIds: [],
+        groups: [],
+        searchQuery: "",
+        showArrows: true,
+        showOrphans: true,
+        showLabels: true
+      },
+      graphLayout: {
+        magneticEnabled: false,
+        zoom: { x: -10000, y: -10000, k: 1 },
+        nodes: {
+          "alpha.md": { x: 120, y: 140 },
+          "beta.md": { x: 280, y: 140 },
+          "gamma.md": { x: 200, y: 300 }
+        }
+      },
+      graphSnapshot: {
+        version: 1,
+        folderName: "Center Graph E2E",
+        createdAt: Date.now(),
+        nodes: [
+          { id: "alpha.md", label: "alpha.md", fullPath: "C:/vault/alpha.md", type: "file", status: "current", tags: [] },
+          { id: "beta.md", label: "beta.md", fullPath: "C:/vault/beta.md", type: "file", status: "current", tags: [] },
+          { id: "gamma.md", label: "gamma.md", fullPath: "C:/vault/gamma.md", type: "file", status: "current", tags: [] }
+        ],
+        links: [
+          { source: "alpha.md", target: "beta.md", type: "link", status: "current" },
+          { source: "beta.md", target: "gamma.md", type: "link", status: "current" }
+        ],
+        files: [
+          { id: "alpha.md", path: "alpha.md", name: "alpha.md", content: "# Alpha", fullPath: "C:/vault/alpha.md", status: "current", tags: [] },
+          { id: "beta.md", path: "beta.md", name: "beta.md", content: "# Beta", fullPath: "C:/vault/beta.md", status: "current", tags: [] },
+          { id: "gamma.md", path: "gamma.md", name: "gamma.md", content: "# Gamma", fullPath: "C:/vault/gamma.md", status: "current", tags: [] }
+        ]
+      }
+    };
+    localStorage.setItem("markdownViewerTabs", JSON.stringify([graphTab]));
+    localStorage.setItem("markdownViewerActiveTab", graphTab.id);
+  });
+
+  await page.goto("/");
+  const graphRender = page.locator(".graph-tab-render");
+  await expect(graphRender).toBeVisible();
+
+  await graphRender.dispatchEvent("contextmenu", {
+    bubbles: true,
+    cancelable: true,
+    button: 2,
+    clientX: 260,
+    clientY: 260
+  });
+  const mapMenu = page.locator(".graph-tab-render .graph-context-menu:not(.hidden)");
+  await expect(mapMenu.getByRole("button", { name: "Center Graph" })).toBeVisible();
+  await mapMenu.getByRole("button", { name: "Center Graph" }).click();
+
+  await expect.poll(() => page.evaluate(() => {
+    const render = document.querySelector(".graph-tab-render:not(.hidden)");
+    if (!render) return false;
+    const renderRect = render.getBoundingClientRect();
+    const nodeRects = Array.from(render.querySelectorAll(".graph-node-file"))
+      .map((node) => node.getBoundingClientRect());
+    const nodesInView = nodeRects.filter((nodeRect) => (
+      nodeRect.right >= renderRect.left
+      && nodeRect.left <= renderRect.right
+      && nodeRect.bottom >= renderRect.top
+      && nodeRect.top <= renderRect.bottom
+    )).length;
+    const tabs = JSON.parse(localStorage.getItem("markdownViewerTabs") || "[]");
+    const zoom = tabs[0]?.graphLayout?.zoom;
+    return nodeRects.length === 3
+      && nodesInView >= 2
+      && Number.isFinite(zoom?.x)
+      && Number.isFinite(zoom?.y)
+      && Math.abs(zoom.x + 10000) > 1000
+      && Math.abs(zoom.y + 10000) > 1000;
+  })).toBe(true);
 });
 
 test("graph map context menu exports original source files for visible nodes", async ({ page }) => {

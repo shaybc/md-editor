@@ -5,6 +5,9 @@ desktop-app/node_modules/
 
 # Developer tools' files
 .lite_workspace.lua
+.agent/
+.agents/
+tools/
 
 # Build/test output
 web-app/playwright-report/

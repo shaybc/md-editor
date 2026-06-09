@@ -1,6 +1,6 @@
 {
   "name": "md-editor",
-  "version": "6.9.0",
+  "version": "6.10.0",
   "private": true,
   "scripts": {
     "test": "node --test tests/*.test.js",
