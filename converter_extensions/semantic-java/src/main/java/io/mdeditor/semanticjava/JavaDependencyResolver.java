@@ -66,7 +66,11 @@ final class JavaDependencyResolver {
     } catch (RuntimeException error) {
       String unresolvedName = unresolvedName(node);
       if (looksLikeTypeName(unresolvedName)) {
-        unresolvedReport.add(importContext.qualify(unresolvedName));
+        Optional<String> localQualifiedName = importContext.resolveLocal(unresolvedName, index);
+        if (localQualifiedName.isPresent()) {
+          return localQualifiedName;
+        }
+        unresolvedReport.add(importContext.qualifyForReport(unresolvedName));
       }
     }
     return Optional.empty();
@@ -142,14 +146,50 @@ final class JavaDependencyResolver {
       return new ImportContext(packageName, explicitImports, wildcardImports);
     }
 
-    String qualify(String rawName) {
-      String normalized = rawName == null ? "" : rawName.trim();
+    Optional<String> resolveLocal(String rawName, LocalTypeIndex index) {
+      String normalized = normalizeTypeName(rawName);
+      if (normalized.isBlank()) return Optional.empty();
+      if (normalized.contains(".")) {
+        return index.hasQualifiedName(normalized) ? Optional.of(normalized) : Optional.empty();
+      }
+
+      String explicitImport = explicitImports.get(normalized);
+      if (explicitImport != null && index.hasQualifiedName(explicitImport)) {
+        return Optional.of(explicitImport);
+      }
+
+      if (!packageName.isBlank()) {
+        String samePackageName = packageName + "." + normalized;
+        if (index.hasQualifiedName(samePackageName)) return Optional.of(samePackageName);
+      }
+
+      List<String> matches = wildcardImports.stream()
+          .map(packageName -> packageName + "." + normalized)
+          .filter(index::hasQualifiedName)
+          .toList();
+      if (matches.size() == 1) return Optional.of(matches.get(0));
+
+      return index.onlyQualifiedNameForSimpleName(normalized);
+    }
+
+    String qualifyForReport(String rawName) {
+      String normalized = normalizeTypeName(rawName);
       if (normalized.isBlank() || normalized.contains(".")) return normalized;
 
       String explicitImport = explicitImports.get(normalized);
       if (explicitImport != null) return explicitImport;
       if (!packageName.isBlank()) return packageName + "." + normalized;
       if (wildcardImports.size() == 1) return wildcardImports.get(0) + "." + normalized;
+      return normalized;
+    }
+
+    private static String normalizeTypeName(String rawName) {
+      String normalized = rawName == null ? "" : rawName.trim();
+      int genericStart = normalized.indexOf('<');
+      if (genericStart >= 0) normalized = normalized.substring(0, genericStart).trim();
+      while (normalized.endsWith("[]")) {
+        normalized = normalized.substring(0, normalized.length() - 2).trim();
+      }
       return normalized;
     }
   }

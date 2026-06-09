@@ -11,9 +11,11 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.TreeSet;
 
 final class LocalTypeIndex {
   private final Map<String, Path> byQualifiedName = new HashMap<>();
+  private final Map<String, TreeSet<String>> qualifiedNamesBySimpleName = new HashMap<>();
   private final Map<Path, String> primaryTypeByFile = new HashMap<>();
   private final Map<Path, String> packageByFile = new HashMap<>();
   private final Map<Path, String> kindByFile = new HashMap<>();
@@ -36,6 +38,9 @@ final class LocalTypeIndex {
       for (TypeDeclaration<?> type : types) {
         String qualifiedName = qualifiedName(packageName, type);
         index.byQualifiedName.put(qualifiedName, file);
+        index.qualifiedNamesBySimpleName
+            .computeIfAbsent(type.getNameAsString(), ignored -> new TreeSet<>())
+            .add(qualifiedName);
         if (primary.isPresent() && primary.get() == type) {
           index.primaryTypeByFile.put(file, qualifiedName);
           index.kindByFile.put(file, typeKind(type));
@@ -47,6 +52,16 @@ final class LocalTypeIndex {
 
   Path fileForQualifiedName(String qualifiedName) {
     return byQualifiedName.get(qualifiedName);
+  }
+
+  boolean hasQualifiedName(String qualifiedName) {
+    return byQualifiedName.containsKey(qualifiedName);
+  }
+
+  Optional<String> onlyQualifiedNameForSimpleName(String simpleName) {
+    TreeSet<String> qualifiedNames = qualifiedNamesBySimpleName.get(simpleName);
+    if (qualifiedNames == null || qualifiedNames.size() != 1) return Optional.empty();
+    return Optional.of(qualifiedNames.first());
   }
 
   String packageName(Path file) {
