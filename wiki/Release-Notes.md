@@ -4,9 +4,18 @@ This page summarizes the tagged MD-Editor releases and the major user-facing fea
 
 ## Current Main
 
-Changes available on `main` after `v6.8`:
+Changes available on `main` after `v6.9`:
 
 - No unreleased changes are currently documented.
+
+## v6.9 - June 9, 2026
+
+- Added `New tag ...` actions to file tree and graph node tag submenus.
+- Added folder tagging from the tree context menu, applying tags to Markdown files in the selected folder tree.
+- Added graph tagging scopes for local graph, full local graph, and full network from graph node context menus.
+- Automatically creates or enables graph filter groups when folder or graph tagging applies a tag.
+- Hid the Markdown formatting toolbar for graph tabs, unsupported files, preview-only mode, and empty workspaces.
+- Updated About dialog and app metadata for the v6.9 release.
 
 ## v6.8 - June 8, 2026
 

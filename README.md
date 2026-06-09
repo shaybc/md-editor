@@ -14,7 +14,7 @@
 
   <p>
     <img src="web-app/assets/badges/license.svg" alt="License: Apache 2.0" />
-    <img src="web-app/assets/badges/release.svg" alt="Release: v6.8" />
+    <img src="web-app/assets/badges/release.svg" alt="Release: v6.9" />
     <img src="web-app/assets/badges/tests.svg" alt="Tests: 28 passing" />
     <img src="web-app/assets/badges/app.svg" alt="App: web desktop" />
     <img src="web-app/assets/badges/code-maps.svg" alt="Code maps: JS TS PY Java C#" />

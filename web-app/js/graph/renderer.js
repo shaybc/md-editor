@@ -2535,6 +2535,23 @@
       return Array.from(visited);
     };
 
+    const getVisibleFullNetworkFileNodeIds = (nodeId) => {
+      if (!nodeId) return [];
+      const adjacency = getVisibleMarkdownFileAdjacency();
+      if (!adjacency.has(nodeId)) return [];
+      const visited = new Set([nodeId]);
+      const queue = Array.from(adjacency.get(nodeId) || []);
+      while (queue.length) {
+        const nextId = queue.shift();
+        if (!nextId || visited.has(nextId) || getNodeCollapsedCluster(nextId)) continue;
+        visited.add(nextId);
+        (adjacency.get(nextId) || new Set()).forEach((neighborId) => {
+          if (!visited.has(neighborId)) queue.push(neighborId);
+        });
+      }
+      return Array.from(visited);
+    };
+
     const getVisibleMarkdownFileAdjacency = () => {
       const visibleFileNodeIds = new Set(nodes.filter((n) => !isTagNode(n) && !isClusterNode(n)).map((n) => n.id));
       const adjacency = new Map(Array.from(visibleFileNodeIds).map((nodeId) => [nodeId, new Set()]));
@@ -2627,13 +2644,16 @@
       return outgoingNodeIds.length > 1 ? [nodeId, ...outgoingNodeIds] : [];
     };
 
-    const getLocalGraphTagNodeIds = (nodeId) => {
+    const getLocalGraphTagNodeIds = (nodeId, mode = "local") => {
       if (!nodeId) return [];
-      return Array.from(new Set([nodeId, ...getVisibleDirectOutgoingFileNodeIds(nodeId)]));
+      let linkedNodeIds = [nodeId, ...getVisibleDirectOutgoingFileNodeIds(nodeId)];
+      if (mode === "full-local") linkedNodeIds = getVisibleFullOutgoingFileNodeIds(nodeId);
+      if (mode === "full-network") linkedNodeIds = getVisibleFullNetworkFileNodeIds(nodeId);
+      return Array.from(new Set(linkedNodeIds));
     };
 
-    const getLocalGraphTagNodes = (graphNode) => {
-      const tagNodeIds = new Set(getLocalGraphTagNodeIds(graphNode?.id));
+    const getLocalGraphTagNodes = (graphNode, mode = "local") => {
+      const tagNodeIds = new Set(getLocalGraphTagNodeIds(graphNode?.id, mode));
       return nodes.filter((node) => tagNodeIds.has(node.id) && !isTagNode(node) && !isClusterNode(node));
     };
 
@@ -2653,7 +2673,7 @@
       let changed = false;
       const groups = currentConfig.groups.map((group) => {
         if (String(group.query || "").trim().toLowerCase() !== tagQuery.toLowerCase()) return group;
-        const nextHidden = shouldHide ? true : group.hidden === true;
+        const nextHidden = shouldHide;
         if (group.enabled !== false && group.hidden === nextHidden) return group;
         changed = true;
         return { ...group, enabled: true, hidden: nextHidden };
@@ -3219,8 +3239,8 @@
       localGraphTagPicker = null;
     };
 
-    const getLocalGraphNodeTags = (graphNode) => {
-      const tagNodes = getLocalGraphTagNodes(graphNode);
+    const getLocalGraphNodeTags = (graphNode, mode = "local") => {
+      const tagNodes = getLocalGraphTagNodes(graphNode, mode);
       const tagsByNodeId = new Map(tagNodes.map((tagNode) => {
         const snapshotFile = getSnapshotFileForNode(tagNode);
         return [tagNode.id, normalizeFileTagList(tagNode.tags?.length ? tagNode.tags : snapshotFile?.tags || [])];
@@ -3230,10 +3250,10 @@
       return { tagNodes, allTags, appliedToAllTags };
     };
 
-    const updateLocalGraphTags = async (seedNode, tag, action) => {
+    const updateLocalGraphTags = async (seedNode, tag, action, mode = "local") => {
       const normalizedTag = normalizeTagName(tag);
       if (!seedNode || !normalizedTag) return;
-      const tagNodes = getLocalGraphTagNodes(seedNode);
+      const tagNodes = getLocalGraphTagNodes(seedNode, mode);
       if (!tagNodes.length) return;
 
       if (action === "add" && typeof createTag === "function") createTag(normalizedTag);
@@ -3257,9 +3277,12 @@
       renderGraphView();
     };
 
-    const tagLocalGraphNodes = (seedNode, tag) => updateLocalGraphTags(seedNode, tag, "add");
+    const tagLocalGraphNodes = (seedNode, tag) => updateLocalGraphTags(seedNode, tag, "add", "local");
+    const tagFullLocalGraphNodes = (seedNode, tag) => updateLocalGraphTags(seedNode, tag, "add", "full-local");
+    const tagFullNetworkNodes = (seedNode, tag) => updateLocalGraphTags(seedNode, tag, "add", "full-network");
 
-    const showLocalGraphTagPicker = (seedNode) => {
+    const showLocalGraphTagPicker = (seedNode, options = {}) => {
+      const mode = options.mode || "local";
       closeLocalGraphTagPicker();
       const overlay = document.createElement("div");
       overlay.className = "graph-tag-picker-overlay";
@@ -3269,12 +3292,12 @@
 
       const title = document.createElement("div");
       title.className = "graph-tag-picker-title";
-      title.textContent = "Tag Local Graph";
+      title.textContent = options.title || "Tag Local Graph";
       panel.appendChild(title);
 
       const list = document.createElement("div");
       list.className = "graph-tag-picker-list";
-      const localGraphTags = getLocalGraphNodeTags(seedNode);
+      const localGraphTags = getLocalGraphNodeTags(seedNode, mode);
       const tags = Array.from(new Set((typeof getAllKnownAndReferencedTags === "function" ? getAllKnownAndReferencedTags() : getKnownTags())
         .concat(localGraphTags.allTags)
         .map(normalizeTagName)
@@ -3304,7 +3327,7 @@
         button.addEventListener("click", async () => {
           closeLocalGraphTagPicker();
           try {
-            await updateLocalGraphTags(seedNode, tag, isApplied ? "remove" : "add");
+            await updateLocalGraphTags(seedNode, tag, isApplied ? "remove" : "add", mode);
           } catch (error) {
             console.error("Failed to tag local graph:", error);
             alert("Unable to tag the local graph.");
@@ -3323,7 +3346,7 @@
         if (!normalizedTag) return;
         closeLocalGraphTagPicker();
         try {
-          await tagLocalGraphNodes(seedNode, normalizedTag);
+          await updateLocalGraphTags(seedNode, normalizedTag, "add", mode);
         } catch (error) {
           console.error("Failed to tag local graph:", error);
           alert("Unable to tag the local graph.");
@@ -3581,6 +3604,35 @@
             const targetNode = contextTargetNode;
             hideContextMenu();
             showLocalGraphTagPicker(targetNode);
+          },
+          onTagFullLocalGraph: () => {
+            if (!contextTargetNode || isTagNode(contextTargetNode) || isClusterNode(contextTargetNode)) return;
+            const targetNode = contextTargetNode;
+            hideContextMenu();
+            showLocalGraphTagPicker(targetNode, {
+              mode: "full-local",
+              title: "Tag full Local Graph"
+            });
+          },
+          onTagFullNetwork: () => {
+            if (!contextTargetNode || isTagNode(contextTargetNode) || isClusterNode(contextTargetNode)) return;
+            const targetNode = contextTargetNode;
+            hideContextMenu();
+            showLocalGraphTagPicker(targetNode, {
+              mode: "full-network",
+              title: "Tag full Network"
+            });
+          },
+          onCreateTag: async (tag) => {
+            if (!contextTargetNode || isTagNode(contextTargetNode) || isClusterNode(contextTargetNode)) return;
+            const targetNode = contextTargetNode;
+            hideContextMenu();
+            try {
+              await updateGraphNodeTagContent(targetNode, tag, "add");
+            } catch (error) {
+              console.error("Failed to update graph file tags:", error);
+              alert("Unable to update this file's tags.");
+            }
           }
         });
       }

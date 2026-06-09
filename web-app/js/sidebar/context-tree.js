@@ -79,20 +79,100 @@
       });
     }
 
-    if (typeof options.onTagLocalGraph === "function") {
+    let needsActionSeparator = Boolean(tags.length);
+    const hasGraphTagActions = typeof options.onTagLocalGraph === "function"
+      || typeof options.onTagFullLocalGraph === "function"
+      || typeof options.onTagFullNetwork === "function";
+    if (hasGraphTagActions) {
       const separator = document.createElement("div");
       separator.className = "graph-context-menu-separator";
       submenuPanel.appendChild(separator);
+      needsActionSeparator = false;
+
+      const graphTagsSubmenu = document.createElement("div");
+      graphTagsSubmenu.className = "graph-context-menu-submenu tags-graph-context-submenu";
+      const graphTagsSubmenuBtn = createFileContextMenuButton(
+        options.tagGraphActionsLabel || "Tag graph",
+        options.tagGraphActionsIcon || CONTEXT_MENU_ACTIONS.tagLocalGraph?.icon || "bi bi-tags",
+        options.tagGraphActionsTooltip || "Open graph tagging actions for this file."
+      );
+      graphTagsSubmenuBtn.setAttribute("aria-haspopup", "true");
+      disableContextMenuTooltip(graphTagsSubmenuBtn);
+      const graphTagsSubmenuArrow = document.createElement("span");
+      graphTagsSubmenuArrow.className = "graph-context-menu-submenu-arrow";
+      graphTagsSubmenuArrow.textContent = "›";
+      graphTagsSubmenuBtn.appendChild(graphTagsSubmenuArrow);
+      const graphTagsSubmenuPanel = document.createElement("div");
+      graphTagsSubmenuPanel.className = "graph-context-menu-submenu-panel tags-graph-context-submenu-panel";
+
+      if (typeof options.onTagLocalGraph === "function") {
+        const button = createFileContextMenuButton(
+          options.tagLocalGraphLabel || CONTEXT_MENU_ACTIONS.tagLocalGraph?.label || "Tag Local Graph",
+          options.tagLocalGraphIcon || CONTEXT_MENU_ACTIONS.tagLocalGraph?.icon || "bi bi-tags",
+          options.tagLocalGraphTooltip || "Add a tag to this file and its direct outgoing linked files."
+        );
+        button.addEventListener("click", (event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          options.onTagLocalGraph();
+        });
+        graphTagsSubmenuPanel.appendChild(button);
+      }
+
+      if (typeof options.onTagFullLocalGraph === "function") {
+        const button = createFileContextMenuButton(
+          options.tagFullLocalGraphLabel || CONTEXT_MENU_ACTIONS.tagFullLocalGraph?.label || "Tag full Local Graph",
+          options.tagFullLocalGraphIcon || CONTEXT_MENU_ACTIONS.tagFullLocalGraph?.icon || "bi bi-tags-fill",
+          options.tagFullLocalGraphTooltip || "Add a tag to this file and every reachable outgoing linked file."
+        );
+        button.addEventListener("click", (event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          options.onTagFullLocalGraph();
+        });
+        graphTagsSubmenuPanel.appendChild(button);
+      }
+
+      if (typeof options.onTagFullNetwork === "function") {
+        const button = createFileContextMenuButton(
+          options.tagFullNetworkLabel || CONTEXT_MENU_ACTIONS.tagFullNetwork?.label || "Tag full Network",
+          options.tagFullNetworkIcon || CONTEXT_MENU_ACTIONS.tagFullNetwork?.icon || "bi bi-diagram-3-fill",
+          options.tagFullNetworkTooltip || "Add a tag to every connected file in this visible graph network."
+        );
+        button.addEventListener("click", (event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          options.onTagFullNetwork();
+        });
+        graphTagsSubmenuPanel.appendChild(button);
+      }
+
+      graphTagsSubmenu.appendChild(graphTagsSubmenuBtn);
+      graphTagsSubmenu.appendChild(graphTagsSubmenuPanel);
+      submenuPanel.appendChild(graphTagsSubmenu);
+      needsActionSeparator = true;
+    }
+
+    if (typeof options.onCreateTag === "function") {
+      if (needsActionSeparator) {
+        const separator = document.createElement("div");
+        separator.className = "graph-context-menu-separator";
+        submenuPanel.appendChild(separator);
+      }
 
       const button = createFileContextMenuButton(
-        options.tagLocalGraphLabel || CONTEXT_MENU_ACTIONS.tagLocalGraph?.label || "Tag Local Graph",
-        options.tagLocalGraphIcon || CONTEXT_MENU_ACTIONS.tagLocalGraph?.icon || "bi bi-tags",
-        options.tagLocalGraphTooltip || "Add a tag to this file and its direct outgoing linked files."
+        options.createTagLabel || "New tag ...",
+        options.createTagIcon || "bi bi-tag",
+        options.createTagTooltip || "Create a tag and add it to this file."
       );
-      button.addEventListener("click", (event) => {
+      button.addEventListener("click", async (event) => {
         event.preventDefault();
         event.stopPropagation();
-        options.onTagLocalGraph();
+        const tagName = window.prompt("New tag:");
+        const normalizedTag = normalizeTagName(tagName);
+        if (!normalizedTag) return;
+        if (typeof createTag === "function" && createTag(normalizedTag) === false) return;
+        await options.onCreateTag(normalizedTag);
       });
       submenuPanel.appendChild(button);
     }
@@ -232,6 +312,123 @@
     renderLinkAutocomplete();
     saveTabsToStorage(tabs);
     if (getActiveGraphTab()) renderGraphView();
+  }
+
+  async function setSidebarFolderTag(node, tag, shouldAdd) {
+    const normalizedTag = normalizeTagName(tag);
+    if (!node || node.kind !== "directory" || !normalizedTag) return;
+
+    const folderFiles = isOpenFolderRootContextNode(node)
+      ? await getOpenFolderMarkdownFilesForGraph()
+      : await collectMarkdownFilesForSidebarFolder(node);
+    if (!folderFiles.length) {
+      alert("This folder does not contain Markdown files to tag.");
+      return;
+    }
+
+    const changedEntries = [];
+    const failedEntries = [];
+    for (const entry of folderFiles) {
+      try {
+        const currentContent = await getEntryContent(entry);
+        const currentTags = getFileTagsFromContent(currentContent);
+        if (shouldAdd && currentTags.includes(normalizedTag)) continue;
+        if (!shouldAdd && !currentTags.includes(normalizedTag)) continue;
+
+        const nextTags = shouldAdd
+          ? [...currentTags, normalizedTag]
+          : currentTags.filter((existingTag) => existingTag !== normalizedTag);
+        const nextContent = setFileTagsInContent(currentContent, nextTags);
+        if (nextContent === currentContent) continue;
+
+        await writeFolderMarkdownEntryContent(entry, nextContent);
+        entry.content = nextContent;
+        entry.tags = getFileTagsFromContent(nextContent);
+        const folderEntry = getSidebarMarkdownFileEntry(entry);
+        if (folderEntry && folderEntry !== entry) {
+          folderEntry.content = nextContent;
+          folderEntry.tags = entry.tags;
+        }
+        updateFolderTreeNodeTagsForEntry(entry, entry.tags);
+        updateOpenMarkdownTabsForSidebarNode(entry, nextContent);
+        await updateGraphSnapshotsForSidebarFileTagChange(entry, nextContent);
+        changedEntries.push(entry);
+      } catch (error) {
+        failedEntries.push(entry);
+        console.error("Failed to update folder file tags:", entry.path || entry.fullPath || entry.name, error);
+      }
+    }
+
+    const changedGroups = shouldAdd ? ensureActiveGraphTagGroup(normalizedTag) : false;
+    if (shouldAdd) saveKnownTags([...getKnownTags(), normalizedTag]);
+    await refreshFolderTagCounts();
+    renderFilteredFolderTree();
+    renderTagManagementList();
+    renderLinkAutocomplete();
+    const activeGraphTab = getActiveGraphTab();
+    if (changedGroups && activeGraphTab) updateGraphTagToolbar(activeGraphTab, activeGraphTab.graphSnapshot || null);
+    saveTabsToStorage(tabs);
+    if (getActiveGraphTab() || changedEntries.length) renderGraphView();
+
+    if (failedEntries.length) {
+      alert(`Unable to update tags for ${failedEntries.length} file${failedEntries.length === 1 ? "" : "s"} in this folder.`);
+    }
+  }
+
+  function ensureActiveGraphTagGroup(tag) {
+    const activeGraphTab = getActiveGraphTab();
+    if (!activeGraphTab) return false;
+    const normalizedTag = normalizeTagName(tag);
+    if (!normalizedTag) return false;
+
+    const tagQuery = `tag:${normalizedTag}`;
+    const currentConfig = normalizeGraphViewConfig(activeGraphTab.graphViewConfig);
+    let changed = false;
+    const groups = currentConfig.groups.map((group) => {
+      if (String(group.query || "").trim().toLowerCase() !== tagQuery.toLowerCase()) return group;
+      if (group.enabled !== false && group.hidden !== true) return group;
+      changed = true;
+      return { ...group, enabled: true, hidden: false };
+    });
+
+    if (!groups.some((group) => String(group.query || "").trim().toLowerCase() === tagQuery.toLowerCase())) {
+      groups.push(normalizeGraphGroups([{
+        id: createGraphGroupId(`${tagQuery}:${Date.now()}`),
+        query: tagQuery,
+        color: getNextDefaultGraphGroupColor(groups),
+        enabled: true,
+        hidden: false
+      }])[0]);
+      changed = true;
+    }
+
+    if (!changed) return false;
+    activeGraphTab.graphViewConfig = normalizeGraphViewConfig({
+      ...currentConfig,
+      groups
+    });
+    markGraphTabAsChanged(activeGraphTab);
+    return true;
+  }
+
+  async function getSidebarFolderTagsAppliedToAll(node) {
+    const folderFiles = isOpenFolderRootContextNode(node)
+      ? await getOpenFolderMarkdownFilesForGraph()
+      : await collectMarkdownFilesForSidebarFolder(node);
+    if (!folderFiles.length) return [];
+
+    let appliedToAllTags = null;
+    for (const entry of folderFiles) {
+      const tags = getFileTagsFromContent(await getEntryContent(entry));
+      const tagSet = new Set(tags);
+      if (appliedToAllTags === null) {
+        appliedToAllTags = tagSet;
+      } else {
+        appliedToAllTags = new Set(Array.from(appliedToAllTags).filter((tag) => tagSet.has(tag)));
+      }
+      if (!appliedToAllTags.size) break;
+    }
+    return Array.from(appliedToAllTags || []).sort((a, b) => a.localeCompare(b));
   }
 
   function runWithTemporaryEditorContent(content, action) {
@@ -2101,6 +2298,9 @@
       CONTEXT_MENU_ACTIONS.rename.icon,
       "Rename this folder on disk and refresh the folder tree."
     );
+    const { submenu: tagsSubmenu, submenuPanel: tagsSubmenuPanel } = createTagsContextSubmenu(
+      "Add or remove YAML frontmatter tags for every Markdown file in this folder and its sub-folders."
+    );
     const deleteFolderBtn = createFileContextMenuButton(
       CONTEXT_MENU_ACTIONS.deleteFolder.label,
       CONTEXT_MENU_ACTIONS.deleteFolder.icon,
@@ -2120,6 +2320,7 @@
       revealOriginalFolderBtn,
       renameFolderBtn,
       copyPathBtn,
+      tagsSubmenu,
       newFileBtn,
       newFolderBtn,
       showGraphBtn,
@@ -2256,6 +2457,8 @@
       }
     });
 
+    tagsSubmenuPanel.dataset.sidebarFolderTagsPanel = "true";
+
     deleteFolderBtn.addEventListener("click", async (event) => {
       event.stopPropagation();
       const target = sidebarContextTarget;
@@ -2299,7 +2502,7 @@
     if (tagsSubmenu) tagsSubmenu.classList.toggle("hidden", !canManageTags);
     if (canManageTags) {
       const renderSidebarTags = (currentTags) => {
-        renderTagsContextSubmenu(tagsSubmenuPanel, currentTags, async (tag, shouldAdd) => {
+        const applySidebarTag = async (tag, shouldAdd) => {
           const latestContent = await readSidebarNodeContent(node);
           const latestTags = getFileTagsFromContent(latestContent);
           const nextTags = shouldAdd
@@ -2312,6 +2515,9 @@
             console.error("Failed to update sidebar file tags:", error);
             alert("Unable to update this file's tags.");
           }
+        };
+        renderTagsContextSubmenu(tagsSubmenuPanel, currentTags, applySidebarTag, {
+          onCreateTag: (tag) => applySidebarTag(tag, true)
         });
       };
       renderSidebarTags(getFolderTreeNodeTags(node));
@@ -2332,10 +2538,36 @@
     const menu = ensureSidebarFolderContextMenu();
     const isRootContext = isOpenFolderRootContextNode(node);
     const title = menu.querySelector(".graph-context-menu-title");
+    const tagsSubmenuPanel = menu.querySelector('[data-sidebar-folder-tags-panel="true"]');
     if (title) title.textContent = isRootContext ? (activeFolderName || "Folder") : (node.name || "Folder");
     menu.querySelectorAll('[data-sidebar-folder-action="rename"], [data-sidebar-folder-action="delete"]').forEach((item) => {
       item.classList.toggle("hidden", isRootContext);
     });
+    const renderFolderTags = (currentTags) => renderTagsContextSubmenu(tagsSubmenuPanel, currentTags, async (tag, shouldAdd) => {
+      const target = sidebarContextTarget;
+      hideSidebarFolderContextMenu();
+      try {
+        await setSidebarFolderTag(target, tag, shouldAdd);
+      } catch (error) {
+        console.error("Failed to update sidebar folder tags:", error);
+        alert("Unable to update this folder's tags.");
+      }
+    }, {
+      onCreateTag: async (tag) => {
+        const target = sidebarContextTarget;
+        hideSidebarFolderContextMenu();
+        try {
+          await setSidebarFolderTag(target, tag, true);
+        } catch (error) {
+          console.error("Failed to update sidebar folder tags:", error);
+          alert("Unable to update this folder's tags.");
+        }
+      }
+    });
+    renderFolderTags([]);
+    getSidebarFolderTagsAppliedToAll(node)
+      .then((currentTags) => renderFolderTags(currentTags))
+      .catch((error) => console.warn("Failed to refresh sidebar folder context tag checks:", error));
     menu.classList.remove("hidden");
     positionSidebarFolderContextMenu(event);
   }
@@ -2771,6 +3003,9 @@
         updateGraphSnapshotsForSidebarFileTagChange,
         updateOpenMarkdownTabsForSidebarNode,
         setSidebarNodeTags,
+        setSidebarFolderTag,
+        ensureActiveGraphTagGroup,
+        getSidebarFolderTagsAppliedToAll,
         runWithTemporaryEditorContent,
         exportMarkdownContent,
         exportHtmlContent,

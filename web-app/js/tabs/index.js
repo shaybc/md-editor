@@ -698,7 +698,15 @@
 
   function setNoOpenTabsMode(enabled) {
     const container = document.querySelector(".content-container");
-    if (container) container.classList.toggle("no-open-tabs", !!enabled);
+    if (container) {
+      container.classList.toggle("no-open-tabs", !!enabled);
+      if (enabled) {
+        container.classList.remove("markdown-tab-active");
+      } else {
+        const activeTab = getActiveTab();
+        container.classList.toggle("markdown-tab-active", !!(activeTab && activeTab.type !== "graph" && !isUnsupportedFileTab(activeTab)));
+      }
+    }
     if (markdownEditor) {
       markdownEditor.disabled = !!enabled;
       markdownEditor.setAttribute("aria-disabled", enabled ? "true" : "false");

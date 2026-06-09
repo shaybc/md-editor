@@ -8,6 +8,11 @@
     const activeTab = getActiveTab();
     const graphActiveTab = !!(activeTab && activeTab.type === "graph");
     const unsupportedActiveTab = isUnsupportedFileTab(activeTab);
+    const markdownActiveTab = !!(activeTab && activeTab.type !== "graph" && !unsupportedActiveTab);
+
+    if (contentContainer) {
+      contentContainer.classList.toggle("markdown-tab-active", markdownActiveTab);
+    }
 
     function updateButton(btn) {
       const btnMode = btn.getAttribute('data-mode');
