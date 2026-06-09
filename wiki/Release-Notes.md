@@ -4,9 +4,18 @@ This page summarizes the tagged MD-Editor releases and the major user-facing fea
 
 ## Current Main
 
-Changes available on `main` after `v7.2`:
+Changes available on `main` after `v7.3`:
 
 - No unreleased changes are currently documented.
+
+## v7.3 - June 9, 2026
+
+- Improved the Semantic Java converter unresolved-type diagnostics so it reports unique unresolved type names instead of repeated resolver attempts.
+- Added `_semantic-java-unresolved-types.md` output with unique unresolved packages and type names.
+- Filtered noisy package fragments from the unresolved-type report.
+- Added a visible busy overlay to the Convert Code to MD dialog while conversion is running.
+- Disabled converter controls during active conversion to prevent accidental repeated actions.
+- Updated About dialog and app metadata for the v7.3 release.
 
 ## v7.2 - June 9, 2026
 

@@ -15,7 +15,7 @@ test("semantic Java converter resolves local dependencies without string false p
       "../../desktop-app/extensions/code-converters/semantic-java/semantic-java-converter.jar"
     );
 
-    execFileSync("java", [
+    const output = execFileSync("java", [
       "-jar",
       converterJar,
       "--root",
@@ -26,7 +26,7 @@ test("semantic Java converter resolves local dependencies without string false p
       "--include-signatures",
       "--include-exceptions",
       "--include-package",
-    ]);
+    ], { encoding: "utf8" });
 
     const markdown = fs.readFileSync(
       path.join(outputRoot, "src", "main", "java", "app", "service", "Service.java.md"),
@@ -41,6 +41,16 @@ test("semantic Java converter resolves local dependencies without string false p
     assert.match(markdown, /app\/service\/DomainException\.java/);
     assert.doesNotMatch(markdown, /app\/model\/Invoice\.java/);
     assert.match(markdown, /public Order run\(User input\) throws DomainException/);
+
+    assert.match(output, /Unique unresolved type names: 2/);
+    assert.match(output, /_semantic-java-unresolved-types\.md/);
+    const report = fs.readFileSync(path.join(outputRoot, "_semantic-java-unresolved-types.md"), "utf8");
+    assert.match(report, /Unique unresolved type names: 2/);
+    assert.match(report, /- com\.external \(1 type\)/);
+    assert.match(report, /- app\.service \(1 type\)/);
+    assert.match(report, /`com\.external\.MissingExternal`/);
+    assert.match(report, /`app\.service\.MissingLocal`/);
+    assert.equal(report.match(/MissingExternal/g).length, 1);
   } finally {
     fs.rmSync(tempRoot, { recursive: true, force: true });
     fs.rmSync(outputRoot, { recursive: true, force: true });
@@ -57,11 +67,15 @@ function writeJavaFixture(root) {
     "package app.service;",
     "",
     "import app.model.*;",
+    "import com.external.MissingExternal;",
     "",
     "public class Service extends BaseService {",
     "  private User user;",
     "  private java.util.List<Order> orders;",
     "  private String fake = \"Invoice\";",
+    "  private MissingExternal missingExternal;",
+    "  private MissingLocal missingLocal;",
+    "  private MissingExternal duplicateMissingExternal;",
     "  // Invoice should not be linked from a comment.",
     "",
     "  public Order run(User input) throws DomainException {",

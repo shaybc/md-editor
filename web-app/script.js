@@ -1922,6 +1922,7 @@ document.addEventListener("DOMContentLoaded", function () {
   const codeConverterRunButton = document.getElementById("code-converter-run");
   const codeConverterFinishButton = document.getElementById("code-converter-finish");
   const codeConverterStatus = document.getElementById("code-converter-status");
+  const codeConverterBusyOverlay = document.getElementById("code-converter-busy-overlay");
   const desktopOpenGraphButtons = document.querySelectorAll(".open-graph-view");
   const exitAppButtons = document.querySelectorAll(".exit-app-button");
   const graphViewCanvas = document.getElementById("graph-view-canvas");
@@ -2040,6 +2041,7 @@ document.addEventListener("DOMContentLoaded", function () {
   let settingsDialogSaving = false;
   let installedCodeConverters = [];
   let codeConverterManifestWarnings = [];
+  let codeConverterIsRunning = false;
   const themePreferences = window.registerMarkdownViewerThemePreferences(app, {
     defaultState: DEFAULT_GLOBAL_STATE,
     mobileThemeToggle,
@@ -3284,6 +3286,30 @@ Markdown content is processed client-side in your browser and sanitized before p
     if (codeConverterStatus) codeConverterStatus.textContent = message || "";
   }
 
+  function setCodeConverterBusyState(isBusy) {
+    codeConverterIsRunning = !!isBusy;
+    const controls = [
+      codeConverterSelector,
+      codeConverterSourceBrowseButton,
+      codeConverterDestinationBrowseButton,
+      codeConverterCancelButton,
+      codeConverterRunButton,
+      ...getCodeConverterFlagControls().map(({ input }) => input),
+    ];
+    controls.forEach((control) => {
+      if (control) control.disabled = !!isBusy;
+    });
+    if (codeConverterModal) {
+      codeConverterModal.classList.toggle("code-converter-running", !!isBusy);
+      codeConverterModal.setAttribute("aria-busy", isBusy ? "true" : "false");
+    }
+    if (codeConverterBusyOverlay) {
+      codeConverterBusyOverlay.hidden = !isBusy;
+      codeConverterBusyOverlay.setAttribute("aria-hidden", isBusy ? "false" : "true");
+    }
+    if (!isBusy) updateCodeConverterOptionVisibility();
+  }
+
   function setCodeConverterCompleteState(isComplete) {
     if (codeConverterCancelButton) codeConverterCancelButton.hidden = !!isComplete;
     if (codeConverterRunButton) codeConverterRunButton.hidden = !!isComplete;
@@ -3326,7 +3352,7 @@ Markdown content is processed client-side in your browser and sanitized before p
         row.hidden = !isSupported;
         row.style.display = isSupported ? "" : "none";
       }
-      if (input) input.disabled = !isSupported;
+      if (input) input.disabled = !isSupported || codeConverterIsRunning;
     });
   }
 
@@ -3393,6 +3419,7 @@ Markdown content is processed client-side in your browser and sanitized before p
     if (!codeConverterModal) return;
     setCodeConverterStatus("");
     setCodeConverterCompleteState(false);
+    setCodeConverterBusyState(false);
     renderCodeConverterSelector();
     codeConverterModal.style.display = "flex";
     await loadCodeConverterExtensions();
@@ -3401,11 +3428,13 @@ Markdown content is processed client-side in your browser and sanitized before p
 
   function hideCodeConverterDialog() {
     if (!codeConverterModal) return;
+    if (codeConverterIsRunning) return;
     codeConverterModal.style.display = "none";
   }
 
   async function browseCodeConverterFolder(input, title) {
     if (!input) return;
+    if (codeConverterIsRunning) return;
     if (typeof Neutralino === "undefined" || !Neutralino.os?.showFolderDialog) {
       alert("Code conversion requires the desktop app so folders can be selected from disk.");
       return;
@@ -3483,7 +3512,7 @@ Markdown content is processed client-side in your browser and sanitized before p
     const command = buildCodeConverterCommand(sourceRoot, destinationRoot);
 
     try {
-      if (codeConverterRunButton) codeConverterRunButton.disabled = true;
+      setCodeConverterBusyState(true);
       setCodeConverterStatus("Converting code dependencies...");
       const result = await Neutralino.os.execCommand(command);
       const exitCode = Number(result?.exitCode ?? result?.code ?? 0);
@@ -3500,7 +3529,7 @@ Markdown content is processed client-side in your browser and sanitized before p
       console.error("Failed to run code converter:", error);
       setCodeConverterStatus("Unable to run the code converter. Make sure Node.js is installed and available on PATH.");
     } finally {
-      if (codeConverterRunButton) codeConverterRunButton.disabled = false;
+      setCodeConverterBusyState(false);
     }
   }
 

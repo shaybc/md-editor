@@ -674,6 +674,13 @@
               <button class="reset-modal-btn" id="code-converter-run" type="button">Convert</button>
               <button class="reset-modal-btn code-converter-finish-button" id="code-converter-finish" type="button" hidden>Finish</button>
             </div>
+            <div id="code-converter-busy-overlay" class="code-converter-busy-overlay" aria-hidden="true" hidden>
+              <div class="code-converter-busy-panel">
+                <span class="code-converter-busy-spinner" aria-hidden="true"></span>
+                <span class="code-converter-busy-title">Converting code to Markdown</span>
+                <span class="code-converter-busy-text">The application is busy. Wait for the converter to finish.</span>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -873,7 +880,7 @@
             <dl class="about-modal-details">
               <div>
                 <dt>Version</dt>
-                <dd id="about-app-version">v7.2</dd>
+                <dd id="about-app-version">v7.3</dd>
               </div>
               <div>
                 <dt>Last release</dt>

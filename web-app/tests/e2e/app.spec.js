@@ -541,7 +541,7 @@ test("opens help and about from the action menu", async ({ page }) => {
   const aboutModal = page.locator("#about-modal");
   await expect(aboutModal).toBeVisible();
   await expect(aboutModal.getByText("MD-Editor", { exact: true })).toBeVisible();
-  await expect(aboutModal.locator("#about-app-version")).toHaveText("v7.2");
+  await expect(aboutModal.locator("#about-app-version")).toHaveText("v7.3");
   await expect(aboutModal.locator("#about-release-date")).toHaveText("June 9, 2026");
   await expect(aboutModal.locator("#about-app-author")).toHaveText("ShayBC");
   await expect(aboutModal.getByText("Apache License 2.0")).toBeVisible();
@@ -794,6 +794,7 @@ test("code converter dialog browses folders and runs converter", async ({ page }
     window.NL_VERSION = "test";
     window.__folderDialogTitles = [];
     window.__execCommands = [];
+    window.__resolveCodeConverter = null;
     const folderSelections = ["C:/src/project", "C:/docs/project-md"];
     window.Neutralino = {
       os: {
@@ -803,6 +804,9 @@ test("code converter dialog browses folders and runs converter", async ({ page }
         },
         execCommand: async (command) => {
           window.__execCommands.push(command);
+          await new Promise((resolve) => {
+            window.__resolveCodeConverter = resolve;
+          });
           return { exitCode: 0, stdOut: "Created 3 markdown file(s) in C:/docs/project-md" };
         }
       }
@@ -831,7 +835,16 @@ test("code converter dialog browses folders and runs converter", async ({ page }
   await expect(page.locator("#code-converter-destination-root")).toHaveValue("C:/docs/project-md");
 
   await page.locator("#code-converter-run").click();
+  await expect(page.locator("#code-converter-busy-overlay")).toBeVisible();
+  await expect(page.locator("#code-converter-selector")).toBeDisabled();
+  await expect(page.locator("#code-converter-source-browse")).toBeDisabled();
+  await expect(page.locator("#code-converter-destination-browse")).toBeDisabled();
+  await expect(page.locator("#code-converter-cancel")).toBeDisabled();
+  await expect(page.locator("#code-converter-run")).toBeDisabled();
+  await expect(page.locator("#code-converter-include-methods")).toBeDisabled();
+  await page.evaluate(() => window.__resolveCodeConverter());
   await expect(page.locator("#code-converter-status")).toHaveText("Created 3 markdown file(s) in C:/docs/project-md");
+  await expect(page.locator("#code-converter-busy-overlay")).toBeHidden();
   await expect(page.locator("#code-converter-cancel")).toBeHidden();
   await expect(page.locator("#code-converter-run")).toBeHidden();
   await expect(page.locator("#code-converter-finish")).toBeVisible();

@@ -10,6 +10,8 @@ java -jar semantic-java-converter.jar --root <source-folder> --vault <destinatio
 
 The converter uses JavaParser Symbol Solver to resolve Java type usages and emits Markdown links only for local source types found under `--root`.
 
+When JavaParser cannot resolve type names, the converter reports the unique unresolved type count and writes `_semantic-java-unresolved-types.md` into `--vault`. The report lists unique package names and unique type names without duplicate references.
+
 Supported flags:
 
 ```text

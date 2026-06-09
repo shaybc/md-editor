@@ -59,9 +59,9 @@ public final class SemanticJavaConverter {
     LocalTypeIndex index = LocalTypeIndex.build(indexParser, javaFiles);
 
     JavaParser parser = new JavaParser(parserConfiguration(sourceRoots));
-    JavaDependencyResolver resolver = new JavaDependencyResolver(index);
+    UnresolvedTypeReport unresolvedReport = new UnresolvedTypeReport();
+    JavaDependencyResolver resolver = new JavaDependencyResolver(index, unresolvedReport);
     MarkdownWriter writer = new MarkdownWriter(options, index);
-    int unresolvedCount = 0;
 
     for (Path file : javaFiles) {
       ParseResult<CompilationUnit> result = parser.parse(file);
@@ -72,13 +72,17 @@ public final class SemanticJavaConverter {
 
       CompilationUnit unit = result.getResult().get();
       Set<Path> dependencies = resolver.resolveDependencies(unit, file);
-      unresolvedCount += resolver.unresolvedCount();
       List<MethodInfo> methods = MethodExtractor.extract(unit);
       List<String> warnings = parseWarnings(result);
       writer.write(file, dependencies, methods, warnings);
     }
 
-    String suffix = unresolvedCount > 0 ? " Unresolved type references: " + unresolvedCount + "." : "";
+    String suffix = "";
+    if (!unresolvedReport.isEmpty()) {
+      Path reportFile = unresolvedReport.write(options.vault);
+      suffix = " Unique unresolved type names: " + unresolvedReport.uniqueTypeCount()
+          + ". Report: " + reportFile + ".";
+    }
     System.out.println("Created " + javaFiles.size() + " markdown file(s) in " + options.vault + "." + suffix);
   }
 
