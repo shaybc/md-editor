@@ -4,9 +4,17 @@ This page summarizes the tagged MD-Editor releases and the major user-facing fea
 
 ## Current Main
 
-Changes available on `main` after `v7.0`:
+Changes available on `main` after `v7.1`:
 
 - No unreleased changes are currently documented.
+
+## v7.1 - June 9, 2026
+
+- Optimized tree folder tagging so graph snapshot metadata is updated in a batch and the graph renders once.
+- Deferred full graph snapshot rebuilding after folder tag updates so color groups become visible faster on slower machines.
+- Improved graph add-to-tab duplicate handling so points with the same relative path from the same source folder are not copied again.
+- Kept the existing conflict prompt for matching relative paths that come from different source folders.
+- Updated About dialog and app metadata for the v7.1 release.
 
 ## v7.0 - June 9, 2026
 

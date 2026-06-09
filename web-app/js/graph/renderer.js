@@ -2074,6 +2074,46 @@
     const getGraphLinkTargetId = (linkData) => getGraphEndpointId(linkData?.target);
     const getGraphLinkKeyForMerge = (linkData) => `${getGraphLinkSourceId(linkData)}->${getGraphLinkTargetId(linkData)}:${linkData?.type || "link"}`;
     const normalizeGraphMetadataValue = (value) => String(value || "").replace(/\\/g, "/").replace(/\/+/g, "/").trim().toLowerCase();
+    const getGraphRelativePathForMerge = (nodeData, fileData) => {
+      const candidates = [
+        fileData?.path,
+        nodeData?.path,
+        fileData?.file?.webkitRelativePath,
+        nodeData?.file?.webkitRelativePath,
+        fileData?.id,
+        nodeData?.id,
+        fileData?.name,
+        nodeData?.label
+      ];
+      for (const candidate of candidates) {
+        const normalized = normalizeGraphMetadataValue(candidate);
+        if (normalized) return normalized;
+      }
+      return "";
+    };
+    const getGraphSourceRootForMerge = (nodeData, fileData) => {
+      const relativePath = getGraphRelativePathForMerge(nodeData, fileData);
+      const sourcePath = normalizeGraphMetadataValue(fileData?.fullPath || nodeData?.fullPath || "");
+      if (sourcePath && relativePath && sourcePath.endsWith(`/${relativePath}`)) {
+        return sourcePath.slice(0, -relativePath.length).replace(/\/$/, "");
+      }
+      return normalizeGraphMetadataValue(
+        fileData?.sourceFolderPath ||
+        nodeData?.sourceFolderPath ||
+        fileData?.folderPath ||
+        nodeData?.folderPath ||
+        fileData?.sourceGraphTitle ||
+        nodeData?.sourceGraphTitle
+      );
+    };
+    const isSameRelativePathAndSourceFolder = (existingNode, existingFile, sourceNode, sourceFile) => {
+      const existingRelativePath = getGraphRelativePathForMerge(existingNode, existingFile);
+      const sourceRelativePath = getGraphRelativePathForMerge(sourceNode, sourceFile);
+      if (!existingRelativePath || existingRelativePath !== sourceRelativePath) return false;
+      const existingSourceRoot = getGraphSourceRootForMerge(existingNode, existingFile);
+      const sourceRoot = getGraphSourceRootForMerge(sourceNode, sourceFile);
+      return Boolean(existingSourceRoot && sourceRoot && existingSourceRoot === sourceRoot);
+    };
     const getNodeMetadataSignature = (nodeData, fileData) => [
       fileData?.fullPath,
       fileData?.path,
@@ -2217,7 +2257,7 @@
         if (existingNode) {
           const existingSignature = getNodeMetadataSignature(existingNode, existingFile);
           const sourceSignature = getNodeMetadataSignature(sourceNode, sourceFile);
-          if (!existingSignature || existingSignature === sourceSignature) {
+          if (isSameRelativePathAndSourceFolder(existingNode, existingFile, sourceNode, sourceFile) || !existingSignature || existingSignature === sourceSignature) {
             sourceToTargetNodeId.set(sourceNode.id, nextNodeId);
             visibleImportedNodeIds.add(nextNodeId);
             return;

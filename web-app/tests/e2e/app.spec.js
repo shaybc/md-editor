@@ -541,7 +541,7 @@ test("opens help and about from the action menu", async ({ page }) => {
   const aboutModal = page.locator("#about-modal");
   await expect(aboutModal).toBeVisible();
   await expect(aboutModal.getByText("MD-Editor", { exact: true })).toBeVisible();
-  await expect(aboutModal.locator("#about-app-version")).toHaveText("v7.0");
+  await expect(aboutModal.locator("#about-app-version")).toHaveText("v7.1");
   await expect(aboutModal.locator("#about-release-date")).toHaveText("June 9, 2026");
   await expect(aboutModal.locator("#about-app-author")).toHaveText("ShayBC");
   await expect(aboutModal.getByText("Apache License 2.0")).toBeVisible();
@@ -1866,6 +1866,93 @@ test("graph add to tab asks before preserving conflicting points", async ({ page
     const target = JSON.parse(localStorage.getItem("markdownViewerTabs") || "[]").find((tab) => tab.id === "conflict_target");
     return target.graphSnapshot.nodes.length;
   })).toBe(2);
+});
+
+test("graph add to tab skips same source relative path conflicts", async ({ page }) => {
+  await page.addInitScript(() => {
+    window.__graphConfirmMessages = [];
+    window.confirm = (message) => {
+      window.__graphConfirmMessages.push(String(message));
+      return true;
+    };
+    const graphViewConfig = {
+      showTags: false,
+      hiddenTagIds: [],
+      hiddenNodeIds: [],
+      selectedTagIds: [],
+      groups: [],
+      collapsedClusters: [],
+      searchQuery: "",
+      showArrows: true,
+      showOrphans: true,
+      showLabels: true
+    };
+    const sourceTab = {
+      id: "same_source_import",
+      title: "Same Source Import",
+      content: "",
+      scrollPos: 0,
+      viewMode: "preview",
+      createdAt: Date.now(),
+      isTemporary: false,
+      type: "graph",
+      folderName: "Same Source Import",
+      graphViewConfig,
+      graphSnapshot: {
+        version: 1,
+        folderName: "Same Source Import",
+        createdAt: Date.now(),
+        nodes: [{ id: "docs/alpha.md", label: "alpha.md", fullPath: "C:/vault/docs/alpha.md", type: "file", status: "current", tags: [] }],
+        links: [],
+        files: [{ id: "docs/alpha.md", path: "docs/alpha.md", name: "alpha.md", content: "# Source Alpha", fullPath: "C:/vault/docs/alpha.md", status: "current", tags: [] }]
+      }
+    };
+    const targetTab = {
+      id: "same_source_target",
+      title: "Same Source Target",
+      content: "",
+      scrollPos: 0,
+      viewMode: "preview",
+      createdAt: Date.now(),
+      isTemporary: false,
+      type: "graph",
+      folderName: "Same Source Target",
+      graphViewConfig,
+      graphSnapshot: {
+        version: 1,
+        folderName: "Same Source Target",
+        createdAt: Date.now(),
+        nodes: [{ id: "docs/alpha.md", label: "alpha.md", fullPath: "C:/vault/docs/alpha.md", type: "file", status: "current", tags: ["existing"] }],
+        links: [],
+        files: [{ id: "docs/alpha.md", path: "docs/alpha.md", name: "alpha.md", content: "# Target Alpha", fullPath: "C:/vault/docs/alpha.md", status: "current", tags: ["existing"] }]
+      }
+    };
+    localStorage.setItem("markdownViewerTabs", JSON.stringify([sourceTab, targetTab]));
+    localStorage.setItem("markdownViewerActiveTab", sourceTab.id);
+  });
+
+  await page.goto("/");
+  await expect(page.locator(".graph-tab-render")).toBeVisible();
+  await page.locator(".graph-node-file").first().dispatchEvent("contextmenu", {
+    bubbles: true,
+    cancelable: true,
+    button: 2,
+    clientX: 220,
+    clientY: 220
+  });
+  const addSubmenu = page.locator(".graph-tab-render:not(.hidden) .graph-context-menu-submenu", { hasText: "Add to Tab" });
+  await addSubmenu.hover();
+  await addSubmenu.locator(".graph-context-menu-submenu-panel .graph-context-menu-item", { hasText: "Add point to Tab ..." }).evaluate((button) => button.click());
+  const chooser = page.locator(".graph-add-to-tab-modal");
+  await expect(chooser).toBeVisible();
+  await chooser.locator(".graph-add-to-tab-row", { hasText: "Same Source Target" }).click();
+  await chooser.locator(".reset-modal-confirm", { hasText: "OK" }).click();
+
+  await expect.poll(() => page.evaluate(() => window.__graphConfirmMessages)).toEqual([]);
+  await expect.poll(() => page.evaluate(() => {
+    const target = JSON.parse(localStorage.getItem("markdownViewerTabs") || "[]").find((tab) => tab.id === "same_source_target");
+    return target.graphSnapshot.nodes.map((node) => node.id);
+  })).toEqual(["docs/alpha.md"]);
 });
 
 test("center graph action restores nodes when saved pan is off screen", async ({ page }) => {

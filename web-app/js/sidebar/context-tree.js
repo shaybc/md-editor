@@ -236,25 +236,93 @@
   }
 
   async function updateGraphSnapshotsForSidebarFileTagChange(node, content) {
-    const changedGraphTabs = [];
-    for (const tab of tabs) {
-      if (tab?.type !== "graph" || !tab.graphSnapshot?.files) continue;
-      let changed = false;
-      tab.graphSnapshot.files.forEach((snapshotFile) => {
-        if (!sidebarNodeMatchesSnapshotFile(node, snapshotFile)) return;
-        snapshotFile.content = content;
-        snapshotFile.tags = getFileTagsFromContent(content);
-        changed = true;
-      });
-      if (!changed) continue;
+    const changedGraphTabs = applyGraphSnapshotTagChanges([{ node, content }]);
+    for (const tab of changedGraphTabs) {
       const currentSnapshot = tab.graphSnapshot;
       tab.graphSnapshot = await createGraphSnapshot(currentSnapshot.files || [], currentSnapshot.folderName || tab.folderName || tab.title);
       if (currentSnapshot.createdAt) tab.graphSnapshot.createdAt = currentSnapshot.createdAt;
       graphRenderCache.delete(tab.id);
       markGraphTabAsChanged(tab);
+    }
+    return changedGraphTabs;
+  }
+
+  function getSnapshotFileNodeIds(snapshotFile) {
+    return Array.from(new Set([
+      snapshotFile?.id,
+      snapshotFile?.path ? normalizeGraphNodeName(snapshotFile.path) : "",
+      snapshotFile?.fullPath ? normalizeGraphNodeName(snapshotFile.fullPath) : "",
+      snapshotFile?.file?.webkitRelativePath ? normalizeGraphNodeName(snapshotFile.file.webkitRelativePath) : "",
+      snapshotFile?.file?.name ? normalizeGraphNodeName(snapshotFile.file.name) : "",
+      snapshotFile?.name ? normalizeGraphNodeName(snapshotFile.name) : ""
+    ].filter(Boolean)));
+  }
+
+  function graphNodeMatchesSnapshotFile(nodeData, snapshotFile) {
+    if (!nodeData || !snapshotFile) return false;
+    const snapshotNodeIds = new Set(getSnapshotFileNodeIds(snapshotFile));
+    if (snapshotNodeIds.has(nodeData.id)) return true;
+    const nodePaths = [nodeData.fullPath, nodeData.path, nodeData.label, nodeData.id]
+      .filter(Boolean)
+      .map(getComparableFilePath);
+    const snapshotPaths = [snapshotFile.fullPath, snapshotFile.path, snapshotFile.file?.webkitRelativePath, snapshotFile.file?.name, snapshotFile.name, snapshotFile.id]
+      .filter(Boolean)
+      .map(getComparableFilePath);
+    return nodePaths.some((nodePath) => snapshotPaths.some((snapshotPath) => nodePath === snapshotPath || nodePath.endsWith(`/${snapshotPath}`) || snapshotPath.endsWith(`/${nodePath}`)));
+  }
+
+  function applyGraphSnapshotTagChanges(changes) {
+    const normalizedChanges = (Array.isArray(changes) ? changes : [])
+      .filter((change) => change?.node && typeof change.content === "string")
+      .map((change) => ({
+        node: change.node,
+        content: change.content,
+        tags: getFileTagsFromContent(change.content)
+      }));
+    if (!normalizedChanges.length) return [];
+
+    const changedGraphTabs = [];
+    for (const tab of tabs) {
+      if (tab?.type !== "graph" || !tab.graphSnapshot?.files) continue;
+      let changed = false;
+      tab.graphSnapshot.files.forEach((snapshotFile) => {
+        const matchingChange = normalizedChanges.find((change) => sidebarNodeMatchesSnapshotFile(change.node, snapshotFile));
+        if (!matchingChange) return;
+        snapshotFile.content = matchingChange.content;
+        snapshotFile.tags = matchingChange.tags;
+        (tab.graphSnapshot.nodes || []).forEach((nodeData) => {
+          if (!graphNodeMatchesSnapshotFile(nodeData, snapshotFile)) return;
+          nodeData.tags = matchingChange.tags;
+          if (nodeData.content !== undefined) nodeData.content = matchingChange.content;
+        });
+        changed = true;
+      });
+      if (!changed) continue;
+      graphRenderCache.delete(tab.id);
+      markGraphTabAsChanged(tab);
       changedGraphTabs.push(tab);
     }
     return changedGraphTabs;
+  }
+
+  function queueGraphSnapshotRefresh(changedGraphTabs) {
+    const graphTabsToRefresh = Array.from(new Set((changedGraphTabs || []).filter((tab) => tab?.type === "graph")));
+    if (!graphTabsToRefresh.length) return;
+    setTimeout(async () => {
+      for (const tab of graphTabsToRefresh) {
+        if (!tabs.includes(tab) || !tab.graphSnapshot?.files) continue;
+        try {
+          const currentSnapshot = tab.graphSnapshot;
+          tab.graphSnapshot = await createGraphSnapshot(currentSnapshot.files || [], currentSnapshot.folderName || tab.folderName || tab.title);
+          if (currentSnapshot.createdAt) tab.graphSnapshot.createdAt = currentSnapshot.createdAt;
+          graphRenderCache.delete(tab.id);
+          markGraphTabAsChanged(tab);
+        } catch (error) {
+          console.warn("Failed to refresh graph snapshot after folder tag update:", error);
+        }
+      }
+      saveTabsToStorage(tabs);
+    }, 250);
   }
 
   function updateOpenMarkdownTabsForSidebarNode(node, content) {
@@ -327,6 +395,7 @@
     }
 
     const changedEntries = [];
+    const graphTagChanges = [];
     const failedEntries = [];
     for (const entry of folderFiles) {
       try {
@@ -351,7 +420,7 @@
         }
         updateFolderTreeNodeTagsForEntry(entry, entry.tags);
         updateOpenMarkdownTabsForSidebarNode(entry, nextContent);
-        await updateGraphSnapshotsForSidebarFileTagChange(entry, nextContent);
+        graphTagChanges.push({ node: entry, content: nextContent });
         changedEntries.push(entry);
       } catch (error) {
         failedEntries.push(entry);
@@ -360,6 +429,7 @@
     }
 
     const changedGroups = shouldAdd ? ensureActiveGraphTagGroup(normalizedTag) : false;
+    const changedGraphTabs = applyGraphSnapshotTagChanges(graphTagChanges);
     if (shouldAdd) saveKnownTags([...getKnownTags(), normalizedTag]);
     await refreshFolderTagCounts();
     renderFilteredFolderTree();
@@ -369,6 +439,7 @@
     if (changedGroups && activeGraphTab) updateGraphTagToolbar(activeGraphTab, activeGraphTab.graphSnapshot || null);
     saveTabsToStorage(tabs);
     if (getActiveGraphTab() || changedEntries.length) renderGraphView();
+    queueGraphSnapshotRefresh(changedGraphTabs);
 
     if (failedEntries.length) {
       alert(`Unable to update tags for ${failedEntries.length} file${failedEntries.length === 1 ? "" : "s"} in this folder.`);
