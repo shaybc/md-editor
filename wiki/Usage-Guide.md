@@ -256,6 +256,16 @@ The converter supports JavaScript, TypeScript, Python, Java, and C# source files
 
 Supported extensions include `.js`, `.jsx`, `.mjs`, `.cjs`, `.ts`, `.tsx`, `.py`, `.java`, and `.cs`.
 
+In the desktop app, the converter dropdown also lists installed converter extensions from:
+
+```text
+<MD-Editor app folder>/extensions/code-converters/<converter-id>/converter.json
+```
+
+Extension manifests declare `supportedLanguages`, `command`, optional command-prefix `args`, and optional `supportedFlags`. MD-Editor always supplies `--root <source-folder>` and `--vault <destination-folder>` when it runs the selected converter.
+
+The bundled Semantic Java Converter uses JavaParser Symbol Solver to create compiler-aware links between local Java source files.
+
 ---
 
 ## Export And Share

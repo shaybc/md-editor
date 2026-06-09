@@ -541,7 +541,7 @@ test("opens help and about from the action menu", async ({ page }) => {
   const aboutModal = page.locator("#about-modal");
   await expect(aboutModal).toBeVisible();
   await expect(aboutModal.getByText("MD-Editor", { exact: true })).toBeVisible();
-  await expect(aboutModal.locator("#about-app-version")).toHaveText("v7.1");
+  await expect(aboutModal.locator("#about-app-version")).toHaveText("v7.2");
   await expect(aboutModal.locator("#about-release-date")).toHaveText("June 9, 2026");
   await expect(aboutModal.locator("#about-app-author")).toHaveText("ShayBC");
   await expect(aboutModal.getByText("Apache License 2.0")).toBeVisible();
@@ -815,7 +815,9 @@ test("code converter dialog browses folders and runs converter", async ({ page }
   const modal = page.locator("#code-converter-modal");
   await expect(modal).toBeVisible();
   await expect(modal).toContainText("Generates Markdown files from a source code folder");
-  await expect(modal).toContainText("Supported languages: JavaScript, TypeScript, Python, and Java");
+  await expect(modal).toContainText("Supported languages: JavaScript, TypeScript, Python, Java, and C#");
+  await expect(page.locator("#code-converter-selector")).toHaveValue("builtin");
+  await expect(page.locator("#code-converter-supported-languages")).toHaveText("Supports: JavaScript, TypeScript, Python, Java, C#.");
   await expect(page.locator("#code-converter-include-methods")).toBeChecked();
   await expect(page.locator("#code-converter-include-accessors")).toBeChecked();
   await expect(page.locator("#code-converter-include-signatures")).toBeChecked();
@@ -838,11 +840,79 @@ test("code converter dialog browses folders and runs converter", async ({ page }
     commands: window.__execCommands
   }))).toEqual({
     titles: ["Select source code root folder", "Select destination Markdown root folder"],
-    commands: ['node "C:/GitHub/shaybc/md-editor/desktop-app/resources/code_converter/dependency-md-generator.js" "C:/src/project" "C:/docs/project-md" --include-methods --include-accessors --include-signatures --include-return-codes --include-exceptions --include-package']
+    commands: ['node "C:/GitHub/shaybc/md-editor/desktop-app/resources/code_converter/dependency-md-generator.js" --root "C:/src/project" --vault "C:/docs/project-md" --include-methods --include-accessors --include-signatures --include-return-codes --include-exceptions --include-package']
   });
 
   await page.locator("#code-converter-finish").click();
   await expect(modal).toBeHidden();
+});
+
+test("code converter dialog runs installed extension converter", async ({ page }) => {
+  await page.addInitScript(() => {
+    window.NL_PATH = "C:/GitHub/shaybc/md-editor/desktop-app";
+    window.NL_VERSION = "test";
+    window.NL_OS = "Windows";
+    window.__folderDialogTitles = [];
+    window.__execCommands = [];
+    const folderSelections = ["C:/src/project", "C:/docs/project-md"];
+    const manifestPath = "C:/GitHub/shaybc/md-editor/desktop-app/extensions/code-converters/semantic-java/converter.json";
+    window.Neutralino = {
+      filesystem: {
+        readDirectory: async (path) => {
+          if (path === "C:/GitHub/shaybc/md-editor/desktop-app/extensions/code-converters") {
+            return [{ entry: "semantic-java", type: "DIRECTORY" }];
+          }
+          return [];
+        },
+        readFile: async (path) => {
+          if (path === manifestPath) {
+            return JSON.stringify({
+              id: "semantic-java",
+              name: "Semantic Java Converter",
+              version: "1.0.0",
+              supportedLanguages: ["Java"],
+              command: "java",
+              args: ["-jar", "semantic-java-converter.jar"],
+              supportedFlags: ["--include-methods", "--include-package"]
+            });
+          }
+          throw new Error("missing file");
+        }
+      },
+      os: {
+        showFolderDialog: async (title) => {
+          window.__folderDialogTitles.push(title);
+          return folderSelections.shift();
+        },
+        execCommand: async (command) => {
+    window.__execCommands.push(command);
+          return { exitCode: 0, stdOut: "Semantic converter created 5 markdown file(s)." };
+        }
+      }
+    };
+  });
+  await openApp(page);
+
+  await page.locator("#desktopActionMenu").click();
+  await page.locator(".open-code-converter-dialog").first().click();
+  const modal = page.locator("#code-converter-modal");
+  await expect(modal).toBeVisible();
+  await expect(page.locator("#code-converter-selector option")).toHaveCount(2);
+  await page.locator("#code-converter-selector").selectOption("extension:0");
+  await expect(page.locator("#code-converter-supported-languages")).toHaveText("Supports: Java.");
+  await expect(page.locator("label[for='code-converter-include-methods']")).toBeVisible();
+  await expect(page.locator("label[for='code-converter-include-package']")).toBeVisible();
+  await expect(page.locator("label[for='code-converter-include-accessors']")).toBeHidden();
+  await expect(page.locator("label[for='code-converter-include-signatures']")).toBeHidden();
+
+  await page.locator("#code-converter-source-browse").click();
+  await page.locator("#code-converter-destination-browse").click();
+  await page.locator("#code-converter-run").click();
+  await expect(page.locator("#code-converter-status")).toHaveText("Semantic converter created 5 markdown file(s).");
+  await expect(page.locator("#code-converter-finish")).toBeVisible();
+  await expect.poll(() => page.evaluate(() => window.__execCommands)).toEqual([
+    'cd /d "C:/GitHub/shaybc/md-editor/desktop-app/extensions/code-converters/semantic-java" && "java" "-jar" "semantic-java-converter.jar" --root "C:/src/project" --vault "C:/docs/project-md" --include-methods --include-package'
+  ]);
 });
 
 test("toggles theme and persists it across reloads", async ({ page }) => {

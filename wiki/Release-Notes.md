@@ -4,9 +4,18 @@ This page summarizes the tagged MD-Editor releases and the major user-facing fea
 
 ## Current Main
 
-Changes available on `main` after `v7.1`:
+Changes available on `main` after `v7.2`:
 
 - No unreleased changes are currently documented.
+
+## v7.2 - June 9, 2026
+
+- Added converter extension support to the desktop Convert Code to MD workflow, including installed converter manifests, a converter dropdown, supported language display, and converter-specific documentation flags.
+- Updated the converter command contract so built-in and extension converters use named `--root` and `--vault` arguments.
+- Added a bundled Semantic Java converter extension powered by JavaParser Symbol Solver for local-source dependency detection.
+- Packaged the Semantic Java converter with its manifest, runnable jar, dependency jars, README, and third-party license notes.
+- Added regression coverage for manifest validation, converter command construction, and semantic Java dependency detection.
+- Updated About dialog and app metadata for the v7.2 release.
 
 ## v7.1 - June 9, 2026
 

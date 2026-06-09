@@ -63,6 +63,8 @@ desktop-app/
 
 `prepare.js` keeps the desktop resources in sync with `web-app/`, so the web and desktop versions share one core implementation.
 
+The desktop `extensions/` folder is also part of the app payload. It includes bundled converter extensions such as `extensions/code-converters/semantic-java/`.
+
 ---
 
 ## Prerequisites

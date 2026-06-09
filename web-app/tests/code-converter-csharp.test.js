@@ -62,7 +62,9 @@ test("code converter generates C# dependency markdown", () => {
     const converterPath = path.resolve(__dirname, "../../code_converter/dependency-md-generator.js");
     execFileSync(process.execPath, [
       converterPath,
+      "--root",
       tempRoot,
+      "--vault",
       outputRoot,
       "--include-methods",
       "--include-accessors",

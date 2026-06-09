@@ -1906,6 +1906,8 @@ document.addEventListener("DOMContentLoaded", function () {
   const settingsResetRecentHistoryButton = document.getElementById("settings-reset-recent-history");
   const settingsResetAllButton = document.getElementById("settings-reset-all");
   const codeConverterModal = document.getElementById("code-converter-modal");
+  const codeConverterSelector = document.getElementById("code-converter-selector");
+  const codeConverterSupportedLanguages = document.getElementById("code-converter-supported-languages");
   const codeConverterSourceRootInput = document.getElementById("code-converter-source-root");
   const codeConverterDestinationRootInput = document.getElementById("code-converter-destination-root");
   const codeConverterSourceBrowseButton = document.getElementById("code-converter-source-browse");
@@ -1989,6 +1991,24 @@ document.addEventListener("DOMContentLoaded", function () {
   const DEFAULT_CONTEXT_MENU_TOOLTIP_DELAY_MS = 3000;
   const DEFAULT_MAX_RECENT_FILES = 10;
   const DEFAULT_MAX_RECENT_FOLDERS = 10;
+  const codeConverterRegistry = typeof window.registerMarkdownViewerCodeConverterRegistry === "function"
+    ? window.registerMarkdownViewerCodeConverterRegistry()
+    : null;
+  const CODE_CONVERTER_KNOWN_FLAGS = codeConverterRegistry?.KNOWN_FLAGS || [
+    "--include-methods",
+    "--include-accessors",
+    "--include-signatures",
+    "--include-return-codes",
+    "--include-exceptions",
+    "--include-package",
+  ];
+  const BUILT_IN_CODE_CONVERTER = Object.freeze({
+    id: "builtin",
+    name: "Built-in lightweight converter",
+    supportedLanguages: ["JavaScript", "TypeScript", "Python", "Java", "C#"],
+    supportedFlags: CODE_CONVERTER_KNOWN_FLAGS.slice(),
+    isBuiltIn: true,
+  });
   const DEFAULT_GLOBAL_STATE = Object.freeze({
     autoSelectFileEnabled: true,
     editorWidthPercent: 50,
@@ -2018,6 +2038,8 @@ document.addEventListener("DOMContentLoaded", function () {
     viewMode: "split"
   });
   let settingsDialogSaving = false;
+  let installedCodeConverters = [];
+  let codeConverterManifestWarnings = [];
   const themePreferences = window.registerMarkdownViewerThemePreferences(app, {
     defaultState: DEFAULT_GLOBAL_STATE,
     mobileThemeToggle,
@@ -3268,11 +3290,112 @@ Markdown content is processed client-side in your browser and sanitized before p
     if (codeConverterFinishButton) codeConverterFinishButton.hidden = !isComplete;
   }
 
-  function showCodeConverterDialog() {
+  function getCodeConverterFlagControls() {
+    return [
+      { input: codeConverterIncludeMethodsInput, flag: "--include-methods" },
+      { input: codeConverterIncludeAccessorsInput, flag: "--include-accessors" },
+      { input: codeConverterIncludeSignaturesInput, flag: "--include-signatures" },
+      { input: codeConverterIncludeReturnCodesInput, flag: "--include-return-codes" },
+      { input: codeConverterIncludeExceptionsInput, flag: "--include-exceptions" },
+      { input: codeConverterIncludePackageInput, flag: "--include-package" },
+    ];
+  }
+
+  function getSelectedCodeConverter() {
+    const value = codeConverterSelector?.value || "builtin";
+    if (value.startsWith("extension:")) {
+      const index = Number(value.slice("extension:".length));
+      return installedCodeConverters[index] || BUILT_IN_CODE_CONVERTER;
+    }
+    return BUILT_IN_CODE_CONVERTER;
+  }
+
+  function getCodeConverterSupportedFlags(converter = getSelectedCodeConverter()) {
+    const flags = Array.isArray(converter?.supportedFlags)
+      ? converter.supportedFlags
+      : CODE_CONVERTER_KNOWN_FLAGS;
+    return new Set(flags.filter((flag) => CODE_CONVERTER_KNOWN_FLAGS.includes(flag)));
+  }
+
+  function updateCodeConverterOptionVisibility() {
+    const supportedFlags = getCodeConverterSupportedFlags();
+    getCodeConverterFlagControls().forEach(({ input, flag }) => {
+      const row = input?.closest?.("label");
+      const isSupported = supportedFlags.has(flag);
+      if (row) {
+        row.hidden = !isSupported;
+        row.style.display = isSupported ? "" : "none";
+      }
+      if (input) input.disabled = !isSupported;
+    });
+  }
+
+  function updateCodeConverterSupportedLanguages() {
+    if (!codeConverterSupportedLanguages) return;
+    const converter = getSelectedCodeConverter();
+    const languages = Array.isArray(converter?.supportedLanguages) && converter.supportedLanguages.length
+      ? converter.supportedLanguages.join(", ")
+      : "Not specified";
+    codeConverterSupportedLanguages.textContent = `Supports: ${languages}.`;
+  }
+
+  function renderCodeConverterSelector() {
+    if (!codeConverterSelector) return;
+    const previousValue = codeConverterSelector.value || "builtin";
+    codeConverterSelector.innerHTML = "";
+    const builtInOption = document.createElement("option");
+    builtInOption.value = "builtin";
+    builtInOption.textContent = BUILT_IN_CODE_CONVERTER.name;
+    codeConverterSelector.appendChild(builtInOption);
+
+    installedCodeConverters.forEach((converter, index) => {
+      const option = document.createElement("option");
+      option.value = `extension:${index}`;
+      option.textContent = converter.version ? `${converter.name} ${converter.version}` : converter.name;
+      codeConverterSelector.appendChild(option);
+    });
+
+    codeConverterSelector.value = Array.from(codeConverterSelector.options).some((option) => option.value === previousValue)
+      ? previousValue
+      : "builtin";
+    updateCodeConverterSupportedLanguages();
+    updateCodeConverterOptionVisibility();
+  }
+
+  async function loadCodeConverterExtensions() {
+    if (!codeConverterRegistry || typeof Neutralino === "undefined") {
+      installedCodeConverters = [];
+      codeConverterManifestWarnings = [];
+      renderCodeConverterSelector();
+      return;
+    }
+
+    try {
+      const result = await codeConverterRegistry.loadInstalledConverters({
+        Neutralino,
+        appPath: window.NL_PATH || "",
+      });
+      installedCodeConverters = result.converters || [];
+      codeConverterManifestWarnings = result.warnings || [];
+      renderCodeConverterSelector();
+      if (codeConverterManifestWarnings.length) {
+        setCodeConverterStatus(`Ignored ${codeConverterManifestWarnings.length} invalid converter manifest(s).`);
+      }
+    } catch (error) {
+      installedCodeConverters = [];
+      codeConverterManifestWarnings = [];
+      renderCodeConverterSelector();
+      console.warn("Failed to load code converter extensions:", error);
+    }
+  }
+
+  async function showCodeConverterDialog() {
     if (!codeConverterModal) return;
     setCodeConverterStatus("");
     setCodeConverterCompleteState(false);
+    renderCodeConverterSelector();
     codeConverterModal.style.display = "flex";
+    await loadCodeConverterExtensions();
     codeConverterSourceRootInput?.focus();
   }
 
@@ -3306,17 +3429,35 @@ Markdown content is processed client-side in your browser and sanitized before p
     return `"${String(value || "").replace(/\\/g, "/").replace(/"/g, '\\"')}"`;
   }
 
-  function getCodeConverterSwitches() {
-    return [
-      [codeConverterIncludeMethodsInput, "--include-methods"],
-      [codeConverterIncludeAccessorsInput, "--include-accessors"],
-      [codeConverterIncludeSignaturesInput, "--include-signatures"],
-      [codeConverterIncludeReturnCodesInput, "--include-return-codes"],
-      [codeConverterIncludeExceptionsInput, "--include-exceptions"],
-      [codeConverterIncludePackageInput, "--include-package"],
-    ]
-      .filter(([input]) => input?.checked)
-      .map(([, flag]) => flag);
+  function getCodeConverterSwitches(converter = getSelectedCodeConverter()) {
+    const supportedFlags = getCodeConverterSupportedFlags(converter);
+    return getCodeConverterFlagControls()
+      .filter(({ input, flag }) => supportedFlags.has(flag) && input?.checked)
+      .map(({ flag }) => flag);
+  }
+
+  function getCodeConverterWorkingDirectoryPrefix(converter) {
+    if (!converter || converter.isBuiltIn || !converter.manifestDir) return "";
+    const changeDirectoryCommand = (typeof NL_OS !== "undefined" && NL_OS !== "Windows")
+      ? "cd"
+      : "cd /d";
+    return `${changeDirectoryCommand} ${quoteCommandArg(converter.manifestDir)} && `;
+  }
+
+  function buildCodeConverterCommand(sourceRoot, destinationRoot) {
+    const converter = getSelectedCodeConverter();
+    const commandParts = converter.isBuiltIn
+      ? ["node", quoteCommandArg(getCodeConverterScriptPath())]
+      : [quoteCommandArg(converter.command)];
+    commandParts.push(
+      ...(Array.isArray(converter.args) ? converter.args.map(quoteCommandArg) : []),
+      "--root",
+      quoteCommandArg(sourceRoot),
+      "--vault",
+      quoteCommandArg(destinationRoot),
+      ...getCodeConverterSwitches(converter)
+    );
+    return `${getCodeConverterWorkingDirectoryPrefix(converter)}${commandParts.join(" ")}`;
   }
 
   async function runCodeConverter() {
@@ -3339,13 +3480,7 @@ Markdown content is processed client-side in your browser and sanitized before p
       return;
     }
 
-    const command = [
-      "node",
-      quoteCommandArg(getCodeConverterScriptPath()),
-      quoteCommandArg(sourceRoot),
-      quoteCommandArg(destinationRoot),
-      ...getCodeConverterSwitches()
-    ].join(" ");
+    const command = buildCodeConverterCommand(sourceRoot, destinationRoot);
 
     try {
       if (codeConverterRunButton) codeConverterRunButton.disabled = true;
@@ -4682,6 +4817,14 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
   if (codeConverterDestinationBrowseButton) {
     codeConverterDestinationBrowseButton.addEventListener("click", function() {
       browseCodeConverterFolder(codeConverterDestinationRootInput, "Select destination Markdown root folder");
+    });
+  }
+
+  if (codeConverterSelector) {
+    codeConverterSelector.addEventListener("change", function() {
+      setCodeConverterStatus("");
+      updateCodeConverterSupportedLanguages();
+      updateCodeConverterOptionVisibility();
     });
   }
 

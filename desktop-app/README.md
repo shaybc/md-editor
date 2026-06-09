@@ -65,6 +65,8 @@ npm run build:all
 
 Build output is placed in `dist/`.
 
+The `extensions/` folder is part of the desktop app payload. It includes bundled converter extensions such as `extensions/code-converters/semantic-java/`.
+
 For more information, see the [Neutralinojs documentation](https://neutralino.js.org/docs/cli/neu-cli#neu-build).
 
 ### Building with Docker

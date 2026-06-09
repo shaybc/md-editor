@@ -40,9 +40,11 @@ const IGNORED_DIRS = new Set([
 
 function usage() {
   console.error([
-    "Usage: node dependency-md-generator.js <source-root> <destination-root> [switches]",
+    "Usage: node dependency-md-generator.js --root <source-root> --vault <destination-root> [switches]",
     "",
     "Switches:",
+    "  --root <source-root>",
+    "  --vault <destination-root>",
     "  --include-methods",
     "  --include-accessors",
     "  --include-signatures",
@@ -82,25 +84,46 @@ function parseArgs(argv) {
     includeExceptions: false,
     includePackage: false,
   };
-  const positional = [];
+  let sourceArg = "";
+  let destinationArg = "";
 
-  for (const arg of argv) {
+  function readRequiredValue(flag, index) {
+    const value = argv[index + 1] || "";
+    if (!value || value.startsWith("--")) {
+      console.error(`Missing value for ${flag}`);
+      usage();
+      process.exit(1);
+    }
+    return value;
+  }
+
+  for (let index = 0; index < argv.length; index += 1) {
+    const arg = argv[index];
     if (arg === "--include-methods") options.includeMethods = true;
     else if (arg === "--include-accessors") options.includeAccessors = true;
     else if (arg === "--include-signatures") options.includeSignatures = true;
     else if (arg === "--include-return-codes") options.includeReturnCodes = true;
     else if (arg === "--include-exceptions") options.includeExceptions = true;
     else if (arg === "--include-package") options.includePackage = true;
+    else if (arg === "--root") {
+      sourceArg = readRequiredValue(arg, index);
+      index += 1;
+    } else if (arg === "--vault") {
+      destinationArg = readRequiredValue(arg, index);
+      index += 1;
+    }
     else if (arg.startsWith("--")) {
       console.error(`Unknown switch: ${arg}`);
       usage();
       process.exit(1);
     } else {
-      positional.push(arg);
+      console.error(`Unexpected positional argument: ${arg}`);
+      usage();
+      process.exit(1);
     }
   }
 
-  return { sourceArg: positional[0], destinationArg: positional[1], options };
+  return { sourceArg, destinationArg, options };
 }
 
 function walkSourceFiles(root) {
