@@ -1660,6 +1660,49 @@
     [localGraphBtn, fullLocalGraphBtn, fullNetworkBtn, expandedClusterGraphBtn].forEach((button) => showGraphSubmenuPanel.appendChild(button));
     showGraphSubmenu.appendChild(showGraphSubmenuBtn);
     showGraphSubmenu.appendChild(showGraphSubmenuPanel);
+    const addToTabSubmenu = document.createElement("div");
+    addToTabSubmenu.className = "graph-context-menu-submenu hidden";
+    const addToTabSubmenuBtn = createContextMenuButton(
+      CONTEXT_MENU_ACTIONS.addToTab?.label || "Add to Tab",
+      CONTEXT_MENU_ACTIONS.addPointToTab?.icon || "bi bi-plus-circle",
+      "Add this point or related graph scope to another open graph tab."
+    );
+    addToTabSubmenuBtn.setAttribute("aria-haspopup", "true");
+    disableContextMenuTooltip(addToTabSubmenuBtn);
+    const addToTabSubmenuArrow = document.createElement("span");
+    addToTabSubmenuArrow.className = "graph-context-menu-submenu-arrow";
+    addToTabSubmenuArrow.textContent = "›";
+    addToTabSubmenuBtn.appendChild(addToTabSubmenuArrow);
+    const addToTabSubmenuPanel = document.createElement("div");
+    addToTabSubmenuPanel.className = "graph-context-menu-submenu-panel";
+    const addPointToTabBtn = createContextMenuButton(
+      CONTEXT_MENU_ACTIONS.addPointToTab?.label || "Add point to Tab ...",
+      CONTEXT_MENU_ACTIONS.addPointToTab?.icon || "bi bi-plus-circle",
+      "Choose a graph tab and add only this point."
+    );
+    const addLocalGraphToTabBtn = createContextMenuButton(
+      "Add local graph to Tab ...",
+      CONTEXT_MENU_ACTIONS.showLocalGraph.icon,
+      "Choose a graph tab and add this point plus direct outgoing linked points."
+    );
+    const addFullLocalGraphToTabBtn = createContextMenuButton(
+      "Add full local graph to Tab ...",
+      CONTEXT_MENU_ACTIONS.showFullLocalGraph.icon,
+      "Choose a graph tab and add every reachable outgoing dependency from this point."
+    );
+    const addFullNetworkToTabBtn = createContextMenuButton(
+      "Add full network to Tab ...",
+      CONTEXT_MENU_ACTIONS.showFullNetwork.icon,
+      "Choose a graph tab and add recursive backlinks and outgoing dependencies from this point."
+    );
+    [
+      addPointToTabBtn,
+      addLocalGraphToTabBtn,
+      addFullLocalGraphToTabBtn,
+      addFullNetworkToTabBtn
+    ].forEach((button) => addToTabSubmenuPanel.appendChild(button));
+    addToTabSubmenu.appendChild(addToTabSubmenuBtn);
+    addToTabSubmenu.appendChild(addToTabSubmenuPanel);
     const addTagBtn = createContextMenuButton(
       CONTEXT_MENU_ACTIONS.addTag.label,
       CONTEXT_MENU_ACTIONS.addTag.icon,
@@ -1802,6 +1845,7 @@
     contextMenu.appendChild(collapseDetectedCommunityBtn);
     contextMenu.appendChild(expandClusterBtn);
     contextMenu.appendChild(showGraphSubmenu);
+    contextMenu.appendChild(addToTabSubmenu);
     contextMenu.appendChild(addTagBtn);
     contextMenu.appendChild(removeTagBtn);
     contextMenu.appendChild(deleteTagBtn);
@@ -2012,6 +2056,352 @@
       getFullBacklinkIds(nodeId).forEach((id) => networkIds.add(id));
       getFullOutgoingDependencyIds(nodeId).forEach((id) => networkIds.add(id));
       return Array.from(networkIds);
+    };
+
+    const cloneGraphValue = (value) => {
+      if (value === undefined) return undefined;
+      if (value === null) return null;
+      try {
+        return JSON.parse(JSON.stringify(value));
+      } catch (error) {
+        console.warn("Failed to clone graph value:", error);
+        return null;
+      }
+    };
+
+    const getGraphEndpointId = (endpoint) => (endpoint && typeof endpoint === "object" ? endpoint.id : endpoint);
+    const getGraphLinkSourceId = (linkData) => getGraphEndpointId(linkData?.source);
+    const getGraphLinkTargetId = (linkData) => getGraphEndpointId(linkData?.target);
+    const getGraphLinkKeyForMerge = (linkData) => `${getGraphLinkSourceId(linkData)}->${getGraphLinkTargetId(linkData)}:${linkData?.type || "link"}`;
+    const normalizeGraphMetadataValue = (value) => String(value || "").replace(/\\/g, "/").replace(/\/+/g, "/").trim().toLowerCase();
+    const getNodeMetadataSignature = (nodeData, fileData) => [
+      fileData?.fullPath,
+      fileData?.path,
+      fileData?.name,
+      nodeData?.fullPath,
+      nodeData?.path,
+      nodeData?.label,
+      nodeData?.sourceGraphTitle,
+      nodeData?.originalId
+    ].map(normalizeGraphMetadataValue).filter(Boolean).join("|");
+    const createImportedNodeId = (nodeId, targetNodeIds, sourceTitle) => {
+      const cleanTitle = normalizeGraphNodeName(sourceTitle || "imported").replace(/[^a-z0-9._/-]+/gi, "-").replace(/^-+|-+$/g, "") || "imported";
+      const baseId = `${nodeId}@@${cleanTitle}`;
+      let candidateId = baseId;
+      let suffix = 2;
+      while (targetNodeIds.has(candidateId)) {
+        candidateId = `${baseId}-${suffix}`;
+        suffix += 1;
+      }
+      return candidateId;
+    };
+    const getGraphTabTitleForMerge = (tab) => {
+      if (!tab) return "Graph View";
+      if (tab.sourceFileName) {
+        return String(tab.sourceFileName)
+          .replace(/\.mdviewer-graph\.json$/i, "")
+          .replace(/\.mdgraph\.json$/i, "")
+          .replace(/\.json$/i, "") || "Saved Graph";
+      }
+      return tab.title || tab.folderName || "Graph View";
+    };
+    const getSourceGraphTitleForMerge = () => getGraphTabTitleForMerge(getActiveGraphTab());
+    const getImportScopeNodeIds = (nodeId, scope) => {
+      if (!nodeId) return new Set();
+      if (scope === "local") return new Set([nodeId, ...getDirectOutgoingNodeIds(nodeId)]);
+      if (scope === "full-local") return new Set([nodeId, ...getFullOutgoingNodeIds(nodeId)]);
+      if (scope === "full-network") return getFullNetworkNodeIds(nodeId);
+      return new Set([nodeId]);
+    };
+    const getVisibleNodeIdsForTargetConfig = (snapshot, viewConfig) => {
+      const snapshotNodes = Array.isArray(snapshot?.nodes) ? snapshot.nodes : [];
+      const snapshotLinks = Array.isArray(snapshot?.links) ? snapshot.links : [];
+      const currentNodeIds = new Set(snapshotNodes.map((nodeData) => nodeData?.id).filter(Boolean));
+      const hiddenNodeIds = new Set(Array.isArray(viewConfig?.hiddenNodeIds) ? viewConfig.hiddenNodeIds : []);
+      hiddenNodeIds.forEach((nodeId) => currentNodeIds.delete(nodeId));
+      const targetMarkdownLinks = snapshotLinks.filter((linkData) => (linkData?.type || "link") !== "tag");
+      const getTargetOutgoingIds = (nodeId) => targetMarkdownLinks
+        .filter((linkData) => getGraphLinkSourceId(linkData) === nodeId)
+        .map(getGraphLinkTargetId)
+        .filter((id) => currentNodeIds.has(id));
+      const getTargetIncomingIds = (nodeId) => targetMarkdownLinks
+        .filter((linkData) => getGraphLinkTargetId(linkData) === nodeId)
+        .map(getGraphLinkSourceId)
+        .filter((id) => currentNodeIds.has(id));
+      const getRecursiveIds = (nodeId, getNextIds) => {
+        const collectedIds = new Set();
+        const idsToVisit = [...getNextIds(nodeId)];
+        while (idsToVisit.length) {
+          const currentId = idsToVisit.shift();
+          if (!currentId || currentId === nodeId || collectedIds.has(currentId)) continue;
+          collectedIds.add(currentId);
+          idsToVisit.push(...getNextIds(currentId));
+        }
+        return collectedIds;
+      };
+
+      if (Array.isArray(viewConfig?.allowedNodeIds) && viewConfig.allowedNodeIds.length) {
+        return new Set(viewConfig.allowedNodeIds.filter((nodeId) => currentNodeIds.has(nodeId)));
+      }
+      if (viewConfig?.mode === "cluster" && Array.isArray(viewConfig.clusterNodeIds)) {
+        return new Set(viewConfig.clusterNodeIds.filter((nodeId) => currentNodeIds.has(nodeId)));
+      }
+      if (viewConfig?.mode === "local" && viewConfig.focusNodeId) {
+        return new Set([viewConfig.focusNodeId, ...getTargetOutgoingIds(viewConfig.focusNodeId)].filter((nodeId) => currentNodeIds.has(nodeId)));
+      }
+      if (viewConfig?.mode === "full-local" && viewConfig.focusNodeId) {
+        return new Set([viewConfig.focusNodeId, ...getRecursiveIds(viewConfig.focusNodeId, getTargetOutgoingIds)].filter((nodeId) => currentNodeIds.has(nodeId)));
+      }
+      if (viewConfig?.mode === "full-network" && viewConfig.focusNodeId) {
+        return new Set([
+          viewConfig.focusNodeId,
+          ...getRecursiveIds(viewConfig.focusNodeId, getTargetIncomingIds),
+          ...getRecursiveIds(viewConfig.focusNodeId, getTargetOutgoingIds)
+        ].filter((nodeId) => currentNodeIds.has(nodeId)));
+      }
+      return currentNodeIds;
+    };
+    const ensureImportedNodesVisibleInTarget = (targetTab, importedNodeIds) => {
+      const normalizedConfig = normalizeGraphViewConfig(targetTab.graphViewConfig || targetTab.graphDocument?.viewConfig || null);
+      const importedIds = Array.from(importedNodeIds || []).filter(Boolean);
+      if (!importedIds.length) return normalizedConfig;
+      if (Array.isArray(normalizedConfig.allowedNodeIds) && normalizedConfig.allowedNodeIds.length) {
+        return {
+          ...normalizedConfig,
+          allowedNodeIds: Array.from(new Set([...normalizedConfig.allowedNodeIds, ...importedIds]))
+        };
+      }
+      if (normalizedConfig.mode === "cluster" && Array.isArray(normalizedConfig.clusterNodeIds)) {
+        return {
+          ...normalizedConfig,
+          clusterNodeIds: Array.from(new Set([...normalizedConfig.clusterNodeIds, ...importedIds]))
+        };
+      }
+      if (["local", "full-local", "full-network"].includes(normalizedConfig.mode) && normalizedConfig.focusNodeId) {
+        return {
+          ...normalizedConfig,
+          mode: "custom",
+          allowedNodeIds: Array.from(new Set([...getVisibleNodeIdsForTargetConfig(targetTab.graphSnapshot, normalizedConfig), ...importedIds]))
+        };
+      }
+      return normalizedConfig;
+    };
+    const mergeGraphScopeIntoTab = (targetTab, scope, sourceNode = contextTargetNode) => {
+      if (!sourceNode || !targetTab || targetTab.type !== "graph") return false;
+      const activeGraphTab = getActiveGraphTab();
+      const sourceSnapshot = activeGraphTab?.graphSnapshot || graphSnapshot;
+      const sourceTitle = getSourceGraphTitleForMerge();
+      const selectedNodeIds = getImportScopeNodeIds(sourceNode.id, scope);
+      const sourceNodesById = new Map((sourceSnapshot?.nodes || nodes || []).map((nodeData) => [nodeData.id, nodeData]));
+      const sourceFilesById = new Map((sourceSnapshot?.files || []).map((fileData) => [fileData.id, fileData]));
+      const selectedSourceNodes = Array.from(selectedNodeIds).map((nodeId) => sourceNodesById.get(nodeId)).filter(Boolean);
+      if (!selectedSourceNodes.length) {
+        alert("No graph points were available to add.");
+        return false;
+      }
+
+      const targetSnapshot = cloneGraphValue(targetTab.graphSnapshot || targetTab.graphDocument?.snapshot || {}) || {};
+      const targetNodes = Array.isArray(targetSnapshot.nodes) ? targetSnapshot.nodes.map((nodeData) => cloneGraphValue(nodeData)).filter(Boolean) : [];
+      const targetLinks = Array.isArray(targetSnapshot.links) ? targetSnapshot.links.map((linkData) => cloneGraphValue(linkData)).filter(Boolean) : [];
+      const targetFiles = Array.isArray(targetSnapshot.files) ? targetSnapshot.files.map((fileData) => cloneGraphValue(fileData)).filter(Boolean) : [];
+      const targetNodesById = new Map(targetNodes.map((nodeData) => [nodeData.id, nodeData]));
+      const targetFilesById = new Map(targetFiles.map((fileData) => [fileData.id, fileData]));
+      const sourceToTargetNodeId = new Map();
+      const visibleImportedNodeIds = new Set();
+
+      selectedSourceNodes.forEach((sourceNode) => {
+        const sourceFile = sourceFilesById.get(sourceNode.id) || null;
+        let nextNodeId = sourceNode.id;
+        const existingNode = targetNodesById.get(nextNodeId);
+        const existingFile = targetFilesById.get(nextNodeId) || null;
+        if (existingNode) {
+          const existingSignature = getNodeMetadataSignature(existingNode, existingFile);
+          const sourceSignature = getNodeMetadataSignature(sourceNode, sourceFile);
+          if (!existingSignature || existingSignature === sourceSignature) {
+            sourceToTargetNodeId.set(sourceNode.id, nextNodeId);
+            visibleImportedNodeIds.add(nextNodeId);
+            return;
+          }
+          const shouldKeepBoth = window.confirm(
+            `The target graph already has a point named "${getGraphNodeLabel(sourceNode)}".\n\nKeep both points by adding the imported one with a source-specific id?`
+          );
+          if (!shouldKeepBoth) return;
+          nextNodeId = createImportedNodeId(sourceNode.id, new Set(targetNodesById.keys()), sourceTitle);
+        }
+
+        const importedNode = {
+          ...cloneGraphValue(sourceNode),
+          id: nextNodeId,
+          originalId: sourceNode.originalId || sourceNode.id,
+          sourceGraphTitle: sourceNode.sourceGraphTitle || sourceTitle
+        };
+        targetNodes.push(importedNode);
+        targetNodesById.set(nextNodeId, importedNode);
+        sourceToTargetNodeId.set(sourceNode.id, nextNodeId);
+        visibleImportedNodeIds.add(nextNodeId);
+
+        if (sourceFile) {
+          const importedFile = {
+            ...cloneGraphValue(sourceFile),
+            id: nextNodeId,
+            originalId: sourceFile.originalId || sourceNode.id,
+            sourceGraphTitle: sourceFile.sourceGraphTitle || sourceTitle
+          };
+          targetFiles.push(importedFile);
+          targetFilesById.set(nextNodeId, importedFile);
+        }
+      });
+
+      if (!sourceToTargetNodeId.size) {
+        alert("No points were added to the target graph.");
+        return false;
+      }
+
+      const targetNodeIds = new Set(targetNodes.map((nodeData) => nodeData.id));
+      const targetLinkKeys = new Set(targetLinks.map(getGraphLinkKeyForMerge));
+      (Array.isArray(sourceSnapshot?.links) ? sourceSnapshot.links : []).forEach((sourceLink) => {
+        const sourceId = getGraphLinkSourceId(sourceLink);
+        const targetId = getGraphLinkTargetId(sourceLink);
+        if (!selectedNodeIds.has(sourceId) && !selectedNodeIds.has(targetId)) return;
+        const mappedSourceId = sourceToTargetNodeId.get(sourceId) || (targetNodeIds.has(sourceId) ? sourceId : "");
+        const mappedTargetId = sourceToTargetNodeId.get(targetId) || (targetNodeIds.has(targetId) ? targetId : "");
+        if (!mappedSourceId || !mappedTargetId || !targetNodeIds.has(mappedSourceId) || !targetNodeIds.has(mappedTargetId)) return;
+        const importedLink = {
+          ...cloneGraphValue(sourceLink),
+          source: mappedSourceId,
+          target: mappedTargetId,
+          sourceGraphTitle: sourceLink.sourceGraphTitle || sourceTitle
+        };
+        const linkKey = getGraphLinkKeyForMerge(importedLink);
+        if (targetLinkKeys.has(linkKey)) return;
+        targetLinks.push(importedLink);
+        targetLinkKeys.add(linkKey);
+      });
+
+      targetTab.graphSnapshot = {
+        ...targetSnapshot,
+        folderName: targetSnapshot.folderName || targetTab.folderName || targetTab.title || "Graph View",
+        nodes: targetNodes,
+        links: targetLinks,
+        files: targetFiles
+      };
+      targetTab.graphViewConfig = ensureImportedNodesVisibleInTarget(targetTab, visibleImportedNodeIds);
+      syncGraphTabDocument(targetTab);
+      markGraphTabAsChanged(targetTab);
+      removeGraphRenderForTab(targetTab.id);
+      saveTabsToStorage(tabs);
+      if (targetTab.id === activeTabId) renderGraphView();
+      return true;
+    };
+    const getAddToTabTargetTabs = () => tabs.filter((tab) => tab?.type === "graph" && tab.id !== activeTabId);
+    const setAddToTabSubmenuVisibility = () => {
+      addToTabSubmenu.classList.toggle("hidden", !getAddToTabTargetTabs().length);
+    };
+    const showAddToTabTargetDialog = (scopeLabel) => new Promise((resolve) => {
+      const targetGraphTabs = getAddToTabTargetTabs();
+      if (!targetGraphTabs.length) {
+        resolve(null);
+        return;
+      }
+
+      const overlay = document.createElement("div");
+      overlay.className = "reset-modal-overlay graph-add-to-tab-modal";
+      overlay.setAttribute("role", "dialog");
+      overlay.setAttribute("aria-modal", "true");
+      overlay.setAttribute("aria-labelledby", "graph-add-to-tab-title");
+      overlay.style.display = "flex";
+
+      const box = document.createElement("div");
+      box.className = "reset-modal-box graph-add-to-tab-modal-box";
+      const title = document.createElement("div");
+      title.id = "graph-add-to-tab-title";
+      title.className = "reset-modal-message graph-add-to-tab-title";
+      title.textContent = `Add ${scopeLabel} to tab`;
+
+      const list = document.createElement("div");
+      list.className = "graph-add-to-tab-list";
+      let selectedTabId = "";
+      const okButton = document.createElement("button");
+
+      targetGraphTabs.forEach((targetTab, index) => {
+        const tabTitle = getGraphTabTitleForMerge(targetTab);
+        const label = document.createElement("label");
+        label.className = "graph-add-to-tab-row";
+        label.title = tabTitle;
+
+        const input = document.createElement("input");
+        input.type = "radio";
+        input.name = "graph-add-to-tab-target";
+        input.value = targetTab.id;
+        if (index === 0) {
+          input.checked = true;
+          selectedTabId = targetTab.id;
+        }
+
+        const text = document.createElement("span");
+        text.className = "graph-add-to-tab-row-label";
+        text.textContent = tabTitle;
+        label.appendChild(input);
+        label.appendChild(text);
+        label.addEventListener("change", () => {
+          selectedTabId = input.value;
+          okButton.disabled = !selectedTabId;
+        });
+        list.appendChild(label);
+      });
+
+      const actions = document.createElement("div");
+      actions.className = "reset-modal-actions graph-add-to-tab-actions";
+      const cancelButton = document.createElement("button");
+      cancelButton.type = "button";
+      cancelButton.className = "reset-modal-btn reset-modal-cancel";
+      cancelButton.textContent = "Cancel";
+      okButton.type = "button";
+      okButton.className = "reset-modal-btn reset-modal-confirm";
+      okButton.textContent = "OK";
+      okButton.disabled = !selectedTabId;
+      actions.appendChild(cancelButton);
+      actions.appendChild(okButton);
+
+      const cleanup = (selectedTargetTab = null) => {
+        overlay.removeEventListener("click", onOverlayClick);
+        overlay.removeEventListener("keydown", onKeyDown);
+        overlay.remove();
+        resolve(selectedTargetTab);
+      };
+      const onOverlayClick = (event) => {
+        if (event.target === overlay) cleanup(null);
+      };
+      const onKeyDown = (event) => {
+        if (event.key === "Escape") {
+          event.preventDefault();
+          cleanup(null);
+        }
+        if (event.key === "Enter" && selectedTabId) {
+          event.preventDefault();
+          cleanup(targetGraphTabs.find((tab) => tab.id === selectedTabId) || null);
+        }
+      };
+
+      cancelButton.addEventListener("click", () => cleanup(null));
+      okButton.addEventListener("click", () => cleanup(targetGraphTabs.find((tab) => tab.id === selectedTabId) || null));
+      overlay.addEventListener("click", onOverlayClick);
+      overlay.addEventListener("keydown", onKeyDown);
+      box.appendChild(title);
+      box.appendChild(list);
+      box.appendChild(actions);
+      overlay.appendChild(box);
+      document.body.appendChild(overlay);
+      list.querySelector("input")?.focus({ preventScroll: true });
+    });
+    const handleAddToTabScope = async (scope, scopeLabel) => {
+      if (!contextTargetNode) return;
+      const sourceNode = contextTargetNode;
+      hideContextMenu();
+      const targetTab = await showAddToTabTargetDialog(scopeLabel);
+      if (!targetTab) return;
+      const didMerge = mergeGraphScopeIntoTab(targetTab, scope, sourceNode);
+      if (didMerge) switchTab(targetTab.id);
     };
 
     const getNodeClipboardPathById = (nodeId) => {
@@ -3552,6 +3942,7 @@
       collapseDetectedCommunityBtn,
       expandClusterBtn,
       showGraphSubmenu,
+      addToTabSubmenu,
       tagsSubmenu,
       deleteTagBtn,
       contextMenuDeleteSeparator,
@@ -3652,6 +4043,8 @@
       expandedClusterGraphBtn.classList.toggle("hidden", !isCluster);
       [renameFileBtn, deleteFileBtn].forEach((item) => item.classList.toggle("hidden", !isFileNode || keepSavedMode));
       tagsSubmenu.classList.toggle("hidden", !isFileNode || keepSavedMode);
+      if (isFileNode) setAddToTabSubmenuVisibility();
+      else addToTabSubmenu.classList.add("hidden");
       collapseToClusterBtn.classList.toggle("hidden", !isFileNode || getCollapsibleClusterMemberIds(d.id).length < 3);
       collapseFullOutgoingToClusterBtn.classList.toggle("hidden", !isFileNode || getCollapsibleClusterMemberIds(d.id, "full-outgoing").length < 3);
       collapseDetectedCommunityBtn.classList.toggle("hidden", !isFileNode || getCollapsibleClusterMemberIds(d.id, "community").length < 3);
@@ -3771,6 +4164,26 @@
       event.stopPropagation();
       if (!contextTargetNode) return;
       expandGraphCluster(contextTargetNode);
+    });
+
+    addPointToTabBtn.addEventListener("click", (event) => {
+      event.stopPropagation();
+      handleAddToTabScope("point", "point");
+    });
+
+    addLocalGraphToTabBtn.addEventListener("click", (event) => {
+      event.stopPropagation();
+      handleAddToTabScope("local", "local graph");
+    });
+
+    addFullLocalGraphToTabBtn.addEventListener("click", (event) => {
+      event.stopPropagation();
+      handleAddToTabScope("full-local", "full local graph");
+    });
+
+    addFullNetworkToTabBtn.addEventListener("click", (event) => {
+      event.stopPropagation();
+      handleAddToTabScope("full-network", "full network");
     });
 
     openFileBtn.addEventListener("click", async (event) => {
@@ -4195,9 +4608,6 @@
     const shouldShowConnectedLabelsOnHover = !shouldDelayHoverHighlight || largeMapHoverPreferences.showConnectedLabels !== false;
     const shouldHighlightConnectedLinesOnHover = !shouldDelayHoverHighlight || largeMapHoverPreferences.highlightConnectedLines !== false;
     const shouldDimOtherLinesOnHover = !shouldDelayHoverHighlight;
-
-    const getGraphLinkSourceId = (linkData) => linkData?.source?.id || linkData?.source;
-    const getGraphLinkTargetId = (linkData) => linkData?.target?.id || linkData?.target;
 
     const shouldIncludeLinkInHoverHighlight = (linkData, includeTagRelationships = false) => (
       includeTagRelationships || isMarkdownLink(linkData)

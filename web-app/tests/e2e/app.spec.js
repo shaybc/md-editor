@@ -541,7 +541,7 @@ test("opens help and about from the action menu", async ({ page }) => {
   const aboutModal = page.locator("#about-modal");
   await expect(aboutModal).toBeVisible();
   await expect(aboutModal.getByText("MD-Editor", { exact: true })).toBeVisible();
-  await expect(aboutModal.locator("#about-app-version")).toHaveText("v6.9");
+  await expect(aboutModal.locator("#about-app-version")).toHaveText("v7.0");
   await expect(aboutModal.locator("#about-release-date")).toHaveText("June 9, 2026");
   await expect(aboutModal.locator("#about-app-author")).toHaveText("ShayBC");
   await expect(aboutModal.getByText("Apache License 2.0")).toBeVisible();
@@ -1601,6 +1601,271 @@ test("local graph warning uses the focused graph node count", async ({ page }) =
   await expect(page.locator("#tab-list .tab-item.active")).toContainText("Local Graph: node-1.md");
   await expect(page.locator(".graph-tab-render:not(.hidden)").locator(".graph-node-file")).toHaveCount(3);
   await expect.poll(() => page.evaluate(() => window.__graphConfirmMessages)).toEqual([]);
+});
+
+test("graph node context menu adds point scopes to other graph tabs", async ({ page }) => {
+  await page.addInitScript(() => {
+    const baseConfig = {
+      showTags: false,
+      hiddenTagIds: [],
+      hiddenNodeIds: [],
+      selectedTagIds: [],
+      groups: [],
+      collapsedClusters: [],
+      searchQuery: "",
+      showArrows: true,
+      showOrphans: true,
+      showLabels: true,
+      textFadeThreshold: 0.35,
+      nodeSize: 0.8,
+      linkThickness: 1,
+      centerForce: 1,
+      repelForce: 650,
+      linkForce: 0.4,
+      linkDistance: 170
+    };
+    const sourceNodes = [
+      { id: "alpha.md", label: "alpha.md", fullPath: "C:/source/alpha.md", type: "file", status: "current", tags: [] },
+      { id: "beta.md", label: "beta.md", fullPath: "C:/source/beta.md", type: "file", status: "current", tags: [] },
+      { id: "gamma.md", label: "gamma.md", fullPath: "C:/source/gamma.md", type: "file", status: "current", tags: [] },
+      { id: "delta.md", label: "delta.md", fullPath: "C:/source/delta.md", type: "file", status: "current", tags: [] },
+      { id: "epsilon.md", label: "epsilon.md", fullPath: "C:/source/epsilon.md", type: "file", status: "current", tags: [] }
+    ];
+    const sourceLinks = [
+      { source: "alpha.md", target: "beta.md", type: "link", status: "current" },
+      { source: "alpha.md", target: "gamma.md", type: "link", status: "current" },
+      { source: "beta.md", target: "delta.md", type: "link", status: "current" },
+      { source: "epsilon.md", target: "alpha.md", type: "link", status: "current" }
+    ];
+    const sourceFiles = sourceNodes.map((node) => ({
+      id: node.id,
+      path: node.id,
+      name: node.id,
+      content: `# ${node.label}`,
+      fullPath: node.fullPath,
+      status: "current",
+      tags: []
+    }));
+    const createTargetTab = (id, title, nodes = [], links = [], extraConfig = {}) => ({
+      id,
+      title,
+      content: "",
+      scrollPos: 0,
+      viewMode: "preview",
+      createdAt: Date.now(),
+      isTemporary: false,
+      type: "graph",
+      folderName: title,
+      graphViewConfig: { ...baseConfig, ...extraConfig },
+      graphSnapshot: {
+        version: 1,
+        folderName: title,
+        createdAt: Date.now(),
+        nodes,
+        links,
+        files: nodes.map((node) => ({
+          id: node.id,
+          path: node.id,
+          name: node.id,
+          content: `# ${node.label}`,
+          fullPath: node.fullPath,
+          status: "current",
+          tags: []
+        }))
+      }
+    });
+    const sourceTab = createTargetTab("add_scope_source", "Source Graph", sourceNodes, sourceLinks);
+    const pointTarget = createTargetTab("add_scope_point", "Point Target", [
+      { id: "beta.md", label: "beta.md", fullPath: "C:/source/beta.md", type: "file", status: "current", tags: [] }
+    ]);
+    const localTarget = createTargetTab("add_scope_local", "Focused Target", [
+      { id: "seed.md", label: "seed.md", fullPath: "C:/target/seed.md", type: "file", status: "current", tags: [] },
+      ...sourceNodes
+    ], sourceLinks, { mode: "local", focusNodeId: "seed.md" });
+    const fullLocalTarget = createTargetTab("add_scope_full_local", "Full Local Target");
+    const fullNetworkTarget = createTargetTab("add_scope_full_network", "Full Network Target");
+    sourceTab.graphSnapshot.files = sourceFiles;
+    localStorage.setItem("markdownViewerGlobalState", JSON.stringify({ contextMenuTooltipDelayMs: 0 }));
+    localStorage.setItem("markdownViewerTabs", JSON.stringify([sourceTab, pointTarget, localTarget, fullLocalTarget, fullNetworkTarget]));
+    localStorage.setItem("markdownViewerActiveTab", sourceTab.id);
+  });
+
+  await page.goto("/");
+  await expect(page.locator(".graph-tab-render")).toBeVisible();
+
+  const addAlphaScopeToTarget = async (targetText, actionText) => {
+    await page.locator("#tab-list .tab-item", { hasText: "Source Graph" }).click();
+    const alphaNode = page.locator(".graph-node-file").filter({ has: page.locator("title", { hasText: "alpha.md" }) }).first();
+    await alphaNode.dispatchEvent("contextmenu", {
+      bubbles: true,
+      cancelable: true,
+      button: 2,
+      clientX: 220,
+      clientY: 220
+    });
+    const addSubmenu = page.locator(".graph-tab-render:not(.hidden) .graph-context-menu-submenu", { hasText: "Add to Tab" });
+    await addSubmenu.hover();
+    await addSubmenu.locator(".graph-context-menu-submenu-panel .graph-context-menu-item", { hasText: actionText }).evaluate((button) => button.click());
+    const chooser = page.locator(".graph-add-to-tab-modal");
+    await expect(chooser).toBeVisible();
+    const targetRow = chooser.locator(".graph-add-to-tab-row", { hasText: targetText });
+    await expect(targetRow).toHaveAttribute("title", targetText);
+    await targetRow.click();
+    await chooser.locator(".reset-modal-confirm", { hasText: "OK" }).click();
+    await expect(page.locator("#tab-list .tab-item.active")).toContainText(targetText);
+  };
+
+  await addAlphaScopeToTarget("Point Target", "Add point to Tab ...");
+  await expect.poll(() => page.evaluate(() => {
+    const target = JSON.parse(localStorage.getItem("markdownViewerTabs") || "[]").find((tab) => tab.id === "add_scope_point");
+    return {
+      nodes: target.graphSnapshot.nodes.map((node) => node.id).sort(),
+      links: target.graphSnapshot.links.map((link) => `${link.source}->${link.target}`).sort()
+    };
+  })).toEqual({
+    nodes: ["alpha.md", "beta.md"],
+    links: ["alpha.md->beta.md"]
+  });
+
+  await addAlphaScopeToTarget("Focused Target", "Add local graph to Tab ...");
+  await expect.poll(() => page.evaluate(() => {
+    const target = JSON.parse(localStorage.getItem("markdownViewerTabs") || "[]").find((tab) => tab.id === "add_scope_local");
+    return {
+      mode: target.graphViewConfig.mode,
+      allowedNodeIds: target.graphViewConfig.allowedNodeIds.slice().sort(),
+      nodes: target.graphSnapshot.nodes.map((node) => node.id).sort()
+    };
+  })).toEqual({
+    mode: "custom",
+    allowedNodeIds: ["alpha.md", "beta.md", "gamma.md", "seed.md"],
+    nodes: ["alpha.md", "beta.md", "delta.md", "epsilon.md", "gamma.md", "seed.md"]
+  });
+
+  await addAlphaScopeToTarget("Full Local Target", "Add full local graph to Tab ...");
+  await expect.poll(() => page.evaluate(() => {
+    const target = JSON.parse(localStorage.getItem("markdownViewerTabs") || "[]").find((tab) => tab.id === "add_scope_full_local");
+    return target.graphSnapshot.nodes.map((node) => node.id).sort();
+  })).toEqual(["alpha.md", "beta.md", "delta.md", "gamma.md"]);
+
+  await addAlphaScopeToTarget("Full Network Target", "Add full network to Tab ...");
+  await expect.poll(() => page.evaluate(() => {
+    const target = JSON.parse(localStorage.getItem("markdownViewerTabs") || "[]").find((tab) => tab.id === "add_scope_full_network");
+    return {
+      nodes: target.graphSnapshot.nodes.map((node) => node.id).sort(),
+      links: target.graphSnapshot.links.map((link) => `${link.source}->${link.target}`).sort()
+    };
+  })).toEqual({
+    nodes: ["alpha.md", "beta.md", "delta.md", "epsilon.md", "gamma.md"],
+    links: ["alpha.md->beta.md", "alpha.md->gamma.md", "beta.md->delta.md", "epsilon.md->alpha.md"]
+  });
+});
+
+test("graph add to tab asks before preserving conflicting points", async ({ page }) => {
+  await page.addInitScript(() => {
+    window.__graphConfirmMessages = [];
+    window.__graphConfirmResponses = [true, false];
+    window.confirm = (message) => {
+      window.__graphConfirmMessages.push(String(message));
+      return window.__graphConfirmResponses.shift() ?? false;
+    };
+    const graphViewConfig = {
+      showTags: false,
+      hiddenTagIds: [],
+      hiddenNodeIds: [],
+      selectedTagIds: [],
+      groups: [],
+      collapsedClusters: [],
+      searchQuery: "",
+      showArrows: true,
+      showOrphans: true,
+      showLabels: true
+    };
+    const sourceTab = {
+      id: "conflict_source",
+      title: "Conflict Source",
+      content: "",
+      scrollPos: 0,
+      viewMode: "preview",
+      createdAt: Date.now(),
+      isTemporary: false,
+      type: "graph",
+      folderName: "Conflict Source",
+      graphViewConfig,
+      graphSnapshot: {
+        version: 1,
+        folderName: "Conflict Source",
+        createdAt: Date.now(),
+        nodes: [{ id: "alpha.md", label: "alpha.md", fullPath: "C:/source/alpha.md", type: "file", status: "current", tags: [] }],
+        links: [],
+        files: [{ id: "alpha.md", path: "alpha.md", name: "alpha.md", content: "# Source Alpha", fullPath: "C:/source/alpha.md", status: "current", tags: [] }]
+      }
+    };
+    const targetTab = {
+      id: "conflict_target",
+      title: "Conflict Target",
+      content: "",
+      scrollPos: 0,
+      viewMode: "preview",
+      createdAt: Date.now(),
+      isTemporary: false,
+      type: "graph",
+      folderName: "Conflict Target",
+      graphViewConfig,
+      graphSnapshot: {
+        version: 1,
+        folderName: "Conflict Target",
+        createdAt: Date.now(),
+        nodes: [{ id: "alpha.md", label: "alpha.md", fullPath: "C:/target/alpha.md", type: "file", status: "current", tags: [] }],
+        links: [],
+        files: [{ id: "alpha.md", path: "alpha.md", name: "alpha.md", content: "# Target Alpha", fullPath: "C:/target/alpha.md", status: "current", tags: [] }]
+      }
+    };
+    localStorage.setItem("markdownViewerTabs", JSON.stringify([sourceTab, targetTab]));
+    localStorage.setItem("markdownViewerActiveTab", sourceTab.id);
+  });
+
+  await page.goto("/");
+  await expect(page.locator(".graph-tab-render")).toBeVisible();
+
+  const addPointToConflictTarget = async () => {
+    await page.locator("#tab-list .tab-item", { hasText: "Conflict Source" }).click();
+    await page.locator(".graph-node-file").first().dispatchEvent("contextmenu", {
+      bubbles: true,
+      cancelable: true,
+      button: 2,
+      clientX: 220,
+      clientY: 220
+    });
+    const addSubmenu = page.locator(".graph-tab-render:not(.hidden) .graph-context-menu-submenu", { hasText: "Add to Tab" });
+    await addSubmenu.hover();
+    await addSubmenu.locator(".graph-context-menu-submenu-panel .graph-context-menu-item", { hasText: "Add point to Tab ..." }).evaluate((button) => button.click());
+    const chooser = page.locator(".graph-add-to-tab-modal");
+    await expect(chooser).toBeVisible();
+    const targetRow = chooser.locator(".graph-add-to-tab-row", { hasText: "Conflict Target" });
+    await expect(targetRow).toHaveAttribute("title", "Conflict Target");
+    await targetRow.click();
+    await chooser.locator(".reset-modal-confirm", { hasText: "OK" }).click();
+  };
+
+  await addPointToConflictTarget();
+  await expect.poll(() => page.evaluate(() => {
+    const target = JSON.parse(localStorage.getItem("markdownViewerTabs") || "[]").find((tab) => tab.id === "conflict_target");
+    return target.graphSnapshot.nodes.map((node) => ({
+      id: node.id,
+      originalId: node.originalId || "",
+      sourceGraphTitle: node.sourceGraphTitle || ""
+    })).sort((a, b) => a.id.localeCompare(b.id));
+  })).toEqual([
+    { id: "alpha.md", originalId: "", sourceGraphTitle: "" },
+    { id: "alpha.md@@conflict-source", originalId: "alpha.md", sourceGraphTitle: "Conflict Source" }
+  ]);
+
+  await addPointToConflictTarget();
+  await expect.poll(() => page.evaluate(() => window.__graphConfirmMessages.length)).toBe(2);
+  await expect.poll(() => page.evaluate(() => {
+    const target = JSON.parse(localStorage.getItem("markdownViewerTabs") || "[]").find((tab) => tab.id === "conflict_target");
+    return target.graphSnapshot.nodes.length;
+  })).toBe(2);
 });
 
 test("center graph action restores nodes when saved pan is off screen", async ({ page }) => {

@@ -5150,6 +5150,54 @@ a:focus {
   accent-color: var(--accent-color);
 }
 
+.graph-add-to-tab-modal-box {
+  width: min(92vw, 420px);
+  max-height: min(76vh, 520px);
+  text-align: left;
+}
+
+.graph-add-to-tab-title {
+  text-align: center;
+}
+
+.graph-add-to-tab-list {
+  display: grid;
+  gap: 0.45rem;
+  max-height: min(46vh, 300px);
+  margin: 0.35rem 0 1rem;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.graph-add-to-tab-row {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0.45rem 0.5rem;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  color: var(--text-color);
+  cursor: pointer;
+}
+
+.graph-add-to-tab-row:hover,
+.graph-add-to-tab-row:focus-within {
+  border-color: var(--accent-color);
+}
+
+.graph-add-to-tab-row input {
+  flex: 0 0 auto;
+  accent-color: var(--accent-color);
+}
+
+.graph-add-to-tab-row-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .editor-link-modal-box {
   width: min(640px, calc(100vw - 28px));
   max-width: min(640px, calc(100vw - 28px));

@@ -4,9 +4,18 @@ This page summarizes the tagged MD-Editor releases and the major user-facing fea
 
 ## Current Main
 
-Changes available on `main` after `v6.9`:
+Changes available on `main` after `v7.0`:
 
 - No unreleased changes are currently documented.
+
+## v7.0 - June 9, 2026
+
+- Added graph node actions to add a point, local graph, full local graph, or full network into another open graph tab.
+- Added a centered destination-tab picker for graph add actions, with scrollable tab selection and full-name tooltips.
+- Preserved destination graph contents while merging imported nodes, files, and matching links.
+- Added conflict handling for imported graph node ids from different source metadata.
+- Ensured imported or reused graph nodes become visible immediately in focused graph tabs.
+- Updated About dialog and app metadata for the v7.0 release.
 
 ## v6.9 - June 9, 2026
 
