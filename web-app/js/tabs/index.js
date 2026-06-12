@@ -9,7 +9,7 @@
     return 'Untitled ' + untitledCounter;
   }
 
-  function createTab(content, title, viewMode) {
+  function createTab(content, title, viewMode, options = {}) {
     if (content === undefined) content = '';
     content = normalizeEditorContent(content);
     if (title === undefined) title = null;
@@ -25,6 +25,7 @@
       sourceFileName: null,
       sourceFileHandle: null,
       sourceFilePath: null,
+      linkBasePath: options.linkBasePath || null,
       savedContent: content,
       type: "markdown",
       folderName: null,
@@ -1093,7 +1094,7 @@
       return;
     }
     if (!title) title = nextUntitledTitle();
-    const tab = createTab(content, title, options.viewMode || 'split');
+    const tab = createTab(content, title, options.viewMode || 'split', options);
     tabs.push(tab);
     const wasEmptyWorkspace = !activeTabId;
     if (wasEmptyWorkspace) {
@@ -1111,6 +1112,7 @@
       switchTab(tab.id);
     }
     markdownEditor.focus();
+    return tab;
   }
 
   function closeTab(tabId, options) {

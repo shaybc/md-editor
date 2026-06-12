@@ -166,7 +166,64 @@
 
   function getActiveMarkdownSourcePath() {
     const activeTab = getActiveMarkdownTab();
-    return activeTab && activeTab.sourceFilePath ? activeTab.sourceFilePath : "";
+    return activeTab && (activeTab.sourceFilePath || activeTab.linkBasePath) ? (activeTab.sourceFilePath || activeTab.linkBasePath) : "";
+  }
+
+  function isBundledWikiPath(path) {
+    return normalizeMarkdownLinkPath(path || "").startsWith("wiki/");
+  }
+
+  function getBundledWikiTargetPath(rawTarget) {
+    const { path: rawTargetPath } = splitLinkTarget(rawTarget);
+    if (!rawTargetPath || !isMarkdownDocumentLinkPath(rawTargetPath)) return "";
+
+    const activeSourcePath = getActiveMarkdownSourcePath();
+    if (!isBundledWikiPath(activeSourcePath)) return "";
+
+    const targetPath = ensureMarkdownLinkExtension(rawTargetPath);
+    const resolvedPath = resolveMarkdownLinkPath(targetPath, activeSourcePath);
+    return isBundledWikiPath(resolvedPath) ? normalizeMarkdownLinkPath(resolvedPath) : "";
+  }
+
+  function findBundledWikiTab(wikiPath) {
+    const normalizedWikiPath = normalizeMarkdownLinkPath(wikiPath);
+    return (tabs || []).find((tab) => {
+      return tab?.type !== "graph"
+        && normalizeMarkdownLinkPath(tab.linkBasePath || "") === normalizedWikiPath;
+    }) || null;
+  }
+
+  async function openBundledWikiLinkFromPreview(rawTarget) {
+    if (typeof fetchBundledWikiMarkdown !== "function" || typeof newTab !== "function") return false;
+
+    const { hash } = splitLinkTarget(rawTarget);
+    const wikiPath = getBundledWikiTargetPath(rawTarget);
+    if (!wikiPath) return false;
+
+    const existingTab = findBundledWikiTab(wikiPath);
+    if (existingTab) {
+      switchTab(existingTab.id);
+      pinTemporaryTab(existingTab.id);
+      scrollMarkdownPreviewToHash(hash);
+      return true;
+    }
+
+    try {
+      const markdown = await fetchBundledWikiMarkdown(wikiPath);
+      const openedTab = newTab(markdown, getMarkdownTitleFromFileName(getFileName(wikiPath)), {
+        viewMode: "preview",
+        linkBasePath: wikiPath
+      });
+      if (openedTab) {
+        pinTemporaryTab(openedTab.id);
+        scrollMarkdownPreviewToHash(hash);
+      }
+      return true;
+    } catch (error) {
+      console.error("Failed to open bundled wiki link:", error);
+      alert("Unable to open this help page.");
+      return true;
+    }
   }
 
   function canReadLinkedFilesystemPath() {
@@ -418,6 +475,8 @@
   }
 
   async function openMarkdownLinkFromPreview(rawTarget) {
+    if (await openBundledWikiLinkFromPreview(rawTarget)) return;
+
     const { hash } = splitLinkTarget(rawTarget);
     const sourceFile = getMarkdownLinkSourceFile(rawTarget);
 
@@ -496,6 +555,7 @@
 
     const rawHref = anchor.getAttribute("href") || "";
     if (!rawHref) return "";
+    if (rawHref.startsWith("#")) return rawHref;
 
     return anchor.href || rawHref;
   }

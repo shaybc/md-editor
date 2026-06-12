@@ -420,6 +420,7 @@ document.addEventListener("DOMContentLoaded", function () {
     get activeFolderPath() { return activeFolderPath; },
     get currentFolderTreeNodes() { return currentFolderTreeNodes; },
     get folderMarkdownFiles() { return folderMarkdownFiles; },
+    get tabs() { return tabs; },
     get markdownPreview() { return markdownPreview; },
     get previewHoveredLinkUrl() { return previewHoveredLinkUrl; },
     set previewHoveredLinkUrl(value) { previewHoveredLinkUrl = value; },
@@ -431,6 +432,9 @@ document.addEventListener("DOMContentLoaded", function () {
     get switchTab() { return switchTab; },
     get pinTemporaryTab() { return pinTemporaryTab; },
     get openDocumentSourceFile() { return openDocumentSourceFile; },
+    get newTab() { return newTab; },
+    fetchBundledWikiMarkdown,
+    getMarkdownTitleFromFileName,
     joinPath,
     get updateStatusLine() { return updateStatusLine; }
   });
@@ -3023,8 +3027,9 @@ Markdown content is processed client-side in your browser and sanitized before p
     initTabs,
   } = tabsModule;
 
-  async function fetchHelpHomeMarkdown() {
-    const helpPaths = ["wiki/Home.md", "../wiki/Home.md", "/wiki/Home.md"];
+  async function fetchBundledWikiMarkdown(wikiPath = "wiki/Home.md") {
+    const normalizedPath = String(wikiPath || "wiki/Home.md").replace(/\\/g, "/").replace(/^\/+/, "");
+    const helpPaths = [normalizedPath, `../${normalizedPath}`, `/${normalizedPath}`];
     let lastError = null;
 
     for (const path of helpPaths) {
@@ -3040,10 +3045,14 @@ Markdown content is processed client-side in your browser and sanitized before p
     throw lastError || new Error("Help file is unavailable.");
   }
 
+  async function fetchHelpHomeMarkdown() {
+    return fetchBundledWikiMarkdown("wiki/Home.md");
+  }
+
   async function openHelpHome() {
     try {
       const markdown = await fetchHelpHomeMarkdown();
-      newTab(markdown, "Help", { viewMode: "preview" });
+      newTab(markdown, "Help", { viewMode: "preview", linkBasePath: "wiki/Home.md" });
     } catch (error) {
       console.error("Failed to open help:", error);
       alert("Unable to open the help file.");

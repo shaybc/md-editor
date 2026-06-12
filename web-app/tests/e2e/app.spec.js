@@ -11,6 +11,7 @@ const browserLibraryStub = `
 
     function inlineMarkdown(value) {
       return escapeHtml(value)
+        .replace(/\\[([^\\]]+)\\]\\(([^)]+)\\)/g, "<a href=\\"$2\\">$1</a>")
         .replace(/\\*\\*([^*]+)\\*\\*/g, "<strong>$1</strong>")
         .replace(/\\*([^*]+)\\*/g, "<em>$1</em>");
     }
@@ -514,7 +515,13 @@ test("opens help and about from the action menu", async ({ page }) => {
   await page.route("**/wiki/Home.md", async (route) => {
     await route.fulfill({
       contentType: "text/markdown",
-      body: "# MD-Editor Wiki\n\nHelp content from the wiki home file."
+      body: "# MD-Editor Wiki\n\n[Start Here](#start-here)\n\nHelp content from the wiki home file.\n\n[Installation](Installation)"
+    });
+  });
+  await page.route("**/wiki/Installation.md", async (route) => {
+    await route.fulfill({
+      contentType: "text/markdown",
+      body: "# Installation\n\nBundled wiki installation page."
     });
   });
   await openApp(page);
@@ -533,6 +540,23 @@ test("opens help and about from the action menu", async ({ page }) => {
 
   await expect(page.locator(".view-mode-btn[data-mode='preview']")).toHaveAttribute("aria-pressed", "true");
   await expect(page.locator("#markdown-preview").getByRole("heading", { name: "MD-Editor Wiki" })).toBeVisible();
+  await expect.poll(() => page.evaluate(() => {
+    const activeTabId = localStorage.getItem("markdownViewerActiveTab");
+    const tabs = JSON.parse(localStorage.getItem("markdownViewerTabs") || "[]");
+    return tabs.find((tab) => tab.id === activeTabId)?.linkBasePath || "";
+  })).toBe("wiki/Home.md");
+  await page.locator("#markdown-preview").getByRole("link", { name: "Start Here" }).dispatchEvent("mouseover", {
+    bubbles: true,
+    cancelable: true
+  });
+  await expect(page.locator("#status-tip")).toHaveText("#start-here");
+  await page.locator("#markdown-preview").getByRole("button", { name: "Installation" }).dispatchEvent("click", {
+    bubbles: true,
+    cancelable: true
+  });
+  await expect(page.locator("#markdown-preview").getByRole("heading", { name: "Installation" })).toBeVisible();
+  await expect(page.locator("#markdown-preview")).toContainText("Bundled wiki installation page.");
+  expect(page.url()).not.toContain("Installation");
 
   await page.locator("#desktopActionMenu").click();
   await page.locator(".help-menu-submenu > .dropdown-toggle").hover();
@@ -541,8 +565,8 @@ test("opens help and about from the action menu", async ({ page }) => {
   const aboutModal = page.locator("#about-modal");
   await expect(aboutModal).toBeVisible();
   await expect(aboutModal.getByText("MD-Editor", { exact: true })).toBeVisible();
-  await expect(aboutModal.locator("#about-app-version")).toHaveText("v7.1");
-  await expect(aboutModal.locator("#about-release-date")).toHaveText("June 9, 2026");
+  await expect(aboutModal.locator("#about-app-version")).toHaveText("v7.4");
+  await expect(aboutModal.locator("#about-release-date")).toHaveText("June 12, 2026");
   await expect(aboutModal.locator("#about-app-author")).toHaveText("ShayBC");
   await expect(aboutModal.getByText("Apache License 2.0")).toBeVisible();
   await expect(aboutModal.locator(".about-modal-logo")).toBeVisible();
