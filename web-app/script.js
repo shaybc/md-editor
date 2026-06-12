@@ -1906,8 +1906,8 @@ document.addEventListener("DOMContentLoaded", function () {
   const settingsResetRecentHistoryButton = document.getElementById("settings-reset-recent-history");
   const settingsResetAllButton = document.getElementById("settings-reset-all");
   const codeConverterModal = document.getElementById("code-converter-modal");
-  const codeConverterSelector = document.getElementById("code-converter-selector");
-  const codeConverterSupportedLanguages = document.getElementById("code-converter-supported-languages");
+  const codeConverterTypeSelect = document.getElementById("code-converter-type");
+  const codeConverterLanguageSupport = document.getElementById("code-converter-language-support");
   const codeConverterSourceRootInput = document.getElementById("code-converter-source-root");
   const codeConverterDestinationRootInput = document.getElementById("code-converter-destination-root");
   const codeConverterSourceBrowseButton = document.getElementById("code-converter-source-browse");
@@ -1922,7 +1922,6 @@ document.addEventListener("DOMContentLoaded", function () {
   const codeConverterRunButton = document.getElementById("code-converter-run");
   const codeConverterFinishButton = document.getElementById("code-converter-finish");
   const codeConverterStatus = document.getElementById("code-converter-status");
-  const codeConverterBusyOverlay = document.getElementById("code-converter-busy-overlay");
   const desktopOpenGraphButtons = document.querySelectorAll(".open-graph-view");
   const exitAppButtons = document.querySelectorAll(".exit-app-button");
   const graphViewCanvas = document.getElementById("graph-view-canvas");
@@ -1992,24 +1991,6 @@ document.addEventListener("DOMContentLoaded", function () {
   const DEFAULT_CONTEXT_MENU_TOOLTIP_DELAY_MS = 3000;
   const DEFAULT_MAX_RECENT_FILES = 10;
   const DEFAULT_MAX_RECENT_FOLDERS = 10;
-  const codeConverterRegistry = typeof window.registerMarkdownViewerCodeConverterRegistry === "function"
-    ? window.registerMarkdownViewerCodeConverterRegistry()
-    : null;
-  const CODE_CONVERTER_KNOWN_FLAGS = codeConverterRegistry?.KNOWN_FLAGS || [
-    "--include-methods",
-    "--include-accessors",
-    "--include-signatures",
-    "--include-return-codes",
-    "--include-exceptions",
-    "--include-package",
-  ];
-  const BUILT_IN_CODE_CONVERTER = Object.freeze({
-    id: "builtin",
-    name: "Built-in lightweight converter",
-    supportedLanguages: ["JavaScript", "TypeScript", "Python", "Java", "C#"],
-    supportedFlags: CODE_CONVERTER_KNOWN_FLAGS.slice(),
-    isBuiltIn: true,
-  });
   const DEFAULT_GLOBAL_STATE = Object.freeze({
     autoSelectFileEnabled: true,
     editorWidthPercent: 50,
@@ -2039,9 +2020,6 @@ document.addEventListener("DOMContentLoaded", function () {
     viewMode: "split"
   });
   let settingsDialogSaving = false;
-  let installedCodeConverters = [];
-  let codeConverterManifestWarnings = [];
-  let codeConverterIsRunning = false;
   const themePreferences = window.registerMarkdownViewerThemePreferences(app, {
     defaultState: DEFAULT_GLOBAL_STATE,
     mobileThemeToggle,
@@ -3286,155 +3264,28 @@ Markdown content is processed client-side in your browser and sanitized before p
     if (codeConverterStatus) codeConverterStatus.textContent = message || "";
   }
 
-  function setCodeConverterBusyState(isBusy) {
-    codeConverterIsRunning = !!isBusy;
-    const controls = [
-      codeConverterSelector,
-      codeConverterSourceBrowseButton,
-      codeConverterDestinationBrowseButton,
-      codeConverterCancelButton,
-      codeConverterRunButton,
-      ...getCodeConverterFlagControls().map(({ input }) => input),
-    ];
-    controls.forEach((control) => {
-      if (control) control.disabled = !!isBusy;
-    });
-    if (codeConverterModal) {
-      codeConverterModal.classList.toggle("code-converter-running", !!isBusy);
-      codeConverterModal.setAttribute("aria-busy", isBusy ? "true" : "false");
-    }
-    if (codeConverterBusyOverlay) {
-      codeConverterBusyOverlay.hidden = !isBusy;
-      codeConverterBusyOverlay.setAttribute("aria-hidden", isBusy ? "false" : "true");
-    }
-    if (!isBusy) updateCodeConverterOptionVisibility();
-  }
-
   function setCodeConverterCompleteState(isComplete) {
     if (codeConverterCancelButton) codeConverterCancelButton.hidden = !!isComplete;
     if (codeConverterRunButton) codeConverterRunButton.hidden = !!isComplete;
     if (codeConverterFinishButton) codeConverterFinishButton.hidden = !isComplete;
   }
 
-  function getCodeConverterFlagControls() {
-    return [
-      { input: codeConverterIncludeMethodsInput, flag: "--include-methods" },
-      { input: codeConverterIncludeAccessorsInput, flag: "--include-accessors" },
-      { input: codeConverterIncludeSignaturesInput, flag: "--include-signatures" },
-      { input: codeConverterIncludeReturnCodesInput, flag: "--include-return-codes" },
-      { input: codeConverterIncludeExceptionsInput, flag: "--include-exceptions" },
-      { input: codeConverterIncludePackageInput, flag: "--include-package" },
-    ];
-  }
-
-  function getSelectedCodeConverter() {
-    const value = codeConverterSelector?.value || "builtin";
-    if (value.startsWith("extension:")) {
-      const index = Number(value.slice("extension:".length));
-      return installedCodeConverters[index] || BUILT_IN_CODE_CONVERTER;
-    }
-    return BUILT_IN_CODE_CONVERTER;
-  }
-
-  function getCodeConverterSupportedFlags(converter = getSelectedCodeConverter()) {
-    const flags = Array.isArray(converter?.supportedFlags)
-      ? converter.supportedFlags
-      : CODE_CONVERTER_KNOWN_FLAGS;
-    return new Set(flags.filter((flag) => CODE_CONVERTER_KNOWN_FLAGS.includes(flag)));
-  }
-
-  function updateCodeConverterOptionVisibility() {
-    const supportedFlags = getCodeConverterSupportedFlags();
-    getCodeConverterFlagControls().forEach(({ input, flag }) => {
-      const row = input?.closest?.("label");
-      const isSupported = supportedFlags.has(flag);
-      if (row) {
-        row.hidden = !isSupported;
-        row.style.display = isSupported ? "" : "none";
-      }
-      if (input) input.disabled = !isSupported || codeConverterIsRunning;
-    });
-  }
-
-  function updateCodeConverterSupportedLanguages() {
-    if (!codeConverterSupportedLanguages) return;
-    const converter = getSelectedCodeConverter();
-    const languages = Array.isArray(converter?.supportedLanguages) && converter.supportedLanguages.length
-      ? converter.supportedLanguages.join(", ")
-      : "Not specified";
-    codeConverterSupportedLanguages.textContent = `Supports: ${languages}.`;
-  }
-
-  function renderCodeConverterSelector() {
-    if (!codeConverterSelector) return;
-    const previousValue = codeConverterSelector.value || "builtin";
-    codeConverterSelector.innerHTML = "";
-    const builtInOption = document.createElement("option");
-    builtInOption.value = "builtin";
-    builtInOption.textContent = BUILT_IN_CODE_CONVERTER.name;
-    codeConverterSelector.appendChild(builtInOption);
-
-    installedCodeConverters.forEach((converter, index) => {
-      const option = document.createElement("option");
-      option.value = `extension:${index}`;
-      option.textContent = converter.version ? `${converter.name} ${converter.version}` : converter.name;
-      codeConverterSelector.appendChild(option);
-    });
-
-    codeConverterSelector.value = Array.from(codeConverterSelector.options).some((option) => option.value === previousValue)
-      ? previousValue
-      : "builtin";
-    updateCodeConverterSupportedLanguages();
-    updateCodeConverterOptionVisibility();
-  }
-
-  async function loadCodeConverterExtensions() {
-    if (!codeConverterRegistry || typeof Neutralino === "undefined") {
-      installedCodeConverters = [];
-      codeConverterManifestWarnings = [];
-      renderCodeConverterSelector();
-      return;
-    }
-
-    try {
-      const result = await codeConverterRegistry.loadInstalledConverters({
-        Neutralino,
-        appPath: window.NL_PATH || "",
-      });
-      installedCodeConverters = result.converters || [];
-      codeConverterManifestWarnings = result.warnings || [];
-      renderCodeConverterSelector();
-      if (codeConverterManifestWarnings.length) {
-        setCodeConverterStatus(`Ignored ${codeConverterManifestWarnings.length} invalid converter manifest(s).`);
-      }
-    } catch (error) {
-      installedCodeConverters = [];
-      codeConverterManifestWarnings = [];
-      renderCodeConverterSelector();
-      console.warn("Failed to load code converter extensions:", error);
-    }
-  }
-
-  async function showCodeConverterDialog() {
+  function showCodeConverterDialog() {
     if (!codeConverterModal) return;
     setCodeConverterStatus("");
     setCodeConverterCompleteState(false);
-    setCodeConverterBusyState(false);
-    renderCodeConverterSelector();
+    updateCodeConverterLanguageSupport();
     codeConverterModal.style.display = "flex";
-    await loadCodeConverterExtensions();
     codeConverterSourceRootInput?.focus();
   }
 
   function hideCodeConverterDialog() {
     if (!codeConverterModal) return;
-    if (codeConverterIsRunning) return;
     codeConverterModal.style.display = "none";
   }
 
   async function browseCodeConverterFolder(input, title) {
     if (!input) return;
-    if (codeConverterIsRunning) return;
     if (typeof Neutralino === "undefined" || !Neutralino.os?.showFolderDialog) {
       alert("Code conversion requires the desktop app so folders can be selected from disk.");
       return;
@@ -3454,39 +3305,74 @@ Markdown content is processed client-side in your browser and sanitized before p
     return `${basePath}/resources/code_converter/dependency-md-generator.js`;
   }
 
+  function getJavaConverterJarPath() {
+    const basePath = String(window.NL_PATH || "").replace(/\\/g, "/").replace(/\/+$/, "");
+    if (!basePath) return "java_converter/target/java_converter.jar";
+    const projectRoot = basePath.replace(/\/desktop-app$/i, "");
+    return `${projectRoot}/java_converter/target/java_converter.jar`;
+  }
+
+  const CODE_CONVERTER_TYPES = Object.freeze({
+    builtin: {
+      statusName: "code converter",
+      languageSupport: "Supported languages: JavaScript, TypeScript, Python, Java, and C#. Supported extensions: .js, .jsx, .mjs, .cjs, .ts, .tsx, .py, .java, and .cs.",
+      buildCommandParts: (sourceRoot, destinationRoot, switches) => [
+        "node",
+        quoteCommandArg(getCodeConverterScriptPath()),
+        quoteCommandArg(sourceRoot),
+        quoteCommandArg(destinationRoot),
+        ...switches
+      ],
+      missingRuntimeMessage: "Unable to run the code converter. Make sure Node.js is installed and available on PATH."
+    },
+    java: {
+      statusName: "Java converter",
+      languageSupport: "Supported language: Java. Supported extension: .java.",
+      buildCommandParts: (sourceRoot, destinationRoot, switches) => [
+        "java",
+        "-Xmx8g",
+        "-jar",
+        quoteCommandArg(getJavaConverterJarPath()),
+        "--root",
+        quoteCommandArg(sourceRoot),
+        "--vault",
+        quoteCommandArg(destinationRoot),
+        ...switches
+      ],
+      missingRuntimeMessage: "Unable to run the Java converter. Make sure Java is installed and java_converter/target/java_converter.jar has been built."
+    }
+  });
+
+  function getSelectedCodeConverterType() {
+    const value = codeConverterTypeSelect?.value || "builtin";
+    return CODE_CONVERTER_TYPES[value] ? value : "builtin";
+  }
+
+  function getSelectedCodeConverterConfig() {
+    return CODE_CONVERTER_TYPES[getSelectedCodeConverterType()];
+  }
+
+  function updateCodeConverterLanguageSupport() {
+    if (codeConverterLanguageSupport) {
+      codeConverterLanguageSupport.textContent = getSelectedCodeConverterConfig().languageSupport;
+    }
+  }
+
   function quoteCommandArg(value) {
     return `"${String(value || "").replace(/\\/g, "/").replace(/"/g, '\\"')}"`;
   }
 
-  function getCodeConverterSwitches(converter = getSelectedCodeConverter()) {
-    const supportedFlags = getCodeConverterSupportedFlags(converter);
-    return getCodeConverterFlagControls()
-      .filter(({ input, flag }) => supportedFlags.has(flag) && input?.checked)
-      .map(({ flag }) => flag);
-  }
-
-  function getCodeConverterWorkingDirectoryPrefix(converter) {
-    if (!converter || converter.isBuiltIn || !converter.manifestDir) return "";
-    const changeDirectoryCommand = (typeof NL_OS !== "undefined" && NL_OS !== "Windows")
-      ? "cd"
-      : "cd /d";
-    return `${changeDirectoryCommand} ${quoteCommandArg(converter.manifestDir)} && `;
-  }
-
-  function buildCodeConverterCommand(sourceRoot, destinationRoot) {
-    const converter = getSelectedCodeConverter();
-    const commandParts = converter.isBuiltIn
-      ? ["node", quoteCommandArg(getCodeConverterScriptPath())]
-      : [quoteCommandArg(converter.command)];
-    commandParts.push(
-      ...(Array.isArray(converter.args) ? converter.args.map(quoteCommandArg) : []),
-      "--root",
-      quoteCommandArg(sourceRoot),
-      "--vault",
-      quoteCommandArg(destinationRoot),
-      ...getCodeConverterSwitches(converter)
-    );
-    return `${getCodeConverterWorkingDirectoryPrefix(converter)}${commandParts.join(" ")}`;
+  function getCodeConverterSwitches() {
+    return [
+      [codeConverterIncludeMethodsInput, "--include-methods"],
+      [codeConverterIncludeAccessorsInput, "--include-accessors"],
+      [codeConverterIncludeSignaturesInput, "--include-signatures"],
+      [codeConverterIncludeReturnCodesInput, "--include-return-codes"],
+      [codeConverterIncludeExceptionsInput, "--include-exceptions"],
+      [codeConverterIncludePackageInput, "--include-package"],
+    ]
+      .filter(([input]) => input?.checked)
+      .map(([, flag]) => flag);
   }
 
   async function runCodeConverter() {
@@ -3509,11 +3395,14 @@ Markdown content is processed client-side in your browser and sanitized before p
       return;
     }
 
-    const command = buildCodeConverterCommand(sourceRoot, destinationRoot);
+    const command = getSelectedCodeConverterConfig()
+      .buildCommandParts(sourceRoot, destinationRoot, getCodeConverterSwitches())
+      .join(" ");
 
     try {
-      setCodeConverterBusyState(true);
-      setCodeConverterStatus("Converting code dependencies...");
+      const converterConfig = getSelectedCodeConverterConfig();
+      if (codeConverterRunButton) codeConverterRunButton.disabled = true;
+      setCodeConverterStatus(`Running ${converterConfig.statusName}...`);
       const result = await Neutralino.os.execCommand(command);
       const exitCode = Number(result?.exitCode ?? result?.code ?? 0);
       if (exitCode !== 0) {
@@ -3527,9 +3416,9 @@ Markdown content is processed client-side in your browser and sanitized before p
       codeConverterFinishButton?.focus();
     } catch (error) {
       console.error("Failed to run code converter:", error);
-      setCodeConverterStatus("Unable to run the code converter. Make sure Node.js is installed and available on PATH.");
+      setCodeConverterStatus(getSelectedCodeConverterConfig().missingRuntimeMessage);
     } finally {
-      setCodeConverterBusyState(false);
+      if (codeConverterRunButton) codeConverterRunButton.disabled = false;
     }
   }
 
@@ -4849,12 +4738,9 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
     });
   }
 
-  if (codeConverterSelector) {
-    codeConverterSelector.addEventListener("change", function() {
-      setCodeConverterStatus("");
-      updateCodeConverterSupportedLanguages();
-      updateCodeConverterOptionVisibility();
-    });
+  if (codeConverterTypeSelect) {
+    codeConverterTypeSelect.addEventListener("change", updateCodeConverterLanguageSupport);
+    updateCodeConverterLanguageSupport();
   }
 
   if (codeConverterCancelButton) {

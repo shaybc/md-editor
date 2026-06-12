@@ -196,10 +196,6 @@ It scans a source folder and produces Markdown dependency maps that can be opene
 
 The desktop app copies this script to `desktop-app/resources/code_converter/dependency-md-generator.js` during preparation so the desktop UI can run the converter through the Neutralino integration.
 
-The desktop converter dialog also supports standalone converter extensions installed under `<MD-Editor app folder>/extensions/code-converters/`. Each extension provides a `converter.json` manifest with its display name, supported languages, command, optional command-prefix args, and optional supported documentation flags. MD-Editor invokes external converters as `command <manifest args> --root <source-folder> --vault <destination-folder> <selected flags>`.
-
-The desktop app ships a Semantic Java Converter extension that uses JavaParser Symbol Solver for compiler-aware local Java dependency links.
-
 ---
 
 ## Deployment Architecture

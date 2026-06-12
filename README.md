@@ -14,7 +14,7 @@
 
   <p>
     <img src="web-app/assets/badges/license.svg" alt="License: Apache 2.0" />
-    <img src="web-app/assets/badges/release.svg" alt="Release: v7.3" />
+    <img src="web-app/assets/badges/release.svg" alt="Release: v7.1" />
     <img src="web-app/assets/badges/tests.svg" alt="Tests: 28 passing" />
     <img src="web-app/assets/badges/app.svg" alt="App: web desktop" />
     <img src="web-app/assets/badges/code-maps.svg" alt="Code maps: JS TS PY Java C#" />
@@ -172,7 +172,7 @@ The desktop dev command prepares the shared resources and starts the Neutralino 
 The converter is available from the app UI and can also be run directly:
 
 ```bash
-node code_converter/dependency-md-generator.js --root <source-root> --vault <destination-root> --include-methods --include-signatures
+node code_converter/dependency-md-generator.js <source-root> <destination-root> --include-methods --include-signatures
 ```
 
 Useful switches:
@@ -185,31 +185,6 @@ Useful switches:
 --include-exceptions
 --include-package
 ```
-
-The desktop converter dialog can also run installed converter extensions from:
-
-```text
-<MD-Editor app folder>/extensions/code-converters/<converter-id>/converter.json
-```
-
-Each extension is a standalone executable described by a manifest:
-
-```json
-{
-  "id": "semantic-java",
-  "name": "Semantic Java Converter",
-  "version": "1.0.0",
-  "description": "Compiler-aware Java source to Markdown converter.",
-  "supportedLanguages": ["Java"],
-  "command": "java",
-  "args": ["-jar", "semantic-java-converter.jar"],
-  "supportedFlags": ["--include-methods", "--include-accessors", "--include-signatures", "--include-package"]
-}
-```
-
-MD-Editor runs converters as `command <manifest args> --root <source-folder> --vault <destination-folder> <selected flags>`. Extension `args` are optional command-prefix arguments; do not include `--root` or `--vault` in the manifest.
-
-The desktop app ships a bundled Semantic Java Converter extension that uses JavaParser Symbol Solver for compiler-aware local Java dependency links.
 
 Open the generated destination folder in MD-Editor to inspect the files as Markdown or graph them as a dependency map.
 

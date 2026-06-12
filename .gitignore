@@ -13,7 +13,8 @@ tools/
 web-app/playwright-report/
 desktop-app/dist/
 desktop-app/output/
-converter_extensions/**/target/
+target/
+**/target/
 
 # Neutralinojs runtime state
 desktop-app/.tmp/

@@ -4,27 +4,9 @@ This page summarizes the tagged MD-Editor releases and the major user-facing fea
 
 ## Current Main
 
-Changes available on `main` after `v7.3`:
+Changes available on `main` after `v7.1`:
 
 - No unreleased changes are currently documented.
-
-## v7.3 - June 9, 2026
-
-- Improved the Semantic Java converter unresolved-type diagnostics so it reports unique unresolved type names instead of repeated resolver attempts.
-- Added `_semantic-java-unresolved-types.md` output with unique unresolved packages and type names.
-- Filtered noisy package fragments from the unresolved-type report.
-- Added a visible busy overlay to the Convert Code to MD dialog while conversion is running.
-- Disabled converter controls during active conversion to prevent accidental repeated actions.
-- Updated About dialog and app metadata for the v7.3 release.
-
-## v7.2 - June 9, 2026
-
-- Added converter extension support to the desktop Convert Code to MD workflow, including installed converter manifests, a converter dropdown, supported language display, and converter-specific documentation flags.
-- Updated the converter command contract so built-in and extension converters use named `--root` and `--vault` arguments.
-- Added a bundled Semantic Java converter extension powered by JavaParser Symbol Solver for local-source dependency detection.
-- Packaged the Semantic Java converter with its manifest, runnable jar, dependency jars, README, and third-party license notes.
-- Added regression coverage for manifest validation, converter command construction, and semantic Java dependency detection.
-- Updated About dialog and app metadata for the v7.2 release.
 
 ## v7.1 - June 9, 2026
 

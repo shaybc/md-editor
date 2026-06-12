@@ -244,16 +244,6 @@ Supported converter languages: JavaScript, TypeScript, Python, Java, and C#.
 
 Supported extensions include `.js`, `.jsx`, `.mjs`, `.cjs`, `.ts`, `.tsx`, `.py`, `.java`, and `.cs`.
 
-The desktop app can also run installed converter extensions. Place a converter manifest at:
-
-```text
-<MD-Editor app folder>/extensions/code-converters/<converter-id>/converter.json
-```
-
-External converters are standalone executables. MD-Editor runs them as `command <manifest args> --root <source-folder> --vault <destination-folder> <selected flags>`.
-
-The desktop app includes a Semantic Java Converter extension for compiler-aware local Java dependency links.
-
 ---
 
 ## Export And Sharing
