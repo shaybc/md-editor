@@ -900,10 +900,12 @@ test("code converter locks form controls while conversion is running", async ({ 
     window.NL_PATH = "C:/GitHub/shaybc/md-editor/desktop-app";
     window.NL_VERSION = "test";
     const folderSelections = ["C:/src/project", "C:/docs/project-md"];
+    window.__codeConverterCommandCount = 0;
     window.Neutralino = {
       os: {
         showFolderDialog: async () => folderSelections.shift(),
         execCommand: async () => new Promise((resolve) => {
+          window.__codeConverterCommandCount += 1;
           window.__finishConversion = () => resolve({ exitCode: 0, stdOut: "Created 3 markdown file(s) in C:/docs/project-md" });
         })
       }
@@ -924,6 +926,8 @@ test("code converter locks form controls while conversion is running", async ({ 
   await expect(page.locator("#code-converter-include-methods")).toBeDisabled();
   await expect(page.locator("#code-converter-include-package")).toBeDisabled();
   await expect(page.locator("#code-converter-cancel")).toBeEnabled();
+  await page.locator("#code-converter-run").click({ force: true });
+  await expect.poll(() => page.evaluate(() => window.__codeConverterCommandCount)).toBe(1);
 
   await page.evaluate(() => window.__finishConversion());
   await expect(page.locator("#code-converter-finish")).toBeVisible();

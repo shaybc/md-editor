@@ -1936,6 +1936,7 @@ document.addEventListener("DOMContentLoaded", function () {
   const codeConverterConsoleState = document.getElementById("code-converter-console-state");
   const codeConverterConsoleCopyButton = document.getElementById("code-converter-console-copy");
   let activeCodeConverterProcessId = null;
+  let codeConverterIsRunning = false;
   let codeConverterCancelRequested = false;
   let completedCodeConverterDestinationRoot = "";
   const desktopOpenGraphButtons = document.querySelectorAll(".open-graph-view");
@@ -3498,8 +3499,11 @@ Markdown content is processed client-side in your browser and sanitized before p
   }
 
   function setCodeConverterRunningState(isRunning) {
+    codeConverterIsRunning = !!isRunning;
+    codeConverterShell?.classList.toggle("is-running", codeConverterIsRunning);
     getCodeConverterFormControls().forEach((control) => {
-      control.disabled = !!isRunning;
+      control.disabled = codeConverterIsRunning;
+      control.setAttribute("aria-disabled", codeConverterIsRunning ? "true" : "false");
     });
     if (codeConverterCancelButton) codeConverterCancelButton.disabled = false;
     if (codeConverterOpenFolderButton && !codeConverterOpenFolderButton.hidden) codeConverterOpenFolderButton.disabled = !!isRunning;
@@ -3696,6 +3700,7 @@ Markdown content is processed client-side in your browser and sanitized before p
   }
 
   async function runCodeConverter() {
+    if (codeConverterIsRunning) return;
     if (typeof Neutralino === "undefined" || (!Neutralino.os?.spawnProcess && !Neutralino.os?.execCommand)) {
       alert("Code conversion requires the desktop app because it runs the local Node.js converter.");
       return;

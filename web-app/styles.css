@@ -4598,6 +4598,17 @@ a:focus {
   background-color: var(--button-hover);
 }
 
+.reset-modal-btn:disabled,
+.reset-modal-btn[aria-disabled="true"] {
+  opacity: 0.52;
+  cursor: not-allowed;
+}
+
+.reset-modal-btn:disabled:hover,
+.reset-modal-btn[aria-disabled="true"]:hover {
+  background: var(--button-bg);
+}
+
 .reset-modal-confirm {
   background-color: var(--color-danger-fg, #d73a49);
   border-color: var(--color-danger-fg, #d73a49);
