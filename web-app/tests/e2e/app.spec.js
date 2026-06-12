@@ -795,6 +795,13 @@ test("code converter dialog browses folders and runs converter", async ({ page }
     window.__folderDialogTitles = [];
     window.__execCommands = [];
     window.__clipboardText = "";
+    document.execCommand = (command) => {
+      if (command === "copy") {
+        window.__clipboardText = document.activeElement?.value || "";
+        return true;
+      }
+      return false;
+    };
     const folderSelections = ["C:/src/project", "C:/docs/project-md"];
     window.Neutralino = {
       clipboard: {

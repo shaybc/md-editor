@@ -3300,6 +3300,53 @@ Markdown content is processed client-side in your browser and sanitized before p
     codeConverterConsoleOutput.scrollTop = codeConverterConsoleOutput.scrollHeight;
   }
 
+  async function copyTextWithTextareaFallback(text) {
+    const textArea = document.createElement("textarea");
+    textArea.value = text;
+    textArea.setAttribute("readonly", "readonly");
+    textArea.style.position = "fixed";
+    textArea.style.top = "0";
+    textArea.style.left = "0";
+    textArea.style.width = "1px";
+    textArea.style.height = "1px";
+    textArea.style.opacity = "0";
+    textArea.style.pointerEvents = "none";
+    document.body.appendChild(textArea);
+    textArea.focus();
+    textArea.select();
+    textArea.setSelectionRange(0, textArea.value.length);
+    const successful = document.execCommand("copy");
+    document.body.removeChild(textArea);
+    if (!successful) throw new Error("Copy command was unsuccessful.");
+  }
+
+  async function copyTextToSystemClipboard(text) {
+    const errors = [];
+    if (navigator.clipboard?.writeText && window.isSecureContext) {
+      try {
+        await navigator.clipboard.writeText(text);
+        return;
+      } catch (error) {
+        errors.push(error);
+      }
+    }
+    try {
+      await copyTextWithTextareaFallback(text);
+      return;
+    } catch (error) {
+      errors.push(error);
+    }
+    if (typeof Neutralino !== "undefined" && Neutralino.clipboard?.writeText) {
+      try {
+        await Neutralino.clipboard.writeText(text);
+        return;
+      } catch (error) {
+        errors.push(error);
+      }
+    }
+    throw errors[errors.length - 1] || new Error("Clipboard is unavailable.");
+  }
+
   async function copyCodeConverterConsole() {
     const text = codeConverterConsoleOutput?.textContent || "";
     if (!text.trim()) {
@@ -3308,13 +3355,7 @@ Markdown content is processed client-side in your browser and sanitized before p
     }
 
     try {
-      if (typeof Neutralino !== "undefined" && Neutralino.clipboard?.writeText) {
-        await Neutralino.clipboard.writeText(text);
-      } else if (navigator.clipboard?.writeText) {
-        await navigator.clipboard.writeText(text);
-      } else {
-        throw new Error("Clipboard is unavailable.");
-      }
+      await copyTextToSystemClipboard(text);
       setCodeConverterConsoleState("copied");
     } catch (error) {
       console.warn("Failed to copy converter console:", error);
