@@ -1885,6 +1885,7 @@ document.addEventListener("DOMContentLoaded", function () {
   const mobileOpenGraphView = document.getElementById("mobile-open-graph-view");
   const welcomePageButtons = document.querySelectorAll(".open-welcome-page");
   const helpHomeButtons = document.querySelectorAll(".open-help-home");
+  const readmePageButtons = document.querySelectorAll(".open-readme-page");
   const aboutDialogButtons = document.querySelectorAll(".show-about-dialog");
   const settingsDialogButtons = document.querySelectorAll(".open-settings-dialog");
   const codeConverterDialogButtons = document.querySelectorAll(".open-code-converter-dialog");
@@ -3049,6 +3050,14 @@ Markdown content is processed client-side in your browser and sanitized before p
     return fetchBundledWikiMarkdown("wiki/Home.md");
   }
 
+  async function fetchReadmeMarkdown() {
+    return fetchBundledWikiMarkdown("README.md");
+  }
+
+  function normalizeBundledReadmeMarkdown(markdown) {
+    return String(markdown || "").replace(/\]\(web-app\/assets\//g, "](assets/");
+  }
+
   async function openHelpHome() {
     try {
       const markdown = await fetchHelpHomeMarkdown();
@@ -3056,6 +3065,16 @@ Markdown content is processed client-side in your browser and sanitized before p
     } catch (error) {
       console.error("Failed to open help:", error);
       alert("Unable to open the help file.");
+    }
+  }
+
+  async function openReadmePage() {
+    try {
+      const markdown = normalizeBundledReadmeMarkdown(await fetchReadmeMarkdown());
+      newTab(markdown, "Readme", { viewMode: "preview", linkBasePath: "README.md" });
+    } catch (error) {
+      console.error("Failed to open readme:", error);
+      alert("Unable to open the readme file.");
     }
   }
 
@@ -5169,6 +5188,16 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
     button.addEventListener("click", function(e) {
       e.preventDefault();
       openHelpHome();
+      if (button.classList.contains("mobile-menu-item")) {
+        closeMobileMenu();
+      }
+    });
+  });
+
+  readmePageButtons.forEach(function(button) {
+    button.addEventListener("click", function(e) {
+      e.preventDefault();
+      openReadmePage();
       if (button.classList.contains("mobile-menu-item")) {
         closeMobileMenu();
       }

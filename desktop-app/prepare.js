@@ -68,6 +68,12 @@ console.log("✓ Copied assets/ → resources/assets/");
 copyDirSync(path.join(ROOT_DIR, "wiki"), path.join(RESOURCES_DIR, "wiki"));
 console.log("Copied wiki/ -> resources/wiki/");
 
+fs.copyFileSync(
+  path.join(ROOT_DIR, "README.md"),
+  path.join(RESOURCES_DIR, "README.md"),
+);
+console.log("Copied README.md -> resources/README.md");
+
 copyDirSync(path.join(ROOT_DIR, "code_converter"), path.join(RESOURCES_DIR, "code_converter"));
 console.log("Copied code_converter/ -> resources/code_converter/");
 

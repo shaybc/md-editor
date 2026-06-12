@@ -524,6 +524,12 @@ test("opens help and about from the action menu", async ({ page }) => {
       body: "# Installation\n\nBundled wiki installation page."
     });
   });
+  await page.route("**/README.md", async (route) => {
+    await route.fulfill({
+      contentType: "text/markdown",
+      body: "# MD-Editor\n\nReadme content from the bundled project readme."
+    });
+  });
   await openApp(page);
 
   await page.locator("#desktopActionMenu").click();
@@ -557,6 +563,19 @@ test("opens help and about from the action menu", async ({ page }) => {
   await expect(page.locator("#markdown-preview").getByRole("heading", { name: "Installation" })).toBeVisible();
   await expect(page.locator("#markdown-preview")).toContainText("Bundled wiki installation page.");
   expect(page.url()).not.toContain("Installation");
+
+  await page.locator("#desktopActionMenu").click();
+  await page.locator(".help-menu-submenu > .dropdown-toggle").hover();
+  await page.locator(".help-menu-submenu .open-readme-page").click();
+
+  await expect(page.locator("#markdown-preview").getByRole("heading", { name: "MD-Editor" })).toBeVisible();
+  await expect(page.locator("#markdown-preview")).toContainText("Readme content from the bundled project readme.");
+  await expect(page.locator("#tab-list .tab-item.active")).toContainText("Readme");
+  await expect.poll(() => page.evaluate(() => {
+    const activeTabId = localStorage.getItem("markdownViewerActiveTab");
+    const tabs = JSON.parse(localStorage.getItem("markdownViewerTabs") || "[]");
+    return tabs.find((tab) => tab.id === activeTabId)?.linkBasePath || "";
+  })).toBe("README.md");
 
   await page.locator("#desktopActionMenu").click();
   await page.locator(".help-menu-submenu > .dropdown-toggle").hover();
