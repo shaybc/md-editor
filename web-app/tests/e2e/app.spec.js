@@ -907,6 +907,21 @@ test("code converter locks form controls while conversion is running", async ({ 
   await expect(page.locator("#code-converter-include-methods")).toBeEnabled();
 });
 
+test("code converter ignores backdrop clicks", async ({ page }) => {
+  await openApp(page);
+
+  await page.locator("#desktopActionMenu").click();
+  await page.locator(".open-code-converter-dialog").first().click();
+  const modal = page.locator("#code-converter-modal");
+  await expect(modal).toBeVisible();
+
+  await modal.dispatchEvent("click");
+  await expect(modal).toBeVisible();
+
+  await page.locator("#code-converter-cancel").click();
+  await expect(modal).toBeHidden();
+});
+
 test("java converter resolves jar from neutralino working directory", async ({ page }) => {
   await page.addInitScript(() => {
     window.NL_CWD = "C:/GitHub/shaybc/md-editor";

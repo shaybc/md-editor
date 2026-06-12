@@ -4895,12 +4895,6 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
     codeConverterRunButton.addEventListener("click", runCodeConverter);
   }
 
-  if (codeConverterModal) {
-    codeConverterModal.addEventListener("click", function(e) {
-      if (e.target === codeConverterModal) hideCodeConverterDialog();
-    });
-  }
-
   document.querySelectorAll("#import-from-folder").forEach(function(button) {
     button.addEventListener("click", function (e) {
       e.preventDefault();
