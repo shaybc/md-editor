@@ -3545,11 +3545,13 @@ Markdown content is processed client-side in your browser and sanitized before p
 
   async function openCompletedCodeConverterFolder() {
     if (!completedCodeConverterDestinationRoot) return;
+    const destinationRoot = completedCodeConverterDestinationRoot;
+    hideCodeConverterDialog();
     try {
-      await openFolderTreeFromNeutralinoPath(completedCodeConverterDestinationRoot);
-      hideCodeConverterDialog();
+      await openFolderTreeFromNeutralinoPath(destinationRoot);
     } catch (error) {
       console.error("Failed to open generated Markdown folder:", error);
+      if (codeConverterModal) codeConverterModal.style.display = "flex";
       setCodeConverterStatus("Unable to open generated folder in MD-Editor.");
     }
   }

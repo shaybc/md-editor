@@ -797,6 +797,11 @@ test("code converter dialog browses folders and runs converter", async ({ page }
     window.__clipboardText = "";
     window.__openedPaths = [];
     window.__readDirectories = [];
+    window.__holdNextFolderOpen = true;
+    window.__finishFolderOpen = null;
+    const folderOpenGate = new Promise((resolve) => {
+      window.__finishFolderOpen = resolve;
+    });
     document.execCommand = (command) => {
       if (command === "copy") {
         window.__clipboardText = document.activeElement?.value || "";
@@ -827,6 +832,10 @@ test("code converter dialog browses folders and runs converter", async ({ page }
       filesystem: {
         readDirectory: async (path) => {
           window.__readDirectories.push(path);
+          if (window.__holdNextFolderOpen) {
+            window.__holdNextFolderOpen = false;
+            await folderOpenGate;
+          }
           return [];
         }
       }
@@ -876,7 +885,9 @@ test("code converter dialog browses folders and runs converter", async ({ page }
   });
 
   await page.locator("#code-converter-open-folder").click();
+  await expect(modal).toBeHidden();
   await expect.poll(() => page.evaluate(() => window.__readDirectories)).toEqual(["C:/docs/project-md"]);
+  await page.evaluate(() => window.__finishFolderOpen());
   await expect(modal).toBeHidden();
 
   await page.locator("#desktopActionMenu").click();
