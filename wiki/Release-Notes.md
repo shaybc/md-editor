@@ -4,9 +4,14 @@ This page summarizes the tagged MD-Editor releases and the major user-facing fea
 
 ## Current Main
 
-Changes available on `main` after `v7.1`:
+Changes available on `main` after `v7.4`:
 
 - No unreleased changes are currently documented.
+
+## v7.4 - June 12, 2026
+
+- Synced Java converter updates into the main application release.
+- Updated About dialog and app metadata for the v7.4 release.
 
 ## v7.1 - June 9, 2026
 
