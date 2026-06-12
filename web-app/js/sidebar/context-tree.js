@@ -1360,12 +1360,24 @@
       "Open the original source file's folder in the system file explorer and select it when supported."
     );
     revealOriginalFileBtn.classList.add("sidebar-open-original-file");
-    const showFullGraphBtn = createFileContextMenuButton(
-      CONTEXT_MENU_ACTIONS.showFullGraph?.label || "Show full graph",
-      CONTEXT_MENU_ACTIONS.showFullGraph?.icon || CONTEXT_MENU_ACTIONS.showFullNetwork?.icon || "bi bi-diagram-3",
-      "Open a graph view with every recursive incoming and outgoing Markdown connection for this file."
+    const showLocalGraphBtn = createFileContextMenuButton(
+      CONTEXT_MENU_ACTIONS.showLocalGraph?.label || "Show local graph",
+      CONTEXT_MENU_ACTIONS.showLocalGraph?.icon || "bi bi-diagram-2",
+      "Open a graph focused on this file and the files it directly links to."
     );
-    showFullGraphBtn.classList.add("sidebar-show-full-graph");
+    showLocalGraphBtn.classList.add("sidebar-file-graph-action");
+    const showFullLocalGraphBtn = createFileContextMenuButton(
+      CONTEXT_MENU_ACTIONS.showFullLocalGraph?.label || "Show full local graph",
+      CONTEXT_MENU_ACTIONS.showFullLocalGraph?.icon || CONTEXT_MENU_ACTIONS.showFullNetwork?.icon || "bi bi-diagram-3",
+      "Open a graph that follows every outgoing dependency reachable from this file."
+    );
+    showFullLocalGraphBtn.classList.add("sidebar-file-graph-action");
+    const showFullNetworkBtn = createFileContextMenuButton(
+      CONTEXT_MENU_ACTIONS.showFullNetwork?.label || "Show full network",
+      CONTEXT_MENU_ACTIONS.showFullNetwork?.icon || "bi bi-diagram-3",
+      "Open a graph containing every recursive backlink and outgoing dependency reachable from this file."
+    );
+    showFullNetworkBtn.classList.add("sidebar-file-graph-action");
     const renameFileBtn = createFileContextMenuButton(
       CONTEXT_MENU_ACTIONS.rename.label,
       CONTEXT_MENU_ACTIONS.rename.icon,
@@ -1473,7 +1485,9 @@
       openOriginalInNewTabBtn,
       openOriginalDefaultAppBtn,
       revealOriginalFileBtn,
-      showFullGraphBtn,
+      showLocalGraphBtn,
+      showFullLocalGraphBtn,
+      showFullNetworkBtn,
       renameFileBtn,
       tagsSubmenu,
       copySubmenu,
@@ -1582,16 +1596,42 @@
       }
     });
 
-    showFullGraphBtn.addEventListener("click", async (event) => {
+    showLocalGraphBtn.addEventListener("click", async (event) => {
       event.preventDefault();
       event.stopPropagation();
       const target = sidebarContextTarget;
       hideSidebarFileContextMenu();
       try {
-        await openSidebarFileFullGraphView(target);
+        await openSidebarFileGraphView(target, "local", "Local Graph", "sidebar-file-local-graph");
       } catch (error) {
-        console.error("Failed to open sidebar file full graph:", error);
-        alert("Unable to open a full graph for this file.");
+        console.error("Failed to open sidebar file local graph:", error);
+        alert("Unable to open a local graph for this file.");
+      }
+    });
+
+    showFullLocalGraphBtn.addEventListener("click", async (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      const target = sidebarContextTarget;
+      hideSidebarFileContextMenu();
+      try {
+        await openSidebarFileGraphView(target, "full-local", "Full Local Graph", "sidebar-file-full-local-graph");
+      } catch (error) {
+        console.error("Failed to open sidebar file full local graph:", error);
+        alert("Unable to open a full local graph for this file.");
+      }
+    });
+
+    showFullNetworkBtn.addEventListener("click", async (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      const target = sidebarContextTarget;
+      hideSidebarFileContextMenu();
+      try {
+        await openSidebarFileGraphView(target, "full-network", "Full Network", "sidebar-file-full-network");
+      } catch (error) {
+        console.error("Failed to open sidebar file full network:", error);
+        alert("Unable to open a full network for this file.");
       }
     });
 
@@ -1821,17 +1861,27 @@
     return normalizeGraphNodeName(node?.path || node?.file?.webkitRelativePath || node?.fullPath || node?.name || "");
   }
 
-  function logSidebarFullGraph(message, details = {}) {
-    console.info("[Sidebar full graph]", message, details);
+  function logSidebarFileGraph(message, details = {}) {
+    console.info("[Sidebar file graph]", message, details);
   }
 
-  function failSidebarFullGraph(message, details = {}) {
-    console.warn("[Sidebar full graph]", message, details);
+  function failSidebarFileGraph(message, details = {}) {
+    console.warn("[Sidebar file graph]", message, details);
     alert(message);
   }
 
-  async function openSidebarFileFullGraphView(node) {
-    logSidebarFullGraph("Requested full graph from tree context menu.", {
+  function logSidebarFullGraph(message, details = {}) {
+    logSidebarFileGraph(message, details);
+  }
+
+  function failSidebarFullGraph(message, details = {}) {
+    failSidebarFileGraph(message, details);
+  }
+
+  async function openSidebarFileGraphView(node, mode, titlePrefix, scopePrefix) {
+    logSidebarFileGraph("Requested graph from tree context menu.", {
+      mode,
+      titlePrefix,
       nodeName: node?.name || "",
       nodePath: node?.path || "",
       nodeFullPath: node?.fullPath || "",
@@ -1841,7 +1891,7 @@
     });
 
     if (!node || node.kind !== "file") {
-      failSidebarFullGraph("Unable to open a full graph because no sidebar file is selected.", {
+      failSidebarFileGraph("Unable to open a graph because no sidebar file is selected.", {
         nodeKind: node?.kind || "",
         nodeName: node?.name || ""
       });
@@ -1850,7 +1900,7 @@
 
     const nodeGraphPath = node.name || node.path || node.fullPath || "";
     if (!isMarkdownPath(nodeGraphPath)) {
-      failSidebarFullGraph("Show full graph is available only for Markdown files.", {
+      failSidebarFileGraph("Show graph is available only for Markdown files.", {
         nodeGraphPath
       });
       return;
@@ -1858,7 +1908,7 @@
 
     const files = await getOpenFolderMarkdownFilesForGraph();
     if (!files.length) {
-      failSidebarFullGraph("Open a folder first to build a full graph for this file.", {
+      failSidebarFileGraph("Open a folder first to build a graph for this file.", {
         currentFolderTreeNodeCount: (currentFolderTreeNodes || []).length,
         folderMarkdownFileCount: (folderMarkdownFiles || []).length
       });
@@ -1867,7 +1917,7 @@
 
     const focusNodeId = getSidebarFileGraphNodeId(node, files);
     if (!focusNodeId) {
-      failSidebarFullGraph("Unable to match this file to a graph point.", {
+      failSidebarFileGraph("Unable to match this file to a graph point.", {
         nodeName: node.name || "",
         nodePath: node.path || "",
         nodeFullPath: node.fullPath || "",
@@ -1876,11 +1926,12 @@
       return;
     }
 
-    const graphTitle = `Full Graph: ${node.name || focusNodeId}`;
+    const graphTitle = `${titlePrefix}: ${node.name || focusNodeId}`;
     const scopeSeed = `${activeFolderPath || activeFolderName || "folder"}:${getSidebarNodeClipboardPath(node) || focusNodeId}`;
-    const graphScopeKey = createFolderGraphScopeKey("sidebar-file-full-graph", scopeSeed);
+    const graphScopeKey = createFolderGraphScopeKey(scopePrefix, scopeSeed);
     if (focusExistingFolderGraphTab(graphScopeKey, graphTitle)) {
-      logSidebarFullGraph("Focused an existing full graph tab.", {
+      logSidebarFileGraph("Focused an existing graph tab.", {
+        mode,
         graphScopeKey,
         graphTitle,
         focusNodeId
@@ -1889,7 +1940,7 @@
     }
 
     if (tabs.length >= 20) {
-      failSidebarFullGraph("Maximum of 20 tabs reached. Please close an existing tab to open a new one.", {
+      failSidebarFileGraph("Maximum of 20 tabs reached. Please close an existing tab to open a new one.", {
         tabCount: tabs.length
       });
       return;
@@ -1898,7 +1949,7 @@
     const graphSnapshot = await createGraphSnapshot(files, activeFolderName || "Graph View");
     const snapshotNodeIds = new Set((graphSnapshot.nodes || []).map((graphNode) => graphNode.id));
     if (!snapshotNodeIds.has(focusNodeId)) {
-      failSidebarFullGraph("Unable to find this file in the current folder graph.", {
+      failSidebarFileGraph("Unable to find this file in the current folder graph.", {
         focusNodeId,
         snapshotNodeCount: snapshotNodeIds.size,
         markdownFileCount: files.length
@@ -1910,13 +1961,14 @@
       graphSnapshot,
       graphScopeKey,
       graphViewConfig: {
-        mode: "full-network",
+        mode,
         focusNodeId,
         hiddenNodeIds: []
       }
     });
     if (!graphTab) {
-      failSidebarFullGraph("Unable to create the full graph tab.", {
+      failSidebarFileGraph("Unable to create the graph tab.", {
+        mode,
         graphTitle,
         graphScopeKey,
         focusNodeId,
@@ -1927,13 +1979,18 @@
     tabs.push(graphTab);
     switchTab(graphTab.id);
     saveTabsToStorage(tabs);
-    logSidebarFullGraph("Opened full graph tab.", {
+    logSidebarFileGraph("Opened graph tab.", {
+      mode,
       graphTitle,
       graphScopeKey,
       focusNodeId,
       snapshotNodeCount: snapshotNodeIds.size,
       markdownFileCount: files.length
     });
+  }
+
+  async function openSidebarFileFullGraphView(node) {
+    return openSidebarFileGraphView(node, "full-network", "Full Network", "sidebar-file-full-network");
   }
 
   async function collectMarkdownFilesForSidebarFolder(node) {
@@ -2663,11 +2720,11 @@
     if (title) title.textContent = node.name || "File";
     const tagsSubmenu = menu.querySelector(".tags-context-submenu");
     const tagsSubmenuPanel = menu.querySelector(".tags-context-submenu-panel");
-    const showFullGraphBtn = menu.querySelector(".sidebar-show-full-graph");
+    const graphActionBtns = menu.querySelectorAll(".sidebar-file-graph-action");
     const openOriginalFileBtns = menu.querySelectorAll(".sidebar-open-original-file");
     const exportOriginalNodeBtn = menu.querySelector(".sidebar-export-original-node");
     const canManageTags = isMarkdownPath(node.name || node.path || node.fullPath || "");
-    if (showFullGraphBtn) showFullGraphBtn.classList.toggle("hidden", !canManageTags);
+    graphActionBtns.forEach((button) => button.classList.toggle("hidden", !canManageTags));
     openOriginalFileBtns.forEach((button) => button.classList.toggle("hidden", !canManageTags));
     if (exportOriginalNodeBtn) exportOriginalNodeBtn.classList.toggle("hidden", !canManageTags);
     if (tagsSubmenu) tagsSubmenu.classList.toggle("hidden", !canManageTags);
@@ -3230,6 +3287,9 @@
         getSidebarMarkdownFileEntry,
         getOpenFolderMarkdownFilesForGraph,
         getSidebarFileGraphNodeId,
+        logSidebarFileGraph,
+        failSidebarFileGraph,
+        openSidebarFileGraphView,
         logSidebarFullGraph,
         failSidebarFullGraph,
         openSidebarFileFullGraphView,

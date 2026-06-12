@@ -4691,7 +4691,7 @@ test("desktop tree context menu can update file tags", async ({ page }) => {
   await expect(page.locator(".graph-link-tag")).toHaveCount(4);
 });
 
-test("tree file context menu opens a recursive full graph for that file", async ({ page }) => {
+test("tree file context menu opens a full local graph for that file", async ({ page }) => {
   await page.addInitScript(() => {
     window.NL_VERSION = "test";
     window.NL_OS = "Windows";
@@ -4742,19 +4742,22 @@ test("tree file context menu opens a recursive full graph for that file", async 
   });
 
   const treeMenu = page.locator(".sidebar-file-context-menu:not(.hidden)");
-  await expect(treeMenu.locator(".graph-context-menu-item", { hasText: "Show full graph" })).toBeVisible();
-  await treeMenu.locator(".graph-context-menu-item", { hasText: "Show full graph" }).evaluate((button) => button.click());
+  await expect(treeMenu.locator(".graph-context-menu-item", { hasText: "Show local graph" })).toBeVisible();
+  await expect(treeMenu.locator(".graph-context-menu-item", { hasText: "Show full local graph" })).toBeVisible();
+  await expect(treeMenu.locator(".graph-context-menu-item", { hasText: "Show full network" })).toBeVisible();
+  await expect(treeMenu.locator(".graph-context-menu-item", { hasText: "Show full graph" })).toHaveCount(0);
+  await treeMenu.locator(".graph-context-menu-item", { hasText: "Show full local graph" }).evaluate((button) => button.click());
 
   await expect.poll(() => page.evaluate(() => {
     const tabs = JSON.parse(localStorage.getItem("markdownViewerTabs") || "[]");
-    const graphTab = tabs.find((tab) => tab.type === "graph" && tab.title === "Full Graph: alpha.md");
+    const graphTab = tabs.find((tab) => tab.type === "graph" && tab.title === "Full Local Graph: alpha.md");
     return {
       mode: graphTab?.graphViewConfig?.mode,
       focusNodeId: graphTab?.graphViewConfig?.focusNodeId,
       snapshotNodeIds: (graphTab?.graphSnapshot?.nodes || []).map((node) => node.id).sort()
     };
   })).toEqual({
-    mode: "full-network",
+    mode: "full-local",
     focusNodeId: "alpha",
     snapshotNodeIds: ["alpha", "beta", "delta", "gamma", "isolated"]
   });
@@ -4857,7 +4860,7 @@ test("tree folder context menu tags markdown files in that folder tree", async (
   });
 });
 
-test("tree file full graph reports when no sidebar file is selected", async ({ page }) => {
+test("tree file graph reports when no sidebar file is selected", async ({ page }) => {
   const consoleMessages = [];
   page.on("console", (message) => {
     consoleMessages.push(`${message.type()}: ${message.text()}`);
@@ -4871,9 +4874,9 @@ test("tree file full graph reports when no sidebar file is selected", async ({ p
   await page.evaluate(() => window.markdownViewerApp.modules.sidebarContextTree.openSidebarFileFullGraphView(null));
 
   await expect.poll(() => page.evaluate(() => window.__alerts)).toEqual([
-    "Unable to open a full graph because no sidebar file is selected."
+    "Unable to open a graph because no sidebar file is selected."
   ]);
-  await expect.poll(() => consoleMessages.some((message) => message.includes("[Sidebar full graph]"))).toBe(true);
+  await expect.poll(() => consoleMessages.some((message) => message.includes("[Sidebar file graph]"))).toBe(true);
 });
 
 test("renders recent files in the action menu", async ({ page }) => {
