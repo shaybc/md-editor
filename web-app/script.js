@@ -3299,16 +3299,27 @@ Markdown content is processed client-side in your browser and sanitized before p
     }
   }
 
+  function getNeutralinoGlobalValue(name) {
+    if (name === "NL_PATH" && typeof NL_PATH !== "undefined") return NL_PATH;
+    if (name === "NL_CWD" && typeof NL_CWD !== "undefined") return NL_CWD;
+    return typeof window !== "undefined" ? window[name] : "";
+  }
+
+  function normalizeLocalPath(path) {
+    return String(path || "").replace(/\\/g, "/").replace(/\/+$/, "");
+  }
+
   function getCodeConverterScriptPath() {
-    const basePath = String(window.NL_PATH || "").replace(/\\/g, "/").replace(/\/+$/, "");
+    const basePath = normalizeLocalPath(getNeutralinoGlobalValue("NL_PATH"));
     if (!basePath) return "resources/code_converter/dependency-md-generator.js";
     return `${basePath}/resources/code_converter/dependency-md-generator.js`;
   }
 
   function getJavaConverterJarPath() {
-    const basePath = String(window.NL_PATH || "").replace(/\\/g, "/").replace(/\/+$/, "");
-    if (!basePath) return "java_converter/target/java_converter.jar";
-    const projectRoot = basePath.replace(/\/desktop-app$/i, "");
+    const basePath = normalizeLocalPath(getNeutralinoGlobalValue("NL_PATH"));
+    const cwdPath = normalizeLocalPath(getNeutralinoGlobalValue("NL_CWD"));
+    const projectRoot = (basePath || cwdPath).replace(/\/desktop-app$/i, "");
+    if (!projectRoot) return "java_converter/target/java_converter.jar";
     return `${projectRoot}/java_converter/target/java_converter.jar`;
   }
 
