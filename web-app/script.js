@@ -1928,6 +1928,8 @@ document.addEventListener("DOMContentLoaded", function () {
   const codeConverterConsoleOutput = document.getElementById("code-converter-console-output");
   const codeConverterConsoleState = document.getElementById("code-converter-console-state");
   const codeConverterConsoleCopyButton = document.getElementById("code-converter-console-copy");
+  let activeCodeConverterProcessId = null;
+  let codeConverterCancelRequested = false;
   const desktopOpenGraphButtons = document.querySelectorAll(".open-graph-view");
   const exitAppButtons = document.querySelectorAll(".exit-app-button");
   const graphViewCanvas = document.getElementById("graph-view-canvas");
@@ -3331,6 +3333,71 @@ Markdown content is processed client-side in your browser and sanitized before p
       .join("\n");
   }
 
+  function getSpawnedProcessOutputText(detail) {
+    const data = detail?.data;
+    if (typeof data === "string") return data;
+    if (data && typeof data === "object") {
+      return data.stdOut || data.stdout || data.stdErr || data.stderr || data.output || data.data || "";
+    }
+    return detail?.stdOut || detail?.stdout || detail?.stdErr || detail?.stderr || detail?.output || "";
+  }
+
+  function getSpawnedProcessExitCode(detail) {
+    const data = detail?.data;
+    const value = data && typeof data === "object"
+      ? data.exitCode ?? data.code
+      : detail?.exitCode ?? detail?.code ?? data;
+    const exitCode = Number(value);
+    return Number.isFinite(exitCode) ? exitCode : 0;
+  }
+
+  function isSpawnedProcessExitAction(action) {
+    return ["exit", "close", "exited", "terminated"].includes(String(action || "").toLowerCase());
+  }
+
+  async function executeCodeConverterCommand(command) {
+    if (Neutralino.os?.spawnProcess && Neutralino.os?.updateSpawnedProcess) {
+      return new Promise(async (resolve, reject) => {
+        let spawnedProcess = null;
+        let isSettled = false;
+        const cleanup = () => {
+          window.removeEventListener("spawnedProcess", handleSpawnedProcessEvent);
+          activeCodeConverterProcessId = null;
+        };
+        const settle = (callback, value) => {
+          if (isSettled) return;
+          isSettled = true;
+          cleanup();
+          callback(value);
+        };
+        const handleSpawnedProcessEvent = (event) => {
+          const detail = event?.detail || {};
+          if (!spawnedProcess || (detail.id !== spawnedProcess.id && detail.pid !== spawnedProcess.pid)) return;
+          const action = detail.action || detail.event || detail.type;
+          if (isSpawnedProcessExitAction(action)) {
+            settle(resolve, { exitCode: getSpawnedProcessExitCode(detail) });
+            return;
+          }
+          const outputText = getSpawnedProcessOutputText(detail);
+          if (outputText) appendCodeConverterConsole(outputText.trimEnd());
+        };
+
+        window.addEventListener("spawnedProcess", handleSpawnedProcessEvent);
+        try {
+          spawnedProcess = await Neutralino.os.spawnProcess(command);
+          activeCodeConverterProcessId = spawnedProcess?.id ?? null;
+        } catch (error) {
+          settle(reject, error);
+        }
+      });
+    }
+
+    const result = await Neutralino.os.execCommand(command);
+    const outputText = getCodeConverterResultText(result);
+    if (outputText) appendCodeConverterConsole(outputText);
+    return result;
+  }
+
   function setCodeConverterCompleteState(isComplete) {
     if (codeConverterCancelButton) codeConverterCancelButton.hidden = !!isComplete;
     if (codeConverterRunButton) codeConverterRunButton.hidden = !!isComplete;
@@ -3397,6 +3464,24 @@ Markdown content is processed client-side in your browser and sanitized before p
   function hideCodeConverterDialog() {
     if (!codeConverterModal) return;
     codeConverterModal.style.display = "none";
+  }
+
+  async function cancelCodeConverterDialog() {
+    if (activeCodeConverterProcessId === null || !Neutralino.os?.updateSpawnedProcess) {
+      hideCodeConverterDialog();
+      return;
+    }
+    codeConverterCancelRequested = true;
+    setCodeConverterStatus("Cancelling converter...");
+    setCodeConverterConsoleState("cancelling");
+    try {
+      await Neutralino.os.updateSpawnedProcess(activeCodeConverterProcessId, "exit");
+    } catch (error) {
+      console.warn("Failed to cancel code converter:", error);
+      appendCodeConverterConsole(error?.message || String(error));
+      setCodeConverterStatus("Unable to cancel converter. See console.");
+      setCodeConverterConsoleState("cancel failed");
+    }
   }
 
   async function browseCodeConverterFolder(input, title, stateFieldName) {
@@ -3522,7 +3607,7 @@ Markdown content is processed client-side in your browser and sanitized before p
   }
 
   async function runCodeConverter() {
-    if (typeof Neutralino === "undefined" || !Neutralino.os?.execCommand) {
+    if (typeof Neutralino === "undefined" || (!Neutralino.os?.spawnProcess && !Neutralino.os?.execCommand)) {
       alert("Code conversion requires the desktop app because it runs the local Node.js converter.");
       return;
     }
@@ -3542,6 +3627,7 @@ Markdown content is processed client-side in your browser and sanitized before p
     }
 
     try {
+      codeConverterCancelRequested = false;
       const converterConfig = getSelectedCodeConverterConfig();
       const command = (await converterConfig.buildCommandParts(sourceRoot, destinationRoot, getCodeConverterSwitches()))
         .join(" ");
@@ -3551,10 +3637,13 @@ Markdown content is processed client-side in your browser and sanitized before p
       setCodeConverterConsoleState("running");
       appendCodeConverterConsole(`> ${command}`);
       setCodeConverterStatus(`Running ${converterConfig.statusName}...`);
-      const result = await Neutralino.os.execCommand(command);
+      const result = await executeCodeConverterCommand(command);
       const exitCode = Number(result?.exitCode ?? result?.code ?? 0);
-      const outputText = getCodeConverterResultText(result);
-      if (outputText) appendCodeConverterConsole(outputText);
+      if (codeConverterCancelRequested) {
+        setCodeConverterConsoleState("cancelled");
+        setCodeConverterStatus(`${converterConfig.statusName} cancelled.`);
+        return;
+      }
       if (exitCode !== 0) {
         setCodeConverterConsoleState(`failed (${exitCode})`);
         setCodeConverterStatus(`${converterConfig.statusName} failed. See console.`);
@@ -3571,6 +3660,8 @@ Markdown content is processed client-side in your browser and sanitized before p
       appendCodeConverterConsole(error?.stack || error?.message || String(error));
       setCodeConverterStatus(getSelectedCodeConverterConfig().missingRuntimeMessage);
     } finally {
+      activeCodeConverterProcessId = null;
+      codeConverterCancelRequested = false;
       setCodeConverterRunningState(false);
     }
   }
@@ -4907,7 +4998,7 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
   }
 
   if (codeConverterCancelButton) {
-    codeConverterCancelButton.addEventListener("click", hideCodeConverterDialog);
+    codeConverterCancelButton.addEventListener("click", cancelCodeConverterDialog);
   }
 
   if (codeConverterFinishButton) {

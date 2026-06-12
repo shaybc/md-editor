@@ -907,6 +907,49 @@ test("code converter locks form controls while conversion is running", async ({ 
   await expect(page.locator("#code-converter-include-methods")).toBeEnabled();
 });
 
+test("code converter streams spawned process output", async ({ page }) => {
+  await page.addInitScript(() => {
+    window.NL_PATH = "C:/GitHub/shaybc/md-editor/desktop-app";
+    window.NL_VERSION = "test";
+    const folderSelections = ["C:/src/project", "C:/docs/project-md"];
+    window.__spawnedCommands = [];
+    window.__finishConversion = null;
+    window.Neutralino = {
+      os: {
+        showFolderDialog: async () => folderSelections.shift(),
+        spawnProcess: async (command) => {
+          window.__spawnedCommands.push(command);
+          setTimeout(() => {
+            window.dispatchEvent(new CustomEvent("spawnedProcess", {
+              detail: { id: 42, action: "stdOut", data: "[2026-06-12 20:11:00] Indexing 9355 Java files..." }
+            }));
+          }, 0);
+          return { id: 42, pid: 4242 };
+        },
+        updateSpawnedProcess: async () => {},
+      }
+    };
+    window.__finishConversion = () => {
+      window.dispatchEvent(new CustomEvent("spawnedProcess", {
+        detail: { id: 42, action: "exit", data: { exitCode: 0 } }
+      }));
+    };
+  });
+  await openApp(page);
+
+  await page.locator("#desktopActionMenu").click();
+  await page.locator(".open-code-converter-dialog").first().click();
+  await page.locator("#code-converter-source-browse").click();
+  await page.locator("#code-converter-destination-browse").click();
+  await page.locator("#code-converter-run").click();
+
+  await expect(page.locator("#code-converter-console-output")).toContainText("Indexing 9355 Java files");
+  await expect(page.locator("#code-converter-run")).toBeDisabled();
+  await page.evaluate(() => window.__finishConversion());
+  await expect(page.locator("#code-converter-finish")).toBeVisible();
+  await expect.poll(() => page.evaluate(() => window.__spawnedCommands.length)).toBe(1);
+});
+
 test("code converter ignores backdrop clicks", async ({ page }) => {
   await openApp(page);
 
