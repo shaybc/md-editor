@@ -4525,6 +4525,31 @@ a:focus {
   background: color-mix(in srgb, var(--accent-color) 86%, #000);
 }
 
+.code-converter-open-folder-button {
+  min-width: 104px;
+}
+
+.code-converter-form .reset-modal-actions {
+  flex-wrap: wrap;
+}
+
+.code-converter-status-link {
+  display: inline;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--accent-color);
+  font: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.code-converter-status-link:hover,
+.code-converter-status-link:focus-visible {
+  color: var(--accent-color);
+}
+
 .code-converter-shell {
   display: flex;
   align-items: stretch;

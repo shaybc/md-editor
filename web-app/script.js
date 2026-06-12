@@ -1920,6 +1920,7 @@ document.addEventListener("DOMContentLoaded", function () {
   const codeConverterIncludePackageInput = document.getElementById("code-converter-include-package");
   const codeConverterCancelButton = document.getElementById("code-converter-cancel");
   const codeConverterRunButton = document.getElementById("code-converter-run");
+  const codeConverterOpenFolderButton = document.getElementById("code-converter-open-folder");
   const codeConverterFinishButton = document.getElementById("code-converter-finish");
   const codeConverterStatus = document.getElementById("code-converter-status");
   const codeConverterShell = document.getElementById("code-converter-shell");
@@ -1930,6 +1931,7 @@ document.addEventListener("DOMContentLoaded", function () {
   const codeConverterConsoleCopyButton = document.getElementById("code-converter-console-copy");
   let activeCodeConverterProcessId = null;
   let codeConverterCancelRequested = false;
+  let completedCodeConverterDestinationRoot = "";
   const desktopOpenGraphButtons = document.querySelectorAll(".open-graph-view");
   const exitAppButtons = document.querySelectorAll(".exit-app-button");
   const graphViewCanvas = document.getElementById("graph-view-canvas");
@@ -3274,6 +3276,32 @@ Markdown content is processed client-side in your browser and sanitized before p
     if (codeConverterStatus) codeConverterStatus.textContent = message || "";
   }
 
+  function getLocalPathName(path) {
+    return normalizeLocalPath(path).split("/").filter(Boolean).pop() || normalizeLocalPath(path) || "folder";
+  }
+
+  function setCodeConverterCompleteStatus(destinationRoot) {
+    if (!codeConverterStatus) return;
+    const normalizedDestination = normalizeLocalPath(destinationRoot);
+    codeConverterStatus.textContent = "";
+    codeConverterStatus.append("Markdown files created in ");
+    const folderLink = document.createElement("button");
+    folderLink.type = "button";
+    folderLink.className = "code-converter-status-link";
+    folderLink.textContent = getLocalPathName(normalizedDestination);
+    folderLink.title = normalizedDestination;
+    folderLink.addEventListener("click", async () => {
+      try {
+        if (typeof Neutralino === "undefined" || !Neutralino.os?.open) throw new Error("No supported folder opener is available.");
+        await Neutralino.os.open(normalizedDestination);
+      } catch (error) {
+        console.error("Failed to open generated folder:", error);
+        setCodeConverterStatus("Unable to open generated folder.");
+      }
+    });
+    codeConverterStatus.append(folderLink, ".");
+  }
+
   function setCodeConverterConsoleExpanded(isExpanded) {
     codeConverterShell?.classList.toggle("console-open", !!isExpanded);
     if (codeConverterConsolePanel) codeConverterConsolePanel.setAttribute("aria-hidden", isExpanded ? "false" : "true");
@@ -3442,6 +3470,7 @@ Markdown content is processed client-side in your browser and sanitized before p
   function setCodeConverterCompleteState(isComplete) {
     if (codeConverterCancelButton) codeConverterCancelButton.hidden = !!isComplete;
     if (codeConverterRunButton) codeConverterRunButton.hidden = !!isComplete;
+    if (codeConverterOpenFolderButton) codeConverterOpenFolderButton.hidden = !isComplete;
     if (codeConverterFinishButton) codeConverterFinishButton.hidden = !isComplete;
   }
 
@@ -3467,6 +3496,7 @@ Markdown content is processed client-side in your browser and sanitized before p
       control.disabled = !!isRunning;
     });
     if (codeConverterCancelButton) codeConverterCancelButton.disabled = false;
+    if (codeConverterOpenFolderButton && !codeConverterOpenFolderButton.hidden) codeConverterOpenFolderButton.disabled = !!isRunning;
     if (codeConverterFinishButton && !codeConverterFinishButton.hidden) codeConverterFinishButton.disabled = !!isRunning;
   }
 
@@ -3496,10 +3526,22 @@ Markdown content is processed client-side in your browser and sanitized before p
     setCodeConverterConsoleExpanded(false);
     setCodeConverterCompleteState(false);
     setCodeConverterRunningState(false);
+    completedCodeConverterDestinationRoot = "";
     hydrateCodeConverterFolderInputs();
     updateCodeConverterLanguageSupport();
     codeConverterModal.style.display = "flex";
     codeConverterSourceRootInput?.focus();
+  }
+
+  async function openCompletedCodeConverterFolder() {
+    if (!completedCodeConverterDestinationRoot) return;
+    try {
+      await openFolderTreeFromNeutralinoPath(completedCodeConverterDestinationRoot);
+      hideCodeConverterDialog();
+    } catch (error) {
+      console.error("Failed to open generated Markdown folder:", error);
+      setCodeConverterStatus("Unable to open generated folder in MD-Editor.");
+    }
   }
 
   function hideCodeConverterDialog() {
@@ -3691,9 +3733,10 @@ Markdown content is processed client-side in your browser and sanitized before p
         return;
       }
       setCodeConverterConsoleState("complete");
-      setCodeConverterStatus(`Markdown files created in ${destinationRoot}.`);
+      completedCodeConverterDestinationRoot = normalizeLocalPath(destinationRoot);
+      setCodeConverterCompleteStatus(completedCodeConverterDestinationRoot);
       setCodeConverterCompleteState(true);
-      codeConverterFinishButton?.focus();
+      codeConverterOpenFolderButton?.focus();
     } catch (error) {
       console.error("Failed to run code converter:", error);
       setCodeConverterConsoleExpanded(true);
@@ -5040,6 +5083,10 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
 
   if (codeConverterCancelButton) {
     codeConverterCancelButton.addEventListener("click", cancelCodeConverterDialog);
+  }
+
+  if (codeConverterOpenFolderButton) {
+    codeConverterOpenFolderButton.addEventListener("click", openCompletedCodeConverterFolder);
   }
 
   if (codeConverterFinishButton) {

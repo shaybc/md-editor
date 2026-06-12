@@ -795,6 +795,8 @@ test("code converter dialog browses folders and runs converter", async ({ page }
     window.__folderDialogTitles = [];
     window.__execCommands = [];
     window.__clipboardText = "";
+    window.__openedPaths = [];
+    window.__readDirectories = [];
     document.execCommand = (command) => {
       if (command === "copy") {
         window.__clipboardText = document.activeElement?.value || "";
@@ -810,6 +812,9 @@ test("code converter dialog browses folders and runs converter", async ({ page }
         }
       },
       os: {
+        open: async (path) => {
+          window.__openedPaths.push(path);
+        },
         showFolderDialog: async (title) => {
           window.__folderDialogTitles.push(title);
           return folderSelections.shift();
@@ -817,6 +822,12 @@ test("code converter dialog browses folders and runs converter", async ({ page }
         execCommand: async (command) => {
           window.__execCommands.push(command);
           return { exitCode: 0, stdOut: "Created 3 markdown file(s) in C:/docs/project-md" };
+        }
+      },
+      filesystem: {
+        readDirectory: async (path) => {
+          window.__readDirectories.push(path);
+          return [];
         }
       }
     };
@@ -843,13 +854,18 @@ test("code converter dialog browses folders and runs converter", async ({ page }
   await expect(page.locator("#code-converter-destination-root")).toHaveValue("C:/docs/project-md");
 
   await page.locator("#code-converter-run").click();
-  await expect(page.locator("#code-converter-status")).toHaveText("Markdown files created in C:/docs/project-md.");
+  await expect(page.locator("#code-converter-status")).toHaveText("Markdown files created in project-md.");
+  await expect(page.locator("#code-converter-status .code-converter-status-link")).toHaveText("project-md");
+  await expect(page.locator("#code-converter-status .code-converter-status-link")).toHaveAttribute("title", "C:/docs/project-md");
+  await page.locator("#code-converter-status .code-converter-status-link").click();
+  await expect.poll(() => page.evaluate(() => window.__openedPaths)).toEqual(["C:/docs/project-md"]);
   await expect(page.locator("#code-converter-console-panel")).toHaveAttribute("aria-hidden", "false");
   await expect(page.locator("#code-converter-console-output")).toContainText("Created 3 markdown file(s) in C:/docs/project-md");
   await page.locator("#code-converter-console-copy").click();
   await expect.poll(() => page.evaluate(() => window.__clipboardText)).toContain("Created 3 markdown file(s) in C:/docs/project-md");
   await expect(page.locator("#code-converter-cancel")).toBeHidden();
   await expect(page.locator("#code-converter-run")).toBeHidden();
+  await expect(page.locator("#code-converter-open-folder")).toBeVisible();
   await expect(page.locator("#code-converter-finish")).toBeVisible();
   await expect.poll(() => page.evaluate(() => ({
     titles: window.__folderDialogTitles,
@@ -859,7 +875,8 @@ test("code converter dialog browses folders and runs converter", async ({ page }
     commands: ['node "C:/GitHub/shaybc/md-editor/desktop-app/resources/code_converter/dependency-md-generator.js" "C:/src/project" "C:/docs/project-md" --include-methods --include-accessors --include-signatures --include-return-codes --include-exceptions --include-package']
   });
 
-  await page.locator("#code-converter-finish").click();
+  await page.locator("#code-converter-open-folder").click();
+  await expect.poll(() => page.evaluate(() => window.__readDirectories)).toEqual(["C:/docs/project-md"]);
   await expect(modal).toBeHidden();
 
   await page.locator("#desktopActionMenu").click();
@@ -871,7 +888,7 @@ test("code converter dialog browses folders and runs converter", async ({ page }
   await page.locator("#code-converter-source-browse").click();
   await page.locator("#code-converter-destination-browse").click();
   await page.locator("#code-converter-run").click();
-  await expect(page.locator("#code-converter-status")).toHaveText("Markdown files created in C:/docs/project-md.");
+  await expect(page.locator("#code-converter-status")).toHaveText("Markdown files created in project-md.");
   await expect.poll(() => page.evaluate(() => window.__execCommands)).toEqual([
     'node "C:/GitHub/shaybc/md-editor/desktop-app/resources/code_converter/dependency-md-generator.js" "C:/src/project" "C:/docs/project-md" --include-methods --include-accessors --include-signatures --include-return-codes --include-exceptions --include-package',
     'java -Xmx8g -jar "C:/GitHub/shaybc/md-editor/java_converter/target/java_converter.jar" --root "C:/src/project" --vault "C:/docs/project-md" --include-methods --include-accessors --include-return-codes --include-exceptions --include-package'
