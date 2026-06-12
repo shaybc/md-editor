@@ -685,6 +685,7 @@
               <p id="code-converter-status" class="editor-link-modal-label" role="status" aria-live="polite"></p>
               <div class="reset-modal-actions">
                 <button class="reset-modal-btn reset-modal-cancel" id="code-converter-cancel" type="button">Cancel</button>
+                <button class="reset-modal-btn code-converter-minimize-button" id="code-converter-minimize" type="button" hidden>Minimize</button>
                 <button class="reset-modal-btn" id="code-converter-run" type="button">Convert</button>
                 <button class="reset-modal-btn code-converter-open-folder-button" id="code-converter-open-folder" type="button" hidden>Open Folder</button>
                 <button class="reset-modal-btn code-converter-finish-button" id="code-converter-finish" type="button" hidden>Finish</button>
@@ -704,6 +705,14 @@
             </div>
           </div>
         </div>
+        <button id="code-converter-task-pill" class="code-converter-task-pill" type="button" hidden aria-live="polite">
+          <span class="code-converter-task-icon" aria-hidden="true"><i class="bi bi-filetype-md"></i></span>
+          <span class="code-converter-task-main">
+            <span id="code-converter-task-name" class="code-converter-task-name">Code converter</span>
+            <span id="code-converter-task-status" class="code-converter-task-status">running</span>
+          </span>
+          <span id="code-converter-task-label" class="code-converter-task-label">Running...</span>
+        </button>
 
         <!-- Editor Link Modal -->
         <div id="editor-link-modal" class="reset-modal-overlay editor-link-modal" role="dialog" aria-modal="true" aria-labelledby="editor-link-modal-title" style="display:none;">

@@ -989,6 +989,126 @@ test("code converter streams spawned process output", async ({ page }) => {
   await expect.poll(() => page.evaluate(() => window.__spawnedCommands.length)).toBe(1);
 });
 
+test("code converter can be minimized and restored while running", async ({ page }) => {
+  await page.addInitScript(() => {
+    window.NL_PATH = "C:/GitHub/shaybc/md-editor/desktop-app";
+    window.NL_VERSION = "test";
+    const folderSelections = ["C:/src/project", "C:/docs/project-md"];
+    window.Neutralino = {
+      os: {
+        showFolderDialog: async () => folderSelections.shift(),
+        spawnProcess: async () => ({ id: 99, pid: 9900 }),
+        updateSpawnedProcess: async () => {}
+      }
+    };
+  });
+  await openApp(page);
+
+  await page.locator("#desktopActionMenu").click();
+  await page.locator(".open-code-converter-dialog").first().click();
+  await page.locator("#code-converter-source-browse").click();
+  await page.locator("#code-converter-destination-browse").click();
+  await page.locator("#code-converter-run").click();
+
+  await expect(page.locator("#code-converter-minimize")).toBeVisible();
+  await page.locator("#code-converter-minimize").click();
+  await expect(page.locator("#code-converter-modal")).toBeHidden();
+  await expect(page.locator("#code-converter-task-pill")).toBeVisible();
+  await expect(page.locator("#code-converter-task-status")).toHaveText("running");
+
+  await page.locator("#markdown-editor").fill("# Editing while conversion runs");
+  await expect(page.locator("#markdown-editor")).toHaveValue("# Editing while conversion runs");
+
+  await page.locator("#code-converter-task-pill").click();
+  await expect(page.locator("#code-converter-modal")).toBeVisible();
+  await expect(page.locator("#code-converter-task-pill")).toBeHidden();
+  await expect(page.locator("#code-converter-run")).toBeDisabled();
+  await expect(page.locator("#code-converter-cancel")).toBeEnabled();
+  await expect(page.locator("#code-converter-console-output")).toContainText("dependency-md-generator.js");
+});
+
+test("code converter minimized task flashes when conversion completes", async ({ page }) => {
+  await page.addInitScript(() => {
+    window.NL_PATH = "C:/GitHub/shaybc/md-editor/desktop-app";
+    window.NL_VERSION = "test";
+    const folderSelections = ["C:/src/project", "C:/docs/project-md"];
+    window.Neutralino = {
+      os: {
+        showFolderDialog: async () => folderSelections.shift(),
+        spawnProcess: async () => ({ id: 77, pid: 7700 }),
+        updateSpawnedProcess: async () => {}
+      }
+    };
+    window.__finishConversion = () => {
+      window.dispatchEvent(new CustomEvent("spawnedProcess", {
+        detail: { id: 77, action: "stdOut", data: "Created 3 markdown file(s) in C:/docs/project-md" }
+      }));
+      window.dispatchEvent(new CustomEvent("spawnedProcess", {
+        detail: { id: 77, action: "exit", data: { exitCode: 0 } }
+      }));
+    };
+  });
+  await openApp(page);
+
+  await page.locator("#desktopActionMenu").click();
+  await page.locator(".open-code-converter-dialog").first().click();
+  await page.locator("#code-converter-source-browse").click();
+  await page.locator("#code-converter-destination-browse").click();
+  await page.locator("#code-converter-run").click();
+  await page.locator("#code-converter-minimize").click();
+
+  await page.evaluate(() => window.__finishConversion());
+  await expect(page.locator("#code-converter-task-status")).toHaveText("complete");
+  await expect(page.locator("#code-converter-task-pill")).toHaveClass(/needs-attention/);
+
+  await page.locator("#code-converter-task-pill").click();
+  await expect(page.locator("#code-converter-task-pill")).toBeHidden();
+  await expect(page.locator("#code-converter-open-folder")).toBeVisible();
+  await expect(page.locator("#code-converter-finish")).toBeVisible();
+  await expect(page.locator("#code-converter-task-pill")).not.toHaveClass(/needs-attention/);
+});
+
+test("code converter minimized task flashes when conversion fails", async ({ page }) => {
+  await page.addInitScript(() => {
+    window.NL_PATH = "C:/GitHub/shaybc/md-editor/desktop-app";
+    window.NL_VERSION = "test";
+    const folderSelections = ["C:/src/project", "C:/docs/project-md"];
+    window.Neutralino = {
+      os: {
+        showFolderDialog: async () => folderSelections.shift(),
+        spawnProcess: async () => ({ id: 88, pid: 8800 }),
+        updateSpawnedProcess: async () => {}
+      }
+    };
+    window.__failConversion = () => {
+      window.dispatchEvent(new CustomEvent("spawnedProcess", {
+        detail: { id: 88, action: "stdErr", data: "Conversion failed hard" }
+      }));
+      window.dispatchEvent(new CustomEvent("spawnedProcess", {
+        detail: { id: 88, action: "exit", data: { exitCode: 2 } }
+      }));
+    };
+  });
+  await openApp(page);
+
+  await page.locator("#desktopActionMenu").click();
+  await page.locator(".open-code-converter-dialog").first().click();
+  await page.locator("#code-converter-source-browse").click();
+  await page.locator("#code-converter-destination-browse").click();
+  await page.locator("#code-converter-run").click();
+  await page.locator("#code-converter-minimize").click();
+
+  await page.evaluate(() => window.__failConversion());
+  await expect(page.locator("#code-converter-task-status")).toHaveText("failed");
+  await expect(page.locator("#code-converter-task-pill")).toHaveClass(/needs-attention/);
+
+  await page.locator("#code-converter-task-pill").click();
+  await expect(page.locator("#code-converter-status")).toHaveText("code converter failed. See console.");
+  await expect(page.locator("#code-converter-console-output")).toContainText("Conversion failed hard");
+  await expect(page.locator("#code-converter-open-folder")).toBeHidden();
+  await expect(page.locator("#code-converter-finish")).toBeVisible();
+});
+
 test("code converter ignores backdrop clicks", async ({ page }) => {
   await openApp(page);
 

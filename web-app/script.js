@@ -1925,6 +1925,7 @@ document.addEventListener("DOMContentLoaded", function () {
   const codeConverterIncludeExceptionsInput = document.getElementById("code-converter-include-exceptions");
   const codeConverterIncludePackageInput = document.getElementById("code-converter-include-package");
   const codeConverterCancelButton = document.getElementById("code-converter-cancel");
+  const codeConverterMinimizeButton = document.getElementById("code-converter-minimize");
   const codeConverterRunButton = document.getElementById("code-converter-run");
   const codeConverterOpenFolderButton = document.getElementById("code-converter-open-folder");
   const codeConverterFinishButton = document.getElementById("code-converter-finish");
@@ -1935,10 +1936,15 @@ document.addEventListener("DOMContentLoaded", function () {
   const codeConverterConsoleOutput = document.getElementById("code-converter-console-output");
   const codeConverterConsoleState = document.getElementById("code-converter-console-state");
   const codeConverterConsoleCopyButton = document.getElementById("code-converter-console-copy");
+  const codeConverterTaskPill = document.getElementById("code-converter-task-pill");
+  const codeConverterTaskName = document.getElementById("code-converter-task-name");
+  const codeConverterTaskStatus = document.getElementById("code-converter-task-status");
+  const codeConverterTaskLabel = document.getElementById("code-converter-task-label");
   let activeCodeConverterProcessId = null;
   let codeConverterIsRunning = false;
   let codeConverterCancelRequested = false;
   let completedCodeConverterDestinationRoot = "";
+  let codeConverterTask = null;
   const desktopOpenGraphButtons = document.querySelectorAll(".open-graph-view");
   const exitAppButtons = document.querySelectorAll(".exit-app-button");
   const graphViewCanvas = document.getElementById("graph-view-canvas");
@@ -3279,8 +3285,116 @@ Markdown content is processed client-side in your browser and sanitized before p
     window.alert("Cache, preferences, and recent history reset.");
   }
 
-  function setCodeConverterStatus(message) {
+  function hasActiveCodeConverterTask() {
+    return !!codeConverterTask;
+  }
+
+  function updateCodeConverterTaskPill() {
+    if (!codeConverterTaskPill) return;
+    const shouldShow = Boolean(codeConverterTask && codeConverterTask.minimized);
+    codeConverterTaskPill.hidden = !shouldShow;
+    if (!shouldShow) {
+      codeConverterTaskPill.classList.remove("is-running", "is-complete", "is-failed", "is-cancelled", "needs-attention");
+      return;
+    }
+
+    const state = codeConverterTask.state || "running";
+    if (codeConverterTaskName) codeConverterTaskName.textContent = codeConverterTask.converterName || "Code converter";
+    if (codeConverterTaskStatus) codeConverterTaskStatus.textContent = state;
+    if (codeConverterTaskLabel) codeConverterTaskLabel.textContent = codeConverterTask.statusText || "Running...";
+    codeConverterTaskPill.title = `${codeConverterTask.converterName || "Code converter"}: ${codeConverterTask.statusText || state}`;
+    codeConverterTaskPill.classList.toggle("is-running", state === "running");
+    codeConverterTaskPill.classList.toggle("is-complete", state === "complete");
+    codeConverterTaskPill.classList.toggle("is-failed", state === "failed" || state === "error");
+    codeConverterTaskPill.classList.toggle("is-cancelled", state === "cancelled");
+    codeConverterTaskPill.classList.toggle("needs-attention", !!codeConverterTask.attention);
+  }
+
+  function updateCodeConverterTaskControls() {
+    if (codeConverterMinimizeButton) {
+      codeConverterMinimizeButton.hidden = !codeConverterTask;
+      codeConverterMinimizeButton.disabled = false;
+    }
+  }
+
+  function clearCodeConverterTask() {
+    codeConverterTask = null;
+    completedCodeConverterDestinationRoot = "";
+    updateCodeConverterTaskPill();
+    updateCodeConverterTaskControls();
+  }
+
+  function createCodeConverterTask(task) {
+    codeConverterTask = {
+      converterType: task.converterType || "builtin",
+      converterName: task.converterName || "code converter",
+      sourceRoot: task.sourceRoot || "",
+      destinationRoot: task.destinationRoot || "",
+      command: task.command || "",
+      processId: null,
+      state: "running",
+      exitCode: null,
+      statusText: `Running ${task.converterName || "code converter"}...`,
+      consoleText: "",
+      consoleState: "running",
+      minimized: false,
+      attention: false
+    };
+    updateCodeConverterTaskPill();
+    updateCodeConverterTaskControls();
+  }
+
+  function setCodeConverterTaskState(state, statusText, options = {}) {
+    if (!codeConverterTask) return;
+    codeConverterTask.state = state;
+    codeConverterTask.statusText = statusText || codeConverterTask.statusText || state;
+    if (Object.prototype.hasOwnProperty.call(options, "exitCode")) codeConverterTask.exitCode = options.exitCode;
+    if (codeConverterTask.minimized && state !== "running" && options.attention !== false) {
+      codeConverterTask.attention = true;
+    }
+    updateCodeConverterTaskPill();
+  }
+
+  function minimizeCodeConverterTask() {
+    if (!codeConverterTask || !codeConverterModal) return;
+    codeConverterTask.minimized = true;
+    codeConverterTask.attention = false;
+    hideCodeConverterDialog();
+    updateCodeConverterTaskPill();
+  }
+
+  function restoreCodeConverterTaskDialog() {
+    if (!codeConverterTask || !codeConverterModal) return;
+    codeConverterTask.minimized = false;
+    codeConverterTask.attention = false;
+    updateCodeConverterTaskPill();
+    codeConverterModal.style.display = "flex";
+    if (codeConverterTask.state === "running") {
+      codeConverterCancelButton?.focus();
+    } else if (!codeConverterOpenFolderButton?.hidden) {
+      codeConverterOpenFolderButton.focus();
+    } else {
+      codeConverterFinishButton?.focus();
+    }
+  }
+
+  function resetCodeConverterDialogForNewTask() {
+    setCodeConverterStatus("", { syncTask: false });
+    clearCodeConverterConsole();
+    setCodeConverterConsoleExpanded(false);
+    setCodeConverterCompleteState(false);
+    setCodeConverterRunningState(false);
+    clearCodeConverterTask();
+    hydrateCodeConverterFolderInputs();
+    updateCodeConverterLanguageSupport();
+  }
+
+  function setCodeConverterStatus(message, options = {}) {
     if (codeConverterStatus) codeConverterStatus.textContent = message || "";
+    if (codeConverterTask && options.syncTask !== false) {
+      codeConverterTask.statusText = message || "";
+      updateCodeConverterTaskPill();
+    }
   }
 
   function getLocalPathName(path) {
@@ -3290,6 +3404,11 @@ Markdown content is processed client-side in your browser and sanitized before p
   function setCodeConverterCompleteStatus(destinationRoot) {
     if (!codeConverterStatus) return;
     const normalizedDestination = normalizeLocalPath(destinationRoot);
+    const statusText = `Markdown files created in ${getLocalPathName(normalizedDestination)}.`;
+    if (codeConverterTask) {
+      codeConverterTask.statusText = statusText;
+      updateCodeConverterTaskPill();
+    }
     codeConverterStatus.textContent = "";
     codeConverterStatus.append("Markdown files created in ");
     const folderLink = document.createElement("button");
@@ -3321,10 +3440,15 @@ Markdown content is processed client-side in your browser and sanitized before p
 
   function setCodeConverterConsoleState(state) {
     if (codeConverterConsoleState) codeConverterConsoleState.textContent = state || "idle";
+    if (codeConverterTask) {
+      codeConverterTask.consoleState = state || "idle";
+      updateCodeConverterTaskPill();
+    }
   }
 
   function clearCodeConverterConsole() {
     if (codeConverterConsoleOutput) codeConverterConsoleOutput.textContent = "";
+    if (codeConverterTask) codeConverterTask.consoleText = "";
     setCodeConverterConsoleState("idle");
   }
 
@@ -3332,6 +3456,7 @@ Markdown content is processed client-side in your browser and sanitized before p
     if (!codeConverterConsoleOutput || !text) return;
     const current = codeConverterConsoleOutput.textContent || "";
     codeConverterConsoleOutput.textContent = current ? `${current}\n${text}` : text;
+    if (codeConverterTask) codeConverterTask.consoleText = codeConverterConsoleOutput.textContent || "";
     codeConverterConsoleOutput.scrollTop = codeConverterConsoleOutput.scrollHeight;
   }
 
@@ -3462,6 +3587,7 @@ Markdown content is processed client-side in your browser and sanitized before p
         try {
           spawnedProcess = await Neutralino.os.spawnProcess(command);
           activeCodeConverterProcessId = spawnedProcess?.id ?? null;
+          if (codeConverterTask) codeConverterTask.processId = activeCodeConverterProcessId;
         } catch (error) {
           settle(reject, error);
         }
@@ -3479,6 +3605,15 @@ Markdown content is processed client-side in your browser and sanitized before p
     if (codeConverterRunButton) codeConverterRunButton.hidden = !!isComplete;
     if (codeConverterOpenFolderButton) codeConverterOpenFolderButton.hidden = !isComplete;
     if (codeConverterFinishButton) codeConverterFinishButton.hidden = !isComplete;
+    updateCodeConverterTaskControls();
+  }
+
+  function setCodeConverterTerminalState(canOpenFolder) {
+    if (codeConverterCancelButton) codeConverterCancelButton.hidden = true;
+    if (codeConverterRunButton) codeConverterRunButton.hidden = true;
+    if (codeConverterOpenFolderButton) codeConverterOpenFolderButton.hidden = !canOpenFolder;
+    if (codeConverterFinishButton) codeConverterFinishButton.hidden = false;
+    updateCodeConverterTaskControls();
   }
 
   function getCodeConverterFormControls() {
@@ -3506,8 +3641,10 @@ Markdown content is processed client-side in your browser and sanitized before p
       control.setAttribute("aria-disabled", codeConverterIsRunning ? "true" : "false");
     });
     if (codeConverterCancelButton) codeConverterCancelButton.disabled = false;
+    if (codeConverterMinimizeButton) codeConverterMinimizeButton.disabled = false;
     if (codeConverterOpenFolderButton && !codeConverterOpenFolderButton.hidden) codeConverterOpenFolderButton.disabled = !!isRunning;
     if (codeConverterFinishButton && !codeConverterFinishButton.hidden) codeConverterFinishButton.disabled = !!isRunning;
+    updateCodeConverterTaskControls();
   }
 
   function getSavedCodeConverterFolder(fieldName) {
@@ -3531,14 +3668,11 @@ Markdown content is processed client-side in your browser and sanitized before p
 
   function showCodeConverterDialog() {
     if (!codeConverterModal) return;
-    setCodeConverterStatus("");
-    clearCodeConverterConsole();
-    setCodeConverterConsoleExpanded(false);
-    setCodeConverterCompleteState(false);
-    setCodeConverterRunningState(false);
-    completedCodeConverterDestinationRoot = "";
-    hydrateCodeConverterFolderInputs();
-    updateCodeConverterLanguageSupport();
+    if (hasActiveCodeConverterTask()) {
+      restoreCodeConverterTaskDialog();
+      return;
+    }
+    resetCodeConverterDialogForNewTask();
     codeConverterModal.style.display = "flex";
     codeConverterSourceRootInput?.focus();
   }
@@ -3549,6 +3683,9 @@ Markdown content is processed client-side in your browser and sanitized before p
     hideCodeConverterDialog();
     try {
       await openFolderTreeFromNeutralinoPath(destinationRoot);
+      setCodeConverterCompleteState(false);
+      setCodeConverterRunningState(false);
+      clearCodeConverterTask();
     } catch (error) {
       console.error("Failed to open generated Markdown folder:", error);
       if (codeConverterModal) codeConverterModal.style.display = "flex";
@@ -3559,6 +3696,13 @@ Markdown content is processed client-side in your browser and sanitized before p
   function hideCodeConverterDialog() {
     if (!codeConverterModal) return;
     codeConverterModal.style.display = "none";
+  }
+
+  function finishCodeConverterTask() {
+    hideCodeConverterDialog();
+    setCodeConverterCompleteState(false);
+    setCodeConverterRunningState(false);
+    clearCodeConverterTask();
   }
 
   async function cancelCodeConverterDialog() {
@@ -3725,8 +3869,16 @@ Markdown content is processed client-side in your browser and sanitized before p
     try {
       codeConverterCancelRequested = false;
       const converterConfig = getSelectedCodeConverterConfig();
+      const converterType = getSelectedCodeConverterType();
       const command = (await converterConfig.buildCommandParts(sourceRoot, destinationRoot, getCodeConverterSwitches()))
         .join(" ");
+      createCodeConverterTask({
+        converterType,
+        converterName: converterConfig.statusName,
+        sourceRoot,
+        destinationRoot,
+        command
+      });
       setCodeConverterRunningState(true);
       clearCodeConverterConsole();
       setCodeConverterConsoleExpanded(true);
@@ -3736,26 +3888,36 @@ Markdown content is processed client-side in your browser and sanitized before p
       const result = await executeCodeConverterCommand(command);
       const exitCode = Number(result?.exitCode ?? result?.code ?? 0);
       if (codeConverterCancelRequested) {
+        setCodeConverterTaskState("cancelled", `${converterConfig.statusName} cancelled.`, { exitCode, attention: true });
         setCodeConverterConsoleState("cancelled");
         setCodeConverterStatus(`${converterConfig.statusName} cancelled.`);
+        setCodeConverterTerminalState(false);
+        codeConverterFinishButton?.focus();
         return;
       }
       if (exitCode !== 0) {
+        setCodeConverterTaskState("failed", `${converterConfig.statusName} failed. See console.`, { exitCode, attention: true });
         setCodeConverterConsoleState(`failed (${exitCode})`);
         setCodeConverterStatus(`${converterConfig.statusName} failed. See console.`);
+        setCodeConverterTerminalState(false);
+        codeConverterFinishButton?.focus();
         return;
       }
+      setCodeConverterTaskState("complete", `Markdown files created in ${getLocalPathName(destinationRoot)}.`, { exitCode, attention: true });
       setCodeConverterConsoleState("complete");
       completedCodeConverterDestinationRoot = normalizeLocalPath(destinationRoot);
       setCodeConverterCompleteStatus(completedCodeConverterDestinationRoot);
-      setCodeConverterCompleteState(true);
+      setCodeConverterTerminalState(true);
       codeConverterOpenFolderButton?.focus();
     } catch (error) {
       console.error("Failed to run code converter:", error);
       setCodeConverterConsoleExpanded(true);
+      setCodeConverterTaskState("failed", getSelectedCodeConverterConfig().missingRuntimeMessage, { attention: true });
       setCodeConverterConsoleState("error");
       appendCodeConverterConsole(error?.stack || error?.message || String(error));
       setCodeConverterStatus(getSelectedCodeConverterConfig().missingRuntimeMessage);
+      setCodeConverterTerminalState(false);
+      codeConverterFinishButton?.focus();
     } finally {
       activeCodeConverterProcessId = null;
       codeConverterCancelRequested = false;
@@ -5139,12 +5301,20 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
     codeConverterCancelButton.addEventListener("click", cancelCodeConverterDialog);
   }
 
+  if (codeConverterMinimizeButton) {
+    codeConverterMinimizeButton.addEventListener("click", minimizeCodeConverterTask);
+  }
+
+  if (codeConverterTaskPill) {
+    codeConverterTaskPill.addEventListener("click", restoreCodeConverterTaskDialog);
+  }
+
   if (codeConverterOpenFolderButton) {
     codeConverterOpenFolderButton.addEventListener("click", openCompletedCodeConverterFolder);
   }
 
   if (codeConverterFinishButton) {
-    codeConverterFinishButton.addEventListener("click", hideCodeConverterDialog);
+    codeConverterFinishButton.addEventListener("click", finishCodeConverterTask);
   }
 
   if (codeConverterRunButton) {
