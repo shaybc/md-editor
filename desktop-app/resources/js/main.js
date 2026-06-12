@@ -49,6 +49,7 @@ async function exitDesktopApp() {
 const DESKTOP_WINDOW_STATE_KEY = "markdownViewerDesktopWindowState";
 const DEFAULT_DESKTOP_WINDOW_SIZE = Object.freeze({ width: 1400, height: 900 });
 const MIN_DESKTOP_WINDOW_SIZE = Object.freeze({ width: 900, height: 600 });
+const MAXIMIZED_SIZE_TOLERANCE = 16;
 let saveDesktopWindowStateTimer = null;
 
 function normalizeDesktopWindowSize(size) {
@@ -57,6 +58,15 @@ function normalizeDesktopWindowSize(size) {
   if (width < MIN_DESKTOP_WINDOW_SIZE.width || height < MIN_DESKTOP_WINDOW_SIZE.height) return null;
   if (width > 10000 || height > 10000) return null;
   return { width, height };
+}
+
+function isLikelyMaximizedDesktopWindowSize(size) {
+  if (!size || typeof window === "undefined" || !window.screen) return false;
+  const screenWidth = Math.max(Number(window.screen.width) || 0, Number(window.screen.availWidth) || 0);
+  const screenHeight = Math.max(Number(window.screen.height) || 0, Number(window.screen.availHeight) || 0);
+  if (!screenWidth || !screenHeight) return false;
+  return size.width >= screenWidth - MAXIMIZED_SIZE_TOLERANCE
+    && size.height >= screenHeight - MAXIMIZED_SIZE_TOLERANCE;
 }
 
 async function centerDesktopWindow() {
@@ -73,6 +83,10 @@ async function restoreDesktopWindowState() {
     const rawState = await Neutralino.storage.getData(DESKTOP_WINDOW_STATE_KEY);
     const savedState = JSON.parse(rawState || "{}");
     const savedSize = normalizeDesktopWindowSize(savedState);
+    if (savedState && (savedState.maximized === true || isLikelyMaximizedDesktopWindowSize(savedSize))) {
+      if (Neutralino.window.maximize) await Neutralino.window.maximize();
+      return;
+    }
     if (savedSize) {
       await Neutralino.window.setSize(savedSize);
       await centerDesktopWindow();
@@ -98,9 +112,13 @@ async function saveDesktopWindowState() {
   if (!Neutralino.window || !Neutralino.storage) return;
   try {
     if (await Neutralino.window.isMinimized()) return;
+    const isMaximized = Neutralino.window.isMaximized && await Neutralino.window.isMaximized();
     const currentSize = normalizeDesktopWindowSize(await Neutralino.window.getSize());
-    if (!currentSize) return;
-    await Neutralino.storage.setData(DESKTOP_WINDOW_STATE_KEY, JSON.stringify(currentSize));
+    if (!currentSize && !isMaximized) return;
+    await Neutralino.storage.setData(DESKTOP_WINDOW_STATE_KEY, JSON.stringify({
+      ...(currentSize || {}),
+      maximized: Boolean(isMaximized)
+    }));
   } catch (error) {
     console.warn("Could not save desktop window size:", error);
   }
