@@ -321,7 +321,7 @@ class JavaConverterIntegrationTest {
               <plugin>
                 <artifactId>maven-compiler-plugin</artifactId>
                 <configuration>
-                  <source>${target.java.version}</source>
+                  <source>@target.java.version@</source>
                   <target>${target.java.version}</target>
                 </configuration>
               </plugin>
@@ -341,6 +341,7 @@ class JavaConverterIntegrationTest {
     String markdown = Files.readString(vault.resolve("src/main/java/app/Main.java.md"), StandardCharsets.UTF_8);
     assertDependency(markdown, "src/main/java/app/Helper.java");
     assertFalse(markdown.contains("${target.java.version}"));
+    assertFalse(markdown.contains("@target.java.version@"));
   }
 
   private static void assertDependency(String markdown, String relativeSource) {

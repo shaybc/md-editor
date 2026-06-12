@@ -680,7 +680,12 @@
             <div id="code-converter-console-panel" class="code-converter-console-panel" aria-hidden="true">
               <div class="code-converter-console-header">
                 <span>Console</span>
-                <span id="code-converter-console-state">idle</span>
+                <div class="code-converter-console-tools">
+                  <span id="code-converter-console-state">idle</span>
+                  <button id="code-converter-console-copy" class="code-converter-console-copy" type="button" aria-label="Copy console output" title="Copy console output">
+                    <i class="bi bi-clipboard" aria-hidden="true"></i>
+                  </button>
+                </div>
               </div>
               <pre id="code-converter-console-output" class="code-converter-console-output" aria-live="polite"></pre>
             </div>

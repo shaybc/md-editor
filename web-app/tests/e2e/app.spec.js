@@ -794,8 +794,14 @@ test("code converter dialog browses folders and runs converter", async ({ page }
     window.NL_VERSION = "test";
     window.__folderDialogTitles = [];
     window.__execCommands = [];
+    window.__clipboardText = "";
     const folderSelections = ["C:/src/project", "C:/docs/project-md"];
     window.Neutralino = {
+      clipboard: {
+        writeText: async (text) => {
+          window.__clipboardText = text;
+        }
+      },
       os: {
         showFolderDialog: async (title) => {
           window.__folderDialogTitles.push(title);
@@ -833,6 +839,8 @@ test("code converter dialog browses folders and runs converter", async ({ page }
   await expect(page.locator("#code-converter-status")).toHaveText("Markdown files created in C:/docs/project-md.");
   await expect(page.locator("#code-converter-console-panel")).toHaveAttribute("aria-hidden", "false");
   await expect(page.locator("#code-converter-console-output")).toContainText("Created 3 markdown file(s) in C:/docs/project-md");
+  await page.locator("#code-converter-console-copy").click();
+  await expect.poll(() => page.evaluate(() => window.__clipboardText)).toContain("Created 3 markdown file(s) in C:/docs/project-md");
   await expect(page.locator("#code-converter-cancel")).toBeHidden();
   await expect(page.locator("#code-converter-run")).toBeHidden();
   await expect(page.locator("#code-converter-finish")).toBeVisible();

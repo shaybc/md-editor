@@ -4568,7 +4568,7 @@ a:focus {
 .code-converter-console-panel {
   width: 0;
   min-width: 0;
-  max-width: min(520px, calc(100vw - 420px));
+  max-width: min(700px, calc(100vw - 420px));
   overflow: hidden;
   border: 1px solid transparent;
   border-left: 0;
@@ -4581,7 +4581,7 @@ a:focus {
 }
 
 .code-converter-shell.console-open .code-converter-console-panel {
-  width: min(520px, calc(100vw - 420px));
+  width: min(700px, calc(100vw - 420px));
   border-color: var(--border-color);
   opacity: 1;
   transform: translateX(0);
@@ -4601,13 +4601,40 @@ a:focus {
   letter-spacing: 0;
 }
 
-.code-converter-console-header span:last-child {
+.code-converter-console-tools {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.code-converter-console-tools span {
   color: #8aa0b7;
   font-weight: 600;
 }
 
+.code-converter-console-copy {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: 1px solid rgba(148, 163, 184, 0.24);
+  border-radius: 6px;
+  background: rgba(15, 23, 42, 0.68);
+  color: #c7d2df;
+  cursor: pointer;
+  transition: background-color 0.16s ease, border-color 0.16s ease, color 0.16s ease;
+}
+
+.code-converter-console-copy:hover,
+.code-converter-console-copy:focus-visible {
+  border-color: rgba(147, 197, 253, 0.64);
+  background: rgba(30, 41, 59, 0.88);
+  color: #eff6ff;
+}
+
 .code-converter-console-output {
-  width: min(520px, calc(100vw - 420px));
+  width: min(700px, calc(100vw - 420px));
   height: calc(100vh - 112px);
   margin: 0;
   padding: 14px;

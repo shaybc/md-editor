@@ -243,11 +243,12 @@ final class ProjectScanner {
   private static String resolveProperties(String value, Map<String, String> properties, Path pom, List<String> warnings) {
     String resolved = value;
     for (int pass = 0; pass < 8; pass += 1) {
-      Matcher matcher = Pattern.compile("\\$\\{([^}]+)}").matcher(resolved);
+      Matcher matcher = Pattern.compile("\\$\\{([^}]+)}|@([^@\\s]+)@").matcher(resolved);
       StringBuffer buffer = new StringBuffer();
       boolean changed = false;
       while (matcher.find()) {
-        String replacement = properties.get(matcher.group(1));
+        String propertyName = matcher.group(1) != null ? matcher.group(1) : matcher.group(2);
+        String replacement = properties.get(propertyName);
         if (replacement == null) {
           warnings.add("Unresolved Maven property in compiler setting from " + pom + ": " + matcher.group(0));
           continue;
@@ -258,6 +259,10 @@ final class ProjectScanner {
       matcher.appendTail(buffer);
       resolved = buffer.toString();
       if (!changed) break;
+    }
+    if (Pattern.compile("\\$\\{[^}]+}|@[^@\\s]+@").matcher(resolved).find()) {
+      warnings.add("Skipping unresolved compiler setting from " + pom + ": " + value);
+      return "";
     }
     return resolved.trim();
   }

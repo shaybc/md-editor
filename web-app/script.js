@@ -1927,6 +1927,7 @@ document.addEventListener("DOMContentLoaded", function () {
   const codeConverterConsolePanel = document.getElementById("code-converter-console-panel");
   const codeConverterConsoleOutput = document.getElementById("code-converter-console-output");
   const codeConverterConsoleState = document.getElementById("code-converter-console-state");
+  const codeConverterConsoleCopyButton = document.getElementById("code-converter-console-copy");
   const desktopOpenGraphButtons = document.querySelectorAll(".open-graph-view");
   const exitAppButtons = document.querySelectorAll(".exit-app-button");
   const graphViewCanvas = document.getElementById("graph-view-canvas");
@@ -3293,6 +3294,28 @@ Markdown content is processed client-side in your browser and sanitized before p
     const current = codeConverterConsoleOutput.textContent || "";
     codeConverterConsoleOutput.textContent = current ? `${current}\n${text}` : text;
     codeConverterConsoleOutput.scrollTop = codeConverterConsoleOutput.scrollHeight;
+  }
+
+  async function copyCodeConverterConsole() {
+    const text = codeConverterConsoleOutput?.textContent || "";
+    if (!text.trim()) {
+      setCodeConverterConsoleState("empty");
+      return;
+    }
+
+    try {
+      if (typeof Neutralino !== "undefined" && Neutralino.clipboard?.writeText) {
+        await Neutralino.clipboard.writeText(text);
+      } else if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(text);
+      } else {
+        throw new Error("Clipboard is unavailable.");
+      }
+      setCodeConverterConsoleState("copied");
+    } catch (error) {
+      console.warn("Failed to copy converter console:", error);
+      setCodeConverterConsoleState("copy failed");
+    }
   }
 
   function getCodeConverterResultText(result) {
@@ -4828,6 +4851,10 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
     codeConverterConsoleToggle.addEventListener("click", function() {
       setCodeConverterConsoleExpanded(!codeConverterShell?.classList.contains("console-open"));
     });
+  }
+
+  if (codeConverterConsoleCopyButton) {
+    codeConverterConsoleCopyButton.addEventListener("click", copyCodeConverterConsole);
   }
 
   if (codeConverterCancelButton) {
