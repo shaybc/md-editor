@@ -871,6 +871,42 @@ test("code converter dialog browses folders and runs converter", async ({ page }
   ]);
 });
 
+test("code converter locks form controls while conversion is running", async ({ page }) => {
+  await page.addInitScript(() => {
+    window.NL_PATH = "C:/GitHub/shaybc/md-editor/desktop-app";
+    window.NL_VERSION = "test";
+    const folderSelections = ["C:/src/project", "C:/docs/project-md"];
+    window.Neutralino = {
+      os: {
+        showFolderDialog: async () => folderSelections.shift(),
+        execCommand: async () => new Promise((resolve) => {
+          window.__finishConversion = () => resolve({ exitCode: 0, stdOut: "Created 3 markdown file(s) in C:/docs/project-md" });
+        })
+      }
+    };
+  });
+  await openApp(page);
+
+  await page.locator("#desktopActionMenu").click();
+  await page.locator(".open-code-converter-dialog").first().click();
+  await page.locator("#code-converter-source-browse").click();
+  await page.locator("#code-converter-destination-browse").click();
+  await page.locator("#code-converter-run").click();
+
+  await expect(page.locator("#code-converter-run")).toBeDisabled();
+  await expect(page.locator("#code-converter-type")).toBeDisabled();
+  await expect(page.locator("#code-converter-source-browse")).toBeDisabled();
+  await expect(page.locator("#code-converter-destination-browse")).toBeDisabled();
+  await expect(page.locator("#code-converter-include-methods")).toBeDisabled();
+  await expect(page.locator("#code-converter-include-package")).toBeDisabled();
+  await expect(page.locator("#code-converter-cancel")).toBeEnabled();
+
+  await page.evaluate(() => window.__finishConversion());
+  await expect(page.locator("#code-converter-finish")).toBeVisible();
+  await expect(page.locator("#code-converter-type")).toBeEnabled();
+  await expect(page.locator("#code-converter-include-methods")).toBeEnabled();
+});
+
 test("java converter resolves jar from neutralino working directory", async ({ page }) => {
   await page.addInitScript(() => {
     window.NL_CWD = "C:/GitHub/shaybc/md-editor";

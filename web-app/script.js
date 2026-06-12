@@ -3335,12 +3335,38 @@ Markdown content is processed client-side in your browser and sanitized before p
     if (codeConverterFinishButton) codeConverterFinishButton.hidden = !isComplete;
   }
 
+  function getCodeConverterFormControls() {
+    return [
+      codeConverterTypeSelect,
+      codeConverterSourceRootInput,
+      codeConverterDestinationRootInput,
+      codeConverterSourceBrowseButton,
+      codeConverterDestinationBrowseButton,
+      codeConverterIncludeMethodsInput,
+      codeConverterIncludeAccessorsInput,
+      codeConverterIncludeSignaturesInput,
+      codeConverterIncludeReturnCodesInput,
+      codeConverterIncludeExceptionsInput,
+      codeConverterIncludePackageInput,
+      codeConverterRunButton
+    ].filter(Boolean);
+  }
+
+  function setCodeConverterRunningState(isRunning) {
+    getCodeConverterFormControls().forEach((control) => {
+      control.disabled = !!isRunning;
+    });
+    if (codeConverterCancelButton) codeConverterCancelButton.disabled = false;
+    if (codeConverterFinishButton && !codeConverterFinishButton.hidden) codeConverterFinishButton.disabled = !!isRunning;
+  }
+
   function showCodeConverterDialog() {
     if (!codeConverterModal) return;
     setCodeConverterStatus("");
     clearCodeConverterConsole();
     setCodeConverterConsoleExpanded(false);
     setCodeConverterCompleteState(false);
+    setCodeConverterRunningState(false);
     updateCodeConverterLanguageSupport();
     codeConverterModal.style.display = "flex";
     codeConverterSourceRootInput?.focus();
@@ -3496,7 +3522,7 @@ Markdown content is processed client-side in your browser and sanitized before p
       const converterConfig = getSelectedCodeConverterConfig();
       const command = (await converterConfig.buildCommandParts(sourceRoot, destinationRoot, getCodeConverterSwitches()))
         .join(" ");
-      if (codeConverterRunButton) codeConverterRunButton.disabled = true;
+      setCodeConverterRunningState(true);
       clearCodeConverterConsole();
       setCodeConverterConsoleExpanded(true);
       setCodeConverterConsoleState("running");
@@ -3522,7 +3548,7 @@ Markdown content is processed client-side in your browser and sanitized before p
       appendCodeConverterConsole(error?.stack || error?.message || String(error));
       setCodeConverterStatus(getSelectedCodeConverterConfig().missingRuntimeMessage);
     } finally {
-      if (codeConverterRunButton) codeConverterRunButton.disabled = false;
+      setCodeConverterRunningState(false);
     }
   }
 
