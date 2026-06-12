@@ -52,6 +52,11 @@ function usage() {
   ].join("\n"));
 }
 
+function logProgress(message) {
+  const timestamp = new Date().toISOString().replace("T", " ").slice(0, 19);
+  console.log(`[${timestamp}] ${message}`);
+}
+
 function normalizePath(filePath) {
   return path.resolve(filePath);
 }
@@ -125,6 +130,10 @@ function walkSourceFiles(root) {
   return files;
 }
 
+function shouldLogProgress(count, total, interval) {
+  return count === total || count % interval === 0;
+}
+
 function buildIndexes(sourceRoot, files) {
   const byPathNoExt = new Map();
   const javaByQualifiedName = new Map();
@@ -133,7 +142,7 @@ function buildIndexes(sourceRoot, files) {
   const csharpBySimpleName = new Map();
   const pythonModules = new Map();
 
-  for (const file of files) {
+  files.forEach((file, index) => {
     const ext = path.extname(file);
     byPathNoExt.set(file.slice(0, -ext.length), file);
 
@@ -178,7 +187,11 @@ function buildIndexes(sourceRoot, files) {
         csharpBySimpleName.get(typeName).push({ file, namespaceName, qualifiedName });
       }
     }
-  }
+    const indexedCount = index + 1;
+    if (shouldLogProgress(indexedCount, files.length, 1000)) {
+      logProgress(`Indexed ${indexedCount} / ${files.length} source files...`);
+    }
+  });
 
   return { byPathNoExt, javaByQualifiedName, javaBySimpleName, csharpByQualifiedName, csharpBySimpleName, pythonModules };
 }
@@ -769,15 +782,31 @@ function main() {
 
   fs.mkdirSync(destinationRoot, { recursive: true });
 
+  logProgress("Starting built-in code conversion");
+  logProgress(`Scanning source files in ${sourceRoot}`);
   const files = walkSourceFiles(sourceRoot);
-  const indexes = buildIndexes(sourceRoot, files);
+  logProgress(`Found ${files.length} supported source file(s).`);
+  if (files.length === 0) {
+    console.log(`Created 0 markdown file(s) in ${destinationRoot}`);
+    return;
+  }
 
-  for (const file of files) {
+  logProgress("Building dependency indexes...");
+  const indexes = buildIndexes(sourceRoot, files);
+  logProgress("Analyzing dependencies and writing Markdown files...");
+
+  files.forEach((file, index) => {
     const dependencies = findDependencies(file, sourceRoot, indexes);
     dependencies.delete(file);
     writeMarkdown(sourceRoot, destinationRoot, file, dependencies, options);
-  }
+    const writtenCount = index + 1;
+    if (shouldLogProgress(writtenCount, files.length, 500)) {
+      logProgress(`Analyzed and wrote ${writtenCount} / ${files.length} source files...`);
+    }
+  });
 
+  logProgress("Built-in code converter summary");
+  logProgress(`Markdown files written: ${files.length}`);
   console.log(`Created ${files.length} markdown file(s) in ${destinationRoot}`);
 }
 
