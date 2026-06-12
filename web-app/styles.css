@@ -4696,10 +4696,9 @@ a:focus {
   border-bottom-right-radius: 0;
 }
 
-.code-converter-console-toggle {
+.code-converter-header-icon {
   position: absolute;
   top: 14px;
-  right: 12px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -4713,11 +4712,19 @@ a:focus {
   transition: color 0.16s ease, border-color 0.16s ease, background-color 0.16s ease;
 }
 
-.code-converter-console-toggle:hover,
-.code-converter-console-toggle:focus-visible {
+.code-converter-header-icon:hover,
+.code-converter-header-icon:focus-visible {
   border-color: var(--border-color);
   background: var(--button-hover);
   color: var(--text-color);
+}
+
+.code-converter-minimize-button {
+  left: 12px;
+}
+
+.code-converter-console-toggle {
+  right: 12px;
 }
 
 .code-converter-console-panel {

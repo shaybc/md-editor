@@ -637,7 +637,10 @@
         <div id="code-converter-modal" class="reset-modal-overlay" role="dialog" aria-modal="true" aria-labelledby="code-converter-title" style="display:none;">
           <div id="code-converter-shell" class="code-converter-shell">
             <div class="reset-modal-box code-converter-form">
-              <button id="code-converter-console-toggle" class="code-converter-console-toggle" type="button" aria-label="Show conversion console" aria-expanded="false" title="Show conversion console">
+              <button id="code-converter-minimize" class="code-converter-header-icon code-converter-minimize-button" type="button" hidden aria-label="Minimize conversion task" title="Minimize conversion task">
+                <i class="bi bi-dash-lg" aria-hidden="true"></i>
+              </button>
+              <button id="code-converter-console-toggle" class="code-converter-header-icon code-converter-console-toggle" type="button" aria-label="Show conversion console" aria-expanded="false" title="Show conversion console">
                 <i class="bi bi-layout-sidebar-inset-reverse" aria-hidden="true"></i>
               </button>
               <p id="code-converter-title" class="reset-modal-message">Convert Code to MD</p>
@@ -692,7 +695,6 @@
               <p id="code-converter-status" class="editor-link-modal-label" role="status" aria-live="polite"></p>
               <div class="reset-modal-actions">
                 <button class="reset-modal-btn reset-modal-cancel" id="code-converter-cancel" type="button">Cancel</button>
-                <button class="reset-modal-btn code-converter-minimize-button" id="code-converter-minimize" type="button" hidden>Minimize</button>
                 <button class="reset-modal-btn" id="code-converter-run" type="button">Convert</button>
                 <button class="reset-modal-btn code-converter-open-folder-button" id="code-converter-open-folder" type="button" hidden>Open Folder</button>
                 <button class="reset-modal-btn code-converter-finish-button" id="code-converter-finish" type="button" hidden>Finish</button>
