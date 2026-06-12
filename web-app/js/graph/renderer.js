@@ -1570,6 +1570,24 @@
       "Open the file's folder in the system file explorer and select this file when supported."
     );
     revealFileBtn.classList.add("hidden");
+    const openOriginalInNewTabBtn = createContextMenuButton(
+      CONTEXT_MENU_ACTIONS.openOriginalInNewTab?.label || "Open original in a new tab",
+      CONTEXT_MENU_ACTIONS.openOriginalInNewTab?.icon || "bi bi-box-arrow-up-right",
+      "Open the original source file referenced by this Markdown point in a new editor tab."
+    );
+    openOriginalInNewTabBtn.classList.add("hidden");
+    const openOriginalDefaultAppBtn = createContextMenuButton(
+      CONTEXT_MENU_ACTIONS.openOriginalWithDefaultApp?.label || "Open original in default app",
+      CONTEXT_MENU_ACTIONS.openOriginalWithDefaultApp?.icon || "bi bi-window",
+      "Open the original source file referenced by this Markdown point with the default system application."
+    );
+    openOriginalDefaultAppBtn.classList.add("hidden");
+    const revealOriginalFileBtn = createContextMenuButton(
+      CONTEXT_MENU_ACTIONS.revealOriginalInFileExplorer?.label || "Reveal original in file explorer",
+      CONTEXT_MENU_ACTIONS.revealOriginalInFileExplorer?.icon || "bi bi-folder2-open",
+      "Open the original source file's folder in the system file explorer and select it when supported."
+    );
+    revealOriginalFileBtn.classList.add("hidden");
     const revealTreeViewBtn = createContextMenuButton(
       CONTEXT_MENU_ACTIONS.revealInTreeView.label,
       CONTEXT_MENU_ACTIONS.revealInTreeView.icon,
@@ -1833,6 +1851,9 @@
     contextMenu.appendChild(openFileBtn);
     contextMenu.appendChild(openDefaultAppBtn);
     contextMenu.appendChild(revealFileBtn);
+    contextMenu.appendChild(openOriginalInNewTabBtn);
+    contextMenu.appendChild(openOriginalDefaultAppBtn);
+    contextMenu.appendChild(revealOriginalFileBtn);
     contextMenu.appendChild(revealTreeViewBtn);
     contextMenu.appendChild(renameFileBtn);
     contextMenu.appendChild(tagsSubmenu);
@@ -2588,6 +2609,76 @@
       }
       const content = await readGraphNodeContent(graphNode);
       return openSidebarFileInPermanentTab(normalizeEditorContent(content), getNodeEditorTitle(graphNode), sourceFile);
+    };
+
+    const getGraphNodeOriginalSourcePath = async (graphNode) => {
+      if (!graphNode || isTagNode(graphNode) || isClusterNode(graphNode)) return "";
+      const sourcePath = getSourceFilePathFromMarkdown(await readGraphNodeContent(graphNode));
+      if (!sourcePath) {
+        alert("This node does not have a source_file frontmatter value.");
+        return "";
+      }
+      return sourcePath;
+    };
+
+    const openGraphNodeOriginalFileInNewTab = async (graphNode) => {
+      if (!graphNode || isTagNode(graphNode) || isClusterNode(graphNode)) return null;
+      if (!isNeutralinoRuntime() || !Neutralino.filesystem?.readFile) {
+        alert("Opening original files is available only in the desktop app.");
+        return null;
+      }
+      const sourcePath = await getGraphNodeOriginalSourcePath(graphNode);
+      if (!sourcePath) return null;
+      const sourceFile = {
+        name: getFileName(sourcePath),
+        path: sourcePath
+      };
+      const existingTab = findTabForSourceFile(sourceFile);
+      if (existingTab) {
+        switchTab(existingTab.id);
+        pinTemporaryTab(existingTab.id);
+        return existingTab;
+      }
+      const sourceContent = await Neutralino.filesystem.readFile(sourcePath);
+      return openSidebarFileInPermanentTab(normalizeEditorContent(sourceContent), getFileName(sourcePath), sourceFile);
+    };
+
+    const openGraphNodeOriginalFileWithDefaultApp = async (graphNode) => {
+      if (!graphNode || isTagNode(graphNode) || isClusterNode(graphNode)) return;
+      if (!isNeutralinoRuntime() || !Neutralino.os?.open) {
+        alert("Opening original files is available only in the desktop app.");
+        return;
+      }
+      const sourcePath = await getGraphNodeOriginalSourcePath(graphNode);
+      if (sourcePath) await Neutralino.os.open(sourcePath);
+    };
+
+    const revealFilesystemPathInExplorer = async (filePath) => {
+      if (!filePath || !isNeutralinoRuntime()) {
+        throw new Error("No file path is available to reveal.");
+      }
+      if (typeof NL_OS !== "undefined" && NL_OS === "Windows" && Neutralino.os?.execCommand) {
+        const windowsPath = filePath.replace(/"/g, "").replace(/\//g, "\\");
+        await Neutralino.os.execCommand(`explorer.exe /select,"${windowsPath}"`);
+        return;
+      }
+      if (Neutralino.os?.open) {
+        const normalized = filePath.replace(/\\/g, "/");
+        const folderPath = normalized.includes("/") ? normalized.slice(0, normalized.lastIndexOf("/")) : normalized;
+        await Neutralino.os.open(folderPath);
+        return;
+      }
+      throw new Error("No supported reveal command is available.");
+    };
+
+    const revealGraphNodeOriginalFile = async (graphNode) => {
+      if (!graphNode || isTagNode(graphNode) || isClusterNode(graphNode)) return;
+      if (!isNeutralinoRuntime()) {
+        alert("Revealing original files is available only in the desktop app.");
+        return;
+      }
+      const sourcePath = await getGraphNodeOriginalSourcePath(graphNode);
+      if (sourcePath) await revealFilesystemPathInExplorer(sourcePath);
     };
 
     const getVisibleFileNodes = () => nodes.filter((graphNode) => !isTagNode(graphNode) && !isClusterNode(graphNode));
@@ -3972,6 +4063,9 @@
       openFileBtn,
       openDefaultAppBtn,
       revealFileBtn,
+      openOriginalInNewTabBtn,
+      openOriginalDefaultAppBtn,
+      revealOriginalFileBtn,
       revealTreeViewBtn,
       renameFileBtn,
       copySubmenu,
@@ -4028,9 +4122,14 @@
     const positionContextMenu = (event) => {
       const bounds = graphViewCanvas.getBoundingClientRect();
       const menuWidth = contextMenu.offsetWidth || 230;
-      const menuHeight = contextMenu.offsetHeight || 280;
+      const statusLineSafeArea = 48;
+      const safeMenuBottom = Math.min(bounds.height, Math.max(8, window.innerHeight - bounds.top - statusLineSafeArea));
+      const safeMenuHeight = Math.max(120, safeMenuBottom - 16);
+      contextMenu.style.maxHeight = `${safeMenuHeight}px`;
+      contextMenu.style.overflowY = "auto";
+      const menuHeight = Math.min(contextMenu.offsetHeight || 280, safeMenuHeight);
       const left = Math.max(8, Math.min(event.clientX - bounds.left, Math.max(8, bounds.width - menuWidth - 8)));
-      const top = Math.max(8, Math.min(event.clientY - bounds.top, Math.max(8, bounds.height - menuHeight - 8)));
+      const top = Math.max(8, Math.min(event.clientY - bounds.top, Math.max(8, safeMenuBottom - menuHeight - 8)));
       contextMenu.style.left = `${left}px`;
       contextMenu.style.top = `${top}px`;
       positionContextSubmenus();
@@ -4077,7 +4176,17 @@
       const isCluster = isClusterNode(d);
       const isFileNode = !isTag && !isCluster;
       const keepSavedMode = isKeepSavedGraphMode(activeTab);
-      [openFileBtn, openDefaultAppBtn, revealFileBtn, revealTreeViewBtn, copySubmenu, exportSubmenu].forEach((item) => item.classList.toggle("hidden", !isFileNode));
+      [
+        openFileBtn,
+        openDefaultAppBtn,
+        revealFileBtn,
+        openOriginalInNewTabBtn,
+        openOriginalDefaultAppBtn,
+        revealOriginalFileBtn,
+        revealTreeViewBtn,
+        copySubmenu,
+        exportSubmenu
+      ].forEach((item) => item.classList.toggle("hidden", !isFileNode));
       showGraphSubmenu.classList.toggle("hidden", !(isFileNode || isCluster));
       [localGraphBtn, fullLocalGraphBtn, fullNetworkBtn].forEach((item) => item.classList.toggle("hidden", !isFileNode));
       expandedClusterGraphBtn.classList.toggle("hidden", !isCluster);
@@ -4274,6 +4383,45 @@
       } catch (error) {
         console.error("Failed to reveal file:", error);
         alert("Unable to reveal this file in the file explorer.");
+      }
+    });
+
+    openOriginalInNewTabBtn.addEventListener("click", async (event) => {
+      event.stopPropagation();
+      if (!contextTargetNode) return;
+      const targetNode = contextTargetNode;
+      hideContextMenu();
+      try {
+        await openGraphNodeOriginalFileInNewTab(targetNode);
+      } catch (error) {
+        console.error("Failed to open original graph node file in a new tab:", error);
+        alert("Unable to open this node's original file in a new tab.");
+      }
+    });
+
+    openOriginalDefaultAppBtn.addEventListener("click", async (event) => {
+      event.stopPropagation();
+      if (!contextTargetNode) return;
+      const targetNode = contextTargetNode;
+      hideContextMenu();
+      try {
+        await openGraphNodeOriginalFileWithDefaultApp(targetNode);
+      } catch (error) {
+        console.error("Failed to open original graph node file with default app:", error);
+        alert("Unable to open this node's original file with the default app.");
+      }
+    });
+
+    revealOriginalFileBtn.addEventListener("click", async (event) => {
+      event.stopPropagation();
+      if (!contextTargetNode) return;
+      const targetNode = contextTargetNode;
+      hideContextMenu();
+      try {
+        await revealGraphNodeOriginalFile(targetNode);
+      } catch (error) {
+        console.error("Failed to reveal original graph node file:", error);
+        alert("Unable to reveal this node's original file.");
       }
     });
 

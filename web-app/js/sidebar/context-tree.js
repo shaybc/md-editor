@@ -1337,17 +1337,29 @@
       CONTEXT_MENU_ACTIONS.openWithDefaultApp.icon,
       "Ask the operating system to open this file with its configured default application."
     );
-    const openOriginalFileBtn = createFileContextMenuButton(
-      CONTEXT_MENU_ACTIONS.openOriginalFile?.label || "Open original file",
-      CONTEXT_MENU_ACTIONS.openOriginalFile?.icon || "bi bi-box-arrow-up-right",
-      "Open the original source file referenced by this Markdown node with the default system application."
-    );
-    openOriginalFileBtn.classList.add("sidebar-open-original-file");
     const revealFileBtn = createFileContextMenuButton(
       CONTEXT_MENU_ACTIONS.revealInFileExplorer.label,
       CONTEXT_MENU_ACTIONS.revealInFileExplorer.icon,
       "Open the file's folder in the system file explorer and select this file when supported."
     );
+    const openOriginalInNewTabBtn = createFileContextMenuButton(
+      CONTEXT_MENU_ACTIONS.openOriginalInNewTab?.label || "Open original in a new tab",
+      CONTEXT_MENU_ACTIONS.openOriginalInNewTab?.icon || "bi bi-box-arrow-up-right",
+      "Open the original source file referenced by this Markdown node in a new editor tab."
+    );
+    openOriginalInNewTabBtn.classList.add("sidebar-open-original-file");
+    const openOriginalDefaultAppBtn = createFileContextMenuButton(
+      CONTEXT_MENU_ACTIONS.openOriginalWithDefaultApp?.label || "Open original in default app",
+      CONTEXT_MENU_ACTIONS.openOriginalWithDefaultApp?.icon || "bi bi-window",
+      "Open the original source file referenced by this Markdown node with the default system application."
+    );
+    openOriginalDefaultAppBtn.classList.add("sidebar-open-original-file");
+    const revealOriginalFileBtn = createFileContextMenuButton(
+      CONTEXT_MENU_ACTIONS.revealOriginalInFileExplorer?.label || "Reveal original in file explorer",
+      CONTEXT_MENU_ACTIONS.revealOriginalInFileExplorer?.icon || "bi bi-folder2-open",
+      "Open the original source file's folder in the system file explorer and select it when supported."
+    );
+    revealOriginalFileBtn.classList.add("sidebar-open-original-file");
     const showFullGraphBtn = createFileContextMenuButton(
       CONTEXT_MENU_ACTIONS.showFullGraph?.label || "Show full graph",
       CONTEXT_MENU_ACTIONS.showFullGraph?.icon || CONTEXT_MENU_ACTIONS.showFullNetwork?.icon || "bi bi-diagram-3",
@@ -1457,8 +1469,10 @@
       separator,
       openFileBtn,
       openDefaultAppBtn,
-      openOriginalFileBtn,
       revealFileBtn,
+      openOriginalInNewTabBtn,
+      openOriginalDefaultAppBtn,
+      revealOriginalFileBtn,
       showFullGraphBtn,
       renameFileBtn,
       tagsSubmenu,
@@ -1529,16 +1543,42 @@
       }
     });
 
-    openOriginalFileBtn.addEventListener("click", async (event) => {
+    openOriginalInNewTabBtn.addEventListener("click", async (event) => {
       event.stopPropagation();
       const target = sidebarContextTarget;
       hideSidebarFileContextMenu();
       if (!target) return;
       try {
-        await openSidebarOriginalFile(target);
+        await openSidebarOriginalFileInNewTab(target);
       } catch (error) {
-        console.error("Failed to open original sidebar file:", error);
-        alert("Unable to open this node's original file.");
+        console.error("Failed to open original sidebar file in a new tab:", error);
+        alert("Unable to open this node's original file in a new tab.");
+      }
+    });
+
+    openOriginalDefaultAppBtn.addEventListener("click", async (event) => {
+      event.stopPropagation();
+      const target = sidebarContextTarget;
+      hideSidebarFileContextMenu();
+      if (!target) return;
+      try {
+        await openSidebarOriginalFileWithDefaultApp(target);
+      } catch (error) {
+        console.error("Failed to open original sidebar file with default app:", error);
+        alert("Unable to open this node's original file with the default app.");
+      }
+    });
+
+    revealOriginalFileBtn.addEventListener("click", async (event) => {
+      event.stopPropagation();
+      const target = sidebarContextTarget;
+      hideSidebarFileContextMenu();
+      if (!target) return;
+      try {
+        await revealSidebarOriginalFile(target);
+      } catch (error) {
+        console.error("Failed to reveal original sidebar file:", error);
+        alert("Unable to reveal this node's original file.");
       }
     });
 
@@ -2240,20 +2280,80 @@
     await showOriginalExportCompleteDialog("Exported 1 original file.", destinationFolder);
   }
 
-  async function openSidebarOriginalFile(node) {
+  async function getSidebarOriginalSourcePath(node) {
     if (!node || node.kind !== "file") return;
-    if (!isNeutralinoRuntime() || !Neutralino.os?.open) {
-      alert("Opening original files is available only in the desktop app.");
-      return;
-    }
-
     const markdown = await readSidebarNodeContent(node);
     const sourcePath = getSourceFilePathFromMarkdown(markdown);
     if (!sourcePath) {
       alert("This file does not have a source_file frontmatter field.");
       return;
     }
+    return sourcePath;
+  }
+
+  async function openSidebarOriginalFileInNewTab(node) {
+    if (!node || node.kind !== "file") return;
+    if (!isNeutralinoRuntime() || !Neutralino.filesystem?.readFile) {
+      alert("Opening original files is available only in the desktop app.");
+      return;
+    }
+
+    const sourcePath = await getSidebarOriginalSourcePath(node);
+    if (!sourcePath) return;
+    const sourceFile = {
+      name: getFileName(sourcePath),
+      path: sourcePath
+    };
+    const existingTab = findTabForSourceFile(sourceFile);
+    if (existingTab) {
+      switchTab(existingTab.id);
+      pinTemporaryTab(existingTab.id);
+      return existingTab;
+    }
+    const sourceContent = await Neutralino.filesystem.readFile(sourcePath);
+    return openSidebarFileInPermanentTab(normalizeEditorContent(sourceContent), getFileName(sourcePath), sourceFile);
+  }
+
+  async function openSidebarOriginalFileWithDefaultApp(node) {
+    if (!node || node.kind !== "file") return;
+    if (!isNeutralinoRuntime() || !Neutralino.os?.open) {
+      alert("Opening original files is available only in the desktop app.");
+      return;
+    }
+
+    const sourcePath = await getSidebarOriginalSourcePath(node);
+    if (!sourcePath) return;
     await Neutralino.os.open(sourcePath);
+  }
+
+  async function revealSidebarOriginalFile(node) {
+    if (!node || node.kind !== "file") return;
+    if (!isNeutralinoRuntime()) {
+      alert("Revealing original files is available only in the desktop app.");
+      return;
+    }
+
+    const sourcePath = await getSidebarOriginalSourcePath(node);
+    if (!sourcePath) return;
+    await revealFilesystemPathInExplorer(sourcePath);
+  }
+
+  async function revealFilesystemPathInExplorer(filePath) {
+    if (!filePath || !isNeutralinoRuntime()) {
+      throw new Error("No file path is available to reveal.");
+    }
+    if (typeof NL_OS !== "undefined" && NL_OS === "Windows" && Neutralino.os?.execCommand) {
+      const windowsPath = filePath.replace(/"/g, "").replace(/\//g, "\\");
+      await Neutralino.os.execCommand(`explorer.exe /select,"${windowsPath}"`);
+      return;
+    }
+    if (Neutralino.os?.open) {
+      const normalized = filePath.replace(/\\/g, "/");
+      const folderPath = normalized.includes("/") ? normalized.slice(0, normalized.lastIndexOf("/")) : normalized;
+      await Neutralino.os.open(folderPath);
+      return;
+    }
+    throw new Error("No supported reveal command is available.");
   }
 
   async function revealSidebarOriginalFolder(node) {
@@ -2564,11 +2664,11 @@
     const tagsSubmenu = menu.querySelector(".tags-context-submenu");
     const tagsSubmenuPanel = menu.querySelector(".tags-context-submenu-panel");
     const showFullGraphBtn = menu.querySelector(".sidebar-show-full-graph");
-    const openOriginalFileBtn = menu.querySelector(".sidebar-open-original-file");
+    const openOriginalFileBtns = menu.querySelectorAll(".sidebar-open-original-file");
     const exportOriginalNodeBtn = menu.querySelector(".sidebar-export-original-node");
     const canManageTags = isMarkdownPath(node.name || node.path || node.fullPath || "");
     if (showFullGraphBtn) showFullGraphBtn.classList.toggle("hidden", !canManageTags);
-    if (openOriginalFileBtn) openOriginalFileBtn.classList.toggle("hidden", !canManageTags);
+    openOriginalFileBtns.forEach((button) => button.classList.toggle("hidden", !canManageTags));
     if (exportOriginalNodeBtn) exportOriginalNodeBtn.classList.toggle("hidden", !canManageTags);
     if (tagsSubmenu) tagsSubmenu.classList.toggle("hidden", !canManageTags);
     if (canManageTags) {

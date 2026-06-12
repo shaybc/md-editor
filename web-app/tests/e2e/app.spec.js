@@ -2852,7 +2852,7 @@ test("sidebar file context menu exports original source file for that node", asy
   await expect.poll(() => page.evaluate(() => window.__openedFolders)).toEqual(["C:/temp/sub_project"]);
 });
 
-test("sidebar file context menu opens original source file", async ({ page }) => {
+test("sidebar file context menu opens original source file in default app", async ({ page }) => {
   await page.addInitScript(() => {
     window.NL_VERSION = "test";
     window.NL_OS = "Windows";
@@ -2897,7 +2897,19 @@ test("sidebar file context menu opens original source file", async ({ page }) =>
     clientX: 150,
     clientY: 160
   });
-  await page.locator(".sidebar-file-context-menu:not(.hidden) .graph-context-menu-item", { hasText: "Open original file" }).evaluate((button) => button.click());
+  const menu = page.locator(".sidebar-file-context-menu:not(.hidden)");
+  await expect.poll(() => menu.evaluate((contextMenu) => Array.from(contextMenu.children)
+    .filter((child) => child.matches("button.graph-context-menu-item:not(.hidden)"))
+    .slice(0, 6)
+    .map((button) => button.querySelector(".graph-context-menu-item-label")?.textContent?.trim()))).toEqual([
+      "Open in a new tab",
+      "Open in default app",
+      "Reveal in file explorer",
+      "Open original in a new tab",
+      "Open original in default app",
+      "Reveal original in file explorer"
+    ]);
+  await menu.locator(".graph-context-menu-item", { hasText: "Open original in default app" }).evaluate((button) => button.click());
 
   await expect.poll(() => page.evaluate(() => window.__openedPaths)).toEqual([
     "C:/workspace/my_project/client/api/aboutApi.js"
