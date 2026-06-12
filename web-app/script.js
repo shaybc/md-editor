@@ -38,6 +38,12 @@ document.addEventListener("DOMContentLoaded", function () {
   const editorSelectionHighlights = document.getElementById("editor-selection-highlights");
   const editorSyntaxHighlight = document.getElementById("editor-syntax-highlight");
   const markdownPreview = document.getElementById("markdown-preview");
+  const appHeader = document.querySelector(".app-header");
+  const headerFolderIdentity = document.getElementById("header-folder-identity");
+  const headerFolderNameButton = document.getElementById("header-folder-name");
+  const headerFolderPathButton = document.getElementById("header-folder-path");
+  const headerBrandLeft = document.getElementById("header-brand-left");
+  const headerBrandRight = document.getElementById("header-brand-right");
   const themeToggle = document.getElementById("theme-toggle");
   const restoreDefaultsButtons = document.querySelectorAll(".restore-defaults-button");
   const importFromFileButtons = document.querySelectorAll("#import-from-file");
@@ -3829,6 +3835,42 @@ Markdown content is processed client-side in your browser and sanitized before p
     });
   }
 
+  function updateHeaderFolderIdentity() {
+    if (!appHeader || !headerFolderIdentity || !headerFolderNameButton || !headerFolderPathButton) return;
+    const hasFolder = Boolean(activeFolderName && activeFolderName !== "Graph View" && (isFolderOpen || activeFolderPath || activeFolderHandle));
+    const folderPath = activeFolderPath || "";
+    appHeader.classList.toggle("has-open-folder", hasFolder);
+    headerFolderIdentity.setAttribute("aria-hidden", hasFolder ? "false" : "true");
+    headerFolderNameButton.textContent = hasFolder ? activeFolderName : "";
+    headerFolderNameButton.title = folderPath || (hasFolder ? activeFolderName : "");
+    headerFolderNameButton.disabled = !folderPath;
+    headerFolderPathButton.textContent = folderPath;
+    headerFolderPathButton.title = folderPath;
+    headerFolderPathButton.disabled = !folderPath;
+    headerFolderPathButton.classList.toggle("is-empty", !folderPath);
+    headerBrandLeft?.setAttribute("aria-hidden", hasFolder ? "true" : "false");
+    headerBrandRight?.setAttribute("aria-hidden", hasFolder ? "false" : "true");
+    headerBrandLeft?.querySelectorAll("a").forEach((link) => {
+      link.tabIndex = hasFolder ? -1 : 0;
+    });
+    headerBrandRight?.querySelectorAll("a").forEach((link) => {
+      link.tabIndex = hasFolder ? 0 : -1;
+    });
+  }
+
+  async function openActiveFolderInExplorer() {
+    if (!activeFolderPath || typeof Neutralino === "undefined" || !Neutralino.os?.open) return;
+    try {
+      await Neutralino.os.open(activeFolderPath);
+    } catch (error) {
+      console.error("Unable to open active folder in Explorer:", error);
+      alert("Unable to open this folder: " + (error?.message || error));
+    }
+  }
+
+  headerFolderNameButton?.addEventListener("click", openActiveFolderInExplorer);
+  headerFolderPathButton?.addEventListener("click", openActiveFolderInExplorer);
+
   function closeFolderTree() {
     hideLinkAutocomplete();
     folderMarkdownFiles = [];
@@ -3853,6 +3895,7 @@ Markdown content is processed client-side in your browser and sanitized before p
     updateFolderStatusLine();
     updateCloseFolderButtons();
     updateFolderTreeToolbarState();
+    updateHeaderFolderIdentity();
   }
 
   function getFolderTreeStats(nodes) {
@@ -3878,6 +3921,7 @@ Markdown content is processed client-side in your browser and sanitized before p
 
   function renderFolderLoadingState(message = "Loading folder...") {
     if (!folderTreeRoot) return;
+    updateHeaderFolderIdentity();
     folderTreeRoot.setAttribute("aria-busy", "true");
     folderTreeRoot.innerHTML = "";
     const loadingState = document.createElement("div");
@@ -3905,6 +3949,7 @@ Markdown content is processed client-side in your browser and sanitized before p
 
   function renderFolderTree(nodes, options = {}) {
     isFolderOpen = true;
+    updateHeaderFolderIdentity();
     folderTreeRoot.removeAttribute("aria-busy");
     if (!options.preserveNodes) {
       currentFolderTreeNodes = nodes || [];
@@ -3928,6 +3973,7 @@ Markdown content is processed client-side in your browser and sanitized before p
       updateFolderStatusLine();
       updateCloseFolderButtons();
       updateFolderTreeToolbarState();
+      updateHeaderFolderIdentity();
       return;
     }
 
@@ -3938,6 +3984,7 @@ Markdown content is processed client-side in your browser and sanitized before p
     updateCloseFolderButtons();
     updateFolderTreeToolbarState();
     updateFolderStatusLine();
+    updateHeaderFolderIdentity();
     syncFolderTreeSelectionToActiveTab({ scroll: false });
     renderLinkAutocomplete();
     if (!options.skipTagRefresh) {

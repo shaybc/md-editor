@@ -6162,6 +6162,48 @@ test("share URL restores markdown content on reload", async ({ page, context }) 
   expect(sharedErrors).toEqual([]);
 });
 
+test("open folder shows clickable folder identity in the header", async ({ page }) => {
+  await page.addInitScript(() => {
+    window.NL_VERSION = "test";
+    window.NL_OS = "Windows";
+    window.__openedFolders = [];
+    window.Neutralino = {
+      filesystem: {
+        readDirectory: async (path) => {
+          if (path === "C:/Users/shayg/Downloads/generated_md/flink_java_converter") {
+            return [{ entry: "README.md", type: "FILE" }];
+          }
+          return [];
+        },
+        readFile: async () => "# Readme"
+      },
+      os: {
+        showFolderDialog: async () => "C:/Users/shayg/Downloads/generated_md/flink_java_converter",
+        open: async (path) => {
+          window.__openedFolders.push(path);
+        }
+      }
+    };
+  });
+  await openApp(page);
+
+  await page.locator("#import-from-folder").click();
+
+  await expect(page.locator(".app-header")).toHaveClass(/has-open-folder/);
+  await expect(page.locator("#header-folder-name")).toHaveText("flink_java_converter");
+  await expect(page.locator("#header-folder-path")).toHaveText("C:/Users/shayg/Downloads/generated_md/flink_java_converter");
+  await expect(page.locator("#header-brand-right")).toHaveAttribute("aria-hidden", "false");
+  await expect(page.locator("#header-brand-left")).toHaveAttribute("aria-hidden", "true");
+
+  await page.locator("#header-folder-name").click();
+  await page.locator("#header-folder-path").click();
+
+  await expect.poll(() => page.evaluate(() => window.__openedFolders)).toEqual([
+    "C:/Users/shayg/Downloads/generated_md/flink_java_converter",
+    "C:/Users/shayg/Downloads/generated_md/flink_java_converter"
+  ]);
+});
+
 test("open folder uses the native directory picker when the browser exposes it", async ({ page }) => {
   await page.addInitScript(() => {
     window.__directoryPickerCalled = false;

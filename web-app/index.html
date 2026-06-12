@@ -300,10 +300,16 @@
                         <div id="mobile-menu-overlay"></div>
                     </div>
 
-                    <h1 class="h4 mb-0 me-2">MD-Editor</h1>
-                    <a href="https://github.com/shaybc/md-editor" class="github-link" title="View on GitHub" target="_blank" rel="noopener noreferrer">
-                        <i class="bi bi-github"></i>
-                    </a>
+                    <div id="header-folder-identity" class="header-folder-identity" aria-hidden="true">
+                        <button id="header-folder-name" class="header-folder-name" type="button"></button>
+                        <button id="header-folder-path" class="header-folder-path" type="button"></button>
+                    </div>
+                    <div id="header-brand-left" class="header-brand header-brand-left">
+                        <h1 class="h4 mb-0 me-2">MD-Editor</h1>
+                        <a href="https://github.com/shaybc/md-editor" class="github-link" title="View on GitHub" target="_blank" rel="noopener noreferrer">
+                            <i class="bi bi-github"></i>
+                        </a>
+                    </div>
                 </div>
 
                 <!-- Center section: View Mode Buttons -->
@@ -327,6 +333,12 @@
 
                 <!-- Right section: Sync toggle -->
                 <div class="header-right d-flex align-items-center gap-2">
+                    <div id="header-brand-right" class="header-brand header-brand-right" aria-hidden="true">
+                        <h1 class="h4 mb-0 me-2">MD-Editor</h1>
+                        <a href="https://github.com/shaybc/md-editor" class="github-link" title="View on GitHub" target="_blank" rel="noopener noreferrer" tabindex="-1">
+                            <i class="bi bi-github"></i>
+                        </a>
+                    </div>
                     <button id="toggle-sync" class="tool-button header-sync-toggle sync-toggle-button sync-enabled border-primary" type="button" title="Toggle Sync Scrolling" aria-label="Toggle sync scrolling">
                         <i class="bi bi-link"></i> <span>Sync Off</span>
                     </button>

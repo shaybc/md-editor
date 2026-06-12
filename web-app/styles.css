@@ -3440,7 +3440,6 @@ a:focus {
   align-items: center;
   justify-content: center;
   transition: transform 0.2s ease, color 0.2s ease;
-  margin-right: 2rem;
 }
 
 .github-link:hover {
@@ -3464,11 +3463,117 @@ a:focus {
 .header-left {
   flex: 1;
   justify-content: flex-start;
+  min-width: 0;
 }
 
 .header-right {
   flex: 1;
   justify-content: flex-end;
+  min-width: 0;
+}
+
+.header-brand {
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
+  white-space: nowrap;
+  transition: opacity 0.18s ease, transform 0.18s ease, max-width 0.18s ease, margin 0.18s ease;
+}
+
+.header-brand-left {
+  max-width: 220px;
+  opacity: 1;
+  transform: translateX(0);
+  overflow: hidden;
+}
+
+.header-brand-right {
+  max-width: 0;
+  opacity: 0;
+  transform: translateX(-12px);
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.app-header.has-open-folder .header-brand-left {
+  max-width: 0;
+  opacity: 0;
+  transform: translateX(12px);
+  margin-left: 0 !important;
+  margin-right: 0 !important;
+  pointer-events: none;
+}
+
+.app-header.has-open-folder .header-brand-right {
+  max-width: 240px;
+  opacity: 1;
+  transform: translateX(0);
+  pointer-events: auto;
+}
+
+.header-brand-right .github-link {
+  margin-right: 0;
+}
+
+.header-folder-identity {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  min-width: 0;
+  max-width: 0;
+  opacity: 0;
+  transform: translateX(-10px);
+  overflow: hidden;
+  pointer-events: none;
+  transition: opacity 0.18s ease, transform 0.18s ease, max-width 0.18s ease, margin 0.18s ease;
+}
+
+.app-header.has-open-folder .header-folder-identity {
+  max-width: min(44vw, 720px);
+  margin-left: 0.75rem;
+  opacity: 1;
+  transform: translateX(0);
+  pointer-events: auto;
+}
+
+.header-folder-name,
+.header-folder-path {
+  max-width: min(44vw, 720px);
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--text-color);
+  text-align: left;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: pointer;
+}
+
+.header-folder-name {
+  font-size: 1.25rem;
+  font-weight: 700;
+  line-height: 1.1;
+}
+
+.header-folder-path {
+  margin-top: 0.2rem;
+  color: var(--muted-text);
+  font-size: 0.8rem;
+  line-height: 1.15;
+}
+
+.header-folder-name:hover,
+.header-folder-path:hover,
+.header-folder-name:focus-visible,
+.header-folder-path:focus-visible {
+  color: var(--accent-color);
+  text-decoration: underline;
+  outline: none;
+}
+
+.header-folder-path.is-empty {
+  display: none;
 }
 
 .header-sync-toggle {
@@ -3479,6 +3584,20 @@ a:focus {
 @media (max-width: 420px) {
   .header-sync-toggle span {
     display: none;
+  }
+}
+
+@media (max-width: 767px) {
+  .app-header.has-open-folder .header-folder-identity,
+  .header-folder-name,
+  .header-folder-path {
+    max-width: 52vw;
+  }
+
+  .app-header.has-open-folder .header-brand-right {
+    max-width: 0;
+    opacity: 0;
+    pointer-events: none;
   }
 }
 
