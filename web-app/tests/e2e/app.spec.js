@@ -922,6 +922,56 @@ test("code converter ignores backdrop clicks", async ({ page }) => {
   await expect(modal).toBeHidden();
 });
 
+test("code converter remembers source and destination folder choices", async ({ page }) => {
+  await page.addInitScript(() => {
+    window.__folderDialogCalls = [];
+    const folderSelections = [
+      "C:/src/first",
+      "C:/src/second",
+      "C:/vault/first",
+      "C:/vault/second"
+    ];
+    window.Neutralino = {
+      os: {
+        showFolderDialog: async (title, options) => {
+          window.__folderDialogCalls.push({ title, options: options || null });
+          return folderSelections.shift();
+        }
+      }
+    };
+  });
+  await openApp(page);
+
+  await page.locator("#desktopActionMenu").click();
+  await page.locator(".open-code-converter-dialog").first().click();
+  await page.locator("#code-converter-source-browse").click();
+  await expect(page.locator("#code-converter-source-root")).toHaveValue("C:/src/first");
+  await page.locator("#code-converter-source-browse").click();
+  await expect(page.locator("#code-converter-source-root")).toHaveValue("C:/src/second");
+
+  await page.locator("#code-converter-destination-browse").click();
+  await expect(page.locator("#code-converter-destination-root")).toHaveValue("C:/vault/first");
+  await page.locator("#code-converter-destination-browse").click();
+  await expect(page.locator("#code-converter-destination-root")).toHaveValue("C:/vault/second");
+
+  await expect.poll(() => page.evaluate(() => window.__folderDialogCalls)).toEqual([
+    { title: "Select source code root folder", options: null },
+    { title: "Select source code root folder", options: { defaultPath: "C:/src/first" } },
+    { title: "Select destination Markdown root folder", options: null },
+    { title: "Select destination Markdown root folder", options: { defaultPath: "C:/vault/first" } }
+  ]);
+  await expect.poll(() => page.evaluate(() => {
+    const state = JSON.parse(localStorage.getItem("markdownViewerGlobalState") || "{}");
+    return {
+      destination: state.codeConverterDestinationRoot,
+      source: state.codeConverterSourceRoot
+    };
+  })).toEqual({
+    destination: "C:/vault/second",
+    source: "C:/src/second"
+  });
+});
+
 test("java converter resolves jar from neutralino working directory", async ({ page }) => {
   await page.addInitScript(() => {
     window.NL_CWD = "C:/GitHub/shaybc/md-editor";

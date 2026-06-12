@@ -2005,6 +2005,8 @@ document.addEventListener("DOMContentLoaded", function () {
     confirmOpenManyGraphNodes: true,
     confirmResetState: true,
     contextMenuTooltipDelayMs: DEFAULT_CONTEXT_MENU_TOOLTIP_DELAY_MS,
+    codeConverterDestinationRoot: "",
+    codeConverterSourceRoot: "",
     graphAutoClusterLargeMapsEnabled: false,
     graphAutoClusterThreshold: DEFAULT_GRAPH_AUTO_CLUSTER_THRESHOLD,
     graphLargeMapHoverDimOtherNodes: false,
@@ -3360,6 +3362,25 @@ Markdown content is processed client-side in your browser and sanitized before p
     if (codeConverterFinishButton && !codeConverterFinishButton.hidden) codeConverterFinishButton.disabled = !!isRunning;
   }
 
+  function getSavedCodeConverterFolder(fieldName) {
+    return normalizeLocalPath(loadGlobalState()[fieldName]);
+  }
+
+  function setSavedCodeConverterFolder(fieldName, folderPath) {
+    const normalizedPath = normalizeLocalPath(folderPath);
+    saveGlobalState({ [fieldName]: normalizedPath });
+    return normalizedPath;
+  }
+
+  function hydrateCodeConverterFolderInputs() {
+    if (codeConverterSourceRootInput && !codeConverterSourceRootInput.value.trim()) {
+      codeConverterSourceRootInput.value = getSavedCodeConverterFolder("codeConverterSourceRoot");
+    }
+    if (codeConverterDestinationRootInput && !codeConverterDestinationRootInput.value.trim()) {
+      codeConverterDestinationRootInput.value = getSavedCodeConverterFolder("codeConverterDestinationRoot");
+    }
+  }
+
   function showCodeConverterDialog() {
     if (!codeConverterModal) return;
     setCodeConverterStatus("");
@@ -3367,6 +3388,7 @@ Markdown content is processed client-side in your browser and sanitized before p
     setCodeConverterConsoleExpanded(false);
     setCodeConverterCompleteState(false);
     setCodeConverterRunningState(false);
+    hydrateCodeConverterFolderInputs();
     updateCodeConverterLanguageSupport();
     codeConverterModal.style.display = "flex";
     codeConverterSourceRootInput?.focus();
@@ -3377,15 +3399,16 @@ Markdown content is processed client-side in your browser and sanitized before p
     codeConverterModal.style.display = "none";
   }
 
-  async function browseCodeConverterFolder(input, title) {
+  async function browseCodeConverterFolder(input, title, stateFieldName) {
     if (!input) return;
     if (typeof Neutralino === "undefined" || !Neutralino.os?.showFolderDialog) {
       alert("Code conversion requires the desktop app so folders can be selected from disk.");
       return;
     }
     try {
-      const selectedPath = await Neutralino.os.showFolderDialog(title);
-      if (selectedPath) input.value = selectedPath;
+      const defaultPath = normalizeLocalPath(input.value) || getSavedCodeConverterFolder(stateFieldName);
+      const selectedPath = await Neutralino.os.showFolderDialog(title, defaultPath ? { defaultPath } : undefined);
+      if (selectedPath) input.value = setSavedCodeConverterFolder(stateFieldName, selectedPath);
     } catch (error) {
       console.warn("Failed to choose code converter folder:", error);
       setCodeConverterStatus("Unable to choose that folder.");
@@ -4858,13 +4881,13 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
 
   if (codeConverterSourceBrowseButton) {
     codeConverterSourceBrowseButton.addEventListener("click", function() {
-      browseCodeConverterFolder(codeConverterSourceRootInput, "Select source code root folder");
+      browseCodeConverterFolder(codeConverterSourceRootInput, "Select source code root folder", "codeConverterSourceRoot");
     });
   }
 
   if (codeConverterDestinationBrowseButton) {
     codeConverterDestinationBrowseButton.addEventListener("click", function() {
-      browseCodeConverterFolder(codeConverterDestinationRootInput, "Select destination Markdown root folder");
+      browseCodeConverterFolder(codeConverterDestinationRootInput, "Select destination Markdown root folder", "codeConverterDestinationRoot");
     });
   }
 
