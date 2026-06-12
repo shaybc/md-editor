@@ -77,6 +77,8 @@ test("code converter generates C# dependency markdown", () => {
     assert.match(markdown, /## Package\s+App/);
     assert.match(markdown, /App\/Service\.cs/);
     assert.match(markdown, /Lib\/Helper\.cs/);
+    assert.match(markdown, /\[Service\.cs\]\(Service\.cs\.md\) \(App\/Service\.cs\)/);
+    assert.match(markdown, /\[Helper\.cs\]\(\.\.\/Lib\/Helper\.cs\.md\) \(Lib\/Helper\.cs\)/);
     assert.match(markdown, /### Run/);
     assert.match(markdown, /public int Run\(Service service\)/);
     assert.match(markdown, /### Name/);

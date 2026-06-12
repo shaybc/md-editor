@@ -27,14 +27,25 @@
 
   function createGraphTargetLookup(nodeIndex) {
     const sourceIndex = nodeIndex instanceof Map ? nodeIndex : new Map();
-    const suffixMatchesByBasename = new Map();
-    sourceIndex.forEach((_path, id) => {
-      const basename = normalizeGraphNodeName(String(id || "").split("/").pop() || "");
-      if (!basename) return;
-      if (!suffixMatchesByBasename.has(basename)) suffixMatchesByBasename.set(basename, []);
-      suffixMatchesByBasename.get(basename).push(id);
-    });
-    return { nodeIndex: sourceIndex, suffixMatchesByBasename };
+    return { nodeIndex: sourceIndex };
+  }
+
+  function normalizeGraphReferencePath(path) {
+    const normalizedParts = [];
+    String(path || "")
+      .replace(/\\/g, "/")
+      .replace(/^\/+/, "")
+      .split("/")
+      .forEach((part) => {
+        if (!part || part === ".") return;
+        if (part === "..") {
+          normalizedParts.pop();
+          return;
+        }
+        normalizedParts.push(part);
+      });
+
+    return normalizedParts.join("/");
   }
 
   function resolveGraphTargetId(reference, sourcePath, nodeIndex) {
@@ -49,22 +60,13 @@
       .replace(/^\/+/, "")
       .replace(/\\/g, "/");
 
-    const sourceDir = (sourcePath || "").split("/").slice(0, -1).join("/");
-    const relativeCandidate = normalizeGraphNodeName(sourceDir ? `${sourceDir}/${cleanedRef}` : cleanedRef);
+    const sourceDir = String(sourcePath || "").replace(/\\/g, "/").split("/").slice(0, -1).join("/");
+    const relativeCandidate = normalizeGraphNodeName(normalizeGraphReferencePath(sourceDir ? `${sourceDir}/${cleanedRef}` : cleanedRef));
     if (sourceIndex.has(relativeCandidate)) return relativeCandidate;
 
-    const directCandidate = normalizeGraphNodeName(cleanedRef);
+    const directCandidate = normalizeGraphNodeName(normalizeGraphReferencePath(cleanedRef));
     if (sourceIndex.has(directCandidate)) return directCandidate;
 
-    const basenameCandidate = normalizeGraphNodeName(cleanedRef.split("/").pop() || "");
-    if (!basenameCandidate) return null;
-
-    const indexedMatches = nodeIndex?.suffixMatchesByBasename?.get(basenameCandidate);
-    const suffixMatches = indexedMatches || Array.from(sourceIndex.keys()).filter((id) =>
-      id === basenameCandidate || id.endsWith(`/${basenameCandidate}`)
-    );
-
-    if (suffixMatches.length === 1) return suffixMatches[0];
     return null;
   }
 

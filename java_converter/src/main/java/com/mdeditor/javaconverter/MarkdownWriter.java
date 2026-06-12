@@ -70,7 +70,9 @@ final class MarkdownWriter {
     } else {
       for (Path dependency : dependencies) {
         Path relativeDependency = root.relativize(dependency);
-        lines.add("- " + markdownLink(outputFile, dependency) + " (" + toMarkdownPath(relativeDependency) + ")");
+        Path dependencyOutputFile = outputFileFor(dependency);
+        lines.add("- " + markdownLink(outputFile, dependencyOutputFile, dependency.getFileName().toString())
+            + " (" + toMarkdownPath(relativeDependency) + ")");
       }
     }
 
@@ -134,7 +136,16 @@ final class MarkdownWriter {
     }
   }
 
+  private Path outputFileFor(Path sourceFile) {
+    Path relativeSource = root.relativize(sourceFile);
+    return vault.resolve(relativeSource.toString() + ".md");
+  }
+
   private static String markdownLink(Path fromFile, Path toFile) {
+    return markdownLink(fromFile, toFile, toMarkdownPath(toFile));
+  }
+
+  private static String markdownLink(Path fromFile, Path toFile, String label) {
     Path relative;
     try {
       relative = fromFile.getParent().relativize(toFile);
@@ -142,7 +153,7 @@ final class MarkdownWriter {
       relative = toFile;
     }
     String href = encodeUriPath(toMarkdownPath(relative));
-    return "[" + toMarkdownPath(toFile) + "](" + href + ")";
+    return "[" + label + "](" + href + ")";
   }
 
   private static String encodeUriPath(String path) {

@@ -305,6 +305,9 @@ class JavaConverterIntegrationTest {
 
   private static void assertDependency(String markdown, String relativeSource) {
     assertTrue(markdown.contains("(" + relativeSource + ")"), "Missing dependency " + relativeSource + "\n" + markdown);
+    String fileName = Path.of(relativeSource).getFileName().toString();
+    assertTrue(markdown.contains("[" + fileName + "]") && markdown.contains(fileName + ".md) (" + relativeSource + ")"),
+        "Dependency should link to generated Markdown for " + relativeSource + "\n" + markdown);
   }
 
   private static void write(Path root, String relative, String content) throws IOException {

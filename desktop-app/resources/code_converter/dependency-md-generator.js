@@ -428,10 +428,15 @@ function findDependencies(file, sourceRoot, indexes) {
   return new Set();
 }
 
-function markdownLink(fromFile, toFile) {
+function markdownLink(fromFile, toFile, label = toMarkdownPath(toFile)) {
   const rel = path.relative(path.dirname(fromFile), toFile) || path.basename(toFile);
   const href = encodeURI(toMarkdownPath(rel));
-  return `[${toMarkdownPath(toFile)}](${href})`;
+  return `[${label}](${href})`;
+}
+
+function getMarkdownOutputFile(sourceRoot, destinationRoot, sourceFile) {
+  const relativeSource = path.relative(sourceRoot, sourceFile);
+  return path.join(destinationRoot, `${relativeSource}.md`);
 }
 
 function sha256File(file) {
@@ -705,7 +710,7 @@ function writeMarkdown(sourceRoot, destinationRoot, sourceFile, dependencies, op
   const relativeSource = path.relative(sourceRoot, sourceFile);
   const parsed = path.parse(relativeSource);
   const outputDir = path.join(destinationRoot, parsed.dir);
-  const outputFile = path.join(outputDir, `${parsed.base}.md`);
+  const outputFile = getMarkdownOutputFile(sourceRoot, destinationRoot, sourceFile);
   const rawContent = fs.readFileSync(sourceFile, "utf8");
   const ext = path.extname(sourceFile);
   const entity = getEntityInfo(rawContent, ext, sourceRoot, sourceFile);
@@ -737,7 +742,8 @@ function writeMarkdown(sourceRoot, destinationRoot, sourceFile, dependencies, op
   } else {
     for (const dependency of sortedDependencies) {
       const relativeDependency = toMarkdownPath(path.relative(sourceRoot, dependency));
-      lines.push(`- ${markdownLink(outputFile, dependency)} (${relativeDependency})`);
+      const dependencyOutputFile = getMarkdownOutputFile(sourceRoot, destinationRoot, dependency);
+      lines.push(`- ${markdownLink(outputFile, dependencyOutputFile, path.basename(dependency))} (${relativeDependency})`);
     }
   }
 
