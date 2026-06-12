@@ -3315,12 +3315,31 @@ Markdown content is processed client-side in your browser and sanitized before p
     return `${basePath}/resources/code_converter/dependency-md-generator.js`;
   }
 
-  function getJavaConverterJarPath() {
+  async function canAccessLocalPath(path) {
+    if (!path || typeof Neutralino === "undefined" || !Neutralino.filesystem?.getStats) return false;
+    try {
+      await Neutralino.filesystem.getStats(path);
+      return true;
+    } catch (_error) {
+      return false;
+    }
+  }
+
+  async function getJavaConverterJarPath() {
     const basePath = normalizeLocalPath(getNeutralinoGlobalValue("NL_PATH"));
     const cwdPath = normalizeLocalPath(getNeutralinoGlobalValue("NL_CWD"));
     const projectRoot = (basePath || cwdPath).replace(/\/desktop-app$/i, "");
-    if (!projectRoot) return "java_converter/target/java_converter.jar";
-    return `${projectRoot}/java_converter/target/java_converter.jar`;
+    const candidates = [
+      projectRoot ? `${projectRoot}/java_converter/target/java_converter.jar` : "",
+      "java_converter/target/java_converter.jar",
+      "../java_converter/target/java_converter.jar"
+    ].filter(Boolean);
+
+    for (const candidate of candidates) {
+      if (await canAccessLocalPath(candidate)) return candidate;
+    }
+
+    return candidates[0] || "java_converter/target/java_converter.jar";
   }
 
   const CODE_CONVERTER_TYPES = Object.freeze({
@@ -3339,11 +3358,11 @@ Markdown content is processed client-side in your browser and sanitized before p
     java: {
       statusName: "Java converter",
       languageSupport: "Supported language: Java. Supported extension: .java.",
-      buildCommandParts: (sourceRoot, destinationRoot, switches) => [
+      buildCommandParts: async (sourceRoot, destinationRoot, switches) => [
         "java",
         "-Xmx8g",
         "-jar",
-        quoteCommandArg(getJavaConverterJarPath()),
+        quoteCommandArg(await getJavaConverterJarPath()),
         "--root",
         quoteCommandArg(sourceRoot),
         "--vault",
@@ -3406,12 +3425,10 @@ Markdown content is processed client-side in your browser and sanitized before p
       return;
     }
 
-    const command = getSelectedCodeConverterConfig()
-      .buildCommandParts(sourceRoot, destinationRoot, getCodeConverterSwitches())
-      .join(" ");
-
     try {
       const converterConfig = getSelectedCodeConverterConfig();
+      const command = (await converterConfig.buildCommandParts(sourceRoot, destinationRoot, getCodeConverterSwitches()))
+        .join(" ");
       if (codeConverterRunButton) codeConverterRunButton.disabled = true;
       setCodeConverterStatus(`Running ${converterConfig.statusName}...`);
       const result = await Neutralino.os.execCommand(command);

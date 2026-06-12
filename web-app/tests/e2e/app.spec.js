@@ -891,6 +891,41 @@ test("java converter resolves jar from neutralino working directory", async ({ p
   ]);
 });
 
+test("java converter falls back to sibling repo jar when runtime path globals are missing", async ({ page }) => {
+  await page.addInitScript(() => {
+    window.NL_VERSION = "test";
+    window.__execCommands = [];
+    const folderSelections = ["C:/src/project", "C:/docs/project-md"];
+    window.Neutralino = {
+      filesystem: {
+        getStats: async (path) => {
+          if (path === "../java_converter/target/java_converter.jar") return { type: "file" };
+          throw new Error("missing");
+        }
+      },
+      os: {
+        showFolderDialog: async () => folderSelections.shift(),
+        execCommand: async (command) => {
+          window.__execCommands.push(command);
+          return { exitCode: 0, stdOut: "Created 3 markdown file(s) in C:/docs/project-md" };
+        }
+      }
+    };
+  });
+  await openApp(page);
+
+  await page.locator("#desktopActionMenu").click();
+  await page.locator(".open-code-converter-dialog").first().click();
+  await page.locator("#code-converter-type").selectOption("java");
+  await page.locator("#code-converter-source-browse").click();
+  await page.locator("#code-converter-destination-browse").click();
+  await page.locator("#code-converter-run").click();
+
+  await expect.poll(() => page.evaluate(() => window.__execCommands)).toEqual([
+    'java -Xmx8g -jar "../java_converter/target/java_converter.jar" --root "C:/src/project" --vault "C:/docs/project-md" --include-methods --include-accessors --include-signatures --include-return-codes --include-exceptions --include-package'
+  ]);
+});
+
 test("toggles theme and persists it across reloads", async ({ page }) => {
   await openApp(page);
 
