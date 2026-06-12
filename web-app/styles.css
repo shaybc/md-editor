@@ -5421,6 +5421,24 @@ a:focus {
   border-color: var(--accent-color);
 }
 
+.rename-modal-input:disabled,
+.rename-modal-input[readonly]:disabled,
+.rename-modal-input.form-control:disabled {
+  background: var(--button-bg);
+  color: var(--disabled-text-color);
+  border-color: var(--border-color);
+  opacity: 1;
+  -webkit-text-fill-color: var(--disabled-text-color);
+}
+
+.rename-modal-input[readonly]:not(:disabled),
+.rename-modal-input.form-control[readonly]:not(:disabled) {
+  background: var(--bg-color);
+  color: var(--text-color);
+  opacity: 1;
+  -webkit-text-fill-color: var(--text-color);
+}
+
 .graph-copy-options-modal-box {
   width: min(92vw, 360px);
 }
