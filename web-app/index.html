@@ -616,61 +616,73 @@
         </div>
 
         <div id="code-converter-modal" class="reset-modal-overlay" role="dialog" aria-modal="true" aria-labelledby="code-converter-title" style="display:none;">
-          <div class="reset-modal-box">
-            <p id="code-converter-title" class="reset-modal-message">Convert Code to MD</p>
-            <p class="editor-link-modal-label">
-              Generates Markdown files from a source code folder. Each output file represents one source file and lists the local code dependencies it imports or references, so the generated folder can be opened as a dependency map in the graph view.
-            </p>
-            <label class="editor-link-modal-label" for="code-converter-type">Converter</label>
-            <select id="code-converter-type" class="rename-modal-input form-control mb-2">
-              <option value="builtin">Built-in Converter</option>
-              <option value="java">Java Converter</option>
-            </select>
-            <p id="code-converter-language-support" class="editor-link-modal-label">
-              Supported languages: JavaScript, TypeScript, Python, Java, and C#. Supported extensions: .js, .jsx, .mjs, .cjs, .ts, .tsx, .py, .java, and .cs.
-            </p>
-            <label class="editor-link-modal-label" for="code-converter-source-root">Source root folder</label>
-            <div class="input-group mb-2">
-              <input type="text" id="code-converter-source-root" class="rename-modal-input form-control" readonly placeholder="Choose source folder" />
-              <button class="reset-modal-btn" id="code-converter-source-browse" type="button">Browse</button>
+          <div id="code-converter-shell" class="code-converter-shell">
+            <div class="reset-modal-box code-converter-form">
+              <button id="code-converter-console-toggle" class="code-converter-console-toggle" type="button" aria-label="Show conversion console" aria-expanded="false" title="Show conversion console">
+                <i class="bi bi-layout-sidebar-inset-reverse" aria-hidden="true"></i>
+              </button>
+              <p id="code-converter-title" class="reset-modal-message">Convert Code to MD</p>
+              <p class="editor-link-modal-label">
+                Generates Markdown files from a source code folder. Each output file represents one source file and lists the local code dependencies it imports or references, so the generated folder can be opened as a dependency map in the graph view.
+              </p>
+              <label class="editor-link-modal-label" for="code-converter-type">Converter</label>
+              <select id="code-converter-type" class="rename-modal-input form-control mb-2">
+                <option value="builtin">Built-in Converter</option>
+                <option value="java">Java Converter</option>
+              </select>
+              <p id="code-converter-language-support" class="editor-link-modal-label">
+                Supported languages: JavaScript, TypeScript, Python, Java, and C#. Supported extensions: .js, .jsx, .mjs, .cjs, .ts, .tsx, .py, .java, and .cs.
+              </p>
+              <label class="editor-link-modal-label" for="code-converter-source-root">Source root folder</label>
+              <div class="input-group mb-2">
+                <input type="text" id="code-converter-source-root" class="rename-modal-input form-control" readonly placeholder="Choose source folder" />
+                <button class="reset-modal-btn" id="code-converter-source-browse" type="button">Browse</button>
+              </div>
+              <label class="editor-link-modal-label" for="code-converter-destination-root">Destination MD root folder</label>
+              <div class="input-group mb-2">
+                <input type="text" id="code-converter-destination-root" class="rename-modal-input form-control" readonly placeholder="Choose destination folder" />
+                <button class="reset-modal-btn" id="code-converter-destination-browse" type="button">Browse</button>
+              </div>
+              <div class="code-converter-options" role="group" aria-label="Code documentation options">
+                <p class="editor-link-modal-label mb-2">Documentation details</p>
+                <label class="editor-image-mode-option" for="code-converter-include-methods">
+                  <input type="checkbox" id="code-converter-include-methods" checked />
+                  Methods and functions
+                </label>
+                <label class="editor-image-mode-option" for="code-converter-include-accessors">
+                  <input type="checkbox" id="code-converter-include-accessors" checked />
+                  Setters and getters
+                </label>
+                <label class="editor-image-mode-option" for="code-converter-include-signatures">
+                  <input type="checkbox" id="code-converter-include-signatures" checked />
+                  Full method and function signatures
+                </label>
+                <label class="editor-image-mode-option" for="code-converter-include-return-codes">
+                  <input type="checkbox" id="code-converter-include-return-codes" checked />
+                  Return codes and return values
+                </label>
+                <label class="editor-image-mode-option" for="code-converter-include-exceptions">
+                  <input type="checkbox" id="code-converter-include-exceptions" checked />
+                  Exceptions and thrown errors
+                </label>
+                <label class="editor-image-mode-option" for="code-converter-include-package">
+                  <input type="checkbox" id="code-converter-include-package" checked />
+                  Package or module name
+                </label>
+              </div>
+              <p id="code-converter-status" class="editor-link-modal-label" role="status" aria-live="polite"></p>
+              <div class="reset-modal-actions">
+                <button class="reset-modal-btn reset-modal-cancel" id="code-converter-cancel" type="button">Cancel</button>
+                <button class="reset-modal-btn" id="code-converter-run" type="button">Convert</button>
+                <button class="reset-modal-btn code-converter-finish-button" id="code-converter-finish" type="button" hidden>Finish</button>
+              </div>
             </div>
-            <label class="editor-link-modal-label" for="code-converter-destination-root">Destination MD root folder</label>
-            <div class="input-group mb-2">
-              <input type="text" id="code-converter-destination-root" class="rename-modal-input form-control" readonly placeholder="Choose destination folder" />
-              <button class="reset-modal-btn" id="code-converter-destination-browse" type="button">Browse</button>
-            </div>
-            <div class="code-converter-options" role="group" aria-label="Code documentation options">
-              <p class="editor-link-modal-label mb-2">Documentation details</p>
-              <label class="editor-image-mode-option" for="code-converter-include-methods">
-                <input type="checkbox" id="code-converter-include-methods" checked />
-                Methods and functions
-              </label>
-              <label class="editor-image-mode-option" for="code-converter-include-accessors">
-                <input type="checkbox" id="code-converter-include-accessors" checked />
-                Setters and getters
-              </label>
-              <label class="editor-image-mode-option" for="code-converter-include-signatures">
-                <input type="checkbox" id="code-converter-include-signatures" checked />
-                Full method and function signatures
-              </label>
-              <label class="editor-image-mode-option" for="code-converter-include-return-codes">
-                <input type="checkbox" id="code-converter-include-return-codes" checked />
-                Return codes and return values
-              </label>
-              <label class="editor-image-mode-option" for="code-converter-include-exceptions">
-                <input type="checkbox" id="code-converter-include-exceptions" checked />
-                Exceptions and thrown errors
-              </label>
-              <label class="editor-image-mode-option" for="code-converter-include-package">
-                <input type="checkbox" id="code-converter-include-package" checked />
-                Package or module name
-              </label>
-            </div>
-            <p id="code-converter-status" class="editor-link-modal-label" role="status" aria-live="polite"></p>
-            <div class="reset-modal-actions">
-              <button class="reset-modal-btn reset-modal-cancel" id="code-converter-cancel" type="button">Cancel</button>
-              <button class="reset-modal-btn" id="code-converter-run" type="button">Convert</button>
-              <button class="reset-modal-btn code-converter-finish-button" id="code-converter-finish" type="button" hidden>Finish</button>
+            <div id="code-converter-console-panel" class="code-converter-console-panel" aria-hidden="true">
+              <div class="code-converter-console-header">
+                <span>Console</span>
+                <span id="code-converter-console-state">idle</span>
+              </div>
+              <pre id="code-converter-console-output" class="code-converter-console-output" aria-live="polite"></pre>
             </div>
           </div>
         </div>

@@ -303,6 +303,46 @@ class JavaConverterIntegrationTest {
     assertDependency(aMarkdown, "src/app/C.java");
   }
 
+  @Test
+  void resolvesMavenCompilerPropertiesBeforeCallingJavac() throws Exception {
+    Path project = temp.resolve("property-project");
+    Path vault = temp.resolve("property-vault");
+    write(project, "pom.xml", """
+        <project xmlns="http://maven.apache.org/POM/4.0.0">
+          <modelVersion>4.0.0</modelVersion>
+          <groupId>app</groupId>
+          <artifactId>property-project</artifactId>
+          <version>1.0.0</version>
+          <properties>
+            <target.java.version>17</target.java.version>
+          </properties>
+          <build>
+            <plugins>
+              <plugin>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <configuration>
+                  <source>${target.java.version}</source>
+                  <target>${target.java.version}</target>
+                </configuration>
+              </plugin>
+            </plugins>
+          </build>
+        </project>
+        """);
+    write(project, "src/main/java/app/Main.java", "package app; public class Main { Helper helper; }\n");
+    write(project, "src/main/java/app/Helper.java", "package app; public class Helper {}\n");
+
+    int exitCode = new CommandLine(new Main()).execute(
+        "--root", project.toString(),
+        "--vault", vault.toString()
+    );
+
+    assertEquals(0, exitCode);
+    String markdown = Files.readString(vault.resolve("src/main/java/app/Main.java.md"), StandardCharsets.UTF_8);
+    assertDependency(markdown, "src/main/java/app/Helper.java");
+    assertFalse(markdown.contains("${target.java.version}"));
+  }
+
   private static void assertDependency(String markdown, String relativeSource) {
     assertTrue(markdown.contains("(" + relativeSource + ")"), "Missing dependency " + relativeSource + "\n" + markdown);
     String fileName = Path.of(relativeSource).getFileName().toString();

@@ -1922,6 +1922,11 @@ document.addEventListener("DOMContentLoaded", function () {
   const codeConverterRunButton = document.getElementById("code-converter-run");
   const codeConverterFinishButton = document.getElementById("code-converter-finish");
   const codeConverterStatus = document.getElementById("code-converter-status");
+  const codeConverterShell = document.getElementById("code-converter-shell");
+  const codeConverterConsoleToggle = document.getElementById("code-converter-console-toggle");
+  const codeConverterConsolePanel = document.getElementById("code-converter-console-panel");
+  const codeConverterConsoleOutput = document.getElementById("code-converter-console-output");
+  const codeConverterConsoleState = document.getElementById("code-converter-console-state");
   const desktopOpenGraphButtons = document.querySelectorAll(".open-graph-view");
   const exitAppButtons = document.querySelectorAll(".exit-app-button");
   const graphViewCanvas = document.getElementById("graph-view-canvas");
@@ -3264,6 +3269,43 @@ Markdown content is processed client-side in your browser and sanitized before p
     if (codeConverterStatus) codeConverterStatus.textContent = message || "";
   }
 
+  function setCodeConverterConsoleExpanded(isExpanded) {
+    codeConverterShell?.classList.toggle("console-open", !!isExpanded);
+    if (codeConverterConsolePanel) codeConverterConsolePanel.setAttribute("aria-hidden", isExpanded ? "false" : "true");
+    if (codeConverterConsoleToggle) {
+      codeConverterConsoleToggle.setAttribute("aria-expanded", isExpanded ? "true" : "false");
+      codeConverterConsoleToggle.setAttribute("aria-label", isExpanded ? "Hide conversion console" : "Show conversion console");
+      codeConverterConsoleToggle.title = isExpanded ? "Hide conversion console" : "Show conversion console";
+    }
+  }
+
+  function setCodeConverterConsoleState(state) {
+    if (codeConverterConsoleState) codeConverterConsoleState.textContent = state || "idle";
+  }
+
+  function clearCodeConverterConsole() {
+    if (codeConverterConsoleOutput) codeConverterConsoleOutput.textContent = "";
+    setCodeConverterConsoleState("idle");
+  }
+
+  function appendCodeConverterConsole(text) {
+    if (!codeConverterConsoleOutput || !text) return;
+    const current = codeConverterConsoleOutput.textContent || "";
+    codeConverterConsoleOutput.textContent = current ? `${current}\n${text}` : text;
+    codeConverterConsoleOutput.scrollTop = codeConverterConsoleOutput.scrollHeight;
+  }
+
+  function getCodeConverterResultText(result) {
+    return [
+      result?.stdOut || result?.stdout || "",
+      result?.stdErr || result?.stderr || "",
+      result?.output || ""
+    ]
+      .map((value) => String(value || "").trim())
+      .filter(Boolean)
+      .join("\n");
+  }
+
   function setCodeConverterCompleteState(isComplete) {
     if (codeConverterCancelButton) codeConverterCancelButton.hidden = !!isComplete;
     if (codeConverterRunButton) codeConverterRunButton.hidden = !!isComplete;
@@ -3273,6 +3315,8 @@ Markdown content is processed client-side in your browser and sanitized before p
   function showCodeConverterDialog() {
     if (!codeConverterModal) return;
     setCodeConverterStatus("");
+    clearCodeConverterConsole();
+    setCodeConverterConsoleExpanded(false);
     setCodeConverterCompleteState(false);
     updateCodeConverterLanguageSupport();
     codeConverterModal.style.display = "flex";
@@ -3430,20 +3474,29 @@ Markdown content is processed client-side in your browser and sanitized before p
       const command = (await converterConfig.buildCommandParts(sourceRoot, destinationRoot, getCodeConverterSwitches()))
         .join(" ");
       if (codeConverterRunButton) codeConverterRunButton.disabled = true;
+      clearCodeConverterConsole();
+      setCodeConverterConsoleExpanded(true);
+      setCodeConverterConsoleState("running");
+      appendCodeConverterConsole(`> ${command}`);
       setCodeConverterStatus(`Running ${converterConfig.statusName}...`);
       const result = await Neutralino.os.execCommand(command);
       const exitCode = Number(result?.exitCode ?? result?.code ?? 0);
+      const outputText = getCodeConverterResultText(result);
+      if (outputText) appendCodeConverterConsole(outputText);
       if (exitCode !== 0) {
-        const errorText = result?.stdErr || result?.stderr || result?.output || "The converter failed.";
-        setCodeConverterStatus(String(errorText).trim());
+        setCodeConverterConsoleState(`failed (${exitCode})`);
+        setCodeConverterStatus(`${converterConfig.statusName} failed. See console.`);
         return;
       }
-      const output = result?.stdOut || result?.stdout || result?.output || `Markdown files created in ${destinationRoot}.`;
-      setCodeConverterStatus(String(output).trim());
+      setCodeConverterConsoleState("complete");
+      setCodeConverterStatus(`Markdown files created in ${destinationRoot}.`);
       setCodeConverterCompleteState(true);
       codeConverterFinishButton?.focus();
     } catch (error) {
       console.error("Failed to run code converter:", error);
+      setCodeConverterConsoleExpanded(true);
+      setCodeConverterConsoleState("error");
+      appendCodeConverterConsole(error?.stack || error?.message || String(error));
       setCodeConverterStatus(getSelectedCodeConverterConfig().missingRuntimeMessage);
     } finally {
       if (codeConverterRunButton) codeConverterRunButton.disabled = false;
@@ -4769,6 +4822,12 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
   if (codeConverterTypeSelect) {
     codeConverterTypeSelect.addEventListener("change", updateCodeConverterLanguageSupport);
     updateCodeConverterLanguageSupport();
+  }
+
+  if (codeConverterConsoleToggle) {
+    codeConverterConsoleToggle.addEventListener("click", function() {
+      setCodeConverterConsoleExpanded(!codeConverterShell?.classList.contains("console-open"));
+    });
   }
 
   if (codeConverterCancelButton) {

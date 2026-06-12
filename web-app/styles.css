@@ -4525,6 +4525,102 @@ a:focus {
   background: color-mix(in srgb, var(--accent-color) 86%, #000);
 }
 
+.code-converter-shell {
+  display: flex;
+  align-items: stretch;
+  max-width: calc(100vw - 28px);
+  max-height: calc(100vh - 28px);
+}
+
+.code-converter-form {
+  position: relative;
+  width: 360px;
+  max-height: calc(100vh - 28px);
+  overflow-y: auto;
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+}
+
+.code-converter-console-toggle {
+  position: absolute;
+  top: 14px;
+  right: 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--disabled-text-color);
+  cursor: pointer;
+  transition: color 0.16s ease, border-color 0.16s ease, background-color 0.16s ease;
+}
+
+.code-converter-console-toggle:hover,
+.code-converter-console-toggle:focus-visible {
+  border-color: var(--border-color);
+  background: var(--button-hover);
+  color: var(--text-color);
+}
+
+.code-converter-console-panel {
+  width: 0;
+  min-width: 0;
+  max-width: min(520px, calc(100vw - 420px));
+  overflow: hidden;
+  border: 1px solid transparent;
+  border-left: 0;
+  border-radius: 0 10px 10px 0;
+  background: #05070a;
+  color: #c7d2df;
+  opacity: 0;
+  transform: translateX(-8px);
+  transition: width 0.28s ease, opacity 0.24s ease, transform 0.28s ease, border-color 0.28s ease;
+}
+
+.code-converter-shell.console-open .code-converter-console-panel {
+  width: min(520px, calc(100vw - 420px));
+  border-color: var(--border-color);
+  opacity: 1;
+  transform: translateX(0);
+}
+
+.code-converter-console-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.18);
+  background: #090d12;
+  color: #d7dee8;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0;
+}
+
+.code-converter-console-header span:last-child {
+  color: #8aa0b7;
+  font-weight: 600;
+}
+
+.code-converter-console-output {
+  width: min(520px, calc(100vw - 420px));
+  height: calc(100vh - 112px);
+  margin: 0;
+  padding: 14px;
+  overflow: auto;
+  background: #05070a;
+  color: #c7d2df;
+  font-family: "Cascadia Mono", "Consolas", "Courier New", monospace;
+  font-size: 12px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
 .code-converter-options {
   display: grid;
   gap: 8px;

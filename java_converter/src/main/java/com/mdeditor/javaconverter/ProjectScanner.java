@@ -11,8 +11,10 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
@@ -188,10 +190,11 @@ final class ProjectScanner {
     try {
       Document document = DocumentBuilderFactory.newInstance().newDocumentBuilder().parse(pom.toFile());
       document.getDocumentElement().normalize();
-      settings.release = firstText(document, "maven.compiler.release").orElse(settings.release);
-      settings.source = firstText(document, "maven.compiler.source").orElse(settings.source);
-      settings.target = firstText(document, "maven.compiler.target").orElse(settings.target);
-      settings.encoding = firstText(document, "project.build.sourceEncoding").orElse(settings.encoding);
+      Map<String, String> properties = readProperties(document);
+      settings.release = resolvedText(document, "maven.compiler.release", properties, pom, warnings).orElse(settings.release);
+      settings.source = resolvedText(document, "maven.compiler.source", properties, pom, warnings).orElse(settings.source);
+      settings.target = resolvedText(document, "maven.compiler.target", properties, pom, warnings).orElse(settings.target);
+      settings.encoding = resolvedText(document, "project.build.sourceEncoding", properties, pom, warnings).orElse(settings.encoding);
 
       NodeList plugins = document.getElementsByTagName("plugin");
       for (int i = 0; i < plugins.getLength(); i += 1) {
@@ -200,14 +203,63 @@ final class ProjectScanner {
         if (!artifactId.equals("maven-compiler-plugin")) {
           continue;
         }
-        settings.release = firstChildText(plugin, "release").orElse(settings.release);
-        settings.source = firstChildText(plugin, "source").orElse(settings.source);
-        settings.target = firstChildText(plugin, "target").orElse(settings.target);
-        settings.encoding = firstChildText(plugin, "encoding").orElse(settings.encoding);
+        settings.release = resolvedChildText(plugin, "release", properties, pom, warnings).orElse(settings.release);
+        settings.source = resolvedChildText(plugin, "source", properties, pom, warnings).orElse(settings.source);
+        settings.target = resolvedChildText(plugin, "target", properties, pom, warnings).orElse(settings.target);
+        settings.encoding = resolvedChildText(plugin, "encoding", properties, pom, warnings).orElse(settings.encoding);
       }
     } catch (Exception error) {
       warnings.add("Could not read compiler settings from " + pom + ": " + error.getMessage());
     }
+  }
+
+  private static Map<String, String> readProperties(Document document) {
+    Map<String, String> properties = new HashMap<>();
+    NodeList nodes = document.getElementsByTagName("properties");
+    if (nodes.getLength() == 0) {
+      return properties;
+    }
+
+    NodeList children = nodes.item(0).getChildNodes();
+    for (int i = 0; i < children.getLength(); i += 1) {
+      if (children.item(i) instanceof Element element) {
+        String value = element.getTextContent();
+        if (value != null && !value.trim().isEmpty()) {
+          properties.put(element.getTagName(), value.trim());
+        }
+      }
+    }
+    return properties;
+  }
+
+  private static Optional<String> resolvedText(Document document, String tag, Map<String, String> properties, Path pom, List<String> warnings) {
+    return firstText(document, tag).map(value -> resolveProperties(value, properties, pom, warnings));
+  }
+
+  private static Optional<String> resolvedChildText(Element element, String tag, Map<String, String> properties, Path pom, List<String> warnings) {
+    return firstChildText(element, tag).map(value -> resolveProperties(value, properties, pom, warnings));
+  }
+
+  private static String resolveProperties(String value, Map<String, String> properties, Path pom, List<String> warnings) {
+    String resolved = value;
+    for (int pass = 0; pass < 8; pass += 1) {
+      Matcher matcher = Pattern.compile("\\$\\{([^}]+)}").matcher(resolved);
+      StringBuffer buffer = new StringBuffer();
+      boolean changed = false;
+      while (matcher.find()) {
+        String replacement = properties.get(matcher.group(1));
+        if (replacement == null) {
+          warnings.add("Unresolved Maven property in compiler setting from " + pom + ": " + matcher.group(0));
+          continue;
+        }
+        matcher.appendReplacement(buffer, Matcher.quoteReplacement(replacement));
+        changed = true;
+      }
+      matcher.appendTail(buffer);
+      resolved = buffer.toString();
+      if (!changed) break;
+    }
+    return resolved.trim();
   }
 
   private static Optional<String> firstText(Document document, String tag) {

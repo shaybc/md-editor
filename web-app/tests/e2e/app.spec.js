@@ -830,7 +830,9 @@ test("code converter dialog browses folders and runs converter", async ({ page }
   await expect(page.locator("#code-converter-destination-root")).toHaveValue("C:/docs/project-md");
 
   await page.locator("#code-converter-run").click();
-  await expect(page.locator("#code-converter-status")).toHaveText("Created 3 markdown file(s) in C:/docs/project-md");
+  await expect(page.locator("#code-converter-status")).toHaveText("Markdown files created in C:/docs/project-md.");
+  await expect(page.locator("#code-converter-console-panel")).toHaveAttribute("aria-hidden", "false");
+  await expect(page.locator("#code-converter-console-output")).toContainText("Created 3 markdown file(s) in C:/docs/project-md");
   await expect(page.locator("#code-converter-cancel")).toBeHidden();
   await expect(page.locator("#code-converter-run")).toBeHidden();
   await expect(page.locator("#code-converter-finish")).toBeVisible();
@@ -854,7 +856,7 @@ test("code converter dialog browses folders and runs converter", async ({ page }
   await page.locator("#code-converter-source-browse").click();
   await page.locator("#code-converter-destination-browse").click();
   await page.locator("#code-converter-run").click();
-  await expect(page.locator("#code-converter-status")).toHaveText("Created 3 markdown file(s) in C:/docs/project-md");
+  await expect(page.locator("#code-converter-status")).toHaveText("Markdown files created in C:/docs/project-md.");
   await expect.poll(() => page.evaluate(() => window.__execCommands)).toEqual([
     'node "C:/GitHub/shaybc/md-editor/desktop-app/resources/code_converter/dependency-md-generator.js" "C:/src/project" "C:/docs/project-md" --include-methods --include-accessors --include-signatures --include-return-codes --include-exceptions --include-package',
     'java -Xmx8g -jar "C:/GitHub/shaybc/md-editor/java_converter/target/java_converter.jar" --root "C:/src/project" --vault "C:/docs/project-md" --include-methods --include-accessors --include-return-codes --include-exceptions --include-package'
