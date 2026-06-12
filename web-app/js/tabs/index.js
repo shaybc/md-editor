@@ -866,6 +866,10 @@
     return openSidebarFileInTab(content, title, sourceFile, { temporary: false });
   }
 
+  function getComparableTabSourcePath(path) {
+    return String(path || "").replace(/\\/g, "/").replace(/\/+/g, "/").toLowerCase();
+  }
+
   function findTabForSourceFile(sourceFile) {
     if (!sourceFile) return null;
 
@@ -877,10 +881,12 @@
     }
 
     if (sourceFile.path) {
+      const sourcePathKey = getComparableTabSourcePath(sourceFile.path);
       const pathMatch = tabs.find(function(tab) {
-        return tab.type !== "graph" && tab.sourceFilePath === sourceFile.path;
+        return tab.type !== "graph" && getComparableTabSourcePath(tab.sourceFilePath || "") === sourcePathKey;
       });
       if (pathMatch) return pathMatch;
+      return null;
     }
 
     const title = sourceFile.name ? getMarkdownTitleFromFileName(sourceFile.name) : null;
@@ -900,10 +906,12 @@
     }
 
     if (sourceFile.path) {
+      const sourcePathKey = getComparableTabSourcePath(sourceFile.path);
       const pathMatch = tabs.find(function(tab) {
-        return tab.type === "graph" && tab.sourceFilePath === sourceFile.path;
+        return tab.type === "graph" && getComparableTabSourcePath(tab.sourceFilePath || "") === sourcePathKey;
       });
       if (pathMatch) return pathMatch;
+      return null;
     }
 
     const title = sourceFile.name ? getGraphTitleFromFileName(sourceFile.name) : null;

@@ -2916,6 +2916,24 @@ test("sidebar file context menu opens original source file in default app", asyn
   ]);
 });
 
+test("sidebar file context menu opens original source in a separate tab after generated file is open", async ({ page }) => {
+  await openApp(page);
+
+  const existingTabTitle = await page.evaluate(() => {
+    const tabsModule = window.markdownViewerApp.modules.tabs;
+    tabsModule.openSidebarFileInPermanentTab("# About API", "aboutApi.js", {
+      name: "aboutApi.js.md",
+      path: "C:/vault/client/api/aboutApi.js.md"
+    });
+    return tabsModule.findTabForSourceFile({
+      name: "aboutApi.js",
+      path: "C:/workspace/my_project/client/api/aboutApi.js"
+    })?.title || "";
+  });
+
+  expect(existingTabTitle).toBe("");
+});
+
 test("sidebar folder context menu reveals original source folder", async ({ page }) => {
   await page.addInitScript(() => {
     window.NL_VERSION = "test";
