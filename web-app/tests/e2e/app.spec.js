@@ -5392,6 +5392,56 @@ test("keeps open folder graph views in sync with saved and deleted files", async
   await expect.poll(() => page.evaluate(() => window.__alerts)).toEqual([]);
 });
 
+test("tree reveal resolves duplicate filenames by full path", async ({ page }) => {
+  await page.addInitScript(() => {
+    window.NL_VERSION = "test";
+    window.NL_OS = "Windows";
+    window.Neutralino = {
+      os: {
+        showFolderDialog: async () => "C:/vault",
+        open: async () => {},
+        execCommand: async () => {}
+      },
+      filesystem: {
+        readDirectory: async (path) => {
+          const entries = {
+            "C:/vault": [
+              { entry: "hosts", type: "DIRECTORY" },
+              { entry: "scripts", type: "DIRECTORY" }
+            ],
+            "C:/vault/hosts": [
+              { entry: "index.ts.md", type: "FILE" }
+            ],
+            "C:/vault/scripts": [
+              { entry: "resolvers", type: "DIRECTORY" }
+            ],
+            "C:/vault/scripts/resolvers": [
+              { entry: "index.ts.md", type: "FILE" }
+            ]
+          };
+          return entries[path] || [];
+        },
+        getStats: async () => ({ modifiedAt: 1, createdAt: 1 }),
+        readFile: async (path) => `# ${path}`
+      }
+    };
+  });
+  await openApp(page);
+
+  await page.locator("#import-from-folder").click();
+
+  const selectedFullPath = await page.evaluate(() => {
+    const button = window.markdownViewerApp.modules.folderToolbar.findFolderTreeFileButtonForTab({
+      sourceFilePath: "C:/vault/scripts/resolvers/index.ts.md",
+      sourceFileName: "index.ts.md",
+      title: "index.ts.md"
+    });
+    return button?.dataset?.fullPath || "";
+  });
+
+  expect(selectedFullPath).toBe("C:/vault/scripts/resolvers/index.ts.md");
+});
+
 test("saves a new graph view through the desktop save dialog", async ({ page }) => {
   await page.addInitScript(() => {
     window.NL_VERSION = "5.0.0";

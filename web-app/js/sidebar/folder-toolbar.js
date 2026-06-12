@@ -373,17 +373,31 @@
     const candidates = getTabTreeFileCandidates(tab);
     if (!candidates.length) return null;
 
-    return Array.from(folderTreeRoot.querySelectorAll(".folder-tree-file")).find(function(button) {
+    const scoredButtons = Array.from(folderTreeRoot.querySelectorAll(".folder-tree-file")).map(function(button) {
       const buttonCandidates = [button.dataset.fullPath, button.dataset.path, button.dataset.name, button.textContent]
         .filter(Boolean)
         .map(getComparableFilePath);
 
-      return candidates.some(function(candidate) {
-        return buttonCandidates.some(function(buttonCandidate) {
-          return buttonCandidate === candidate || buttonCandidate.endsWith(`/${candidate}`) || candidate.endsWith(`/${buttonCandidate}`);
-        });
-      });
-    }) || null;
+      const score = candidates.reduce(function(bestScore, candidate) {
+        return Math.max(bestScore, buttonCandidates.reduce(function(bestButtonScore, buttonCandidate) {
+          if (!candidate || !buttonCandidate) return bestButtonScore;
+          if (buttonCandidate === candidate) return Math.max(bestButtonScore, 10000 + buttonCandidate.length);
+          if (buttonCandidate.endsWith(`/${candidate}`)) return Math.max(bestButtonScore, 5000 + candidate.length);
+          if (candidate.endsWith(`/${buttonCandidate}`)) return Math.max(bestButtonScore, 1000 + buttonCandidate.length);
+          return bestButtonScore;
+        }, 0));
+      }, 0);
+
+      return { button, score };
+    });
+
+    const bestMatch = scoredButtons.reduce(function(best, candidate) {
+      if (!candidate.score) return best;
+      if (!best || candidate.score > best.score) return candidate;
+      return best;
+    }, null);
+
+    return bestMatch?.button || null;
   }
 
   function syncFolderTreeSelectionToActiveTab(options = {}) {
