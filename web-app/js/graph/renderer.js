@@ -3914,14 +3914,26 @@
       if (action === "add" && typeof createTag === "function") createTag(normalizedTag);
 
       let changedFiles = false;
+      const changedSnapshotFiles = [];
       for (const tagNode of tagNodes) {
-        changedFiles = await updateGraphNodeTagContent(tagNode, normalizedTag, action, { deferGraphRefresh: true }) || changedFiles;
+        const changedThisFile = await updateGraphNodeTagContent(tagNode, normalizedTag, action, { deferGraphRefresh: true });
+        changedFiles = changedThisFile || changedFiles;
+        if (changedThisFile) {
+          const changedSnapshotFile = getSnapshotFileForNode(tagNode);
+          if (changedSnapshotFile) changedSnapshotFiles.push(changedSnapshotFile);
+        }
       }
 
+      if (changedSnapshotFiles.length) {
+        await rebuildOpenGraphSnapshotsAfterBatchTagChange(changedSnapshotFiles);
+      }
       const changedGroups = action === "add" ? ensureGraphTagGroup(normalizedTag) : false;
       if (!changedFiles && !changedGroups) return;
 
       const activeGraphTab = getActiveGraphTab();
+      saveTabsToStorage(tabs);
+      renderTabBar(tabs, activeTabId);
+      updateSaveCurrentFileButtons();
       await refreshFolderTagCounts();
       renderFilteredFolderTree();
       renderTagManagementList();

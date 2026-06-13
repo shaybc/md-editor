@@ -4553,6 +4553,18 @@ test("graph tags submenu can tag the full local graph", async ({ page }) => {
       clipboard: { writeText: async () => {} },
       os: { open: async () => {}, execCommand: async () => {} }
     };
+    const openMarkdownTab = {
+      id: "open_beta_tab_e2e",
+      title: "beta.md",
+      content: "# Beta\n\n[[gamma]]",
+      savedContent: "# Beta\n\n[[gamma]]",
+      sourceFileName: "beta.md",
+      sourceFilePath: "C:/vault/beta.md",
+      scrollPos: 0,
+      viewMode: "preview",
+      createdAt: Date.now(),
+      isTemporary: false
+    };
     const graphTab = {
       id: "full_local_tag_graph_e2e",
       title: "Full Local Tag Graph E2E",
@@ -4593,7 +4605,7 @@ test("graph tags submenu can tag the full local graph", async ({ page }) => {
       }
     };
     localStorage.setItem("markdownViewerGlobalState", JSON.stringify({ knownTags: ["full"], graphMagneticEnabled: true }));
-    localStorage.setItem("markdownViewerTabs", JSON.stringify([graphTab]));
+    localStorage.setItem("markdownViewerTabs", JSON.stringify([openMarkdownTab, graphTab]));
     localStorage.setItem("markdownViewerActiveTab", graphTab.id);
   });
 
@@ -4624,15 +4636,30 @@ test("graph tags submenu can tag the full local graph", async ({ page }) => {
     "C:/vault/gamma.md"
   ]);
   await expect.poll(() => page.evaluate(() => {
-    const graphTab = JSON.parse(localStorage.getItem("markdownViewerTabs") || "[]")[0];
+    const graphTab = JSON.parse(localStorage.getItem("markdownViewerTabs") || "[]")
+      .find((tab) => tab.id === "full_local_tag_graph_e2e");
     return graphTab.graphSnapshot.files.map((file) => ({ id: file.id, tags: file.tags }));
   })).toEqual([
-    { id: "alpha.md", tags: ["full"] },
-    { id: "beta.md", tags: ["full"] },
-    { id: "gamma.md", tags: ["full"] }
+    { id: "alpha", tags: ["full"] },
+    { id: "beta", tags: ["full"] },
+    { id: "gamma", tags: ["full"] }
   ]);
   await expect.poll(() => page.evaluate(() => {
-    const graphTab = JSON.parse(localStorage.getItem("markdownViewerTabs") || "[]")[0];
+    const betaTab = JSON.parse(localStorage.getItem("markdownViewerTabs") || "[]")
+      .find((tab) => tab.id === "open_beta_tab_e2e");
+    return betaTab && {
+      content: betaTab.content,
+      savedContent: betaTab.savedContent,
+      graphSyncedTags: betaTab.graphSyncedTags
+    };
+  })).toEqual({
+    content: "---\ntags: [full]\n---\n# Beta\n\n[[gamma]]",
+    savedContent: "---\ntags: [full]\n---\n# Beta\n\n[[gamma]]",
+    graphSyncedTags: ["full"]
+  });
+  await expect.poll(() => page.evaluate(() => {
+    const graphTab = JSON.parse(localStorage.getItem("markdownViewerTabs") || "[]")
+      .find((tab) => tab.id === "full_local_tag_graph_e2e");
     return (graphTab.graphViewConfig.groups || []).map((group) => ({
       id: group.id,
       query: group.query,
@@ -4741,10 +4768,10 @@ test("graph tags submenu can tag the full network", async ({ page }) => {
     const graphTab = JSON.parse(localStorage.getItem("markdownViewerTabs") || "[]")[0];
     return graphTab.graphSnapshot.files.map((file) => ({ id: file.id, tags: file.tags }));
   })).toEqual([
-    { id: "alpha.md", tags: ["network"] },
-    { id: "beta.md", tags: ["network"] },
-    { id: "gamma.md", tags: ["network"] },
-    { id: "delta.md", tags: [] }
+    { id: "alpha", tags: ["network"] },
+    { id: "beta", tags: ["network"] },
+    { id: "gamma", tags: ["network"] },
+    { id: "delta", tags: [] }
   ]);
   await expect.poll(() => page.evaluate(() => {
     const graphTab = JSON.parse(localStorage.getItem("markdownViewerTabs") || "[]")[0];
