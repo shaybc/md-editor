@@ -1416,6 +1416,72 @@ test("keeps editor line numbers in sync with typed content", async ({ page }) =>
   await expect(lineNumbers.nth(2)).toHaveText("3");
 });
 
+test("keeps soft-wrapped editor overlays within the textarea text area", async ({ page }) => {
+  await openApp(page);
+
+  const editor = page.locator("#markdown-editor");
+  const wrappedLine = "MD-Editor is a modern client-side Markdown workspace for writing, previewing, importing, organizing, and exporting Markdown documents. This welcome document appears when the app starts with no saved tabs and when all tabs are reset.";
+  await editor.fill(Array.from({ length: 40 }, () => wrappedLine).join("\n"));
+
+  const metrics = await page.evaluate(() => {
+    const textarea = document.querySelector("#markdown-editor");
+    const syntaxOverlay = document.querySelector("#editor-syntax-highlight");
+    const selectionOverlay = document.querySelector("#editor-selection-highlights");
+    const wrapper = textarea.parentElement;
+    const textareaStyle = window.getComputedStyle(textarea);
+    const syntaxStyle = window.getComputedStyle(syntaxOverlay);
+    const selectionStyle = window.getComputedStyle(selectionOverlay);
+    const borderWidth = (parseFloat(textareaStyle.borderLeftWidth) || 0)
+      + (parseFloat(textareaStyle.borderRightWidth) || 0);
+    const scrollbarWidth = Math.max(0, textarea.offsetWidth - textarea.clientWidth - borderWidth);
+    const overlayScrollbarWidth = parseFloat(window.getComputedStyle(wrapper).getPropertyValue("--editor-overlay-scrollbar-width")) || 0;
+    const textareaRect = textarea.getBoundingClientRect();
+    const syntaxRect = syntaxOverlay.getBoundingClientRect();
+
+    return {
+      scrollbarWidth,
+      overlayScrollbarWidth,
+      rightGap: textareaRect.right - syntaxRect.right,
+      syntaxOverflowWrap: syntaxStyle.overflowWrap,
+      syntaxWordBreak: syntaxStyle.wordBreak,
+      selectionOverflowWrap: selectionStyle.overflowWrap,
+      selectionWordBreak: selectionStyle.wordBreak
+    };
+  });
+
+  expect(Math.abs(metrics.overlayScrollbarWidth - metrics.scrollbarWidth)).toBeLessThanOrEqual(1);
+  expect(Math.abs(metrics.rightGap - metrics.scrollbarWidth)).toBeLessThanOrEqual(1);
+  expect(metrics.syntaxOverflowWrap).toBe("normal");
+  expect(metrics.syntaxWordBreak).toBe("normal");
+  expect(metrics.selectionOverflowWrap).toBe("normal");
+  expect(metrics.selectionWordBreak).toBe("normal");
+});
+
+test("keeps metric-changing markdown styles from shifting editor overlay text", async ({ page }) => {
+  await openApp(page);
+
+  const editor = page.locator("#markdown-editor");
+  await editor.fill("# Heading Overlay\n\nThis line has **strong words** and *emphasis words*.");
+
+  const metrics = await page.evaluate(() => {
+    const styledNodes = [
+      document.querySelector("#editor-syntax-highlight .editor-md-heading"),
+      document.querySelector("#editor-syntax-highlight .editor-md-strong"),
+      document.querySelector("#editor-syntax-highlight .editor-md-emphasis")
+    ];
+    return styledNodes.map((node) => {
+      const style = node ? window.getComputedStyle(node) : null;
+      return style ? { fontWeight: style.fontWeight, fontStyle: style.fontStyle } : null;
+    });
+  });
+
+  expect(metrics).toEqual([
+    { fontWeight: "400", fontStyle: "normal" },
+    { fontWeight: "400", fontStyle: "normal" },
+    { fontWeight: "400", fontStyle: "normal" }
+  ]);
+});
+
 test("updates document statistics and focused editor position", async ({ page }) => {
   await openApp(page);
 

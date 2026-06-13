@@ -64,6 +64,17 @@
       measure.style.width = `${markdownEditor.clientWidth}px`;
     }
 
+    function syncEditorOverlayMetrics() {
+      const wrapper = markdownEditor.parentElement;
+      if (!wrapper) return;
+
+      const computedStyle = window.getComputedStyle(markdownEditor);
+      const borderWidth = (parseFloat(computedStyle.borderLeftWidth) || 0)
+        + (parseFloat(computedStyle.borderRightWidth) || 0);
+      const scrollbarWidth = Math.max(0, markdownEditor.offsetWidth - markdownEditor.clientWidth - borderWidth);
+      wrapper.style.setProperty("--editor-overlay-scrollbar-width", `${scrollbarWidth}px`);
+    }
+
     function getEditorWrappedLineHeights(lines, computedStyle, lineHeight) {
       const measure = getEditorLineMeasure();
       const paddingTop = parseFloat(computedStyle.paddingTop) || 0;
@@ -100,6 +111,8 @@
     }
 
     function updateEditorLineNumbers() {
+      syncEditorOverlayMetrics();
+
       const lines = markdownEditor.value.split("\n");
       const activeLine = getCurrentEditorLine();
       const computedStyle = window.getComputedStyle(markdownEditor);
@@ -189,6 +202,7 @@
       getCurrentEditorLine,
       getEditorLineHeight,
       scheduleEditorLineNumbersUpdate,
+      syncEditorOverlayMetrics,
       syncEditorCurrentLineScroll,
       syncEditorLineNumberScroll,
       syncEditorSelectionHighlightsScroll,

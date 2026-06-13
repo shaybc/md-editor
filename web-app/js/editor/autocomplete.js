@@ -396,7 +396,7 @@
         "boxSizing", "width", "height", "fontFamily", "fontSize", "fontWeight", "fontStyle",
         "letterSpacing", "textTransform", "wordSpacing", "textIndent", "lineHeight", "paddingTop",
         "paddingRight", "paddingBottom", "paddingLeft", "borderTopWidth", "borderRightWidth",
-        "borderBottomWidth", "borderLeftWidth", "whiteSpace", "overflowWrap", "tabSize"
+        "borderBottomWidth", "borderLeftWidth", "whiteSpace", "overflowWrap", "wordBreak", "tabSize"
       ];
       properties.forEach((property) => { mirror.style[property] = computedStyle[property]; });
       mirror.style.position = "absolute";
@@ -404,8 +404,6 @@
       mirror.style.overflow = "hidden";
       mirror.style.top = "0";
       mirror.style.left = "-9999px";
-      mirror.style.whiteSpace = "pre-wrap";
-      mirror.style.overflowWrap = "break-word";
       mirror.textContent = textarea.value.slice(0, position);
       const marker = document.createElement("span");
       marker.textContent = textarea.value.slice(position, position + 1) || "\u200b";

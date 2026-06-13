@@ -445,6 +445,7 @@ body {
   flex: 1 1 auto;
   min-width: 0;
   height: 100%;
+  --editor-overlay-scrollbar-width: 0px;
   background-color: var(--editor-bg);
   transition: background-color 0.3s ease;
 }
@@ -467,7 +468,7 @@ body {
 
 .editor-selection-highlights {
   position: absolute;
-  inset: 0;
+  inset: 0 var(--editor-overlay-scrollbar-width) 0 0;
   z-index: 0;
   overflow: hidden;
   color: transparent;
@@ -476,7 +477,8 @@ body {
   line-height: 1.5;
   padding: 10px 10px 10px 18px;
   white-space: pre-wrap;
-  overflow-wrap: break-word;
+  overflow-wrap: normal;
+  word-break: normal;
   pointer-events: none;
   transition: background-color 0.3s ease;
 }
@@ -513,7 +515,7 @@ body {
 
 .editor-syntax-highlight {
   position: absolute;
-  inset: 0;
+  inset: 0 var(--editor-overlay-scrollbar-width) 0 0;
   z-index: 1;
   margin: 0;
   border: none;
@@ -525,7 +527,8 @@ body {
   padding: 10px 10px 10px 18px;
   white-space: pre-wrap;
   overflow: hidden;
-  overflow-wrap: break-word;
+  overflow-wrap: normal;
+  word-break: normal;
   pointer-events: none;
   transition: color 0.3s ease;
 }
@@ -541,17 +544,14 @@ body {
 
 .editor-md-heading {
   color: var(--editor-syntax-heading);
-  font-weight: 700;
 }
 
 .editor-md-strong {
   color: var(--editor-syntax-strong);
-  font-weight: 700;
 }
 
 .editor-md-emphasis {
   color: var(--editor-syntax-emphasis);
-  font-style: italic;
 }
 
 .editor-md-code {
@@ -797,6 +797,7 @@ body {
 .textarea-caret-mirror {
   min-height: 0;
   resize: none;
+  word-break: normal;
 }
 
 .editor-line-measure {
@@ -809,7 +810,8 @@ body {
   visibility: hidden;
   resize: none;
   white-space: pre-wrap;
-  overflow-wrap: break-word;
+  overflow-wrap: normal;
+  word-break: normal;
   pointer-events: none;
 }
 
