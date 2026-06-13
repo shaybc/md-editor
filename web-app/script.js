@@ -627,6 +627,29 @@ document.addEventListener("DOMContentLoaded", function () {
     }
     editorFindReplaceStatus.textContent = `${editorFindCurrentIndex + 1} of ${editorFindMatches.length} matches`;
   }
+  function getEditorFindMatchScrollTop(match) {
+    const computedStyle = window.getComputedStyle(markdownEditor);
+    const parsedLineHeight = parseFloat(computedStyle.lineHeight);
+    const parsedFontSize = parseFloat(computedStyle.fontSize);
+    const lineHeight = Number.isNaN(parsedLineHeight)
+      ? (Number.isNaN(parsedFontSize) ? 21 : parsedFontSize * 1.5)
+      : parsedLineHeight;
+    const paddingTop = parseFloat(computedStyle.paddingTop) || 0;
+    const lineIndex = markdownEditor.value.slice(0, match.start).split("\n").length - 1;
+    return Math.max(0, paddingTop + (lineIndex * lineHeight));
+  }
+  function scrollEditorFindMatchIntoView(match) {
+    if (!match) return;
+    const targetTop = getEditorFindMatchScrollTop(match);
+    const visibleTop = markdownEditor.scrollTop;
+    const visibleBottom = visibleTop + markdownEditor.clientHeight;
+    const safeMargin = Math.min(96, Math.max(32, markdownEditor.clientHeight * 0.18));
+    const targetBottom = targetTop + safeMargin;
+    if (targetTop >= visibleTop + safeMargin && targetBottom <= visibleBottom - safeMargin) return;
+
+    markdownEditor.scrollTop = Math.max(0, targetTop - (markdownEditor.clientHeight / 2));
+    markdownEditor.dispatchEvent(new Event("scroll", { bubbles: true }));
+  }
   function selectEditorFindMatch(index) {
     if (!editorFindMatches.length) {
       editorFindCurrentIndex = -1;
@@ -638,7 +661,7 @@ document.addEventListener("DOMContentLoaded", function () {
     markdownEditor.focus();
     markdownEditor.selectionStart = match.start;
     markdownEditor.selectionEnd = match.end;
-    markdownEditor.scrollIntoView({ block: "nearest" });
+    scrollEditorFindMatchIntoView(match);
     updateEditorFindReplaceStatus();
   }
   function refreshEditorFindMatches(options = {}) {

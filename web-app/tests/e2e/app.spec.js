@@ -1646,6 +1646,35 @@ test("converts selected editor text from the formatting toolbar", async ({ page 
   await expect(editor).toHaveValue("gamma beta gamma");
 });
 
+test("find and replace navigation scrolls offscreen matches into view", async ({ page }) => {
+  await openApp(page);
+
+  const editor = page.locator("#markdown-editor");
+  const lines = Array.from({ length: 90 }, (_value, index) => (
+    index === 0 || index === 75 ? `target line ${index + 1}` : `plain line ${index + 1}`
+  ));
+  await editor.fill(lines.join("\n"));
+  await editor.evaluate((textarea) => {
+    textarea.focus();
+    textarea.selectionStart = 0;
+    textarea.selectionEnd = 0;
+    textarea.scrollTop = 0;
+  });
+
+  await page.locator(".editor-format-button[data-editor-format-action='find-replace']").evaluate((button) => button.click());
+  await expect(page.locator("#editor-find-replace-modal")).toBeVisible();
+  await page.locator("#editor-find-input").fill("target");
+  await expect(page.locator("#editor-find-replace-status")).toHaveText("1 of 2 matches");
+  await editor.evaluate((textarea) => {
+    textarea.scrollTop = 0;
+    textarea.dispatchEvent(new Event("scroll", { bubbles: true }));
+  });
+
+  await page.locator("#editor-find-next").click();
+  await expect(page.locator("#editor-find-replace-status")).toHaveText("2 of 2 matches");
+  await expect.poll(() => editor.evaluate((textarea) => textarea.scrollTop)).toBeGreaterThan(0);
+});
+
 test("mirrors editor markdown syntax in the highlight overlay", async ({ page }) => {
   await openApp(page);
 
