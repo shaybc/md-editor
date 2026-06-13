@@ -1,4 +1,4 @@
-# Configuration
+﻿# Configuration
 
 This page documents configuration files, persisted preferences, settings-screen options, and runtime UI options in **MD-Editor**.
 
@@ -320,7 +320,7 @@ Desktop runtime configuration is in `desktop-app/neutralino.config.json`.
 {
   "$schema": "https://raw.githubusercontent.com/neutralinojs/neutralinojs/main/schemas/neutralino.config.schema.json",
   "applicationId": "js.neutralino.sample",
-  "version": "7.5.0",
+  "version": "7.6.0",
   "defaultMode": "window",
   "port": 0,
   "documentRoot": "/resources/",

@@ -5,8 +5,10 @@
     const marked = deps.marked;
     const hljs = deps.hljs;
     const mermaid = deps.mermaid;
+    const getSyntaxHighlightStyleForLanguage = deps.getSyntaxHighlightStyleForLanguage || function() { return ""; };
 
     function initMermaid() {
+      if (!mermaid?.initialize) return;
       const currentTheme = document.documentElement.getAttribute("data-theme");
       const mermaidTheme = currentTheme === "dark" ? "dark" : "default";
 
@@ -27,14 +29,20 @@
         return `<div class="mermaid-container"><div class="mermaid" id="${uniqueId}">${code}</div></div>`;
       }
 
+      if (!hljs?.getLanguage || !hljs?.highlight) {
+        return `<pre><code>${escapeHtml(code)}</code></pre>`;
+      }
       const validLanguage = hljs.getLanguage(normalizedLanguage) ? normalizedLanguage : "plaintext";
       const highlightedCode = hljs.highlight(code, {
         language: validLanguage
       }).value;
-      return `<pre><code class="hljs ${validLanguage}">${highlightedCode}</code></pre>`;
+      const syntaxStyle = getSyntaxHighlightStyleForLanguage(validLanguage);
+      const styleAttribute = syntaxStyle ? ` style="${escapeHtml(syntaxStyle)}"` : "";
+      return `<pre><code class="hljs ${validLanguage}"${styleAttribute}>${highlightedCode}</code></pre>`;
     }
 
     function configureMarkedRenderer() {
+      if (!marked?.Renderer || !marked?.setOptions) return;
       const markedOptions = {
         gfm: true,
         breaks: false,
@@ -63,6 +71,14 @@
       }
 
       configureMarkedRenderer();
+    }
+
+    function escapeHtml(str) {
+      return String(str || "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;");
     }
 
     const api = {

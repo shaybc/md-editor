@@ -1,12 +1,19 @@
-# Release Notes
+﻿# Release Notes
 
 This page summarizes the tagged MD-Editor releases and the major user-facing features included in each version. It is based on the repository release tags and commit history.
 
 ## Current Main
 
-Changes available on `main` after `v7.5`:
+Changes available on `main` after `v7.6`:
 
 - No unreleased changes are currently documented.
+
+## v7.6 - June 14, 2026
+
+- Added a full-screen Settings screen with side tabs and search.
+- Added per-language syntax highlight color settings for editor and preview code tokens.
+- Updated settings workflows and tests for tabbed settings and syntax color preferences.
+- Updated About dialog and app metadata for the v7.6 release.
 
 ## v7.5 - June 13, 2026
 

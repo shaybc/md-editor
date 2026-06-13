@@ -7,17 +7,18 @@
   function updateViewModeButtons(mode) {
     const activeTab = getActiveTab();
     const graphActiveTab = !!(activeTab && activeTab.type === "graph");
-    const unsupportedActiveTab = isUnsupportedFileTab(activeTab);
-    const markdownActiveTab = !!(activeTab && activeTab.type !== "graph" && !unsupportedActiveTab);
+    const previewableActiveTab = isPreviewableDocumentTab(activeTab);
+    const editorOnlyActiveTab = !!(activeTab && activeTab.type !== "graph" && !previewableActiveTab);
 
     if (contentContainer) {
-      contentContainer.classList.toggle("markdown-tab-active", markdownActiveTab);
+      contentContainer.classList.toggle("markdown-tab-active", previewableActiveTab);
+      contentContainer.classList.toggle("editor-only-tab-active", editorOnlyActiveTab);
     }
 
     function updateButton(btn) {
       const btnMode = btn.getAttribute('data-mode');
       const isActive = btnMode === mode;
-      const isDisabled = graphActiveTab ? btnMode !== 'preview' : (unsupportedActiveTab && btnMode !== 'editor');
+      const isDisabled = graphActiveTab ? btnMode !== 'preview' : (editorOnlyActiveTab && btnMode !== 'editor');
       btn.classList.toggle('active', isActive);
       btn.setAttribute('aria-pressed', isActive ? 'true' : 'false');
       btn.disabled = isDisabled;
@@ -26,10 +27,10 @@
         if (graphActiveTab) {
           btn.title = `${btnMode === 'editor' ? 'Editor only' : 'Split view'} is unavailable for graph tabs`;
         } else {
-          btn.title = `${btnMode === 'split' ? 'Split view' : 'Preview only'} is unavailable for unsupported files`;
+          btn.title = `${btnMode === 'split' ? 'Split view' : 'Preview only'} is available only for Markdown and HTML files`;
         }
       } else if (btnMode === 'editor') {
-        btn.title = unsupportedActiveTab ? 'Editor only (required for unsupported files)' : 'Editor only';
+        btn.title = editorOnlyActiveTab ? 'Editor only (required for this file type)' : 'Editor only';
       } else if (btnMode === 'split') {
         btn.title = 'Split view';
       } else if (btnMode === 'preview') {

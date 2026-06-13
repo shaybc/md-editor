@@ -2,6 +2,7 @@
   window.registerMarkdownViewerRender = function registerMarkdownViewerRender(app, deps) {
     with (deps) {
   function processEmojis(element) {
+    if (!joypixels?.shortnameToUnicode) return;
     const walker = document.createTreeWalker(
       element,
       NodeFilter.SHOW_TEXT,
@@ -63,13 +64,21 @@
     updateEditorLineNumbers();
     try {
       const { frontmatter, frontmatterPrefix, body } = parseFrontmatter(markdownEditor.value);
-      const prefixHtml = frontmatterPrefix ? marked.parse(frontmatterPrefix) : '';
+      const parseMarkdown = marked?.parse
+        ? function(source) { return marked.parse(source); }
+        : function(source) { return `<pre>${escapeHtml(source)}</pre>`; };
+      const sanitizeHtml = DOMPurify?.sanitize
+        ? function(html) {
+            return DOMPurify.sanitize(html, {
+              ADD_TAGS: ['mjx-container'],
+              ADD_ATTR: ['id', 'class', 'style']
+            });
+          }
+        : function(html) { return html; };
+      const prefixHtml = frontmatterPrefix ? parseMarkdown(frontmatterPrefix) : '';
       const tableHtml = frontmatter ? renderFrontmatterTable(frontmatter) : '';
-      const html = prefixHtml + tableHtml + marked.parse(body);
-      const sanitizedHtml = DOMPurify.sanitize(html, {
-        ADD_TAGS: ['mjx-container'],
-        ADD_ATTR: ['id', 'class', 'style']
-      });
+      const html = prefixHtml + tableHtml + parseMarkdown(body);
+      const sanitizedHtml = sanitizeHtml(html);
       markdownPreview.innerHTML = sanitizedHtml;
       enhanceWikiLinks(markdownPreview);
       enhancePreviewMarkdownImages(markdownPreview);
@@ -82,7 +91,7 @@
 
       try {
         const mermaidNodes = markdownPreview.querySelectorAll('.mermaid');
-        if (mermaidNodes.length > 0) {
+        if (mermaidNodes.length > 0 && mermaid?.init) {
           Promise.resolve(mermaid.init(undefined, mermaidNodes))
             .then(() => addMermaidToolbars())
             .catch((e) => {
@@ -117,6 +126,14 @@
   function debouncedRender() {
     clearTimeout(getMarkdownRenderTimeout());
     setMarkdownRenderTimeout(setTimeout(renderMarkdown, RENDER_DELAY));
+  }
+
+  function escapeHtml(str) {
+    return String(str || "")
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;");
   }
 
   return {

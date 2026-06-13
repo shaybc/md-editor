@@ -1,14 +1,44 @@
-{
+﻿{
     "name":  "md-editor",
-    "version":  "7.5.0",
+    "version":  "7.6.0",
     "private":  true,
     "scripts":  {
                     "test":  "node --test tests/*.test.js",
-                    "check:js":  "node --check js/core/context.js \u0026\u0026 node --check js/app.js \u0026\u0026 node --check js/platform/folder-picker.js \u0026\u0026 node --check js/files/types.js \u0026\u0026 node --check js/files/save.js \u0026\u0026 node --check js/files/open.js \u0026\u0026 node --check js/ui/theme-preferences.js \u0026\u0026 node --check js/ui/mobile-menu.js \u0026\u0026 node --check js/ui/view-layout.js \u0026\u0026 node --check js/ui/layout-preferences.js \u0026\u0026 node --check js/recent/index.js \u0026\u0026 node --check js/recent/actions.js \u0026\u0026 node --check js/clipboard.js \u0026\u0026 node --check js/scroll-sync.js \u0026\u0026 node --check js/unsaved-changes.js \u0026\u0026 node --check js/editor/line-status.js \u0026\u0026 node --check js/editor/status-line.js \u0026\u0026 node --check js/editor/context-menu.js \u0026\u0026 node --check js/editor/autocomplete.js \u0026\u0026 node --check js/editor/syntax-highlight.js \u0026\u0026 node --check js/markdown/frontmatter.js \u0026\u0026 node --check js/markdown/renderer-config.js \u0026\u0026 node --check js/markdown/links.js \u0026\u0026 node --check js/markdown/mermaid-tools.js \u0026\u0026 node --check js/markdown/render.js \u0026\u0026 node --check js/tags/index.js \u0026\u0026 node --check js/graph/extraction.js \u0026\u0026 node --check js/graph/persistence.js \u0026\u0026 node --check js/graph/documents.js \u0026\u0026 node --check js/graph/toolbar.js \u0026\u0026 node --check js/graph/renderer.js \u0026\u0026 node --check js/tabs/counter.js \u0026\u0026 node --check js/tabs/index.js \u0026\u0026 node --check js/sidebar/folder-toolbar.js \u0026\u0026 node --check js/sidebar/context-tree.js \u0026\u0026 node --check js/export/page-breaks.js \u0026\u0026 node --check js/import/dropped-items.js \u0026\u0026 node --check js/import/drag-drop.js \u0026\u0026 node --check js/import/github.js \u0026\u0026 node --check js/share-url.js \u0026\u0026 node --check js/keyboard-shortcuts.js \u0026\u0026 node --check script.js",
+                    "build:codemirror":  "esbuild js/editor/codemirror-bundle-source.js --bundle --format=iife --platform=browser --outfile=js/vendor/codemirror.bundle.js",
+                    "check:js":  "node --check js/core/context.js \u0026\u0026 node --check js/app.js \u0026\u0026 node --check js/platform/folder-picker.js \u0026\u0026 node --check js/languages/registry.js \u0026\u0026 node --check js/files/types.js \u0026\u0026 node --check js/files/save.js \u0026\u0026 node --check js/files/open.js \u0026\u0026 node --check js/ui/theme-preferences.js \u0026\u0026 node --check js/ui/mobile-menu.js \u0026\u0026 node --check js/ui/view-layout.js \u0026\u0026 node --check js/ui/layout-preferences.js \u0026\u0026 node --check js/ui/settings-screen.js \u0026\u0026 node --check js/recent/index.js \u0026\u0026 node --check js/recent/actions.js \u0026\u0026 node --check js/clipboard.js \u0026\u0026 node --check js/scroll-sync.js \u0026\u0026 node --check js/unsaved-changes.js \u0026\u0026 node --check js/editor/line-status.js \u0026\u0026 node --check js/editor/status-line.js \u0026\u0026 node --check js/editor/codemirror-editor.js \u0026\u0026 node --check js/editor/context-menu.js \u0026\u0026 node --check js/editor/autocomplete.js \u0026\u0026 node --check js/editor/syntax-highlight.js \u0026\u0026 node --check js/markdown/frontmatter.js \u0026\u0026 node --check js/markdown/renderer-config.js \u0026\u0026 node --check js/markdown/links.js \u0026\u0026 node --check js/markdown/mermaid-tools.js \u0026\u0026 node --check js/markdown/render.js \u0026\u0026 node --check js/tags/index.js \u0026\u0026 node --check js/graph/extraction.js \u0026\u0026 node --check js/graph/persistence.js \u0026\u0026 node --check js/graph/documents.js \u0026\u0026 node --check js/graph/toolbar.js \u0026\u0026 node --check js/graph/renderer.js \u0026\u0026 node --check js/tabs/counter.js \u0026\u0026 node --check js/tabs/index.js \u0026\u0026 node --check js/sidebar/folder-toolbar.js \u0026\u0026 node --check js/sidebar/context-tree.js \u0026\u0026 node --check js/export/page-breaks.js \u0026\u0026 node --check js/import/dropped-items.js \u0026\u0026 node --check js/import/drag-drop.js \u0026\u0026 node --check js/import/github.js \u0026\u0026 node --check js/share-url.js \u0026\u0026 node --check js/keyboard-shortcuts.js \u0026\u0026 node --check script.js",
                     "test:e2e":  "playwright test",
                     "test:all":  "npm run check:js \u0026\u0026 npm test \u0026\u0026 npm run test:e2e"
                 },
     "devDependencies":  {
                             "@playwright/test":  "^1.52.0"
-                        }
+                        },
+    "dependencies":  {
+                         "@codemirror/autocomplete":  "^6.20.3",
+                         "@codemirror/commands":  "^6.10.3",
+                         "@codemirror/lang-cpp":  "^6.0.3",
+                         "@codemirror/lang-css":  "^6.3.1",
+                         "@codemirror/lang-html":  "^6.4.11",
+                         "@codemirror/lang-java":  "^6.0.2",
+                         "@codemirror/lang-javascript":  "^6.2.5",
+                         "@codemirror/lang-json":  "^6.0.2",
+                         "@codemirror/lang-markdown":  "^6.5.0",
+                         "@codemirror/lang-php":  "^6.0.2",
+                         "@codemirror/lang-python":  "^6.2.1",
+                         "@codemirror/lang-rust":  "^6.0.2",
+                         "@codemirror/lang-sass":  "^6.0.2",
+                         "@codemirror/lang-sql":  "^6.10.0",
+                         "@codemirror/lang-xml":  "^6.1.0",
+                         "@codemirror/lang-yaml":  "^6.1.3",
+                         "@codemirror/language":  "^6.12.3",
+                         "@codemirror/legacy-modes":  "^6.5.3",
+                         "@codemirror/lint":  "^6.9.7",
+                         "@codemirror/search":  "^6.7.0",
+                         "@codemirror/state":  "^6.6.0",
+                         "@codemirror/view":  "^6.43.1",
+                         "@lezer/highlight":  "^1.2.3",
+                         "@prettier/plugin-xml":  "^3.4.2",
+                         "codemirror":  "^6.0.2",
+                         "esbuild":  "^0.28.1",
+                         "prettier":  "^3.8.4"
+                     }
 }

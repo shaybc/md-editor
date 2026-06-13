@@ -551,7 +551,7 @@
     if (tab.type === "graph") return;
     tab.content = markdownEditor.value;
     tab.scrollPos = markdownEditor.scrollTop;
-    tab.viewMode = isUnsupportedFileTab(tab) ? 'editor' : (currentViewMode || 'split');
+    tab.viewMode = isPreviewableDocumentTab(tab) ? (currentViewMode || 'split') : 'editor';
     saveTabsToStorage(tabs);
   }
 
@@ -702,10 +702,11 @@
     if (container) {
       container.classList.toggle("no-open-tabs", !!enabled);
       if (enabled) {
-        container.classList.remove("markdown-tab-active");
+        container.classList.remove("markdown-tab-active", "editor-only-tab-active");
       } else {
         const activeTab = getActiveTab();
-        container.classList.toggle("markdown-tab-active", !!(activeTab && activeTab.type !== "graph" && !isUnsupportedFileTab(activeTab)));
+        container.classList.toggle("markdown-tab-active", isPreviewableDocumentTab(activeTab));
+        container.classList.toggle("editor-only-tab-active", !!(activeTab && activeTab.type !== "graph" && !isPreviewableDocumentTab(activeTab)));
       }
     }
     if (markdownEditor) {
@@ -734,6 +735,7 @@
     setGraphViewMode(false);
     markdownEditor.value = tab.content;
     restoreViewMode(tab.viewMode);
+    if (typeof applySyntaxHighlightColorsForActiveLanguage === "function") applySyntaxHighlightColorsForActiveLanguage();
     renderEditorSyntaxHighlights();
     renderMarkdown();
     requestAnimationFrame(function() {
@@ -765,7 +767,7 @@
     tab.sourceFileHandle = sourceFile && sourceFile.handle ? sourceFile.handle : null;
     tab.sourceFilePath = sourceFile && sourceFile.path ? sourceFile.path : null;
     tab.isUnsupportedFile = isUnsupportedSourceFile(sourceFile);
-    if (tab.isUnsupportedFile) tab.viewMode = 'editor';
+    if (!isPreviewableSourceFile(sourceFile)) tab.viewMode = 'editor';
   }
 
   function isUnsupportedSourceFile(sourceFile) {
@@ -782,6 +784,22 @@
     return !!path && isTextDocumentPath(path) && !isSupportedFolderTreeDocumentPath(path);
   }
 
+  function isHtmlPath(path) {
+    return /\.(html|htm)$/i.test(path || "");
+  }
+
+  function isPreviewableSourceFile(sourceFile) {
+    if (!sourceFile) return true;
+    const path = sourceFile.path || sourceFile.name || sourceFile.file?.name || sourceFile.handle?.name || "";
+    return !path || isMarkdownPath(path) || isHtmlPath(path);
+  }
+
+  function isPreviewableDocumentTab(tab) {
+    if (!tab || tab.type === "graph") return false;
+    const path = tab.sourceFilePath || tab.sourceFileName || tab.sourceFileHandle?.name || "";
+    return !path || isMarkdownPath(path) || isHtmlPath(path);
+  }
+
   function getActiveTab() {
     return tabs.find(function(tab) { return tab.id === activeTabId; }) || null;
   }
@@ -789,11 +807,11 @@
   function getAllowedViewModeForActiveTab(mode) {
     const activeTab = getActiveTab();
     if (activeTab && activeTab.type === "graph") return 'preview';
-    return isUnsupportedFileTab(activeTab) ? 'editor' : (mode || 'split');
+    return isPreviewableDocumentTab(activeTab) ? (mode || 'split') : 'editor';
   }
 
   function getDefaultViewModeForOpenedFile(sourceFile) {
-    return isUnsupportedSourceFile(sourceFile) ? 'editor' : 'split';
+    return isPreviewableSourceFile(sourceFile) ? 'split' : 'editor';
   }
 
   function activateSidebarTab(tab) {
@@ -803,6 +821,7 @@
     setNoOpenTabsMode(false);
     markdownEditor.value = tab.content;
     restoreViewMode(tab.viewMode);
+    if (typeof applySyntaxHighlightColorsForActiveLanguage === "function") applySyntaxHighlightColorsForActiveLanguage();
     renderEditorSyntaxHighlights();
     renderMarkdown();
     requestAnimationFrame(function() {
@@ -1262,7 +1281,7 @@
     }
     saveCurrentTabState();
     const dupTitle = tab.title + ' (copy)';
-    const dup = createTab(tab.content, dupTitle, isUnsupportedFileTab(tab) ? 'editor' : tab.viewMode);
+    const dup = createTab(tab.content, dupTitle, isPreviewableDocumentTab(tab) ? tab.viewMode : 'editor');
     dup.savedContent = tab.savedContent;
     dup.isUnsupportedFile = isUnsupportedFileTab(tab);
     const idx = tabs.findIndex(function(t) { return t.id === tabId; });
@@ -1436,6 +1455,8 @@
       applySidebarFileMetadata,
       isUnsupportedSourceFile,
       isUnsupportedFileTab,
+      isPreviewableDocumentTab,
+      isPreviewableSourceFile,
       getActiveTab,
       getAllowedViewModeForActiveTab,
       getDefaultViewModeForOpenedFile,

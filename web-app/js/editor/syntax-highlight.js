@@ -5,6 +5,7 @@
     const markdownEditor = deps.markdownEditor;
     const editorSyntaxHighlight = deps.editorSyntaxHighlight;
     const escapeHtml = deps.escapeHtml;
+    const getCodeMirrorEditor = deps.getCodeMirrorEditor || function() { return deps.codeMirrorEditor || null; };
 
     function rangesOverlap(existingRanges, start, end) {
       return existingRanges.some(function(range) {
@@ -237,6 +238,11 @@
 
     function renderEditorSyntaxHighlights() {
       if (!editorSyntaxHighlight || !markdownEditor) return;
+      if (getCodeMirrorEditor()?.isEnabled()) {
+        editorSyntaxHighlight.innerHTML = "";
+        markdownEditor.classList.remove("syntax-highlight-enabled");
+        return;
+      }
 
       const state = { inFence: false, fenceLanguage: "" };
       const lines = markdownEditor.value.split("\n");

@@ -1,4 +1,4 @@
-# MD-Editor
+﻿# MD-Editor
 
 <div align="center">
   <img src="web-app/assets/icon.jpg" alt="MD-Editor Logo" width="140" />
@@ -7,14 +7,14 @@
   <p>Converts code to md representation, advanced MD editor, explore code dependecies, explore code as a graph .</p>
 
   <p>
-    <a href="wiki/Home.md" target="_blank" rel="noopener noreferrer">Documentation</a> ֲ·
-    <a href="wiki/Markdown-Reference.md" target="_blank" rel="noopener noreferrer">Markdown Reference</a> ֲ·
+    <a href="wiki/Home.md" target="_blank" rel="noopener noreferrer">Documentation</a> ײ²ֲ·
+    <a href="wiki/Markdown-Reference.md" target="_blank" rel="noopener noreferrer">Markdown Reference</a> ײ²ֲ·
     <a href="wiki/Release-Notes.md" target="_blank" rel="noopener noreferrer">Release Notes</a>
   </p>
 
   <p>
     <img src="web-app/assets/badges/license.svg" alt="License: Apache 2.0" />
-    <img src="web-app/assets/badges/release.svg" alt="Release: v7.5" />
+    <img src="web-app/assets/badges/release.svg" alt="Release: v7.6" />
     <img src="web-app/assets/badges/tests.svg" alt="Tests: 28 passing" />
     <img src="web-app/assets/badges/app.svg" alt="App: web desktop" />
     <img src="web-app/assets/badges/code-maps.svg" alt="Code maps: JS TS PY Java C#" />
@@ -119,16 +119,16 @@ Supported converter languages: JavaScript, TypeScript, Python, Java, and C#.
 
 ```text
 .
-ג”ג”€ג”€ code_converter/                 # Source-to-Markdown dependency generator
-ג”ג”€ג”€ desktop-app/                    # Neutralino desktop app and packaged resources
-ג”ג”€ג”€ web-app/                        # Static browser app
-ג”‚   ג”ג”€ג”€ assets/                     # App images and README screenshots
-ג”‚   ג”ג”€ג”€ js/                         # Extracted app modules
-ג”‚   ג”ג”€ג”€ tests/                      # Node and Playwright tests
-ג”‚   ג”ג”€ג”€ index.html
-ג”‚   ג”ג”€ג”€ script.js
-ג”‚   ג””ג”€ג”€ styles.css
-ג””ג”€ג”€ wiki/                           # Project documentation pages
+׳’ג€ֲ׳’ג€ג‚¬׳’ג€ג‚¬ code_converter/                 # Source-to-Markdown dependency generator
+׳’ג€ֲ׳’ג€ג‚¬׳’ג€ג‚¬ desktop-app/                    # Neutralino desktop app and packaged resources
+׳’ג€ֲ׳’ג€ג‚¬׳’ג€ג‚¬ web-app/                        # Static browser app
+׳’ג€ג€   ׳’ג€ֲ׳’ג€ג‚¬׳’ג€ג‚¬ assets/                     # App images and README screenshots
+׳’ג€ג€   ׳’ג€ֲ׳’ג€ג‚¬׳’ג€ג‚¬ js/                         # Extracted app modules
+׳’ג€ג€   ׳’ג€ֲ׳’ג€ג‚¬׳’ג€ג‚¬ tests/                      # Node and Playwright tests
+׳’ג€ג€   ׳’ג€ֲ׳’ג€ג‚¬׳’ג€ג‚¬ index.html
+׳’ג€ג€   ׳’ג€ֲ׳’ג€ג‚¬׳’ג€ג‚¬ script.js
+׳’ג€ג€   ׳’ג€ג€׳’ג€ג‚¬׳’ג€ג‚¬ styles.css
+׳’ג€ג€׳’ג€ג‚¬׳’ג€ג‚¬ wiki/                           # Project documentation pages
 ```
 
 ## Run The Web App

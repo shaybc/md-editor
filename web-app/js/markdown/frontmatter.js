@@ -7,6 +7,7 @@
     const source = String(markdown || "");
     const match = source.match(/^---\r?\n([\s\S]*?)\r?\n---(\r?\n|$)/);
     if (match) {
+      if (!jsyaml?.load) return { frontmatter: null, frontmatterPrefix: "", body: source };
       try {
         const data = jsyaml.load(match[1]) || {};
         return { frontmatter: data, frontmatterPrefix: "", body: source.slice(match[0].length) };
@@ -18,6 +19,7 @@
 
     const afterTitleMatch = source.match(/^(#{1,6}\s+[^\r\n]+(?:\r?\n[ \t]*)?\r?\n)---\r?\n([\s\S]*?)\r?\n---(\r?\n|$)/);
     if (!afterTitleMatch) return { frontmatter: null, frontmatterPrefix: "", body: source };
+    if (!jsyaml?.load) return { frontmatter: null, frontmatterPrefix: "", body: source };
     try {
       const data = jsyaml.load(afterTitleMatch[2]) || {};
       return {
@@ -46,10 +48,12 @@
           .map(v => `<span class="fm-tag">${escapeHtml(String(v ?? ''))}</span>`)
           .join('');
       }
-      return `<pre class="fm-complex">${escapeHtml(jsyaml.dump(value).trimEnd())}</pre>`;
+      const dumped = jsyaml?.dump ? jsyaml.dump(value).trimEnd() : JSON.stringify(value, null, 2);
+      return `<pre class="fm-complex">${escapeHtml(dumped)}</pre>`;
     }
     if (typeof value === 'object') {
-      return `<pre class="fm-complex">${escapeHtml(jsyaml.dump(value).trimEnd())}</pre>`;
+      const dumped = jsyaml?.dump ? jsyaml.dump(value).trimEnd() : JSON.stringify(value, null, 2);
+      return `<pre class="fm-complex">${escapeHtml(dumped)}</pre>`;
     }
     return escapeHtml(String(value));
   }

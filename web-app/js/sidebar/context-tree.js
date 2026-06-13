@@ -2977,6 +2977,8 @@
   function getFileIconClass(fileName, options = {}) {
     if (options.isUnsupportedFile) return "bi-file-earmark-x";
     if (options.isGraphFile || isGraphFilePath(fileName)) return "bi-diagram-3";
+    const language = languageRegistry?.resolveLanguageForPath(fileName);
+    if (language?.icon) return language.icon;
     const extension = getFileExtension(fileName);
     const iconByExtension = {
       json: "bi-filetype-json",
@@ -3003,6 +3005,11 @@
     };
     if (iconByExtension[extension]) return iconByExtension[extension];
     return isMarkdownPath(fileName) ? "bi-file-earmark-text" : "bi-file-text";
+  }
+
+  function getFileLanguageClass(fileName) {
+    const language = languageRegistry?.resolveLanguageForPath(fileName);
+    return language?.colorClass || "";
   }
 
   function renderFolderTreeNode(node, parentPath = "") {
@@ -3044,10 +3051,12 @@
     const isGraphFile = isGraphFilePath(node.name) || node.isGraphDocumentFile === true;
     const isJsonFile = isJsonPath(node.name);
     const isUnsupportedFile = !isSupportedFolderTreeDocumentNode(node);
-    const canOpenAsTextFile = isSidebarDocumentNode(node);
+    const canOpenAsTextFile = isSidebarDocumentNode(node) || (isUnsupportedFile && showUnsupportedFolderFiles);
+    const fileLanguageClass = isUnsupportedFile ? "" : getFileLanguageClass(node.name || node.path || node.fullPath);
     button.type = "button";
     button.className = "folder-tree-file"
       + (isGraphFile ? " folder-tree-graph-file" : "")
+      + (fileLanguageClass ? ` folder-tree-language-file ${fileLanguageClass}` : "")
       + (isUnsupportedFile ? " folder-tree-unsupported-file" : "");
     button.title = isUnsupportedFile
       ? (canOpenAsTextFile
@@ -3075,18 +3084,21 @@
       });
       if (folderEntry) return readFolderMarkdownFileContent(folderEntry);
 
+      if (node.file) return node.file.text();
       if (!node.handle?.getFile) throw new Error("No readable file handle is available.");
-      const file = node.file ? node.file : await node.handle.getFile();
+      const file = await node.handle.getFile();
       return file.text();
     }
 
     function getSidebarFileSource() {
-      return {
+      const source = {
         name: node.name,
         file: node.file || null,
         handle: node.handle || null,
         path: getSidebarNodeFilesystemPath(node) || node.fullPath || node.path || null
       };
+      if (isUnsupportedFile) source.isUnsupportedFile = true;
+      return source;
     }
 
     async function openSidebarFile(options) {
@@ -3340,6 +3352,7 @@
         prefersReducedFolderTreeMotion,
         toggleFolderTreeDetails,
         getFileIconClass,
+        getFileLanguageClass,
         renderFolderTreeNode,
         findTabForSidebarFile,
         buildTreeFromFileList,

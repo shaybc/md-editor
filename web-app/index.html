@@ -1,11 +1,11 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <!-- Primary Meta Tags -->
     <meta name="title" content="MD-Editor">
-    <meta name="description" content="MD-Editor is a powerful GitHub-style Markdown rendering tool with live preview, LaTeX math, Mermaid diagrams, syntax highlighting, dark mode, and export options to PDF, HTML, and MDג€”all fully client-side and secure.">
+    <meta name="description" content="MD-Editor is a powerful GitHub-style Markdown rendering tool with live preview, LaTeX math, Mermaid diagrams, syntax highlighting, dark mode, and export options to PDF, HTML, and MD׳’ג‚¬ג€all fully client-side and secure.">
     <meta name="keywords" content="MD-Editor, GitHub-style markdown, live preview, markdown editor, LaTeX support, Mermaid diagrams, PDF export, syntax highlighting, markdown to HTML, secure markdown tool, client-side markdown editor, advanced markdown parser, next-gen markdown tool">
     <meta name="author" content="shaybc">
     <meta name="robots" content="index, follow">
@@ -445,8 +445,44 @@
               </button>
             </div>
 
-            <div class="settings-modal-body">
-              <section class="settings-panel settings-graph-panel" aria-labelledby="settings-graph-title">
+            <div class="settings-screen-shell">
+              <aside class="settings-sidebar" aria-label="Settings categories">
+                <label class="settings-search" for="settings-search-input">
+                  <i class="bi bi-search" aria-hidden="true"></i>
+                  <input id="settings-search-input" type="search" placeholder="Search settings..." autocomplete="off" />
+                </label>
+                <nav class="settings-tabs" aria-label="Settings categories">
+                  <p class="settings-tab-group">Preferences</p>
+                  <button class="settings-tab-button active" type="button" data-settings-tab="graph" aria-selected="true">
+                    <i class="bi bi-diagram-3" aria-hidden="true"></i>
+                    <span>Graph View</span>
+                  </button>
+                  <button class="settings-tab-button" type="button" data-settings-tab="recent" aria-selected="false" tabindex="-1">
+                    <i class="bi bi-clock-history" aria-hidden="true"></i>
+                    <span>Recent Items</span>
+                  </button>
+                  <button class="settings-tab-button" type="button" data-settings-tab="interface" aria-selected="false" tabindex="-1">
+                    <i class="bi bi-window-sidebar" aria-hidden="true"></i>
+                    <span>Interface</span>
+                  </button>
+                  <button class="settings-tab-button" type="button" data-settings-tab="syntax" aria-selected="false" tabindex="-1">
+                    <i class="bi bi-palette" aria-hidden="true"></i>
+                    <span>Syntax Colors</span>
+                  </button>
+                  <button class="settings-tab-button" type="button" data-settings-tab="confirmations" aria-selected="false" tabindex="-1">
+                    <i class="bi bi-shield-check" aria-hidden="true"></i>
+                    <span>Confirmations</span>
+                  </button>
+                  <p class="settings-tab-group">Maintenance</p>
+                  <button class="settings-tab-button settings-tab-danger" type="button" data-settings-tab="reset" aria-selected="false" tabindex="-1">
+                    <i class="bi bi-arrow-counterclockwise" aria-hidden="true"></i>
+                    <span>Reset</span>
+                  </button>
+                </nav>
+              </aside>
+
+              <div class="settings-modal-body">
+              <section class="settings-panel settings-graph-panel active" data-settings-panel="graph" aria-labelledby="settings-graph-title">
                 <div class="settings-panel-heading">
                   <span class="settings-panel-icon"><i class="bi bi-diagram-3" aria-hidden="true"></i></span>
                   <div>
@@ -537,7 +573,7 @@
                 </div>
               </section>
 
-              <section class="settings-panel" aria-labelledby="settings-recent-title">
+              <section class="settings-panel" data-settings-panel="recent" aria-labelledby="settings-recent-title" hidden>
                 <div class="settings-panel-heading">
                   <span class="settings-panel-icon"><i class="bi bi-clock-history" aria-hidden="true"></i></span>
                   <div>
@@ -558,7 +594,7 @@
                 </div>
               </section>
 
-              <section class="settings-panel" aria-labelledby="settings-interface-title">
+              <section class="settings-panel" data-settings-panel="interface" aria-labelledby="settings-interface-title" hidden>
                 <div class="settings-panel-heading">
                   <span class="settings-panel-icon"><i class="bi bi-window-sidebar" aria-hidden="true"></i></span>
                   <div>
@@ -573,7 +609,33 @@
                 </label>
               </section>
 
-              <section class="settings-panel settings-confirmation-panel" aria-labelledby="settings-confirmation-title">
+              <section class="settings-panel" data-settings-panel="syntax" aria-labelledby="settings-syntax-title" hidden>
+                <div class="settings-panel-heading">
+                  <span class="settings-panel-icon"><i class="bi bi-palette" aria-hidden="true"></i></span>
+                  <div>
+                    <h3 id="settings-syntax-title" class="settings-panel-title">Syntax Colors</h3>
+                    <p class="settings-panel-description">Choose syntax highlight colors per language and token type.</p>
+                  </div>
+                </div>
+
+                <div class="settings-subsection">
+                  <h4 class="settings-subsection-title">Language</h4>
+                  <div class="settings-syntax-toolbar">
+                    <label class="settings-field" for="settings-syntax-language">
+                      <span class="settings-field-label">Language</span>
+                      <select id="settings-syntax-language" class="rename-modal-input settings-select-input"></select>
+                    </label>
+                    <button class="reset-modal-btn settings-secondary-action" id="settings-syntax-reset-language" type="button">Reset language colors</button>
+                  </div>
+                </div>
+
+                <div class="settings-subsection">
+                  <h4 class="settings-subsection-title">Token Colors</h4>
+                  <div id="settings-syntax-color-grid" class="settings-syntax-color-grid" aria-label="Syntax token color settings"></div>
+                </div>
+              </section>
+
+              <section class="settings-panel settings-confirmation-panel" data-settings-panel="confirmations" aria-labelledby="settings-confirmation-title" hidden>
                 <div class="settings-panel-heading">
                   <span class="settings-panel-icon"><i class="bi bi-shield-check" aria-hidden="true"></i></span>
                   <div>
@@ -610,7 +672,7 @@
                 </div>
               </section>
 
-              <section class="settings-panel settings-reset-section" aria-labelledby="settings-reset-title">
+              <section class="settings-panel settings-reset-section" data-settings-panel="reset" aria-labelledby="settings-reset-title" hidden>
                 <div class="settings-panel-heading">
                   <span class="settings-panel-icon settings-panel-icon-danger"><i class="bi bi-arrow-counterclockwise" aria-hidden="true"></i></span>
                   <div>
@@ -625,6 +687,7 @@
                   <button class="reset-modal-btn reset-modal-confirm settings-danger-action" id="settings-reset-all" type="button">Reset all</button>
                 </div>
               </section>
+              </div>
             </div>
 
             <div class="settings-modal-footer">
@@ -934,11 +997,11 @@
             <dl class="about-modal-details">
               <div>
                 <dt>Version</dt>
-                <dd id="about-app-version">v7.5</dd>
+                <dd id="about-app-version">v7.6</dd>
               </div>
               <div>
                 <dt>Last release</dt>
-                <dd id="about-release-date">June 13, 2026</dd>
+                <dd id="about-release-date">June 14, 2026</dd>
               </div>
               <div>
                 <dt>Author</dt>
@@ -1428,6 +1491,7 @@
     <script src="js/core/context.js"></script>
     <script src="js/app.js"></script>
     <script src="js/platform/folder-picker.js"></script>
+    <script src="js/languages/registry.js"></script>
     <script src="js/files/types.js"></script>
     <script src="js/files/save.js"></script>
     <script src="js/files/open.js"></script>
@@ -1435,6 +1499,7 @@
     <script src="js/ui/mobile-menu.js"></script>
     <script src="js/ui/view-layout.js"></script>
     <script src="js/ui/layout-preferences.js"></script>
+    <script src="js/ui/settings-screen.js"></script>
     <script src="js/recent/index.js"></script>
     <script src="js/recent/actions.js"></script>
     <script src="js/clipboard.js"></script>
@@ -1442,6 +1507,8 @@
     <script src="js/unsaved-changes.js"></script>
     <script src="js/editor/line-status.js"></script>
     <script src="js/editor/status-line.js"></script>
+    <script src="js/vendor/codemirror.bundle.js"></script>
+    <script src="js/editor/codemirror-editor.js"></script>
     <script src="js/editor/context-menu.js"></script>
     <script src="js/editor/autocomplete.js"></script>
     <script src="js/editor/syntax-highlight.js"></script>

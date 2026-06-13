@@ -11,6 +11,10 @@
     const updateEditorLineNumbers = deps.updateEditorLineNumbers;
     const updateEditorSelectionHighlights = deps.updateEditorSelectionHighlights;
     const updateStatusLine = deps.updateStatusLine;
+    const getCodeMirrorEditor = deps.getCodeMirrorEditor || function() { return deps.codeMirrorEditor || null; };
+    const getActiveTab = deps.getActiveTab || function() { return null; };
+    const isMarkdownPath = deps.isMarkdownPath || function(path) { return /\.(md|markdown)$/i.test(path || ""); };
+    const isUnsupportedFileTab = deps.isUnsupportedFileTab || function() { return false; };
 
     let editorContextMenu = null;
     let editorContextMenuSelection = null;
@@ -345,6 +349,15 @@
 
     function runEditorContextMenuAction(action) {
       switch (action) {
+        case "format-file":
+          formatEditorDocument();
+          break;
+        case "collapse-all-folds":
+          collapseAllEditorFolds();
+          break;
+        case "expand-all-folds":
+          expandAllEditorFolds();
+          break;
         case "emoji":
           restoreEditorContextSelection();
           hideEditorContextMenu();
@@ -374,13 +387,86 @@
       }
     }
 
+    async function formatEditorDocument() {
+      restoreEditorContextSelection();
+      hideEditorContextMenu();
+      const codeMirrorEditor = getCodeMirrorEditor();
+      if (!codeMirrorEditor || typeof codeMirrorEditor.formatActiveDocument !== "function") return;
+      try {
+        const didFormat = await codeMirrorEditor.formatActiveDocument();
+        if (didFormat) {
+          updateEditorLineNumbers();
+          updateEditorSelectionHighlights();
+          updateStatusLine();
+        }
+      } catch (error) {
+        console.warn("Failed to format editor document:", error);
+        window.alert(error?.message || "This file could not be formatted.");
+      }
+    }
+
+    function canShowMarkdownConversionSection() {
+      const activeTab = getActiveTab();
+      if (isUnsupportedFileTab(activeTab)) return false;
+      const sourcePath = activeTab?.sourceFilePath || activeTab?.sourceFileName || activeTab?.sourceFileHandle?.name || "";
+      if (sourcePath) return isMarkdownPath(sourcePath);
+      return !activeTab || activeTab.type === "markdown";
+    }
+
+    function collapseAllEditorFolds() {
+      hideEditorContextMenu();
+      const codeMirrorEditor = getCodeMirrorEditor();
+      if (typeof codeMirrorEditor?.collapseTopLevelFolds === "function") {
+        codeMirrorEditor.collapseTopLevelFolds();
+      }
+    }
+
+    function expandAllEditorFolds() {
+      hideEditorContextMenu();
+      const codeMirrorEditor = getCodeMirrorEditor();
+      if (typeof codeMirrorEditor?.expandTopLevelFolds === "function") {
+        codeMirrorEditor.expandTopLevelFolds();
+      }
+    }
+
+    function renderEditorFoldContextMenu(clientX, clientY) {
+      const menu = getEditorContextMenu();
+      const foldActions = [
+        { type: "collapse-all-folds", label: "Collapse all", icon: "bi-chevron-bar-contract" },
+        { type: "expand-all-folds", label: "Expand all", icon: "bi-chevron-bar-expand" }
+      ];
+
+      menu.innerHTML = `
+        <div class="editor-context-menu-items editor-context-menu-native-items">
+          ${foldActions.map((action) => `
+            <button class="editor-context-menu-item" type="button" role="menuitem" data-editor-context-action="${action.type}">
+              <i class="bi ${action.icon}" aria-hidden="true"></i>
+              <span>${escapeHtml(action.label)}</span>
+            </button>
+          `).join("")}
+        </div>
+      `;
+
+      menu.querySelectorAll("[data-editor-context-action]").forEach(function(button) {
+        button.addEventListener("click", function() {
+          runEditorContextMenuAction(button.dataset.editorContextAction);
+        });
+      });
+
+      positionEditorContextMenu(menu, clientX, clientY);
+    }
+
     function renderEditorContextMenu(clientX, clientY) {
       const menu = getEditorContextMenu();
       const selectedText = markdownEditor.value.slice(editorContextMenuSelection.start, editorContextMenuSelection.end);
       const preview = selectedText.replace(/\s+/g, " ").trim();
       const caseToggleAction = editorSelectionMatchCaseSensitive ? "ignore-case" : "case-sensitive";
       const caseToggleLabel = editorSelectionMatchCaseSensitive ? "Ignore case" : "Case sensitive";
+      const activeCodeMirrorEditor = getCodeMirrorEditor();
+      const canFormatFile = activeCodeMirrorEditor?.canFormatActiveDocument?.() === true;
+      const canConvertMarkdownSelection = canShowMarkdownConversionSection();
       const browserLikeActions = [
+        { type: "format-file", label: canFormatFile ? "Format file" : "Format unavailable", shortcut: "", icon: "bi-magic", disabled: !canFormatFile },
         { type: "emoji", label: "Emoji", shortcut: "Win+Period", icon: "bi-emoji-smile" },
         { type: "cut", label: "Cut", shortcut: "Ctrl+X", icon: "bi-scissors" },
         { type: "copy", label: "Copy", shortcut: "Ctrl+C", icon: "bi-copy" },
@@ -392,24 +478,26 @@
       menu.innerHTML = `
         <div class="editor-context-menu-items editor-context-menu-native-items">
           ${browserLikeActions.map((action) => `
-            <button class="editor-context-menu-item" type="button" role="menuitem" data-editor-context-action="${action.type}">
+            <button class="editor-context-menu-item" type="button" role="menuitem" data-editor-context-action="${action.type}"${action.disabled ? " disabled aria-disabled=\"true\"" : ""}>
               <i class="bi ${action.icon}" aria-hidden="true"></i>
               <span>${escapeHtml(action.label)}</span>
               ${action.shortcut ? `<kbd>${escapeHtml(action.shortcut)}</kbd>` : ""}
             </button>
           `).join("")}
         </div>
-        <div class="editor-context-menu-divider" role="separator"></div>
-        <div class="editor-context-menu-title">Convert selection</div>
-        ${preview ? `<div class="editor-context-menu-preview">${escapeHtml(preview.slice(0, 60))}${preview.length > 60 ? "..." : ""}</div>` : ""}
-        <div class="editor-context-menu-items">
-          ${editorMarkdownActions.map((action) => `
-            <button class="editor-context-menu-item" type="button" role="menuitem" data-markdown-action="${action.type}">
-              <i class="bi ${action.icon}" aria-hidden="true"></i>
-              <span>${escapeHtml(action.label)}</span>
-            </button>
-          `).join("")}
-        </div>
+        ${canConvertMarkdownSelection ? `
+          <div class="editor-context-menu-divider" role="separator"></div>
+          <div class="editor-context-menu-title">Convert selection</div>
+          ${preview ? `<div class="editor-context-menu-preview">${escapeHtml(preview.slice(0, 60))}${preview.length > 60 ? "..." : ""}</div>` : ""}
+          <div class="editor-context-menu-items">
+            ${editorMarkdownActions.map((action) => `
+              <button class="editor-context-menu-item" type="button" role="menuitem" data-markdown-action="${action.type}">
+                <i class="bi ${action.icon}" aria-hidden="true"></i>
+                <span>${escapeHtml(action.label)}</span>
+              </button>
+            `).join("")}
+          </div>
+        ` : ""}
       `;
 
       menu.querySelectorAll("[data-markdown-action]").forEach(function(button) {
@@ -430,13 +518,15 @@
       const selectionStart = markdownEditor.selectionStart;
       const selectionEnd = markdownEditor.selectionEnd;
 
+      event.preventDefault();
+      hideLinkAutocomplete();
+
       if (selectionStart === selectionEnd) {
-        hideEditorContextMenu();
+        editorContextMenuSelection = { start: selectionStart, end: selectionEnd };
+        renderEditorFoldContextMenu(event.clientX, event.clientY);
         return;
       }
 
-      event.preventDefault();
-      hideLinkAutocomplete();
       editorContextMenuSelection = { start: selectionStart, end: selectionEnd };
       renderEditorContextMenu(event.clientX, event.clientY);
     }
@@ -449,6 +539,7 @@
       contains,
       convertSelectionToMarkdown,
       applyMarkdownActionToSelection,
+      formatEditorDocument,
       replaceSelectionWithText,
       replaceRangeWithText,
       getEditorSelectionMatchCaseSensitive,

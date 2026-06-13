@@ -33,6 +33,7 @@ document.addEventListener("DOMContentLoaded", function () {
   let isFolderOpen = false;
 
   const markdownEditor = document.getElementById("markdown-editor");
+  let codeMirrorEditor = null;
   const editorLineNumbers = document.getElementById("editor-line-numbers");
   const editorCurrentLine = document.getElementById("editor-current-line");
   const editorSelectionHighlights = document.getElementById("editor-selection-highlights");
@@ -348,7 +349,7 @@ document.addEventListener("DOMContentLoaded", function () {
   });
 
   const frontmatterRenderer = window.registerMarkdownViewerFrontmatter(app, {
-    jsyaml
+    jsyaml: typeof jsyaml !== "undefined" ? jsyaml : null
   });
   const {
     parseFrontmatter,
@@ -357,7 +358,10 @@ document.addEventListener("DOMContentLoaded", function () {
     escapeHtml
   } = frontmatterRenderer;
 
+  const languageRegistry = window.registerMarkdownViewerLanguageRegistry(app);
+
   const fileTypes = window.registerMarkdownViewerFileTypes(app, {
+    languageRegistry,
     get Neutralino() { return typeof Neutralino !== "undefined" ? Neutralino : undefined; },
     navigator
   });
@@ -533,6 +537,10 @@ document.addEventListener("DOMContentLoaded", function () {
     getEditorInputEventCount: function() { return editorInputEventCount; },
     hideLinkAutocomplete,
     openEditorEmojiModal,
+    getCodeMirrorEditor: function() { return codeMirrorEditor; },
+    getActiveTab: function() { return getActiveTab(); },
+    isMarkdownPath: function(path) { return isMarkdownPath(path); },
+    isUnsupportedFileTab: function(tab) { return isUnsupportedFileTab(tab); },
     updateEditorLineNumbers: function() { updateEditorLineNumbers(); },
     updateEditorSelectionHighlights: function() { updateEditorSelectionHighlights(); },
     updateStatusLine: function() { updateStatusLine(); }
@@ -1982,7 +1990,7 @@ document.addEventListener("DOMContentLoaded", function () {
     MIN_SIDEBAR_PANEL_HEIGHT,
     MIN_PANE_PERCENT,
     get getActiveTab() { return getActiveTab; },
-    get isUnsupportedFileTab() { return isUnsupportedFileTab; },
+    get isPreviewableDocumentTab() { return isPreviewableDocumentTab; },
     get getAllowedViewModeForActiveTab() { return getAllowedViewModeForActiveTab; },
     get saveGlobalState() { return saveGlobalState; },
     renderMarkdown: function() { return renderMarkdown(); },
@@ -2071,6 +2079,12 @@ document.addEventListener("DOMContentLoaded", function () {
   const settingsResetPreferencesButton = document.getElementById("settings-reset-preferences");
   const settingsResetRecentHistoryButton = document.getElementById("settings-reset-recent-history");
   const settingsResetAllButton = document.getElementById("settings-reset-all");
+  const settingsSyntaxLanguageSelect = document.getElementById("settings-syntax-language");
+  const settingsSyntaxColorGrid = document.getElementById("settings-syntax-color-grid");
+  const settingsSyntaxResetLanguageButton = document.getElementById("settings-syntax-reset-language");
+  const settingsScreen = window.createMarkdownViewerSettingsScreen
+    ? window.createMarkdownViewerSettingsScreen({ modal: settingsModal, defaultTab: "graph" })
+    : null;
   const codeConverterModal = document.getElementById("code-converter-modal");
   const codeConverterTypeSelect = document.getElementById("code-converter-type");
   const codeConverterLanguageSupport = document.getElementById("code-converter-language-support");
@@ -2174,6 +2188,86 @@ document.addEventListener("DOMContentLoaded", function () {
   const DEFAULT_CONTEXT_MENU_TOOLTIP_DELAY_MS = 3000;
   const DEFAULT_MAX_RECENT_FILES = 10;
   const DEFAULT_MAX_RECENT_FOLDERS = 10;
+  const SYNTAX_HIGHLIGHT_TOKENS = Object.freeze([
+    { key: "muted", label: "Markers and punctuation", cssVar: "--editor-syntax-muted", previewVars: [] },
+    { key: "heading", label: "Headings", cssVar: "--editor-syntax-heading", previewVars: ["--color-prettylights-syntax-markup-heading"] },
+    { key: "strong", label: "Bold text", cssVar: "--editor-syntax-strong", previewVars: ["--color-prettylights-syntax-markup-bold"] },
+    { key: "emphasis", label: "Emphasis", cssVar: "--editor-syntax-emphasis", previewVars: ["--color-prettylights-syntax-markup-italic"] },
+    { key: "code", label: "Inline code and regex", cssVar: "--editor-syntax-code", previewVars: ["--color-prettylights-syntax-string-regexp"] },
+    { key: "link", label: "Links", cssVar: "--editor-syntax-link", previewVars: [] },
+    { key: "url", label: "URLs", cssVar: "--editor-syntax-url", previewVars: [] },
+    { key: "quote", label: "Quotes", cssVar: "--editor-syntax-quote", previewVars: ["--color-prettylights-syntax-comment"] },
+    { key: "list", label: "Lists", cssVar: "--editor-syntax-list", previewVars: ["--color-prettylights-syntax-markup-list"] },
+    { key: "table", label: "Tables", cssVar: "--editor-syntax-table", previewVars: [] },
+    { key: "keyword", label: "Keywords", cssVar: "--editor-syntax-keyword", previewVars: ["--color-prettylights-syntax-keyword"] },
+    { key: "atom", label: "Atoms and booleans", cssVar: "--editor-syntax-atom", previewVars: ["--color-prettylights-syntax-constant"] },
+    { key: "string", label: "Strings", cssVar: "--editor-syntax-string", previewVars: ["--color-prettylights-syntax-string"] },
+    { key: "number", label: "Numbers", cssVar: "--editor-syntax-number", previewVars: ["--color-prettylights-syntax-constant"] },
+    { key: "type", label: "Types and classes", cssVar: "--editor-syntax-type", previewVars: ["--color-prettylights-syntax-entity"] },
+    { key: "function", label: "Functions", cssVar: "--editor-syntax-function", previewVars: ["--color-prettylights-syntax-entity"] },
+    { key: "variable", label: "Variables", cssVar: "--editor-syntax-variable", previewVars: ["--color-prettylights-syntax-variable"] },
+    { key: "property", label: "Properties", cssVar: "--editor-syntax-property", previewVars: ["--color-prettylights-syntax-constant"] },
+    { key: "operator", label: "Operators", cssVar: "--editor-syntax-operator", previewVars: ["--color-prettylights-syntax-constant"] },
+    { key: "bracket", label: "Brackets", cssVar: "--editor-syntax-bracket", previewVars: ["--color-prettylights-syntax-brackethighlighter-angle"] },
+    { key: "comment", label: "Comments", cssVar: "--editor-syntax-comment", previewVars: ["--color-prettylights-syntax-comment"] },
+    { key: "tag", label: "Tags", cssVar: "--editor-syntax-tag", previewVars: ["--color-prettylights-syntax-entity-tag"] },
+    { key: "attribute", label: "Attributes", cssVar: "--editor-syntax-attribute", previewVars: ["--color-prettylights-syntax-constant"] },
+    { key: "invalid", label: "Invalid syntax", cssVar: "--editor-syntax-invalid", previewVars: ["--color-prettylights-syntax-invalid-illegal-bg"] }
+  ]);
+  const DEFAULT_SYNTAX_TOKEN_COLORS = Object.freeze({
+    light: Object.freeze({
+      muted: "#687386",
+      heading: "#315fbd",
+      strong: "#263145",
+      emphasis: "#7c4fb3",
+      code: "#b4455b",
+      link: "#2f5c9f",
+      url: "#4b8b62",
+      quote: "#4f8a58",
+      list: "#b56d27",
+      table: "#8b6f2f",
+      keyword: "#4b55b8",
+      atom: "#8e55b9",
+      string: "#9a4f40",
+      number: "#8a5a16",
+      type: "#247a8d",
+      function: "#2f6fad",
+      variable: "#27364d",
+      property: "#7255a8",
+      operator: "#6f7683",
+      bracket: "#667084",
+      comment: "#5f8b4b",
+      tag: "#2f7a91",
+      attribute: "#8a5f1f",
+      invalid: "#b64d5d"
+    }),
+    dark: Object.freeze({
+      muted: "#8e98a8",
+      heading: "#8db7dc",
+      strong: "#d7dde8",
+      emphasis: "#c9a7da",
+      code: "#d98c89",
+      link: "#9fc2df",
+      url: "#91c68b",
+      quote: "#8dbf7f",
+      list: "#d7ad78",
+      table: "#c9ae70",
+      keyword: "#8bb6e8",
+      atom: "#c7a2db",
+      string: "#d7a081",
+      number: "#d9c27e",
+      type: "#79c9c8",
+      function: "#87bde7",
+      variable: "#d6dbe5",
+      property: "#c6a4de",
+      operator: "#aab2c0",
+      bracket: "#9ba5b5",
+      comment: "#7fb06b",
+      tag: "#80c7dc",
+      attribute: "#d7b77c",
+      invalid: "#d9929a"
+    })
+  });
   const DEFAULT_GLOBAL_STATE = Object.freeze({
     autoSelectFileEnabled: true,
     editorWidthPercent: 50,
@@ -2202,9 +2296,11 @@ document.addEventListener("DOMContentLoaded", function () {
     sidebarDropzoneVisible: true,
     sidebarVisible: true,
     syncScrollingEnabled: true,
+    syntaxHighlightColors: {},
     viewMode: "split"
   });
   let settingsDialogSaving = false;
+  let syntaxHighlightColorDraft = null;
   const themePreferences = window.registerMarkdownViewerThemePreferences(app, {
     defaultState: DEFAULT_GLOBAL_STATE,
     mobileThemeToggle,
@@ -2300,6 +2396,161 @@ document.addEventListener("DOMContentLoaded", function () {
     return Math.max(0, Math.min(100, Math.floor(value)));
   }
 
+  function normalizeSyntaxColor(value, fallback) {
+    const color = String(value || "").trim();
+    return /^#[0-9a-f]{6}$/i.test(color) ? color.toLowerCase() : fallback;
+  }
+
+  function getCurrentSyntaxThemeName() {
+    return document.documentElement.getAttribute("data-theme") === "dark" ? "dark" : "light";
+  }
+
+  function getDefaultSyntaxTokenColor(tokenKey) {
+    return DEFAULT_SYNTAX_TOKEN_COLORS[getCurrentSyntaxThemeName()][tokenKey] || "#888888";
+  }
+
+  function getSyntaxHighlightColors() {
+    const saved = loadGlobalState().syntaxHighlightColors;
+    return saved && typeof saved === "object" && !Array.isArray(saved) ? saved : {};
+  }
+
+  function getLanguageSyntaxColors(languageId) {
+    const source = syntaxHighlightColorDraft || getSyntaxHighlightColors();
+    const colors = source[languageId];
+    return colors && typeof colors === "object" && !Array.isArray(colors) ? colors : {};
+  }
+
+  function cloneSyntaxHighlightColors(colors = getSyntaxHighlightColors()) {
+    return Object.fromEntries(Object.entries(colors).map(([languageId, languageColors]) => [
+      languageId,
+      { ...(languageColors && typeof languageColors === "object" && !Array.isArray(languageColors) ? languageColors : {}) }
+    ]));
+  }
+
+  function getSyntaxLanguageIdForPath(path, content) {
+    return languageRegistry?.resolveLanguageForPath(path || "document.md", { content: content || "" })?.id || "markdown";
+  }
+
+  function getActiveSyntaxLanguageId() {
+    const activeTab = tabs.find((tab) => tab.id === activeTabId);
+    if (!activeTab || activeTab.type === "graph") return "markdown";
+    const path = activeTab.sourceFilePath || activeTab.sourceFileName || activeTab.title || "document.md";
+    return getSyntaxLanguageIdForPath(path, activeTab.content || markdownEditor?.value || "");
+  }
+
+  function applySyntaxTokenOverridesForLanguage(languageId, targetElement) {
+    if (!targetElement) return;
+    const colors = getLanguageSyntaxColors(languageId);
+    SYNTAX_HIGHLIGHT_TOKENS.forEach((token) => {
+      targetElement.style.removeProperty(token.cssVar);
+      token.previewVars.forEach((previewVar) => targetElement.style.removeProperty(previewVar));
+      const override = normalizeSyntaxColor(colors[token.key], "");
+      if (!override) return;
+      targetElement.style.setProperty(token.cssVar, override);
+      token.previewVars.forEach((previewVar) => targetElement.style.setProperty(previewVar, override));
+    });
+  }
+
+  function applySyntaxHighlightColorsForActiveLanguage() {
+    applySyntaxTokenOverridesForLanguage(getActiveSyntaxLanguageId(), document.documentElement);
+  }
+
+  function getSyntaxHighlightStyleForLanguage(language) {
+    const rawLanguage = String(language || "").trim().toLowerCase();
+    const languageInfo = languageRegistry?.languages?.find((candidate) => (
+      candidate.id === rawLanguage ||
+      candidate.codeMirrorLanguage === rawLanguage ||
+      candidate.extensions?.includes(rawLanguage)
+    ));
+    const languageId = languageInfo?.id || rawLanguage || "text";
+    const colors = getLanguageSyntaxColors(languageId);
+    const styleParts = [];
+    SYNTAX_HIGHLIGHT_TOKENS.forEach((token) => {
+      const override = normalizeSyntaxColor(colors[token.key], "");
+      if (!override) return;
+      styleParts.push(`${token.cssVar}: ${override}`);
+      token.previewVars.forEach((previewVar) => styleParts.push(`${previewVar}: ${override}`));
+    });
+    return styleParts.length ? styleParts.join("; ") : "";
+  }
+
+  function populateSyntaxLanguageOptions() {
+    if (!settingsSyntaxLanguageSelect) return;
+    settingsSyntaxLanguageSelect.innerHTML = "";
+    (languageRegistry?.languages || []).forEach((language) => {
+      const option = document.createElement("option");
+      option.value = language.id;
+      option.textContent = language.label;
+      settingsSyntaxLanguageSelect.appendChild(option);
+    });
+    settingsSyntaxLanguageSelect.value = getActiveSyntaxLanguageId();
+  }
+
+  function renderSyntaxColorSettings() {
+    if (!settingsSyntaxColorGrid || !settingsSyntaxLanguageSelect) return;
+    const languageId = settingsSyntaxLanguageSelect.value || getActiveSyntaxLanguageId();
+    const colors = getLanguageSyntaxColors(languageId);
+    settingsSyntaxColorGrid.innerHTML = "";
+    SYNTAX_HIGHLIGHT_TOKENS.forEach((token) => {
+      const row = document.createElement("label");
+      row.className = "settings-syntax-color-row";
+      row.setAttribute("for", `settings-syntax-color-${token.key}`);
+
+      const text = document.createElement("span");
+      text.className = "settings-syntax-color-text";
+      const title = document.createElement("span");
+      title.className = "settings-switch-title";
+      title.textContent = token.label;
+      const description = document.createElement("span");
+      description.className = "settings-switch-description";
+      description.textContent = token.key;
+      text.append(title, description);
+
+      const input = document.createElement("input");
+      input.type = "color";
+      input.id = `settings-syntax-color-${token.key}`;
+      input.className = "settings-color-input settings-syntax-color-input";
+      input.dataset.syntaxToken = token.key;
+      input.value = normalizeSyntaxColor(colors[token.key], getDefaultSyntaxTokenColor(token.key));
+      input.setAttribute("aria-label", `${token.label} color`);
+
+      row.append(text, input);
+      settingsSyntaxColorGrid.appendChild(row);
+    });
+  }
+
+  function collectSyntaxColorSettings() {
+    const current = syntaxHighlightColorDraft || cloneSyntaxHighlightColors();
+    const next = { ...current };
+    if (!settingsSyntaxLanguageSelect) return next;
+    const languageId = settingsSyntaxLanguageSelect.value || getActiveSyntaxLanguageId();
+    const languageColors = {};
+    settingsSyntaxColorGrid?.querySelectorAll(".settings-syntax-color-input").forEach((input) => {
+      const tokenKey = input.dataset.syntaxToken;
+      if (!tokenKey) return;
+      const color = normalizeSyntaxColor(input.value, getDefaultSyntaxTokenColor(tokenKey));
+      if (color !== getDefaultSyntaxTokenColor(tokenKey)) {
+        languageColors[tokenKey] = color;
+      }
+    });
+    if (Object.keys(languageColors).length) next[languageId] = languageColors;
+    else delete next[languageId];
+    syntaxHighlightColorDraft = next;
+    return next;
+  }
+
+  function resetSelectedSyntaxLanguageColors() {
+    if (!settingsSyntaxLanguageSelect) return;
+    const languageId = settingsSyntaxLanguageSelect.value || getActiveSyntaxLanguageId();
+    const next = { ...(syntaxHighlightColorDraft || cloneSyntaxHighlightColors()) };
+    delete next[languageId];
+    syntaxHighlightColorDraft = next;
+    renderSyntaxColorSettings();
+    applySyntaxHighlightColorsForActiveLanguage();
+    renderEditorSyntaxHighlights();
+    renderMarkdown();
+  }
+
   function initializeContextMenuTooltips() {
     let tooltipTimer = null;
     let tooltipTarget = null;
@@ -2366,9 +2617,10 @@ document.addEventListener("DOMContentLoaded", function () {
   initializeContextMenuTooltips();
 
   const rendererConfig = window.registerMarkdownViewerRendererConfig(app, {
-    marked,
-    hljs,
-    mermaid
+    marked: typeof marked !== "undefined" ? marked : null,
+    hljs: typeof hljs !== "undefined" ? hljs : null,
+    mermaid: typeof mermaid !== "undefined" ? mermaid : null,
+    getSyntaxHighlightStyleForLanguage
   });
   rendererConfig.initialize();
   const initMermaid = rendererConfig.initMermaid;
@@ -2435,7 +2687,8 @@ document.addEventListener("DOMContentLoaded", function () {
   const editorSyntaxHighlighter = window.registerMarkdownViewerEditorSyntaxHighlight(app, {
     markdownEditor,
     editorSyntaxHighlight,
-    escapeHtml
+    escapeHtml,
+    getCodeMirrorEditor: function() { return codeMirrorEditor; }
   });
   const renderEditorSyntaxHighlights = editorSyntaxHighlighter.renderEditorSyntaxHighlights;
   const syncEditorSyntaxHighlightScroll = editorSyntaxHighlighter.syncEditorSyntaxHighlightScroll;
@@ -2466,11 +2719,11 @@ document.addEventListener("DOMContentLoaded", function () {
     get updateDocumentStats() { return updateDocumentStats; },
     document,
     NodeFilter,
-    get marked() { return marked; },
-    get DOMPurify() { return DOMPurify; },
-    get mermaid() { return mermaid; },
+    get marked() { return typeof marked !== "undefined" ? marked : null; },
+    get DOMPurify() { return typeof DOMPurify !== "undefined" ? DOMPurify : null; },
+    get mermaid() { return typeof mermaid !== "undefined" ? mermaid : null; },
     get MathJax() { return window.MathJax; },
-    get joypixels() { return joypixels; }
+    get joypixels() { return typeof joypixels !== "undefined" ? joypixels : null; }
   });
   const processEmojis = markdownRender.processEmojis;
   const renderMarkdown = markdownRender.renderMarkdown;
@@ -2673,6 +2926,17 @@ Markdown content is processed client-side in your browser and sanitized before p
     "linkDistance",
     "groupForce"
   ]);
+
+  function getActiveEditorPathForLanguage() {
+    const activeTab = tabs.find((tab) => tab.id === activeTabId);
+    return activeTab?.sourceFilePath || activeTab?.sourceFileName || activeTab?.title || "document.md";
+  }
+
+  codeMirrorEditor = window.registerMarkdownViewerCodeMirrorEditor(app, {
+    markdownEditor,
+    languageRegistry,
+    getActiveEditorPath: getActiveEditorPathForLanguage
+  });
 
   function getGraphViewPreferenceDefaults() {
     const savedPreferences = loadGlobalState().graphViewPreferences;
@@ -3083,6 +3347,7 @@ Markdown content is processed client-side in your browser and sanitized before p
     saveGlobalState,
     get setGraphViewMode() { return setGraphViewMode; },
     get renderGraphView() { return renderGraphView; },
+    applySyntaxHighlightColorsForActiveLanguage,
     renderMarkdown,
     renderEditorSyntaxHighlights,
     updateEditorLineNumbers,
@@ -3155,6 +3420,7 @@ Markdown content is processed client-side in your browser and sanitized before p
     applySidebarFileMetadata,
     isUnsupportedSourceFile,
     isUnsupportedFileTab,
+    isPreviewableDocumentTab,
     getActiveTab,
     getAllowedViewModeForActiveTab,
     getDefaultViewModeForOpenedFile,
@@ -3407,15 +3673,26 @@ Markdown content is processed client-side in your browser and sanitized before p
     if (settingsContextMenuTooltipDelayInput) {
       settingsContextMenuTooltipDelayInput.value = String(getContextMenuTooltipDelayMs());
     }
+    syntaxHighlightColorDraft = cloneSyntaxHighlightColors();
+    populateSyntaxLanguageOptions();
+    renderSyntaxColorSettings();
     settingsModal.style.display = "flex";
-    settingsGraphAutoClusterThresholdInput?.focus();
-    settingsGraphAutoClusterThresholdInput?.select();
+    if (settingsScreen) {
+      settingsScreen.open();
+    } else {
+      settingsGraphAutoClusterThresholdInput?.focus();
+      settingsGraphAutoClusterThresholdInput?.select();
+    }
   }
 
   function hideSettingsDialog() {
     if (!settingsModal) return;
     if (settingsDialogSaving) return;
     settingsModal.style.display = "none";
+    syntaxHighlightColorDraft = null;
+    applySyntaxHighlightColorsForActiveLanguage();
+    renderEditorSyntaxHighlights();
+    renderMarkdown();
   }
 
   function setSettingsDialogSaving(isSaving) {
@@ -3424,7 +3701,7 @@ Markdown content is processed client-side in your browser and sanitized before p
       settingsModal.classList.toggle("settings-modal-saving", settingsDialogSaving);
       settingsModal.setAttribute("aria-busy", settingsDialogSaving ? "true" : "false");
     }
-    const controls = settingsModal?.querySelectorAll("input, button") || [];
+    const controls = settingsModal?.querySelectorAll("input, button, select") || [];
     controls.forEach((control) => {
       control.disabled = settingsDialogSaving;
     });
@@ -3467,6 +3744,7 @@ Markdown content is processed client-side in your browser and sanitized before p
     }
     const graphNodeDefaultColor = getGraphColorInputValue(settingsGraphNodeDefaultColorInput?.value || DEFAULT_GRAPH_NODE_COLOR);
     const graphFindHighlightColor = getGraphColorInputValue(settingsGraphFindHighlightColorInput?.value || DEFAULT_GRAPH_FIND_HIGHLIGHT_COLOR);
+    const syntaxHighlightColors = collectSyntaxColorSettings();
     setSettingsDialogSaving(true);
     try {
       saveGlobalState({
@@ -3485,14 +3763,19 @@ Markdown content is processed client-side in your browser and sanitized before p
         confirmResetState: !!settingsConfirmResetStateInput?.checked,
         contextMenuTooltipDelayMs: Math.min(10000, Math.floor(contextMenuTooltipDelayMs)),
         maxRecentFiles: Math.min(100, Math.floor(maxRecentFiles)),
-        maxRecentFolders: Math.min(100, Math.floor(maxRecentFolders))
+        maxRecentFolders: Math.min(100, Math.floor(maxRecentFolders)),
+        syntaxHighlightColors
       });
       applyRecentItemLimits();
+      applySyntaxHighlightColorsForActiveLanguage();
+      renderEditorSyntaxHighlights();
+      renderMarkdown();
       const activeGraphTab = tabs.find((tab) => tab.id === activeTabId && tab.type === "graph");
       if (activeGraphTab) {
         removeGraphRenderForTab(activeGraphTab.id);
         await renderGraphView();
       }
+      syntaxHighlightColorDraft = null;
       settingsModal.style.display = "none";
     } finally {
       setSettingsDialogSaving(false);
@@ -3537,6 +3820,11 @@ Markdown content is processed client-side in your browser and sanitized before p
     });
     if (restored && settingsModal?.style.display !== "none") {
       showSettingsDialog();
+    }
+    if (restored) {
+      applySyntaxHighlightColorsForActiveLanguage();
+      renderEditorSyntaxHighlights();
+      renderMarkdown();
     }
     return restored;
   }
@@ -4772,6 +5060,7 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
     set selectedFolderTreeTags(value) { selectedFolderTreeTags = value; },
     get isFolderOpen() { return isFolderOpen; },
     set isFolderOpen(value) { isFolderOpen = value; },
+    get showUnsupportedFolderFiles() { return showUnsupportedFolderFiles; },
     get shownFolderInputFallbackNotice() { return shownFolderInputFallbackNotice; },
     set shownFolderInputFallbackNotice(value) { shownFolderInputFallbackNotice = value; },
     get markdownEditor() { return markdownEditor; },
@@ -4798,6 +5087,7 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
     get NL_VERSION() { return typeof NL_VERSION !== "undefined" ? NL_VERSION : undefined; },
     get bootstrap() { return typeof bootstrap !== "undefined" ? bootstrap : undefined; },
     get navigator() { return navigator; },
+    languageRegistry,
     folderPicker,
     get normalizeEditorContent() { return normalizeEditorContent; },
     normalizeFileTagList,
@@ -5240,6 +5530,9 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
     editorPositionLabelElement,
     editorPositionValueElement,
     formatGraphZoomPercent,
+    isEditorFocused: function() {
+      return codeMirrorEditor?.isFocused ? codeMirrorEditor.isFocused() : document.activeElement === markdownEditor;
+    },
     getActiveTab: function() {
       return tabs.find((tab) => tab.id === activeTabId);
     },
@@ -5545,15 +5838,33 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
     });
   }
 
-  if (settingsGraphAutoClusterThresholdInput) {
-    settingsGraphAutoClusterThresholdInput.addEventListener("keydown", function(e) {
-      if (e.key === "Enter") saveSettingsDialog();
-      if (e.key === "Escape") hideSettingsDialog();
+  if (settingsSyntaxLanguageSelect) {
+    settingsSyntaxLanguageSelect.addEventListener("change", renderSyntaxColorSettings);
+  }
+
+  if (settingsSyntaxResetLanguageButton) {
+    settingsSyntaxResetLanguageButton.addEventListener("click", resetSelectedSyntaxLanguageColors);
+  }
+
+  if (settingsSyntaxColorGrid) {
+    settingsSyntaxColorGrid.addEventListener("input", function(event) {
+      const input = event.target.closest?.(".settings-syntax-color-input");
+      if (!input || !settingsSyntaxLanguageSelect) return;
+      const languageId = settingsSyntaxLanguageSelect.value || getActiveSyntaxLanguageId();
+      const tokenKey = input.dataset.syntaxToken;
+      if (!languageId || !tokenKey) return;
+      const next = { ...(syntaxHighlightColorDraft || cloneSyntaxHighlightColors()) };
+      const languageColors = { ...(next[languageId] || {}) };
+      const color = normalizeSyntaxColor(input.value, getDefaultSyntaxTokenColor(tokenKey));
+      if (color === getDefaultSyntaxTokenColor(tokenKey)) delete languageColors[tokenKey];
+      else languageColors[tokenKey] = color;
+      if (Object.keys(languageColors).length) next[languageId] = languageColors;
+      else delete next[languageId];
+      syntaxHighlightColorDraft = next;
     });
   }
 
-  [settingsGraphRenderWarningThresholdInput, settingsMaxRecentFilesInput, settingsMaxRecentFoldersInput].forEach(function(input) {
-    if (!input) return;
+  settingsModal?.querySelectorAll(".settings-number-input").forEach(function(input) {
     input.addEventListener("keydown", function(e) {
       if (e.key === "Enter") saveSettingsDialog();
       if (e.key === "Escape") hideSettingsDialog();
@@ -5947,6 +6258,7 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
   const openGraphFindDialog = graphRenderer.openGraphFindDialog;
 
   initTabs();
+  applySyntaxHighlightColorsForActiveLanguage();
   if (loadGlobalState().syncScrollingEnabled === false) toggleSyncScrolling();
   updateSyncToggleButtons();
   updateMobileStats();

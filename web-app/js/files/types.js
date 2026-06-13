@@ -1,6 +1,7 @@
 (function(window) {
   window.registerMarkdownViewerFileTypes = function registerMarkdownViewerFileTypes(app, deps) {
     const GRAPH_DOCUMENT_TYPES = new Set(["graph-view", "graph-export"]);
+    const languageRegistry = deps.languageRegistry || null;
 
     with (deps) {
   function getMarkdownTitleFromFileName(fileName) {
@@ -25,6 +26,7 @@
   }
 
   function isKnownTextFilePath(path) {
+    if (languageRegistry?.isSupportedLanguagePath(path)) return true;
     const extension = getFileExtension(path);
     if (!extension) {
       return /(^|[\/])(dockerfile|makefile|rakefile|gemfile|license|readme|changelog|authors|contributors)$/i.test(path || "");
@@ -63,7 +65,7 @@
   }
 
   function isSupportedFolderTreeDocumentPath(path) {
-    return isMarkdownPath(path) || isGraphFilePath(path);
+    return isMarkdownPath(path) || isGraphFilePath(path) || languageRegistry?.isSupportedLanguagePath(path) === true;
   }
 
   function isSupportedFolderTreeDocumentNode(node) {

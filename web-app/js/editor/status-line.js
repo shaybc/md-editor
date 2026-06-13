@@ -32,6 +32,7 @@
     const getActiveTab = deps.getActiveTab;
     const getGraphZoomScaleFromLayout = deps.getGraphZoomScaleFromLayout;
     const getPreviewHoveredLinkUrl = deps.getPreviewHoveredLinkUrl;
+    const isEditorFocused = deps.isEditorFocused || function() { return document.activeElement === markdownEditor; };
 
     function getEditorLineColumn(text, position) {
       const safePosition = Math.max(0, Math.min(position, text.length));
@@ -51,7 +52,7 @@
     function updateEditorTextpadStatus(activeTab) {
       if (!editorTextpadStatusElement) return;
 
-      const shouldShowEditorStatus = !!activeTab && activeTab.type !== "graph" && document.activeElement === markdownEditor;
+      const shouldShowEditorStatus = !!activeTab && activeTab.type !== "graph" && isEditorFocused();
       editorTextpadStatusElement.classList.toggle("hidden", !shouldShowEditorStatus);
       if (!shouldShowEditorStatus) return;
 

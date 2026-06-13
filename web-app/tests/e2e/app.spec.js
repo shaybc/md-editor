@@ -392,6 +392,11 @@ async function openApp(page, path = "/") {
   await expect(page.locator("#markdown-preview")).toBeVisible();
 }
 
+async function selectSettingsTab(page, tabName) {
+  await page.locator(`.settings-tab-button[data-settings-tab="${tabName}"]`).click();
+  await expect(page.locator(`.settings-panel[data-settings-panel="${tabName}"]`)).toBeVisible();
+}
+
 test("loads into an editable split-view document", async ({ page }) => {
   await openApp(page);
 
@@ -657,28 +662,38 @@ test("settings menu updates graph auto-clustering threshold", async ({ page }) =
   await page.locator("#desktopActionMenu").click();
   await page.locator(".open-settings-dialog").first().click();
   await expect(page.locator("#settings-modal")).toBeVisible();
+  await expect(page.locator("#settings-search-input")).toBeFocused();
+  await expect(page.locator(".settings-tab-button[data-settings-tab='graph']")).toHaveClass(/active/);
+  await expect(page.locator(".settings-panel[data-settings-panel='graph']")).toBeVisible();
   await expect(page.locator("#settings-graph-auto-cluster-threshold")).toHaveValue("1000");
   await expect(page.locator("#settings-graph-render-warning-threshold")).toHaveValue("1500");
   await expect(page.locator("#settings-graph-most-referenced-percent")).toHaveValue("10");
   await expect(page.locator("#settings-graph-show-file-extensions")).not.toBeChecked();
   await expect(page.locator("#settings-graph-node-default-color")).toHaveValue("#58a6ff");
+  await selectSettingsTab(page, "confirmations");
   await expect(page.locator("#settings-confirm-open-many-graph-nodes")).toBeChecked();
   await expect(page.locator("#settings-confirm-delete-files")).toBeChecked();
   await expect(page.locator("#settings-confirm-reset-state")).toBeChecked();
+  await selectSettingsTab(page, "recent");
   await expect(page.locator("#settings-max-recent-files")).toHaveValue("10");
   await expect(page.locator("#settings-max-recent-folders")).toHaveValue("10");
+  await selectSettingsTab(page, "interface");
   await expect(page.locator("#settings-context-menu-tooltip-delay")).toHaveValue("3000");
 
+  await selectSettingsTab(page, "graph");
   await page.locator("#settings-graph-auto-cluster-threshold").fill("1200");
   await page.locator("#settings-graph-render-warning-threshold").fill("1800");
   await page.locator("#settings-graph-most-referenced-percent").fill("25");
   await page.locator("#settings-graph-show-file-extensions").check();
   await page.locator("#settings-graph-node-default-color").fill("#ff66cc");
+  await selectSettingsTab(page, "confirmations");
   await page.locator("#settings-confirm-open-many-graph-nodes").uncheck();
   await page.locator("#settings-confirm-delete-files").uncheck();
   await page.locator("#settings-confirm-reset-state").uncheck();
+  await selectSettingsTab(page, "recent");
   await page.locator("#settings-max-recent-files").fill("7");
   await page.locator("#settings-max-recent-folders").fill("5");
+  await selectSettingsTab(page, "interface");
   await page.locator("#settings-context-menu-tooltip-delay").fill("900");
   await page.locator("#settings-modal-save").click();
   await expect(page.locator("#settings-modal")).toBeHidden();
@@ -718,12 +733,76 @@ test("settings menu updates graph auto-clustering threshold", async ({ page }) =
   await expect(page.locator("#settings-graph-most-referenced-percent")).toHaveValue("25");
   await expect(page.locator("#settings-graph-show-file-extensions")).toBeChecked();
   await expect(page.locator("#settings-graph-node-default-color")).toHaveValue("#ff66cc");
+  await selectSettingsTab(page, "confirmations");
   await expect(page.locator("#settings-confirm-open-many-graph-nodes")).not.toBeChecked();
   await expect(page.locator("#settings-confirm-delete-files")).not.toBeChecked();
   await expect(page.locator("#settings-confirm-reset-state")).not.toBeChecked();
+  await selectSettingsTab(page, "recent");
   await expect(page.locator("#settings-max-recent-files")).toHaveValue("7");
   await expect(page.locator("#settings-max-recent-folders")).toHaveValue("5");
+  await selectSettingsTab(page, "interface");
   await expect(page.locator("#settings-context-menu-tooltip-delay")).toHaveValue("900");
+});
+
+test("settings screen side tabs and search select categories", async ({ page }) => {
+  await openApp(page);
+
+  await page.locator("#desktopActionMenu").click();
+  await page.locator(".open-settings-dialog").first().click();
+  await expect(page.locator("#settings-modal")).toBeVisible();
+  await expect(page.locator("#settings-search-input")).toBeFocused();
+  await expect(page.locator(".settings-tab-button[data-settings-tab='graph']")).toHaveClass(/active/);
+
+  await selectSettingsTab(page, "recent");
+  await expect(page.locator("#settings-max-recent-files")).toBeVisible();
+  await expect(page.locator(".settings-panel[data-settings-panel='graph']")).toBeHidden();
+
+  await selectSettingsTab(page, "confirmations");
+  await expect(page.locator("#settings-confirm-delete-files")).toBeVisible();
+
+  await page.locator("#settings-search-input").fill("tooltip");
+  await expect(page.locator(".settings-tab-button[data-settings-tab='interface']")).toHaveClass(/active/);
+  await expect(page.locator("#settings-context-menu-tooltip-delay")).toBeVisible();
+
+  await page.locator("#settings-search-input").fill("recent");
+  await expect(page.locator(".settings-tab-button[data-settings-tab='recent']")).toHaveClass(/active/);
+  await expect(page.locator("#settings-max-recent-folders")).toBeVisible();
+
+  await page.locator("#settings-search-input").fill("reset");
+  await expect(page.locator(".settings-tab-button[data-settings-tab='reset']")).toHaveClass(/active/);
+  await expect(page.locator("#settings-reset-all")).toBeVisible();
+});
+
+test("settings screen saves syntax colors per language", async ({ page }) => {
+  await openApp(page);
+  await page.locator("#markdown-editor").fill([
+    "```js",
+    "const answer = 42;",
+    "```"
+  ].join("\n"));
+
+  await page.locator("#desktopActionMenu").click();
+  await page.locator(".open-settings-dialog").first().click();
+  await selectSettingsTab(page, "syntax");
+  await expect(page.locator("#settings-syntax-language")).toBeVisible();
+  await page.locator("#settings-syntax-language").selectOption("javascript");
+  await expect(page.locator(".settings-syntax-color-input")).toHaveCount(24);
+
+  await page.locator("#settings-syntax-color-keyword").fill("#ff00aa");
+  await page.locator("#settings-modal-save").click();
+  await expect(page.locator("#settings-modal")).toBeHidden();
+
+  await expect.poll(() => page.evaluate(() => {
+    const state = JSON.parse(localStorage.getItem("markdownViewerGlobalState") || "{}");
+    const code = document.querySelector("#markdown-preview code.language-javascript, #markdown-preview code.javascript, #markdown-preview code.hljs");
+    return {
+      keyword: state.syntaxHighlightColors?.javascript?.keyword,
+      style: code?.getAttribute("style") || ""
+    };
+  })).toEqual({
+    keyword: "#ff00aa",
+    style: "--editor-syntax-keyword: #ff00aa; --color-prettylights-syntax-keyword: #ff00aa"
+  });
 });
 
 test("settings menu toggles graph node file extensions", async ({ page }) => {
@@ -5339,6 +5418,7 @@ test("settings menu limits remembered recent files and folders", async ({ page }
 
   await page.locator("#desktopActionMenu").click();
   await page.locator(".open-settings-dialog").first().click();
+  await selectSettingsTab(page, "recent");
   await page.locator("#settings-max-recent-files").fill("2");
   await page.locator("#settings-max-recent-folders").fill("1");
   await page.locator("#settings-modal-save").click();
@@ -5386,11 +5466,14 @@ test("settings reset all clears cache preferences and recent history", async ({ 
 
   await page.locator("#desktopActionMenu").click();
   await page.locator(".open-settings-dialog").first().click();
+  await selectSettingsTab(page, "reset");
   await page.locator("#settings-reset-all").click();
 
+  await selectSettingsTab(page, "graph");
   await expect(page.locator("#settings-graph-auto-cluster-threshold")).toHaveValue("1000");
   await expect(page.locator("#settings-graph-most-referenced-percent")).toHaveValue("10");
   await expect(page.locator("#settings-graph-show-file-extensions")).not.toBeChecked();
+  await selectSettingsTab(page, "recent");
   await expect(page.locator("#settings-max-recent-files")).toHaveValue("10");
   await expect(page.locator("#settings-max-recent-folders")).toHaveValue("10");
   await expect(page.locator(".recent-files-menu .recent-empty-item")).toHaveText("No recent files");
