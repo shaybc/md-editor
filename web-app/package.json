@@ -1,14 +1,14 @@
 {
-  "name": "md-editor",
-  "version": "7.4.0",
-  "private": true,
-  "scripts": {
-    "test": "node --test tests/*.test.js",
-    "check:js": "node --check js/core/context.js && node --check js/app.js && node --check js/platform/folder-picker.js && node --check js/files/types.js && node --check js/files/save.js && node --check js/files/open.js && node --check js/ui/theme-preferences.js && node --check js/ui/mobile-menu.js && node --check js/ui/view-layout.js && node --check js/ui/layout-preferences.js && node --check js/recent/index.js && node --check js/recent/actions.js && node --check js/clipboard.js && node --check js/scroll-sync.js && node --check js/unsaved-changes.js && node --check js/editor/line-status.js && node --check js/editor/status-line.js && node --check js/editor/context-menu.js && node --check js/editor/autocomplete.js && node --check js/editor/syntax-highlight.js && node --check js/markdown/frontmatter.js && node --check js/markdown/renderer-config.js && node --check js/markdown/links.js && node --check js/markdown/mermaid-tools.js && node --check js/markdown/render.js && node --check js/tags/index.js && node --check js/graph/extraction.js && node --check js/graph/persistence.js && node --check js/graph/documents.js && node --check js/graph/toolbar.js && node --check js/graph/renderer.js && node --check js/tabs/counter.js && node --check js/tabs/index.js && node --check js/sidebar/folder-toolbar.js && node --check js/sidebar/context-tree.js && node --check js/export/page-breaks.js && node --check js/import/dropped-items.js && node --check js/import/drag-drop.js && node --check js/import/github.js && node --check js/share-url.js && node --check js/keyboard-shortcuts.js && node --check script.js",
-    "test:e2e": "playwright test",
-    "test:all": "npm run check:js && npm test && npm run test:e2e"
-  },
-  "devDependencies": {
-    "@playwright/test": "^1.52.0"
-  }
+    "name":  "md-editor",
+    "version":  "7.5.0",
+    "private":  true,
+    "scripts":  {
+                    "test":  "node --test tests/*.test.js",
+                    "check:js":  "node --check js/core/context.js \u0026\u0026 node --check js/app.js \u0026\u0026 node --check js/platform/folder-picker.js \u0026\u0026 node --check js/files/types.js \u0026\u0026 node --check js/files/save.js \u0026\u0026 node --check js/files/open.js \u0026\u0026 node --check js/ui/theme-preferences.js \u0026\u0026 node --check js/ui/mobile-menu.js \u0026\u0026 node --check js/ui/view-layout.js \u0026\u0026 node --check js/ui/layout-preferences.js \u0026\u0026 node --check js/recent/index.js \u0026\u0026 node --check js/recent/actions.js \u0026\u0026 node --check js/clipboard.js \u0026\u0026 node --check js/scroll-sync.js \u0026\u0026 node --check js/unsaved-changes.js \u0026\u0026 node --check js/editor/line-status.js \u0026\u0026 node --check js/editor/status-line.js \u0026\u0026 node --check js/editor/context-menu.js \u0026\u0026 node --check js/editor/autocomplete.js \u0026\u0026 node --check js/editor/syntax-highlight.js \u0026\u0026 node --check js/markdown/frontmatter.js \u0026\u0026 node --check js/markdown/renderer-config.js \u0026\u0026 node --check js/markdown/links.js \u0026\u0026 node --check js/markdown/mermaid-tools.js \u0026\u0026 node --check js/markdown/render.js \u0026\u0026 node --check js/tags/index.js \u0026\u0026 node --check js/graph/extraction.js \u0026\u0026 node --check js/graph/persistence.js \u0026\u0026 node --check js/graph/documents.js \u0026\u0026 node --check js/graph/toolbar.js \u0026\u0026 node --check js/graph/renderer.js \u0026\u0026 node --check js/tabs/counter.js \u0026\u0026 node --check js/tabs/index.js \u0026\u0026 node --check js/sidebar/folder-toolbar.js \u0026\u0026 node --check js/sidebar/context-tree.js \u0026\u0026 node --check js/export/page-breaks.js \u0026\u0026 node --check js/import/dropped-items.js \u0026\u0026 node --check js/import/drag-drop.js \u0026\u0026 node --check js/import/github.js \u0026\u0026 node --check js/share-url.js \u0026\u0026 node --check js/keyboard-shortcuts.js \u0026\u0026 node --check script.js",
+                    "test:e2e":  "playwright test",
+                    "test:all":  "npm run check:js \u0026\u0026 npm test \u0026\u0026 npm run test:e2e"
+                },
+    "devDependencies":  {
+                            "@playwright/test":  "^1.52.0"
+                        }
 }

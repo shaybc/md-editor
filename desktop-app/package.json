@@ -1,17 +1,19 @@
 {
-  "name": "md-editor-desktop",
-  "version": "7.4.0",
-  "private": true,
-  "description": "Neutralinojs desktop port of MD-Editor",
-  "scripts": {
-    "setup": "node setup-binaries.js && node download-vendor.js",
-    "postsetup": "node prepare.js",
-    "predev": "npm run setup",
-    "dev": "node run-neutralino.js run",
-    "prebuild": "npm run setup",
-    "build": "node run-neutralino.js build --embed-resources",
-    "build:portable": "node run-neutralino.js build --release",
-    "build:all": "npm run build && npm run build:portable"
-  },
-  "dependencies": {}
+    "name":  "md-editor-desktop",
+    "version":  "7.5.0",
+    "private":  true,
+    "description":  "Neutralinojs desktop port of MD-Editor",
+    "scripts":  {
+                    "setup":  "node setup-binaries.js \u0026\u0026 node download-vendor.js",
+                    "postsetup":  "node prepare.js",
+                    "predev":  "npm run setup",
+                    "dev":  "node run-neutralino.js run",
+                    "prebuild":  "npm run setup",
+                    "build":  "node run-neutralino.js build --embed-resources",
+                    "build:portable":  "node run-neutralino.js build --release",
+                    "build:all":  "npm run build \u0026\u0026 npm run build:portable"
+                },
+    "dependencies":  {
+
+                     }
 }

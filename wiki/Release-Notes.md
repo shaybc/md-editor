@@ -4,9 +4,17 @@ This page summarizes the tagged MD-Editor releases and the major user-facing fea
 
 ## Current Main
 
-Changes available on `main` after `v7.4`:
+Changes available on `main` after `v7.5`:
 
 - No unreleased changes are currently documented.
+
+## v7.5 - June 13, 2026
+
+- Improved editor find/replace, selection highlighting, context-menu actions, and wrapped-line alignment.
+- Added converter console streaming, minimized conversion tasks, folder actions, and safer converter control states.
+- Expanded graph and tree context actions for local graph scopes, original source files, ungrouped files, and graph state refreshes.
+- Improved About/help/license access and bundled documentation links.
+- Updated About dialog and app metadata for the v7.5 release.
 
 ## v7.4 - June 12, 2026
 
