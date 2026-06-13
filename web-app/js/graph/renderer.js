@@ -1868,6 +1868,7 @@
     contextMenu.appendChild(revealFileBtn);
     contextMenu.appendChild(originalSourceSubmenu);
     contextMenu.appendChild(revealTreeViewBtn);
+    contextMenu.appendChild(showGraphSubmenu);
     contextMenu.appendChild(renameFileBtn);
     contextMenu.appendChild(tagsSubmenu);
     contextMenu.appendChild(copySubmenu);
@@ -1878,7 +1879,6 @@
     contextMenu.appendChild(collapseFullOutgoingToClusterBtn);
     contextMenu.appendChild(collapseDetectedCommunityBtn);
     contextMenu.appendChild(expandClusterBtn);
-    contextMenu.appendChild(showGraphSubmenu);
     contextMenu.appendChild(addToTabSubmenu);
     contextMenu.appendChild(addTagBtn);
     contextMenu.appendChild(removeTagBtn);
