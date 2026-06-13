@@ -4762,11 +4762,15 @@ test("tree file context menu opens a full local graph for that file", async ({ p
   });
 
   const treeMenu = page.locator(".sidebar-file-context-menu:not(.hidden)");
-  await expect(treeMenu.locator(".graph-context-menu-item", { hasText: "Show local graph" })).toBeVisible();
-  await expect(treeMenu.locator(".graph-context-menu-item", { hasText: "Show full local graph" })).toBeVisible();
-  await expect(treeMenu.locator(".graph-context-menu-item", { hasText: "Show full network" })).toBeVisible();
   await expect(treeMenu.locator(".graph-context-menu-item", { hasText: "Show full graph" })).toHaveCount(0);
-  await treeMenu.locator(".graph-context-menu-item", { hasText: "Show full local graph" }).evaluate((button) => button.click());
+  const showGraphSubmenu = treeMenu.locator(".sidebar-file-graph-submenu");
+  await expect(showGraphSubmenu.locator("> .graph-context-menu-item", { hasText: "Show graph" })).toBeVisible();
+  await expect(showGraphSubmenu.locator(".graph-context-menu-submenu-panel .graph-context-menu-item")).toHaveText([
+    "Show local graph",
+    "Show full local graph",
+    "Show full network"
+  ]);
+  await showGraphSubmenu.locator(".graph-context-menu-item", { hasText: "Show full local graph" }).evaluate((button) => button.click());
 
   await expect.poll(() => page.evaluate(() => {
     const tabs = JSON.parse(localStorage.getItem("markdownViewerTabs") || "[]");

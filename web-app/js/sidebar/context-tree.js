@@ -1393,6 +1393,24 @@
       "Open a graph containing every recursive backlink and outgoing dependency reachable from this file."
     );
     showFullNetworkBtn.classList.add("sidebar-file-graph-action");
+    const showGraphSubmenu = document.createElement("div");
+    showGraphSubmenu.className = "graph-context-menu-submenu sidebar-file-graph-submenu";
+    const showGraphSubmenuBtn = createFileContextMenuButton(
+      CONTEXT_MENU_ACTIONS.showGraph?.label || "Show graph",
+      CONTEXT_MENU_ACTIONS.showGraph?.icon || "bi bi-diagram-3",
+      "Open graph views for this file."
+    );
+    showGraphSubmenuBtn.setAttribute("aria-haspopup", "true");
+    disableContextMenuTooltip(showGraphSubmenuBtn);
+    const showGraphSubmenuArrow = document.createElement("span");
+    showGraphSubmenuArrow.className = "graph-context-menu-submenu-arrow";
+    showGraphSubmenuArrow.textContent = "›";
+    showGraphSubmenuBtn.appendChild(showGraphSubmenuArrow);
+    const showGraphSubmenuPanel = document.createElement("div");
+    showGraphSubmenuPanel.className = "graph-context-menu-submenu-panel";
+    [showLocalGraphBtn, showFullLocalGraphBtn, showFullNetworkBtn].forEach((button) => showGraphSubmenuPanel.appendChild(button));
+    showGraphSubmenu.appendChild(showGraphSubmenuBtn);
+    showGraphSubmenu.appendChild(showGraphSubmenuPanel);
     const renameFileBtn = createFileContextMenuButton(
       CONTEXT_MENU_ACTIONS.rename.label,
       CONTEXT_MENU_ACTIONS.rename.icon,
@@ -1498,9 +1516,7 @@
       openDefaultAppBtn,
       revealFileBtn,
       originalSourceSubmenu,
-      showLocalGraphBtn,
-      showFullLocalGraphBtn,
-      showFullNetworkBtn,
+      showGraphSubmenu,
       renameFileBtn,
       tagsSubmenu,
       copySubmenu,
