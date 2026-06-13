@@ -136,7 +136,7 @@
       const selectionEnd = Math.max(markdownEditor.selectionStart || 0, markdownEditor.selectionEnd || 0);
       const selectedText = text.slice(selectionStart, selectionEnd);
 
-      if (!selectedText || selectedText.trim() === "") {
+      if (!isHighlightableEditorSelection(selectedText)) {
         editorSelectionHighlights.innerHTML = "";
         return;
       }
@@ -159,6 +159,13 @@
       markup += escapeHtml(text.slice(searchFrom));
       editorSelectionHighlights.innerHTML = `<div class="editor-selection-highlights-inner">${markup}</div>`;
       syncEditorSelectionHighlightsScroll();
+    }
+
+    function isHighlightableEditorSelection(selection) {
+      const selectedText = String(selection || "");
+      const trimmed = selectedText.trim();
+      if (trimmed.length < 2 || trimmed !== selectedText) return false;
+      return /^[\p{L}\p{N}_-]+$/u.test(trimmed) && /[\p{L}\p{N}]/u.test(trimmed);
     }
 
     function syncEditorSelectionHighlightsScroll() {
