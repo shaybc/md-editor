@@ -607,6 +607,50 @@ test("opens help and about from the action menu", async ({ page }) => {
   })).toBe("LICENSE");
 });
 
+test("opens about license from bundled desktop file", async ({ page }) => {
+  await page.addInitScript(() => {
+    window.NL_VERSION = "test";
+    window.NL_OS = "Windows";
+    window.NL_PATH = "C:/Program Files/MD-Editor";
+    window.NL_CWD = "C:/GitHub/shaybc/md-editor/desktop-app";
+    window.__licenseReadPaths = [];
+    window.Neutralino = {
+      filesystem: {
+        readFile: async (path) => {
+          window.__licenseReadPaths.push(path);
+          if (String(path).replace(/\\/g, "/").endsWith("/resources/LICENSE")) {
+            return "Apache License\nVersion 2.0, January 2004\nDesktop bundled license";
+          }
+          throw new Error(`Missing file: ${path}`);
+        }
+      },
+      clipboard: { writeText: async () => {} },
+      os: {
+        getEnv: async () => "",
+        open: async () => {},
+        execCommand: async () => {}
+      }
+    };
+  });
+  await page.route("**/LICENSE", async (route) => {
+    await route.fulfill({ status: 404, body: "not found" });
+  });
+
+  await openApp(page);
+  await page.locator("#desktopActionMenu").click();
+  await page.locator(".help-menu-submenu > .dropdown-toggle").hover();
+  await page.locator(".help-menu-submenu .show-about-dialog").click();
+
+  const aboutModal = page.locator("#about-modal");
+  await expect(aboutModal).toBeVisible();
+  await aboutModal.getByRole("button", { name: "Apache License 2.0" }).click();
+
+  await expect(aboutModal).toBeHidden();
+  await expect(page.locator("#tab-list .tab-item.active")).toContainText("License");
+  await expect(page.locator("#markdown-preview")).toContainText("Desktop bundled license");
+  await expect.poll(() => page.evaluate(() => window.__licenseReadPaths)).toContain("C:/Program Files/MD-Editor/resources/LICENSE");
+});
+
 test("settings menu updates graph auto-clustering threshold", async ({ page }) => {
   await openApp(page);
 

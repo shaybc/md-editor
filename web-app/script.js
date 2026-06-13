@@ -3029,8 +3029,48 @@ Markdown content is processed client-side in your browser and sanitized before p
     initTabs,
   } = tabsModule;
 
+  function getNeutralinoGlobalValue(name) {
+    if (name === "NL_PATH" && typeof NL_PATH !== "undefined") return NL_PATH;
+    if (name === "NL_CWD" && typeof NL_CWD !== "undefined") return NL_CWD;
+    return typeof window !== "undefined" ? window[name] : "";
+  }
+
+  function normalizeLocalPath(path) {
+    return String(path || "").replace(/\\/g, "/").replace(/\/+$/, "");
+  }
+
+  async function readBundledDesktopMarkdown(normalizedPath) {
+    if (typeof NL_VERSION === "undefined" || typeof Neutralino === "undefined" || !Neutralino.filesystem?.readFile) {
+      return null;
+    }
+
+    const basePath = normalizeLocalPath(getNeutralinoGlobalValue("NL_PATH"));
+    const cwdPath = normalizeLocalPath(getNeutralinoGlobalValue("NL_CWD"));
+    const candidates = [
+      basePath ? `${basePath}/resources/${normalizedPath}` : "",
+      cwdPath ? `${cwdPath}/resources/${normalizedPath}` : "",
+      `resources/${normalizedPath}`,
+      normalizedPath
+    ].filter(Boolean);
+    let lastError = null;
+
+    for (const candidate of candidates) {
+      try {
+        return await Neutralino.filesystem.readFile(candidate);
+      } catch (error) {
+        lastError = error;
+      }
+    }
+
+    if (lastError) throw lastError;
+    return null;
+  }
+
   async function fetchBundledWikiMarkdown(wikiPath = "wiki/Home.md") {
     const normalizedPath = String(wikiPath || "wiki/Home.md").replace(/\\/g, "/").replace(/^\/+/, "");
+    const desktopMarkdown = await readBundledDesktopMarkdown(normalizedPath);
+    if (desktopMarkdown !== null) return desktopMarkdown;
+
     const helpPaths = [normalizedPath, `../${normalizedPath}`, `/${normalizedPath}`];
     let lastError = null;
 
@@ -3794,16 +3834,6 @@ Markdown content is processed client-side in your browser and sanitized before p
       console.warn("Failed to choose code converter folder:", error);
       setCodeConverterStatus("Unable to choose that folder.");
     }
-  }
-
-  function getNeutralinoGlobalValue(name) {
-    if (name === "NL_PATH" && typeof NL_PATH !== "undefined") return NL_PATH;
-    if (name === "NL_CWD" && typeof NL_CWD !== "undefined") return NL_CWD;
-    return typeof window !== "undefined" ? window[name] : "";
-  }
-
-  function normalizeLocalPath(path) {
-    return String(path || "").replace(/\\/g, "/").replace(/\/+$/, "");
   }
 
   function getCodeConverterScriptPath() {
