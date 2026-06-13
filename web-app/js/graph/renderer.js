@@ -1625,11 +1625,6 @@
       "Remove this point from the current graph view while keeping the original file on disk."
     );
     hidePointBtn.classList.add("hidden");
-    const removeLeafNodesBtn = createContextMenuButton(
-      CONTEXT_MENU_ACTIONS.removeLeafNodes.label,
-      CONTEXT_MENU_ACTIONS.removeLeafNodes.icon,
-      "Hide all visible file points that have no direct outgoing Markdown links."
-    );
     const collapseToClusterBtn = createContextMenuButton(
       CONTEXT_MENU_ACTIONS.collapseToCluster.label,
       CONTEXT_MENU_ACTIONS.collapseToCluster.icon,
@@ -1874,7 +1869,6 @@
     contextMenu.appendChild(copySubmenu);
     contextMenu.appendChild(contextMenuGraphSeparator);
     contextMenu.appendChild(hidePointBtn);
-    contextMenu.appendChild(removeLeafNodesBtn);
     contextMenu.appendChild(collapseToClusterBtn);
     contextMenu.appendChild(collapseFullOutgoingToClusterBtn);
     contextMenu.appendChild(collapseDetectedCommunityBtn);
@@ -3996,7 +3990,13 @@
     groupMostReferencedButton.className = "graph-quick-action-menu-item";
     groupMostReferencedButton.setAttribute("role", "menuitem");
     groupMostReferencedButton.innerHTML = '<i class="bi bi-tags" aria-hidden="true"></i><span>Group most referenced</span>';
+    const removeLeafQuickActionButton = document.createElement("button");
+    removeLeafQuickActionButton.type = "button";
+    removeLeafQuickActionButton.className = "graph-quick-action-menu-item";
+    removeLeafQuickActionButton.setAttribute("role", "menuitem");
+    removeLeafQuickActionButton.innerHTML = `<i class="${CONTEXT_MENU_ACTIONS.removeLeafNodes.icon}" aria-hidden="true"></i><span>${CONTEXT_MENU_ACTIONS.removeLeafNodes.label}</span>`;
     quickActionMenu.appendChild(groupMostReferencedButton);
+    quickActionMenu.appendChild(removeLeafQuickActionButton);
     quickActionWrapper.append(quickActionStatus, quickActionMenu, quickActionButton);
     graphRenderWrapper.appendChild(quickActionWrapper);
 
@@ -4004,6 +4004,7 @@
       quickActionWrapper.classList.toggle("busy", !!busy);
       quickActionButton.disabled = !!busy;
       groupMostReferencedButton.disabled = !!busy;
+      removeLeafQuickActionButton.disabled = !!busy;
       quickActionButton.setAttribute("aria-busy", busy ? "true" : "false");
       quickActionStatusLabel.textContent = busy ? message : "";
       quickActionStatus.classList.toggle("hidden", !busy);
@@ -4032,6 +4033,10 @@
         console.error("Failed to group most referenced graph nodes:", error);
         alert("Unable to group the most referenced files.");
       }
+    });
+    removeLeafQuickActionButton.addEventListener("click", () => {
+      closeGraphQuickActionMenu();
+      hideLeafGraphPoints();
     });
 
     const applyMagneticSetting = () => {
@@ -4099,7 +4104,6 @@
       openAllBtn,
       centerGraphBtn,
       exportOriginalNodesBtn,
-      removeLeafNodesBtn,
       magneticToggleBtn
     ];
 
@@ -4298,11 +4302,6 @@
       event.stopPropagation();
       hideContextMenu();
       await exportOriginalGraphNodes();
-    });
-
-    removeLeafNodesBtn.addEventListener("click", (event) => {
-      event.stopPropagation();
-      hideLeafGraphPoints();
     });
 
     collapseToClusterBtn.addEventListener("click", (event) => {

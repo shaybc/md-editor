@@ -1763,7 +1763,7 @@ test("saved graph remains interactive and filters only graph snapshot tags", asy
   await expect(graphMenu).toContainText("Open in a new tab");
   await expect(graphMenu.getByRole("button", { name: "Turn magnetic forces off" })).toBeHidden();
   await expect(graphMenu.getByRole("button", { name: "Open all" })).toBeHidden();
-  await expect(graphMenu.getByRole("button", { name: "Remove Leaf Nodes" })).toBeHidden();
+  await expect(graphMenu.getByRole("button", { name: "Remove Leaf Nodes" })).toHaveCount(0);
   await expect(graphMenu.getByRole("button", { name: "Center Graph" })).toBeHidden();
   await expect(graphMenu.locator(".tags-context-menu-item")).toHaveText(["#defined"]);
   await expect(graphMenu.evaluate((menu) => Array.from(menu.children).map((child) => child.textContent.trim()))).resolves.not.toContain("Share");
@@ -1818,7 +1818,7 @@ test("saved graph remains interactive and filters only graph snapshot tags", asy
   });
   const mapMenu = page.locator(".graph-tab-render .graph-context-menu:not(.hidden)");
   await expect(mapMenu).toContainText("Turn magnetic forces off");
-  await expect(mapMenu).toContainText("Remove Leaf Nodes");
+  await expect(mapMenu).not.toContainText("Remove Leaf Nodes");
   await expect(mapMenu.getByRole("button", { name: "Center Graph" })).toBeVisible();
   await expect(mapMenu.getByRole("button", { name: "Open in a new tab" })).toBeHidden();
 
@@ -3926,7 +3926,7 @@ test("graph open all asks before opening more than twenty visible file points", 
   });
 });
 
-test("graph context menu removes visible leaf nodes generation by generation", async ({ page }) => {
+test("graph quick action removes visible leaf nodes generation by generation", async ({ page }) => {
   await page.addInitScript(() => {
     const graphTab = {
       id: "graph_leaf_e2e",
@@ -3982,26 +3982,14 @@ test("graph context menu removes visible leaf nodes generation by generation", a
   await expect(page.locator(".graph-tab-render")).toBeVisible();
   await expect(page.locator(".graph-node-file")).toHaveCount(3);
 
-  await page.locator(".graph-tab-render").dispatchEvent("contextmenu", {
-    bubbles: true,
-    cancelable: true,
-    button: 2,
-    clientX: 260,
-    clientY: 260
-  });
-  await page.locator(".graph-context-menu-item", { hasText: "Remove Leaf Nodes" }).click();
+  await page.locator(".graph-quick-action-button").click();
+  await page.locator(".graph-quick-action-menu-item", { hasText: "Remove Leaf Nodes" }).click();
   await expect(page.locator(".graph-node-file")).toHaveCount(2);
   await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem("markdownViewerTabs"))[0].graphViewConfig.hiddenNodeIds.sort()))
     .toEqual(["leaf.md"]);
 
-  await page.locator(".graph-tab-render").dispatchEvent("contextmenu", {
-    bubbles: true,
-    cancelable: true,
-    button: 2,
-    clientX: 260,
-    clientY: 260
-  });
-  await page.locator(".graph-context-menu-item", { hasText: "Remove Leaf Nodes" }).click();
+  await page.locator(".graph-quick-action-button").click();
+  await page.locator(".graph-quick-action-menu-item", { hasText: "Remove Leaf Nodes" }).click();
   await expect(page.locator(".graph-node-file")).toHaveCount(1);
   await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem("markdownViewerTabs"))[0].graphViewConfig.hiddenNodeIds.sort()))
     .toEqual(["leaf.md", "mid.md"]);
