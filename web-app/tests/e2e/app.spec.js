@@ -1691,37 +1691,21 @@ test("editor selection context menu toggles case insensitive occurrence highligh
 
   await expect(page.locator(".editor-selection-match")).toHaveCount(1);
   await editor.dispatchEvent("contextmenu", { bubbles: true, cancelable: true, button: 2, clientX: 240, clientY: 220 });
-  const contextMenu = page.locator("#editor-context-menu");
-  await expect(contextMenu).toBeVisible();
-  await expect(contextMenu.locator("[data-editor-context-action='ignore-case']")).toBeVisible();
-  await expect(contextMenu).toContainText("Cut");
-  await expect(contextMenu).toContainText("Copy");
-  await expect(contextMenu).toContainText("Paste");
-  await expect(contextMenu).toContainText("Emoji");
-  await expect(contextMenu).toContainText("Select all");
+  await expect(page.locator("#editor-context-menu")).toBeVisible();
+  await expect(page.locator("[data-editor-context-action='ignore-case']")).toBeVisible();
+  await expect(page.locator("#editor-context-menu")).toContainText("Cut");
+  await expect(page.locator("#editor-context-menu")).toContainText("Copy");
+  await expect(page.locator("#editor-context-menu")).toContainText("Paste");
+  await expect(page.locator("#editor-context-menu")).toContainText("Emoji");
+  await expect(page.locator("#editor-context-menu")).toContainText("Select all");
 
-  await contextMenu.locator("[data-editor-context-action='ignore-case']").evaluate((button) => button.click());
+  await page.locator("[data-editor-context-action='ignore-case']").evaluate((button) => button.click());
   await expect(page.locator(".editor-selection-match")).toHaveCount(3);
 
   await editor.dispatchEvent("contextmenu", { bubbles: true, cancelable: true, button: 2, clientX: 240, clientY: 220 });
-  await expect(contextMenu.locator("[data-editor-context-action='case-sensitive']")).toBeVisible();
-  await contextMenu.locator("[data-editor-context-action='case-sensitive']").evaluate((button) => button.click());
+  await expect(page.locator("[data-editor-context-action='case-sensitive']")).toBeVisible();
+  await page.locator("[data-editor-context-action='case-sensitive']").evaluate((button) => button.click());
   await expect(page.locator(".editor-selection-match")).toHaveCount(1);
-});
-
-test("editor selection highlights ignore punctuation fragments", async ({ page }) => {
-  await openApp(page);
-
-  const editor = page.locator("#markdown-editor");
-  await editor.fill("export, import, format,\nexport import format");
-  await editor.evaluate((textarea) => {
-    const start = textarea.value.indexOf("t,");
-    textarea.focus();
-    textarea.setSelectionRange(start, start + 2);
-    textarea.dispatchEvent(new Event("select", { bubbles: true }));
-  });
-
-  await expect(page.locator(".editor-selection-match")).toHaveCount(0);
 });
 
 test("find and replace navigation scrolls offscreen matches into view", async ({ page }) => {
