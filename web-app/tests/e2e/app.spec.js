@@ -1632,6 +1632,10 @@ test("converts selected editor text from the formatting toolbar", async ({ page 
   });
   await page.locator(".editor-format-button[data-editor-format-action='find-replace']").click();
   await expect(page.locator("#editor-find-replace-modal")).toBeVisible();
+  await expect.poll(async () => {
+    const box = await page.locator(".editor-find-replace-modal-box").boundingBox();
+    return Math.round(box?.width || 0);
+  }).toBeLessThanOrEqual(460);
   await expect(page.locator("#editor-find-input")).toHaveValue("alpha");
   await expect(page.locator("#editor-find-replace-status")).toHaveText("1 of 2 matches");
   await page.locator("#editor-replace-input").fill("gamma");

@@ -5954,12 +5954,43 @@ a:focus {
 }
 
 .editor-find-replace-modal-box {
-  position: relative;
-  width: min(980px, calc(100vw - 18px));
-  max-width: min(980px, calc(100vw - 18px));
-  gap: 14px;
-  padding: 28px;
+  position: fixed;
+  top: 136px;
+  right: 28px;
+  width: min(430px, calc(100vw - 32px));
+  max-width: min(430px, calc(100vw - 32px));
+  gap: 9px;
+  padding: 18px;
   text-align: left;
+  pointer-events: auto;
+}
+
+#editor-find-replace-modal {
+  align-items: flex-start;
+  background: transparent;
+  justify-content: flex-end;
+  padding: 0;
+  pointer-events: none;
+}
+
+.editor-find-replace-modal-box .editor-clear-markdown-title {
+  font-size: 13px;
+  padding-right: 38px;
+  text-align: left;
+}
+
+.editor-find-replace-modal-box .editor-clear-markdown-close {
+  top: 14px;
+  right: 14px;
+}
+
+.editor-find-replace-modal-box .editor-link-modal-label {
+  font-size: 11px;
+  margin-top: 2px;
+}
+
+.editor-find-replace-modal-box .rename-modal-input {
+  height: 34px;
 }
 
 .editor-find-replace-status-row {
@@ -5975,6 +6006,14 @@ a:focus {
   font-size: 13px;
 }
 
+.editor-find-replace-modal-box .reset-modal-actions {
+  margin-top: 2px;
+}
+
+.editor-find-replace-modal-box .reset-modal-btn {
+  padding: 6px 12px;
+}
+
 .editor-find-replace-nav {
   display: inline-flex;
   gap: 6px;
@@ -5987,6 +6026,16 @@ a:focus {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+}
+
+@media (max-width: 760px) {
+  .editor-find-replace-modal-box {
+    top: 98px;
+    right: 12px;
+    left: 12px;
+    width: auto;
+    max-width: none;
+  }
 }
 
 .editor-symbol-actions {
