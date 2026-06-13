@@ -2177,6 +2177,8 @@ body {
   bottom: 7.25rem;
   z-index: 1501;
   display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
   min-width: 220px;
   padding: 0.45rem;
   border: 1px solid var(--border-color);
