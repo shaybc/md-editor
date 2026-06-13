@@ -1682,9 +1682,14 @@ test("find and replace navigation scrolls offscreen matches into view", async ({
   await openApp(page);
 
   const editor = page.locator("#markdown-editor");
-  const lines = Array.from({ length: 90 }, (_value, index) => (
-    index === 0 || index === 75 ? `target line ${index + 1}` : `plain line ${index + 1}`
-  ));
+  await page.locator(".view-mode-btn[data-mode='split']").click();
+  const wrappedLine = "plain wrapped line " + "word ".repeat(90);
+  const lines = [
+    "target line 1",
+    ...Array.from({ length: 28 }, () => wrappedLine),
+    "target line after wrapped content",
+    ...Array.from({ length: 20 }, (_value, index) => `plain line ${index + 1}`)
+  ];
   await editor.fill(lines.join("\n"));
   await editor.evaluate((textarea) => {
     textarea.focus();
@@ -1704,7 +1709,7 @@ test("find and replace navigation scrolls offscreen matches into view", async ({
 
   await page.locator("#editor-find-next").click();
   await expect(page.locator("#editor-find-replace-status")).toHaveText("2 of 2 matches");
-  await expect.poll(() => editor.evaluate((textarea) => textarea.scrollTop)).toBeGreaterThan(0);
+  await expect.poll(() => editor.evaluate((textarea) => textarea.scrollTop)).toBeGreaterThan(1000);
 });
 
 test("mirrors editor markdown syntax in the highlight overlay", async ({ page }) => {

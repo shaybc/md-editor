@@ -173,6 +173,7 @@ document.addEventListener("DOMContentLoaded", function () {
   let editorFindReplaceExpanded = true;
   let editorFindMatchCase = false;
   let editorFindPreserveCase = false;
+  let editorFindLineMeasure = null;
   const editorSymbols = [
     { group: "Common Symbols", symbol: "©", entity: "&copy;", keywords: "copyright c" },
     { group: "Common Symbols", symbol: "®", entity: "&reg;", keywords: "registered trademark r" },
@@ -672,7 +673,51 @@ document.addEventListener("DOMContentLoaded", function () {
     }
     return replacement;
   }
-  function getEditorFindMatchScrollTop(match) {
+  function getEditorFindLineMeasure() {
+    if (!editorFindLineMeasure) {
+      editorFindLineMeasure = document.createElement("textarea");
+      editorFindLineMeasure.className = "editor-line-measure";
+      editorFindLineMeasure.setAttribute("aria-hidden", "true");
+      editorFindLineMeasure.setAttribute("tabindex", "-1");
+      editorFindLineMeasure.setAttribute("wrap", "soft");
+      document.body.appendChild(editorFindLineMeasure);
+    }
+    return editorFindLineMeasure;
+  }
+  function syncEditorFindLineMeasureStyles(measure, computedStyle) {
+    [
+      "fontFamily",
+      "fontSize",
+      "fontWeight",
+      "fontStyle",
+      "lineHeight",
+      "letterSpacing",
+      "textTransform",
+      "textIndent",
+      "textRendering",
+      "wordSpacing",
+      "paddingTop",
+      "paddingRight",
+      "paddingBottom",
+      "paddingLeft",
+      "borderTopWidth",
+      "borderRightWidth",
+      "borderBottomWidth",
+      "borderLeftWidth",
+      "boxSizing",
+      "tabSize"
+    ].forEach(function(property) {
+      measure.style[property] = computedStyle[property];
+    });
+    measure.style.width = `${markdownEditor.clientWidth}px`;
+  }
+  function getEditorFindMeasuredLineHeight(measure, computedStyle, lineHeight, line) {
+    const paddingTop = parseFloat(computedStyle.paddingTop) || 0;
+    const paddingBottom = parseFloat(computedStyle.paddingBottom) || 0;
+    measure.value = line || " ";
+    return Math.max(lineHeight, Math.ceil(measure.scrollHeight - paddingTop - paddingBottom));
+  }
+  function getEditorFindMatchMetrics(match) {
     const computedStyle = window.getComputedStyle(markdownEditor);
     const parsedLineHeight = parseFloat(computedStyle.lineHeight);
     const parsedFontSize = parseFloat(computedStyle.fontSize);
@@ -680,20 +725,40 @@ document.addEventListener("DOMContentLoaded", function () {
       ? (Number.isNaN(parsedFontSize) ? 21 : parsedFontSize * 1.5)
       : parsedLineHeight;
     const paddingTop = parseFloat(computedStyle.paddingTop) || 0;
-    const lineIndex = markdownEditor.value.slice(0, match.start).split("\n").length - 1;
-    return Math.max(0, paddingTop + (lineIndex * lineHeight));
+    const beforeMatch = markdownEditor.value.slice(0, match.start);
+    const linesBeforeMatch = beforeMatch.split("\n");
+    const previousLines = linesBeforeMatch.slice(0, -1);
+    const currentLinePrefix = linesBeforeMatch[linesBeforeMatch.length - 1] || "";
+    const measure = getEditorFindLineMeasure();
+    syncEditorFindLineMeasureStyles(measure, computedStyle);
+    const previousTop = previousLines.reduce(function(total, line) {
+      return total + getEditorFindMeasuredLineHeight(measure, computedStyle, lineHeight, line);
+    }, 0);
+    const prefixHeight = currentLinePrefix
+      ? getEditorFindMeasuredLineHeight(measure, computedStyle, lineHeight, currentLinePrefix)
+      : lineHeight;
+    const wrappedPrefixTop = Math.max(0, prefixHeight - lineHeight);
+    return {
+      lineHeight,
+      top: Math.max(0, paddingTop + previousTop + wrappedPrefixTop)
+    };
   }
   function scrollEditorFindMatchIntoView(match) {
     if (!match) return;
-    const targetTop = getEditorFindMatchScrollTop(match);
+    const metrics = getEditorFindMatchMetrics(match);
     const visibleTop = markdownEditor.scrollTop;
     const visibleBottom = visibleTop + markdownEditor.clientHeight;
-    const safeMargin = Math.min(96, Math.max(32, markdownEditor.clientHeight * 0.18));
-    const targetBottom = targetTop + safeMargin;
-    if (targetTop >= visibleTop + safeMargin && targetBottom <= visibleBottom - safeMargin) return;
+    const safeMargin = Math.min(140, Math.max(48, markdownEditor.clientHeight * 0.22));
+    const targetBottom = metrics.top + metrics.lineHeight;
+    if (metrics.top >= visibleTop + safeMargin && targetBottom <= visibleBottom - safeMargin) return;
 
-    markdownEditor.scrollTop = Math.max(0, targetTop - (markdownEditor.clientHeight / 2));
-    markdownEditor.dispatchEvent(new Event("scroll", { bubbles: true }));
+    const nextScrollTop = Math.max(0, metrics.top - (markdownEditor.clientHeight * 0.42));
+    const applyFindScroll = function() {
+      markdownEditor.scrollTop = nextScrollTop;
+      markdownEditor.dispatchEvent(new Event("scroll", { bubbles: true }));
+    };
+    applyFindScroll();
+    window.requestAnimationFrame(applyFindScroll);
   }
   function selectEditorFindMatch(index) {
     if (!editorFindMatches.length) {
