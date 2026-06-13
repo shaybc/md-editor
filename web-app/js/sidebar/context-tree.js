@@ -1368,7 +1368,7 @@
     disableContextMenuTooltip(originalSourceSubmenuBtn);
     const originalSourceSubmenuArrow = document.createElement("span");
     originalSourceSubmenuArrow.className = "graph-context-menu-submenu-arrow";
-    originalSourceSubmenuArrow.textContent = "ג€÷";
+    originalSourceSubmenuArrow.textContent = "›";
     originalSourceSubmenuBtn.appendChild(originalSourceSubmenuArrow);
     const originalSourceSubmenuPanel = document.createElement("div");
     originalSourceSubmenuPanel.className = "graph-context-menu-submenu-panel";
