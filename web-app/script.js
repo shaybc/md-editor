@@ -4464,6 +4464,7 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
     exportOriginalNodes: { label: "Export original nodes", icon: "bi bi-files" },
     exportOriginalNode: { label: "Export original node", icon: "bi bi-file-earmark-arrow-down" },
     openWithDefaultApp: { label: "Open in default app", icon: "bi bi-window" },
+    originalSource: { label: "Original Source", icon: "bi bi-file-earmark-code" },
     openOriginalInNewTab: { label: "Open original in a new tab", icon: "bi bi-box-arrow-up-right" },
     openOriginalWithDefaultApp: { label: "Open original in default app", icon: "bi bi-window" },
     revealOriginalInFileExplorer: { label: "Reveal original in file explorer", icon: "bi bi-folder2-open" },

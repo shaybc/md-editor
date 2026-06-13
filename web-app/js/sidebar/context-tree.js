@@ -1347,19 +1347,34 @@
       CONTEXT_MENU_ACTIONS.openOriginalInNewTab?.icon || "bi bi-box-arrow-up-right",
       "Open the original source file referenced by this Markdown node in a new editor tab."
     );
-    openOriginalInNewTabBtn.classList.add("sidebar-open-original-file");
     const openOriginalDefaultAppBtn = createFileContextMenuButton(
       CONTEXT_MENU_ACTIONS.openOriginalWithDefaultApp?.label || "Open original in default app",
       CONTEXT_MENU_ACTIONS.openOriginalWithDefaultApp?.icon || "bi bi-window",
       "Open the original source file referenced by this Markdown node with the default system application."
     );
-    openOriginalDefaultAppBtn.classList.add("sidebar-open-original-file");
     const revealOriginalFileBtn = createFileContextMenuButton(
       CONTEXT_MENU_ACTIONS.revealOriginalInFileExplorer?.label || "Reveal original in file explorer",
       CONTEXT_MENU_ACTIONS.revealOriginalInFileExplorer?.icon || "bi bi-folder2-open",
       "Open the original source file's folder in the system file explorer and select it when supported."
     );
-    revealOriginalFileBtn.classList.add("sidebar-open-original-file");
+    const originalSourceSubmenu = document.createElement("div");
+    originalSourceSubmenu.className = "graph-context-menu-submenu sidebar-original-source-submenu";
+    const originalSourceSubmenuBtn = createFileContextMenuButton(
+      CONTEXT_MENU_ACTIONS.originalSource?.label || "Original Source",
+      CONTEXT_MENU_ACTIONS.originalSource?.icon || "bi bi-file-earmark-code",
+      "Open original source file actions."
+    );
+    originalSourceSubmenuBtn.setAttribute("aria-haspopup", "true");
+    disableContextMenuTooltip(originalSourceSubmenuBtn);
+    const originalSourceSubmenuArrow = document.createElement("span");
+    originalSourceSubmenuArrow.className = "graph-context-menu-submenu-arrow";
+    originalSourceSubmenuArrow.textContent = "ג€÷";
+    originalSourceSubmenuBtn.appendChild(originalSourceSubmenuArrow);
+    const originalSourceSubmenuPanel = document.createElement("div");
+    originalSourceSubmenuPanel.className = "graph-context-menu-submenu-panel";
+    [openOriginalInNewTabBtn, openOriginalDefaultAppBtn, revealOriginalFileBtn].forEach((button) => originalSourceSubmenuPanel.appendChild(button));
+    originalSourceSubmenu.appendChild(originalSourceSubmenuBtn);
+    originalSourceSubmenu.appendChild(originalSourceSubmenuPanel);
     const showLocalGraphBtn = createFileContextMenuButton(
       CONTEXT_MENU_ACTIONS.showLocalGraph?.label || "Show local graph",
       CONTEXT_MENU_ACTIONS.showLocalGraph?.icon || "bi bi-diagram-2",
@@ -1482,9 +1497,7 @@
       openFileBtn,
       openDefaultAppBtn,
       revealFileBtn,
-      openOriginalInNewTabBtn,
-      openOriginalDefaultAppBtn,
-      revealOriginalFileBtn,
+      originalSourceSubmenu,
       showLocalGraphBtn,
       showFullLocalGraphBtn,
       showFullNetworkBtn,
@@ -2721,11 +2734,11 @@
     const tagsSubmenu = menu.querySelector(".tags-context-submenu");
     const tagsSubmenuPanel = menu.querySelector(".tags-context-submenu-panel");
     const graphActionBtns = menu.querySelectorAll(".sidebar-file-graph-action");
-    const openOriginalFileBtns = menu.querySelectorAll(".sidebar-open-original-file");
+    const originalSourceSubmenu = menu.querySelector(".sidebar-original-source-submenu");
     const exportOriginalNodeBtn = menu.querySelector(".sidebar-export-original-node");
     const canManageTags = isMarkdownPath(node.name || node.path || node.fullPath || "");
     graphActionBtns.forEach((button) => button.classList.toggle("hidden", !canManageTags));
-    openOriginalFileBtns.forEach((button) => button.classList.toggle("hidden", !canManageTags));
+    if (originalSourceSubmenu) originalSourceSubmenu.classList.toggle("hidden", !canManageTags);
     if (exportOriginalNodeBtn) exportOriginalNodeBtn.classList.toggle("hidden", !canManageTags);
     if (tagsSubmenu) tagsSubmenu.classList.toggle("hidden", !canManageTags);
     if (canManageTags) {

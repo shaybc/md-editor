@@ -1575,19 +1575,34 @@
       CONTEXT_MENU_ACTIONS.openOriginalInNewTab?.icon || "bi bi-box-arrow-up-right",
       "Open the original source file referenced by this Markdown point in a new editor tab."
     );
-    openOriginalInNewTabBtn.classList.add("hidden");
     const openOriginalDefaultAppBtn = createContextMenuButton(
       CONTEXT_MENU_ACTIONS.openOriginalWithDefaultApp?.label || "Open original in default app",
       CONTEXT_MENU_ACTIONS.openOriginalWithDefaultApp?.icon || "bi bi-window",
       "Open the original source file referenced by this Markdown point with the default system application."
     );
-    openOriginalDefaultAppBtn.classList.add("hidden");
     const revealOriginalFileBtn = createContextMenuButton(
       CONTEXT_MENU_ACTIONS.revealOriginalInFileExplorer?.label || "Reveal original in file explorer",
       CONTEXT_MENU_ACTIONS.revealOriginalInFileExplorer?.icon || "bi bi-folder2-open",
       "Open the original source file's folder in the system file explorer and select it when supported."
     );
-    revealOriginalFileBtn.classList.add("hidden");
+    const originalSourceSubmenu = document.createElement("div");
+    originalSourceSubmenu.className = "graph-context-menu-submenu hidden";
+    const originalSourceSubmenuBtn = createContextMenuButton(
+      CONTEXT_MENU_ACTIONS.originalSource?.label || "Original Source",
+      CONTEXT_MENU_ACTIONS.originalSource?.icon || "bi bi-file-earmark-code",
+      "Open original source file actions."
+    );
+    originalSourceSubmenuBtn.setAttribute("aria-haspopup", "true");
+    disableContextMenuTooltip(originalSourceSubmenuBtn);
+    const originalSourceSubmenuArrow = document.createElement("span");
+    originalSourceSubmenuArrow.className = "graph-context-menu-submenu-arrow";
+    originalSourceSubmenuArrow.textContent = "›";
+    originalSourceSubmenuBtn.appendChild(originalSourceSubmenuArrow);
+    const originalSourceSubmenuPanel = document.createElement("div");
+    originalSourceSubmenuPanel.className = "graph-context-menu-submenu-panel";
+    [openOriginalInNewTabBtn, openOriginalDefaultAppBtn, revealOriginalFileBtn].forEach((button) => originalSourceSubmenuPanel.appendChild(button));
+    originalSourceSubmenu.appendChild(originalSourceSubmenuBtn);
+    originalSourceSubmenu.appendChild(originalSourceSubmenuPanel);
     const revealTreeViewBtn = createContextMenuButton(
       CONTEXT_MENU_ACTIONS.revealInTreeView.label,
       CONTEXT_MENU_ACTIONS.revealInTreeView.icon,
@@ -1851,9 +1866,7 @@
     contextMenu.appendChild(openFileBtn);
     contextMenu.appendChild(openDefaultAppBtn);
     contextMenu.appendChild(revealFileBtn);
-    contextMenu.appendChild(openOriginalInNewTabBtn);
-    contextMenu.appendChild(openOriginalDefaultAppBtn);
-    contextMenu.appendChild(revealOriginalFileBtn);
+    contextMenu.appendChild(originalSourceSubmenu);
     contextMenu.appendChild(revealTreeViewBtn);
     contextMenu.appendChild(renameFileBtn);
     contextMenu.appendChild(tagsSubmenu);
@@ -4063,9 +4076,7 @@
       openFileBtn,
       openDefaultAppBtn,
       revealFileBtn,
-      openOriginalInNewTabBtn,
-      openOriginalDefaultAppBtn,
-      revealOriginalFileBtn,
+      originalSourceSubmenu,
       revealTreeViewBtn,
       renameFileBtn,
       copySubmenu,
@@ -4180,9 +4191,7 @@
         openFileBtn,
         openDefaultAppBtn,
         revealFileBtn,
-        openOriginalInNewTabBtn,
-        openOriginalDefaultAppBtn,
-        revealOriginalFileBtn,
+        originalSourceSubmenu,
         revealTreeViewBtn,
         copySubmenu,
         exportSubmenu

@@ -2900,16 +2900,18 @@ test("sidebar file context menu opens original source file in default app", asyn
   const menu = page.locator(".sidebar-file-context-menu:not(.hidden)");
   await expect.poll(() => menu.evaluate((contextMenu) => Array.from(contextMenu.children)
     .filter((child) => child.matches("button.graph-context-menu-item:not(.hidden)"))
-    .slice(0, 6)
+    .slice(0, 3)
     .map((button) => button.querySelector(".graph-context-menu-item-label")?.textContent?.trim()))).toEqual([
       "Open in a new tab",
       "Open in default app",
-      "Reveal in file explorer",
-      "Open original in a new tab",
-      "Open original in default app",
-      "Reveal original in file explorer"
+      "Reveal in file explorer"
     ]);
-  await menu.locator(".graph-context-menu-item", { hasText: "Open original in default app" }).evaluate((button) => button.click());
+  const originalSourceSubmenu = menu.locator(".graph-context-menu-submenu", { hasText: "Original Source" });
+  await expect(originalSourceSubmenu).toBeVisible();
+  await expect(originalSourceSubmenu.locator(".graph-context-menu-item", { hasText: "Open original in a new tab" })).toHaveCount(1);
+  await expect(originalSourceSubmenu.locator(".graph-context-menu-item", { hasText: "Open original in default app" })).toHaveCount(1);
+  await expect(originalSourceSubmenu.locator(".graph-context-menu-item", { hasText: "Reveal original in file explorer" })).toHaveCount(1);
+  await originalSourceSubmenu.locator(".graph-context-menu-item", { hasText: "Open original in default app" }).evaluate((button) => button.click());
 
   await expect.poll(() => page.evaluate(() => window.__openedPaths)).toEqual([
     "C:/workspace/my_project/client/api/aboutApi.js"
