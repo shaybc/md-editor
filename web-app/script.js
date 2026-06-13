@@ -532,6 +532,7 @@ document.addEventListener("DOMContentLoaded", function () {
     getActiveTabId: function() { return activeTabId; },
     getEditorInputEventCount: function() { return editorInputEventCount; },
     hideLinkAutocomplete,
+    openEditorEmojiModal,
     updateEditorLineNumbers: function() { updateEditorLineNumbers(); },
     updateEditorSelectionHighlights: function() { updateEditorSelectionHighlights(); },
     updateStatusLine: function() { updateStatusLine(); }
@@ -1579,7 +1580,10 @@ document.addEventListener("DOMContentLoaded", function () {
     editorLineNumbers,
     editorCurrentLine,
     editorSelectionHighlights,
-    escapeHtml
+    escapeHtml,
+    getEditorSelectionMatchCaseSensitive: function() {
+      return editorContextMenu.getEditorSelectionMatchCaseSensitive();
+    }
   });
   const getEditorLineHeight = editorLineStatus.getEditorLineHeight;
   const updateEditorLineNumbers = editorLineStatus.updateEditorLineNumbers;
@@ -5342,6 +5346,7 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
       updateStatusLine();
     });
   });
+  markdownEditor.addEventListener("contextmenu", handleEditorContextMenu);
   markdownEditor.addEventListener("focus", function() {
     renderLinkAutocomplete();
     updateEditorLineNumbers();

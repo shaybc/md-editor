@@ -7,6 +7,7 @@
     const editorCurrentLine = deps.editorCurrentLine;
     const editorSelectionHighlights = deps.editorSelectionHighlights;
     const escapeHtml = deps.escapeHtml;
+    const getEditorSelectionMatchCaseSensitive = deps.getEditorSelectionMatchCaseSensitive || function() { return true; };
 
     let editorLineMeasure = null;
     let editorLineNumberResizeFrame = null;
@@ -142,13 +143,17 @@
 
       let markup = "";
       let searchFrom = 0;
-      let matchIndex = text.indexOf(selectedText, searchFrom);
+      const matchCase = getEditorSelectionMatchCaseSensitive();
+      const searchableText = matchCase ? text : text.toLocaleLowerCase();
+      const searchableSelection = matchCase ? selectedText : selectedText.toLocaleLowerCase();
+      let matchIndex = searchableText.indexOf(searchableSelection, searchFrom);
 
       while (matchIndex !== -1) {
+        const matchedText = text.slice(matchIndex, matchIndex + selectedText.length);
         markup += escapeHtml(text.slice(searchFrom, matchIndex));
-        markup += `<span class="editor-selection-match">${escapeHtml(selectedText)}</span>`;
+        markup += `<span class="editor-selection-match">${escapeHtml(matchedText)}</span>`;
         searchFrom = matchIndex + selectedText.length;
-        matchIndex = text.indexOf(selectedText, searchFrom);
+        matchIndex = searchableText.indexOf(searchableSelection, searchFrom);
       }
 
       markup += escapeHtml(text.slice(searchFrom));

@@ -7,12 +7,14 @@
     const getActiveTabId = deps.getActiveTabId;
     const getEditorInputEventCount = deps.getEditorInputEventCount;
     const hideLinkAutocomplete = deps.hideLinkAutocomplete;
+    const openEditorEmojiModal = deps.openEditorEmojiModal;
     const updateEditorLineNumbers = deps.updateEditorLineNumbers;
     const updateEditorSelectionHighlights = deps.updateEditorSelectionHighlights;
     const updateStatusLine = deps.updateStatusLine;
 
     let editorContextMenu = null;
     let editorContextMenuSelection = null;
+    let editorSelectionMatchCaseSensitive = true;
     const editorContextMenuUndoStack = [];
     const editorContextMenuRedoStack = [];
     const editorContextMenuUndoStackLimit = 50;
@@ -288,12 +290,116 @@
       hideEditorContextMenu();
     }
 
+    function restoreEditorContextSelection() {
+      if (!editorContextMenuSelection) return false;
+      markdownEditor.focus();
+      markdownEditor.selectionStart = editorContextMenuSelection.start;
+      markdownEditor.selectionEnd = editorContextMenuSelection.end;
+      return true;
+    }
+
+    function runEditorContextCommand(command) {
+      restoreEditorContextSelection();
+      try {
+        document.execCommand(command);
+      } catch (_) {
+        return false;
+      } finally {
+        if (command !== "copy") hideEditorContextMenu();
+      }
+      return true;
+    }
+
+    async function pasteIntoEditorContextSelection() {
+      restoreEditorContextSelection();
+      let pastedText = "";
+      try {
+        pastedText = await navigator.clipboard.readText();
+      } catch (_) {
+        runEditorContextCommand("paste");
+        return;
+      }
+      replaceSelectionWithText(pastedText);
+    }
+
+    function selectAllEditorText() {
+      markdownEditor.focus();
+      markdownEditor.selectionStart = 0;
+      markdownEditor.selectionEnd = markdownEditor.value.length;
+      updateEditorLineNumbers();
+      updateEditorSelectionHighlights();
+      updateStatusLine();
+      hideEditorContextMenu();
+    }
+
+    function setEditorSelectionMatchCaseSensitive(matchCase) {
+      editorSelectionMatchCaseSensitive = matchCase !== false;
+      updateEditorSelectionHighlights();
+      updateStatusLine();
+      hideEditorContextMenu();
+    }
+
+    function getEditorSelectionMatchCaseSensitive() {
+      return editorSelectionMatchCaseSensitive;
+    }
+
+    function runEditorContextMenuAction(action) {
+      switch (action) {
+        case "emoji":
+          restoreEditorContextSelection();
+          hideEditorContextMenu();
+          if (typeof openEditorEmojiModal === "function") openEditorEmojiModal();
+          break;
+        case "cut":
+          runEditorContextCommand("cut");
+          break;
+        case "copy":
+          runEditorContextCommand("copy");
+          hideEditorContextMenu();
+          break;
+        case "paste":
+          pasteIntoEditorContextSelection();
+          break;
+        case "select-all":
+          selectAllEditorText();
+          break;
+        case "ignore-case":
+          setEditorSelectionMatchCaseSensitive(false);
+          break;
+        case "case-sensitive":
+          setEditorSelectionMatchCaseSensitive(true);
+          break;
+        default:
+          break;
+      }
+    }
+
     function renderEditorContextMenu(clientX, clientY) {
       const menu = getEditorContextMenu();
       const selectedText = markdownEditor.value.slice(editorContextMenuSelection.start, editorContextMenuSelection.end);
       const preview = selectedText.replace(/\s+/g, " ").trim();
+      const caseToggleAction = editorSelectionMatchCaseSensitive ? "ignore-case" : "case-sensitive";
+      const caseToggleLabel = editorSelectionMatchCaseSensitive ? "Ignore case" : "Case sensitive";
+      const browserLikeActions = [
+        { type: "emoji", label: "Emoji", shortcut: "Win+Period", icon: "bi-emoji-smile" },
+        { type: "cut", label: "Cut", shortcut: "Ctrl+X", icon: "bi-scissors" },
+        { type: "copy", label: "Copy", shortcut: "Ctrl+C", icon: "bi-copy" },
+        { type: "paste", label: "Paste", shortcut: "Ctrl+V", icon: "bi-clipboard" },
+        { type: "select-all", label: "Select all", shortcut: "Ctrl+A", icon: "bi-textarea-t" },
+        { type: caseToggleAction, label: caseToggleLabel, shortcut: "", icon: editorSelectionMatchCaseSensitive ? "bi-type" : "bi-type-bold" }
+      ];
 
       menu.innerHTML = `
+        <div class="editor-context-menu-items editor-context-menu-native-items">
+          ${browserLikeActions.map((action) => `
+            <button class="editor-context-menu-item" type="button" role="menuitem" data-editor-context-action="${action.type}">
+              <i class="bi ${action.icon}" aria-hidden="true"></i>
+              <span>${escapeHtml(action.label)}</span>
+              ${action.shortcut ? `<kbd>${escapeHtml(action.shortcut)}</kbd>` : ""}
+            </button>
+          `).join("")}
+        </div>
+        <div class="editor-context-menu-divider" role="separator"></div>
         <div class="editor-context-menu-title">Convert selection</div>
         ${preview ? `<div class="editor-context-menu-preview">${escapeHtml(preview.slice(0, 60))}${preview.length > 60 ? "..." : ""}</div>` : ""}
         <div class="editor-context-menu-items">
@@ -309,6 +415,11 @@
       menu.querySelectorAll("[data-markdown-action]").forEach(function(button) {
         button.addEventListener("click", function() {
           replaceEditorSelectionWithMarkdown(button.dataset.markdownAction);
+        });
+      });
+      menu.querySelectorAll("[data-editor-context-action]").forEach(function(button) {
+        button.addEventListener("click", function() {
+          runEditorContextMenuAction(button.dataset.editorContextAction);
         });
       });
 
@@ -340,6 +451,7 @@
       applyMarkdownActionToSelection,
       replaceSelectionWithText,
       replaceRangeWithText,
+      getEditorSelectionMatchCaseSensitive,
       hideEditorContextMenu,
       handleEditorContextMenu,
       redoEditorContextMenuConversion,
