@@ -150,6 +150,9 @@ document.addEventListener("DOMContentLoaded", function () {
   const editorFindInput = document.getElementById("editor-find-input");
   const editorReplaceInput = document.getElementById("editor-replace-input");
   const editorFindReplaceStatus = document.getElementById("editor-find-replace-status");
+  const editorFindReplaceExpandButton = document.getElementById("editor-find-replace-expand");
+  const editorFindMatchCaseButton = document.getElementById("editor-find-match-case");
+  const editorFindPreserveCaseButton = document.getElementById("editor-find-preserve-case");
   const editorFindPrevButton = document.getElementById("editor-find-prev");
   const editorFindNextButton = document.getElementById("editor-find-next");
   const editorReplaceOneButton = document.getElementById("editor-replace-one");
@@ -167,6 +170,9 @@ document.addEventListener("DOMContentLoaded", function () {
   let editorClearMarkdownSelection = null;
   let editorFindMatches = [];
   let editorFindCurrentIndex = -1;
+  let editorFindReplaceExpanded = true;
+  let editorFindMatchCase = false;
+  let editorFindPreserveCase = false;
   const editorSymbols = [
     { group: "Common Symbols", symbol: "©", entity: "&copy;", keywords: "copyright c" },
     { group: "Common Symbols", symbol: "®", entity: "&reg;", keywords: "registered trademark r" },
@@ -604,28 +610,67 @@ document.addEventListener("DOMContentLoaded", function () {
   function getEditorFindQuery() {
     return String(editorFindInput?.value || "");
   }
+  function getEditorFindSearchValue(value) {
+    return editorFindMatchCase ? String(value || "") : String(value || "").toLocaleLowerCase();
+  }
   function collectEditorFindMatches(query) {
     const matches = [];
     if (!query) return matches;
     const value = markdownEditor.value;
-    let index = value.indexOf(query);
+    const searchableValue = getEditorFindSearchValue(value);
+    const searchableQuery = getEditorFindSearchValue(query);
+    let index = searchableValue.indexOf(searchableQuery);
     while (index >= 0) {
       matches.push({ start: index, end: index + query.length });
-      index = value.indexOf(query, index + Math.max(query.length, 1));
+      index = searchableValue.indexOf(searchableQuery, index + Math.max(searchableQuery.length, 1));
     }
     return matches;
   }
   function updateEditorFindReplaceStatus() {
     if (!editorFindReplaceStatus) return;
     if (!getEditorFindQuery()) {
-      editorFindReplaceStatus.textContent = "0 matches";
+      editorFindReplaceStatus.textContent = "No results";
       return;
     }
     if (!editorFindMatches.length) {
-      editorFindReplaceStatus.textContent = "0 matches";
+      editorFindReplaceStatus.textContent = "No results";
       return;
     }
     editorFindReplaceStatus.textContent = `${editorFindCurrentIndex + 1} of ${editorFindMatches.length} matches`;
+  }
+  function updateEditorFindReplaceMode() {
+    if (!editorFindReplaceModal) return;
+    editorFindReplaceModal.classList.toggle("find-replace-expanded", editorFindReplaceExpanded);
+    editorFindReplaceModal.classList.toggle("find-replace-collapsed", !editorFindReplaceExpanded);
+    if (editorFindReplaceExpandButton) {
+      editorFindReplaceExpandButton.setAttribute("aria-expanded", String(editorFindReplaceExpanded));
+      editorFindReplaceExpandButton.setAttribute("aria-label", editorFindReplaceExpanded ? "Hide replace field" : "Show replace field");
+      const icon = editorFindReplaceExpandButton.querySelector("i");
+      if (icon) icon.className = editorFindReplaceExpanded ? "bi bi-chevron-down" : "bi bi-chevron-right";
+    }
+  }
+  function setEditorFindReplaceExpanded(expanded) {
+    editorFindReplaceExpanded = !!expanded;
+    updateEditorFindReplaceMode();
+  }
+  function updateEditorFindOptionButtons() {
+    editorFindMatchCaseButton?.classList.toggle("active", editorFindMatchCase);
+    editorFindMatchCaseButton?.setAttribute("aria-pressed", String(editorFindMatchCase));
+    editorFindPreserveCaseButton?.classList.toggle("active", editorFindPreserveCase);
+    editorFindPreserveCaseButton?.setAttribute("aria-pressed", String(editorFindPreserveCase));
+  }
+  function getCasePreservedReplacement(sourceText, replacementText) {
+    const source = String(sourceText || "");
+    const replacement = String(replacementText || "");
+    if (!editorFindPreserveCase || !source || !replacement) return replacement;
+    if (source === source.toLocaleUpperCase()) return replacement.toLocaleUpperCase();
+    if (source === source.toLocaleLowerCase()) return replacement.toLocaleLowerCase();
+    const first = source.charAt(0);
+    const rest = source.slice(1);
+    if (first === first.toLocaleUpperCase() && rest === rest.toLocaleLowerCase()) {
+      return replacement.charAt(0).toLocaleUpperCase() + replacement.slice(1).toLocaleLowerCase();
+    }
+    return replacement;
   }
   function getEditorFindMatchScrollTop(match) {
     const computedStyle = window.getComputedStyle(markdownEditor);
@@ -684,16 +729,23 @@ document.addEventListener("DOMContentLoaded", function () {
       updateEditorFindReplaceStatus();
     }
   }
-  function openEditorFindReplaceModal() {
+  function openEditorFindReplaceModal(options = {}) {
     if (!editorFindReplaceModal) return;
     const selectedText = getSelectedEditorText();
     if (editorFindInput) editorFindInput.value = selectedText;
-    if (editorReplaceInput) editorReplaceInput.value = "";
+    if (options.resetReplace !== false && editorReplaceInput) editorReplaceInput.value = "";
+    setEditorFindReplaceExpanded(options.replace !== false);
+    updateEditorFindOptionButtons();
     editorFindReplaceModal.style.display = "flex";
     refreshEditorFindMatches({ select: !!selectedText });
     window.setTimeout(function() {
-      editorFindInput?.focus();
-      editorFindInput?.select();
+      if (options.focusReplace && editorFindReplaceExpanded) {
+        editorReplaceInput?.focus();
+        editorReplaceInput?.select();
+      } else {
+        editorFindInput?.focus();
+        editorFindInput?.select();
+      }
     }, 0);
   }
   function closeEditorFindReplaceModal() {
@@ -721,7 +773,8 @@ document.addEventListener("DOMContentLoaded", function () {
     markdownEditor.focus();
     markdownEditor.selectionStart = match.start;
     markdownEditor.selectionEnd = match.end;
-    editorContextMenu.replaceSelectionWithText(editorReplaceInput?.value || "");
+    const originalText = markdownEditor.value.slice(match.start, match.end);
+    editorContextMenu.replaceSelectionWithText(getCasePreservedReplacement(originalText, editorReplaceInput?.value || ""));
     refreshEditorFindMatches();
   }
   function replaceAllEditorFindMatches() {
@@ -732,14 +785,23 @@ document.addEventListener("DOMContentLoaded", function () {
     }
     const replacement = editorReplaceInput?.value || "";
     const value = markdownEditor.value;
-    if (!value.includes(query)) {
+    const matches = collectEditorFindMatches(query);
+    if (!matches.length) {
       refreshEditorFindMatches({ select: false });
       return;
     }
+    let nextValue = "";
+    let cursor = 0;
+    matches.forEach(function(match) {
+      nextValue += value.slice(cursor, match.start);
+      nextValue += getCasePreservedReplacement(value.slice(match.start, match.end), replacement);
+      cursor = match.end;
+    });
+    nextValue += value.slice(cursor);
     markdownEditor.focus();
     markdownEditor.selectionStart = 0;
     markdownEditor.selectionEnd = value.length;
-    editorContextMenu.replaceSelectionWithText(value.split(query).join(replacement));
+    editorContextMenu.replaceSelectionWithText(nextValue);
     refreshEditorFindMatches({ select: false });
   }
   function getSelectedEditorText() {
@@ -1156,7 +1218,7 @@ document.addEventListener("DOMContentLoaded", function () {
         return;
       }
       if (button.dataset.editorFormatAction === "find-replace") {
-        openEditorFindReplaceModal();
+        openEditorFindReplaceModal({ replace: true });
         return;
       }
       if (button.dataset.editorFormatAction === "link") {
@@ -3056,6 +3118,28 @@ Markdown content is processed client-side in your browser and sanitized before p
     if (name === "NL_PATH" && typeof NL_PATH !== "undefined") return NL_PATH;
     if (name === "NL_CWD" && typeof NL_CWD !== "undefined") return NL_CWD;
     return typeof window !== "undefined" ? window[name] : "";
+  }
+  if (editorFindReplaceExpandButton) {
+    editorFindReplaceExpandButton.addEventListener("click", function() {
+      setEditorFindReplaceExpanded(!editorFindReplaceExpanded);
+      if (editorFindReplaceExpanded) editorReplaceInput?.focus();
+      else editorFindInput?.focus();
+    });
+  }
+  if (editorFindMatchCaseButton) {
+    editorFindMatchCaseButton.addEventListener("click", function() {
+      editorFindMatchCase = !editorFindMatchCase;
+      updateEditorFindOptionButtons();
+      refreshEditorFindMatches();
+      editorFindInput?.focus();
+    });
+  }
+  if (editorFindPreserveCaseButton) {
+    editorFindPreserveCaseButton.addEventListener("click", function() {
+      editorFindPreserveCase = !editorFindPreserveCase;
+      updateEditorFindOptionButtons();
+      editorReplaceInput?.focus();
+    });
   }
 
   function normalizeLocalPath(path) {
@@ -5144,6 +5228,16 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
   // Tab key handler to insert indentation instead of moving focus
   markdownEditor.addEventListener("keydown", function(e) {
     if (handleLinkAutocompleteKeydown(e)) return;
+    if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && e.key.toLowerCase() === "f") {
+      e.preventDefault();
+      openEditorFindReplaceModal({ replace: false });
+      return;
+    }
+    if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && e.key.toLowerCase() === "h") {
+      e.preventDefault();
+      openEditorFindReplaceModal({ replace: true, focusReplace: true });
+      return;
+    }
     if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && e.key.toLowerCase() === "z" && undoEditorContextMenuConversion()) {
       e.preventDefault();
       return;

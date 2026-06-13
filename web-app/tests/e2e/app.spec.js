@@ -1635,7 +1635,7 @@ test("converts selected editor text from the formatting toolbar", async ({ page 
   await expect.poll(async () => {
     const box = await page.locator(".editor-find-replace-modal-box").boundingBox();
     return Math.round(box?.width || 0);
-  }).toBeLessThanOrEqual(460);
+  }).toBeLessThanOrEqual(640);
   await expect(page.locator("#editor-find-input")).toHaveValue("alpha");
   await expect(page.locator("#editor-find-replace-status")).toHaveText("1 of 2 matches");
   await page.locator("#editor-replace-input").fill("gamma");
@@ -1644,6 +1644,38 @@ test("converts selected editor text from the formatting toolbar", async ({ page 
   await expect(page.locator("#editor-find-replace-status")).toHaveText("1 of 1 matches");
   await page.locator("#editor-replace-all").click();
   await expect(editor).toHaveValue("gamma beta gamma");
+});
+
+test("find and replace supports match case preserve case and editor shortcuts", async ({ page }) => {
+  await openApp(page);
+
+  const editor = page.locator("#markdown-editor");
+  await editor.fill("Alpha alpha ALPHA");
+  await editor.focus();
+  await page.keyboard.press("Control+F");
+
+  await expect(page.locator("#editor-find-replace-modal")).toBeVisible();
+  await expect(page.locator("#editor-find-replace-modal")).toHaveClass(/find-replace-collapsed/);
+  await expect(page.locator("#editor-replace-input")).not.toBeVisible();
+  await page.locator("#editor-find-input").fill("alpha");
+  await expect(page.locator("#editor-find-replace-status")).toHaveText("1 of 3 matches");
+
+  await page.locator("#editor-find-match-case").click();
+  await expect(page.locator("#editor-find-match-case")).toHaveAttribute("aria-pressed", "true");
+  await expect(page.locator("#editor-find-replace-status")).toHaveText("1 of 1 matches");
+
+  await editor.focus();
+  await page.keyboard.press("Control+H");
+  await expect(page.locator("#editor-find-replace-modal")).toHaveClass(/find-replace-expanded/);
+  await expect(page.locator("#editor-replace-input")).toBeVisible();
+
+  await page.locator("#editor-find-match-case").click();
+  await page.locator("#editor-find-preserve-case").click();
+  await expect(page.locator("#editor-find-preserve-case")).toHaveAttribute("aria-pressed", "true");
+  await page.locator("#editor-find-input").fill("alpha");
+  await page.locator("#editor-replace-input").fill("beta");
+  await page.locator("#editor-replace-all").click();
+  await expect(editor).toHaveValue("Beta beta BETA");
 });
 
 test("find and replace navigation scrolls offscreen matches into view", async ({ page }) => {

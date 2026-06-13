@@ -879,29 +879,44 @@
         <!-- Editor Find and Replace Modal -->
         <div id="editor-find-replace-modal" class="reset-modal-overlay editor-link-modal" role="dialog" aria-modal="true" aria-labelledby="editor-find-replace-title" style="display:none;">
           <div class="reset-modal-box editor-find-replace-modal-box">
-            <button class="modal-close editor-clear-markdown-close" id="editor-find-replace-close" type="button" aria-label="Close find and replace dialog">
-              <i class="bi bi-x-lg" aria-hidden="true"></i>
+            <span id="editor-find-replace-title" class="visually-hidden">Find and replace</span>
+            <button class="editor-find-replace-expand" id="editor-find-replace-expand" type="button" aria-label="Show replace field" aria-expanded="true">
+              <i class="bi bi-chevron-down" aria-hidden="true"></i>
             </button>
-            <p id="editor-find-replace-title" class="reset-modal-message editor-clear-markdown-title">Find &amp; Replace</p>
-            <label class="editor-link-modal-label" for="editor-find-input">Find</label>
-            <input type="text" id="editor-find-input" class="rename-modal-input" placeholder="Find text" autocomplete="off" />
-            <label class="editor-link-modal-label" for="editor-replace-input">Replace</label>
-            <input type="text" id="editor-replace-input" class="rename-modal-input" placeholder="Replace with" autocomplete="off" />
-            <div class="editor-find-replace-status-row">
-              <span id="editor-find-replace-status" class="editor-find-replace-status">0 matches</span>
-              <div class="editor-find-replace-nav">
-                <button class="reset-modal-btn editor-find-replace-nav-btn" id="editor-find-prev" type="button" title="Previous match" aria-label="Previous match">
-                  <i class="bi bi-chevron-up" aria-hidden="true"></i>
+            <div class="editor-find-replace-fields">
+              <div class="editor-find-replace-row">
+                <input type="text" id="editor-find-input" class="editor-find-replace-input" placeholder="Find" autocomplete="off" aria-label="Find" />
+                <button class="editor-find-replace-option" id="editor-find-match-case" type="button" title="Match Case" aria-label="Match Case" aria-pressed="false">Aa</button>
+              </div>
+              <div class="editor-find-replace-row editor-find-replace-row-replace">
+                <input type="text" id="editor-replace-input" class="editor-find-replace-input" placeholder="Replace" autocomplete="off" aria-label="Replace" />
+                <button class="editor-find-replace-option" id="editor-find-preserve-case" type="button" title="Preserve Case" aria-label="Preserve Case" aria-pressed="false">AB</button>
+                <button class="editor-find-replace-icon-btn" id="editor-replace-one" type="button" title="Replace" aria-label="Replace">
+                  <i class="bi bi-arrow-down-up" aria-hidden="true"></i>
                 </button>
-                <button class="reset-modal-btn editor-find-replace-nav-btn" id="editor-find-next" type="button" title="Next match" aria-label="Next match">
-                  <i class="bi bi-chevron-down" aria-hidden="true"></i>
+                <button class="editor-find-replace-icon-btn" id="editor-replace-all" type="button" title="Replace All" aria-label="Replace All">
+                  <i class="bi bi-arrow-repeat" aria-hidden="true"></i>
                 </button>
               </div>
             </div>
-            <div class="reset-modal-actions">
-              <button class="reset-modal-btn reset-modal-cancel" id="editor-find-replace-cancel" type="button">Close</button>
-              <button class="reset-modal-btn" id="editor-replace-one" type="button">Replace</button>
-              <button class="reset-modal-btn" id="editor-replace-all" type="button">Replace All</button>
+            <span id="editor-find-replace-status" class="editor-find-replace-status">No results</span>
+            <div class="editor-find-replace-nav">
+              <button class="editor-find-replace-icon-btn" id="editor-find-prev" type="button" title="Previous match" aria-label="Previous match">
+                <i class="bi bi-arrow-up" aria-hidden="true"></i>
+              </button>
+              <button class="editor-find-replace-icon-btn" id="editor-find-next" type="button" title="Next match" aria-label="Next match">
+                <i class="bi bi-arrow-down" aria-hidden="true"></i>
+              </button>
+            </div>
+            <button class="editor-find-replace-icon-btn editor-find-replace-close" id="editor-find-replace-close" type="button" aria-label="Close find and replace dialog">
+              <i class="bi bi-x-lg" aria-hidden="true"></i>
+            </button>
+            <button class="editor-find-replace-icon-btn editor-find-replace-menu" type="button" title="More actions" aria-label="More actions">
+              <i class="bi bi-list" aria-hidden="true"></i>
+            </button>
+            <!-- Legacy fallback controls kept hidden for older test selectors and keyboard focus order. -->
+            <div class="editor-find-replace-legacy-actions" aria-hidden="true">
+              <button type="button" tabindex="-1">Close</button>
             </div>
           </div>
         </div>

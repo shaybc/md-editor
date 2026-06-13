@@ -4544,6 +4544,18 @@ a:focus {
   color: var(--color-danger-fg, #d73a49);
 }
 
+.visually-hidden {
+  position: absolute !important;
+  width: 1px !important;
+  height: 1px !important;
+  padding: 0 !important;
+  margin: -1px !important;
+  overflow: hidden !important;
+  clip: rect(0, 0, 0, 0) !important;
+  white-space: nowrap !important;
+  border: 0 !important;
+}
+
 /* ========================================
    RESET & RENAME CONFIRMATION MODALS
    ======================================== */
@@ -5955,14 +5967,18 @@ a:focus {
 
 .editor-find-replace-modal-box {
   position: fixed;
-  top: 136px;
+  top: 128px;
   right: 28px;
-  width: min(430px, calc(100vw - 32px));
-  max-width: min(430px, calc(100vw - 32px));
-  gap: 9px;
-  padding: 18px;
+  width: min(610px, calc(100vw - 32px));
+  max-width: min(610px, calc(100vw - 32px));
+  min-width: min(610px, calc(100vw - 32px));
+  display: grid;
+  grid-template-columns: 28px minmax(230px, 1fr) auto auto auto auto;
+  gap: 0;
+  padding: 0;
   text-align: left;
   pointer-events: auto;
+  overflow: hidden;
 }
 
 #editor-find-replace-modal {
@@ -5973,59 +5989,113 @@ a:focus {
   pointer-events: none;
 }
 
-.editor-find-replace-modal-box .editor-clear-markdown-title {
-  font-size: 13px;
-  padding-right: 38px;
-  text-align: left;
+.editor-find-replace-expand,
+.editor-find-replace-icon-btn,
+.editor-find-replace-option {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: var(--disabled-text-color);
+  cursor: pointer;
+  height: 30px;
+  min-width: 30px;
+  padding: 0 8px;
 }
 
-.editor-find-replace-modal-box .editor-clear-markdown-close {
-  top: 14px;
-  right: 14px;
+.editor-find-replace-expand {
+  align-self: stretch;
+  border-right: 1px solid var(--border-color);
+  grid-column: 1;
+  grid-row: 1 / span 2;
+  height: auto;
 }
 
-.editor-find-replace-modal-box .editor-link-modal-label {
-  font-size: 11px;
-  margin-top: 2px;
+.editor-find-replace-expand:hover,
+.editor-find-replace-icon-btn:hover,
+.editor-find-replace-option:hover,
+.editor-find-replace-option.active {
+  background: var(--button-hover);
+  color: var(--text-color);
 }
 
-.editor-find-replace-modal-box .rename-modal-input {
-  height: 34px;
+.editor-find-replace-fields {
+  display: grid;
+  grid-column: 2;
+  grid-row: 1 / span 2;
 }
 
-.editor-find-replace-status-row {
+.editor-find-replace-row {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  margin-top: 6px;
+  background: var(--bg-color);
+  border-bottom: 1px solid var(--border-color);
+  min-width: 0;
+}
+
+.editor-find-replace-row:last-child {
+  border-bottom: 0;
+}
+
+.editor-find-replace-input {
+  background: transparent;
+  border: 0;
+  color: var(--text-color);
+  flex: 1 1 auto;
+  font-size: 13px;
+  height: 30px;
+  min-width: 0;
+  outline: 0;
+  padding: 0 8px;
+}
+
+.editor-find-replace-input::placeholder {
+  color: var(--disabled-text-color);
 }
 
 .editor-find-replace-status {
+  align-self: center;
   color: var(--disabled-text-color);
   font-size: 13px;
-}
-
-.editor-find-replace-modal-box .reset-modal-actions {
-  margin-top: 2px;
-}
-
-.editor-find-replace-modal-box .reset-modal-btn {
-  padding: 6px 12px;
+  grid-column: 3;
+  grid-row: 1;
+  padding: 0 10px;
+  white-space: nowrap;
 }
 
 .editor-find-replace-nav {
   display: inline-flex;
-  gap: 6px;
+  grid-column: 4;
+  grid-row: 1;
 }
 
-.editor-find-replace-nav-btn {
-  width: 32px;
-  height: 28px;
-  padding: 0;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
+.editor-find-replace-menu {
+  grid-column: 5;
+  grid-row: 1;
+}
+
+.editor-find-replace-close {
+  grid-column: 6;
+  grid-row: 1;
+}
+
+.editor-find-replace-legacy-actions {
+  display: none;
+}
+
+.find-replace-collapsed .editor-find-replace-modal-box {
+  grid-template-rows: 30px;
+}
+
+.find-replace-collapsed .editor-find-replace-expand {
+  grid-row: 1;
+}
+
+.find-replace-collapsed .editor-find-replace-fields {
+  grid-row: 1;
+}
+
+.find-replace-collapsed .editor-find-replace-row-replace {
+  display: none;
 }
 
 @media (max-width: 760px) {
@@ -6034,7 +6104,27 @@ a:focus {
     right: 12px;
     left: 12px;
     width: auto;
+    min-width: 0;
     max-width: none;
+    grid-template-columns: 28px minmax(0, 1fr) auto auto auto;
+  }
+
+  .editor-find-replace-status {
+    grid-column: 2;
+    grid-row: 3;
+    padding: 6px 8px;
+  }
+
+  .editor-find-replace-nav {
+    grid-column: 3;
+  }
+
+  .editor-find-replace-menu {
+    grid-column: 4;
+  }
+
+  .editor-find-replace-close {
+    grid-column: 5;
   }
 }
 
