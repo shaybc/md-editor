@@ -3661,6 +3661,139 @@ test("graph quick action groups most referenced files by percentile", async ({ p
   await expect(page.locator(".graph-quick-action-status")).toBeHidden();
 });
 
+test("graph quick action groups all ungrouped files", async ({ page }) => {
+  await page.addInitScript(() => {
+    window.NL_VERSION = "test";
+    window.NL_OS = "Windows";
+    window.__alerts = [];
+    window.__writes = [];
+    window.__promptCalls = [];
+    window.alert = (message) => window.__alerts.push(String(message));
+    window.prompt = (message, defaultValue) => {
+      window.__promptCalls.push({ message, defaultValue });
+      return defaultValue;
+    };
+
+    const files = new Map([
+      ["C:/vault/grouped.md", "---\ntags: [infra]\n---\n# Grouped"],
+      ["C:/vault/rest-a.md", "# Rest A"],
+      ["C:/vault/rest-b.md", "# Rest B"]
+    ]);
+
+    window.Neutralino = {
+      filesystem: {
+        readFile: async (path) => files.get(path) || "",
+        writeFile: async (path, content) => {
+          await new Promise((resolve) => setTimeout(resolve, 40));
+          files.set(path, content);
+          window.__writes.push({ path, content });
+        }
+      },
+      clipboard: { writeText: async () => {} },
+      os: { open: async () => {}, execCommand: async () => {} }
+    };
+
+    const nodes = [
+      { id: "grouped.md", label: "grouped.md", fullPath: "C:/vault/grouped.md", type: "file", status: "current", tags: ["infra"] },
+      { id: "rest-a.md", label: "rest-a.md", fullPath: "C:/vault/rest-a.md", type: "file", status: "current", tags: [] },
+      { id: "rest-b.md", label: "rest-b.md", fullPath: "C:/vault/rest-b.md", type: "file", status: "current", tags: [] }
+    ];
+    const snapshotFiles = nodes.map((node) => ({
+      id: node.id,
+      path: node.id,
+      name: node.id,
+      fullPath: node.fullPath,
+      content: files.get(node.fullPath),
+      status: "current",
+      tags: node.tags
+    }));
+
+    const graphTab = {
+      id: "ungrouped_graph_e2e",
+      title: "Ungrouped Graph E2E",
+      content: "",
+      scrollPos: 0,
+      viewMode: "preview",
+      createdAt: Date.now(),
+      isTemporary: false,
+      type: "graph",
+      folderName: "Ungrouped Graph E2E",
+      graphScopeKey: "root-folder:c:/vault",
+      graphViewConfig: {
+        showTags: false,
+        hiddenTagIds: [],
+        hiddenNodeIds: [],
+        selectedTagIds: [],
+        groups: [{ id: "group-infra", query: "tag:infra", color: "#336699", enabled: true, hidden: false }],
+        searchQuery: "",
+        showArrows: true,
+        showOrphans: true,
+        showLabels: true,
+        textFadeThreshold: 0.35,
+        nodeSize: 0.8,
+        linkThickness: 1,
+        centerForce: 1,
+        repelForce: 650,
+        linkForce: 0.4,
+        linkDistance: 170,
+        groupForce: 0.18
+      },
+      graphSnapshot: {
+        version: 1,
+        folderName: "Ungrouped Graph E2E",
+        createdAt: Date.now(),
+        nodes,
+        links: [{ source: "rest-a.md", target: "rest-b.md", type: "link", status: "current" }],
+        files: snapshotFiles
+      }
+    };
+
+    localStorage.setItem("markdownViewerGlobalState", JSON.stringify({ knownTags: ["infra"], graphMagneticEnabled: true }));
+    localStorage.setItem("markdownViewerTabs", JSON.stringify([graphTab]));
+    localStorage.setItem("markdownViewerActiveTab", graphTab.id);
+  });
+
+  await page.goto("/");
+  await expect(page.locator(".graph-node-file")).toHaveCount(3);
+  await page.locator(".graph-quick-action-button").click();
+  await page.locator(".graph-quick-action-menu-item", { hasText: "Group all UnGrouped" }).click();
+  await expect(page.locator(".graph-quick-action-status")).toBeVisible();
+  await expect(page.locator(".graph-quick-action-status")).toHaveText(/Finding ungrouped files|Grouping|Creating group|Refreshing graph/);
+
+  await expect.poll(() => page.evaluate(() => window.__promptCalls)).toEqual([
+    { message: "Group tag for all ungrouped files", defaultValue: "the_rest" }
+  ]);
+  await expect.poll(() => page.evaluate(() => window.__alerts)).toEqual([]);
+  await expect.poll(() => page.evaluate(() => window.__writes.map((write) => write.path).sort())).toEqual([
+    "C:/vault/rest-a.md",
+    "C:/vault/rest-b.md"
+  ]);
+  await expect.poll(() => page.evaluate(() => {
+    const graphTab = JSON.parse(localStorage.getItem("markdownViewerTabs")).find((tab) => tab.id === "ungrouped_graph_e2e");
+    return {
+      tagged: graphTab.graphSnapshot.files
+        .filter((file) => (file.tags || []).includes("the_rest"))
+        .map((file) => file.id)
+        .sort(),
+      groupedStillInfra: graphTab.graphSnapshot.files.find((file) => file.fullPath === "C:/vault/grouped.md" || file.name === "grouped.md")?.tags || [],
+      groups: graphTab.graphViewConfig.groups.map((group) => ({
+        query: group.query,
+        enabled: group.enabled,
+        hidden: group.hidden,
+        hasColor: /^#[0-9a-f]{6}$/i.test(group.color || "")
+      }))
+    };
+  })).toEqual({
+    tagged: ["rest-a", "rest-b"],
+    groupedStillInfra: ["infra"],
+    groups: [
+      { query: "tag:infra", enabled: true, hidden: false, hasColor: true },
+      { query: "tag:the_rest", enabled: true, hidden: false, hasColor: true }
+    ]
+  });
+  await expect(page.locator(".graph-quick-action-status")).toBeHidden();
+});
+
 test("graph quick action blocks most referenced grouping in saved graph mode", async ({ page }) => {
   await page.addInitScript(() => {
     window.__alerts = [];

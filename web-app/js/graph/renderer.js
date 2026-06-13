@@ -161,6 +161,7 @@
     };
     removeGraphLoadingState();
     if (!activeTab || activeTab.type !== "graph") {
+      document.querySelectorAll(".graph-quick-action").forEach((node) => node.remove());
       updateStatusLine({ visiblePointCount: 0, graphEdgeCount: 0, graphClusterCount: 0, graphCollapsedNodeCount: 0 });
       updateGraphTagToolbar(null, null);
       renderTagManagementList();
@@ -307,6 +308,7 @@
       return;
     }
     removeGraphRenderForTab(activeTab.id);
+    document.querySelectorAll(".graph-quick-action").forEach((node) => node.remove());
 
     const graphRenderWrapper = document.createElement("div");
     graphRenderWrapper.className = "graph-tab-render";
@@ -3337,7 +3339,7 @@
       ]).includes(tag);
     };
 
-    const groupMostReferencedGraphNodes = async () => {
+    const tagGraphNodesAndCreateGroup = async (selectedNodes, normalizedTag, options = {}) => {
       const activeGraphTab = getActiveGraphTab();
       if (!activeGraphTab || !graphSnapshot?.nodes?.length) return;
       if (isKeepSavedGraphMode(activeGraphTab)) {
@@ -3345,29 +3347,35 @@
         return;
       }
 
-      const tagName = window.prompt("Tag name for the most referenced files", "infrastructure");
-      const normalizedTag = normalizeTagName(tagName);
-      if (!normalizedTag) return;
+      const {
+        perfName = "graph quick action tagging",
+        emptyMessage = "No files were found to tag.",
+        detectMessage = "Preparing files...",
+        groupMessage = "Creating group...",
+        failureNoun = "file",
+        progressVerb = "Tagging",
+        hidden = true,
+        perfDetails = {}
+      } = options;
 
       const tagPerf = typeof createGraphPerfSession === "function"
-        ? createGraphPerfSession("group most referenced tagging", {
+        ? createGraphPerfSession(perfName, {
           tag: normalizedTag,
           tabId: activeGraphTab.id,
-          title: activeGraphTab.title || ""
+          title: activeGraphTab.title || "",
+          ...perfDetails
         })
         : null;
-      setGraphQuickActionBusy(true, "Detecting most referenced...");
+      setGraphQuickActionBusy(true, detectMessage);
       await new Promise((resolve) => requestAnimationFrame(resolve));
       try {
-        const selectedNodes = getMostReferencedGraphNodes();
-        tagPerf?.mark("selected most referenced files", {
+        tagPerf?.mark("selected graph files", {
           selectedFiles: selectedNodes.length,
           graphNodes: nodes.length,
-          graphLinks: links.length,
-          percent: getGraphMostReferencedPercent()
+          graphLinks: links.length
         });
         if (!selectedNodes.length) {
-          alert("No referenced files were found to tag.");
+          alert(emptyMessage);
           return;
         }
 
@@ -3387,14 +3395,14 @@
         if (typeof createTag === "function") createTag(normalizedTag);
         tagPerf?.mark("tag ensured", { tag: normalizedTag });
 
-        setGraphQuickActionBusy(true, `Tagging ${selectedNodes.length} file${selectedNodes.length === 1 ? "" : "s"}...`);
+        setGraphQuickActionBusy(true, `${progressVerb} ${selectedNodes.length} file${selectedNodes.length === 1 ? "" : "s"}...`);
         let changedFiles = false;
         let alreadyTaggedFiles = false;
         const failedNodes = [];
         const changedSnapshotFiles = [];
         for (let index = 0; index < selectedNodes.length; index += 1) {
           const graphNode = selectedNodes[index];
-          setGraphQuickActionBusy(true, `Tagging file ${index + 1} / ${selectedNodes.length}`);
+          setGraphQuickActionBusy(true, `${progressVerb} file ${index + 1} / ${selectedNodes.length}`);
           if (index === 0 || index % 10 === 0) await new Promise((resolve) => requestAnimationFrame(resolve));
           try {
             alreadyTaggedFiles = hasSnapshotTagForNode(graphNode, normalizedTag) || alreadyTaggedFiles;
@@ -3447,7 +3455,7 @@
           } catch (error) {
             failedNodes.push(graphNode);
             batchTotals.failed += 1;
-            console.error("Failed to tag most referenced graph file:", graphNode?.id, error);
+            console.error("Failed to tag graph file:", graphNode?.id, error);
             tagPerf?.mark("tag file failed", {
               index: index + 1,
               total: selectedNodes.length,
@@ -3457,7 +3465,7 @@
           }
         }
 
-        setGraphQuickActionBusy(true, "Creating hidden group...");
+        setGraphQuickActionBusy(true, groupMessage);
         tagPerf?.mark("tagging loop complete", {
           selectedFiles: selectedNodes.length,
           changed: batchTotals.changed,
@@ -3482,10 +3490,10 @@
           });
         }
         const changedGroups = (changedFiles || alreadyTaggedFiles || failedNodes.length < selectedNodes.length)
-          ? ensureGraphTagGroup(normalizedTag, { hidden: true })
+          ? ensureGraphTagGroup(normalizedTag, { hidden })
           : false;
         if (!changedFiles && !changedGroups) {
-          if (failedNodes.length) alert(`Unable to tag ${failedNodes.length} most referenced file${failedNodes.length === 1 ? "" : "s"}.`);
+          if (failedNodes.length) alert(`Unable to tag ${failedNodes.length} ${failureNoun}${failedNodes.length === 1 ? "" : "s"}.`);
           return;
         }
 
@@ -3514,12 +3522,61 @@
         });
 
         if (failedNodes.length) {
-          alert(`Tagged ${selectedNodes.length - failedNodes.length} most referenced file${selectedNodes.length - failedNodes.length === 1 ? "" : "s"}, but ${failedNodes.length} file${failedNodes.length === 1 ? "" : "s"} could not be updated.`);
+          alert(`Tagged ${selectedNodes.length - failedNodes.length} ${failureNoun}${selectedNodes.length - failedNodes.length === 1 ? "" : "s"}, but ${failedNodes.length} file${failedNodes.length === 1 ? "" : "s"} could not be updated.`);
         }
       } finally {
         tagPerf?.end({ completed: true });
         setGraphQuickActionBusy(false);
       }
+    };
+
+    const groupMostReferencedGraphNodes = async () => {
+      const activeGraphTab = getActiveGraphTab();
+      if (!activeGraphTab || !graphSnapshot?.nodes?.length) return;
+      if (isKeepSavedGraphMode(activeGraphTab)) {
+        alert("Saved graph mode does not update saved tags or links.");
+        return;
+      }
+
+      const tagName = window.prompt("Tag name for the most referenced files", "infrastructure");
+      const normalizedTag = normalizeTagName(tagName);
+      if (!normalizedTag) return;
+      const selectedNodes = getMostReferencedGraphNodes();
+      await tagGraphNodesAndCreateGroup(selectedNodes, normalizedTag, {
+        perfName: "group most referenced tagging",
+        emptyMessage: "No referenced files were found to tag.",
+        detectMessage: "Detecting most referenced...",
+        groupMessage: "Creating hidden group...",
+        failureNoun: "most referenced file",
+        perfDetails: { percent: getGraphMostReferencedPercent() }
+      });
+    };
+
+    const getUngroupedGraphNodes = () => nodes
+      .filter((node) => !isTagNode(node) && !isClusterNode(node) && !getMatchingGraphGroupForNode(node));
+
+    const groupAllUngroupedGraphNodes = async () => {
+      const activeGraphTab = getActiveGraphTab();
+      if (!activeGraphTab || !graphSnapshot?.nodes?.length) return;
+      if (isKeepSavedGraphMode(activeGraphTab)) {
+        alert("Saved graph mode does not update saved tags or links.");
+        return;
+      }
+
+      const tagName = window.prompt("Group tag for all ungrouped files", "the_rest");
+      const normalizedTag = normalizeTagName(tagName);
+      if (!normalizedTag) return;
+      const selectedNodes = getUngroupedGraphNodes();
+      await tagGraphNodesAndCreateGroup(selectedNodes, normalizedTag, {
+        perfName: "group all ungrouped tagging",
+        emptyMessage: "No ungrouped files were found to tag.",
+        detectMessage: "Finding ungrouped files...",
+        groupMessage: "Creating group...",
+        failureNoun: "ungrouped file",
+        hidden: false,
+        progressVerb: "Grouping",
+        perfDetails: { ungroupedFiles: selectedNodes.length }
+      });
     };
 
     const collapseGraphNodeToCluster = (graphNode, mode = "direct-outgoing") => {
@@ -3961,6 +4018,7 @@
 
     const quickActionWrapper = document.createElement("div");
     quickActionWrapper.className = "graph-quick-action";
+    quickActionWrapper.dataset.graphTabId = activeTab.id;
     const quickActionButton = document.createElement("button");
     quickActionButton.type = "button";
     quickActionButton.className = "graph-quick-action-button";
@@ -3990,20 +4048,27 @@
     groupMostReferencedButton.className = "graph-quick-action-menu-item";
     groupMostReferencedButton.setAttribute("role", "menuitem");
     groupMostReferencedButton.innerHTML = '<i class="bi bi-tags" aria-hidden="true"></i><span>Group most referenced</span>';
+    const groupUngroupedButton = document.createElement("button");
+    groupUngroupedButton.type = "button";
+    groupUngroupedButton.className = "graph-quick-action-menu-item";
+    groupUngroupedButton.setAttribute("role", "menuitem");
+    groupUngroupedButton.innerHTML = '<i class="bi bi-collection" aria-hidden="true"></i><span>Group all UnGrouped</span>';
     const removeLeafQuickActionButton = document.createElement("button");
     removeLeafQuickActionButton.type = "button";
     removeLeafQuickActionButton.className = "graph-quick-action-menu-item";
     removeLeafQuickActionButton.setAttribute("role", "menuitem");
     removeLeafQuickActionButton.innerHTML = `<i class="${CONTEXT_MENU_ACTIONS.removeLeafNodes.icon}" aria-hidden="true"></i><span>${CONTEXT_MENU_ACTIONS.removeLeafNodes.label}</span>`;
     quickActionMenu.appendChild(groupMostReferencedButton);
+    quickActionMenu.appendChild(groupUngroupedButton);
     quickActionMenu.appendChild(removeLeafQuickActionButton);
     quickActionWrapper.append(quickActionStatus, quickActionMenu, quickActionButton);
-    graphRenderWrapper.appendChild(quickActionWrapper);
+    document.body.appendChild(quickActionWrapper);
 
     const setGraphQuickActionBusy = (busy, message = "") => {
       quickActionWrapper.classList.toggle("busy", !!busy);
       quickActionButton.disabled = !!busy;
       groupMostReferencedButton.disabled = !!busy;
+      groupUngroupedButton.disabled = !!busy;
       removeLeafQuickActionButton.disabled = !!busy;
       quickActionButton.setAttribute("aria-busy", busy ? "true" : "false");
       quickActionStatusLabel.textContent = busy ? message : "";
@@ -4032,6 +4097,15 @@
       } catch (error) {
         console.error("Failed to group most referenced graph nodes:", error);
         alert("Unable to group the most referenced files.");
+      }
+    });
+    groupUngroupedButton.addEventListener("click", async () => {
+      closeGraphQuickActionMenu();
+      try {
+        await groupAllUngroupedGraphNodes();
+      } catch (error) {
+        console.error("Failed to group ungrouped graph nodes:", error);
+        alert("Unable to group the ungrouped files.");
       }
     });
     removeLeafQuickActionButton.addEventListener("click", () => {

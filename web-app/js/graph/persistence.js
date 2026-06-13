@@ -1547,6 +1547,7 @@
     }
     graphRenderCache.delete(tabId);
     getGraphRenderWrappersForTab(tabId).forEach((wrapper) => wrapper.remove());
+    document.querySelectorAll(`.graph-quick-action[data-graph-tab-id="${CSS.escape(String(tabId))}"]`).forEach((node) => node.remove());
   }
 
   function hideInactiveGraphRenders(activeGraphTabId) {
