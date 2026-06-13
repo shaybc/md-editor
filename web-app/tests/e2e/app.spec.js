@@ -530,6 +530,12 @@ test("opens help and about from the action menu", async ({ page }) => {
       body: "# MD-Editor\n\nReadme content from the bundled project readme."
     });
   });
+  await page.route("**/LICENSE", async (route) => {
+    await route.fulfill({
+      contentType: "text/plain",
+      body: "Apache License\nVersion 2.0, January 2004"
+    });
+  });
   await openApp(page);
 
   await page.locator("#desktopActionMenu").click();
@@ -587,8 +593,18 @@ test("opens help and about from the action menu", async ({ page }) => {
   await expect(aboutModal.locator("#about-app-version")).toHaveText("v7.4");
   await expect(aboutModal.locator("#about-release-date")).toHaveText("June 12, 2026");
   await expect(aboutModal.locator("#about-app-author")).toHaveText("ShayBC");
-  await expect(aboutModal.getByText("Apache License 2.0")).toBeVisible();
+  await expect(aboutModal.getByRole("button", { name: "Apache License 2.0" })).toBeVisible();
   await expect(aboutModal.locator(".about-modal-logo")).toBeVisible();
+  await aboutModal.getByRole("button", { name: "Apache License 2.0" }).click();
+  await expect(aboutModal).toBeHidden();
+  await expect(page.locator(".header-action-menu .dropdown-menu.show")).toHaveCount(0);
+  await expect(page.locator("#tab-list .tab-item.active")).toContainText("License");
+  await expect(page.locator("#markdown-preview")).toContainText("Apache License");
+  await expect.poll(() => page.evaluate(() => {
+    const activeTabId = localStorage.getItem("markdownViewerActiveTab");
+    const tabs = JSON.parse(localStorage.getItem("markdownViewerTabs") || "[]");
+    return tabs.find((tab) => tab.id === activeTabId)?.linkBasePath || "";
+  })).toBe("LICENSE");
 });
 
 test("settings menu updates graph auto-clustering threshold", async ({ page }) => {

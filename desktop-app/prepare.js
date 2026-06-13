@@ -74,6 +74,12 @@ fs.copyFileSync(
 );
 console.log("Copied README.md -> resources/README.md");
 
+fs.copyFileSync(
+  path.join(ROOT_DIR, "LICENSE"),
+  path.join(RESOURCES_DIR, "LICENSE"),
+);
+console.log("Copied LICENSE -> resources/LICENSE");
+
 copyDirSync(path.join(ROOT_DIR, "code_converter"), path.join(RESOURCES_DIR, "code_converter"));
 console.log("Copied code_converter/ -> resources/code_converter/");
 

@@ -5541,6 +5541,24 @@ a:focus {
   margin: 0;
 }
 
+.about-modal-link-button {
+  appearance: none;
+  background: none;
+  border: 0;
+  color: var(--link-color);
+  cursor: pointer;
+  font: inherit;
+  margin: 0;
+  padding: 0;
+  text-align: left;
+}
+
+.about-modal-link-button:hover,
+.about-modal-link-button:focus-visible {
+  color: var(--accent-color);
+  text-decoration: underline;
+}
+
 /* ========================================
    RENAME MODAL INPUT
    ======================================== */

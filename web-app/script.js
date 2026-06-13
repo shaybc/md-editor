@@ -1891,6 +1891,7 @@ document.addEventListener("DOMContentLoaded", function () {
   const codeConverterDialogButtons = document.querySelectorAll(".open-code-converter-dialog");
   const aboutModal = document.getElementById("about-modal");
   const aboutModalClose = document.getElementById("about-modal-close");
+  const aboutLicenseButton = document.getElementById("about-app-license");
   const settingsModal = document.getElementById("settings-modal");
   const settingsGraphAutoClusterThresholdInput = document.getElementById("settings-graph-auto-cluster-threshold");
   const settingsGraphAutoClusterLargeMapsInput = document.getElementById("settings-graph-auto-cluster-large-maps");
@@ -3054,6 +3055,10 @@ Markdown content is processed client-side in your browser and sanitized before p
     return fetchBundledWikiMarkdown("README.md");
   }
 
+  async function fetchLicenseMarkdown() {
+    return fetchBundledWikiMarkdown("LICENSE");
+  }
+
   function normalizeBundledReadmeMarkdown(markdown) {
     return String(markdown || "").replace(/\]\(web-app\/assets\//g, "](assets/");
   }
@@ -3078,8 +3083,32 @@ Markdown content is processed client-side in your browser and sanitized before p
     }
   }
 
+  async function openLicensePage() {
+    try {
+      const markdown = await fetchLicenseMarkdown();
+      newTab(markdown, "License", { viewMode: "preview", linkBasePath: "LICENSE" });
+    } catch (error) {
+      console.error("Failed to open license:", error);
+      alert("Unable to open the license file.");
+    }
+  }
+
   function openWelcomePage() {
     newTab(sampleMarkdown, "Welcome to MD-Editor", { viewMode: "preview" });
+  }
+
+  function closeOpenActionMenus() {
+    const desktopActionMenuButton = document.getElementById("desktopActionMenu");
+    if (desktopActionMenuButton && typeof bootstrap !== "undefined" && bootstrap?.Dropdown) {
+      bootstrap.Dropdown.getOrCreateInstance(desktopActionMenuButton).hide();
+    }
+    document.querySelectorAll(".dropdown-menu.show, .action-submenu.show").forEach((menu) => {
+      menu.classList.remove("show");
+    });
+    document.querySelectorAll('[aria-expanded="true"]').forEach((button) => {
+      button.setAttribute("aria-expanded", "false");
+    });
+    closeMobileMenu();
   }
 
   function showAboutDialog() {
@@ -5246,6 +5275,15 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
 
   if (aboutModalClose) {
     aboutModalClose.addEventListener("click", hideAboutDialog);
+  }
+
+  if (aboutLicenseButton) {
+    aboutLicenseButton.addEventListener("click", function(e) {
+      e.preventDefault();
+      hideAboutDialog();
+      closeOpenActionMenus();
+      openLicensePage();
+    });
   }
 
   if (aboutModal) {
