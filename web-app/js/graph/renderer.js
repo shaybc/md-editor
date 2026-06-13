@@ -4132,13 +4132,18 @@
 
     const positionContextMenu = (event) => {
       const bounds = graphViewCanvas.getBoundingClientRect();
+      contextMenu.style.maxHeight = "";
+      contextMenu.style.overflowY = "";
       const menuWidth = contextMenu.offsetWidth || 230;
       const statusLineSafeArea = 48;
       const safeMenuBottom = Math.min(bounds.height, Math.max(8, window.innerHeight - bounds.top - statusLineSafeArea));
       const safeMenuHeight = Math.max(120, safeMenuBottom - 16);
-      contextMenu.style.maxHeight = `${safeMenuHeight}px`;
-      contextMenu.style.overflowY = "auto";
-      const menuHeight = Math.min(contextMenu.offsetHeight || 280, safeMenuHeight);
+      const naturalMenuHeight = contextMenu.offsetHeight || 280;
+      const menuHeight = Math.min(naturalMenuHeight, safeMenuHeight);
+      if (naturalMenuHeight > safeMenuHeight) {
+        contextMenu.style.maxHeight = `${safeMenuHeight}px`;
+        contextMenu.style.overflowY = "auto";
+      }
       const left = Math.max(8, Math.min(event.clientX - bounds.left, Math.max(8, bounds.width - menuWidth - 8)));
       const top = Math.max(8, Math.min(event.clientY - bounds.top, Math.max(8, safeMenuBottom - menuHeight - 8)));
       contextMenu.style.left = `${left}px`;
