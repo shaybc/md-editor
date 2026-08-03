@@ -1,0 +1,347 @@
+<mxfile host="127.0.0.1" agent="MD-Editor" pages="2">
+  <diagram id="jdt-startup-flow" name="JDT Startup Analysis">
+    <mxGraphModel dx="1970" dy="1114" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1600" pageHeight="1000" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="title" parent="1" style="text;html=1;align=center;verticalAlign=middle;fontSize=24;fontStyle=1;fontColor=#e1d5e7;" value="MD-Editor: JDT Analysis at Startup" vertex="1">
+          <mxGeometry height="50" width="720" x="860" y="20" as="geometry" />
+        </mxCell>
+        <mxCell id="open" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=15;" value="Folder opened or restored&#xa;at application startup" vertex="1">
+          <mxGeometry height="70" width="220" x="414" y="31" as="geometry" />
+        </mxCell>
+        <mxCell id="detect" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=15;" value="Detect project model&#xa;and source files" vertex="1">
+          <mxGeometry height="70" width="220" x="689" y="31" as="geometry" />
+        </mxCell>
+        <mxCell id="hasJava" parent="1" style="rhombus;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=15;" value="Java content found?" vertex="1">
+          <mxGeometry height="100" width="170" x="714" y="141" as="geometry" />
+        </mxCell>
+        <mxCell id="noJava" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=14;" value="Skip JDT startup&#xa;No Java analysis required" vertex="1">
+          <mxGeometry height="70" width="200" x="424" y="156" as="geometry" />
+        </mxCell>
+        <mxCell id="jdk" parent="1" style="rhombus;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=15;" value="Valid project JDK?" vertex="1">
+          <mxGeometry height="100" width="170" x="1145" y="141" as="geometry" />
+        </mxCell>
+        <mxCell id="jdkBlocked" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=14;" value="Analysis blocked&#xa;Project JDK required" vertex="1">
+          <mxGeometry height="70" width="200" x="1385" y="156" as="geometry" />
+        </mxCell>
+        <mxCell id="startJdt" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=15;" value="Start JDT language server" vertex="1">
+          <mxGeometry height="70" width="220" x="1120" y="297" as="geometry" />
+        </mxCell>
+        <mxCell id="initialize" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=15;" value="Send initialize request&#xa;and workspace settings" vertex="1">
+          <mxGeometry height="70" width="220" x="1120" y="411" as="geometry" />
+        </mxCell>
+        <mxCell id="serviceReady" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontSize=15;" value="Wait for JDT service-ready&#xa;milestone" vertex="1">
+          <mxGeometry height="70" width="220" x="1120" y="526" as="geometry" />
+        </mxCell>
+        <mxCell id="importRequest" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=15;" value="Explicitly request&#xa;java.project.import" vertex="1">
+          <mxGeometry height="70" width="220" x="824" y="411" as="geometry" />
+        </mxCell>
+        <mxCell id="importComplete" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontSize=15;" value="Wait for successful&#xa;project-import completion" vertex="1">
+          <mxGeometry height="70" width="220" x="519" y="290" as="geometry" />
+        </mxCell>
+        <mxCell id="classpathReady" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=15;fontStyle=1;" value="Java classpath ready" vertex="1">
+          <mxGeometry height="70" width="220" x="519" y="407" as="geometry" />
+        </mxCell>
+        <mxCell id="hasKotlin" parent="1" style="rhombus;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=15;" value="Kotlin content found?" vertex="1">
+          <mxGeometry height="100" width="170" x="544" y="511" as="geometry" />
+        </mxCell>
+        <mxCell id="javaReady" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=15;fontStyle=1;" value="Publish Java diagnostics&#xa;Analysis ready" vertex="1">
+          <mxGeometry height="70" width="220" x="384" y="631" as="geometry" />
+        </mxCell>
+        <mxCell id="kotlinModel" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=14;" value="Resolve Kotlin model&#xa;Refresh requests join any&#xa;analysis already in progress" vertex="1">
+          <mxGeometry height="100" width="240" x="724" y="587" as="geometry" />
+        </mxCell>
+        <mxCell id="abiChanged" parent="1" style="rhombus;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=15;" value="Kotlin ABI changed?" vertex="1">
+          <mxGeometry height="100" width="180" x="754" y="723" as="geometry" />
+        </mxCell>
+        <mxCell id="applyAbi" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=15;" value="Apply ABI snapshot to JDT&#xa;and reconcile classpath" vertex="1">
+          <mxGeometry height="70" width="230" x="1024" y="738" as="geometry" />
+        </mxCell>
+        <mxCell id="verifyAbi" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontSize=15;" value="Wait for JDT verification&#xa;Then confirm ABI revision" vertex="1">
+          <mxGeometry height="70" width="230" x="1024" y="882" as="geometry" />
+        </mxCell>
+        <mxCell id="ready" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=16;fontStyle=1;" value="Java/Kotlin: Ready&#xa;Release diagnostics" vertex="1">
+          <mxGeometry height="80" width="240" x="584" y="877" as="geometry" />
+        </mxCell>
+        <mxCell id="explicitFailure" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=14;" value="Explicit error event&#xa;Import, server, or ABI failure&#xa;→ mark analysis incomplete&#xa;with the specific reason" vertex="1">
+          <mxGeometry height="100" width="260" x="46" y="581" as="geometry" />
+        </mxCell>
+        <mxCell id="watchdog" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=14;" value="No tracked progress for 5 minutes&#xa;→ “Project analysis stopped making progress”&#xa;JDT may still be running internally" vertex="1">
+          <mxGeometry height="100" width="290" x="1295" y="723" as="geometry" />
+        </mxCell>
+        <mxCell id="e1" edge="1" parent="1" source="open" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;" target="detect">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e2" edge="1" parent="1" source="detect" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;" target="hasJava">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e3" edge="1" parent="1" source="hasJava" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;" target="jdk" value="Yes">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e4" edge="1" parent="1" source="hasJava" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;" target="noJava" value="No">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e5" edge="1" parent="1" source="jdk" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;" target="startJdt" value="Yes">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e6" edge="1" parent="1" source="jdk" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;" target="jdkBlocked" value="No">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e7" edge="1" parent="1" source="startJdt" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;" target="initialize">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e8" edge="1" parent="1" source="initialize" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;" target="serviceReady">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e9" edge="1" parent="1" source="serviceReady" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;entryX=1;entryY=0.5;entryDx=0;entryDy=0;" target="importRequest" value="Event received">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e10" edge="1" parent="1" source="importRequest" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;entryX=1;entryY=0.5;entryDx=0;entryDy=0;" target="importComplete">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e11" edge="1" parent="1" source="importComplete" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" target="classpathReady" value="Success response">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e12" edge="1" parent="1" source="classpathReady" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" target="hasKotlin">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e13" edge="1" parent="1" source="hasKotlin" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;exitX=0;exitY=0.5;exitDx=0;exitDy=0;" target="javaReady" value="No">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e14" edge="1" parent="1" source="hasKotlin" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" target="kotlinModel" value="Yes">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e15" edge="1" parent="1" source="kotlinModel" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;" target="abiChanged">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e16" edge="1" parent="1" source="abiChanged" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;exitX=0;exitY=0.5;exitDx=0;exitDy=0;" target="ready" value="No">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e17" edge="1" parent="1" source="abiChanged" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;" target="applyAbi" value="Yes">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e18" edge="1" parent="1" source="applyAbi" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;" target="verifyAbi">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e19" edge="1" parent="1" source="verifyAbi" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;" target="ready" value="Verified + confirmed">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e20" edge="1" parent="1" source="javaReady" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" target="ready">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="failureEdge1" edge="1" parent="1" source="importComplete" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;dashed=1;strokeColor=#b85450;fontColor=#b85450;endArrow=block;endFill=1;" target="explicitFailure" value="Failure">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="failureEdge2" edge="1" parent="1" source="verifyAbi" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;dashed=1;strokeColor=#b85450;fontColor=#b85450;endArrow=block;endFill=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=1;entryDx=0;entryDy=0;" target="explicitFailure" value="Failure">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="1139" y="980" />
+              <mxPoint x="176" y="980" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="stallEdge1" edge="1" parent="1" source="serviceReady" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;dashed=1;strokeColor=#b85450;fontColor=#b85450;endArrow=block;endFill=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;" target="watchdog" value="No progress event">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="stallEdge2" edge="1" parent="1" source="verifyAbi" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;dashed=1;strokeColor=#b85450;fontColor=#b85450;endArrow=block;endFill=1;" target="watchdog" value="No progress event">
+          <mxGeometry relative="1" x="-0.3857" as="geometry">
+            <mxPoint as="offset" />
+          </mxGeometry>
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+  <diagram id="2iqFlqtijNx3jpHStq_J" name="Page-2">
+    <mxGraphModel dx="2845" dy="1200" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="850" pageHeight="1100" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="gR_b9R4qX_7Aoga3GK1A-1" parent="1" style="text;html=1;align=center;verticalAlign=middle;fontSize=24;fontStyle=1;fontColor=#e1d5e7;" value="MD-Editor: JDT / Kotlin Analysis with Observability and Recovery" vertex="1">
+          <mxGeometry height="50" width="900" x="800" y="390" as="geometry" />
+        </mxCell>
+        <mxCell id="gR_b9R4qX_7Aoga3GK1A-2" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=15;" value="Folder opened or restored&#xa;Detect Java / Kotlin model" vertex="1">
+          <mxGeometry height="75" width="230" x="360" y="480" as="geometry" />
+        </mxCell>
+        <mxCell id="gR_b9R4qX_7Aoga3GK1A-3" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=15;fontStyle=1;" value="JDT service ready&#xa;Project import complete&#xa;Java classpath ready" vertex="1">
+          <mxGeometry height="85" width="240" x="650" y="475" as="geometry" />
+        </mxCell>
+        <mxCell id="gR_b9R4qX_7Aoga3GK1A-4" parent="1" style="rhombus;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=15;" value="Kotlin content found?" vertex="1">
+          <mxGeometry height="105" width="190" x="950" y="465" as="geometry" />
+        </mxCell>
+        <mxCell id="gR_b9R4qX_7Aoga3GK1A-5" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=15;fontStyle=1;" value="Java diagnostics ready" vertex="1">
+          <mxGeometry height="65" width="190" x="950" y="625" as="geometry" />
+        </mxCell>
+        <mxCell id="gR_b9R4qX_7Aoga3GK1A-6" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=14;" value="Resolve Kotlin model&#xa;Refresh joins any analysis&#xa;already in progress" vertex="1">
+          <mxGeometry height="85" width="240" x="1210" y="475" as="geometry" />
+        </mxCell>
+        <mxCell id="gR_b9R4qX_7Aoga3GK1A-7" parent="1" style="rhombus;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=14;" value="Model refresh&#xa;succeeded?" vertex="1">
+          <mxGeometry height="105" width="180" x="1520" y="465" as="geometry" />
+        </mxCell>
+        <mxCell id="gR_b9R4qX_7Aoga3GK1A-8" parent="1" style="rhombus;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=14;" value="Kotlin ABI snapshot&#xa;requires JDT reconcile?" vertex="1">
+          <mxGeometry height="105" width="210" x="1770" y="465" as="geometry" />
+        </mxCell>
+        <mxCell id="gR_b9R4qX_7Aoga3GK1A-9" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=16;fontStyle=1;" value="Java / Kotlin Ready&#xa;Release stable diagnostics" vertex="1">
+          <mxGeometry height="75" width="230" x="1790" y="630" as="geometry" />
+        </mxCell>
+        <mxCell id="gR_b9R4qX_7Aoga3GK1A-10" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=14;" value="Begin Kotlin ABI generation&#xa;Set Java task: Refreshing Kotlin classpath" vertex="1">
+          <mxGeometry height="80" width="270" x="1550" y="760" as="geometry" />
+        </mxCell>
+        <mxCell id="gR_b9R4qX_7Aoga3GK1A-11" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=14;" value="Log reconciliation attempt&#xa;Generation, revision, project URIs, entry counts" vertex="1">
+          <mxGeometry height="80" width="260" x="1230" y="760" as="geometry" />
+        </mxCell>
+        <mxCell id="gR_b9R4qX_7Aoga3GK1A-12" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=14;" value="Send JDT command&#xa;mdeditor.kotlin.reconcileAbiClasspaths" vertex="1">
+          <mxGeometry height="80" width="260" x="910" y="760" as="geometry" />
+        </mxCell>
+        <mxCell id="gR_b9R4qX_7Aoga3GK1A-13" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontSize=14;" value="Wait for JDT response&#xa;5 min inactivity limit&#xa;30 min absolute limit" vertex="1">
+          <mxGeometry height="90" width="240" x="600" y="755" as="geometry" />
+        </mxCell>
+        <mxCell id="gR_b9R4qX_7Aoga3GK1A-14" parent="1" style="rhombus;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=14;" value="JDT transport&#xa;activity?" vertex="1">
+          <mxGeometry height="95" width="170" x="370" y="755" as="geometry" />
+        </mxCell>
+        <mxCell id="gR_b9R4qX_7Aoga3GK1A-15" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=13;" value="Mark generation progress&#xa;Log activity source (throttled)&#xa;Re-arm inactivity timer" vertex="1">
+          <mxGeometry height="85" width="210" x="350" y="905" as="geometry" />
+        </mxCell>
+        <mxCell id="gR_b9R4qX_7Aoga3GK1A-16" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=14;" value="No progress for 5 minutes&#xa;or 30-minute maximum reached&#xa;Mark generation incomplete" vertex="1">
+          <mxGeometry height="85" width="245" x="600" y="905" as="geometry" />
+        </mxCell>
+        <mxCell id="gR_b9R4qX_7Aoga3GK1A-17" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=14;" value="Log full structured result&#xa;Missing projects / JARs&#xa;Workspace project inventory&#xa;Verification details" vertex="1">
+          <mxGeometry height="100" width="260" x="910" y="905" as="geometry" />
+        </mxCell>
+        <mxCell id="gR_b9R4qX_7Aoga3GK1A-18" parent="1" style="rhombus;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=14;" value="Projects or JARs&#xa;still missing?" vertex="1">
+          <mxGeometry height="100" width="190" x="1230" y="905" as="geometry" />
+        </mxCell>
+        <mxCell id="gR_b9R4qX_7Aoga3GK1A-19" parent="1" style="rhombus;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=14;" value="Bounded retry&#xa;remaining?" vertex="1">
+          <mxGeometry height="100" width="180" x="1490" y="905" as="geometry" />
+        </mxCell>
+        <mxCell id="gR_b9R4qX_7Aoga3GK1A-20" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontSize=14;" value="Log retry evidence&#xa;Wait 1 second, then 3 seconds" vertex="1">
+          <mxGeometry height="80" width="230" x="1750" y="915" as="geometry" />
+        </mxCell>
+        <mxCell id="gR_b9R4qX_7Aoga3GK1A-21" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontSize=14;" value="Verify revision, generation, metadata,&#xa;types and effective entries&#xa;Confirm ABI revision" vertex="1">
+          <mxGeometry height="90" width="270" x="1230" y="1075" as="geometry" />
+        </mxCell>
+        <mxCell id="gR_b9R4qX_7Aoga3GK1A-22" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=14;" value="Structured terminal failure&#xa;Preserve code, stack, duration, evidence,&#xa;workspace inventory and JDT log path" vertex="1">
+          <mxGeometry height="95" width="290" x="1520" y="1075" as="geometry" />
+        </mxCell>
+        <mxCell id="gR_b9R4qX_7Aoga3GK1A-23" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=14;" value="Cancel stale JDT request&#xa;Send $/cancelRequest&#xa;Ignore late response via operation epoch" vertex="1">
+          <mxGeometry height="95" width="270" x="1180" y="1240" as="geometry" />
+        </mxCell>
+        <mxCell id="gR_b9R4qX_7Aoga3GK1A-24" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=14;" value="Settle Java and Kotlin tasks as failed&#xa;Keep last committed diagnostics&#xa;Do not claim analysis is still working" vertex="1">
+          <mxGeometry height="95" width="290" x="1490" y="1240" as="geometry" />
+        </mxCell>
+        <mxCell id="gR_b9R4qX_7Aoga3GK1A-25" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=14;" value="Project Analysis Incomplete&#xa;Open Debug Log | Retry Analysis | Close" vertex="1">
+          <mxGeometry height="85" width="270" x="1815" y="1245" as="geometry" />
+        </mxCell>
+        <mxCell id="gR_b9R4qX_7Aoga3GK1A-26" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=14;" value="Targeted manual retry&#xa;Reuse latest ABI snapshot&#xa;Start a fresh generation" vertex="1">
+          <mxGeometry height="90" width="270" x="1815" y="1410" as="geometry" />
+        </mxCell>
+        <mxCell id="gR_b9R4qX_7Aoga3GK1A-27" parent="1" style="shape=note;whiteSpace=wrap;html=1;backgroundOutline=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=13;" value="Evidence destinations&#xa;&#xa;MD-Editor Debug Log: correlated attempts, activity, results, retries, cancellation and failure&#xa;&#xa;JDT .metadata/.log: native Eclipse/JDT events&#xa;&#xa;Kotlin adapter log: model/compiler lifecycle&#xa;&#xa;AJDT logs: .md-editor/ajdt-diagnostics" vertex="1">
+          <mxGeometry height="205" width="350" x="360" y="1130" as="geometry" />
+        </mxCell>
+        <mxCell id="gR_b9R4qX_7Aoga3GK1A-28" edge="1" parent="1" source="gR_b9R4qX_7Aoga3GK1A-2" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;" target="gR_b9R4qX_7Aoga3GK1A-3">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="gR_b9R4qX_7Aoga3GK1A-29" edge="1" parent="1" source="gR_b9R4qX_7Aoga3GK1A-3" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;" target="gR_b9R4qX_7Aoga3GK1A-4">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="gR_b9R4qX_7Aoga3GK1A-30" edge="1" parent="1" source="gR_b9R4qX_7Aoga3GK1A-4" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;" target="gR_b9R4qX_7Aoga3GK1A-5" value="No">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="gR_b9R4qX_7Aoga3GK1A-31" edge="1" parent="1" source="gR_b9R4qX_7Aoga3GK1A-4" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;" target="gR_b9R4qX_7Aoga3GK1A-6" value="Yes">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="gR_b9R4qX_7Aoga3GK1A-32" edge="1" parent="1" source="gR_b9R4qX_7Aoga3GK1A-6" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;" target="gR_b9R4qX_7Aoga3GK1A-7">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="gR_b9R4qX_7Aoga3GK1A-33" edge="1" parent="1" source="gR_b9R4qX_7Aoga3GK1A-7" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;" target="gR_b9R4qX_7Aoga3GK1A-8" value="Yes">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="gR_b9R4qX_7Aoga3GK1A-34" edge="1" parent="1" source="gR_b9R4qX_7Aoga3GK1A-7" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;dashed=1;strokeColor=#b85450;fontColor=#b85450;endArrow=block;endFill=1;" target="gR_b9R4qX_7Aoga3GK1A-22" value="No">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="gR_b9R4qX_7Aoga3GK1A-35" edge="1" parent="1" source="gR_b9R4qX_7Aoga3GK1A-8" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;" target="gR_b9R4qX_7Aoga3GK1A-9" value="No">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="gR_b9R4qX_7Aoga3GK1A-36" edge="1" parent="1" source="gR_b9R4qX_7Aoga3GK1A-8" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;" target="gR_b9R4qX_7Aoga3GK1A-10" value="Yes">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="gR_b9R4qX_7Aoga3GK1A-37" edge="1" parent="1" source="gR_b9R4qX_7Aoga3GK1A-10" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;" target="gR_b9R4qX_7Aoga3GK1A-11">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="gR_b9R4qX_7Aoga3GK1A-38" edge="1" parent="1" source="gR_b9R4qX_7Aoga3GK1A-11" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;" target="gR_b9R4qX_7Aoga3GK1A-12">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="gR_b9R4qX_7Aoga3GK1A-39" edge="1" parent="1" source="gR_b9R4qX_7Aoga3GK1A-12" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;" target="gR_b9R4qX_7Aoga3GK1A-13">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="gR_b9R4qX_7Aoga3GK1A-40" edge="1" parent="1" source="gR_b9R4qX_7Aoga3GK1A-13" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;" target="gR_b9R4qX_7Aoga3GK1A-14">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="gR_b9R4qX_7Aoga3GK1A-41" edge="1" parent="1" source="gR_b9R4qX_7Aoga3GK1A-14" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;" target="gR_b9R4qX_7Aoga3GK1A-15" value="Yes">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="gR_b9R4qX_7Aoga3GK1A-42" edge="1" parent="1" source="gR_b9R4qX_7Aoga3GK1A-15" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;" target="gR_b9R4qX_7Aoga3GK1A-13" value="Continue waiting">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="gR_b9R4qX_7Aoga3GK1A-43" edge="1" parent="1" source="gR_b9R4qX_7Aoga3GK1A-14" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;dashed=1;strokeColor=#b85450;fontColor=#b85450;endArrow=block;endFill=1;" target="gR_b9R4qX_7Aoga3GK1A-16" value="No / timeout">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="gR_b9R4qX_7Aoga3GK1A-44" edge="1" parent="1" source="gR_b9R4qX_7Aoga3GK1A-13" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;" target="gR_b9R4qX_7Aoga3GK1A-17" value="Response">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="gR_b9R4qX_7Aoga3GK1A-45" edge="1" parent="1" source="gR_b9R4qX_7Aoga3GK1A-17" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;" target="gR_b9R4qX_7Aoga3GK1A-18">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="gR_b9R4qX_7Aoga3GK1A-46" edge="1" parent="1" source="gR_b9R4qX_7Aoga3GK1A-18" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;" target="gR_b9R4qX_7Aoga3GK1A-19" value="Yes">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="gR_b9R4qX_7Aoga3GK1A-47" edge="1" parent="1" source="gR_b9R4qX_7Aoga3GK1A-19" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;" target="gR_b9R4qX_7Aoga3GK1A-20" value="Yes">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="gR_b9R4qX_7Aoga3GK1A-48" edge="1" parent="1" source="gR_b9R4qX_7Aoga3GK1A-20" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;" target="gR_b9R4qX_7Aoga3GK1A-11" value="Retry">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="1865" y="870" />
+              <mxPoint x="1360" y="870" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="gR_b9R4qX_7Aoga3GK1A-49" edge="1" parent="1" source="gR_b9R4qX_7Aoga3GK1A-19" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;dashed=1;strokeColor=#b85450;fontColor=#b85450;endArrow=block;endFill=1;" target="gR_b9R4qX_7Aoga3GK1A-22" value="No">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="gR_b9R4qX_7Aoga3GK1A-50" edge="1" parent="1" source="gR_b9R4qX_7Aoga3GK1A-18" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;" target="gR_b9R4qX_7Aoga3GK1A-21" value="No">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="gR_b9R4qX_7Aoga3GK1A-51" edge="1" parent="1" source="gR_b9R4qX_7Aoga3GK1A-21" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;" target="gR_b9R4qX_7Aoga3GK1A-9" value="Verified + confirmed">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="gR_b9R4qX_7Aoga3GK1A-52" edge="1" parent="1" source="gR_b9R4qX_7Aoga3GK1A-21" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;dashed=1;strokeColor=#b85450;fontColor=#b85450;endArrow=block;endFill=1;" target="gR_b9R4qX_7Aoga3GK1A-22" value="Validation failure">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="gR_b9R4qX_7Aoga3GK1A-53" edge="1" parent="1" source="gR_b9R4qX_7Aoga3GK1A-16" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;dashed=1;strokeColor=#b85450;endArrow=block;endFill=1;" target="gR_b9R4qX_7Aoga3GK1A-23">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="gR_b9R4qX_7Aoga3GK1A-54" edge="1" parent="1" source="gR_b9R4qX_7Aoga3GK1A-22" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;dashed=1;strokeColor=#b85450;endArrow=block;endFill=1;" target="gR_b9R4qX_7Aoga3GK1A-23">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="gR_b9R4qX_7Aoga3GK1A-55" edge="1" parent="1" source="gR_b9R4qX_7Aoga3GK1A-23" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;" target="gR_b9R4qX_7Aoga3GK1A-24">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="gR_b9R4qX_7Aoga3GK1A-56" edge="1" parent="1" source="gR_b9R4qX_7Aoga3GK1A-24" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;" target="gR_b9R4qX_7Aoga3GK1A-25">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="gR_b9R4qX_7Aoga3GK1A-57" edge="1" parent="1" source="gR_b9R4qX_7Aoga3GK1A-25" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;" target="gR_b9R4qX_7Aoga3GK1A-26" value="Retry Analysis">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="gR_b9R4qX_7Aoga3GK1A-58" edge="1" parent="1" source="gR_b9R4qX_7Aoga3GK1A-26" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;" target="gR_b9R4qX_7Aoga3GK1A-10" value="Fresh generation">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="2110" y="1455" />
+              <mxPoint x="2110" y="800" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

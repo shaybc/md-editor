@@ -1,0 +1,43 @@
+# Dependencies
+node_modules/
+desktop-app/node_modules/
+
+# Developer tools' files
+.lite_workspace.lua
+.md-editor/
+
+# Build/test output
+desktop-app/playwright-report/
+desktop-app/test-results/
+desktop-app/tests/eval/results/
+/dist/
+desktop-app/output/
+target/
+**/target/
+
+# Neutralinojs runtime state
+desktop-app/.tmp/
+desktop-app/.storage
+desktop-app/*.log
+*.log
+
+# Bundled Kotlin tools materialized by desktop-app setup
+/desktop-app/vendor/kotlin-lsp/
+/desktop-app/vendor/kotlin-compiler/
+/desktop-app/vendor/.downloads/
+
+# Internal tooling JDK materialized by desktop-app setup
+/desktop-app/bin/tooling-jdk/
+/desktop-app/bin/.downloads/
+/desktop-app/bin/.tooling-jdk-extract/
+
+# Offline diagram editor materialized from the pinned draw.io source archive
+/desktop-app/resources/vendor/diagram-editor/
+/desktop-app/vendor/.drawio-extract/
+/drawio-release-report.json
+
+
+# removing git LFS
+/desktop-app/bin/tooling-jdk/
+/desktop-app/vendor/kotlin-lsp/
+/desktop-app/vendor/kotlin-compiler/

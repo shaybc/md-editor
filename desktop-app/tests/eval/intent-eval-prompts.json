@@ -1,0 +1,61 @@
+{
+  "schemaVersion": 1,
+  "cases": [
+    {
+      "id": "answer-preference-purpose",
+      "taskType": "answer",
+      "mode": "chat",
+      "prompt": "What does intentClarificationMode control?",
+      "rubric": { "acceptanceCriteria": ["Explains ask, assume, and off without claiming a mutation."], "expectedFiles": ["desktop-app/resources/ai-companion/config/defaults.js"], "expectedSymbols": ["normalizeAiCompanionSettings"] }
+    },
+    {
+      "id": "answer-plan-mode",
+      "taskType": "answer",
+      "mode": "chat",
+      "prompt": "How does Plan mode save a proposed plan?",
+      "rubric": { "acceptanceCriteria": ["Identifies normalization and plan repository persistence."], "expectedFiles": ["desktop-app/resources/ai-companion/modes/plan/index.js"], "expectedSymbols": ["runPlanMode"] }
+    },
+    {
+      "id": "diagnostic-preference-overflow",
+      "taskType": "diagnostic",
+      "mode": "agent",
+      "prompt": "Diagnose why a full preferences_get can overflow while an exact-key read succeeds. Do not edit files.",
+      "rubric": { "acceptanceCriteria": ["Finds unbounded state resolution and distinguishes execution failure from returned data."], "expectedFiles": ["desktop-app/resources/js/ai-companion/settings-tools.js"], "expectedSymbols": ["executePreferenceTool"] }
+    },
+    {
+      "id": "diagnostic-gemini-signature",
+      "taskType": "diagnostic",
+      "mode": "agent",
+      "prompt": "Diagnose a Gemini missing thought_signature error during harness discovery. Do not edit files.",
+      "rubric": { "acceptanceCriteria": ["Separates harness observations from provider-authored function calls."], "expectedFiles": ["desktop-app/resources/ai-companion/core/agent-tool-loop.js", "desktop-app/resources/ai-companion/providers/gemini-connector.js"], "expectedSymbols": ["createHarnessObservationMessage"] }
+    },
+    {
+      "id": "planning-settings-toggle",
+      "taskType": "planning",
+      "mode": "plan",
+      "prompt": "Plan a user-visible Settings toggle for intent contracts while preserving the internal experiment dimensions.",
+      "rubric": { "acceptanceCriteria": ["Covers browser load/save wiring, normalizer parity, and tests."], "expectedFiles": ["desktop-app/resources/index.html", "desktop-app/resources/js/script.js", "desktop-app/resources/js/ai-companion/settings.js"], "expectedSymbols": [] }
+    },
+    {
+      "id": "planning-clarification-resume",
+      "taskType": "planning",
+      "mode": "plan",
+      "prompt": "Plan restart recovery for an unanswered intent clarification without resurrecting the dead bridge request.",
+      "rubric": { "acceptanceCriteria": ["Starts fresh extraction with saved answers and keeps approvals separate."], "expectedFiles": ["desktop-app/resources/js/ai-companion/interrupted-task-resume.js", "desktop-app/resources/js/ai-companion/panel.js"], "expectedSymbols": ["buildClarificationResumeRequest"] }
+    },
+    {
+      "id": "implementation-contract-card",
+      "taskType": "implementation",
+      "mode": "agent",
+      "prompt": "Implement a collapsible intent card showing provenance and target verification states.",
+      "rubric": { "acceptanceCriteria": ["Restored and live cards use one renderer and remain read-only."], "expectedFiles": ["desktop-app/resources/js/ai-companion/intent-contract-renderer.js", "desktop-app/resources/js/ai-companion/panel.js", "desktop-app/resources/styles.css"], "expectedSymbols": ["createIntentContractCard"] }
+    },
+    {
+      "id": "implementation-eval-metrics",
+      "taskType": "implementation",
+      "mode": "agent",
+      "prompt": "Implement local intent-contract evaluation metrics separated by task type.",
+      "rubric": { "acceptanceCriteria": ["Records false-met, localization, clarification, revision, cost, and latency without uploading data."], "expectedFiles": ["desktop-app/tests/eval/intent-contracts-eval.js"], "expectedSymbols": ["summarizeByTaskType", "evaluateRollout"] }
+    }
+  ]
+}

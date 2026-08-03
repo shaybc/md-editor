@@ -1,0 +1,59 @@
+{
+  "contract": {
+    "source": "extracted",
+    "verifiability": "verified",
+    "taskType": "diagnostic",
+    "goal": {
+      "value": "Check the latest git changes and update the documentation if needed",
+      "provenance": "explicit"
+    },
+    "expectedOutcome": {
+      "value": "The changes are understood and the documentation reflects them",
+      "provenance": "inferred"
+    },
+    "acceptanceCriteria": [
+      {
+        "id": "AC1",
+        "description": "Check the latest git changes and update the documentation if needed",
+        "provenance": "explicit"
+      }
+    ],
+    "namedTargets": {
+      "files": [],
+      "symbols": [],
+      "errors": [],
+      "uiAreas": []
+    }
+  },
+  "evidenceLedger": [
+    {
+      "id": "EV1",
+      "source": "tool",
+      "tool": "git_panel_status",
+      "outcome": "succeeded",
+      "verifiedState": true,
+      "truncated": false,
+      "successConfirmedIndependently": true,
+      "summary": "19 changed file names"
+    },
+    {
+      "id": "EV2",
+      "source": "tool",
+      "tool": "run_command",
+      "outcome": "not-executed",
+      "verifiedState": false,
+      "truncated": false,
+      "successConfirmedIndependently": false,
+      "summary": "git diff was blocked by policy"
+    },
+    {
+      "id": "EV-CANDIDATE-1",
+      "source": "candidate-response",
+      "outcome": "succeeded",
+      "verifiedState": true,
+      "truncated": false,
+      "successConfirmedIndependently": true,
+      "summary": "Normalized candidate response"
+    }
+  ]
+}

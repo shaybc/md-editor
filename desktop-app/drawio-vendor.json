@@ -1,0 +1,39 @@
+{
+  "version": "30.0.4",
+  "tag": "v30.0.4",
+  "commit": "201b8601fb9f07a4b3a4cba03212b1aa122cec06",
+  "archive": "drawio-201b8601fb9f07a4b3a4cba03212b1aa122cec06.tar.gz",
+  "url": "https://github.com/jgraph/drawio/archive/201b8601fb9f07a4b3a4cba03212b1aa122cec06.tar.gz",
+  "sha256": "dea2f92a46cc9fff85bfc19cd3137f8af4aeb6ac26afca9c725f6fb82ee749ff",
+  "archiveRoot": "drawio-201b8601fb9f07a4b3a4cba03212b1aa122cec06",
+  "webappPath": "src/main/webapp",
+  "runtimeDirectories": [
+    "images",
+    "img",
+    "js",
+    "math4",
+    "mxgraph",
+    "resources",
+    "shapes",
+    "stencils",
+    "styles"
+  ],
+  "runtimeFiles": [
+    "favicon.ico",
+    "index.html",
+    "shortcuts.svg"
+  ],
+  "requiredEntries": [
+    "src/main/webapp/index.html",
+    "src/main/webapp/js/bootstrap.js",
+    "src/main/webapp/js/app.min.js",
+    "src/main/webapp/js/main.js",
+    "src/main/webapp/mxgraph",
+    "src/main/webapp/styles/grapheditor.css",
+    "src/main/webapp/stencils/arrows.xml",
+    "src/main/webapp/stencils/basic.xml",
+    "src/main/webapp/stencils/flowchart.xml",
+    "LICENSE",
+    "README.md"
+  ]
+}

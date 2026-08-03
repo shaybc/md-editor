@@ -1,0 +1,9 @@
+// Disables test execution for every project of every build in the tree.
+//
+// "-x test" on the command line cannot reach nested builds such as buildSrc, but init
+// scripts apply to every build. MD-Editor's analysis-support Gradle runs never need
+// test results, and a broken buildSrc test task (for example corrupted binary
+// test-results left by an interrupted run) would otherwise fail the whole run.
+gradle.allprojects { project ->
+    project.tasks.withType(org.gradle.api.tasks.testing.Test).configureEach { it.enabled = false }
+}

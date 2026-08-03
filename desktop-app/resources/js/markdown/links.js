@@ -1,0 +1,749 @@
+﻿(function(global) {
+  global.registerMarkdownViewerMarkdownLinks = function registerMarkdownViewerMarkdownLinks(app, deps) {
+    const api = {};
+
+    with (deps) {
+    function getWikiLinkParts(rawLink) {
+    const value = String(rawLink || "").trim();
+    const pipeIndex = value.indexOf("|");
+    const target = (pipeIndex >= 0 ? value.slice(0, pipeIndex) : value).trim();
+    const label = (pipeIndex >= 0 ? value.slice(pipeIndex + 1) : target).trim() || target;
+    return { target, label };
+  }
+
+  function isExternalOrSpecialLinkTarget(target) {
+    return /^(?:[a-z][a-z0-9+.-]*:|#|\/\/)/i.test(String(target || "").trim());
+  }
+
+  function isExternalWebLinkTarget(target) {
+    return /^(?:https?:\/\/|\/\/)/i.test(String(target || "").trim());
+  }
+
+  function normalizeExternalWebLinkTarget(target) {
+    const trimmedTarget = String(target || "").trim();
+    return trimmedTarget.startsWith("//") ? `${window.location.protocol}${trimmedTarget}` : trimmedTarget;
+  }
+
+  async function openExternalWebLink(target) {
+    const url = normalizeExternalWebLinkTarget(target);
+    if (!url) return;
+
+    try {
+      if (typeof Neutralino !== "undefined" && Neutralino.os && typeof Neutralino.os.open === "function") {
+        await Neutralino.os.open(url);
+        return;
+      }
+    } catch (error) {
+      console.error("Failed to open external link with the OS:", error);
+    }
+
+    window.open(url, "_blank", "noopener,noreferrer");
+  }
+
+  function getWikiLinkHref(target) {
+    const trimmedTarget = String(target || "").trim();
+    if (!trimmedTarget) return "#";
+    if (trimmedTarget.startsWith("#")) return trimmedTarget;
+    if (isExternalOrSpecialLinkTarget(trimmedTarget)) return "#";
+
+    const hashIndex = trimmedTarget.indexOf("#");
+    const pathPart = hashIndex >= 0 ? trimmedTarget.slice(0, hashIndex) : trimmedTarget;
+    const suffix = hashIndex >= 0 ? trimmedTarget.slice(hashIndex) : "";
+    const pathWithExtension = /\.[^/\\]+$/.test(pathPart) ? pathPart : `${pathPart}.md`;
+    return encodeURI(`${pathWithExtension}${suffix}`);
+  }
+
+  function splitLinkTarget(target) {
+    const rawTarget = String(target || "").trim();
+    const hashIndex = rawTarget.indexOf("#");
+    const queryIndex = rawTarget.indexOf("?");
+    const cutIndexes = [hashIndex, queryIndex].filter((index) => index >= 0);
+    const firstCutIndex = cutIndexes.length ? Math.min(...cutIndexes) : -1;
+    const path = firstCutIndex >= 0 ? rawTarget.slice(0, firstCutIndex) : rawTarget;
+    const suffix = firstCutIndex >= 0 ? rawTarget.slice(firstCutIndex) : "";
+    const hash = hashIndex >= 0 ? rawTarget.slice(hashIndex + 1).split("?")[0] : "";
+    return { path, suffix, hash };
+  }
+
+  function safeDecodeLinkPath(path) {
+    try {
+      return decodeURIComponent(String(path || ""));
+    } catch (_) {
+      return String(path || "");
+    }
+  }
+
+  function normalizeMarkdownLinkPath(path) {
+    const normalized = safeDecodeLinkPath(path)
+      .replace(/\\/g, "/")
+      .replace(/^\.\//, "");
+    const segments = [];
+
+    normalized.split("/").forEach((segment) => {
+      if (!segment || segment === ".") return;
+      if (segment === "..") {
+        if (segments.length && segments[segments.length - 1] !== "..") {
+          segments.pop();
+        } else {
+          segments.push(segment);
+        }
+        return;
+      }
+      segments.push(segment);
+    });
+
+    return segments.join("/");
+  }
+
+  function getDirectoryPath(path) {
+    const normalized = String(path || "").replace(/\\/g, "/");
+    const index = normalized.lastIndexOf("/");
+    return index >= 0 ? normalized.slice(0, index) : "";
+  }
+
+  function getLinkPathExtension(path) {
+    const fileName = getFileName(splitLinkTarget(path).path);
+    const extensionMatch = fileName.match(/\.([^.]*)$/);
+    return extensionMatch ? extensionMatch[1].toLowerCase() : "";
+  }
+
+  function isMarkdownDocumentLinkPath(path) {
+    const { path: targetPath } = splitLinkTarget(path);
+    if (!targetPath) return false;
+    const extension = getLinkPathExtension(targetPath);
+    return !extension || extension === "md" || extension === "markdown";
+  }
+
+  function ensureMarkdownLinkExtension(path) {
+    if (!path || getLinkPathExtension(path)) return path;
+    return `${path}.md`;
+  }
+
+  function isSameOriginMarkdownUrl(target) {
+    try {
+      const url = new URL(String(target || ""), window.location.href);
+      return url.origin === window.location.origin && isMarkdownDocumentLinkPath(url.pathname);
+    } catch (_) {
+      return false;
+    }
+  }
+
+  function getSameOriginMarkdownUrlPath(target) {
+    const url = new URL(String(target || ""), window.location.href);
+    return `${url.pathname.replace(/^\/+/, "")}${url.search}${url.hash}`;
+  }
+
+  function isAbsoluteFilesystemPath(path) {
+    const value = String(path || "");
+    return /^[a-zA-Z]:[\\/]/.test(value) || /^\\\\/.test(value) || value.startsWith("/");
+  }
+
+  function normalizeFilesystemLinkPath(path) {
+    const rawPath = safeDecodeLinkPath(path).replace(/\\/g, "/");
+    const driveMatch = rawPath.match(/^[a-zA-Z]:\//);
+    const prefix = driveMatch ? driveMatch[0] : (rawPath.startsWith("/") ? "/" : "");
+    const pathWithoutPrefix = prefix ? rawPath.slice(prefix.length) : rawPath;
+    return prefix + normalizeMarkdownLinkPath(pathWithoutPrefix);
+  }
+
+  function resolveMarkdownLinkPath(targetPath, basePath) {
+    const decodedTarget = safeDecodeLinkPath(targetPath).replace(/\\/g, "/");
+    if (!decodedTarget) return "";
+    if (isAbsoluteFilesystemPath(decodedTarget)) {
+      return normalizeFilesystemLinkPath(decodedTarget);
+    }
+
+    const decodedBasePath = safeDecodeLinkPath(basePath || "").replace(/\\/g, "/");
+    if (isAbsoluteFilesystemPath(decodedBasePath)) {
+      const baseDirectory = getDirectoryPath(decodedBasePath);
+      return normalizeFilesystemLinkPath(baseDirectory ? `${baseDirectory}/${decodedTarget}` : decodedTarget);
+    }
+
+    const normalizedBasePath = normalizeMarkdownLinkPath(decodedBasePath);
+    const baseDirectory = getDirectoryPath(normalizedBasePath);
+    return normalizeMarkdownLinkPath(baseDirectory ? `${baseDirectory}/${decodedTarget}` : decodedTarget);
+  }
+
+  function getActiveMarkdownSourcePath() {
+    const activeTab = getActiveMarkdownTab();
+    return activeTab && (activeTab.sourceFilePath || activeTab.linkBasePath) ? (activeTab.sourceFilePath || activeTab.linkBasePath) : "";
+  }
+
+  function isBundledWikiPath(path) {
+    const normalizedPath = normalizeMarkdownLinkPath(path || "");
+    return normalizedPath.startsWith("wiki/") || normalizedPath.startsWith("help/");
+  }
+
+  function getBundledWikiTargetPath(rawTarget) {
+    const { path: rawTargetPath } = splitLinkTarget(rawTarget);
+    if (!rawTargetPath || !isMarkdownDocumentLinkPath(rawTargetPath)) return "";
+
+    const activeSourcePath = getActiveMarkdownSourcePath();
+    if (!isBundledWikiPath(activeSourcePath)) return "";
+
+    const targetPath = ensureMarkdownLinkExtension(rawTargetPath);
+    const resolvedPath = resolveMarkdownLinkPath(targetPath, activeSourcePath);
+    return isBundledWikiPath(resolvedPath) ? normalizeMarkdownLinkPath(resolvedPath) : "";
+  }
+
+  function findBundledWikiTab(wikiPath) {
+    const normalizedWikiPath = normalizeMarkdownLinkPath(wikiPath);
+    return (tabs || []).find((tab) => {
+      return tab?.type !== "graph"
+        && normalizeMarkdownLinkPath(tab.linkBasePath || "") === normalizedWikiPath;
+    }) || null;
+  }
+
+  async function openBundledWikiLinkFromPreview(rawTarget) {
+    if (typeof fetchBundledWikiMarkdown !== "function" || typeof newTab !== "function") return false;
+
+    const { hash } = splitLinkTarget(rawTarget);
+    const wikiPath = getBundledWikiTargetPath(rawTarget);
+    if (!wikiPath) return false;
+
+    const existingTab = findBundledWikiTab(wikiPath);
+    if (existingTab) {
+      switchTab(existingTab.id);
+      pinTemporaryTab(existingTab.id);
+      scrollMarkdownPreviewToHash(hash);
+      return true;
+    }
+
+    try {
+      const markdown = await fetchBundledWikiMarkdown(wikiPath);
+      const openedTab = newTab(markdown, getMarkdownTitleFromFileName(getFileName(wikiPath)), {
+        viewMode: "preview",
+        linkBasePath: wikiPath
+      });
+      if (openedTab) {
+        pinTemporaryTab(openedTab.id);
+        scrollMarkdownPreviewToHash(hash);
+      }
+      return true;
+    } catch (error) {
+      console.error("Failed to open bundled wiki link:", error);
+      alert("Unable to open this help page.");
+      return true;
+    }
+  }
+
+  function canReadLinkedFilesystemPath() {
+    return typeof Neutralino !== "undefined" && !!Neutralino.filesystem?.readFile;
+  }
+
+  function getFolderEntryPathCandidates(entry) {
+    const candidates = [
+      entry && entry.path,
+      entry && entry.fullPath,
+      entry && entry.file && entry.file.webkitRelativePath,
+      entry && entry.file && entry.file.name
+    ];
+    return candidates
+      .filter(Boolean)
+      .map((path) => normalizeMarkdownLinkPath(path));
+  }
+
+  function findOpenFolderMarkdownEntry(resolvedPath, rawTargetPath) {
+    const normalizedResolvedPath = normalizeMarkdownLinkPath(resolvedPath);
+    const normalizedRawTargetPath = normalizeMarkdownLinkPath(ensureMarkdownLinkExtension(rawTargetPath || ""));
+    const rawTargetIsBareFileName = !!normalizedRawTargetPath && !normalizedRawTargetPath.includes("/");
+    const rawTargetFileName = rawTargetIsBareFileName ? getFileName(normalizedRawTargetPath).toLowerCase() : "";
+    const resolvedWithoutFolderRoot = activeFolderName && normalizedResolvedPath.startsWith(`${activeFolderName}/`)
+      ? normalizedResolvedPath.slice(activeFolderName.length + 1)
+      : normalizedResolvedPath;
+
+    const exactMatch = (folderMarkdownFiles || []).find((entry) => {
+      const candidates = getFolderEntryPathCandidates(entry);
+      return candidates.some((candidate) => {
+        const candidateWithoutFolderRoot = activeFolderName && candidate.startsWith(`${activeFolderName}/`)
+          ? candidate.slice(activeFolderName.length + 1)
+          : candidate;
+        return candidate === normalizedResolvedPath
+          || candidate === normalizedRawTargetPath
+          || candidate === resolvedWithoutFolderRoot
+          || candidateWithoutFolderRoot === normalizedResolvedPath
+          || candidateWithoutFolderRoot === normalizedRawTargetPath
+          || candidateWithoutFolderRoot === resolvedWithoutFolderRoot;
+      });
+    });
+
+    if (exactMatch || !rawTargetIsBareFileName) return exactMatch || null;
+
+    return (folderMarkdownFiles || []).find((entry) => {
+      return getFolderEntryPathCandidates(entry).some((candidate) => {
+        return getFileName(candidate).toLowerCase() === rawTargetFileName;
+      });
+    }) || null;
+  }
+
+  function getMarkdownLinkSourceFile(target) {
+    const { path: rawTargetPath } = splitLinkTarget(target);
+    if (!rawTargetPath || !isMarkdownDocumentLinkPath(rawTargetPath)) return null;
+
+    const targetPath = ensureMarkdownLinkExtension(rawTargetPath);
+    const activeSourcePath = getActiveMarkdownSourcePath();
+    const resolvedPath = resolveMarkdownLinkPath(targetPath, activeSourcePath);
+    const folderEntry = findOpenFolderMarkdownEntry(resolvedPath, rawTargetPath);
+
+    if (folderEntry) {
+      return {
+        name: folderEntry.name || getFileName(folderEntry.path || folderEntry.fullPath || targetPath),
+        file: folderEntry.file || null,
+        handle: folderEntry.handle || null,
+        path: folderEntry.fullPath || folderEntry.path || resolvedPath
+      };
+    }
+
+    if (canReadLinkedFilesystemPath()) {
+      if (isAbsoluteFilesystemPath(resolvedPath)) {
+        return {
+          name: getFileName(resolvedPath),
+          path: resolvedPath
+        };
+      }
+      if (activeFolderPath) {
+        const folderRelativePath = normalizeMarkdownLinkPath(resolvedPath).replace(new RegExp(`^${activeFolderName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}/`), "");
+        const fullPath = joinPath(activeFolderPath, folderRelativePath);
+        return {
+          name: getFileName(fullPath),
+          path: fullPath
+        };
+      }
+    }
+
+    return null;
+  }
+
+  function isPreviewImagePath(path) {
+    return /\.(avif|bmp|gif|jpe?g|png|svg|webp)([#?].*)?$/i.test(path || "");
+  }
+
+  function getImageMimeType(path) {
+    const extension = String(path || "").toLowerCase().split(/[?#]/)[0].split(".").pop();
+    switch (extension) {
+      case "avif": return "image/avif";
+      case "bmp": return "image/bmp";
+      case "gif": return "image/gif";
+      case "jpg":
+      case "jpeg": return "image/jpeg";
+      case "png": return "image/png";
+      case "svg": return "image/svg+xml";
+      case "webp": return "image/webp";
+      default: return "application/octet-stream";
+    }
+  }
+
+  function getAllFolderTreeFileNodes(nodes, files = []) {
+    (nodes || []).forEach((node) => {
+      if (!node) return;
+      if (node.kind === "directory") {
+        getAllFolderTreeFileNodes(node.children || [], files);
+      } else if (node.kind === "file") {
+        files.push(node);
+      }
+    });
+    return files;
+  }
+
+  function findOpenFolderFileNode(resolvedPath, rawTargetPath) {
+    const normalizedResolvedPath = normalizeMarkdownLinkPath(resolvedPath);
+    const normalizedRawTargetPath = normalizeMarkdownLinkPath(rawTargetPath || "");
+    const rawTargetIsBareFileName = !!normalizedRawTargetPath && !normalizedRawTargetPath.includes("/");
+    const rawTargetFileName = rawTargetIsBareFileName ? getFileName(normalizedRawTargetPath).toLowerCase() : "";
+    const resolvedWithoutFolderRoot = activeFolderName && normalizedResolvedPath.startsWith(`${activeFolderName}/`)
+      ? normalizedResolvedPath.slice(activeFolderName.length + 1)
+      : normalizedResolvedPath;
+
+    const exactMatch = getAllFolderTreeFileNodes(currentFolderTreeNodes || []).find((node) => {
+      const candidates = [
+        node.path,
+        node.fullPath,
+        node.file && node.file.webkitRelativePath,
+        node.file && node.file.name,
+        node.name
+      ].filter(Boolean).map((candidate) => normalizeMarkdownLinkPath(candidate));
+
+      return candidates.some((candidate) => {
+        const candidateWithoutFolderRoot = activeFolderName && candidate.startsWith(`${activeFolderName}/`)
+          ? candidate.slice(activeFolderName.length + 1)
+          : candidate;
+        return candidate === normalizedResolvedPath
+          || candidate === resolvedWithoutFolderRoot
+          || candidateWithoutFolderRoot === normalizedResolvedPath
+          || candidateWithoutFolderRoot === resolvedWithoutFolderRoot
+          || candidate === normalizedRawTargetPath;
+      });
+    });
+
+    if (exactMatch || !rawTargetIsBareFileName) return exactMatch || null;
+
+    return getAllFolderTreeFileNodes(currentFolderTreeNodes || []).find((node) => {
+      return getFileName(node.path || node.fullPath || node.name || "").toLowerCase() === rawTargetFileName;
+    }) || null;
+  }
+
+  function getNeutralinoRuntimePath(name) {
+    if (typeof getNeutralinoGlobalValue === "function") {
+      return normalizeFilesystemLinkPath(getNeutralinoGlobalValue(name) || "");
+    }
+    if (name === "NL_PATH" && typeof global.NL_PATH !== "undefined") return normalizeFilesystemLinkPath(global.NL_PATH || "");
+    if (name === "NL_CWD" && typeof global.NL_CWD !== "undefined") return normalizeFilesystemLinkPath(global.NL_CWD || "");
+    return "";
+  }
+
+  function getBundledImagePathCandidates(resolvedPath) {
+    const normalized = normalizeMarkdownLinkPath(resolvedPath);
+    const activeSourcePath = normalizeMarkdownLinkPath(getActiveMarkdownSourcePath());
+    const isBundledResourcePath = isBundledWikiPath(activeSourcePath) && normalized.startsWith("resources/");
+    if (!isBundledWikiPath(normalized) && !isBundledResourcePath) return [];
+
+    const basePath = getNeutralinoRuntimePath("NL_PATH");
+    const cwdPath = getNeutralinoRuntimePath("NL_CWD");
+    return [
+      basePath ? joinPath(basePath, normalized) : "",
+      cwdPath ? joinPath(cwdPath, normalized) : "",
+      basePath && !normalized.startsWith("resources/") ? joinPath(basePath, "resources", normalized) : "",
+      cwdPath && !normalized.startsWith("resources/") ? joinPath(cwdPath, "resources", normalized) : ""
+    ].filter(Boolean);
+  }
+
+  function getReadableFilesystemImagePath(resolvedPath) {
+    if (isAbsoluteFilesystemPath(resolvedPath)) return resolvedPath;
+    const bundledCandidates = getBundledImagePathCandidates(resolvedPath);
+    if (bundledCandidates.length) return bundledCandidates[0];
+    if (!activeFolderPath) return "";
+    const normalized = normalizeMarkdownLinkPath(resolvedPath);
+    const folderRelativePath = activeFolderName && normalized.startsWith(`${activeFolderName}/`)
+      ? normalized.slice(activeFolderName.length + 1)
+      : normalized;
+    return joinPath(activeFolderPath, folderRelativePath);
+  }
+
+  async function readFilesystemImageAsObjectUrl(path) {
+    if (typeof Neutralino === "undefined" || !Neutralino.filesystem?.readBinaryFile || !path) return "";
+    const buffer = await Neutralino.filesystem.readBinaryFile(path);
+    const blob = new Blob([buffer], { type: getImageMimeType(path) });
+    return URL.createObjectURL(blob);
+  }
+
+  async function readFirstFilesystemImageAsObjectUrl(paths) {
+    for (const path of paths || []) {
+      try {
+        const objectUrl = await readFilesystemImageAsObjectUrl(path);
+        if (objectUrl) return objectUrl;
+      } catch (_) {
+        // Try the next runtime candidate.
+      }
+    }
+    return "";
+  }
+
+  async function getPreviewImageObjectUrl(rawSrc) {
+    if (!rawSrc || rawSrc.startsWith("data:") || rawSrc.startsWith("blob:") || isExternalOrSpecialLinkTarget(rawSrc)) return "";
+    if (!isPreviewImagePath(rawSrc)) return "";
+
+    const activeSourcePath = getActiveMarkdownSourcePath();
+    const resolvedPath = resolveMarkdownLinkPath(rawSrc, activeSourcePath);
+    const folderNode = findOpenFolderFileNode(resolvedPath, rawSrc);
+    if (folderNode?.file) {
+      return URL.createObjectURL(folderNode.file);
+    }
+    if (folderNode?.handle) {
+      const file = await folderNode.handle.getFile();
+      return URL.createObjectURL(file);
+    }
+
+    if (!folderNode) {
+      const bundledCandidates = getBundledImagePathCandidates(resolvedPath);
+      if (bundledCandidates.length) return readFirstFilesystemImageAsObjectUrl(bundledCandidates);
+    }
+
+    const filesystemPath = folderNode?.fullPath || getReadableFilesystemImagePath(resolvedPath);
+    return filesystemPath ? readFilesystemImageAsObjectUrl(filesystemPath) : "";
+  }
+
+  function enhancePreviewMarkdownImages(container) {
+    if (!container) return;
+    container.querySelectorAll("img[src]").forEach((image) => {
+      const rawSrc = image.getAttribute("src") || "";
+      if (!rawSrc || image.dataset.markdownImageResolved === "true") return;
+      image.dataset.markdownImageOriginalSrc = rawSrc;
+      getPreviewImageObjectUrl(rawSrc)
+        .then((objectUrl) => {
+          if (!objectUrl) return;
+          image.src = objectUrl;
+          image.dataset.markdownImageResolved = "true";
+        })
+        .catch((error) => {
+          console.warn("Failed to resolve preview image:", rawSrc, error);
+        });
+    });
+  }
+
+  function scrollMarkdownPreviewToHash(hash) {
+    if (!hash) return;
+    requestAnimationFrame(() => {
+      const decodedHash = safeDecodeLinkPath(String(hash).replace(/^#/, ""));
+      const normalizedHash = normalizeMarkdownAnchorSlug(decodedHash);
+      const target = markdownPreview.querySelector(`#${CSS.escape(decodedHash)}`)
+        || markdownPreview.querySelector(`[name="${CSS.escape(decodedHash)}"]`)
+        || Array.from(markdownPreview.querySelectorAll("h1, h2, h3, h4, h5, h6"))
+          .find((heading) => normalizeMarkdownAnchorSlug(heading.id || heading.textContent || "") === normalizedHash);
+      if (target) {
+        scrollMarkdownPreviewTargetIntoView(target);
+      }
+    });
+  }
+
+  function scrollMarkdownPreviewTargetIntoView(target) {
+    const scrollContainer = markdownPreview.closest(".preview-pane") || markdownPreview.parentElement || markdownPreview;
+    if (!scrollContainer || typeof scrollContainer.getBoundingClientRect !== "function") {
+      if (typeof target.scrollIntoView === "function") {
+        target.scrollIntoView({ block: "start" });
+      }
+      return;
+    }
+
+    const containerRect = scrollContainer.getBoundingClientRect();
+    const targetRect = target.getBoundingClientRect();
+    const nextScrollTop = scrollContainer.scrollTop + targetRect.top - containerRect.top - 12;
+    scrollContainer.scrollTop = Math.max(0, nextScrollTop);
+  }
+
+  function normalizeMarkdownAnchorSlug(value) {
+    return safeDecodeLinkPath(value)
+      .trim()
+      .toLowerCase()
+      .replace(/<[^>]*>/g, "")
+      .replace(/[^\p{L}\p{N}\s_-]/gu, "")
+      .replace(/\s+/g, "-");
+  }
+
+  async function openMarkdownLinkFromPreview(rawTarget) {
+    if (helpBrowser?.handleLink?.(rawTarget)) return;
+    if (await openBundledWikiLinkFromPreview(rawTarget)) return;
+
+    const { hash } = splitLinkTarget(rawTarget);
+    const sourceFile = getMarkdownLinkSourceFile(rawTarget);
+
+    if (!sourceFile) {
+      alert("Unable to open this Markdown link. Open the containing folder or use the desktop app so MD-Editor can read linked local files.");
+      return;
+    }
+
+    const activeMarkdownTab = getActiveMarkdownTab();
+    if (hash && markdownSourceFileMatchesTab(sourceFile, activeMarkdownTab)) {
+      scrollMarkdownPreviewToHash(hash);
+      return;
+    }
+
+    try {
+      const openedTab = await openDocumentSourceFile(sourceFile);
+      if (openedTab) {
+        scrollMarkdownPreviewToHash(hash);
+      }
+    } catch (error) {
+      console.error("Failed to open linked Markdown file:", error);
+      alert("Unable to open linked Markdown file.");
+    }
+  }
+
+  function markdownSourceFileMatchesTab(sourceFile, tab) {
+    if (!sourceFile || !tab || tab.type === "graph") return false;
+    if (sourceFile.handle && tab.sourceFileHandle === sourceFile.handle) return true;
+
+    const sourcePath = normalizeFilesystemLinkPath(sourceFile.path || "");
+    const tabPath = normalizeFilesystemLinkPath(tab.sourceFilePath || "");
+    if (sourcePath && tabPath && sourcePath.toLowerCase() === tabPath.toLowerCase()) return true;
+
+    const sourceName = sourceFile.name || (sourceFile.path ? getFileName(sourceFile.path) : "");
+    const tabName = tab.sourceFileName || (tab.sourceFilePath ? getFileName(tab.sourceFilePath) : "");
+    return !!sourceName && !!tabName && sourceName.toLowerCase() === tabName.toLowerCase();
+  }
+
+  function annotatePreviewMarkdownLinks(container) {
+    if (!container) return;
+
+    container.querySelectorAll("a[href]").forEach((anchor) => {
+      const rawHref = anchor.getAttribute("href") || "";
+      if (!rawHref || rawHref.startsWith("#")) return;
+
+      let markdownTarget = "";
+      if (!isExternalOrSpecialLinkTarget(rawHref) && isMarkdownDocumentLinkPath(rawHref)) {
+        markdownTarget = rawHref;
+      } else if (isSameOriginMarkdownUrl(rawHref)) {
+        markdownTarget = getSameOriginMarkdownUrlPath(rawHref);
+      }
+
+      if (!markdownTarget) return;
+
+      anchor.dataset.markdownLinkTarget = markdownTarget;
+      anchor.setAttribute("href", "#");
+      anchor.setAttribute("role", "button");
+      anchor.title = anchor.title || `Open Markdown file: ${splitLinkTarget(markdownTarget).path}`;
+    });
+  }
+
+  function getPreviewLinkStatusUrl(anchor) {
+    if (!anchor) return "";
+
+    const markdownTarget = anchor.dataset.markdownLinkTarget || "";
+    if (markdownTarget) return markdownTarget;
+
+    const rawHref = anchor.getAttribute("href") || "";
+    if (!rawHref) return "";
+    if (rawHref.startsWith("#")) return rawHref;
+
+    return anchor.href || rawHref;
+  }
+
+  function handlePreviewLinkMouseOver(event) {
+    const anchor = event.target.closest("a[href], a[data-markdown-link-target]");
+    if (!anchor || !markdownPreview.contains(anchor)) return;
+
+    previewHoveredLinkUrl = getPreviewLinkStatusUrl(anchor);
+    updateStatusLine();
+  }
+
+  function handlePreviewLinkMouseOut(event) {
+    const anchor = event.target.closest("a[href], a[data-markdown-link-target]");
+    if (!anchor || !markdownPreview.contains(anchor)) return;
+    if (event.relatedTarget && anchor.contains(event.relatedTarget)) return;
+
+    previewHoveredLinkUrl = "";
+    updateStatusLine();
+  }
+
+  function handlePreviewLinkClick(event) {
+    const anchor = event.target.closest("a[href], a[data-markdown-link-target]");
+    if (!anchor || !markdownPreview.contains(anchor)) return;
+
+    const markdownTarget = anchor.dataset.markdownLinkTarget || "";
+    const rawHref = markdownTarget || anchor.getAttribute("href") || "";
+    if (!rawHref) return;
+
+    if (!markdownTarget && rawHref.startsWith("#") && rawHref.length > 1) {
+      event.preventDefault();
+      event.stopPropagation();
+      if (helpBrowser?.handleLink?.(rawHref)) return;
+      scrollMarkdownPreviewToHash(rawHref);
+      return;
+    }
+
+    let linkTarget = rawHref;
+    if (!markdownTarget && isSameOriginMarkdownUrl(rawHref)) {
+      linkTarget = getSameOriginMarkdownUrlPath(rawHref);
+    } else if (!markdownTarget && isExternalWebLinkTarget(rawHref)) {
+      event.preventDefault();
+      event.stopPropagation();
+      openExternalWebLink(rawHref);
+      return;
+    } else if (!markdownTarget && isExternalOrSpecialLinkTarget(rawHref)) {
+      return;
+    }
+
+    if (!isMarkdownDocumentLinkPath(linkTarget)) return;
+
+    event.preventDefault();
+    event.stopPropagation();
+    openMarkdownLinkFromPreview(linkTarget);
+  }
+
+  function createWikiLinkAnchor(rawLink) {
+    const { target, label } = getWikiLinkParts(rawLink);
+    const anchor = document.createElement("a");
+    anchor.className = "wiki-link";
+    anchor.href = getWikiLinkHref(target);
+    anchor.textContent = label;
+    anchor.title = `Open Markdown file: ${ensureMarkdownLinkExtension(target)}`;
+    anchor.dataset.wikiTarget = target;
+    return anchor;
+  }
+
+  function shouldSkipWikiLinkTextNode(node) {
+    const parent = node && node.parentElement;
+    return !parent || !!parent.closest("a, code, pre, script, style, textarea");
+  }
+
+  function enhanceWikiLinks(container) {
+    if (!container) return;
+
+    const textNodes = [];
+    const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT, {
+      acceptNode(node) {
+        if (shouldSkipWikiLinkTextNode(node) || !/\[\[[^\]\n]+\]\]/.test(node.nodeValue || "")) {
+          return NodeFilter.FILTER_REJECT;
+        }
+        return NodeFilter.FILTER_ACCEPT;
+      }
+    });
+
+    let node;
+    while ((node = walker.nextNode())) textNodes.push(node);
+
+    textNodes.forEach((textNode) => {
+      const fragment = document.createDocumentFragment();
+      const text = textNode.nodeValue || "";
+      const wikiLinkRegex = /\[\[([^\]\n]+)\]\]/g;
+      let lastIndex = 0;
+      let match;
+
+      while ((match = wikiLinkRegex.exec(text)) !== null) {
+        if (match.index > lastIndex) {
+          fragment.appendChild(document.createTextNode(text.slice(lastIndex, match.index)));
+        }
+        fragment.appendChild(createWikiLinkAnchor(match[1]));
+        lastIndex = wikiLinkRegex.lastIndex;
+      }
+
+      if (lastIndex < text.length) {
+        fragment.appendChild(document.createTextNode(text.slice(lastIndex)));
+      }
+
+      textNode.parentNode.replaceChild(fragment, textNode);
+    });
+  }
+
+
+      api.getWikiLinkParts = getWikiLinkParts;
+      api.isExternalOrSpecialLinkTarget = isExternalOrSpecialLinkTarget;
+      api.isExternalWebLinkTarget = isExternalWebLinkTarget;
+      api.normalizeExternalWebLinkTarget = normalizeExternalWebLinkTarget;
+      api.openExternalWebLink = openExternalWebLink;
+      api.getWikiLinkHref = getWikiLinkHref;
+      api.splitLinkTarget = splitLinkTarget;
+      api.safeDecodeLinkPath = safeDecodeLinkPath;
+      api.normalizeMarkdownLinkPath = normalizeMarkdownLinkPath;
+      api.getDirectoryPath = getDirectoryPath;
+      api.getLinkPathExtension = getLinkPathExtension;
+      api.isMarkdownDocumentLinkPath = isMarkdownDocumentLinkPath;
+      api.ensureMarkdownLinkExtension = ensureMarkdownLinkExtension;
+      api.isSameOriginMarkdownUrl = isSameOriginMarkdownUrl;
+      api.getSameOriginMarkdownUrlPath = getSameOriginMarkdownUrlPath;
+      api.isAbsoluteFilesystemPath = isAbsoluteFilesystemPath;
+      api.normalizeFilesystemLinkPath = normalizeFilesystemLinkPath;
+      api.resolveMarkdownLinkPath = resolveMarkdownLinkPath;
+      api.getActiveMarkdownSourcePath = getActiveMarkdownSourcePath;
+      api.canReadLinkedFilesystemPath = canReadLinkedFilesystemPath;
+      api.getFolderEntryPathCandidates = getFolderEntryPathCandidates;
+      api.findOpenFolderMarkdownEntry = findOpenFolderMarkdownEntry;
+      api.getMarkdownLinkSourceFile = getMarkdownLinkSourceFile;
+      api.scrollMarkdownPreviewToHash = scrollMarkdownPreviewToHash;
+      api.scrollMarkdownPreviewTargetIntoView = scrollMarkdownPreviewTargetIntoView;
+      api.normalizeMarkdownAnchorSlug = normalizeMarkdownAnchorSlug;
+      api.openMarkdownLinkFromPreview = openMarkdownLinkFromPreview;
+      api.markdownSourceFileMatchesTab = markdownSourceFileMatchesTab;
+      api.enhancePreviewMarkdownImages = enhancePreviewMarkdownImages;
+      api.annotatePreviewMarkdownLinks = annotatePreviewMarkdownLinks;
+      api.getPreviewLinkStatusUrl = getPreviewLinkStatusUrl;
+      api.handlePreviewLinkMouseOver = handlePreviewLinkMouseOver;
+      api.handlePreviewLinkMouseOut = handlePreviewLinkMouseOut;
+      api.handlePreviewLinkClick = handlePreviewLinkClick;
+      api.createWikiLinkAnchor = createWikiLinkAnchor;
+      api.shouldSkipWikiLinkTextNode = shouldSkipWikiLinkTextNode;
+      api.enhanceWikiLinks = enhanceWikiLinks;
+    }
+
+    return api;
+  };
+})(window);

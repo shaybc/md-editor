@@ -1,0 +1,3 @@
+# Apache RAT exclusions reviewed by the project.
+# Exclusion prevents inspection; it does not approve or determine a file's license.
+# generated/**

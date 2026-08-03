@@ -1,0 +1,132 @@
+// Registers private per-project model tasks; no project compilation task is invoked.
+
+// "-x test" on the command line cannot reach nested builds such as buildSrc, but init
+// scripts apply to every build in the tree. Model extraction never needs test results,
+// and a broken buildSrc test task (for example corrupted binary test-results left by an
+// interrupted run) would otherwise fail the whole export.
+gradle.allprojects { project ->
+    project.tasks.withType(org.gradle.api.tasks.testing.Test).configureEach { it.enabled = false }
+}
+
+gradle.projectsEvaluated {
+    def output = System.getProperty('mdeditor.kotlin.model.output')
+    if (!output) throw new GradleException('Missing mdeditor.kotlin.model.output')
+    def fragments = new File("${output}.parts")
+    def exportTasks = []
+    rootProject.allprojects.each { project ->
+        if (!project.plugins.hasPlugin('org.jetbrains.kotlin.jvm')) return
+        def exportTask = project.tasks.register('mdEditorExportKotlinJvmModel') {
+            doLast {
+                def kotlinExtension = project.extensions.findByName('kotlin')
+                def javaSourceSets = project.extensions.findByName('sourceSets')
+                def sourceSets = kotlinExtension?.sourceSets?.collect { sourceSet ->
+                    def taskName = sourceSet.name == 'main'
+                        ? 'compileKotlin'
+                        : "compile${sourceSet.name.capitalize()}Kotlin"
+                    def compileTask = project.tasks.findByName(taskName)
+                    def javaSourceSet = javaSourceSets?.findByName(sourceSet.name)
+                    def compileClasspath = javaSourceSet?.compileClasspath
+                    def compileConfigurationName = javaSourceSet?.hasProperty('compileClasspathConfigurationName')
+                        ? javaSourceSet.compileClasspathConfigurationName
+                        : (sourceSet.name == 'main' ? 'compileClasspath' : "${sourceSet.name}CompileClasspath")
+                    def compileConfiguration = project.configurations.findByName(compileConfigurationName)
+                    def libraries = compileClasspath?.files?.collect { it.absolutePath }?.sort() ?: []
+                    if (!libraries) {
+                        try { libraries = compileTask?.libraries?.files?.collect { it.absolutePath }?.sort() ?: [] } catch (ignored) {}
+                    }
+                    def localSourceSetDependencies = javaSourceSets?.findAll { candidate ->
+                        candidate.name != sourceSet.name && candidate.output.classesDirs.files.any {
+                            libraries.contains(it.absolutePath)
+                        }
+                    }?.collect { it.name }?.unique()?.sort() ?: []
+                    def dependsOnMain = localSourceSetDependencies.contains('main')
+                    def projectDependencies = []
+                    compileConfiguration?.incoming?.resolutionResult?.allComponents?.each { component ->
+                        try {
+                            if (component.id.hasProperty('projectPath') && component.id.projectPath != project.path) projectDependencies << component.id.projectPath
+                        } catch (ignored) {}
+                    }
+                    def dependencyJavaSourceRoots = projectDependencies.unique().collectMany { dependencyPath ->
+                        def dependencyProject = rootProject.findProject(dependencyPath)
+                        def dependencySourceSets = dependencyProject?.extensions?.findByName('sourceSets')
+                        def selectedSourceSets = dependencySourceSets?.findAll { candidate ->
+                            candidate.output.classesDirs.files.any { outputDir -> libraries.contains(outputDir.absolutePath) }
+                        } ?: []
+                        if (!selectedSourceSets) {
+                            def fallback = dependencySourceSets?.findByName(sourceSet.name) ?: dependencySourceSets?.findByName('main')
+                            selectedSourceSets = fallback ? [fallback] : []
+                        }
+                        selectedSourceSets.collectMany { candidate ->
+                            candidate.java.srcDirs.findAll { it.exists() }.collect { it.absolutePath }
+                        }
+                    }.unique().sort()
+                    def compilerArguments = []
+                    try { compilerArguments = compileTask?.compilerOptions?.freeCompilerArgs?.getOrElse([]) ?: [] } catch (ignored) {}
+                    try {
+                        def jvmTarget = compileTask?.compilerOptions?.jvmTarget?.getOrNull()?.target
+                        if (jvmTarget && !compilerArguments.contains('-jvm-target')) compilerArguments = compilerArguments + ['-jvm-target', jvmTarget]
+                    } catch (ignored) {}
+                    def compilerPluginClasspath = []
+                    try { compilerPluginClasspath = compileTask?.pluginClasspath?.files?.collect { it.absolutePath }?.sort() ?: [] } catch (ignored) {}
+                    if (!compilerPluginClasspath) {
+                        try { compilerPluginClasspath = compileTask?.compilerPluginClasspath?.files?.collect { it.absolutePath }?.sort() ?: [] } catch (ignored) {}
+                    }
+                    compilerPluginClasspath = compilerPluginClasspath.findAll { new File(it).name.contains('-compiler-plugin') }
+                    def kotlinFiles = []
+                    try { kotlinFiles = compileTask?.sources?.files?.findAll { it.name.endsWith('.kt') }?.collect { it.absolutePath }?.sort() ?: [] } catch (ignored) {}
+                    if (!kotlinFiles) kotlinFiles = sourceSet.kotlin.files.findAll { it.name.endsWith('.kt') }.collect { it.absolutePath }.sort()
+                    def taskOwnsJavaSources = compileTask?.hasProperty('javaSources') == true
+                    def javaFiles = []
+                    if (taskOwnsJavaSources) {
+                        try { javaFiles = compileTask.javaSources.files.findAll { it.name.endsWith('.java') }.collect { it.absolutePath }.sort() } catch (ignored) {}
+                    } else {
+                        javaFiles = javaSourceSet?.java?.files?.findAll { it.name.endsWith('.java') }?.collect { it.absolutePath }?.sort() ?: []
+                    }
+                    def javaSourceRoots = javaSourceSet?.java?.srcDirs?.findAll { root ->
+                        def prefix = root.absolutePath + File.separator
+                        javaFiles.any { file -> file == root.absolutePath || file.startsWith(prefix) }
+                    }?.collect { it.absolutePath }?.sort() ?: []
+                    [
+                        name: sourceSet.name,
+                        test: sourceSet.name.toLowerCase().contains('test'),
+                        dependsOnMain: dependsOnMain == true,
+                        localSourceSetDependencies: localSourceSetDependencies,
+                        kotlinSourceRoots: sourceSet.kotlin.srcDirs.collect { it.absolutePath }.sort(),
+                        javaSourceRoots: javaSourceRoots,
+                        kotlinFiles: kotlinFiles,
+                        javaFiles: javaFiles,
+                        classpath: libraries,
+                        projectDependencies: projectDependencies.unique().sort(),
+                        dependencyJavaSourceRoots: dependencyJavaSourceRoots,
+                        compilerArguments: compilerArguments,
+                        compilerPluginClasspath: compilerPluginClasspath
+                    ]
+                } ?: []
+                def record = [
+                    projectPath: project.path,
+                    projectDir: project.projectDir.absolutePath,
+                    kotlinPluginVersion: project.plugins.findPlugin('org.jetbrains.kotlin.jvm')?.class?.package?.implementationVersion ?: 'unknown',
+                    sourceSets: sourceSets
+                ]
+                fragments.mkdirs()
+                def fragmentName = project.path.bytes.encodeHex().toString() + '.json'
+                new File(fragments, fragmentName).text = groovy.json.JsonOutput.toJson(record)
+            }
+        }
+        exportTasks << exportTask
+    }
+    gradle.taskGraph.whenReady {
+        if (fragments.exists()) fragments.deleteDir()
+    }
+    rootProject.tasks.register('mdEditorExportKotlinJvmModels') {
+        dependsOn exportTasks
+        doLast {
+            def records = fragments.listFiles()?.findAll { it.name.endsWith('.json') }?.sort { it.name }?.collect {
+                new groovy.json.JsonSlurper().parse(it)
+            } ?: []
+            new File(output).withWriter('UTF-8') { writer ->
+                writer.write(groovy.json.JsonOutput.prettyPrint(groovy.json.JsonOutput.toJson(records)))
+            }
+        }
+    }
+}

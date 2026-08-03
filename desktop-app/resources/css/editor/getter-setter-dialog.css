@@ -1,0 +1,177 @@
+/* Java getter/setter selection dialog. */
+.getter-setter-dialog-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 10080;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(0, 0, 0, 0.58);
+}
+
+.getter-setter-dialog-overlay[hidden] {
+  display: none;
+}
+
+.getter-setter-dialog-panel {
+  width: min(620px, calc(100vw - 48px));
+  max-height: min(720px, calc(100vh - 48px));
+  overflow: hidden;
+  color: var(--text-color, #e5e7eb);
+  background: var(--panel-bg, #252732);
+  border: 1px solid var(--border-color, #555866);
+  border-radius: 6px;
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.45);
+}
+
+.getter-setter-dialog-header,
+.getter-setter-dialog-footer {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px;
+}
+
+.getter-setter-dialog-header {
+  justify-content: space-between;
+  border-bottom: 1px solid var(--border-color, #555866);
+}
+
+.getter-setter-dialog-header h2 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.getter-setter-dialog-close {
+  padding: 0 4px;
+  color: inherit;
+  background: transparent;
+  border: 0;
+  font-size: 24px;
+  line-height: 1;
+}
+
+.getter-setter-dialog-instruction,
+.getter-setter-selection-summary {
+  margin: 0;
+  padding: 12px 16px 0;
+  font-size: 13px;
+}
+
+.getter-setter-dialog-content {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 132px;
+  gap: 12px;
+  padding: 10px 16px;
+}
+
+.getter-setter-field-list {
+  min-height: 220px;
+  max-height: min(430px, calc(100vh - 260px));
+  overflow: auto;
+  padding: 6px;
+  background: var(--editor-bg, #1f212a);
+  border: 1px solid var(--border-color, #555866);
+}
+
+.getter-setter-field-group {
+  margin: 0 0 8px;
+  padding: 0 6px 4px 26px;
+  border: 0;
+}
+
+.getter-setter-field-group legend {
+  float: none;
+  width: 100%;
+  margin: 0 0 3px -20px;
+  color: inherit;
+  font-size: 13px;
+}
+
+.getter-setter-field-type {
+  margin-left: 8px;
+  color: var(--muted-text-color, #aeb3c2);
+  font-size: 12px;
+}
+
+.getter-setter-generation-options {
+  display: grid;
+  gap: 10px;
+  padding: 2px 16px 0;
+  font-size: 13px;
+}
+
+.getter-setter-generation-options > label:first-child {
+  display: grid;
+  gap: 5px;
+}
+
+.getter-setter-generation-options select {
+  width: 100%;
+  min-height: 32px;
+  padding: 4px 8px;
+  color: inherit;
+  background: var(--editor-bg, #1f212a);
+  border: 1px solid var(--border-color, #656978);
+  border-radius: 3px;
+}
+
+.getter-setter-comments-option {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.getter-setter-accessor-option {
+  display: block;
+  margin: 3px 0;
+  font-family: var(--editor-font-family, monospace);
+  font-size: 13px;
+}
+
+.getter-setter-field-group input {
+  margin-right: 7px;
+}
+
+.getter-setter-selection-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.getter-setter-selection-actions button,
+.getter-setter-dialog-footer button {
+  min-height: 30px;
+  padding: 5px 10px;
+  color: inherit;
+  background: var(--button-bg, #343746);
+  border: 1px solid var(--border-color, #656978);
+  border-radius: 3px;
+  font-size: 12px;
+}
+
+.getter-setter-dialog-footer {
+  justify-content: flex-end;
+  padding-top: 16px;
+}
+
+.getter-setter-dialog-generate {
+  background: var(--accent-color, #6f42c1) !important;
+  border-color: var(--accent-color, #6f42c1) !important;
+}
+
+.getter-setter-dialog-generate:disabled {
+  opacity: 0.5;
+}
+
+@media (max-width: 620px) {
+  .getter-setter-dialog-content {
+    grid-template-columns: 1fr;
+  }
+
+  .getter-setter-selection-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+  }
+}

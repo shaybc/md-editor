@@ -1,0 +1,22 @@
+{
+    "schemaVersion":  1,
+    "kotlinLsp":  {
+                      "version":  "262.8190.0",
+                      "platforms":  {
+                                        "win-x64":  {
+                                                        "archive":  "kotlin-server-262.8190.0.win.zip",
+                                                        "url":  "https://download-cdn.jetbrains.com/language-server/kotlin-server/262.8190.0/kotlin-server-262.8190.0.win.zip",
+                                                        "sha256":  "f5211f4f321f2a2e4b9ac9c971b24af1bceed2e1c1a5109258ebe37e6062f290",
+                                                        "entry":  "bin/intellij-server.exe"
+                                                    }
+                                    }
+                  },
+    "kotlinCompiler":  {
+                           "version":  "2.3.21",
+                           "archive":  "kotlin-compiler-2.3.21.zip",
+                           "url":  "https://github.com/JetBrains/kotlin/releases/download/v2.3.21/kotlin-compiler-2.3.21.zip",
+                           "sha256":  "a8cfc1d62cd4d0de4d04f42575e40135bd620588c17d568a20eb9c7c259af14f",
+                           "abiPlugin":  "kotlinc/lib/jvm-abi-gen.jar",
+                           "entry":  "kotlinc/bin/kotlinc.bat"
+                       }
+}

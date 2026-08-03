@@ -1,0 +1,406 @@
+.rat-manager-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 10080;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(0, 0, 0, 0.58);
+}
+
+.rat-manager-dialog {
+  width: min(1080px, 96vw);
+  max-height: 92vh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  color: var(--text-color);
+  background: var(--panel-bg);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  box-shadow: 0 22px 64px rgba(0, 0, 0, 0.35);
+}
+
+.rat-manager-header,
+.rat-manager-footer,
+.rat-manager-action-heading,
+.rat-manager-inline-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.rat-manager-header {
+  justify-content: space-between;
+  padding: 18px 22px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.rat-manager-header h2,
+.rat-manager-detail h3,
+.rat-manager-summary h3 {
+  margin: 0;
+}
+
+.rat-manager-kicker {
+  color: var(--secondary-text);
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.rat-manager-close {
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font-size: 28px;
+  cursor: pointer;
+}
+
+.rat-manager-stages {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  border-bottom: 1px solid var(--border-color);
+}
+
+.rat-manager-stages span {
+  padding: 9px 6px;
+  text-align: center;
+  color: var(--secondary-text);
+  font-size: 12px;
+}
+
+.rat-manager-stages span.active {
+  color: var(--accent-color);
+  box-shadow: inset 0 -2px currentColor;
+}
+
+.rat-manager-body {
+  padding: 22px;
+  overflow: auto;
+}
+
+.rat-manager-problem,
+.rat-manager-notice,
+.rat-manager-warning,
+.rat-manager-error {
+  padding: 13px 15px;
+  border-radius: 8px;
+  background: var(--color-attention-subtle);
+}
+
+.rat-manager-problem code {
+  display: block;
+  margin-top: 8px;
+  overflow-wrap: anywhere;
+}
+
+.rat-manager-facts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin: 16px 0;
+}
+
+.rat-manager-facts span,
+.rat-manager-detail-list {
+  padding: 12px;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+}
+
+.rat-manager-facts strong {
+  display: block;
+  margin-bottom: 4px;
+}
+
+.rat-manager-actions {
+  display: grid;
+  gap: 10px;
+  margin-top: 18px;
+}
+
+.rat-manager-action {
+  display: grid;
+  gap: 6px;
+  padding: 14px;
+  text-align: left;
+  color: inherit;
+  background: var(--panel-bg);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.rat-manager-action:hover:not(:disabled) {
+  border-color: var(--accent-color);
+}
+
+.rat-manager-action:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.rat-manager-action-heading {
+  justify-content: space-between;
+}
+
+.rat-manager-action-heading small {
+  padding: 3px 7px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--accent-color) 12%, transparent);
+}
+
+.rat-manager-action-advanced {
+  border-color: color-mix(in srgb, var(--error-color) 55%, var(--border-color));
+}
+
+.rat-manager-form,
+.rat-manager-detail {
+  display: grid;
+  gap: 14px;
+}
+
+.rat-manager-form label,
+.rat-manager-detail label {
+  display: grid;
+  gap: 6px;
+}
+
+.rat-manager-form input,
+.rat-manager-form textarea,
+.rat-manager-form select,
+.rat-manager-detail textarea {
+  width: 100%;
+  padding: 9px;
+  color: inherit;
+  background: var(--panel-bg);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+}
+
+.rat-manager-form textarea,
+.rat-manager-detail textarea {
+  min-height: 92px;
+}
+
+.rat-manager-check {
+  display: flex !important;
+  align-items: flex-start;
+}
+
+.rat-manager-check input {
+  width: auto;
+}
+
+.rat-manager-diff {
+  margin: 14px 0;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.rat-manager-diff h4 {
+  margin: 0;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.rat-manager-diff > div {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+}
+
+.rat-manager-diff section {
+  min-width: 0;
+  padding: 10px;
+}
+
+.rat-manager-diff pre {
+  max-height: 300px;
+  overflow: auto;
+  white-space: pre-wrap;
+}
+
+.rat-manager-detail-list {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 8px 14px;
+}
+
+.rat-manager-detail-list dt {
+  font-weight: 700;
+}
+
+.rat-manager-detail-list dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.rat-manager-footer {
+  justify-content: flex-end;
+  margin-top: 18px;
+}
+
+.rat-manager-footer button,
+.rat-manager-inline-actions button {
+  padding: 8px 13px;
+  color: inherit;
+  background: transparent;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+}
+
+.rat-manager-footer button.primary {
+  color: var(--accent-contrast);
+  background: var(--accent-color);
+  border-color: var(--accent-color);
+}
+
+.rat-manager-error {
+  color: var(--error-color);
+  background: color-mix(in srgb, var(--error-color) 12%, var(--panel-bg));
+}
+
+@media (max-width: 760px) {
+  .rat-manager-overlay { padding: 8px; }
+  .rat-manager-stages { grid-template-columns: repeat(3, 1fr); }
+  .rat-manager-facts,
+  .rat-manager-diff > div { grid-template-columns: 1fr; }
+}
+
+.rat-manager-problem-heading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.rat-manager-action-item {
+  position: relative;
+}
+
+.rat-manager-action-item .rat-manager-action {
+  width: 100%;
+  padding-right: 52px;
+}
+
+.rat-manager-help-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  color: var(--accent-color);
+  background: var(--panel-bg);
+  border: 1px solid var(--border-color);
+  border-radius: 50%;
+  cursor: pointer;
+}
+
+.rat-manager-help-button:hover,
+.rat-manager-help-button:focus-visible {
+  color: var(--accent-contrast);
+  background: var(--accent-color);
+  border-color: var(--accent-color);
+}
+
+.rat-manager-action-help {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  z-index: 1;
+}
+
+.rat-manager-help-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 10090;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(0, 0, 0, 0.64);
+}
+
+.rat-manager-help-dialog {
+  width: min(760px, 94vw);
+  max-height: 88vh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  color: var(--text-color);
+  background: var(--panel-bg);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  box-shadow: 0 22px 64px rgba(0, 0, 0, 0.4);
+}
+
+.rat-manager-help-dialog > header,
+.rat-manager-help-dialog > footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.rat-manager-help-dialog > header h3,
+.rat-manager-help-body h4 {
+  margin: 0;
+}
+
+.rat-manager-help-dialog > header > button {
+  border: 0;
+  color: inherit;
+  background: transparent;
+  font-size: 26px;
+  cursor: pointer;
+}
+
+.rat-manager-help-body {
+  padding: 20px;
+  overflow: auto;
+}
+
+.rat-manager-help-body > p:first-child {
+  margin-top: 0;
+  font-size: 1.03em;
+}
+
+.rat-manager-help-body section {
+  margin-top: 14px;
+  padding: 12px 14px;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+}
+
+.rat-manager-help-body section p {
+  margin: 7px 0 0;
+}
+
+.rat-manager-help-links {
+  display: grid;
+  gap: 8px;
+}
+
+.rat-manager-help-links a {
+  color: var(--accent-color);
+  text-decoration: underline;
+}
+
+.rat-manager-help-dialog > footer {
+  justify-content: flex-end;
+  border-top: 1px solid var(--border-color);
+  border-bottom: 0;
+}
+
+.rat-manager-help-dialog > footer button {
+  padding: 8px 15px;
+  color: var(--accent-contrast);
+  background: var(--accent-color);
+  border: 1px solid var(--accent-color);
+  border-radius: 6px;
+}

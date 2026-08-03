@@ -1,0 +1,31 @@
+flowchart TD
+    U[User request] --> EX[Intent extraction -> contract + shaped criteria]
+    EX --> PB{Plan phase - who can enumerate?}
+    PB -->|enumerable set - for all X| DET[Harness enumerates targets<br/>list_files / glob -> one item per target]
+    PB -->|open-ended| MOD[Model proposes plan items - light]
+    DET --> PLAN[(Task Plan<br/>items: id, target, criterionRef, status)]
+    MOD --> PLAN
+
+    PLAN --> LOOP
+    subgraph LOOP[Execution rounds - existing agent loop]
+      RECITE[Harness re-injects plan status<br/>done / remaining - recitation] --> ACT[Model works the next REMAINING item]
+      ACT --> EVID[Tool evidence ledger]
+      EVID --> TRACK[Harness marks item done<br/>succeeded, target-matching action -> done]
+      TRACK --> RECITE
+    end
+
+    LOOP --> GATE{All items done or skipped?}
+    GATE -->|no, rounds left| LOOP
+    GATE -->|yes| VER[Verifier checks criteria<br/>against the enumerated plan set - 'all' is provable]
+    VER --> Q{complete?}
+    Q -->|incomplete| STEER[Steering feedback = REMAINING plan items<br/>not 'redo everything']
+    STEER --> LOOP
+    Q -->|complete| DONE([Report success])
+
+    PLAN -. persist per task .-> REC[(chat/task record: record.plan)]
+    REC -. resume: restore items + statuses .-> PLAN
+
+    classDef harness fill:#1f3a5f,stroke:#4a90d9,color:#eaf2fb
+    classDef model fill:#3f2a12,stroke:#d98a3a,color:#fbf0e2
+    class DET,PLAN,RECITE,TRACK,GATE,VER,STEER,REC harness
+    class MOD,ACT model

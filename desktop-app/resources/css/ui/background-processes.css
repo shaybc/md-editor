@@ -1,0 +1,110 @@
+.background-processes-view {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.background-processes-toolbar {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.background-processes-search {
+  flex: 1 1 240px;
+  min-width: 140px;
+  padding: 6px 9px;
+  color: var(--text-color);
+  background: var(--input-bg, var(--bg-color));
+  border: 1px solid var(--border-color);
+  border-radius: 5px;
+}
+
+.background-processes-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+}
+
+.background-processes-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.background-processes-table th,
+.background-processes-table td {
+  padding: 7px 10px;
+  border-bottom: 1px solid var(--border-color);
+  text-align: left;
+  white-space: nowrap;
+}
+
+.background-processes-table th:nth-child(2),
+.background-processes-description {
+  width: 100%;
+  white-space: normal;
+}
+
+.background-process-description-button {
+  padding: 0;
+  color: var(--accent-color);
+  background: transparent;
+  border: 0;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.background-process-description-button:hover,
+.background-process-description-button:focus-visible {
+  text-decoration: underline;
+}
+
+.background-process-icon {
+  color: var(--accent-color);
+}
+
+.background-process-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.background-process-status.running i {
+  animation: background-process-spin 1s linear infinite;
+}
+
+.background-process-status.finished { color: var(--success-color, #2da44e); }
+.background-process-status.failed { color: var(--error-color, #cf222e); }
+.background-process-status.cancelled { color: var(--secondary-text); }
+
+.background-process-action {
+  padding: 3px 8px;
+  color: var(--text-color);
+  background: var(--button-bg);
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+}
+
+.background-process-action:disabled {
+  opacity: 0.55;
+}
+
+.background-process-delete {
+  color: var(--error-color, #cf222e);
+}
+
+.background-processes-empty {
+  padding: 24px;
+  color: var(--secondary-text);
+  text-align: center;
+}
+
+@keyframes background-process-spin {
+  to { transform: rotate(360deg); }
+}

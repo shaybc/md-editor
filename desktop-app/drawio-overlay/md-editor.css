@@ -1,0 +1,18 @@
+/* MD-Editor branding and offline-host adjustments for the bundled editor. */
+html,
+body {
+  overscroll-behavior: none;
+}
+
+#geInfo .geBlock h1 {
+  font-size: 0;
+}
+
+#geInfo .geBlock h1::after {
+  content: "Diagram Editor";
+  font-size: 24px;
+}
+
+#geInfo .geBlock > p {
+  display: none;
+}

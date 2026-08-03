@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Define only reviewed project-specific license evidence here. -->
+<rat-config>
+  <families>
+    <!-- <family id="EXAMPLE" name="Example License" /> -->
+  </families>
+  <licenses>
+    <!-- <license family="EXAMPLE" id="EXAMPLE1" name="Example License"><text>Exact evidence</text></license> -->
+  </licenses>
+  <approved>
+    <!-- <family license_ref="EXAMPLE" /> -->
+  </approved>
+</rat-config>

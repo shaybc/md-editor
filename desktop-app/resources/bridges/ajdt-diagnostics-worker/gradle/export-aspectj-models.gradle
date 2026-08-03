@@ -1,0 +1,65 @@
+// Exports resolved Gradle inputs for every AspectJ module selected by MD-Editor.
+import groovy.json.JsonOutput
+import groovy.json.JsonSlurper
+
+// "-x test" on the command line cannot reach nested builds such as buildSrc, but init
+// scripts apply to every build in the tree. Model extraction never needs test results,
+// and a broken buildSrc test task (for example corrupted binary test-results left by an
+// interrupted run) would otherwise fail the whole export.
+gradle.allprojects { project ->
+    project.tasks.withType(org.gradle.api.tasks.testing.Test).configureEach { it.enabled = false }
+}
+
+gradle.projectsEvaluated {
+    def outputPath = rootProject.providers.gradleProperty("mdEditorAjdtModelOutput").get()
+    def requestedScopes = new JsonSlurper().parse(new File(rootProject.providers.gradleProperty("mdEditorAjdtScopesFile").get()))
+        .findAll { it }
+        .collect { new File(it).canonicalFile.path.toLowerCase(Locale.ROOT) }
+        .toSet()
+    def modelFiles = []
+    def exportTasks = []
+
+    rootProject.allprojects.each { candidate ->
+        if (!requestedScopes.contains(candidate.projectDir.canonicalFile.path.toLowerCase(Locale.ROOT))) return
+        def sourceSets = candidate.extensions.findByName("sourceSets")
+        def mainSourceSet = sourceSets?.findByName("main")
+        def compileTask = candidate.tasks.findByName("compileAspectj")
+        if (mainSourceSet == null || compileTask == null) return
+        def modelFile = new File("${outputPath}.parts", candidate.path.replace(':', '_') + ".json")
+        modelFiles << modelFile
+        exportTasks << candidate.tasks.register("exportMdEditorAjdtModel") {
+            doLast {
+                def sourceRoots = mainSourceSet.java.srcDirs
+                    .findAll { it.exists() }
+                    .collect { it.canonicalFile.path }
+                    .sort()
+                def classpath = mainSourceSet.compileClasspath.files
+                    .findAll { it.exists() }
+                    .collect { it.canonicalFile.path }
+                    .sort()
+                def model = [
+                    projectPath: candidate.path,
+                    projectRoot: candidate.projectDir.canonicalFile.path,
+                    sourceRoots: sourceRoots,
+                    classpath: classpath,
+                    javaVersion: String.valueOf(compileTask.sourceCompatibility)
+                ]
+                modelFile.parentFile.mkdirs()
+                modelFile.setText(JsonOutput.toJson(model), "UTF-8")
+            }
+        }
+    }
+
+    rootProject.tasks.register("exportMdEditorAjdtModels") {
+        group = "verification"
+        description = "Exports AspectJ compilation models for MD-Editor diagnostics."
+        dependsOn exportTasks
+
+        doLast {
+            def outputFile = new File(outputPath)
+            outputFile.parentFile.mkdirs()
+            def models = modelFiles.collect { new JsonSlurper().parseText(it.getText("UTF-8")) }
+            outputFile.setText(JsonOutput.prettyPrint(JsonOutput.toJson(models)), "UTF-8")
+        }
+    }
+}

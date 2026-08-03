@@ -1,0 +1,28 @@
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+  <groupId>mdeditor.java</groupId>
+  <artifactId>mdeditor-java-pull-up-jdt</artifactId>
+  <version>1.0.0</version>
+  <packaging>bundle</packaging>
+  <properties><maven.compiler.release>21</maven.compiler.release></properties>
+  <dependencies>
+    <dependency><groupId>org.eclipse.jdt</groupId><artifactId>org.eclipse.jdt.core</artifactId><version>3.42.0</version><scope>provided</scope></dependency>
+    <dependency><groupId>org.eclipse.platform</groupId><artifactId>org.eclipse.core.resources</artifactId><version>3.22.200</version><scope>provided</scope></dependency>
+    <dependency><groupId>org.eclipse.platform</groupId><artifactId>org.eclipse.core.runtime</artifactId><version>3.33.100</version><scope>provided</scope></dependency>
+    <dependency><groupId>org.eclipse.jdt.ls</groupId><artifactId>org.eclipse.jdt.ls.core</artifactId><version>runtime</version><scope>system</scope><systemPath>${jdt.ls.core.jar}</systemPath></dependency>
+    <dependency><groupId>org.eclipse.jdt</groupId><artifactId>org.eclipse.jdt.core.manipulation</artifactId><version>runtime</version><scope>system</scope><systemPath>${jdt.manipulation.jar}</systemPath></dependency>
+    <dependency><groupId>org.eclipse.platform</groupId><artifactId>org.eclipse.ltk.core.refactoring</artifactId><version>runtime</version><scope>system</scope><systemPath>${ltk.refactoring.jar}</systemPath></dependency>
+    <dependency><groupId>org.eclipse.lsp4j</groupId><artifactId>org.eclipse.lsp4j</artifactId><version>runtime</version><scope>system</scope><systemPath>${lsp4j.jar}</systemPath></dependency>
+  </dependencies>
+  <build>
+    <resources><resource><directory>src/main/resources</directory></resource></resources>
+    <plugins>
+      <plugin><groupId>org.apache.felix</groupId><artifactId>maven-bundle-plugin</artifactId><version>6.0.0</version><extensions>true</extensions><configuration><instructions>
+        <Bundle-SymbolicName>mdeditor.java.pullup;singleton:=true</Bundle-SymbolicName>
+        <Bundle-Version>1.0.0</Bundle-Version>
+        <Bundle-Name>MD-Editor Java Pull Up Refactoring</Bundle-Name>
+        <Require-Bundle>org.eclipse.core.runtime,org.eclipse.core.resources,org.eclipse.jdt.core,org.eclipse.jdt.core.manipulation,org.eclipse.jdt.ls.core,org.eclipse.ltk.core.refactoring,org.eclipse.lsp4j</Require-Bundle>
+      </instructions></configuration></plugin>
+    </plugins>
+  </build>
+</project>

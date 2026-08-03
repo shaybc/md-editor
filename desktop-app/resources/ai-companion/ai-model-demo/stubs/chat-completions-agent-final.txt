@@ -1,0 +1,21 @@
+{
+  "id": "chatcmpl-demo-agent-final-001",
+  "object": "chat.completion",
+  "created": 1782880000,
+  "model": "llama3.1",
+  "choices": [
+    {
+      "index": 0,
+      "message": {
+        "role": "assistant",
+        "content": "Demo agent run complete. I listed the workspace files, selected `__AI_DEMO_FILE_PATH__`, read it with the read_file tool, and here is the content returned by that tool:\n\n__AI_DEMO_FILE_CONTENT__"
+      },
+      "finish_reason": "stop"
+    }
+  ],
+  "usage": {
+    "prompt_tokens": 96,
+    "completion_tokens": 64,
+    "total_tokens": 160
+  }
+}

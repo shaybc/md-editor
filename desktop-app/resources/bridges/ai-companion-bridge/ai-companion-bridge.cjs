@@ -1,0 +1,446 @@
+#!/usr/bin/env node
+
+/**
+ * Desktop AI Companion bridge.
+ *
+ * Receives a launch request from a temp file or legacy base64 argument, then relays
+ * AI Companion requests over a newline-delimited JSON stdio protocol.
+ */
+
+"use strict";
+
+const readline = require("node:readline");
+const fs = require("node:fs");
+const path = require("node:path");
+
+function requireAiCompanionModule(relativePath) {
+  return require(path.resolve(__dirname, "../../ai-companion", relativePath));
+
+}
+
+const { normalizeAiCompanionSettings, testConnection } = requireAiCompanionModule("core/agent-runtime");
+const { createProviderDebugEmitter } = requireAiCompanionModule("core/provider-debug");
+const { inspectServerCertificate } = requireAiCompanionModule("core/tls-certificate");
+const { runChatMode } = requireAiCompanionModule("modes/chat");
+const { runAutocompleteMode } = requireAiCompanionModule("modes/autocomplete");
+const { runAgentMode } = requireAiCompanionModule("modes/agent");
+const { runGitSummaryMode } = requireAiCompanionModule("modes/git-summary");
+const { runPlanMode } = requireAiCompanionModule("modes/plan");
+const planRepositoryTools = requireAiCompanionModule("tools/plan-repository-tools");
+const promptProfile = requireAiCompanionModule("config/prompts");
+const { createSecurityContext } = requireAiCompanionModule("security/security-context");
+const { ApprovalGrantStore } = requireAiCompanionModule("core/approval-grant-store");
+const approvalPolicy = requireAiCompanionModule("core/agent-approval-policy");
+const approvalCapabilities = requireAiCompanionModule("core/approval-capability-registry");
+const activeRequests = new Map();
+const pendingApprovals = new Map();
+const pendingAppActions = new Map();
+const pendingClarifications = new Map();
+let nextApprovalId = 1;
+let nextAppActionId = 1;
+let nextClarificationId = 1;
+
+function validatePersistentGrantCapabilities(rules, effectivePolicy) {
+  const knownCapabilities = new Set(["workspace.file.write", ...Object.values(approvalCapabilities.CAPABILITIES).map((entry) => entry.id)]);
+  const allowedCapabilities = effectivePolicy?.approvals?.allowedCapabilities || ["*"];
+  const maximumLifetimes = effectivePolicy?.approvals?.maximumGrantLifetime || {};
+  for (const rule of Array.isArray(rules) ? rules : []) {
+    if (!knownCapabilities.has(rule.capability)) throw new Error(`Unknown approval capability: ${rule.capability}`);
+    if (!allowedCapabilities.includes("*") && !allowedCapabilities.includes(rule.capability)) throw new Error(`Enterprise policy does not permit grants for ${rule.capability}.`);
+    const maximum = maximumLifetimes[rule.capability] || maximumLifetimes.default || "action";
+    if (maximum !== "workspace") throw new Error(`Workspace grants are not permitted for ${rule.capability} by the effective policy.`);
+  }
+}
+
+function send(message) {
+  process.stdout.write(`${JSON.stringify(message)}\n`);
+}
+
+function decodeRequest(value) {
+  const raw = Buffer.from(String(value || ""), "base64").toString("utf8");
+  const request = JSON.parse(raw || "{}");
+  return normalizeLaunchRequest(request);
+}
+
+function normalizeLaunchRequest(request) {
+  return {
+    workspaceRoot: String(request.workspaceRoot || ""),
+    profileRoot: String(request.profileRoot || ""),
+    settings: normalizeAiCompanionSettings(request.settings)
+  };
+}
+
+function decodeRequestFile(filePath) {
+  const raw = fs.readFileSync(filePath, "utf8");
+  try {
+    fs.unlinkSync(filePath);
+  } catch (_error) {
+    // Best-effort cleanup only; a stale temp file should not block startup.
+  }
+  return normalizeLaunchRequest(JSON.parse(raw || "{}"));
+}
+
+function loadLaunchRequest(argv) {
+  if (argv[2] === "--request-file") return decodeRequestFile(argv[3]);
+  return decodeRequest(argv[2]);
+}
+
+function isAbortError(error, signal) {
+  return signal?.aborted === true || error?.name === "AbortError" || /aborted|cancelled/i.test(error?.message || "");
+}
+
+function rejectApprovalsForRequest(requestId) {
+  for (const [approvalId, approval] of pendingApprovals) {
+    if (approval.requestId !== requestId) continue;
+    pendingApprovals.delete(approvalId);
+    approval.reject(new Error("AI Companion request cancelled."));
+  }
+}
+
+/**
+ * Reject any clarification questions still awaiting an answer for a request. Called on
+ * cancel and on request completion so a dead clarification promise never lingers.
+ * @param {string} requestId The originating request id.
+ */
+function rejectClarificationsForRequest(requestId) {
+  for (const [clarificationId, clarification] of pendingClarifications) {
+    if (clarification.requestId !== requestId) continue;
+    pendingClarifications.delete(clarificationId);
+    clarification.signal?.removeEventListener?.("abort", clarification.abort);
+    clarification.reject(new Error("AI Companion request cancelled."));
+  }
+}
+
+/**
+ * Ask the user one clarification question, returning a promise that resolves with the
+ * answer when the browser posts a matching clarification response.
+ * @param {string} requestId The originating request id.
+ * @param {AbortSignal} signal Cancellation signal for the request.
+ * @param {object} details Question payload { ambiguityId, question, reason, answerType, choices }.
+ * @returns {Promise<string>} The user's answer text.
+ */
+function requestClarification(requestId, signal, details = {}) {
+  if (signal?.aborted) return Promise.reject(new Error("AI Companion request cancelled."));
+  const clarificationId = `clarification-${requestId}-${nextClarificationId++}`;
+  send({ id: requestId, type: "clarification", clarificationId, ...details });
+  return new Promise((resolve, reject) => {
+    const abort = () => {
+      pendingClarifications.delete(clarificationId);
+      reject(new Error("AI Companion request cancelled."));
+    };
+    pendingClarifications.set(clarificationId, { requestId, resolve, reject, abort, signal });
+    signal?.addEventListener?.("abort", abort, { once: true });
+  });
+}
+
+/**
+ * Resolve a pending clarification with the answer posted by the browser and echo a
+ * clarification-resolved event so the panel can render the answered state.
+ * @param {object} message The browser response { clarificationId, answer, id }.
+ */
+function handleClarification(message) {
+  const clarificationId = String(message.clarificationId || "");
+  const clarification = pendingClarifications.get(clarificationId);
+  if (!clarification) {
+    if (message.id) send({ id: String(message.id), type: "done", action: "clarification", result: { accepted: false, clarificationId } });
+    return;
+  }
+  const answer = String(message.answer || "").trim();
+  if (!answer) {
+    if (message.id) send({ id: String(message.id), type: "done", action: "clarification", result: { accepted: false, clarificationId, error: "A clarification answer is required." } });
+    return;
+  }
+  pendingClarifications.delete(clarificationId);
+  clarification.signal?.removeEventListener?.("abort", clarification.abort);
+  send({ id: clarification.requestId, type: "clarification-resolved", clarificationId, answer });
+  clarification.resolve(answer);
+  if (message.id) send({ id: String(message.id), type: "done", action: "clarification", result: { accepted: true, clarificationId } });
+}
+
+function rejectAppActionsForRequest(requestId) {
+  for (const [appActionId, action] of pendingAppActions) {
+    if (action.requestId !== requestId) continue;
+    pendingAppActions.delete(appActionId);
+    action.reject(new Error("AI Companion request cancelled."));
+  }
+}
+
+function requestAppAction(requestId, signal, details = {}) {
+  if (signal?.aborted) return Promise.reject(new Error("AI Companion request cancelled."));
+  const appActionId = `app-action-${requestId}-${nextAppActionId++}`;
+  send({ id: requestId, type: "app-action", actionId: appActionId, ...details });
+  return new Promise((resolve, reject) => {
+    const abort = () => {
+      pendingAppActions.delete(appActionId);
+      reject(new Error("AI Companion request cancelled."));
+    };
+    pendingAppActions.set(appActionId, { requestId, resolve, reject, abort });
+    signal?.addEventListener?.("abort", abort, { once: true });
+  });
+}
+
+function handleAppActionResult(message) {
+  const appActionId = String(message.appActionId || message.actionId || "");
+  const action = pendingAppActions.get(appActionId);
+  if (!action) {
+    if (message.id) send({ id: String(message.id), type: "done", action: "appActionResult", result: { accepted: false, appActionId } });
+    return;
+  }
+  pendingAppActions.delete(appActionId);
+  if (message.ok === false) action.reject(new Error(message.error || "AI Companion editor action failed."));
+  else action.resolve(message.result || {});
+  if (message.id) send({ id: String(message.id), type: "done", action: "appActionResult", result: { accepted: true, appActionId } });
+}
+function requestApproval(requestId, signal, details = {}, context = {}) {
+  if (signal?.aborted) return Promise.reject(new Error("AI Companion request cancelled."));
+  const approvalId = `approval-${requestId}-${nextApprovalId++}`;
+  send({ id: requestId, type: "approval", approvalId, ...details });
+  return new Promise((resolve, reject) => {
+    const abort = () => {
+      pendingApprovals.delete(approvalId);
+      reject(new Error("AI Companion request cancelled."));
+    };
+    pendingApprovals.set(approvalId, {
+      requestId,
+      resolve,
+      reject,
+      abort,
+      capability: String(details.capability || ""),
+      resource: details.resource || null,
+      maximumGrantLifetime: String(details.maximumGrantLifetime || "action"),
+      effectiveSecurityPolicy: context.effectiveSecurityPolicy || {},
+      auditLogger: context.auditLogger || null,
+      profileRoot: String(context.profileRoot || ""),
+      workspaceRoot: String(context.workspaceRoot || ""),
+      grantOptions: Array.isArray(details.grantOptions) ? details.grantOptions.map((option) => ({ ...option })) : []
+    });
+    signal?.addEventListener?.("abort", abort, { once: true });
+  });
+}
+
+function normalizeApprovalDecision(message) {
+  if (message.approved === true) return { decision: "approve", approved: true, instructions: "", grantOptionId: String(message.grantOptionId || "") };
+  if (message.approved === false && !message.decision) return { decision: "reject", approved: false, instructions: "" };
+  const decision = ["approve", "reject", "instruct"].includes(message.decision) ? message.decision : "reject";
+  return {
+    decision,
+    approved: decision === "approve",
+    instructions: String(message.instructions || message.prompt || "").trim(),
+    grantOptionId: String(message.grantOptionId || "")
+  };
+}
+
+async function handleApproval(message) {
+  const approvalId = String(message.approvalId || "");
+  const approval = pendingApprovals.get(approvalId);
+  if (!approval) {
+    if (message.id) send({ id: String(message.id), type: "done", action: "approval", result: { accepted: false, approvalId } });
+    return;
+  }
+  const decision = normalizeApprovalDecision(message);
+  let selectedOption = null;
+  if (decision.grantOptionId) {
+    selectedOption = approvalPolicy.validateGrantOption({
+      capability: approval.capability,
+      resource: approval.resource,
+      maximumGrantLifetime: approval.maximumGrantLifetime,
+      grantOptions: approval.grantOptions
+    }, decision.grantOptionId, approval.effectiveSecurityPolicy);
+    if (!selectedOption) {
+      if (message.id) send({ id: String(message.id), type: "done", action: "approval", result: { accepted: false, approvalId, error: "The selected approval option is stale, unknown, or disabled by policy." } });
+      return;
+    }
+    if (selectedOption.lifetime === "workspace") {
+      try {
+        const store = new ApprovalGrantStore(approval.profileRoot, approval.workspaceRoot);
+        await store.add({ capability: approval.capability, matcher: selectedOption.matcher, lifetime: "workspace", enabled: true });
+      } catch (error) {
+        await approval.auditLogger?.record({ timestamp: new Date().toISOString(), requestId: approval.requestId, workspace: approval.workspaceRoot, tool: "approvalGrantPersist", capability: approval.capability, decision: "persistence-error", error: error?.message || String(error) });
+        if (message.id) send({ id: String(message.id), type: "done", action: "approval", result: { accepted: false, approvalId, error: `The workspace approval could not be saved: ${error?.message || String(error)}` } });
+        return;
+      }
+    }
+  }
+  pendingApprovals.delete(approvalId);
+  approval.resolve(decision);
+  if (message.id) send({ id: String(message.id), type: "done", action: "approval", result: { accepted: true, approvalId, decision: decision.decision } });
+}
+
+function handleCancel(message) {
+  const targetId = String(message.targetId || "");
+  const controller = activeRequests.get(targetId);
+  if (controller) controller.abort();
+  rejectApprovalsForRequest(targetId);
+  rejectClarificationsForRequest(targetId);
+  rejectAppActionsForRequest(targetId);
+  if (message.id) send({ id: String(message.id), type: "done", action: "cancel", result: { cancelled: Boolean(controller), targetId } });
+}
+
+async function handleRequest(session, message) {
+  if (message.action === "approval") {
+    await handleApproval(message);
+    return;
+  }
+  if (message.action === "clarification") {
+    handleClarification(message);
+    return;
+  }
+  if (message.action === "appActionResult") {
+    handleAppActionResult(message);
+    return;
+  }
+  if (message.action === "cancel") {
+    handleCancel(message);
+    return;
+  }
+
+  const id = String(message.id || "");
+  const startedAt = Date.now();
+  const controller = new AbortController();
+  const emit = (event) => send({ id, ...event });
+  activeRequests.set(id, controller);
+  try {
+    emit({ type: "start", action: message.action, startedAt });
+    let result;
+    const requestSettings = message.settings ? normalizeAiCompanionSettings(message.settings) : session.settings;
+    const requestWorkspaceRoot = message.workspaceRoot || session.workspaceRoot;
+    const requestProfileRoot = message.profileRoot || session.profileRoot || "";
+    const securityContext = await createSecurityContext({
+      workspaceRoot: requestWorkspaceRoot,
+      profileRoot: requestProfileRoot,
+      userPolicy: requestSettings.aiSecurityPolicy
+    });
+    const request = {
+      ...message,
+      requestId: id,
+      appVersion: String(message.appVersion || process.env.NL_APPVERSION || ""),
+      workspaceRoot: requestWorkspaceRoot,
+      profileRoot: requestProfileRoot,
+      settings: requestSettings,
+      securityContext,
+      signal: controller.signal,
+      requestApproval: (details) => requestApproval(id, controller.signal, details, { profileRoot: requestProfileRoot, workspaceRoot: requestWorkspaceRoot, effectiveSecurityPolicy: securityContext.policy, auditLogger: securityContext.auditLogger }),
+      requestClarification: (details) => requestClarification(id, controller.signal, details),
+      requestAppAction: (details) => requestAppAction(id, controller.signal, details)
+    };
+    if (message.action === "testConnection") {
+      result = await testConnection(requestSettings, { signal: controller.signal, onDebug: createProviderDebugEmitter(emit) });
+    } else if (message.action === "inspectCertificate") {
+      result = await inspectServerCertificate(message.url, { signal: controller.signal });
+    } else if (message.action === "chat") {
+      result = await runChatMode(request, emit);
+    } else if (message.action === "autocomplete") {
+      result = await runAutocompleteMode(request, emit);
+    } else if (message.action === "agent") {
+      result = await runAgentMode(request, emit);
+    } else if (message.action === "plan") {
+      result = await runPlanMode(request, emit);
+    } else if (message.action === "plansList") {
+      result = await planRepositoryTools.planList(request.workspaceRoot, message, { signal: controller.signal });
+    } else if (message.action === "planRead") {
+      result = await planRepositoryTools.planRead(request.workspaceRoot, message, { signal: controller.signal });
+    } else if (message.action === "planUpdate") {
+      result = await planRepositoryTools.planUpdate(request.workspaceRoot, message, { signal: controller.signal });
+    } else if (message.action === "planDelete") {
+      result = await planRepositoryTools.planDelete(request.workspaceRoot, message, { signal: controller.signal });
+    } else if (message.action === "planUpdateStatus") {
+      result = await planRepositoryTools.planUpdateStatus(request.workspaceRoot, message, { signal: controller.signal });
+    } else if (message.action === "planRebuildIndex") {
+      result = await planRepositoryTools.planRebuildIndex(request.workspaceRoot, message, { signal: controller.signal });
+    } else if (message.action === "gitSummary") {
+      result = await runGitSummaryMode(request, emit);
+    } else if (message.action === "promptsGet") {
+      result = { entries: await promptProfile.listProfilePromptEntries({ profileRoot: request.profileRoot }) };
+    } else if (message.action === "promptUpdate") {
+      result = { entries: await promptProfile.updateProfilePromptEntry({ profileRoot: request.profileRoot }, message.keyPath, message.value) };
+    } else if (message.action === "promptsUpgradeCheck") {
+      result = await promptProfile.checkPromptProfileUpgrade({ profileRoot: request.profileRoot });
+    } else if (message.action === "promptsUpgradeConflicts") {
+      result = await promptProfile.getPromptProfileUpgradeConflicts({ profileRoot: request.profileRoot }, message.upgradeToken);
+    } else if (message.action === "promptsUpgradeResolve") {
+      result = await promptProfile.resolvePromptProfileUpgrade({ profileRoot: request.profileRoot }, {
+        upgradeToken: message.upgradeToken, strategy: message.strategy, resolutions: message.resolutions
+      });
+    } else if (message.action === "securityPolicyGet") {
+      const describePolicySource = (source) => ({
+        found: source?.found === true,
+        valid: source?.valid !== false,
+        source: source?.source || "",
+        path: source?.path || "",
+        error: source?.error || ""
+      });
+      result = {
+        effectivePolicy: securityContext.policy,
+        error: securityContext.policyError,
+        managed: describePolicySource(securityContext.managedSource),
+        workspace: describePolicySource(securityContext.workspaceSource),
+        auditLocation: securityContext.auditLocation
+      };
+    } else if (message.action === "approvalGrantsList") {
+      const store = new ApprovalGrantStore(request.profileRoot, request.workspaceRoot);
+      const grants = await store.list();
+      const legacy = (await approvalPolicy.loadApprovalPolicies(request.workspaceRoot)).map((entry) => ({
+        scope: entry.scope,
+        path: entry.path,
+        writeRuleCount: Array.isArray(entry.policy?.allow?.write) ? entry.policy.allow.write.length : 0
+      }));
+      result = { ...grants, legacy };
+    } else if (message.action === "approvalGrantRevoke") {
+      const store = new ApprovalGrantStore(request.profileRoot, request.workspaceRoot);
+      result = await store.revoke(message.ruleId);
+      await securityContext.auditLogger?.record({ timestamp: new Date().toISOString(), requestId: id, workspace: request.workspaceRoot, tool: "approvalGrantRevoke", decision: result.revoked ? "revoked" : "not-found", ruleId: String(message.ruleId || "") });
+    } else if (message.action === "approvalGrantsReplace") {
+      validatePersistentGrantCapabilities(message.document?.rules, securityContext.policy);
+      const store = new ApprovalGrantStore(request.profileRoot, request.workspaceRoot);
+      result = await store.replace(message.document);
+      await securityContext.auditLogger?.record({ timestamp: new Date().toISOString(), requestId: id, workspace: request.workspaceRoot, tool: "approvalGrantsReplace", decision: "updated", count: result.rules.length });
+    } else if (message.action === "approvalLegacyImport") {
+      const selectedScope = String(message.scope || "");
+      const legacy = (await approvalPolicy.loadApprovalPolicies(request.workspaceRoot)).find((entry) => entry.scope === selectedScope);
+      if (!legacy) throw new Error("The selected legacy approval policy was not found.");
+      validatePersistentGrantCapabilities([{ capability: "workspace.file.write" }], securityContext.policy);
+      const store = new ApprovalGrantStore(request.profileRoot, request.workspaceRoot);
+      result = await store.importLegacy(legacy.policy);
+      await securityContext.auditLogger?.record({ timestamp: new Date().toISOString(), requestId: id, workspace: request.workspaceRoot, tool: "approvalLegacyImport", decision: "imported", source: legacy.path, count: result.imported });
+    } else {
+      throw new Error("AI Companion action is not supported.");
+    }
+    send({ id, type: "done", action: message.action, elapsedMs: Date.now() - startedAt, result });
+  } catch (error) {
+    const elapsedMs = Date.now() - startedAt;
+    if (isAbortError(error, controller.signal)) {
+      send({ id, type: "cancelled", action: message.action, elapsedMs });
+    } else {
+      send({ id, type: "error", action: message.action, elapsedMs, error: error?.message || String(error) });
+    }
+  } finally {
+    activeRequests.delete(id);
+    rejectApprovalsForRequest(id);
+    rejectClarificationsForRequest(id);
+    rejectAppActionsForRequest(id);
+  }
+}
+
+function bindInput(session) {
+  const reader = readline.createInterface({ input: process.stdin, crlfDelay: Infinity });
+  reader.on("line", (line) => {
+    let message;
+    try {
+      message = JSON.parse(line || "{}");
+    } catch (error) {
+      send({ type: "error", error: error?.message || String(error) });
+      return;
+    }
+    void handleRequest(session, message);
+  });
+  reader.on("close", () => process.exit(0));
+}
+
+try {
+  const session = loadLaunchRequest(process.argv);
+  send({ type: "ready", title: "AI Companion", workspaceRoot: session.workspaceRoot });
+  bindInput(session);
+} catch (error) {
+  send({ type: "error", error: error?.message || String(error) });
+  process.exitCode = 1;
+}

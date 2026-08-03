@@ -1,0 +1,106 @@
+/* Java Outline tree in the lower sidebar. */
+.outline-panel {
+  display: flex;
+  flex-direction: column;
+  background: var(--editor-bg);
+  color: var(--text-color);
+}
+
+.outline-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  padding: 5px 0 10px;
+}
+
+.outline-tree {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.outline-tree-children {
+  padding-left: 14px;
+}
+
+.outline-row {
+  display: grid;
+  grid-template-columns: 14px 16px minmax(0, auto) minmax(0, 1fr);
+  align-items: center;
+  gap: 4px;
+  width: 100%;
+  min-height: 25px;
+  padding: 2px 8px;
+  border: 0;
+  border-radius: 3px;
+  background: transparent;
+  color: var(--text-color);
+  font: inherit;
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.outline-row:hover,
+.outline-row:focus-visible {
+  background: var(--button-hover);
+  outline: none;
+}
+
+.outline-disclosure,
+.outline-symbol-icon {
+  line-height: 1;
+  text-align: center;
+}
+
+.outline-disclosure {
+  color: var(--text-muted, #8b949e);
+}
+
+.outline-disclosure-placeholder::before {
+  content: "";
+}
+
+.outline-symbol-icon {
+  color: var(--accent-color);
+}
+
+.outline-kind-field .outline-symbol-icon {
+  color: #d29922;
+  font-size: 7px;
+}
+
+.outline-kind-method .outline-symbol-icon,
+.outline-kind-constructor .outline-symbol-icon {
+  color: #a371f7;
+}
+
+.outline-symbol-name,
+.outline-symbol-detail {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.outline-symbol-detail {
+  padding-left: 4px;
+  color: var(--text-muted, #8b949e);
+}
+
+.outline-empty {
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 18px;
+  color: var(--text-muted, #8b949e);
+  font-size: 12px;
+  line-height: 1.45;
+  text-align: center;
+}
+
+.outline-empty i {
+  font-size: 22px;
+}

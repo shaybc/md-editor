@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- MD-Editor offline validation subset for Apache RAT 0.18 configuration files.
+     It validates the documented families/licenses/approved/matchers envelope and
+     intentionally permits matcher extensions. It is not the generated RAT XSD. -->
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" elementFormDefault="qualified">
+  <xs:element name="rat-config">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element name="families" minOccurs="0"><xs:complexType><xs:sequence><xs:element name="family" minOccurs="0" maxOccurs="unbounded"><xs:complexType><xs:attribute name="id" type="xs:string" use="required"/><xs:attribute name="name" type="xs:string" use="required"/></xs:complexType></xs:element></xs:sequence></xs:complexType></xs:element>
+        <xs:element name="licenses" minOccurs="0"><xs:complexType><xs:sequence><xs:element name="license" minOccurs="0" maxOccurs="unbounded"><xs:complexType mixed="true"><xs:sequence><xs:any minOccurs="0" maxOccurs="unbounded" processContents="lax"/></xs:sequence><xs:attribute name="family" type="xs:string" use="required"/><xs:attribute name="id" type="xs:string" use="required"/><xs:attribute name="name" type="xs:string" use="optional"/></xs:complexType></xs:element></xs:sequence></xs:complexType></xs:element>
+        <xs:element name="approved" minOccurs="0"><xs:complexType><xs:sequence><xs:element name="family" minOccurs="0" maxOccurs="unbounded"><xs:complexType><xs:attribute name="license_ref" type="xs:string" use="required"/></xs:complexType></xs:element></xs:sequence></xs:complexType></xs:element>
+        <xs:element name="matchers" minOccurs="0"><xs:complexType><xs:sequence><xs:any minOccurs="0" maxOccurs="unbounded" processContents="lax"/></xs:sequence></xs:complexType></xs:element>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+</xs:schema>

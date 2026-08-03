@@ -1,0 +1,147 @@
+{
+  "formatVersion": 1,
+  "generatedAt": "2026-07-26",
+  "policy": "offline-only, exact full-text matching outside explicitly declared template placeholders",
+  "placeholderTokens": ["[year]", "[yyyy]", "[fullname]", "[name of copyright owner]"],
+  "source": {
+    "repository": "https://github.com/github/choosealicense.com",
+    "revision": "d6277c04899ce98b13d713186b48d110ac998d0b",
+    "license": "MIT"
+  },
+  "labels": {
+    "commercial-use": "Commercial use",
+    "modifications": "Modification",
+    "distribution": "Distribution",
+    "patent-use": "Patent use",
+    "private-use": "Private use",
+    "include-copyright": "License and copyright notice",
+    "document-changes": "State changes",
+    "disclose-source": "Disclose source",
+    "network-use-disclose": "Network use is distribution",
+    "same-license": "Same license",
+    "same-license--file": "Same license (file)",
+    "same-license--library": "Same license (library)",
+    "trademark-use": "Trademark use",
+    "liability": "Liability",
+    "warranty": "Warranty"
+  },
+  "licenses": [
+    {
+      "id": "MIT",
+      "name": "MIT License",
+      "description": "A short and simple permissive license requiring preservation of copyright and license notices. Licensed works, modifications, and larger works may be distributed under different terms and without source code.",
+      "permissions": ["commercial-use", "modifications", "distribution", "private-use"],
+      "conditions": ["include-copyright"],
+      "limitations": ["liability", "warranty"],
+      "textPath": "/assets/license-header/licenses/mit.txt"
+    },
+    {
+      "id": "Apache-2.0",
+      "name": "Apache License 2.0",
+      "description": "A permissive license requiring preservation of copyright and license notices. Contributors provide an express grant of patent rights, and larger works may be distributed under different terms.",
+      "permissions": ["commercial-use", "modifications", "distribution", "patent-use", "private-use"],
+      "conditions": ["include-copyright", "document-changes"],
+      "limitations": ["trademark-use", "liability", "warranty"],
+      "textPath": "/assets/license-header/licenses/apache-2.0.txt"
+    },
+    {
+      "id": "GPL-2.0-only",
+      "name": "GNU General Public License v2.0",
+      "description": "A strong copyleft license requiring source code for distributed derived works to be made available under the same license.",
+      "permissions": ["commercial-use", "modifications", "distribution", "private-use"],
+      "conditions": ["include-copyright", "document-changes", "disclose-source", "same-license"],
+      "limitations": ["liability", "warranty"],
+      "textPath": "/assets/license-header/licenses/gpl-2.0-only.txt"
+    },
+    {
+      "id": "GPL-3.0-only",
+      "name": "GNU General Public License v3.0",
+      "description": "A strong copyleft license requiring complete source code for distributed licensed works and modifications to remain available under the same license.",
+      "permissions": ["commercial-use", "modifications", "distribution", "patent-use", "private-use"],
+      "conditions": ["include-copyright", "document-changes", "disclose-source", "same-license"],
+      "limitations": ["liability", "warranty"],
+      "textPath": "/assets/license-header/licenses/gpl-3.0-only.txt"
+    },
+    {
+      "id": "AGPL-3.0-only",
+      "name": "GNU Affero General Public License v3.0",
+      "description": "A strong copyleft license requiring complete source code to remain available, including when a modified version is used to provide a service over a network.",
+      "permissions": ["commercial-use", "modifications", "distribution", "patent-use", "private-use"],
+      "conditions": ["include-copyright", "document-changes", "disclose-source", "network-use-disclose", "same-license"],
+      "limitations": ["liability", "warranty"],
+      "textPath": "/assets/license-header/licenses/agpl-3.0-only.txt"
+    },
+    {
+      "id": "LGPL-2.1-only",
+      "name": "GNU Lesser General Public License v2.1",
+      "description": "A library-focused copyleft license requiring derived library works to use the same license while allowing works that only link to the library to use other terms.",
+      "permissions": ["commercial-use", "modifications", "distribution", "private-use"],
+      "conditions": ["include-copyright", "disclose-source", "document-changes", "same-license--library"],
+      "limitations": ["liability", "warranty"],
+      "textPath": "/assets/license-header/licenses/lgpl-2.1-only.txt"
+    },
+    {
+      "id": "LGPL-3.0-only",
+      "name": "GNU Lesser General Public License v3.0",
+      "description": "A copyleft license requiring licensed library code and modifications to remain available while allowing larger works using the library to use different terms.",
+      "permissions": ["commercial-use", "modifications", "distribution", "patent-use", "private-use"],
+      "conditions": ["include-copyright", "disclose-source", "document-changes", "same-license--library"],
+      "limitations": ["liability", "warranty"],
+      "textPath": "/assets/license-header/licenses/lgpl-3.0-only.txt"
+    },
+    {
+      "id": "BSD-2-Clause",
+      "name": "BSD 2-Clause \"Simplified\" License",
+      "description": "A permissive license with minimal conditions that is similar to the MIT License.",
+      "permissions": ["commercial-use", "modifications", "distribution", "private-use"],
+      "conditions": ["include-copyright"],
+      "limitations": ["liability", "warranty"],
+      "textPath": "/assets/license-header/licenses/bsd-2-clause.txt"
+    },
+    {
+      "id": "BSD-3-Clause",
+      "name": "BSD 3-Clause \"New\" or \"Revised\" License",
+      "description": "A permissive license that also prohibits using contributor names to promote derived products without written consent.",
+      "permissions": ["commercial-use", "modifications", "distribution", "private-use"],
+      "conditions": ["include-copyright"],
+      "limitations": ["liability", "warranty"],
+      "textPath": "/assets/license-header/licenses/bsd-3-clause.txt"
+    },
+    {
+      "id": "MPL-2.0",
+      "name": "Mozilla Public License 2.0",
+      "description": "A file-level copyleft license requiring source code for licensed files and modifications to those files to remain available.",
+      "permissions": ["commercial-use", "modifications", "distribution", "patent-use", "private-use"],
+      "conditions": ["disclose-source", "include-copyright", "same-license--file"],
+      "limitations": ["liability", "trademark-use", "warranty"],
+      "textPath": "/assets/license-header/licenses/mpl-2.0.txt"
+    },
+    {
+      "id": "EPL-2.0",
+      "name": "Eclipse Public License 2.0",
+      "description": "A commercially friendly copyleft license with a royalty-free patent grant that allows linked works to use other licenses.",
+      "permissions": ["commercial-use", "distribution", "modifications", "patent-use", "private-use"],
+      "conditions": ["disclose-source", "include-copyright", "same-license"],
+      "limitations": ["liability", "warranty"],
+      "textPath": "/assets/license-header/licenses/epl-2.0.txt"
+    },
+    {
+      "id": "ISC",
+      "name": "ISC License",
+      "description": "A concise permissive license that is functionally similar to the BSD 2-Clause and MIT licenses.",
+      "permissions": ["commercial-use", "distribution", "modifications", "private-use"],
+      "conditions": ["include-copyright"],
+      "limitations": ["liability", "warranty"],
+      "textPath": "/assets/license-header/licenses/isc.txt"
+    },
+    {
+      "id": "Unlicense",
+      "name": "The Unlicense",
+      "description": "A license with no conditions that dedicates works to the public domain.",
+      "permissions": ["private-use", "commercial-use", "modifications", "distribution"],
+      "conditions": [],
+      "limitations": ["liability", "warranty"],
+      "textPath": "/assets/license-header/licenses/unlicense.txt"
+    }
+  ]
+}

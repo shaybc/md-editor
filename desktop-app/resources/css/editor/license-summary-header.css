@@ -1,0 +1,142 @@
+/* Fixed offline license summary shown above an exactly matched source file. */
+.editor-pane.license-summary-capable {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.editor-pane.license-summary-capable > .editor-shell {
+  flex: 1 1 auto;
+  height: auto;
+  min-height: 0;
+}
+
+.license-summary-host {
+  flex: 0 0 auto;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--border-color);
+  background: var(--editor-bg);
+}
+
+.license-summary-host[hidden] {
+  display: none;
+}
+
+.license-summary-card {
+  overflow: hidden;
+  border: 1px solid var(--border-color);
+  border-radius: 7px;
+  background: var(--panel-bg, var(--editor-bg));
+  color: var(--text-color);
+}
+
+.license-summary-body {
+  display: grid;
+  grid-template-columns: minmax(220px, 2fr) repeat(3, minmax(140px, 1fr));
+  gap: 20px;
+  padding: 16px;
+}
+
+.license-summary-title {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.license-summary-title > i {
+  flex: 0 0 auto;
+  margin-top: 2px;
+  font-size: 22px;
+}
+
+.license-summary-title h3,
+.license-summary-category h4 {
+  margin: 0;
+  color: var(--text-color);
+}
+
+.license-summary-title h3 {
+  font-size: 17px;
+}
+
+.license-summary-overview p {
+  margin: 10px 0 0;
+  color: var(--secondary-text);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.license-summary-category h4 {
+  font-size: 13px;
+}
+
+.license-summary-category ul {
+  display: grid;
+  gap: 5px;
+  margin: 9px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.license-summary-category li {
+  display: flex;
+  align-items: flex-start;
+  gap: 7px;
+  min-width: 0;
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.license-summary-category li i {
+  flex: 0 0 auto;
+}
+
+.license-summary-category li span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.license-summary-permission {
+  color: var(--color-success-fg, #3fb950);
+}
+
+.license-summary-limitation {
+  color: var(--color-danger-fg, #f85149);
+}
+
+.license-summary-condition {
+  color: var(--color-accent-fg, #58a6ff);
+}
+
+.license-summary-footer {
+  padding: 9px 16px;
+  border-top: 1px solid var(--border-color);
+  color: var(--secondary-text);
+  font-size: 11px;
+}
+
+@media (max-width: 1100px) {
+  .license-summary-body {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .license-summary-overview {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 760px) {
+  .license-summary-host {
+    padding: 8px;
+  }
+
+  .license-summary-body {
+    grid-template-columns: 1fr;
+    gap: 14px;
+    padding: 12px;
+  }
+
+  .license-summary-overview {
+    grid-column: auto;
+  }
+}

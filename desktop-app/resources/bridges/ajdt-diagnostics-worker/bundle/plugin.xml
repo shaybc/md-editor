@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?eclipse version="3.4"?>
+<plugin>
+   <extension point="org.eclipse.core.runtime.applications" id="application">
+      <application cardinality="singleton-global" thread="main" visible="true">
+         <run class="mdeditor.ajdt.diagnostics.AjdtDiagnosticsApplication"/>
+      </application>
+   </extension>
+</plugin>

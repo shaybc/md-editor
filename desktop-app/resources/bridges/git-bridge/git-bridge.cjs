@@ -1,0 +1,849 @@
+#!/usr/bin/env node
+
+/**
+ * Desktop Git bridge.
+ *
+ * Receives one base64-encoded JSON request, executes the matching repository
+ * operation through simple-git, and prints one JSON response to stdout.
+ */
+
+const simpleGit = require("simple-git");
+const fs = require("node:fs/promises");
+const path = require("node:path");
+const { parseGitStatusPorcelainV2 } = require("./git-status-porcelain-v2.cjs");
+
+const ALLOWED_ACTIONS = new Set(["status", "fetch", "pull", "push", "stage", "unstage", "commit", "compareFile", "compareConflictFile", "compareStashFile", "branchList", "switchBranch", "branchCreate", "branchRename", "branchPush", "branchDeleteLocal", "branchDeleteRemote", "branchActivity", "tagCreate", "tagDelete", "resetToRemote", "stashList", "stashCreate", "stashPop", "discardChanges", "stashDrop", "changesDigest"]);
+
+/**
+ * Size caps for the AI change-summary digest. Patches beyond these caps are
+ * replaced by their --stat line so the model can still see the file changed
+ * and read it through workspace tools instead.
+ */
+const DIGEST_LIMITS = Object.freeze({
+  patchFileLines: 400,
+  sectionBytes: 48 * 1024,
+  untrackedFileBytes: 8 * 1024,
+  untrackedTotalBytes: 48 * 1024,
+  untrackedMaxFiles: 40,
+  totalBytes: 120 * 1024
+});
+
+/** Null byte used to detect binary content without embedding control characters in source. */
+const NULL_CHARACTER = String.fromCharCode(0);
+const GIT_COMMAND_DELAY_MS = 300;
+
+/**
+ * Add a fixed pause between Git processes started by one bridge request.
+ * @param {object} git - The simple-git instance used for the request.
+ * @param {number} delayMs - Milliseconds to wait after each completed Git command.
+ * @returns {object} A Git client that serializes the methods used by this bridge.
+ */
+function createDelayedGitClient(git, delayMs = GIT_COMMAND_DELAY_MS) {
+  let hasRunCommand = false;
+  let commandQueue = Promise.resolve();
+
+  function run(method, args) {
+    const command = commandQueue.then(async () => {
+      if (hasRunCommand) await new Promise((resolve) => setTimeout(resolve, delayMs));
+      hasRunCommand = true;
+      return git[method](...args);
+    });
+    commandQueue = command.catch(() => {});
+    return command;
+  }
+
+  return {
+    add: (...args) => run("add", args),
+    checkIsRepo: (...args) => run("checkIsRepo", args),
+    commit: (...args) => run("commit", args),
+    fetch: (...args) => run("fetch", args),
+    pull: (...args) => run("pull", args),
+    push: (...args) => run("push", args),
+    raw: (...args) => run("raw", args),
+    reset: (...args) => run("reset", args)
+  };
+}
+
+function logGitBridgeError(error) {
+  if (error?.gitBridgeLogged === true) return;
+  console.error(`[git-bridge] ${error?.stack || error?.message || String(error)}`);
+  if (error && typeof error === "object") error.gitBridgeLogged = true;
+}
+
+function createGitStatusError(code, stage, cause) {
+  const message = code === "GIT_STATUS_NOT_REPOSITORY"
+    ? "The opened folder is not a Git repository."
+    : (stage === "parse" ? "Git status output could not be parsed." : "Git status could not be read.");
+  const error = new Error(message, { cause });
+  error.code = code;
+  error.stage = stage;
+  error.retryable = false;
+  return error;
+}
+
+/**
+ * Read complete Git status without invoking simple-git's recursive status parser.
+ * @param {object} git - Delayed Git client used by the current bridge request.
+ * @returns {Promise<object>} Complete normalized Git Panel status.
+ * @throws {Error} A bounded non-retryable GIT_STATUS error when execution or parsing fails.
+ */
+async function readGitStatus(git) {
+  let output;
+  try {
+    output = await git.raw(["status", "--porcelain=v2", "--branch", "-z", "--untracked-files=all"]);
+  } catch (error) {
+    logGitBridgeError(error);
+    const code = /not a git repository/i.test(String(error?.message || error))
+      ? "GIT_STATUS_NOT_REPOSITORY"
+      : "GIT_STATUS_EXECUTION_FAILED";
+    throw createGitStatusError(code, "execute", error);
+  }
+  try {
+    return parseGitStatusPorcelainV2(output);
+  } catch (error) {
+    logGitBridgeError(error);
+    if (error?.code === "GIT_STATUS_PARSE_FAILED") throw error;
+    throw createGitStatusError("GIT_STATUS_PARSE_FAILED", "parse", error);
+  }
+}
+
+function decodeRequest(value) {
+  const raw = Buffer.from(String(value || ""), "base64").toString("utf8");
+  const request = JSON.parse(raw || "{}");
+  if (!request || typeof request !== "object") throw new Error("Git request is invalid.");
+  if (!ALLOWED_ACTIONS.has(request.action)) throw new Error("Git action is not allowed.");
+  if (!request.folderPath || typeof request.folderPath !== "string") throw new Error("Git folder path is required.");
+  return request;
+}
+
+function normalizeFiles(files) {
+  return Array.isArray(files)
+    ? files.map((file) => String(file || "").trim()).filter(Boolean)
+    : [];
+}
+
+function normalizeGitPath(value) {
+  return String(value || "").replace(/\\/g, "/").trim();
+}
+
+function normalizeBranchName(value) {
+  const branch = String(value || "").trim();
+  if (!branch) throw new Error("Branch name is required.");
+  if (branch.startsWith("-") || branch.endsWith("/") || branch.endsWith(".") || branch.includes("..") || branch.includes("//") || /[\s~^:?*[\\]/.test(branch)) {
+    throw new Error("Branch name is invalid.");
+  }
+  return branch;
+}
+
+function normalizeTagName(value) {
+  const tag = String(value || "").trim();
+  if (!tag) throw new Error("Tag name is required.");
+  if (tag.startsWith("-") || tag.endsWith("/") || tag.endsWith(".") || tag.includes("..") || tag.includes("//") || /[\s~^:?*[\\]/.test(tag)) {
+    throw new Error("Tag name is invalid.");
+  }
+  return tag;
+}
+
+function debugGitBridgeBranch(message, data) {
+  console.error(`[git-bridge] ${message}: ${JSON.stringify(data)}`);
+}
+
+function normalizeRemoteBranchName(value) {
+  const branch = normalizeGitPath(value).trim();
+  if (!branch) throw new Error("Remote branch name is required.");
+  if (!branch.includes("/")) {
+    debugGitBridgeBranch("invalid remote branch name", { value, normalized: branch });
+    throw new Error(`Remote branch name is invalid: ${branch}`);
+  }
+  normalizeBranchName(branch);
+  return branch;
+}
+
+function getLocalBranchNameFromRemote(remoteBranch) {
+  const branch = normalizeRemoteBranchName(remoteBranch);
+  return normalizeBranchName(branch.split("/").slice(1).join("/"));
+}
+
+function splitRemoteBranchName(remoteBranch) {
+  const branch = normalizeRemoteBranchName(remoteBranch);
+  const [remote, ...branchParts] = branch.split("/");
+  return {
+    remote: normalizeBranchName(remote),
+    branch: normalizeBranchName(branchParts.join("/"))
+  };
+}
+
+function normalizeStashRef(value) {
+  const ref = String(value || "").trim();
+  if (!/^stash@\{\d+\}$/.test(ref)) throw new Error("Git stash reference is invalid.");
+  return ref;
+}
+
+function normalizeStashRefs(values) {
+  return (Array.isArray(values) ? values : []).map(normalizeStashRef);
+}
+
+function getStashRefIndex(ref) {
+  const match = normalizeStashRef(ref).match(/^stash@\{(\d+)\}$/);
+  return match ? Number(match[1]) : -1;
+}
+
+function sortStashRefsForDrop(values) {
+  return normalizeStashRefs(values).sort((left, right) => getStashRefIndex(right) - getStashRefIndex(left));
+}
+
+function getFileName(filePath) {
+  return normalizeGitPath(filePath).split("/").pop() || "file";
+}
+
+function getCompareScope(value) {
+  if (value === "staged" || value === "unstaged") return value;
+  throw new Error("Git compare scope is invalid.");
+}
+
+function assertTextSnapshot(content, name) {
+  if (String(content || "").includes(NULL_CHARACTER)) {
+    throw new Error(`"${name || "This file"}" appears to be a binary file and cannot be compared as text.`);
+  }
+}
+
+async function readGitSnapshot(git, revision, filePath) {
+  try {
+    return await git.raw(["show", `${revision}:${filePath}`]);
+  } catch (_error) {
+    return "";
+  }
+}
+
+async function readWorkingTreeSnapshot(folderPath, filePath) {
+  const root = path.resolve(folderPath);
+  const resolvedPath = path.resolve(root, filePath);
+  if (resolvedPath !== root && !resolvedPath.startsWith(root + path.sep)) throw new Error("Git file path is invalid.");
+  try {
+    return await fs.readFile(resolvedPath, "utf8");
+  } catch (_error) {
+    return "";
+  }
+}
+
+function resolveWorkingTreePath(folderPath, filePath) {
+  const root = path.resolve(folderPath);
+  const resolvedPath = path.resolve(root, filePath);
+  if (resolvedPath !== root && !resolvedPath.startsWith(root + path.sep)) throw new Error("Git file path is invalid.");
+  return resolvedPath;
+}
+
+function createCompareDescriptor(folderPath, filePath, scope, leftContent, rightContent) {
+  const name = getFileName(filePath);
+  const isStaged = scope === "staged";
+  return {
+    title: `${isStaged ? "Staged changes" : "Unstaged changes"}: ${filePath}`,
+    left: {
+      name: `${isStaged ? "HEAD" : "Index"}: ${name}`,
+      content: leftContent
+    },
+    right: {
+      name: `${isStaged ? "Staged" : "Working tree"}: ${name}`,
+      path: isStaged ? undefined : resolveWorkingTreePath(folderPath, filePath),
+      content: rightContent
+    },
+    viewMode: "side-by-side"
+  };
+}
+
+function createConflictCompareDescriptor(folderPath, filePath, leftContent, rightContent) {
+  const name = getFileName(filePath);
+  return {
+    title: `Resolve conflict: ${filePath}`,
+    left: {
+      name: `Stashed: ${name}`,
+      content: leftContent
+    },
+    right: {
+      name: `Working tree: ${name}`,
+      path: resolveWorkingTreePath(folderPath, filePath),
+      content: rightContent
+    },
+    gitConflict: {
+      filePath
+    },
+    viewMode: "side-by-side"
+  };
+}
+
+function createStashCompareDescriptor(folderPath, stashRef, filePath, originalPath, leftContent, rightContent) {
+  const name = getFileName(filePath);
+  return {
+    title: `Stashed file: ${filePath}`,
+    left: {
+      name: `Stashed: ${name}`,
+      content: leftContent
+    },
+    right: {
+      name: `Working tree: ${name}`,
+      path: resolveWorkingTreePath(folderPath, filePath),
+      content: rightContent
+    },
+    gitStash: {
+      stashRef,
+      filePath,
+      originalPath: normalizeGitPath(originalPath)
+    },
+    viewMode: "side-by-side"
+  };
+}
+
+function formatStatus(status) {
+  const files = (status.files || []).map((file) => ({
+    path: file.path,
+    originalPath: file.from || file.oldPath || file.old_path || "",
+    index: file.index,
+    workingDir: file.working_dir,
+  }));
+
+  return {
+    branch: status.current || "",
+    tracking: status.tracking || "",
+    ahead: Number(status.ahead || 0),
+    behind: Number(status.behind || 0),
+    staged: files.filter((file) => file.index && file.index !== " " && file.index !== "?"),
+    unstaged: files.filter((file) => file.workingDir && file.workingDir !== " "),
+    files,
+  };
+}
+
+function getDiscardFileGroups(status, files) {
+  const selected = normalizeFiles(files);
+  const statusFiles = Array.isArray(status?.files) ? status.files : [];
+  const statusByPath = new Map(statusFiles.map((file) => [normalizeGitPath(file.path), file]));
+  return selected.reduce((groups, filePath) => {
+    const file = statusByPath.get(normalizeGitPath(filePath));
+    if (file?.index === "?" || file?.workingDir === "?") groups.untracked.push(filePath);
+    else if (/^(AA|AU|DD|DU|UA|UD|UU)$/.test(`${file?.index || " "}${file?.workingDir || " "}`)) groups.conflicted.push(filePath);
+    else groups.tracked.push(filePath);
+    return groups;
+  }, { tracked: [], untracked: [], conflicted: [] });
+}
+
+function parseStashListOutput(output) {
+  return String(output || "").split(/\r?\n/).filter(Boolean).map((line) => {
+    const match = line.match(/^(stash@\{\d+\}):\s*(.*)$/);
+    const ref = normalizeStashRef(match?.[1] || "");
+    return {
+      ref,
+      message: match?.[2] || ref,
+      files: []
+    };
+  });
+}
+
+function parseStashFilesOutput(output) {
+  return String(output || "").split(/\r?\n/).filter(Boolean).map((line) => {
+    const parts = line.split(/\t+/);
+    const status = parts.shift() || "";
+    const filePath = parts.length > 1 ? `${normalizeGitPath(parts[0])} -> ${normalizeGitPath(parts[parts.length - 1])}` : normalizeGitPath(parts[0] || line);
+    return { status, path: filePath };
+  }).filter((file) => file.path);
+}
+
+function parseLocalBranchListOutput(output) {
+  return String(output || "").split(/\r?\n/).filter(Boolean).map((line) => {
+    const [name, tracking = "", head = "", updatedAt = "", commitHash = ""] = line.split("|");
+    return {
+      name: normalizeBranchName(name || ""),
+      tracking: normalizeGitPath(tracking || ""),
+      current: head === "*",
+      updatedAt,
+      commitHash
+    };
+  });
+}
+
+function parseRemoteBranchListOutput(output) {
+  const lines = String(output || "").split(/\r?\n/).map((line) => normalizeGitPath(line).trim()).filter(Boolean);
+  debugGitBridgeBranch("remote branch list lines", lines);
+  return lines.map((line) => {
+    const [name = "", updatedAt = "", commitHash = ""] = line.split("|");
+    return { name: normalizeGitPath(name).trim(), updatedAt, commitHash };
+  }).filter((branch) => branch.name.includes("/") && !/\/HEAD(?:\s*->.*)?$/.test(branch.name)).map((branch) => ({
+    name: normalizeRemoteBranchName(branch.name),
+    localName: getLocalBranchNameFromRemote(branch.name),
+    updatedAt: branch.updatedAt,
+    commitHash: branch.commitHash
+  }));
+}
+
+function parseBranchActivityOutput(output) {
+  return String(output || "").split(/\r?\n/).filter(Boolean).map((line) => {
+    const [hash = "", date = "", author = "", subject = ""] = line.split("\x1f");
+    return { hash, date, author, subject };
+  });
+}
+
+function parseTagListOutput(output) {
+  return String(output || "").split(/\r?\n/).filter(Boolean).map((line) => {
+    const [name = "", updatedAt = "", commitHash = ""] = line.split("|");
+    return {
+      name: normalizeTagName(name || ""),
+      updatedAt,
+      commitHash
+    };
+  });
+}
+
+function normalizeBranchActivityLimit(value) {
+  const count = Number(value);
+  return Number.isInteger(count) && count > 0 ? Math.min(count, 100) : 20;
+}
+
+function normalizeBranchActivitySkip(value) {
+  const count = Number(value);
+  return Number.isInteger(count) && count > 0 ? count : 0;
+}
+
+function createBranchList(localBranches, remoteBranches, currentBranch = "") {
+  const localByName = new Map((Array.isArray(localBranches) ? localBranches : []).map((branch) => [branch.name, branch]));
+  const remoteItems = (Array.isArray(remoteBranches) ? remoteBranches : []).map((remote) => {
+    const local = localByName.get(remote.localName);
+    return {
+      type: "remote",
+      name: remote.name,
+      localName: remote.localName,
+      hasLocal: !!local,
+      current: currentBranch === remote.localName,
+      tracking: local?.tracking || remote.name,
+      updatedAt: local?.updatedAt || remote.updatedAt || "",
+      commitHash: local?.commitHash || remote.commitHash || ""
+    };
+  });
+  const remoteLocalNames = new Set(remoteItems.map((branch) => branch.localName));
+  const localOnly = (Array.isArray(localBranches) ? localBranches : []).filter((branch) => !remoteLocalNames.has(branch.name)).map((branch) => ({
+    type: "local",
+    name: branch.name,
+    current: !!branch.current,
+    tracking: branch.tracking || "",
+    updatedAt: branch.updatedAt || "",
+    commitHash: branch.commitHash || ""
+  }));
+  return { remote: remoteItems, localOnly };
+}
+
+function isBinaryText(content) {
+  return String(content || "").includes(NULL_CHARACTER);
+}
+
+/**
+ * Cap one diff patch for the changes digest: each per-file chunk is limited to
+ * DIGEST_LIMITS.patchFileLines lines and the whole section to
+ * DIGEST_LIMITS.sectionBytes bytes. Returns the capped text plus whether
+ * anything was cut. Pure function - no IO.
+ */
+function capDigestPatchText(patch, limits = DIGEST_LIMITS) {
+  const text = String(patch || "");
+  if (!text) return { text: "", truncated: false };
+  let truncated = false;
+  const chunks = text.split(/^(?=diff --git )/m).map((chunk) => {
+    const lines = chunk.split("\n");
+    if (lines.length <= limits.patchFileLines) return chunk;
+    truncated = true;
+    return `${lines.slice(0, limits.patchFileLines).join("\n")}\n...[patch truncated]`;
+  });
+  let capped = chunks.join("");
+  if (capped.length > limits.sectionBytes) {
+    truncated = true;
+    capped = `${capped.slice(0, limits.sectionBytes)}\n...[section truncated]`;
+  }
+  return { text: capped, truncated };
+}
+
+/**
+ * Enforce the digest total-size budget by dropping the least important
+ * content first: patch bodies (unpushed, then unstaged, then staged), then
+ * untracked file contents. Stat lines and untracked paths always stay so the
+ * model knows which files changed. Mutates and returns the digest.
+ */
+function enforceDigestTotalBudget(digest, limits = DIGEST_LIMITS) {
+  const patchFields = ["unpushedPatch", "unstagedPatch", "stagedPatch"];
+  const digestSize = () => JSON.stringify(digest).length;
+  for (const field of patchFields) {
+    if (digestSize() <= limits.totalBytes) break;
+    if (!digest[field]) continue;
+    digest[field] = "";
+    if (!digest.truncated.includes(field)) digest.truncated.push(field);
+  }
+  if (digestSize() > limits.totalBytes && Array.isArray(digest.untracked)) {
+    for (const entry of digest.untracked) {
+      if (digestSize() <= limits.totalBytes) break;
+      if (!entry.content) continue;
+      entry.content = "";
+      entry.truncated = true;
+      const marker = `untracked:${entry.path}`;
+      if (!digest.truncated.includes(marker)) digest.truncated.push(marker);
+    }
+  }
+  return digest;
+}
+
+/**
+ * Cap the untracked file list for the digest: at most untrackedMaxFiles
+ * entries carry content, within a shared untrackedTotalBytes budget. Files
+ * beyond the caps keep their path with a truncation marker so the summary can
+ * still mention them. Mutates entries in place and returns markers.
+ */
+function capUntrackedDigestEntries(untracked, limits = DIGEST_LIMITS) {
+  const markers = [];
+  let remainingBytes = limits.untrackedTotalBytes;
+  (Array.isArray(untracked) ? untracked : []).forEach((entry, index) => {
+    if (!entry.content) return;
+    if (index >= limits.untrackedMaxFiles || entry.content.length > remainingBytes) {
+      entry.content = "";
+      entry.truncated = true;
+      markers.push(`untracked:${entry.path}`);
+      return;
+    }
+    remainingBytes -= entry.content.length;
+  });
+  return markers;
+}
+
+async function readGitRawSafe(git, args) {
+  try {
+    return String(await git.raw(args) || "");
+  } catch (_error) {
+    return "";
+  }
+}
+
+/**
+ * Read one untracked file for the digest, capped to
+ * DIGEST_LIMITS.untrackedFileBytes. Binary files keep an empty content with a
+ * binary marker so the summary can still mention that the file was added.
+ */
+async function readUntrackedDigestFile(folderPath, filePath, limits = DIGEST_LIMITS) {
+  try {
+    const resolvedPath = resolveWorkingTreePath(folderPath, filePath);
+    const content = await fs.readFile(resolvedPath, "utf8");
+    if (isBinaryText(content.slice(0, 4096))) return { path: filePath, content: "", binary: true, truncated: false };
+    const truncated = content.length > limits.untrackedFileBytes;
+    return {
+      path: filePath,
+      content: truncated ? `${content.slice(0, limits.untrackedFileBytes)}\n...[file truncated]` : content,
+      binary: false,
+      truncated
+    };
+  } catch (_error) {
+    return { path: filePath, content: "", binary: false, truncated: false };
+  }
+}
+
+/**
+ * Collect the local-change digest used by the AI commit-summary feature:
+ * branch/upstream state, unpushed commits, staged/unstaged diffs, and
+ * untracked file contents - all size-capped. Read-only: runs no mutating git
+ * commands and never fetches.
+ */
+async function collectChangesDigest(git, folderPath) {
+  const status = await readGitStatus(git);
+  const tracking = status.tracking || "";
+  const truncated = [];
+
+  const capSection = (name, patch) => {
+    const capped = capDigestPatchText(patch);
+    if (capped.truncated) truncated.push(name);
+    return capped.text;
+  };
+
+  const unpushedLog = tracking
+    ? await readGitRawSafe(git, ["log", `${tracking}..HEAD`, "--date=short", "--pretty=format:%h%x1f%ad%x1f%an%x1f%s"])
+    : "";
+  const unpushedCommits = parseBranchActivityOutput(unpushedLog).map((entry) => ({
+    hash: entry.hash,
+    date: entry.date,
+    author: entry.author,
+    subject: entry.subject
+  }));
+
+  const untrackedPaths = status.files
+    .filter((file) => file.index === "?" || file.workingDir === "?")
+    .map((file) => normalizeGitPath(file.path));
+  const untracked = [];
+  for (const filePath of untrackedPaths) {
+    const entry = await readUntrackedDigestFile(folderPath, filePath);
+    if (entry.truncated) truncated.push(`untracked:${filePath}`);
+    untracked.push(entry);
+  }
+  capUntrackedDigestEntries(untracked).forEach((marker) => {
+    if (!truncated.includes(marker)) truncated.push(marker);
+  });
+
+  const digest = {
+    branch: status.branch,
+    tracking,
+    ahead: status.ahead,
+    behind: status.behind,
+    clean: status.files.length === 0,
+    commitScope: status.staged.length ? "staged" : "all",
+    unpushedCommits,
+    unpushedStat: tracking ? await readGitRawSafe(git, ["diff", "--stat", `${tracking}...HEAD`]) : "",
+    unpushedPatch: tracking ? capSection("unpushedPatch", await readGitRawSafe(git, ["diff", `${tracking}...HEAD`])) : "",
+    stagedStat: await readGitRawSafe(git, ["diff", "--cached", "--stat"]),
+    stagedPatch: capSection("stagedPatch", await readGitRawSafe(git, ["diff", "--cached"])),
+    unstagedStat: await readGitRawSafe(git, ["diff", "--stat"]),
+    unstagedPatch: capSection("unstagedPatch", await readGitRawSafe(git, ["diff"])),
+    untracked,
+    truncated
+  };
+  return enforceDigestTotalBudget(digest);
+}
+
+async function readStashes(git) {
+  const stashes = parseStashListOutput(await git.raw(["stash", "list"]));
+  for (const stash of stashes) {
+    try {
+      stash.files = parseStashFilesOutput(await git.raw(["stash", "show", "--name-status", stash.ref]));
+    } catch (_error) {
+      stash.files = [];
+    }
+  }
+  return stashes;
+}
+
+async function runRequest(request) {
+  const git = createDelayedGitClient(simpleGit({ baseDir: request.folderPath, binary: "git" }));
+  const files = normalizeFiles(request.files);
+
+  if (request.action === "status") {
+    const isRepo = await git.checkIsRepo();
+    if (!isRepo) return { action: request.action, isRepo: false, status: formatStatus({ files: [] }) };
+    return { action: request.action, isRepo: true, status: await readGitStatus(git) };
+  }
+
+  if (!(await git.checkIsRepo())) throw new Error("The opened folder is not a Git repository.");
+
+  if (request.action === "stashList") {
+    return { action: request.action, isRepo: true, stashes: await readStashes(git) };
+  }
+
+  if (request.action === "changesDigest") {
+    return { action: request.action, isRepo: true, digest: await collectChangesDigest(git, request.folderPath) };
+  }
+
+  if (request.action === "resetToRemote") {
+    const branch = normalizeBranchName(request.branch || "main");
+    await git.raw(["switch", "-f", branch]);
+    await git.fetch("origin");
+    await git.raw(["reset", "--hard", `origin/${branch}`]);
+    await git.raw(["clean", "-fd"]);
+    return { action: request.action, isRepo: true, status: await readGitStatus(git) };
+  }
+
+  if (request.action === "compareFile") {
+    const scope = getCompareScope(request.scope);
+    const filePath = normalizeGitPath(request.filePath);
+    const originalPath = normalizeGitPath(request.originalPath) || filePath;
+    if (!filePath) throw new Error("Git file path is required.");
+    const leftContent = scope === "staged"
+      ? await readGitSnapshot(git, "HEAD", originalPath)
+      : await readGitSnapshot(git, "", originalPath);
+    const rightContent = scope === "staged"
+      ? await readGitSnapshot(git, "", filePath)
+      : await readWorkingTreeSnapshot(request.folderPath, filePath);
+    assertTextSnapshot(leftContent, filePath);
+    assertTextSnapshot(rightContent, filePath);
+    return {
+      action: request.action,
+      isRepo: true,
+      compare: createCompareDescriptor(request.folderPath, filePath, scope, leftContent, rightContent)
+    };
+  }
+
+  if (request.action === "compareConflictFile") {
+    const filePath = normalizeGitPath(request.filePath);
+    if (!filePath) throw new Error("Git file path is required.");
+    const leftContent = await readGitSnapshot(git, ":3", filePath);
+    const rightContent = await readWorkingTreeSnapshot(request.folderPath, filePath);
+    assertTextSnapshot(leftContent, filePath);
+    assertTextSnapshot(rightContent, filePath);
+    return {
+      action: request.action,
+      isRepo: true,
+      compare: createConflictCompareDescriptor(request.folderPath, filePath, leftContent, rightContent)
+    };
+  }
+
+  if (request.action === "compareStashFile") {
+    const stashRef = normalizeStashRef(request.stashRef);
+    const filePath = normalizeGitPath(request.filePath);
+    const originalPath = normalizeGitPath(request.originalPath);
+    if (!filePath) throw new Error("Git file path is required.");
+    const leftContent = await readGitSnapshot(git, stashRef, filePath);
+    const rightContent = await readWorkingTreeSnapshot(request.folderPath, filePath);
+    assertTextSnapshot(leftContent, filePath);
+    assertTextSnapshot(rightContent, filePath);
+    return {
+      action: request.action,
+      isRepo: true,
+      compare: createStashCompareDescriptor(request.folderPath, stashRef, filePath, originalPath, leftContent, rightContent)
+    };
+  }
+
+  if (request.action === "branchList") {
+    try {
+      await git.raw(["fetch", "--prune"]);
+    } catch (_error) {
+      await git.fetch();
+    }
+    const localBranches = parseLocalBranchListOutput(await git.raw(["branch", "--format=%(refname:short)|%(upstream:short)|%(HEAD)|%(committerdate:iso8601)|%(objectname:short)"]));
+    const remoteBranches = parseRemoteBranchListOutput(await git.raw(["branch", "-r", "--format=%(refname:short)|%(committerdate:iso8601)|%(objectname:short)"]));
+    const tags = parseTagListOutput(await git.raw(["tag", "--sort=-creatordate", "--format=%(refname:short)|%(creatordate:iso8601)|%(objectname:short)"]));
+    const currentBranch = localBranches.find((branch) => branch.current)?.name || "";
+    const branches = createBranchList(localBranches, remoteBranches, currentBranch);
+    return { action: request.action, isRepo: true, branches, tags };
+  }
+
+  if (request.action === "switchBranch") {
+    if (request.remoteBranch) await git.raw(["switch", "--track", normalizeRemoteBranchName(request.remoteBranch)]);
+    else await git.raw(["switch", normalizeBranchName(request.branch)]);
+    return { action: request.action, isRepo: true, status: await readGitStatus(git) };
+  }
+
+  if (request.action === "branchCreate") {
+    await git.raw(["switch", "-c", normalizeBranchName(request.branch)]);
+    return { action: request.action, isRepo: true, status: await readGitStatus(git) };
+  }
+
+  if (request.action === "branchRename") {
+    await git.raw(["branch", "-m", normalizeBranchName(request.branch), normalizeBranchName(request.newBranch)]);
+    return { action: request.action, isRepo: true, status: await readGitStatus(git) };
+  }
+
+  if (request.action === "branchPush") {
+    await git.raw(["push", "-u", "origin", normalizeBranchName(request.branch)]);
+    return { action: request.action, isRepo: true, status: await readGitStatus(git) };
+  }
+
+  if (request.action === "branchDeleteLocal") {
+    await git.raw(["branch", "-d", normalizeBranchName(request.branch)]);
+    return { action: request.action, isRepo: true, status: await readGitStatus(git) };
+  }
+
+  if (request.action === "branchDeleteRemote") {
+    const remoteBranch = splitRemoteBranchName(request.remoteBranch || request.branch);
+    await git.raw(["push", remoteBranch.remote, "--delete", remoteBranch.branch]);
+    return { action: request.action, isRepo: true, status: await readGitStatus(git) };
+  }
+
+  if (request.action === "branchActivity") {
+    const ref = normalizeBranchName(request.ref || request.branch || request.remoteBranch);
+    const limit = normalizeBranchActivityLimit(request.activityLimit);
+    const skip = normalizeBranchActivitySkip(request.activitySkip);
+    const entries = parseBranchActivityOutput(await git.raw(["log", `--skip=${skip}`, "-n", String(limit + 1), "--date=relative", "--pretty=format:%h%x1f%ad%x1f%an%x1f%s", ref]));
+    return { action: request.action, isRepo: true, activity: entries.slice(0, limit), hasMore: entries.length > limit };
+  }
+
+  if (request.action === "tagCreate") {
+    await git.raw(["tag", normalizeTagName(request.tag)]);
+    return { action: request.action, isRepo: true, status: await readGitStatus(git) };
+  }
+
+  if (request.action === "tagDelete") {
+    await git.raw(["tag", "-d", normalizeTagName(request.tag)]);
+    return { action: request.action, isRepo: true, status: await readGitStatus(git) };
+  }
+
+  if (request.action === "fetch") await git.fetch();
+  if (request.action === "pull") await git.pull();
+  if (request.action === "push") await git.push();
+  if (request.action === "stage") {
+    if (!files.length) throw new Error("Select files to stage.");
+    await git.add(files);
+  }
+  if (request.action === "unstage") {
+    if (!files.length) throw new Error("Select files to unstage.");
+    await git.reset(["--", ...files]);
+  }
+  if (request.action === "discardChanges") {
+    if (!files.length) throw new Error("Select files to discard.");
+    const groups = getDiscardFileGroups(await readGitStatus(git), files);
+    if (groups.conflicted.length) await git.raw(["restore", "--source=HEAD", "--staged", "--worktree", "--", ...groups.conflicted]);
+    if (groups.tracked.length) await git.raw(["restore", "--worktree", "--", ...groups.tracked]);
+    if (groups.untracked.length) await git.raw(["clean", "-fd", "--", ...groups.untracked]);
+    return {
+      action: request.action,
+      isRepo: true,
+      status: await readGitStatus(git),
+      discardedTracked: groups.tracked,
+      discardedUntracked: groups.untracked,
+      discardedConflicted: groups.conflicted
+    };
+  }
+  if (request.action === "stashCreate") {
+    const message = String(request.message || "").trim();
+    if (!files.length) throw new Error("Select files to stash.");
+    const args = ["stash", "push", "--include-untracked", "--keep-index"];
+    if (message) args.push("-m", message);
+    await git.raw([...args, "--", ...files]);
+  }
+  if (request.action === "stashPop") {
+    await git.raw(["stash", "pop", normalizeStashRef(request.stashRef)]);
+  }
+  if (request.action === "stashDrop") {
+    const stashRefs = sortStashRefsForDrop(request.stashRefs);
+    if (!stashRefs.length) throw new Error("Select stashes to drop.");
+    for (const stashRef of stashRefs) await git.raw(["stash", "drop", stashRef]);
+  }
+  if (request.action === "commit") {
+    const message = String(request.message || "").trim();
+    if (!message) throw new Error("Commit message is required.");
+    await git.commit(message);
+  }
+
+  const response = { action: request.action, isRepo: true, status: await readGitStatus(git) };
+  if (request.action === "stashCreate" || request.action === "stashPop" || request.action === "stashDrop") response.stashes = await readStashes(git);
+  return response;
+}
+
+async function main() {
+  try {
+    const request = decodeRequest(process.argv[2]);
+    const response = await runRequest(request);
+    process.stdout.write(JSON.stringify({ ok: true, ...response }));
+  } catch (error) {
+    logGitBridgeError(error);
+    process.stdout.write(JSON.stringify({ ok: false, error: error?.message || String(error) }));
+    process.exitCode = 1;
+  }
+}
+
+if (require.main === module) {
+  main();
+}
+
+module.exports = {
+  decodeRequest,
+  formatStatus,
+  readGitStatus,
+  normalizeFiles,
+  normalizeBranchName,
+  normalizeRemoteBranchName,
+  splitRemoteBranchName,
+  parseLocalBranchListOutput,
+  parseRemoteBranchListOutput,
+  parseBranchActivityOutput,
+  parseTagListOutput,
+  normalizeBranchActivityLimit,
+  normalizeBranchActivitySkip,
+  createBranchList,
+  normalizeTagName,
+  normalizeStashRef,
+  normalizeStashRefs,
+  parseStashFilesOutput,
+  parseStashListOutput,
+  sortStashRefsForDrop,
+  runRequest,
+  DIGEST_LIMITS,
+  capDigestPatchText,
+  capUntrackedDigestEntries,
+  collectChangesDigest,
+  enforceDigestTotalBudget,
+};

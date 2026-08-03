@@ -1,0 +1,154 @@
+const assert = require("node:assert/strict");
+const fs = require("node:fs");
+const path = require("node:path");
+const test = require("node:test");
+
+const panelSource = fs.readFileSync(path.resolve(__dirname, "../resources/js/ai-companion/panel.js"), "utf8");
+const indexSource = fs.readFileSync(path.resolve(__dirname, "../resources/index.html"), "utf8");
+
+test("AI Companion persists chats as date-nested chat folders with ordered task files", () => {
+  assert.match(panelSource, /deps\.joinPath\(companionDir, "chats"\)/);
+  assert.match(panelSource, /function getChatStorageDateParts\(value = Date\.now\(\)\)/);
+  assert.match(panelSource, /function joinStoragePath\(\.\.\.parts\)/);
+  assert.match(panelSource, /return joinStoragePath\(chatsDir, dateParts\.year, dateParts\.month, dateParts\.day\)/);
+  assert.match(panelSource, /return dateDir && chat\?\.id \? deps\.joinPath\(dateDir, chat\.id\) : ""/);
+  assert.match(panelSource, /await ensureProfileDirectory\(joinStoragePath\(chatsDir, dateParts\.year\)\)/);
+  assert.match(panelSource, /await ensureProfileDirectory\(joinStoragePath\(chatsDir, dateParts\.year, dateParts\.month\)\)/);
+  assert.match(panelSource, /await ensureProfileDirectory\(dateDir\)/);
+  assert.match(panelSource, /return `chat_\$\{createStorageTimestamp\(createdAt\)\}_\$\{createStorageSuffix\(\)\}`/);
+  assert.match(panelSource, /return `task_\$\{padTaskSequence\(sequence\)\}_\$\{createStorageTimestamp\(createdAt\)\}_\$\{createStorageSuffix\(\)\}`/);
+  assert.match(panelSource, /fileName: `\$\{id\}\.json`/);
+  assert.match(panelSource, /sort\(compareAgentTaskIndexItems\)/);
+  assert.match(panelSource, /readLatestChatIndex/);
+  assert.match(panelSource, /readSavedChatIndexes/);
+  assert.match(panelSource, /function getChatContextRestoreTotals\(chat, tasks = \[\]\)/);
+  assert.match(panelSource, /return \{ \.\.\.tokenTotals, requestCount \}/);
+  assert.match(panelSource, /chatIndex\.tasks\.length \? chatIndex : null/);
+});
+
+test("AI Companion keeps a legacy flat task fallback while moving new saves to chats", () => {
+  assert.match(panelSource, /deps\.joinPath\(profileDir, "companion", "agent", "tasks"\)/);
+  assert.match(panelSource, /readLegacyAgentTaskIndex/);
+  assert.match(panelSource, /storage: "legacy"/);
+  assert.match(panelSource, /getLegacyAgentTaskFilePath/);
+});
+
+test("AI Companion previous chat dropdown uses date-nested saved non-empty chat indexes", () => {
+  assert.match(indexSource, /id="ai-companion-chat-select"/);
+  assert.match(panelSource, /const CHAT_HISTORY_SELECT_LIMIT = 25/);
+  assert.match(panelSource, /async function readDateNestedChatEntries\(chatsDir\)/);
+  assert.match(panelSource, /isChatDateDirectoryEntry\(entry, \/\^\\d\{4\}\$\/\)/);
+  assert.match(panelSource, /isChatDateDirectoryEntry\(entry, \/\^\\d\{2\}\$\/\)/);
+  assert.match(panelSource, /chatEntries\.push\(\{ id, path: joinStoragePath\(dayDir, id\) \}\)/);
+  assert.match(panelSource, /readChatIndexById\(entry\.id, entry\.path\)/);
+  assert.doesNotMatch(panelSource, /\.filter\(\(entry\) => \/\^chat_\/\.test\(getDirectoryEntryName\(entry\)\)\)\s*\.sort\(\(a, b\) => getDirectoryEntryName\(b\)\.localeCompare\(getDirectoryEntryName\(a\)\)\);\s*const chats = \[\]/);
+  assert.match(panelSource, /const result = chats\.sort\(compareChatIndexesNewestFirst\)\.slice\(0, limit\)/);
+  assert.match(panelSource, /logChatHistoryDebug\("refresh completed"/);
+  assert.match(panelSource, /chatIndex\.tasks\.length \? chatIndex : null/);
+});
+
+test("AI Companion previous chat dropdown derives compact display names", () => {
+  assert.match(panelSource, /function getChatDisplayName\(chat\)/);
+  assert.match(panelSource, /function stripChatDisplayPrefix\(text\)/);
+  assert.match(panelSource, /replace\(\/\^This Chat\\s\*\[-:\]\\s\*\/i, ""\)/);
+  assert.match(panelSource, /title && title !== "Chat"/);
+  assert.match(panelSource, /const taskTitle = task\?\.title \|\| task\?\.prompt/);
+  assert.match(panelSource, /return `Chat \$\{date\.getFullYear\(\)\}-\$\{pad\(date\.getMonth\(\) \+ 1\)\}-\$\{pad\(date\.getDate\(\)\)\} \$\{pad\(date\.getHours\(\)\)\}:\$\{pad\(date\.getMinutes\(\)\)\}`/);
+  assert.match(panelSource, /singleLine\.length > 48/);
+  assert.match(panelSource, /function formatChatUpdatedTooltip\(chat\)/);
+  assert.match(panelSource, /Last updated:/);
+});
+
+test("AI Companion previous chat selection saves and visually replaces the active chat", () => {
+  assert.match(panelSource, /async function switchToSavedChat\(chatId, selectedChatIndex = null\)/);
+  assert.match(panelSource, /void switchToSavedChat\(chat\.id, chat\)/);
+  assert.match(panelSource, /await saveVisibleAgentEntries\(\)/);
+  assert.match(panelSource, /const chatIndex = selectedChatIndex\?\.id === chatId \? selectedChatIndex : await readChatIndexById\(chatId\)/);
+  assert.match(panelSource, /await loadChatIntoPanel\(chatIndex\)/);
+  assert.match(panelSource, /function clearToolLog\(\)/);
+  assert.match(panelSource, /agentEntries = \[\]/);
+  assert.match(panelSource, /for \(const item of agentTaskIndex\)[\s\S]*renderSavedAgentTask\(record, false\)/);
+});
+test("AI Companion previous chat dropdown exposes per-chat actions", () => {
+  assert.match(panelSource, /className = "ai-companion-chat-menu-title"/);
+  assert.match(panelSource, /className = "ai-companion-chat-action-toggle"/);
+  assert.match(panelSource, /bi bi-three-dots-vertical/);
+  assert.match(panelSource, /className = "ai-companion-chat-action-menu"/);
+  assert.match(panelSource, /dataset\.aiCompanionChatActionMenu = "true"/);
+  assert.match(panelSource, /document\.body\?\.appendChild\(actionMenu\)/);
+  assert.match(panelSource, /function removeChatActionMenus\(\)/);
+  assert.match(panelSource, /createActionItem\("Rename Chat", renameSavedChat\)/);
+  assert.match(panelSource, /createActionItem\("Delete Chat", deleteSavedChat, "danger"\)/);
+  assert.match(panelSource, /createActionItem\("Show Chat Folder", showSavedChatFolder\)/);
+  assert.match(panelSource, /function closeChatActionMenu\(\)/);
+  assert.match(panelSource, /if \(!event\.target\?\.closest\?\.\("\.ai-companion-chat-actions"\)\) closeChatActionMenu\(\)/);
+});
+
+test("AI Companion chat actions rename, delete, and reveal saved chat storage", () => {
+  assert.match(panelSource, /async function writeChatIndexTitle\(chat, title\)/);
+  assert.match(panelSource, /const updatedPayload = \{ \.\.\.payload, title: nextTitle \}/);
+  assert.match(panelSource, /await deps\.Neutralino\.filesystem\.writeFile\(indexPath, JSON\.stringify\(updatedPayload, null, 2\)\)/);
+  assert.match(panelSource, /return deps\.confirm\(message, \{ title: "Delete Chat", confirmLabel: "Delete Chat", confirmVariant: "danger" \}\)/);
+  assert.match(panelSource, /This operation cannot be undone/);
+  assert.match(panelSource, /You will lose all text, prompts, attached files, and pasted images included in this chat/);
+  assert.match(panelSource, /async function deleteSavedChatStorage\(chat\)/);
+  assert.match(panelSource, /await deps\.Neutralino\.filesystem\.remove\(chatDir\)/);
+  assert.match(panelSource, /if \(wasActive\) resetDeletedActiveChat\(\)/);
+  assert.match(panelSource, /async function showSavedChatFolder\(chat\)/);
+  assert.match(panelSource, /await deps\.openPathInExplorer\(chatDir\)/);
+});
+test("AI Companion builds same-chat conversation history for new requests", () => {
+  assert.match(panelSource, /const CONVERSATION_HISTORY_TURN_LIMIT = 12/);
+  assert.match(panelSource, /const CONVERSATION_HISTORY_MESSAGE_MAX_CHARS = 4000/);
+  assert.match(panelSource, /function buildConversationHistory\(excludedEntry = null\)/);
+  assert.match(panelSource, /record\?\.status === "interrupted" \|\| record\?\.status === "running"/);
+  assert.match(panelSource, /getVisibleAgentTaskRecord\(item\.id\) \|\| await readAgentTaskRecord\(item\)/);
+  assert.match(panelSource, /event\?\.type === "chat-response" && event\.isError !== true/);
+  assert.match(panelSource, /event\?\.type === "agent-summary"/);
+  assert.match(panelSource, /event\.finalResponse \|\| event\.outcome/);
+  assert.match(panelSource, /const conversationHistory = await buildConversationHistory\(existingEntry\)/);
+  assert.match(panelSource, /const requestPayload = \{/);
+  assert.match(panelSource, /workspaceRoot: deps\.getWorkspaceRoot\(\)/);
+  assert.match(panelSource, /conversationHistory,/);
+  assert.match(panelSource, /savedIntentContract: savedIntentState\?\.contract \|\| null/);
+  assert.match(panelSource, /priorIntentContract: priorIntentState\?\.contract \|\| null/);
+  assert.match(panelSource, /executionKind === "resume" && Number\.isInteger\(resumedTurnIndex\)/);
+  assert.match(panelSource, /attachments: normalizeAttachmentReferences\(attachments\)/);
+});
+
+
+test("AI Companion persists task-level changed file summaries", () => {
+  assert.ok(panelSource.includes("function buildTaskChangesFromSummary(summary = {})"));
+  assert.ok(panelSource.includes("activeAgentEntry.record.changes = changes"));
+  assert.ok(panelSource.includes("savedEvent.changedFiles = changes.files"));
+  assert.ok(panelSource.includes("function getTaskChanges(record = {})"));
+  assert.ok(panelSource.includes('event?.type === "agent-summary"'));
+});
+
+test("AI Companion persists M3 completion evidence and assessment in task schema v3", () => {
+  assert.match(panelSource, /version: Math\.max\(3, Number\(savedRecord\.version\) \|\| 1\)/);
+  assert.match(panelSource, /version: 3/);
+  assert.ok(panelSource.includes('savedEvent.type === "completion-assessment"'));
+  assert.ok(panelSource.includes("activeAgentEntry.record.completionAssessment = savedEvent.assessment || null"));
+  assert.ok(panelSource.includes("activeAgentEntry.record.evidenceLedger = Array.isArray(savedEvent.evidenceLedger) ? savedEvent.evidenceLedger : []"));
+  assert.ok(panelSource.includes("completionAssessment: null"));
+  assert.ok(panelSource.includes("evidenceLedger: []"));
+});
+
+test("AI Companion persists M4 experiment assignment, feedback, and evaluation data", () => {
+  assert.match(panelSource, /chat\.intentExperiment = intentExperiment\.assignIntentExperiment/);
+  assert.match(panelSource, /getCurrentSettings\(\)\.intentContractsEnabled === true/);
+  assert.match(panelSource, /intentExperiment: source\.intentExperiment/);
+  assert.match(panelSource, /if \(settings\.intentContractsEnabled === true && !chat\.intentExperiment\)/);
+  assert.match(panelSource, /record\.clarificationFeedback/);
+  assert.match(panelSource, /record\.intentEvaluation/);
+  assert.match(panelSource, /createMarkdownViewerIntentEvaluationLog/);
+});
+
+test("AI Companion exposes a task-level Changes inspector section", () => {
+  assert.ok(indexSource.includes('id="ai-companion-workspace-changes"'));
+  assert.ok(indexSource.includes('data-ai-companion-inspector-section="changes"'));
+  assert.ok(panelSource.includes('const taskChangesPanel = panel.querySelector("#ai-companion-workspace-changes")'));
+  assert.ok(panelSource.includes("function renderTaskChangesPanel(record = null)"));
+  assert.ok(panelSource.includes("openActivityCompare(file.compare)"));
+});

@@ -1,0 +1,270 @@
+/* Built-in hex editor managed-tab layout. */
+.tab-view[data-tab-view-kind="hex-editor"] {
+  overflow: hidden;
+}
+
+.hex-editor {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  width: 100%;
+  min-width: 0;
+  height: 100%;
+  min-height: 0;
+  color: var(--text-color, #24292f);
+  background: var(--editor-bg, #fff);
+}
+
+.hex-editor-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  flex-wrap: wrap;
+  padding: 0.55rem 0.7rem;
+  border-bottom: 1px solid var(--border-color, #d0d7de);
+  background: var(--toolbar-bg, var(--sidebar-bg, #f6f8fa));
+}
+
+.hex-editor-file,
+.hex-editor-search,
+.hex-editor-go-to {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.hex-editor-file {
+  min-width: 12rem;
+  margin-right: auto;
+}
+
+.hex-editor-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 20rem;
+}
+
+.hex-editor-meta {
+  color: var(--muted-text-color, #57606a);
+  font-size: 0.78rem;
+  white-space: nowrap;
+}
+
+.hex-editor-toolbar input,
+.hex-editor-toolbar select,
+.hex-editor-button {
+  min-height: 2rem;
+  border: 1px solid var(--border-color, #d0d7de);
+  border-radius: 0.35rem;
+  color: inherit;
+  background: var(--input-bg, var(--editor-bg, #fff));
+  font: inherit;
+}
+
+.hex-editor-toolbar input {
+  padding: 0.25rem 0.5rem;
+}
+
+.hex-editor-search-input {
+  width: 10rem;
+}
+
+.hex-editor-offset-input {
+  width: 6.5rem;
+}
+
+.hex-editor-button {
+  padding: 0.25rem 0.55rem;
+  cursor: pointer;
+}
+
+.hex-editor-button:hover:not(:disabled) {
+  background: var(--hover-bg, rgba(127, 127, 127, 0.14));
+}
+
+.hex-editor-button:disabled {
+  cursor: default;
+  opacity: 0.45;
+}
+
+.hex-editor-case-label {
+  white-space: nowrap;
+  font-size: 0.78rem;
+}
+
+.hex-editor-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 20rem;
+  flex: 1;
+  min-height: 0;
+}
+
+.hex-editor-grid-panel {
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.hex-editor-column-header,
+.hex-editor-row {
+  display: grid;
+  grid-template-columns: 8rem minmax(31rem, 1fr) 17rem;
+  align-items: center;
+  font-family: var(--font-monospace, "Cascadia Code", "Consolas", monospace);
+  font-size: 0.82rem;
+  line-height: 1;
+}
+
+.hex-editor-column-header {
+  flex: 0 0 2rem;
+  min-width: 56rem;
+  color: var(--muted-text-color, #57606a);
+  border-bottom: 1px solid var(--border-color, #d0d7de);
+  background: var(--toolbar-bg, var(--sidebar-bg, #f6f8fa));
+}
+
+.hex-editor-offset-header,
+.hex-editor-row-offset {
+  padding-left: 0.7rem;
+}
+
+.hex-editor-hex-header {
+  word-spacing: 0.4rem;
+}
+
+.hex-editor-scroll {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  outline: none;
+}
+
+.hex-editor-scroll:focus-visible {
+  box-shadow: inset 0 0 0 2px var(--accent-color, #0969da);
+}
+
+.hex-editor-spacer {
+  position: relative;
+  min-width: 56rem;
+}
+
+.hex-editor-rows {
+  position: absolute;
+  inset: 0;
+}
+
+.hex-editor-row {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 24px;
+}
+
+.hex-editor-row:nth-child(even) {
+  background: color-mix(in srgb, var(--editor-bg, #fff) 94%, var(--text-color, #24292f));
+}
+
+.hex-editor-row-hex,
+.hex-editor-row-ascii {
+  display: grid;
+  grid-template-columns: repeat(16, 1.7rem);
+  align-items: center;
+}
+
+.hex-editor-row-ascii {
+  grid-template-columns: repeat(16, 1rem);
+  padding-left: 0.55rem;
+  border-left: 1px solid var(--border-color, #d0d7de);
+}
+
+.hex-editor-byte {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 1.35rem;
+  border-radius: 0.18rem;
+  cursor: default;
+  user-select: none;
+}
+
+.hex-editor-byte.selected {
+  color: var(--selection-text-color, #fff);
+  background: var(--selection-bg, #0969da);
+}
+
+.hex-editor-byte.active {
+  box-shadow: inset 0 0 0 2px var(--accent-color, #cf222e);
+}
+
+.hex-editor-inspector {
+  overflow: auto;
+  padding: 0.8rem;
+  border-left: 1px solid var(--border-color, #d0d7de);
+  background: var(--sidebar-bg, #f6f8fa);
+}
+
+[data-theme="dark"] .hex-editor-inspector {
+  color: var(--text-color);
+  background: var(--panel-bg);
+}
+
+.hex-editor-inspector h3 {
+  margin: 0 0 0.65rem;
+  font-size: 0.95rem;
+}
+
+.hex-editor-inspector dl {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0.4rem 0.7rem;
+  margin: 0;
+  font-size: 0.78rem;
+}
+
+.hex-editor-inspector dt {
+  color: var(--muted-text-color, #57606a);
+  font-weight: 500;
+}
+
+.hex-editor-inspector dd {
+  margin: 0;
+  font-family: var(--font-monospace, "Cascadia Code", "Consolas", monospace);
+}
+
+.hex-editor-status {
+  flex: 0 0 auto;
+  min-height: 1.6rem;
+  padding: 0.25rem 0.7rem;
+  color: var(--muted-text-color, #57606a);
+  border-top: 1px solid var(--border-color, #d0d7de);
+  font-size: 0.75rem;
+}
+
+.hex-editor-status.error {
+  color: var(--danger-color, #cf222e);
+}
+
+.hex-editor-missing {
+  margin: auto;
+  max-width: 32rem;
+  padding: 2rem;
+  text-align: center;
+}
+
+@media (max-width: 900px) {
+  .hex-editor-body {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .hex-editor-inspector {
+    display: none;
+  }
+
+  .hex-editor-file {
+    width: 100%;
+  }
+}

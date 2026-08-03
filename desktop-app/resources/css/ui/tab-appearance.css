@@ -1,0 +1,88 @@
+/* Canonical appearance for user-selectable outer tabs. AI Companion tabs are intentionally excluded. */
+body:not(.tab-style-legacy) .tab-item.source-file-tab {
+  text-transform: none;
+}
+
+body.tab-style-legacy {
+  --legacy-outer-tab-strip-height: 36px;
+  --legacy-outer-tab-height: 30px;
+  --legacy-outer-tab-padding: 0 10px 0 12px;
+  --legacy-outer-tab-border: 1px solid var(--border-color);
+  --legacy-outer-tab-radius: 6px 6px 0 0;
+  --legacy-outer-tab-background: var(--button-bg);
+  --legacy-outer-tab-hover-background: var(--button-hover);
+  --legacy-outer-tab-selected-background: var(--bg-color);
+  --legacy-outer-tab-color: var(--text-color);
+  --legacy-outer-tab-selected-color: var(--accent-color);
+  --legacy-outer-tab-font-size: 13px;
+  --legacy-outer-tab-font-weight: 400;
+  --legacy-outer-tab-opacity: 0.7;
+  --legacy-outer-tab-hover-opacity: 0.9;
+}
+
+body.tab-style-legacy .tab-bar,
+body.tab-style-legacy .bottom-panel-header,
+body.tab-style-legacy .sidebar-lower-tabs {
+  min-height: var(--legacy-outer-tab-strip-height);
+  padding: 0 4px;
+  background: var(--header-bg);
+}
+
+body.tab-style-legacy .tab-bar {
+  height: var(--legacy-outer-tab-strip-height);
+}
+
+body.tab-style-legacy .sidebar-lower-tabs {
+  flex-basis: var(--legacy-outer-tab-strip-height);
+}
+
+body.tab-style-legacy .tab-list,
+body.tab-style-legacy .bottom-panel-tab-list,
+body.tab-style-legacy .sidebar-lower-tab-list {
+  align-self: stretch;
+  align-items: flex-end;
+  gap: 0;
+}
+
+body.tab-style-legacy .tab-item,
+body.tab-style-legacy .bottom-panel-tab,
+body.tab-style-legacy .sidebar-lower-tab {
+  height: var(--legacy-outer-tab-height);
+  padding: var(--legacy-outer-tab-padding);
+  border: var(--legacy-outer-tab-border);
+  border-bottom: 0;
+  border-radius: var(--legacy-outer-tab-radius);
+  background: var(--legacy-outer-tab-background);
+  color: var(--legacy-outer-tab-color);
+  font-family: inherit;
+  font-size: var(--legacy-outer-tab-font-size);
+  font-style: normal;
+  font-weight: var(--legacy-outer-tab-font-weight);
+  line-height: normal;
+  text-transform: none;
+  letter-spacing: normal;
+  margin-right: 2px;
+  opacity: var(--legacy-outer-tab-opacity);
+}
+
+body.tab-style-legacy .tab-item:hover,
+body.tab-style-legacy .tab-item:focus-visible,
+body.tab-style-legacy .bottom-panel-tab:hover,
+body.tab-style-legacy .bottom-panel-tab:focus-visible,
+body.tab-style-legacy .sidebar-lower-tab:hover,
+body.tab-style-legacy .sidebar-lower-tab:focus-visible {
+  background: var(--legacy-outer-tab-hover-background);
+  color: var(--legacy-outer-tab-color);
+  opacity: var(--legacy-outer-tab-hover-opacity);
+}
+
+body.tab-style-legacy .tab-item.active,
+body.tab-style-legacy .bottom-panel-tab.active,
+body.tab-style-legacy .sidebar-lower-tab.active {
+  border-color: var(--border-color);
+  border-bottom: 1px solid var(--legacy-outer-tab-selected-background);
+  background: var(--legacy-outer-tab-selected-background);
+  color: var(--legacy-outer-tab-selected-color);
+  font-weight: var(--legacy-outer-tab-font-weight);
+  opacity: 1;
+}

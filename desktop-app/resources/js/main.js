@@ -1,0 +1,359 @@
+// This is just a sample app. You can structure your Neutralinojs app code as you wish.
+// This example app is written with vanilla JavaScript and HTML.
+// Feel free to use any frontend framework you like :)
+// See more details: https://neutralino.js.org/docs/how-to/use-a-frontend-library
+
+const MD_EDITOR_DESKTOP_VERSION = "10.1.0";
+const markdownViewerStartupPerf = window.markdownViewerStartupPerf || null;
+if (markdownViewerStartupPerf?.mark) {
+  markdownViewerStartupPerf.mark("desktop main.js loaded", {
+    mode: typeof NL_MODE !== "undefined" ? NL_MODE : null,
+    port: typeof NL_PORT !== "undefined" ? NL_PORT : null
+  });
+}
+
+/*
+    Function to display information about the Neutralino app.
+    This function updates the content of the 'info' element in the HTML
+    with details regarding the running Neutralino application, including
+    its ID, port, operating system, and version information.
+*/
+function showInfo() {
+  return `
+        ${NL_APPID} is running on port ${NL_PORT} inside ${NL_OS}
+        <br/><br/>
+        <span>server: v${NL_VERSION} . client: v${NL_CVERSION}</span>
+        `;
+}
+
+/*
+    Function to open the official Neutralino documentation in the default web browser.
+*/
+function openDocs() {
+  Neutralino.os.open("https://neutralino.js.org/docs");
+}
+
+/*
+    Function to open a tutorial video on Neutralino's official YouTube channel in the default web browser.
+*/
+function openTutorial() {
+  Neutralino.os.open("https://www.youtube.com/c/CodeZri");
+}
+
+async function stopLanguageServerProcessesBeforeExit() {
+  if (typeof window.markdownViewerStopLanguageServerProcessesBeforeExit === "function") {
+    await window.markdownViewerStopLanguageServerProcessesBeforeExit();
+  }
+}
+
+let desktopExitInProgress = false;
+
+async function exitDesktopApp() {
+  if (desktopExitInProgress) return;
+  if (typeof window.markdownViewerRequestApplicationExit === "function") {
+    await window.markdownViewerRequestApplicationExit();
+    return;
+  }
+  desktopExitInProgress = true;
+  await stopLanguageServerProcessesBeforeExit();
+  await saveDesktopWindowState();
+  Neutralino.app.exit();
+}
+
+const DESKTOP_WINDOW_STATE_KEY = "markdownViewerDesktopWindowState";
+const DEFAULT_DESKTOP_WINDOW_SIZE = Object.freeze({ width: 1400, height: 900 });
+const MIN_DESKTOP_WINDOW_SIZE = Object.freeze({ width: 900, height: 600 });
+const MAXIMIZED_SIZE_TOLERANCE = 16;
+const DESKTOP_STARTUP_REVEAL_TIMEOUT_MS = 2000;
+let saveDesktopWindowStateTimer = null;
+let desktopWindowShown = false;
+
+function normalizeDesktopWindowSize(size) {
+  const width = Math.round(Number(size && size.width) || 0);
+  const height = Math.round(Number(size && size.height) || 0);
+  if (width < MIN_DESKTOP_WINDOW_SIZE.width || height < MIN_DESKTOP_WINDOW_SIZE.height) return null;
+  if (width > 10000 || height > 10000) return null;
+  return { width, height };
+}
+
+function isLikelyMaximizedDesktopWindowSize(size) {
+  if (!size || typeof window === "undefined" || !window.screen) return false;
+  const screenWidth = Math.max(Number(window.screen.width) || 0, Number(window.screen.availWidth) || 0);
+  const screenHeight = Math.max(Number(window.screen.height) || 0, Number(window.screen.availHeight) || 0);
+  if (!screenWidth || !screenHeight) return false;
+  return size.width >= screenWidth - MAXIMIZED_SIZE_TOLERANCE
+    && size.height >= screenHeight - MAXIMIZED_SIZE_TOLERANCE;
+}
+
+async function centerDesktopWindow() {
+  try {
+    if (Neutralino.window?.center) await Neutralino.window.center();
+  } catch (error) {
+    console.warn("Could not center desktop window:", error);
+  }
+}
+
+async function restoreDesktopWindowState() {
+  if (!Neutralino.window || !Neutralino.storage) return;
+  try {
+    const rawState = await Neutralino.storage.getData(DESKTOP_WINDOW_STATE_KEY);
+    const savedState = JSON.parse(rawState || "{}");
+    const savedSize = normalizeDesktopWindowSize(savedState);
+    if (savedState && (savedState.maximized === true || isLikelyMaximizedDesktopWindowSize(savedSize))) {
+      if (Neutralino.window.maximize) await Neutralino.window.maximize();
+      return;
+    }
+    if (savedSize) {
+      await Neutralino.window.setSize(savedSize);
+      await centerDesktopWindow();
+      return;
+    }
+  } catch (error) {
+    const code = error && error.code;
+    if (code && code !== "NE_ST_NOSTKEX") {
+      console.warn("Could not restore desktop window size:", error);
+    }
+  }
+
+  try {
+    const currentSize = normalizeDesktopWindowSize(await Neutralino.window.getSize());
+    if (!currentSize) await Neutralino.window.setSize(DEFAULT_DESKTOP_WINDOW_SIZE);
+    await centerDesktopWindow();
+  } catch (error) {
+    console.warn("Could not apply default desktop window size:", error);
+  }
+}
+
+async function saveDesktopWindowState() {
+  if (!Neutralino.window || !Neutralino.storage) return;
+  try {
+    if (await Neutralino.window.isMinimized()) return;
+    const isMaximized = Neutralino.window.isMaximized && await Neutralino.window.isMaximized();
+    const currentSize = normalizeDesktopWindowSize(await Neutralino.window.getSize());
+    if (!currentSize && !isMaximized) return;
+    await Neutralino.storage.setData(DESKTOP_WINDOW_STATE_KEY, JSON.stringify({
+      ...(currentSize || {}),
+      maximized: Boolean(isMaximized)
+    }));
+  } catch (error) {
+    console.warn("Could not save desktop window size:", error);
+  }
+}
+
+function scheduleDesktopWindowStateSave() {
+  window.clearTimeout(saveDesktopWindowStateTimer);
+  saveDesktopWindowStateTimer = window.setTimeout(saveDesktopWindowState, 250);
+}
+
+async function setupDesktopWindowStatePersistence() {
+  if (NL_MODE !== "window") return;
+  markdownViewerStartupPerf?.mark?.("desktop window state restore start");
+  await restoreDesktopWindowState();
+  markdownViewerStartupPerf?.mark?.("desktop window state restore complete");
+  window.addEventListener("resize", scheduleDesktopWindowStateSave);
+  window.addEventListener("beforeunload", saveDesktopWindowState);
+  window.setTimeout(saveDesktopWindowState, 1000);
+}
+
+async function showDesktopWindowOnce() {
+  if (desktopWindowShown || NL_MODE !== "window" || !Neutralino.window?.show) return;
+  desktopWindowShown = true;
+  markdownViewerStartupPerf?.mark?.("desktop window show start");
+  try {
+    await Neutralino.window.show();
+    if (Neutralino.window.focus) await Neutralino.window.focus();
+    markdownViewerStartupPerf?.mark?.("desktop window show complete");
+  } catch (error) {
+    desktopWindowShown = false;
+    markdownViewerStartupPerf?.mark?.("desktop window show failed", { message: error?.message || String(error) });
+    console.warn("Could not show desktop window:", error);
+  }
+}
+
+function revealDesktopWindowWhenStartupShellReady() {
+  if (window.markdownViewerBootScreen?.shellReady) {
+    void showDesktopWindowOnce();
+  } else if (window.markdownViewerBootScreen?.onShellReady) {
+    window.markdownViewerBootScreen.onShellReady(function() {
+      void showDesktopWindowOnce();
+    });
+  } else {
+    window.addEventListener("markdownViewerStartupShellReady", function() {
+      void showDesktopWindowOnce();
+    }, { once: true });
+  }
+
+  window.setTimeout(function() {
+    void showDesktopWindowOnce();
+  }, DESKTOP_STARTUP_REVEAL_TIMEOUT_MS);
+}
+
+/*
+    Function to set up a system tray menu with options specific to the window mode.
+    This function checks if the application is running in window mode, and if so,
+    it defines the tray menu items and sets up the tray accordingly.
+*/
+function setTray() {
+  // Tray menu is only available in window mode
+  if (NL_MODE != "window") {
+    console.log("INFO: Tray menu is only available in the window mode.");
+    return;
+  }
+
+  // Define tray menu items
+  let tray = {
+    icon: "/resources/icons/trayIcon.png",
+    menuItems: [
+      { id: "VERSION", text: "Get version" },
+      { id: "SEP", text: "-" },
+      { id: "QUIT", text: "Quit" },
+    ],
+  };
+
+  // Set the tray menu
+  Neutralino.os.setTray(tray);
+}
+
+/*
+    Function to handle click events on the tray menu items.
+    This function performs different actions based on the clicked item's ID,
+    such as displaying version information or exiting the application.
+*/
+function onTrayMenuItemClicked(event) {
+  switch (event.detail.id) {
+    case "VERSION":
+      // Display version information
+      Neutralino.os.showMessageBox(
+        "Version information",
+        `MD-Editor: v${MD_EDITOR_DESKTOP_VERSION}`,
+      );
+      break;
+    case "QUIT":
+      // Exit the application
+      exitDesktopApp();
+      break;
+  }
+}
+
+/*
+    Function to handle the window close event by gracefully exiting the Neutralino application.
+*/
+async function onWindowClose() {
+  await exitDesktopApp();
+}
+
+
+function rememberInitialRecentFile(filePath) {
+  if (!filePath) return;
+
+  try {
+    const name = filePath.split(/[\\/]/).pop() || filePath;
+    const storageKey = "markdownViewerRecentFiles";
+    const recentItems = JSON.parse(localStorage.getItem(storageKey) || "[]");
+    const nextItem = {
+      name,
+      label: name,
+      path: filePath,
+      handleName: null,
+      updatedAt: Date.now()
+    };
+    const nextItems = [
+      nextItem,
+      ...recentItems.filter((item) => String(item && (item.path || item.handleName || item.name || item.label) || "").toLowerCase() !== filePath.toLowerCase())
+    ].slice(0, 10);
+    localStorage.setItem(storageKey, JSON.stringify(nextItems));
+  } catch (error) {
+    console.warn("Could not remember initial file:", error);
+  }
+}
+
+
+// Initialize Neutralino
+Neutralino.init();
+markdownViewerStartupPerf?.mark?.("Neutralino.init called");
+
+// Register event listeners
+Neutralino.events.on("trayMenuItemClicked", onTrayMenuItemClicked);
+Neutralino.events.on("windowClose", onWindowClose);
+
+// Conditional initialization: Set up system tray if not running on macOS
+Neutralino.events.on("ready", async () => {
+  markdownViewerStartupPerf?.mark?.("Neutralino ready event", {
+    mode: typeof NL_MODE !== "undefined" ? NL_MODE : null,
+    port: typeof NL_PORT !== "undefined" ? NL_PORT : null
+  });
+  revealDesktopWindowWhenStartupShellReady();
+  void setupDesktopWindowStatePersistence();
+	if (NL_OS != "Darwin") {
+	  // TODO: Fix https://github.com/neutralinojs/neutralinojs/issues/615
+	  setTimeout(() => setTray(), 500);
+	}
+});
+
+function isInitialMarkdownFilePath(filePath) {
+  return /\.(md|markdown)$/i.test(filePath || "");
+}
+
+function isInitialTextFilePath(filePath) {
+  return /\.(md|markdown|drawio|mdviewer-graph\.json|mdgraph\.json|json|txt|text|java|cs|css|js|ts|html|htm|xml|csv|ya?ml|toml|ini|log|properties|conf|sh|bash|py|rb|php|sql)$/i.test(filePath || "")
+    || /(^|[\/])(dockerfile|makefile|license|readme|changelog)$/i.test(filePath || "");
+}
+
+function isInitialDiagramFile(filePath, content) {
+  return /\.drawio$/i.test(filePath || "")
+    || (/\.xml$/i.test(filePath || "") && /^\s*(?:<\?xml[^>]*>\s*)?<(?:mxfile|mxGraphModel)\b/i.test(content || ""));
+}
+
+async function waitForInitialDocumentOpener() {
+  for (let attempt = 0; attempt < 200; attempt += 1) {
+    if (typeof window.markdownViewerOpenDocumentSourceFile === "function") {
+      return window.markdownViewerOpenDocumentSourceFile;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+  return null;
+}
+
+// Open text-based file passed as command-line argument (e.g. when double-clicking a .md or .txt file)
+(async function loadInitialFile() {
+  const args = Array.isArray(NL_ARGS) ? NL_ARGS : (() => { try { return JSON.parse(NL_ARGS); } catch(e) { return []; } })();
+  const filePath = args.find(a => typeof a === 'string' && isInitialTextFilePath(a));
+  if (!filePath) return;
+
+  try {
+    const content = await Neutralino.filesystem.readFile(filePath);
+    if (isInitialDiagramFile(filePath, content)) {
+      const openInitialDocument = await waitForInitialDocumentOpener();
+      if (openInitialDocument) {
+        await openInitialDocument({ name: filePath.split(/[\\/]/).pop(), path: filePath, content });
+        rememberInitialRecentFile(filePath);
+        return;
+      }
+    }
+
+    rememberInitialRecentFile(filePath);
+
+    function applyContent() {
+      const editor = document.getElementById('markdown-editor');
+      const dropzone = document.getElementById('dropzone');
+      if (!editor) return;
+      editor.value = content;
+      editor.dispatchEvent(new Event('input'));
+      if (isInitialMarkdownFilePath(filePath)) {
+        setTimeout(() => {
+          const splitButton = document.querySelector('.view-mode-btn[data-mode="split"], .mobile-view-mode-btn[data-mode="split"]');
+          if (splitButton) splitButton.click();
+        }, 0);
+      }
+      if (dropzone) dropzone.style.display = 'none';
+    }
+
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', applyContent);
+    } else {
+      setTimeout(applyContent, 0);
+    }
+  } catch (e) {
+    console.warn('Could not open initial file:', e);
+  }
+})();

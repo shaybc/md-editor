@@ -1,0 +1,31 @@
+{
+  "id": "chatcmpl-demo-agent-list-files-001",
+  "object": "chat.completion",
+  "created": 1782880000,
+  "model": "llama3.1",
+  "choices": [
+    {
+      "index": 0,
+      "message": {
+        "role": "assistant",
+        "content": "",
+        "tool_calls": [
+          {
+            "id": "demo-agent-list-files-1",
+            "type": "function",
+            "function": {
+              "name": "list_files",
+              "arguments": "{\"maxFiles\":160}"
+            }
+          }
+        ]
+      },
+      "finish_reason": "tool_calls"
+    }
+  ],
+  "usage": {
+    "prompt_tokens": 48,
+    "completion_tokens": 12,
+    "total_tokens": 60
+  }
+}

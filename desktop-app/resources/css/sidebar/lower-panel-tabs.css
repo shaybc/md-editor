@@ -1,0 +1,85 @@
+/* Shared lower-sidebar view host and tab strip. */
+.sidebar-dropzone-panel.sidebar-lower-panel {
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+  overflow: hidden;
+}
+
+.sidebar-lower-tabs {
+  flex: 0 0 34px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 8px 0 1px;
+  border-bottom: 1px solid var(--border-color);
+  background: var(--bg-color);
+}
+
+.sidebar-lower-tab-list {
+  align-self: stretch;
+  display: flex;
+  align-items: end;
+  gap: 2px;
+}
+
+.sidebar-lower-tabs[hidden],
+.sidebar-lower-view[hidden] {
+  display: none !important;
+}
+
+.sidebar-lower-tab {
+  height: 34px;
+  padding: 0 9px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  color: var(--text-muted, #8b949e);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+}
+
+.sidebar-lower-tab:hover,
+.sidebar-lower-tab:focus-visible {
+  color: var(--text-color);
+  outline: none;
+}
+
+.sidebar-lower-tab.active {
+  border-bottom-color: var(--accent-color);
+  color: var(--text-color);
+}
+
+.sidebar-lower-close {
+  width: 26px;
+  height: 26px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-muted, #8b949e);
+}
+
+.sidebar-lower-close:hover,
+.sidebar-lower-close:focus-visible {
+  background: var(--button-hover);
+  color: var(--text-color);
+  outline: none;
+}
+
+.sidebar-lower-view {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.sidebar-lower-dropzone-view {
+  padding: 10px;
+}
+
+.sidebar-lower-dropzone-view .dropzone {
+  box-sizing: border-box;
+}

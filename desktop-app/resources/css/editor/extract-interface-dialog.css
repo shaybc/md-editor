@@ -1,0 +1,197 @@
+.extract-interface-dialog-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 11000;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(0, 0, 0, 0.58);
+}
+
+.extract-interface-dialog-overlay[hidden],
+.extract-interface-dialog-panel [hidden] {
+  display: none !important;
+}
+
+.extract-interface-dialog-panel {
+  width: min(1040px, 94vw);
+  max-height: 90vh;
+  overflow: auto;
+  color: var(--text-color, #e8e8e8);
+  background: var(--panel-bg, #2d2d30);
+  border: 1px solid var(--border-color, #555);
+  border-radius: 7px;
+  box-shadow: 0 20px 55px rgba(0, 0, 0, 0.45);
+}
+
+.extract-interface-dialog-header,
+.extract-interface-dialog-footer,
+.extract-interface-members-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.extract-interface-dialog-header,
+.extract-interface-dialog-footer {
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border-color, #555);
+}
+
+.extract-interface-dialog-footer {
+  justify-content: flex-end;
+  border-top: 1px solid var(--border-color, #555);
+  border-bottom: 0;
+}
+
+.extract-interface-dialog-header h2,
+.extract-interface-diff h3 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.extract-interface-dialog-close {
+  border: 0;
+  color: inherit;
+  background: transparent;
+  font-size: 1.5rem;
+}
+
+.extract-interface-configuration,
+.extract-interface-preview,
+.extract-interface-applied {
+  padding: 16px;
+}
+
+.extract-interface-name-label {
+  display: grid;
+  grid-template-columns: max-content minmax(220px, 1fr);
+  align-items: center;
+  gap: 10px;
+}
+
+.extract-interface-name,
+.extract-interface-dialog-panel button {
+  color: inherit;
+  background: var(--input-bg, #1f1f1f);
+  border: 1px solid var(--border-color, #666);
+  border-radius: 3px;
+  padding: 6px 10px;
+}
+
+.extract-interface-dialog-panel button:disabled {
+  opacity: 0.5;
+}
+
+.extract-interface-validation {
+  min-height: 1.2em;
+  margin: 5px 0 8px;
+  color: var(--danger-color, #f48771);
+}
+
+.extract-interface-options {
+  display: grid;
+  gap: 7px;
+  margin: 0 0 14px;
+  padding: 10px 12px;
+  border: 1px solid var(--border-color, #555);
+}
+
+.extract-interface-dependent {
+  margin-left: 24px;
+}
+
+.extract-interface-members-heading {
+  margin-bottom: 8px;
+}
+
+.extract-interface-members-heading button + button {
+  margin-left: 6px;
+}
+
+.extract-interface-members {
+  min-height: 160px;
+  max-height: 300px;
+  overflow: auto;
+  border: 1px solid var(--border-color, #555);
+  background: var(--editor-bg, #1e1e1e);
+}
+
+.extract-interface-member {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  padding: 7px 10px;
+  font-family: var(--font-monospace, Consolas, monospace);
+}
+
+.extract-interface-member:hover,
+.extract-interface-file-list button[aria-selected="true"] {
+  background: var(--selection-bg, #094771);
+}
+
+.extract-interface-selection-summary {
+  margin: 8px 0 0;
+}
+
+.extract-interface-preview-layout {
+  display: grid;
+  grid-template-columns: minmax(180px, 25%) 1fr;
+  gap: 10px;
+  min-height: 480px;
+}
+
+.extract-interface-file-list {
+  overflow: auto;
+  border: 1px solid var(--border-color, #555);
+}
+
+.extract-interface-file-list button {
+  width: 100%;
+  border: 0;
+  border-radius: 0;
+  text-align: left;
+  overflow-wrap: anywhere;
+}
+
+.extract-interface-diff {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  min-width: 0;
+  border: 1px solid var(--border-color, #555);
+}
+
+.extract-interface-diff > div {
+  min-width: 0;
+  overflow: auto;
+}
+
+.extract-interface-diff > div + div {
+  border-left: 1px solid var(--border-color, #555);
+}
+
+.extract-interface-diff h3 {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--border-color, #555);
+}
+
+.extract-interface-diff pre {
+  min-height: 420px;
+  margin: 0;
+  padding: 10px;
+  white-space: pre;
+  tab-size: 4;
+}
+
+@media (max-width: 760px) {
+  .extract-interface-preview-layout,
+  .extract-interface-diff {
+    grid-template-columns: 1fr;
+  }
+
+  .extract-interface-diff > div + div {
+    border-left: 0;
+    border-top: 1px solid var(--border-color, #555);
+  }
+}

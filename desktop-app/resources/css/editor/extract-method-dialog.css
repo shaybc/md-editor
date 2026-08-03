@@ -1,0 +1,393 @@
+.extract-method-dialog-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 11000;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgba(0, 0, 0, 0.58);
+}
+
+.extract-method-dialog-overlay[hidden],
+.extract-method-dialog-panel [hidden] {
+  display: none !important;
+}
+
+.extract-method-dialog-panel {
+  width: min(480px, 94vw);
+  color: var(--text-color, #e5e7eb);
+  background: var(--panel-bg, #252732);
+  border: 1px solid var(--border-color, #555866);
+  border-radius: 6px;
+  box-shadow: 0 18px 45px rgba(0, 0, 0, 0.52);
+}
+
+.extract-method-preview-mode .extract-method-dialog-panel {
+  width: min(1290px, 96vw);
+  height: min(790px, 92vh);
+  display: flex;
+  flex-direction: column;
+}
+
+.extract-method-dialog-header {
+  display: flex;
+  align-items: center;
+  min-height: 34px;
+  padding: 0 8px;
+  color: inherit;
+  background: transparent;
+  border-bottom: 1px solid var(--border-color, #555866);
+}
+
+.extract-method-dialog-header h2 {
+  flex: 1;
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.extract-method-dialog-icon {
+  margin-right: 7px;
+  color: var(--accent-color, #6f42c1);
+  font-size: 18px;
+  transform: rotate(12deg);
+}
+
+.extract-method-dialog-close {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  color: inherit;
+  background: transparent;
+  font-size: 20px;
+}
+
+.extract-method-dialog-close:hover {
+  background: var(--button-bg, #343746);
+}
+
+.extract-method-configuration {
+  padding: 12px 11px 8px;
+}
+
+.extract-method-name-label {
+  display: grid;
+  grid-template-columns: 78px 1fr;
+  align-items: center;
+  gap: 8px;
+}
+
+.extract-method-name {
+  min-width: 0;
+  height: 25px;
+  box-sizing: border-box;
+  padding: 2px 5px;
+  color: inherit;
+  background: var(--input-bg, #1f212a);
+  border: 1px solid var(--border-color, #656978);
+  border-radius: 3px;
+  outline: none;
+}
+
+.extract-method-name:focus {
+  border-color: var(--accent-color, #6f42c1);
+  box-shadow: 0 0 0 1px var(--accent-color, #6f42c1);
+}
+
+.extract-method-validation {
+  min-height: 17px;
+  margin: 2px 0 4px 86px;
+  color: var(--danger-color, #f48771);
+  font-size: 12px;
+}
+
+.extract-method-options {
+  margin: 0 0 10px;
+  padding: 8px 10px 9px;
+  border: 1px solid var(--border-color, #555866);
+}
+
+.extract-method-options legend {
+  padding: 0 4px;
+}
+
+.extract-method-access-row,
+.extract-method-modifier-row {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 6px;
+}
+
+.extract-method-modifier-row {
+  grid-template-columns: repeat(2, 1fr);
+  margin-top: 8px;
+}
+
+.extract-method-options label,
+.extract-method-jdt-options label {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+}
+
+.extract-method-options input:disabled,
+.extract-method-jdt-options input:disabled {
+  opacity: 0.75;
+}
+
+.extract-method-jdt-options {
+  display: grid;
+  gap: 7px;
+  padding: 0 3px 11px;
+}
+
+.extract-method-jdt-options small {
+  color: var(--muted-text-color, #aeb3c2);
+  white-space: normal;
+}
+
+.extract-method-signature-section {
+  min-height: 66px;
+  padding-top: 9px;
+  border-top: 1px solid var(--border-color, #555866);
+}
+
+.extract-method-signature-section h3,
+.extract-method-changes h3,
+.extract-method-diff-headings h3 {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 400;
+}
+
+.extract-method-signature {
+  min-height: 36px;
+  margin: 5px 0 0;
+  padding: 0;
+  overflow: auto;
+  color: inherit;
+  background: transparent;
+  border: 0;
+  white-space: pre-wrap;
+  font: 13px Consolas, "Courier New", monospace;
+}
+
+.extract-method-dialog-footer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 51px;
+  box-sizing: border-box;
+  padding: 9px 12px;
+  border-top: 1px solid var(--border-color, #555866);
+}
+
+.extract-method-footer-spacer {
+  flex: 1;
+}
+
+.extract-method-dialog-footer button {
+  min-width: 88px;
+  height: 27px;
+  padding: 2px 12px;
+  color: inherit;
+  background: var(--button-bg, #343746);
+  border: 1px solid var(--border-color, #656978);
+  border-radius: 3px;
+}
+
+.extract-method-ok {
+  background: var(--accent-color, #6f42c1) !important;
+  border-color: var(--accent-color, #6f42c1) !important;
+}
+
+.extract-method-dialog-footer button:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--button-bg, #343746) 82%, var(--accent-color, #6f42c1));
+  border-color: var(--accent-color, #6f42c1);
+}
+
+.extract-method-dialog-footer button:focus-visible {
+  outline: 2px solid var(--accent-color, #6f42c1);
+  outline-offset: -3px;
+}
+
+.extract-method-dialog-footer button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.extract-method-preview {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-rows: 245px minmax(0, 1fr);
+  padding: 0 8px 8px;
+}
+
+.extract-method-changes {
+  min-height: 0;
+  padding-top: 8px;
+}
+
+.extract-method-changes h3 {
+  height: 24px;
+  line-height: 24px;
+}
+
+.extract-method-change-tree {
+  height: calc(100% - 25px);
+  box-sizing: border-box;
+  overflow: auto;
+  padding: 6px;
+  color: inherit;
+  background: var(--editor-bg, #1f212a);
+  border: 1px solid var(--border-color, #555866);
+}
+
+.extract-method-tree-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 23px;
+  white-space: nowrap;
+}
+
+.extract-method-tree-row > span:first-child {
+  width: 13px;
+  color: inherit;
+  text-align: center;
+}
+
+.extract-method-tree-row input {
+  width: 14px;
+  height: 14px;
+  margin: 0;
+  opacity: 1;
+}
+
+.extract-method-tree-type { padding-left: 22px; }
+.extract-method-tree-member { padding-left: 44px; }
+.extract-method-tree-leaf { padding-left: 66px; }
+.extract-method-tree-file strong { font-weight: 600; }
+
+.extract-method-diff-shell {
+  min-height: 0;
+  display: grid;
+  grid-template-rows: 30px 29px minmax(0, 1fr);
+  background: var(--editor-bg, #1f212a);
+  border: 1px solid var(--border-color, #555866);
+}
+
+.extract-method-diff-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 8px;
+  background: var(--button-bg, #343746);
+  color: inherit;
+  border-bottom: 1px solid var(--border-color, #555866);
+}
+
+.extract-method-diff-toolbar strong {
+  padding: 4px 7px;
+  color: inherit;
+  background: var(--button-bg, #343746);
+  font-weight: 400;
+}
+
+.extract-method-diff-headings {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  background: var(--panel-bg, #252732);
+  border-bottom: 1px solid var(--border-color, #555866);
+}
+
+.extract-method-diff-headings h3 {
+  padding: 6px 8px;
+}
+
+.extract-method-diff-headings h3 + h3 {
+  border-left: 1px solid var(--border-color, #555866);
+}
+
+.extract-method-diff {
+  min-height: 0;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+}
+
+.extract-method-diff pre {
+  min-width: 0;
+  min-height: 0;
+  margin: 0;
+  overflow: auto;
+  color: inherit;
+  background: var(--editor-bg, #1f212a);
+  font: 12px/1.5 Consolas, "Courier New", monospace;
+  tab-size: 4;
+}
+
+.extract-method-diff pre + pre {
+  border-left: 1px solid var(--border-color, #555866);
+}
+
+.extract-method-diff-line {
+  display: block;
+  min-width: max-content;
+  padding: 0 9px;
+  white-space: pre;
+}
+
+.extract-method-diff-line-changed {
+  background: rgba(142, 45, 49, 0.62);
+}
+
+.extract-method-after .extract-method-diff-line-changed {
+  background: rgba(35, 105, 58, 0.58);
+}
+
+.extract-method-undo-banner {
+  position: fixed;
+  right: 18px;
+  bottom: 18px;
+  z-index: 11020;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 10px 9px 13px;
+  color: var(--text-color, #e5e7eb);
+  background: var(--panel-bg, #252732);
+  border: 1px solid var(--border-color, #555866);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.42);
+}
+
+.extract-method-undo-banner button {
+  padding: 4px 9px;
+  color: inherit;
+  background: var(--button-bg, #343746);
+  border: 1px solid var(--border-color, #656978);
+}
+
+.extract-method-undo-banner .extract-method-undo-dismiss {
+  min-width: 24px;
+  padding: 2px 5px;
+  border: 0;
+  background: transparent;
+  font-size: 18px;
+}
+
+@media (max-width: 760px) {
+  .extract-method-access-row {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .extract-method-preview-mode .extract-method-dialog-panel {
+    height: 94vh;
+  }
+
+  .extract-method-preview {
+    grid-template-rows: 210px minmax(0, 1fr);
+  }
+}

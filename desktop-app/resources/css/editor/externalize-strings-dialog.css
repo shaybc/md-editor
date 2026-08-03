@@ -1,0 +1,107 @@
+/* Externalize Strings wizard. */
+.externalize-strings-dialog-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 10080;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(0, 0, 0, 0.58);
+}
+
+.externalize-strings-dialog-overlay[hidden] { display: none; }
+.externalize-strings-dialog-panel {
+  display: flex;
+  flex-direction: column;
+  width: min(760px, calc(100vw - 48px));
+  max-height: min(800px, calc(100vh - 48px));
+  overflow: hidden;
+  color: var(--text-color, #e5e7eb);
+  background: var(--panel-bg, #252732);
+  border: 1px solid var(--border-color, #555866);
+  border-radius: 6px;
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.45);
+}
+.externalize-strings-dialog-panel.externalize-preview-panel { height: min(800px, calc(100vh - 48px)); }
+
+.externalize-strings-dialog-header,
+.externalize-strings-dialog-footer { display: flex; align-items: center; gap: 10px; padding: 12px 16px; }
+.externalize-strings-dialog-header { flex: 0 0 auto; justify-content: space-between; background: var(--panel-bg, #252732); border-bottom: 1px solid var(--border-color, #555866); }
+.externalize-strings-dialog-header h2 { margin: 0; font-size: 16px; font-weight: 600; }
+.externalize-strings-dialog-subtitle { margin: 5px 0 0; color: var(--muted-text-color, #b7bbc8); font-size: 12px; }
+.externalize-strings-dialog-close { padding: 0 4px; color: inherit; background: transparent; border: 0; font-size: 24px; }
+.externalize-strings-dialog-body { flex: 1 1 auto; min-height: 0; overflow: auto; padding: 14px 16px 4px; }
+.externalize-key-prefix-label,
+.externalize-accessor-configuration label { display: grid; gap: 5px; font-size: 13px; }
+.externalize-key-prefix-label { grid-template-columns: max-content minmax(0, 1fr); align-items: center; gap: 10px; }
+.externalize-key-prefix-label input { box-sizing: border-box; width: 100%; min-width: 0; }
+.externalize-key-prefix-label input,
+.externalize-accessor-configuration input,
+.externalize-string-row input,
+.externalize-string-row select {
+  min-height: 31px;
+  padding: 4px 7px;
+  color: inherit;
+  background: var(--editor-bg, #1f212a);
+  border: 1px solid var(--border-color, #656978);
+}
+
+.externalize-strings-prompt { margin: 14px 0 6px; font-size: 13px; }
+.externalize-string-table {
+  max-height: 300px;
+  overflow: auto;
+  background: var(--editor-bg, #1f212a);
+  border: 1px solid var(--border-color, #555866);
+}
+
+.externalize-string-row {
+  display: grid;
+  grid-template-columns: 120px minmax(0, 1fr) minmax(170px, 0.8fr);
+  gap: 8px;
+  align-items: center;
+  padding: 6px 8px;
+  border-bottom: 1px solid color-mix(in srgb, var(--border-color, #555866) 60%, transparent);
+  font-size: 12px;
+}
+
+.externalize-string-row:last-child { border-bottom: 0; }
+.externalize-string-row-header { position: sticky; top: 0; z-index: 1; background: var(--panel-bg, #252732); font-weight: 600; }
+.externalize-string-row:not(.externalize-string-row-header) { cursor: pointer; }
+.externalize-string-row-selected { background: color-mix(in srgb, var(--accent-color, #8b5cf6) 16%, transparent); }
+.externalize-string-value { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--editor-font-family, monospace); }
+.externalize-source-context { margin-top: 10px; border: 1px solid var(--border-color, #555866); }
+.externalize-source-context[hidden] { display: none; }
+.externalize-source-context h3 { margin: 0; padding: 7px 9px; background: var(--panel-bg, #252732); font-size: 12px; }
+.externalize-source-context pre { max-height: 150px; overflow: auto; margin: 0; padding: 10px; background: var(--editor-bg, #1f212a); font: 12px/1.5 var(--editor-font-family, monospace); white-space: pre; }
+.externalize-source-occurrence { padding: 1px 2px; color: inherit; border-radius: 2px; }
+.externalize-source-occurrence-externalize { background: color-mix(in srgb, #22c55e 52%, transparent); outline: 1px solid #22c55e; }
+.externalize-source-occurrence-ignore { background: color-mix(in srgb, #f59e0b 48%, transparent); outline: 1px solid #f59e0b; }
+.externalize-source-occurrence-skip { background: color-mix(in srgb, #94a3b8 38%, transparent); outline: 1px solid #94a3b8; }
+.externalize-accessor-configuration { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 14px; padding: 12px; border: 1px solid var(--border-color, #656978); }
+.externalize-accessor-configuration label { min-width: 0; }
+.externalize-accessor-configuration input { box-sizing: border-box; width: 100%; min-width: 0; }
+.externalize-accessor-configuration input[readonly] { opacity: 0.75; }
+.externalize-preview-body { display: flex; flex-direction: column; overflow: hidden; }
+.externalize-preview-list { display: flex; flex: 1 1 auto; flex-direction: column; gap: 12px; min-width: 0; min-height: 0; overflow: hidden; }
+.externalize-preview-file { display: flex; flex: 1 1 0; flex-direction: column; min-width: 0; min-height: 0; border: 1px solid var(--border-color, #555866); }
+.externalize-preview-file h3 { flex: 0 0 auto; margin: 0; padding: 7px 9px; background: var(--panel-bg, #252732); font-size: 12px; }
+.externalize-preview-file pre { box-sizing: border-box; flex: 1 1 auto; width: 100%; min-width: 0; min-height: 0; overflow: auto; margin: 0; padding: 10px; background: var(--editor-bg, #1f212a); font: 12px/1.5 var(--editor-font-family, monospace); white-space: pre; }
+.externalize-strings-dialog-footer { flex: 0 0 auto; justify-content: flex-end; background: var(--panel-bg, #252732); border-top: 1px solid var(--border-color, #555866); }
+.externalize-strings-dialog-footer button {
+  min-width: 88px;
+  min-height: 31px;
+  padding: 5px 11px;
+  color: inherit;
+  background: var(--button-bg, #343746);
+  border: 1px solid var(--border-color, #656978);
+  border-radius: 3px;
+  font-size: 12px;
+}
+.externalize-dialog-primary { background: var(--accent-color, #6f42c1) !important; border-color: var(--accent-color, #6f42c1) !important; }
+
+@media (max-width: 700px) {
+  .externalize-string-row { grid-template-columns: 100px 1fr; }
+  .externalize-string-row-header span:last-child { display: none; }
+  .externalize-string-row input { grid-column: 1 / -1; }
+  .externalize-accessor-configuration { grid-template-columns: 1fr; }
+}

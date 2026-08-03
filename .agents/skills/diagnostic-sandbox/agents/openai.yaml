@@ -1,0 +1,4 @@
+interface:
+  display_name: "Diagnostic Sandbox"
+  short_description: "Prove difficult fixes safely before integration"
+  default_prompt: "Use $diagnostic-sandbox to isolate and prove a difficult implementation fix before changing production code."

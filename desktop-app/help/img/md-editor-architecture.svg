@@ -1,0 +1,261 @@
+﻿<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1120" viewBox="0 0 1600 1120" role="img" aria-labelledby="title desc">
+  <title id="title">MD-Editor desktop architecture</title>
+  <desc id="desc">Layered architecture diagram showing the Neutralino desktop host, resource shell, feature modules, editor and intelligence services, native bridges, and local data boundaries.</desc>
+  <defs>
+    <style>
+      .bg { fill: #f8fafc; }
+      .title { font: 700 34px Arial, sans-serif; fill: #1f2937; }
+      .subtitle { font: 400 18px Arial, sans-serif; fill: #475569; }
+      .layer-title { font: 700 20px Arial, sans-serif; fill: #111827; }
+      .layer-note { font: 400 14px Arial, sans-serif; fill: #475569; }
+      .box-title { font: 700 16px Arial, sans-serif; fill: #111827; }
+      .box-text { font: 400 13px Arial, sans-serif; fill: #334155; }
+      .small { font: 400 12px Arial, sans-serif; fill: #334155; }
+      .lane-label { font: 700 16px Arial, sans-serif; fill: #334155; }
+      .layer { stroke: #64748b; stroke-width: 2; rx: 18; }
+      .box { stroke: #64748b; stroke-width: 1.7; rx: 10; }
+      .mini { stroke: #94a3b8; stroke-width: 1.3; rx: 8; }
+      .arrow { stroke: #475569; stroke-width: 2.4; fill: none; marker-end: url(#arrowhead); }
+      .arrow-soft { stroke: #64748b; stroke-width: 1.9; fill: none; marker-end: url(#arrowheadSoft); stroke-dasharray: 7 6; }
+      .arrow-strong { stroke: #0f766e; stroke-width: 3; fill: none; marker-end: url(#arrowheadStrong); }
+      .runtime { fill: #dbeafe; }
+      .shell { fill: #e0e7ff; }
+      .modules { fill: #ede9fe; }
+      .editor { fill: #dcfce7; }
+      .bridge { fill: #ffedd5; }
+      .data { fill: #fef9c3; }
+      .accent-blue { fill: #bfdbfe; }
+      .accent-purple { fill: #ddd6fe; }
+      .accent-green { fill: #bbf7d0; }
+      .accent-orange { fill: #fed7aa; }
+      .accent-yellow { fill: #fef08a; }
+      .accent-rose { fill: #fecdd3; }
+      .accent-cyan { fill: #cffafe; }
+      .legend-line { stroke: #475569; stroke-width: 2.2; marker-end: url(#arrowhead); }
+      .legend-dash { stroke: #64748b; stroke-width: 2; stroke-dasharray: 7 6; marker-end: url(#arrowheadSoft); }
+    </style>
+    <marker id="arrowhead" markerWidth="12" markerHeight="8" refX="11" refY="4" orient="auto">
+      <path d="M0,0 L12,4 L0,8 Z" fill="#475569" />
+    </marker>
+    <marker id="arrowheadSoft" markerWidth="12" markerHeight="8" refX="11" refY="4" orient="auto">
+      <path d="M0,0 L12,4 L0,8 Z" fill="#64748b" />
+    </marker>
+    <marker id="arrowheadStrong" markerWidth="12" markerHeight="8" refX="11" refY="4" orient="auto">
+      <path d="M0,0 L12,4 L0,8 Z" fill="#0f766e" />
+    </marker>
+  </defs>
+
+  <rect class="bg" width="1600" height="1120" />
+  <text x="70" y="62" class="title">MD-Editor Desktop App Architecture</text>
+  <text x="70" y="92" class="subtitle">Layered components, ownership boundaries, and communication paths in the Neutralino desktop application.</text>
+
+  <g transform="translate(70 118)">
+    <line x1="0" y1="0" x2="46" y2="0" class="legend-line" />
+    <text x="58" y="5" class="small">direct call / event / data flow</text>
+    <line x1="270" y1="0" x2="316" y2="0" class="legend-dash" />
+    <text x="328" y="5" class="small">async native bridge or external process</text>
+    <line x1="645" y1="0" x2="691" y2="0" class="arrow-strong" />
+    <text x="703" y="5" class="small">builds on lower layer</text>
+  </g>
+
+  <!-- Desktop host layer -->
+  <rect x="70" y="150" width="1460" height="128" class="layer runtime" />
+  <text x="96" y="183" class="layer-title">Desktop Host Layer</text>
+  <text x="96" y="206" class="layer-note">Starts Neutralino, owns desktop lifecycle, exports native auth/runtime data, and serves local resources.</text>
+
+  <rect x="120" y="226" width="210" height="36" class="box accent-blue" />
+  <text x="145" y="249" class="box-title">run-neutralino.js</text>
+  <rect x="360" y="226" width="220" height="36" class="box accent-blue" />
+  <text x="389" y="249" class="box-title">neutralino.config.json</text>
+  <rect x="610" y="226" width="210" height="36" class="box accent-blue" />
+  <text x="652" y="249" class="box-title">Neutralino runtime</text>
+  <rect x="850" y="226" width="190" height="36" class="box accent-blue" />
+  <text x="911" y="249" class="box-title">WebView</text>
+  <rect x="1070" y="226" width="200" height="36" class="box accent-blue" />
+  <text x="1110" y="249" class="box-title">Profile folder</text>
+  <rect x="1300" y="226" width="180" height="36" class="box accent-blue" />
+  <text x="1330" y="249" class="box-title">resources/ root</text>
+
+  <!-- Resource shell layer -->
+  <rect x="70" y="306" width="1460" height="138" class="layer shell" />
+  <text x="96" y="339" class="layer-title">Resource Shell And Composition Layer</text>
+  <text x="96" y="362" class="layer-note">Static files load in order; modules register on window; script.js composes app state, DOM references, and dependencies.</text>
+
+  <rect x="120" y="382" width="190" height="44" class="box accent-purple" />
+  <text x="165" y="405" class="box-title">index.html</text>
+  <text x="145" y="421" class="box-text">script load order</text>
+  <rect x="340" y="382" width="190" height="44" class="box accent-purple" />
+  <text x="397" y="405" class="box-title">main.js</text>
+  <text x="370" y="421" class="box-text">lifecycle events</text>
+  <rect x="560" y="382" width="220" height="44" class="box accent-purple" />
+  <text x="594" y="405" class="box-title">app.js + context.js</text>
+  <text x="599" y="421" class="box-text">shared app constants</text>
+  <rect x="810" y="382" width="250" height="44" class="box accent-purple" />
+  <text x="881" y="405" class="box-title">script.js</text>
+  <text x="846" y="421" class="box-text">composition + legacy coordinator</text>
+  <rect x="1090" y="382" width="220" height="44" class="box accent-purple" />
+  <text x="1124" y="405" class="box-title">window.register...</text>
+  <text x="1136" y="421" class="box-text">classic modules</text>
+  <rect x="1340" y="382" width="140" height="44" class="box accent-purple" />
+  <text x="1369" y="405" class="box-title">app deps</text>
+  <text x="1359" y="421" class="box-text">injected helpers</text>
+
+  <!-- Feature modules -->
+  <rect x="70" y="472" width="1460" height="230" class="layer modules" />
+  <text x="96" y="505" class="layer-title">User-Facing Feature Modules</text>
+  <text x="96" y="528" class="layer-note">Panels and tabs share the app context but keep feature ownership in focused modules under resources/js.</text>
+
+  <rect x="118" y="552" width="185" height="54" class="box accent-purple" />
+  <text x="184" y="575" class="box-title">Tabs</text>
+  <text x="145" y="592" class="box-text">index / persistence / views</text>
+
+  <rect x="330" y="552" width="185" height="54" class="box accent-purple" />
+  <text x="369" y="575" class="box-title">Folder Tree</text>
+  <text x="355" y="592" class="box-text">open files and folders</text>
+
+  <rect x="542" y="552" width="185" height="54" class="box accent-purple" />
+  <text x="586" y="575" class="box-title">Graph View</text>
+  <text x="566" y="592" class="box-text">links, tags, health</text>
+
+  <rect x="754" y="552" width="185" height="54" class="box accent-purple" />
+  <text x="817" y="575" class="box-title">Git Panel</text>
+  <text x="780" y="592" class="box-text">status, diff, branches</text>
+
+  <rect x="966" y="552" width="185" height="54" class="box accent-purple" />
+  <text x="1007" y="575" class="box-title">AI Companion</text>
+  <text x="995" y="592" class="box-text">chat, agent, autocomplete</text>
+
+  <rect x="1178" y="552" width="145" height="54" class="box accent-purple" />
+  <text x="1202" y="575" class="box-title">API Client</text>
+  <text x="1203" y="592" class="box-text">requests, history</text>
+
+  <rect x="1350" y="552" width="130" height="54" class="box accent-purple" />
+  <text x="1385" y="575" class="box-title">Tools</text>
+  <text x="1368" y="592" class="box-text">terminal, convert</text>
+
+  <rect x="118" y="630" width="185" height="44" class="mini accent-purple" />
+  <text x="146" y="655" class="box-title">View Modes</text>
+  <text x="145" y="671" class="box-text">Editor / Split / Preview</text>
+  <rect x="330" y="630" width="185" height="44" class="mini accent-purple" />
+  <text x="360" y="655" class="box-title">File Actions</text>
+  <text x="357" y="671" class="box-text">open / save / preview</text>
+  <rect x="542" y="630" width="185" height="44" class="mini accent-purple" />
+  <text x="569" y="655" class="box-title">Graph Toolbar</text>
+  <text x="567" y="671" class="box-text">filters / groups / tags</text>
+  <rect x="754" y="630" width="185" height="44" class="mini accent-purple" />
+  <text x="783" y="655" class="box-title">AI Summary</text>
+  <text x="780" y="671" class="box-text">commit message assist</text>
+  <rect x="966" y="630" width="185" height="44" class="mini accent-purple" />
+  <text x="995" y="655" class="box-title">Agent Tools</text>
+  <text x="994" y="671" class="box-text">editor, graph, Git, API</text>
+  <rect x="1178" y="630" width="145" height="44" class="mini accent-purple" />
+  <text x="1205" y="655" class="box-title">Storage</text>
+  <text x="1200" y="671" class="box-text">collections + env</text>
+  <rect x="1350" y="630" width="130" height="44" class="mini accent-purple" />
+  <text x="1376" y="655" class="box-title">Settings</text>
+  <text x="1372" y="671" class="box-text">profiles + prefs</text>
+
+  <!-- Editor and intelligence services -->
+  <rect x="70" y="730" width="1460" height="176" class="layer editor" />
+  <text x="96" y="763" class="layer-title">Editor, Preview, Search, And Intelligence Services</text>
+  <text x="96" y="786" class="layer-note">Reusable services power tabs and modules: editing, rendering, language intelligence, graph extraction, and AI tool context.</text>
+
+  <rect x="118" y="812" width="185" height="56" class="box accent-green" />
+  <text x="156" y="836" class="box-title">CodeMirror 6</text>
+  <text x="145" y="854" class="box-text">editor surface + state</text>
+  <rect x="330" y="812" width="185" height="56" class="box accent-green" />
+  <text x="357" y="836" class="box-title">Context Menu</text>
+  <text x="355" y="854" class="box-text">editor actions + copy</text>
+  <rect x="542" y="812" width="185" height="56" class="box accent-green" />
+  <text x="577" y="836" class="box-title">Markdown Render</text>
+  <text x="565" y="854" class="box-text">preview, links, Mermaid</text>
+  <rect x="754" y="812" width="185" height="56" class="box accent-green" />
+  <text x="777" y="836" class="box-title">Language Registry</text>
+  <text x="781" y="854" class="box-text">file type to editor mode</text>
+  <rect x="966" y="812" width="185" height="56" class="box accent-green" />
+  <text x="996" y="836" class="box-title">LSP Client</text>
+  <text x="993" y="854" class="box-text">diagnostics + hovers</text>
+  <rect x="1178" y="812" width="145" height="56" class="box accent-green" />
+  <text x="1201" y="836" class="box-title">Search Index</text>
+  <text x="1204" y="854" class="box-text">workspace find</text>
+  <rect x="1350" y="812" width="130" height="56" class="box accent-green" />
+  <text x="1377" y="836" class="box-title">Converters</text>
+  <text x="1375" y="854" class="box-text">code to MD</text>
+
+  <!-- Native process layer -->
+  <rect x="70" y="934" width="1460" height="104" class="layer bridge" />
+  <text x="96" y="967" class="layer-title">Native Bridges And External Processes</text>
+  <text x="96" y="990" class="layer-note">Bridge modules keep long-running process IO outside the renderer and exchange compact JSON events.</text>
+
+  <rect x="148" y="1006" width="175" height="28" class="box accent-orange" />
+  <text x="184" y="1025" class="box-title">Git bridge</text>
+  <rect x="360" y="1006" width="175" height="28" class="box accent-orange" />
+  <text x="392" y="1025" class="box-title">AI bridge</text>
+  <rect x="572" y="1006" width="175" height="28" class="box accent-orange" />
+  <text x="597" y="1025" class="box-title">Terminal bridge</text>
+  <rect x="784" y="1006" width="175" height="28" class="box accent-orange" />
+  <text x="819" y="1025" class="box-title">API bridge</text>
+  <rect x="996" y="1006" width="175" height="28" class="box accent-orange" />
+  <text x="1024" y="1025" class="box-title">LSP processes</text>
+  <rect x="1208" y="1006" width="175" height="28" class="box accent-orange" />
+  <text x="1233" y="1025" class="box-title">Java/JS tools</text>
+
+  <!-- Data layer -->
+  <rect x="70" y="1056" width="1460" height="44" class="layer data" />
+  <text x="96" y="1084" class="layer-title">Local Data Boundary</text>
+  <text x="310" y="1084" class="box-text">workspace folders</text>
+  <text x="485" y="1084" class="box-text">Markdown and source files</text>
+  <text x="720" y="1084" class="box-text">.md-editor profile data</text>
+  <text x="965" y="1084" class="box-text">Git repositories</text>
+  <text x="1160" y="1084" class="box-text">optional external APIs/model providers</text>
+
+  <!-- Build-on arrows between layers -->
+  <path d="M800 306 L800 282" class="arrow-strong" />
+  <path d="M800 472 L800 448" class="arrow-strong" />
+  <path d="M800 730 L800 706" class="arrow-strong" />
+  <path d="M800 934 L800 910" class="arrow-strong" />
+  <path d="M800 1056 L800 1042" class="arrow-strong" />
+
+  <!-- Internal communication arrows -->
+  <path d="M310 404 C390 404 468 404 556 404" class="arrow" />
+  <path d="M780 404 C842 404 960 404 1086 404" class="arrow" />
+  <path d="M1220 426 C1220 465 1180 510 1060 548" class="arrow" />
+
+  <path d="M210 606 L210 626" class="arrow" />
+  <path d="M210 674 C210 732 210 766 210 808" class="arrow" />
+  <path d="M303 839 C312 839 318 839 326 839" class="arrow" />
+  <path d="M303 579 C383 610 471 704 560 812" class="arrow" />
+  <path d="M423 606 C490 654 556 718 633 808" class="arrow" />
+  <path d="M635 606 C638 672 638 742 636 808" class="arrow" />
+  <path d="M846 606 L846 626" class="arrow" />
+  <path d="M939 657 C955 650 963 650 964 650" class="arrow" />
+  <path d="M1060 606 L1060 626" class="arrow" />
+  <path d="M1151 657 C1162 657 1168 657 1174 657" class="arrow" />
+
+  <path d="M303 840 C475 806 600 802 750 835" class="arrow" />
+  <path d="M939 839 C948 839 956 839 962 839" class="arrow" />
+  <path d="M846 812 C846 760 575 700 542 606" class="arrow" />
+  <path d="M1251 606 C1251 690 1251 742 1251 808" class="arrow" />
+  <path d="M1415 606 C1415 694 1415 742 1415 808" class="arrow" />
+
+  <!-- Async bridge arrows -->
+  <path d="M846 606 C760 780 438 900 236 1002" class="arrow-soft" />
+  <path d="M846 674 C780 776 530 910 448 1002" class="arrow-soft" />
+  <path d="M1060 606 C1012 780 620 900 448 1002" class="arrow-soft" />
+  <path d="M1415 674 C1338 820 816 930 659 1002" class="arrow-soft" />
+  <path d="M1251 674 C1180 822 926 930 871 1002" class="arrow-soft" />
+  <path d="M1059 868 C1062 914 1076 964 1084 1002" class="arrow-soft" />
+  <path d="M1415 868 C1390 930 1340 962 1295 1002" class="arrow-soft" />
+
+  <!-- Data boundary arrows -->
+  <path d="M235 1034 C300 1048 360 1054 425 1056" class="arrow-soft" />
+  <path d="M1084 1034 C1040 1050 990 1054 960 1056" class="arrow-soft" />
+  <path d="M1295 1034 C1260 1049 1220 1054 1180 1056" class="arrow-soft" />
+
+  <!-- Side labels -->
+  <text x="1545" y="221" class="lane-label" transform="rotate(90 1545 221)">desktop host</text>
+  <text x="1545" y="359" class="lane-label" transform="rotate(90 1545 359)">resource shell</text>
+  <text x="1545" y="544" class="lane-label" transform="rotate(90 1545 544)">feature modules</text>
+  <text x="1545" y="766" class="lane-label" transform="rotate(90 1545 766)">services</text>
+  <text x="1545" y="955" class="lane-label" transform="rotate(90 1545 955)">native/process</text>
+</svg>

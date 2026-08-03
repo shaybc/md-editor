@@ -1,0 +1,4 @@
+body.app-foreground-waiting,
+body.app-foreground-waiting * {
+  cursor: progress !important;
+}

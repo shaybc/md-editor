@@ -1,0 +1,136 @@
+/* Java Add Import candidate chooser. */
+.add-import-dialog-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 10040;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(8, 10, 18, 0.5);
+}
+
+.add-import-dialog-overlay[hidden] {
+  display: none;
+}
+
+.add-import-dialog-panel {
+  width: min(520px, calc(100vw - 32px));
+  min-height: 370px;
+  display: flex;
+  flex-direction: column;
+  color: var(--text-color, #f5f5f5);
+  background: var(--modal-background, #23242f);
+  border: 1px solid var(--border-color, #4a4d5e);
+  border-radius: 8px;
+  box-shadow: 0 20px 55px rgba(0, 0, 0, 0.45);
+}
+
+.add-import-dialog-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--border-color, #4a4d5e);
+}
+
+.add-import-dialog-header h2 {
+  margin: 0;
+  font-size: 16px;
+}
+
+.add-import-dialog-close {
+  border: 0;
+  color: inherit;
+  background: transparent;
+  font-size: 24px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.add-import-dialog-body {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px 16px;
+}
+
+.add-import-dialog-prompt {
+  margin: 0;
+  color: var(--text-muted, #c5c7d1);
+  font-size: 13px;
+}
+
+.add-import-dialog-search {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 8px 10px;
+  color: inherit;
+  background: var(--input-background, #191a23);
+  border: 1px solid var(--border-color, #4a4d5e);
+  border-radius: 4px;
+}
+
+.add-import-dialog-list {
+  flex: 1;
+  min-height: 230px;
+  overflow: auto;
+  background: var(--input-background, #191a23);
+  border: 1px solid var(--border-color, #4a4d5e);
+  border-radius: 4px;
+}
+
+.add-import-dialog-option {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 8px 10px;
+  cursor: pointer;
+}
+
+.add-import-dialog-option:hover,
+.add-import-dialog-option:has(input:checked) {
+  background: var(--selection-background, rgba(157, 108, 255, 0.25));
+}
+
+.add-import-dialog-option i {
+  color: var(--accent-color, #b487ff);
+}
+
+.add-import-dialog-option input {
+  margin: 0;
+}
+
+.add-import-dialog-empty {
+  margin: 0;
+  padding: 18px;
+  color: var(--text-muted, #c5c7d1);
+  text-align: center;
+}
+
+.add-import-dialog-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 12px 16px;
+  border-top: 1px solid var(--border-color, #4a4d5e);
+}
+
+.add-import-dialog-footer button {
+  min-width: 92px;
+  padding: 8px 14px;
+  color: inherit;
+  background: var(--button-background, #353748);
+  border: 1px solid var(--border-color, #5b5e70);
+  border-radius: 5px;
+  cursor: pointer;
+}
+
+.add-import-dialog-footer .add-import-dialog-confirm {
+  background: var(--accent-color, #8f5de7);
+}
+
+.add-import-dialog-footer button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}

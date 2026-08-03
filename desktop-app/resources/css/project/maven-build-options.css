@@ -1,0 +1,280 @@
+.maven-build-options-host {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  gap: 8px;
+  min-height: 0;
+}
+
+.maven-build-options-dynamic-content {
+  display: grid;
+  align-content: start;
+  gap: 8px;
+  min-height: 0;
+  padding-right: 4px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-gutter: stable;
+}
+
+.maven-build-options-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.maven-build-options-title {
+  margin: 0;
+  color: var(--text-color);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.maven-build-options-group {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding: 8px;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  background: var(--bg-color);
+}
+
+.maven-build-options-group-title {
+  padding: 0 4px;
+  color: var(--text-color);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.maven-build-option-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 3px 8px;
+  padding: 5px 4px;
+}
+
+.maven-build-option-row + .maven-build-option-row {
+  border-top: 1px solid color-mix(in srgb, var(--border-color) 70%, transparent);
+}
+
+.maven-build-option-control {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  color: var(--text-color);
+  font-size: 13px;
+}
+
+.maven-build-option-control input {
+  flex: 0 0 auto;
+  accent-color: var(--accent-color);
+}
+
+.maven-build-option-label {
+  min-width: 0;
+}
+
+.maven-build-option-badge {
+  padding: 2px 7px;
+  border: 1px solid var(--border-color);
+  border-radius: 999px;
+  color: var(--secondary-text);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.maven-build-option-info {
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 1px solid var(--border-color);
+  border-radius: 50%;
+  background: var(--button-bg);
+  color: var(--accent-color);
+  font: 600 13px/1 sans-serif;
+  cursor: pointer;
+}
+
+.maven-build-option-info:hover,
+.maven-build-option-info:focus-visible {
+  border-color: var(--accent-color);
+  outline: 2px solid color-mix(in srgb, var(--accent-color) 25%, transparent);
+  outline-offset: 1px;
+}
+
+.maven-build-option-description,
+.maven-build-option-disabled,
+.maven-build-option-warning,
+.maven-build-options-provider-error,
+.maven-build-options-errors p {
+  grid-column: 1 / -1;
+  margin: 0 0 0 25px;
+  font-size: 12px;
+}
+
+.maven-build-option-description {
+  color: var(--secondary-text);
+}
+
+.maven-build-option-disabled,
+.maven-build-options-provider-error,
+.maven-build-options-errors {
+  color: var(--color-danger-fg, #d73a49);
+}
+
+.maven-build-option-warning {
+  color: var(--bs-warning-text-emphasis, #8a5b00);
+}
+
+.maven-build-options-errors {
+  padding: 8px 10px;
+  border: 1px solid color-mix(in srgb, currentColor 45%, var(--border-color));
+  border-radius: 8px;
+}
+
+.maven-build-options-errors p {
+  margin-left: 0;
+}
+
+.maven-build-options-help-row {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 8px;
+  padding: 7px 5px 2px 25px;
+  border-top: 1px solid color-mix(in srgb, var(--border-color) 70%, transparent);
+}
+
+.maven-build-options-help-link {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--accent-color);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  text-align: left;
+  text-decoration: underline;
+}
+
+.maven-build-options-help-link:hover,
+.maven-build-options-help-link:focus-visible {
+  color: var(--link-hover-color, var(--accent-color));
+  outline: 2px solid color-mix(in srgb, var(--accent-color) 25%, transparent);
+  outline-offset: 2px;
+}
+.maven-build-options-advanced {
+  display: grid;
+  gap: 6px;
+  padding: 8px;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  background: var(--bg-color);
+}
+
+.maven-build-options-advanced-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.maven-build-options-advanced-label {
+  margin: 0;
+  color: var(--text-color);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.maven-build-options-advanced-input {
+  width: 100%;
+  min-height: 34px;
+  padding: 6px 9px;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  background: var(--input-bg, var(--bg-color));
+  color: var(--text-color);
+  font: inherit;
+  font-size: 13px;
+}
+
+.maven-build-options-advanced-input:focus-visible {
+  border-color: var(--accent-color);
+  outline: 2px solid color-mix(in srgb, var(--accent-color) 25%, transparent);
+  outline-offset: 1px;
+}
+.maven-build-options-status {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin: 0;
+  padding: 8px 10px;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  background: var(--button-bg);
+  color: var(--secondary-text);
+  font-size: 12px;
+}
+
+.maven-build-options-status-action {
+  flex: 0 0 auto;
+  border: 1px solid var(--border-color);
+  border-radius: 999px;
+  background: var(--bg-color);
+  color: var(--text-color);
+  font: inherit;
+  font-size: 12px;
+  padding: 4px 10px;
+  cursor: pointer;
+}
+
+.maven-build-options-status-action:hover,
+.maven-build-options-status-action:focus-visible {
+  border-color: var(--accent-color);
+  outline: 2px solid color-mix(in srgb, var(--accent-color) 25%, transparent);
+  outline-offset: 1px;
+}
+
+.maven-build-options-status.is-error {
+  border-color: color-mix(in srgb, var(--color-danger-fg, #d73a49) 45%, var(--border-color));
+  color: var(--color-danger-fg, #d73a49);
+}
+
+.maven-build-options-task-pill {
+  position: fixed;
+  right: 22px;
+  bottom: 22px;
+  z-index: 1100;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  max-width: min(360px, calc(100vw - 44px));
+  padding: 10px 14px;
+  border: 1px solid var(--border-color);
+  border-radius: 999px;
+  background: var(--button-bg);
+  color: var(--text-color);
+  box-shadow: var(--shadow-lg, 0 12px 28px rgba(0, 0, 0, 0.18));
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.maven-build-options-task-pill[hidden] {
+  display: none;
+}
+
+.maven-build-options-task-pill i {
+  color: var(--accent-color);
+}
+
+.maven-build-options-task-pill:hover,
+.maven-build-options-task-pill:focus-visible {
+  border-color: var(--accent-color);
+  outline: 2px solid color-mix(in srgb, var(--accent-color) 25%, transparent);
+  outline-offset: 2px;
+}

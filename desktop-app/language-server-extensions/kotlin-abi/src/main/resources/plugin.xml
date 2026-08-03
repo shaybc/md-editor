@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?eclipse version="3.4"?>
+<plugin>
+  <extension point="org.eclipse.jdt.core.classpathContainerInitializer">
+    <classpathContainerInitializer id="MD_EDITOR_KOTLIN_ABI" class="mdeditor.kotlin.abi.KotlinAbiClasspathContainer"/>
+  </extension>
+  <extension point="org.eclipse.jdt.ls.core.delegateCommandHandler">
+    <delegateCommandHandler class="mdeditor.kotlin.abi.JdtWorkspaceProjectInventoryCommandHandler">
+      <command id="mdeditor.java.getWorkspaceProjectInventory"/>
+    </delegateCommandHandler>
+    <delegateCommandHandler class="mdeditor.kotlin.abi.KotlinAbiCommandHandler">
+      <command id="mdeditor.kotlin.updateAbiClasspaths"/>
+      <command id="mdeditor.kotlin.reconcileAbiClasspaths"/>
+      <command id="mdeditor.kotlin.clearAbiClasspaths"/>
+      <command id="mdeditor.kotlin.getAbiClasspaths"/>
+    </delegateCommandHandler>
+  </extension>
+</plugin>
+

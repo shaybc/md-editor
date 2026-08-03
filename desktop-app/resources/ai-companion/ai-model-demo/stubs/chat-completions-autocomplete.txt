@@ -1,0 +1,21 @@
+{
+  "id": "chatcmpl-demo-autocomplete-001",
+  "object": "chat.completion",
+  "created": 1782880000,
+  "model": "llama3.1",
+  "choices": [
+    {
+      "index": 0,
+      "message": {
+        "role": "assistant",
+        "content": "return FORMATTER.format(Instant.now());"
+      },
+      "finish_reason": "stop"
+    }
+  ],
+  "usage": {
+    "prompt_tokens": 32,
+    "completion_tokens": 8,
+    "total_tokens": 40
+  }
+}

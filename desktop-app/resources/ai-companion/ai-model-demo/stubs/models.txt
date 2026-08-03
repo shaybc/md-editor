@@ -1,0 +1,17 @@
+{
+  "object": "list",
+  "data": [
+    {
+      "id": "llama3.1",
+      "object": "model",
+      "created": 1782880000,
+      "owned_by": "ai-model-demo"
+    },
+    {
+      "id": "demo-autocomplete",
+      "object": "model",
+      "created": 1782880000,
+      "owned_by": "ai-model-demo"
+    }
+  ]
+}

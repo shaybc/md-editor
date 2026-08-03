@@ -1,0 +1,31 @@
+{
+  "formatVersion": 1,
+  "generatedAt": "2026-07-17",
+  "policy": "offline-first, version-pinned, no automatic runtime updates",
+  "schemas": [
+    {
+      "ratVersion": "0.17",
+      "path": "/assets/rat-policy/schemas/rat-policy-0.17.xsd",
+      "kind": "md-editor-validation-subset",
+      "source": "https://creadur.apache.org/rat017/apache-rat/xsd.html",
+      "license": "Apache-2.0",
+      "limitations": "Structural subset; custom matcher extensions are accepted with lax validation."
+    },
+    {
+      "ratVersion": "0.18",
+      "path": "/assets/rat-policy/schemas/rat-policy-0.18.xsd",
+      "kind": "md-editor-validation-subset",
+      "source": "https://creadur.apache.org/rat/license_def.html",
+      "license": "Apache-2.0",
+      "limitations": "Structural subset; custom matcher extensions are accepted with lax validation."
+    }
+  ],
+  "templates": [
+    { "id": "rat-config", "path": "/assets/rat-policy/templates/rat-config.xml", "author": "MD-Editor", "license": "Apache-2.0" },
+    { "id": "rat-excludes", "path": "/assets/rat-policy/templates/rat-excludes.txt", "author": "MD-Editor", "license": "Apache-2.0" },
+    { "id": "apache-2.0-header", "path": "/assets/rat-policy/templates/apache-2.0-header.txt", "author": "MD-Editor", "license": "Apache-2.0" },
+    { "id": "apache-2.0-license", "path": "/assets/rat-policy/templates/apache-2.0-license.txt", "source": "https://www.apache.org/licenses/LICENSE-2.0.txt", "license": "Apache-2.0" },
+    { "id": "third-party-inventory", "path": "/assets/rat-policy/templates/third-party-inventory.md", "author": "MD-Editor", "license": "Apache-2.0" }
+  ],
+  "excludedArtifacts": ["Apache RAT binaries", "RAT default license database", "complete SPDX data set"]
+}

@@ -1,0 +1,19 @@
+{
+  "id": "cmpl-demo-001",
+  "object": "text_completion",
+  "created": 1782880000,
+  "model": "llama3.1",
+  "choices": [
+    {
+      "index": 0,
+      "text": "Demo completion from tools/ai-model-demo/stubs/completions.txt.",
+      "logprobs": null,
+      "finish_reason": "stop"
+    }
+  ],
+  "usage": {
+    "prompt_tokens": 12,
+    "completion_tokens": 10,
+    "total_tokens": 22
+  }
+}

@@ -1,0 +1,41 @@
+import groovy.json.JsonOutput
+import org.gradle.api.artifacts.ProjectDependency
+
+/*
+ * Read-only Gradle task used by MD-Editor to discover the projects declared by
+ * settings.gradle and the Java source sets supplied by their applied plugins.
+ */
+gradle.projectsEvaluated {
+    if (rootProject.tasks.findByName("mdEditorJavaProjectInventory") != null) return
+    rootProject.tasks.register("mdEditorJavaProjectInventory") {
+        group = "md-editor"
+        description = "Exports the authoritative Gradle Java project inventory."
+        doLast {
+            def records = rootProject.allprojects.collect { candidate ->
+                def sourceSets = candidate.extensions.findByName("sourceSets")
+                def sourceRoots = sourceSets == null
+                    ? []
+                    : sourceSets.collectMany { sourceSet -> sourceSet.allJava.srcDirs }.findAll { it.exists() }*.absolutePath.unique()
+                def projectDependencies = candidate.configurations
+                    .collectMany { configuration -> configuration.dependencies.withType(ProjectDependency) }
+                    .collect { dependency ->
+                        dependency.metaClass.respondsTo(dependency, "getPath")
+                            ? dependency.path
+                            : dependency.dependencyProject.path
+                    }
+                    .unique()
+                [
+                    projectPath: candidate.path,
+                    name: candidate.name,
+                    projectDir: candidate.projectDir.absolutePath,
+                    javaCapable: sourceSets != null,
+                    javaPlatform: candidate.plugins.hasPlugin("java-platform"),
+                    buildRoot: candidate == rootProject,
+                    sourceRoots: sourceRoots,
+                    projectDependencies: projectDependencies
+                ]
+            }
+            println("MD_EDITOR_JAVA_PROJECT_INVENTORY=" + JsonOutput.toJson(records))
+        }
+    }
+}

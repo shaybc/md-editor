@@ -1,0 +1,173 @@
+<mxfile host="127.0.0.1" agent="Codex" compressed="false">
+  <diagram id="drawio-bridge-startup" name="Bridge Startup and Recovery">
+    <mxGraphModel dx="1703" dy="821" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="2200" pageHeight="1400" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="title" parent="1" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;fontSize=24;fontStyle=1;fontColor=light-dark(#E1D5E7,#392F3F);" value="MD-Editor draw.io Bridge: Startup, Events, Retry, Failure, Logging, and Cleanup" vertex="1">
+          <mxGeometry height="40" width="1500" x="350" y="20" as="geometry" />
+        </mxCell>
+        <mxCell id="hostLane" parent="1" style="swimlane;html=1;horizontal=0;startSize=32;fillColor=none;swimlaneFillColor=none;strokeColor=default;fontColor=light-dark(#D5C4FF,#FFFFFF);fontStyle=1;" value="MD-Editor host / tab controller" vertex="1">
+          <mxGeometry height="250" width="2060" x="40" y="83" as="geometry" />
+        </mxCell>
+        <mxCell id="openTab" parent="hostLane" style="rounded=1;whiteSpace=wrap;html=1;fillColor=light-dark(#000000,#392F3F);strokeColor=#9673A6;fontColor=light-dark(#D5C4FF,#FFFFFF);" value="User opens or creates&lt;br&gt;a .drawio tab" vertex="1">
+          <mxGeometry height="70" width="170" x="739" y="100" as="geometry" />
+        </mxCell>
+        <mxCell id="mountTab" parent="hostLane" style="rounded=1;whiteSpace=wrap;html=1;fillColor=light-dark(#000000,#392F3F);strokeColor=#9673A6;fontColor=light-dark(#D5C4FF,#FFFFFF);" value="mountDiagramTab()&lt;br&gt;creates view + controller" vertex="1">
+          <mxGeometry height="70" width="190" x="990" y="100" as="geometry" />
+        </mxCell>
+        <mxCell id="e1" edge="1" parent="hostLane" source="openTab" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=default;fontColor=light-dark(#D5C4FF,#FFFFFF);" target="mountTab">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="createBridge" parent="hostLane" style="rounded=1;whiteSpace=wrap;html=1;fillColor=light-dark(#000000,#392F3F);strokeColor=#9673A6;fontColor=light-dark(#D5C4FF,#FFFFFF);" value="createBridge()&lt;br&gt;registers message + frame-error listeners" vertex="1">
+          <mxGeometry height="90" width="240" x="1240" y="90" as="geometry" />
+        </mxCell>
+        <mxCell id="e2" edge="1" parent="hostLane" source="mountTab" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=default;fontColor=light-dark(#D5C4FF,#FFFFFF);" target="createBridge">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="failureUi" parent="hostLane" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F8CECC;strokeColor=#B85450;fontColor=light-dark(#D5C4FF,#FFFFFF);" value="Terminal UI response&lt;br&gt;status = error&lt;br&gt;alert explains close/reopen" vertex="1">
+          <mxGeometry height="100" width="230" x="1700" y="85" as="geometry" />
+        </mxCell>
+        <mxCell id="bridgeLane" parent="1" style="swimlane;html=1;horizontal=0;startSize=32;fillColor=none;swimlaneFillColor=none;strokeColor=default;fontColor=light-dark(#D5C4FF,#FFFFFF);fontStyle=1;" value="Bridge state machine / iframe boundary" vertex="1">
+          <mxGeometry height="440" width="2060" x="40" y="348" as="geometry" />
+        </mxCell>
+        <mxCell id="attempt" parent="bridgeLane" style="rounded=1;whiteSpace=wrap;html=1;fillColor=light-dark(#000000,#392F3F);strokeColor=#9673A6;fontColor=light-dark(#D5C4FF,#FFFFFF);" value="Start attempt&lt;br&gt;attempt += 1&lt;br&gt;(maximum 2)" vertex="1">
+          <mxGeometry height="90" width="180" x="1510" y="65" as="geometry" />
+        </mxCell>
+        <mxCell id="logAttempt" parent="bridgeLane" style="shape=document;whiteSpace=wrap;html=1;boundedLbl=1;fillColor=light-dark(#000000,#392F3F);strokeColor=#9673A6;fontColor=light-dark(#D5C4FF,#FFFFFF);" value="LOG info&lt;br&gt;startup-attempt&lt;br&gt;attempt, max=2, timeout=15s, URL" vertex="1">
+          <mxGeometry height="115" width="210" x="1250" y="52.5" as="geometry" />
+        </mxCell>
+        <mxCell id="e4" edge="1" parent="bridgeLane" source="attempt" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=default;fontColor=light-dark(#D5C4FF,#FFFFFF);" target="logAttempt">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="initDecision" parent="bridgeLane" style="rhombus;whiteSpace=wrap;html=1;fillColor=light-dark(#4A3B16,#1F2F1E);strokeColor=light-dark(#000000,#446E2C);fontColor=light-dark(#D5C4FF,#FFFFFF);" value="init received&lt;br&gt;before failure?" vertex="1">
+          <mxGeometry height="120" width="180" x="75" y="294" as="geometry" />
+        </mxCell>
+        <mxCell id="navigate" parent="bridgeLane" style="rounded=1;whiteSpace=wrap;html=1;fillColor=light-dark(#000000,#392F3F);strokeColor=#9673A6;fontColor=light-dark(#D5C4FF,#FFFFFF);" value="Set iframe.src&lt;br&gt;Attempt 2 adds&lt;br&gt;mdEditorStartupAttempt=2" vertex="1">
+          <mxGeometry height="100" width="220" x="990" y="60" as="geometry" />
+        </mxCell>
+        <mxCell id="e5" edge="1" parent="bridgeLane" source="logAttempt" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=default;fontColor=light-dark(#D5C4FF,#FFFFFF);" target="navigate">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="vendorLoad" parent="bridgeLane" style="rounded=1;whiteSpace=wrap;html=1;fillColor=light-dark(#4A3B16,#1F2F1E);strokeColor=light-dark(#000000,#446E2C);fontColor=light-dark(#D5C4FF,#FFFFFF);" value="Bundled draw.io starts&lt;br&gt;index.html + bootstrap + shapes + stencils + extensions" vertex="1">
+          <mxGeometry height="115" width="260" x="690" y="52.5" as="geometry" />
+        </mxCell>
+        <mxCell id="e6" edge="1" parent="bridgeLane" source="navigate" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=default;fontColor=light-dark(#D5C4FF,#FFFFFF);" target="vendorLoad">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="waitInit" parent="bridgeLane" style="rounded=1;whiteSpace=wrap;html=1;fillColor=light-dark(#4A3B16,#1F2F1E);strokeColor=light-dark(#000000,#446E2C);fontColor=light-dark(#D5C4FF,#FFFFFF);" value="Bridge waits concurrently for:&lt;br&gt;1. postMessage { event: init }&lt;br&gt;2. 15-second timer&lt;br&gt;3. top-level iframe error" vertex="1">
+          <mxGeometry height="135" width="260" x="360" y="42.5" as="geometry" />
+        </mxCell>
+        <mxCell id="e7" edge="1" parent="bridgeLane" source="vendorLoad" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=default;fontColor=light-dark(#D5C4FF,#FFFFFF);" target="waitInit">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e8" edge="1" parent="bridgeLane" source="waitInit" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=default;fontColor=light-dark(#D5C4FF,#FFFFFF);entryX=0.5;entryY=0;entryDx=0;entryDy=0;" target="initDecision" value="events race">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="logFailed" parent="bridgeLane" style="shape=document;whiteSpace=wrap;html=1;boundedLbl=1;fillColor=#F8CECC;strokeColor=#B85450;fontColor=light-dark(#D5C4FF,#FFFFFF);" value="LOG error&lt;br&gt;startup-failed&lt;br&gt;attempt=2 + reason + message" vertex="1">
+          <mxGeometry height="110" width="230" x="1700" y="297" as="geometry" />
+        </mxCell>
+        <mxCell id="attemptDecision" parent="bridgeLane" style="rhombus;whiteSpace=wrap;html=1;fillColor=light-dark(#4A3B16,#1F2F1E);strokeColor=light-dark(#000000,#446E2C);fontColor=light-dark(#D5C4FF,#FFFFFF);" value="attempt &amp;lt; 2?" vertex="1">
+          <mxGeometry height="120" width="170" x="1030" y="292" as="geometry" />
+        </mxCell>
+        <mxCell id="e15" edge="1" parent="bridgeLane" source="attemptDecision" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=default;fontColor=light-dark(#D5C4FF,#FFFFFF);exitX=1;exitY=0.5;exitDx=0;exitDy=0;" target="logFailed" value="No: attempt 2 failed">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="logRetry" parent="bridgeLane" style="shape=document;whiteSpace=wrap;html=1;boundedLbl=1;fillColor=light-dark(#4A3B16,#1F2F1E);strokeColor=light-dark(#000000,#446E2C);fontColor=light-dark(#D5C4FF,#FFFFFF);" value="LOG warning&lt;br&gt;startup-retry&lt;br&gt;reason + nextAttempt=2" vertex="1">
+          <mxGeometry height="110" width="210" x="1250" y="190" as="geometry" />
+        </mxCell>
+        <mxCell id="e14" edge="1" parent="bridgeLane" source="logRetry" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=default;fontColor=light-dark(#D5C4FF,#FFFFFF);labelBackgroundColor=none;" target="attempt" value="retry loop">
+          <mxGeometry relative="1" x="-0.3045" as="geometry">
+            <mxPoint as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e13" edge="1" parent="bridgeLane" source="attemptDecision" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=default;fontColor=light-dark(#D5C4FF,#FFFFFF);exitX=0.5;exitY=0;exitDx=0;exitDy=0;" target="logRetry" value="Yes">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="logTimeout" parent="bridgeLane" style="shape=document;whiteSpace=wrap;html=1;boundedLbl=1;fillColor=light-dark(#4A3B16,#1F2F1E);strokeColor=light-dark(#000000,#446E2C);fontColor=light-dark(#D5C4FF,#FFFFFF);" value="LOG warning&lt;br&gt;startup-timeout or startup-frame-error" vertex="1">
+          <mxGeometry height="110" width="220" x="709" y="297" as="geometry" />
+        </mxCell>
+        <mxCell id="e12" edge="1" parent="bridgeLane" source="logTimeout" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=default;entryX=0;entryY=0.5;entryDx=0;entryDy=0;fontColor=light-dark(#D5C4FF,#FFFFFF);" target="attemptDecision">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="failureDetected" parent="bridgeLane" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F8CECC;strokeColor=#B85450;fontColor=light-dark(#D5C4FF,#FFFFFF);" value="Failure detected&lt;br&gt;timer timeout, or immediate&lt;br&gt;top-level frame error" vertex="1">
+          <mxGeometry height="100" width="240" x="375" y="302" as="geometry" />
+        </mxCell>
+        <mxCell id="e11" edge="1" parent="bridgeLane" source="failureDetected" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=default;fontColor=light-dark(#D5C4FF,#FFFFFF);" target="logTimeout">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e10" edge="1" parent="bridgeLane" source="initDecision" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=default;fontColor=light-dark(#D5C4FF,#FFFFFF);exitX=1;exitY=0.5;exitDx=0;exitDy=0;" target="failureDetected" value="No: timeout/error">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="runtimeLane" parent="1" style="swimlane;html=1;horizontal=0;startSize=32;fillColor=none;swimlaneFillColor=none;strokeColor=default;fontColor=light-dark(#D5C4FF,#FFFFFF);fontStyle=1;" value="Ready-state messages and cleanup" vertex="1">
+          <mxGeometry height="260" width="2060" x="40" y="805" as="geometry" />
+        </mxCell>
+        <mxCell id="logReady" parent="1" style="shape=document;whiteSpace=wrap;html=1;boundedLbl=1;fillColor=#F8CECC;strokeColor=#B85450;fontColor=light-dark(#D5C4FF,#FFFFFF);" value="Cancel startup timer&lt;br&gt;LOG info: startup-ready" vertex="1">
+          <mxGeometry height="95" width="210" x="100" y="860" as="geometry" />
+        </mxCell>
+        <mxCell id="sendLoad" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F8CECC;strokeColor=#B85450;fontColor=light-dark(#D5C4FF,#FFFFFF);" value="Bridge sends action: load&lt;br&gt;XML, title, autosave, theme" vertex="1">
+          <mxGeometry height="95" width="220" x="380" y="860" as="geometry" />
+        </mxCell>
+        <mxCell id="operational" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F8CECC;strokeColor=#B85450;fontColor=light-dark(#D5C4FF,#FFFFFF);fontStyle=1;" value="Diagram operational&lt;br&gt;draw.io editor is visible" vertex="1">
+          <mxGeometry height="95" width="210" x="670" y="860" as="geometry" />
+        </mxCell>
+        <mxCell id="messages" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F8CECC;strokeColor=#B85450;fontColor=light-dark(#D5C4FF,#FFFFFF);" value="Runtime postMessage events&lt;br&gt;autosave/save update XML&lt;br&gt;export resolves pending request&lt;br&gt;exit notifies host" vertex="1">
+          <mxGeometry height="125" width="250" x="950" y="845" as="geometry" />
+        </mxCell>
+        <mxCell id="closeDecision" parent="1" style="rhombus;whiteSpace=wrap;html=1;fillColor=#F8CECC;strokeColor=#B85450;fontColor=light-dark(#D5C4FF,#FFFFFF);" value="Tab closed?" vertex="1">
+          <mxGeometry height="110" width="160" x="1270" y="852" as="geometry" />
+        </mxCell>
+        <mxCell id="dispose" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=light-dark(#000000,#392F3F);strokeColor=#9673A6;fontColor=light-dark(#D5C4FF,#FFFFFF);" value="dispose()&lt;br&gt;clear timer + remove listeners&lt;br&gt;reject pending export&lt;br&gt;iframe = about:blank" vertex="1">
+          <mxGeometry height="125" width="250" x="1510" y="843" as="geometry" />
+        </mxCell>
+        <mxCell id="logDisposed" parent="1" style="shape=document;whiteSpace=wrap;html=1;boundedLbl=1;fillColor=light-dark(#000000,#392F3F);strokeColor=#9673A6;fontColor=light-dark(#D5C4FF,#FFFFFF);" value="LOG debug&lt;br&gt;disposed" vertex="1">
+          <mxGeometry height="95" width="170" x="1830" y="857" as="geometry" />
+        </mxCell>
+        <mxCell id="crashNote" parent="1" style="shape=note;whiteSpace=wrap;html=1;backgroundOutline=1;fillColor=#F8CECC;strokeColor=#B85450;fontColor=light-dark(#D5C4FF,#FFFFFF);" value="Crash/subresource failure behavior:&lt;br&gt;A vendor-script failure often does not raise an iframe error. In that case no init event arrives, so the 15-second timer triggers recovery. A top-level iframe error triggers the same recovery immediately." vertex="1">
+          <mxGeometry height="150" width="570" x="70" y="1080" as="geometry" />
+        </mxCell>
+        <mxCell id="retryNote" parent="1" style="shape=note;whiteSpace=wrap;html=1;backgroundOutline=1;fillColor=light-dark(#4A3B16,#1F2F1E);strokeColor=light-dark(#000000,#446E2C);fontColor=light-dark(#D5C4FF,#FFFFFF);" value="Retry budget:&lt;br&gt;&lt;b&gt;1 retry / 2 total attempts&lt;/b&gt;.&lt;br&gt;Closing and reopening the tab creates a new bridge and resets the budget." vertex="1">
+          <mxGeometry height="150" width="430" x="710" y="1080" as="geometry" />
+        </mxCell>
+        <mxCell id="loggingNote" parent="1" style="shape=note;whiteSpace=wrap;html=1;backgroundOutline=1;fillColor=light-dark(#000000,#392F3F);strokeColor=#9673A6;fontColor=light-dark(#D5C4FF,#FFFFFF);" value="Log destination:&lt;br&gt;Lifecycle events pass to appDebugLog. They appear in the console and are appended to the configured debug.log only when debug logging and file logging are enabled and the selected level permits the event." vertex="1">
+          <mxGeometry height="150" width="820" x="1210" y="1080" as="geometry" />
+        </mxCell>
+        <mxCell id="e3" edge="1" parent="1" source="createBridge" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=default;fontColor=light-dark(#D5C4FF,#FFFFFF);" target="attempt">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e9" edge="1" parent="1" source="initDecision" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=default;fontColor=light-dark(#D5C4FF,#FFFFFF);exitX=0.5;exitY=1;exitDx=0;exitDy=0;" target="logReady" value="Yes: init">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e16" edge="1" parent="1" source="logFailed" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=default;fontColor=light-dark(#D5C4FF,#FFFFFF);" target="failureUi">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e17" edge="1" parent="1" source="logReady" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=default;fontColor=light-dark(#D5C4FF,#FFFFFF);" target="sendLoad">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e18" edge="1" parent="1" source="sendLoad" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=default;fontColor=light-dark(#D5C4FF,#FFFFFF);" target="operational">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e19" edge="1" parent="1" source="operational" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=default;fontColor=light-dark(#D5C4FF,#FFFFFF);" target="messages">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e20" edge="1" parent="1" source="messages" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=default;fontColor=light-dark(#D5C4FF,#FFFFFF);" target="closeDecision">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e21" edge="1" parent="1" source="closeDecision" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=default;fontColor=light-dark(#D5C4FF,#FFFFFF);" target="messages" value="No">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="1350" y="1000" />
+              <mxPoint x="1075" y="1000" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e22" edge="1" parent="1" source="closeDecision" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=default;fontColor=light-dark(#D5C4FF,#FFFFFF);" target="dispose" value="Yes">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e23" edge="1" parent="1" source="dispose" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=default;fontColor=light-dark(#D5C4FF,#FFFFFF);" target="logDisposed">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

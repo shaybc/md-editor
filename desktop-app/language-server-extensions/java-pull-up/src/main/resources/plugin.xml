@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?eclipse version="3.4"?>
+<plugin>
+  <extension point="org.eclipse.jdt.ls.core.delegateCommandHandler">
+    <delegateCommandHandler class="mdeditor.java.pullup.PullUpCommandHandler">
+      <command id="mdeditor.java.pullUp.check"/>
+      <command id="mdeditor.java.pullUp.resolve"/>
+      <command id="mdeditor.java.pullUp.preview"/>
+    </delegateCommandHandler>
+  </extension>
+</plugin>

@@ -1,0 +1,220 @@
+/* Archive file viewer: searchable hierarchy and read-only entry preview. */
+.archive-viewer {
+  display: grid;
+  flex: 1 1 auto;
+  grid-template-columns: minmax(230px, 320px) minmax(0, 1fr);
+  min-width: 0;
+  min-height: 0;
+  background: var(--preview-bg);
+  color: var(--text-color);
+}
+
+.archive-viewer-sidebar {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  border-right: 1px solid var(--border-color);
+  background: var(--sidebar-bg, var(--header-bg));
+}
+
+.archive-viewer-search-row {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: 10px 10px 6px;
+  border: 1px solid var(--border-color);
+  border-radius: 5px;
+  padding: 0 8px;
+  background: var(--input-bg, var(--editor-bg));
+}
+
+.archive-viewer-search {
+  width: 100%;
+  min-width: 0;
+  border: 0;
+  padding: 6px 0;
+  outline: 0;
+  background: transparent;
+  color: var(--text-color);
+  font: inherit;
+  font-size: 0.82rem;
+}
+
+.archive-viewer-count {
+  padding: 0 11px 7px;
+  color: var(--disabled-text-color);
+  font-size: 0.75rem;
+}
+
+.archive-viewer-tree {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  padding: 0 5px 10px;
+}
+
+.archive-viewer-tree-root,
+.archive-viewer-tree-group {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.archive-viewer-tree-group {
+  padding-left: 17px;
+}
+
+.archive-viewer-tree-button {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  min-width: 0;
+  border: 0;
+  border-radius: 4px;
+  padding: 4px 6px;
+  background: transparent;
+  color: var(--text-color);
+  font: inherit;
+  font-size: 0.8rem;
+  text-align: left;
+  cursor: pointer;
+}
+
+.archive-viewer-tree-button:hover,
+.archive-viewer-tree-button.is-selected {
+  background: var(--button-hover);
+}
+
+.archive-viewer-tree-button span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.archive-viewer-entry {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+
+.archive-viewer-entry-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 42px;
+  border-bottom: 1px solid var(--border-color);
+  padding: 6px 10px;
+  background: var(--header-bg);
+}
+
+.archive-viewer-entry-heading {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.archive-viewer-entry-name,
+.archive-viewer-entry-meta {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.archive-viewer-entry-name {
+  font-size: 0.83rem;
+}
+
+.archive-viewer-entry-meta {
+  color: var(--disabled-text-color);
+  font-size: 0.74rem;
+}
+
+.archive-viewer-entry-stage {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+}
+
+.archive-viewer-text-preview {
+  flex: 1 1 auto;
+  min-width: max-content;
+  min-height: 100%;
+  margin: 0;
+  padding: 14px 16px;
+  background: var(--editor-bg);
+  color: var(--text-color);
+  font-family: var(--font-monospace, Consolas, "Courier New", monospace);
+  font-size: 0.82rem;
+  line-height: 1.45;
+  tab-size: 4;
+  white-space: pre;
+}
+
+.archive-viewer-message {
+  align-self: center;
+  width: min(520px, calc(100% - 32px));
+  margin: auto;
+  padding: 24px;
+  text-align: center;
+}
+
+.archive-viewer-message h2 {
+  margin: 0 0 8px;
+  font-size: 1rem;
+}
+
+.archive-viewer-message p {
+  margin: 0;
+  color: var(--muted-text);
+  font-size: 0.86rem;
+}
+
+.archive-viewer-message.is-error h2 {
+  color: var(--danger-color, #c0392b);
+}
+
+.archive-viewer-entry-details {
+  display: grid;
+  align-self: center;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: 6px 12px;
+  width: min(620px, calc(100% - 32px));
+  margin: auto;
+  padding: 18px;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  font-size: 0.82rem;
+}
+
+.archive-viewer-entry-details dt {
+  font-weight: 600;
+}
+
+.archive-viewer-entry-details dd {
+  min-width: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.archive-viewer-entry-stage > .file-preview-content {
+  flex: 1 1 auto;
+}
+
+@media (max-width: 800px) {
+  .archive-viewer {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(170px, 36%) minmax(0, 1fr);
+  }
+
+  .archive-viewer-sidebar {
+    border-right: 0;
+    border-bottom: 1px solid var(--border-color);
+  }
+}

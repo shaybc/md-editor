@@ -1,0 +1,249 @@
+// DOM construction and coordinate mapping for raster image-editor tabs.
+(function(global) {
+  "use strict";
+
+  const namespace = global.MarkdownViewerImageEditor = global.MarkdownViewerImageEditor || {};
+  const TOOL_ICONS = {
+    select: "bi-bounding-box",
+    pencil: "bi-pencil",
+    brush: "bi-brush",
+    line: "bi-slash-lg",
+    rectangle: "bi-square",
+    ellipse: "bi-circle",
+    polygon: "bi-pentagon",
+    bucket: "bi-paint-bucket",
+    text: "bi-fonts"
+  };
+
+  function button(icon, label, className) {
+    const element = document.createElement("button");
+    element.type = "button";
+    element.className = `image-editor-button ${className || ""}`.trim();
+    element.title = label;
+    element.setAttribute("aria-label", label);
+    element.innerHTML = `<i class="bi ${icon}" aria-hidden="true"></i>`;
+    return element;
+  }
+
+  function createToolButton(tool) {
+    const element = button(TOOL_ICONS[tool], tool[0].toUpperCase() + tool.slice(1), "image-editor-tool");
+    element.dataset.tool = tool;
+    return element;
+  }
+
+  class ImageEditorView {
+    /**
+     * Build the image-editor toolbar and layered canvas surface.
+     * @param {HTMLElement} root - Managed tab root that owns this view.
+     */
+    constructor(root) {
+      this.root = root;
+      root.innerHTML = "";
+      root.classList.add("image-editor-root");
+      this.shell = document.createElement("div");
+      this.shell.className = "image-editor-shell";
+      this.shell.innerHTML = `
+        <div class="image-editor-toolbar" role="toolbar" aria-label="Image editing tools">
+          <div class="image-editor-history-actions"></div>
+          <div class="image-editor-tools"></div>
+          <label title="Foreground color">FG <input class="image-editor-foreground" type="color" value="#111111"></label>
+          <label title="Background color">BG <input class="image-editor-background" type="color" value="#ffffff"></label>
+          <label>Size <input class="image-editor-size" type="range" min="1" max="64" value="8"></label>
+          <label><input class="image-editor-fill" type="checkbox"> Fill</label>
+          <div class="image-editor-text-controls">
+            <select class="image-editor-font" aria-label="Font family"><option>Arial</option><option>Georgia</option><option>Courier New</option></select>
+            <input class="image-editor-font-size" type="number" min="8" max="144" value="24" aria-label="Font size">
+            <button type="button" class="image-editor-format" data-format="bold" title="Bold"><strong>B</strong></button>
+            <button type="button" class="image-editor-format" data-format="italic" title="Italic"><em>I</em></button>
+          </div>
+          <div class="image-editor-selection-actions"></div>
+          <div class="image-editor-zoom-actions"></div>
+        </div>
+        <div class="image-editor-stage" tabindex="0" role="application" aria-label="Image editor canvas">
+          <div class="image-editor-canvas-wrap">
+            <canvas class="image-editor-canvas"></canvas>
+            <canvas class="image-editor-overlay"></canvas>
+            <span class="image-editor-canvas-resize image-editor-canvas-resize-e" data-canvas-resize="e" title="Resize canvas width" aria-hidden="true"></span>
+            <span class="image-editor-canvas-resize image-editor-canvas-resize-s" data-canvas-resize="s" title="Resize canvas height" aria-hidden="true"></span>
+            <span class="image-editor-canvas-resize image-editor-canvas-resize-se" data-canvas-resize="se" title="Resize canvas" aria-hidden="true"></span>
+            <div class="image-editor-text-box" title="Drag the border to move text" hidden>
+              <textarea class="image-editor-text-input" aria-label="Image text" hidden></textarea>
+              <span class="image-editor-text-resize image-editor-text-resize-nw" data-text-resize="nw" aria-hidden="true"></span>
+              <span class="image-editor-text-resize image-editor-text-resize-ne" data-text-resize="ne" aria-hidden="true"></span>
+              <span class="image-editor-text-resize image-editor-text-resize-sw" data-text-resize="sw" aria-hidden="true"></span>
+              <span class="image-editor-text-resize image-editor-text-resize-se" data-text-resize="se" aria-hidden="true"></span>
+            </div>
+          </div>
+        </div>
+        <div class="image-editor-status" aria-live="polite"></div>
+      `;
+      root.appendChild(this.shell);
+      this.toolbar = this.shell.querySelector(".image-editor-toolbar");
+      this.stage = this.shell.querySelector(".image-editor-stage");
+      this.wrap = this.shell.querySelector(".image-editor-canvas-wrap");
+      this.canvas = this.shell.querySelector(".image-editor-canvas");
+      this.overlay = this.shell.querySelector(".image-editor-overlay");
+      this.textBox = this.shell.querySelector(".image-editor-text-box");
+      this.textInput = this.shell.querySelector(".image-editor-text-input");
+      this.status = this.shell.querySelector(".image-editor-status");
+      this.context = this.canvas.getContext("2d", { willReadFrequently: true });
+      this.overlayContext = this.overlay.getContext("2d");
+
+      namespace.tools.forEach((tool) => this.shell.querySelector(".image-editor-tools").appendChild(createToolButton(tool)));
+      [
+        ["bi-arrow-counterclockwise", "Undo", "undo"],
+        ["bi-arrow-clockwise", "Redo", "redo"]
+      ].forEach(([icon, label, action]) => {
+        const element = button(icon, label);
+        element.dataset.action = action;
+        this.shell.querySelector(".image-editor-history-actions").appendChild(element);
+      });
+      [
+        ["bi-scissors", "Cut", "cut"], ["bi-copy", "Copy", "copy"],
+        ["bi-clipboard", "Paste", "paste"], ["bi-trash", "Delete", "delete"]
+      ].forEach(([icon, label, action]) => {
+        const element = button(icon, label);
+        element.dataset.action = action;
+        this.shell.querySelector(".image-editor-selection-actions").appendChild(element);
+      });
+      [["bi-dash-lg", "Zoom out", "zoom-out"], ["bi-plus-lg", "Zoom in", "zoom-in"]].forEach(([icon, label, action]) => {
+        const element = button(icon, label);
+        element.dataset.action = action;
+        this.shell.querySelector(".image-editor-zoom-actions").appendChild(element);
+      });
+    }
+
+    setDimensions(width, height) {
+      this.canvas.width = this.overlay.width = width;
+      this.canvas.height = this.overlay.height = height;
+      this.overlayContext.clearRect(0, 0, this.overlay.width, this.overlay.height);
+      if (!this.textBox.hidden) this.hideTextInput();
+    }
+
+    setZoom(zoom) {
+      const width = Math.round(this.canvas.width * zoom);
+      const height = Math.round(this.canvas.height * zoom);
+      this.wrap.style.width = `${width}px`;
+      this.wrap.style.height = `${height}px`;
+      [this.canvas, this.overlay].forEach((canvas) => {
+        canvas.style.width = `${width}px`;
+        canvas.style.height = `${height}px`;
+      });
+      if (!this.textBox.hidden && this.textRect) this.positionTextInput(this.textRect);
+    }
+
+    pointFromEvent(event) {
+      const rect = this.overlay.getBoundingClientRect();
+      return {
+        x: Math.max(0, Math.min(this.canvas.width, (event.clientX - rect.left) * this.canvas.width / rect.width)),
+        y: Math.max(0, Math.min(this.canvas.height, (event.clientY - rect.top) * this.canvas.height / rect.height))
+      };
+    }
+
+    update(state, commandState) {
+      this.shell.querySelectorAll("[data-tool]").forEach((element) => {
+        const active = element.dataset.tool === state.tool;
+        element.classList.toggle("active", active);
+        element.setAttribute("aria-pressed", String(active));
+      });
+      this.shell.querySelector(".image-editor-foreground").value = state.foregroundColor;
+      this.shell.querySelector(".image-editor-background").value = state.backgroundColor;
+      this.shell.querySelector(".image-editor-fill").checked = state.fillShapes;
+      this.shell.querySelector(".image-editor-text-controls").hidden = state.tool !== "text";
+      ["undo", "redo", "cut", "copy", "delete"].forEach((action) => {
+        const key = `can${action[0].toUpperCase()}${action.slice(1)}`;
+        const element = this.shell.querySelector(`[data-action="${action}"]`);
+        if (element) element.disabled = commandState[key] !== true;
+      });
+      this.status.textContent = `${state.width} × ${state.height}px · ${Math.round(state.zoom * 100)}%${state.isDirty ? " · Unsaved" : ""}`;
+    }
+
+    getScale() {
+      return {
+        x: this.overlay.clientWidth / this.overlay.width,
+        y: this.overlay.clientHeight / this.overlay.height
+      };
+    }
+
+    rectFromPoints(start, end) {
+      return {
+        x: Math.min(start.x, end.x),
+        y: Math.min(start.y, end.y),
+        width: Math.abs(end.x - start.x),
+        height: Math.abs(end.y - start.y)
+      };
+    }
+
+    applyTextInputStyle(state) {
+      if (this.textInput.hidden) return;
+      const scale = this.getScale();
+      this.textInput.style.font = `${state.fontItalic ? "italic " : ""}${state.fontBold ? "bold " : ""}${state.fontSize * scale.y}px ${state.fontFamily}`;
+      this.textInput.style.color = state.foregroundColor;
+    }
+
+    showTextInput(rect, state) {
+      this.textBox.hidden = false;
+      this.textInput.hidden = false;
+      this.textInput.value = "";
+      this.positionTextInput(rect);
+      this.applyTextInputStyle(state);
+      setTimeout(() => this.textInput.focus(), 0);
+    }
+
+    positionTextInput(rectOrPoint) {
+      const scale = this.getScale();
+      const previous = this.textRect || { width: 1, height: 1 };
+      const rect = {
+        x: rectOrPoint.x,
+        y: rectOrPoint.y,
+        width: rectOrPoint.width ?? previous.width,
+        height: rectOrPoint.height ?? previous.height
+      };
+      this.textRect = rect;
+      this.textBox.style.left = `${rect.x * scale.x}px`;
+      this.textBox.style.top = `${rect.y * scale.y}px`;
+      this.textBox.style.width = `${rect.width * scale.x}px`;
+      this.textBox.style.height = `${rect.height * scale.y}px`;
+    }
+
+    getTextInputRect() {
+      return this.textRect ? { ...this.textRect } : null;
+    }
+
+    getTextContentRect() {
+      if (!this.textRect || this.textInput.hidden) return null;
+      const canvasRect = this.canvas.getBoundingClientRect();
+      const inputRect = this.textInput.getBoundingClientRect();
+      const inputStyle = global.getComputedStyle(this.textInput);
+      const scaleX = this.canvas.width / canvasRect.width;
+      const scaleY = this.canvas.height / canvasRect.height;
+      const left = parseFloat(inputStyle.paddingLeft) || 0;
+      const top = parseFloat(inputStyle.paddingTop) || 0;
+      const right = parseFloat(inputStyle.paddingRight) || 0;
+      const bottom = parseFloat(inputStyle.paddingBottom) || 0;
+      const fontSize = parseFloat(inputStyle.fontSize) || 24;
+      const lineHeight = Number.isFinite(parseFloat(inputStyle.lineHeight)) ? parseFloat(inputStyle.lineHeight) : fontSize * 1.2;
+      return {
+        x: (inputRect.left - canvasRect.left + left) * scaleX,
+        y: (inputRect.top - canvasRect.top + top) * scaleY,
+        width: Math.max(1, (inputRect.width - left - right) * scaleX),
+        height: Math.max(1, (inputRect.height - top - bottom) * scaleY),
+        lineHeight: lineHeight * scaleY,
+        fontSize: fontSize * scaleY
+      };
+    }
+
+    hideTextInput() {
+      this.textBox.hidden = true;
+      this.textInput.hidden = true;
+      this.textRect = null;
+    }
+
+    destroy() {
+      this.root.classList.remove("image-editor-root");
+      this.root.innerHTML = "";
+    }
+  }
+
+  namespace.ImageEditorView = ImageEditorView;
+})(typeof window !== "undefined" ? window : globalThis);

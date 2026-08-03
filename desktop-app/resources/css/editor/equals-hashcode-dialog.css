@@ -1,0 +1,72 @@
+/* Java equals() and hashCode() generation dialog. */
+.equals-hashcode-dialog-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 10080;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(0, 0, 0, 0.58);
+}
+
+.equals-hashcode-dialog-overlay[hidden] { display: none; }
+.equals-hashcode-dialog-panel {
+  width: min(560px, calc(100vw - 48px));
+  max-height: min(720px, calc(100vh - 48px));
+  overflow: auto;
+  color: var(--text-color, #e5e7eb);
+  background: var(--panel-bg, #252732);
+  border: 1px solid var(--border-color, #555866);
+  border-radius: 6px;
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.45);
+}
+
+.equals-hashcode-dialog-header,
+.equals-hashcode-dialog-footer { display: flex; align-items: center; gap: 10px; padding: 12px 16px; }
+.equals-hashcode-dialog-header { justify-content: space-between; border-bottom: 1px solid var(--border-color, #555866); }
+.equals-hashcode-dialog-header h2 { margin: 0; font-size: 15px; font-weight: 600; }
+.equals-hashcode-dialog-close { padding: 0 4px; color: inherit; background: transparent; border: 0; font-size: 24px; }
+.equals-hashcode-dialog-instruction,
+.equals-hashcode-selection-summary { margin: 0; padding: 12px 16px 0; font-size: 13px; }
+.equals-hashcode-dialog-content {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 112px;
+  gap: 12px;
+  padding: 10px 16px;
+}
+
+.equals-hashcode-field-list {
+  min-height: 250px;
+  max-height: min(390px, calc(100vh - 390px));
+  overflow: auto;
+  padding: 8px;
+  background: var(--editor-bg, #1f212a);
+  border: 1px solid var(--border-color, #555866);
+}
+
+.equals-hashcode-field-option { display: flex; align-items: center; gap: 7px; margin: 3px 0; padding: 3px 5px; font: 13px var(--editor-font-family, monospace); }
+.equals-hashcode-field-type { margin-left: auto; color: var(--muted-text-color, #aeb3c2); font-size: 12px; }
+.equals-hashcode-selection-actions { display: flex; flex-direction: column; gap: 8px; }
+.equals-hashcode-selection-actions button,
+.equals-hashcode-dialog-footer button {
+  min-height: 30px;
+  padding: 5px 10px;
+  color: inherit;
+  background: var(--button-bg, #343746);
+  border: 1px solid var(--border-color, #656978);
+  border-radius: 3px;
+  font-size: 12px;
+}
+
+.equals-hashcode-generation-options { display: grid; gap: 8px; padding: 2px 16px 0; font-size: 13px; }
+.equals-hashcode-generation-options > label:first-child { display: grid; gap: 5px; }
+.equals-hashcode-generation-options > label:not(:first-child) { display: flex; align-items: center; gap: 6px; }
+.equals-hashcode-insertion-point { min-height: 31px; padding: 4px 8px; color: inherit; background: var(--editor-bg, #1f212a); border: 1px solid var(--border-color, #656978); }
+.equals-hashcode-dialog-footer { justify-content: flex-end; padding-top: 16px; }
+.equals-hashcode-dialog-generate { background: var(--accent-color, #6f42c1) !important; border-color: var(--accent-color, #6f42c1) !important; }
+.equals-hashcode-dialog-generate:disabled { opacity: 0.5; }
+
+@media (max-width: 620px) {
+  .equals-hashcode-dialog-content { grid-template-columns: 1fr; }
+  .equals-hashcode-selection-actions { display: grid; grid-template-columns: 1fr 1fr; }
+}
