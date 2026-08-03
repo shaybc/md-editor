@@ -38,6 +38,6 @@ desktop-app/*.log
 
 
 # removing git LFS
-/desktop-app/bin/tooling-jdk/
+#/desktop-app/bin/tooling-jdk/
 /desktop-app/vendor/kotlin-lsp/
 /desktop-app/vendor/kotlin-compiler/
