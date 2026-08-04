@@ -17,14 +17,7 @@
       label: "OpenAI",
       baseUrl: "https://api.openai.com/v1",
       defaultModel: "gpt-5.5",
-      models: Object.freeze([
-        "gpt-5.6-sol",
-        "gpt-5.6-terra",
-        "gpt-5.6-luna",
-        "gpt-5.5",
-        "gpt-5.5-pro",
-        "gpt-5.4"
-      ])
+      registryProviders: Object.freeze(["openai"])
     }),
     "google-gemini": Object.freeze({
       id: "google-gemini",
@@ -32,45 +25,28 @@
       baseUrl: "https://generativelanguage.googleapis.com/v1beta/openai",
       defaultModel: "gemini-3.6-flash",
       recommendedRequestDelayMs: 4500,
-      models: Object.freeze([
-        "gemini-3.6-flash",
-        "gemini-3.5-flash",
-        "gemini-3.5-flash-lite",
-        "gemini-3.1-flash-lite",
-        "gemini-3.1-pro-preview",
-        "gemini-3.1-pro",
-        "gemini-2.5-flash",
-        "gemini-2.5-flash-lite",
-        "gemini-2.5-pro"
-      ])
+      registryProviders: Object.freeze(["google", "google-gemini"])
     }),
     anthropic: Object.freeze({
       id: "anthropic",
       label: "Anthropic Claude",
       baseUrl: "https://api.anthropic.com/v1",
       defaultModel: "claude-sonnet-5",
-      models: Object.freeze(["claude-fable-5", "claude-opus-5", "claude-sonnet-5", "claude-haiku-4-5"])
+      registryProviders: Object.freeze(["anthropic"])
     }),
     xai: Object.freeze({
       id: "xai",
       label: "xAI Grok",
       baseUrl: "https://api.x.ai/v1",
       defaultModel: "grok-4.5",
-      models: Object.freeze([
-        "grok-4.5",
-        "grok-4.3",
-        "grok-4.20-reasoning",
-        "grok-4.20",
-        "grok-4.1-fast-reasoning",
-        "grok-4.1-fast"
-      ])
+      registryProviders: Object.freeze(["xai"])
     }),
     ollama: Object.freeze({
       id: "ollama",
       label: "Ollama",
       baseUrl: "http://localhost:11434/v1",
       defaultModel: "qwen3.5",
-      models: Object.freeze(["qwen3.5", "gpt-oss:20b", "qwen3:8b", "llama3.2", "gemma3"])
+      registryProviders: Object.freeze(["ollama", "meta (local)", "alibaba (local)", "deepseek (local)"])
     })
   });
 
@@ -87,11 +63,23 @@
    * Replace a model datalist with suggestions for one bundled provider.
    * @param {string} providerMode Selected AI Companion provider mode.
    * @param {HTMLDataListElement|null} modelOptionsList Model suggestion datalist.
+   * @param {object[]} registryModels Current rows from the AI Companion model registry.
    * @returns {string[]} Model identifiers added to the datalist.
    */
-  function populateProviderModelSuggestions(providerMode, modelOptionsList) {
+  function populateProviderModelSuggestions(providerMode, modelOptionsList, registryModels = []) {
     const preset = getProviderPreset(providerMode);
-    const models = preset ? Array.from(preset.models) : [];
+    const matchingProviders = new Set(
+      preset ? Array.from(preset.registryProviders, (provider) => String(provider || "").trim().toLowerCase()) : []
+    );
+    const seenModelIds = new Set();
+    const models = (Array.isArray(registryModels) ? registryModels : []).reduce((modelIds, model) => {
+      const modelId = String(model?.id || "").trim();
+      const provider = String(model?.provider || "").trim().toLowerCase();
+      if (!modelId || !matchingProviders.has(provider) || seenModelIds.has(modelId)) return modelIds;
+      seenModelIds.add(modelId);
+      modelIds.push(modelId);
+      return modelIds;
+    }, []);
     if (!modelOptionsList) return models;
     const documentRef = modelOptionsList.ownerDocument || (typeof document !== "undefined" ? document : null);
     const options = documentRef
@@ -108,12 +96,12 @@
   /**
    * Apply a bundled provider selection to the editable connection fields.
    * @param {string} providerMode Selected AI Companion provider mode.
-   * @param {{baseUrlInput?: HTMLInputElement|null, modelInput?: HTMLInputElement|null, apiKeyInput?: HTMLInputElement|null, modelOptionsList?: HTMLDataListElement|null, requestDelayInput?: HTMLInputElement|null}} fields Settings controls to update.
+   * @param {{baseUrlInput?: HTMLInputElement|null, modelInput?: HTMLInputElement|null, apiKeyInput?: HTMLInputElement|null, modelOptionsList?: HTMLDataListElement|null, requestDelayInput?: HTMLInputElement|null, registryModels?: object[]}} fields Settings controls to update.
    * @returns {object|null} Applied preset data, or null when the mode has no bundled preset.
    */
   function applyProviderPresetSelection(providerMode, fields = {}) {
     const preset = getProviderPreset(providerMode);
-    populateProviderModelSuggestions(providerMode, fields.modelOptionsList);
+    populateProviderModelSuggestions(providerMode, fields.modelOptionsList, fields.registryModels);
     if (fields.apiKeyInput) fields.apiKeyInput.value = "";
     if (!preset) return null;
     if (fields.baseUrlInput) fields.baseUrlInput.value = preset.baseUrl;

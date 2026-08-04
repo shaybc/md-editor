@@ -44,7 +44,7 @@
 
     async function persist() {
       try {
-        const saved = await registry.saveRegistry({ version: 1, models });
+        const saved = await registry.saveRegistry({ version: 2, models });
         models = saved.models.map((model) => ({ ...model }));
         setStatus("");
         deps.onRegistryChanged?.();
@@ -205,6 +205,7 @@
         models = loaded.models.map((model) => ({ ...model }));
         renderRows();
         setStatus("");
+        deps.onRegistryChanged?.();
       } catch (error) {
         setStatus(`Could not load model registry: ${error?.message || String(error)}`, true);
       }
@@ -241,7 +242,7 @@
         return;
       }
       // Make sure the file exists with current content before opening it as a tab.
-      await registry.saveRegistry({ version: 1, models });
+      await registry.saveRegistry({ version: 2, models });
       await deps.openDocumentSourceFile(
         { name: "model-registry.json", path: filePath },
         { temporary: false, title: "model-registry.json" }

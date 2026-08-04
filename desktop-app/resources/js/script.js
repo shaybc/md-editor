@@ -3080,7 +3080,10 @@ async function startMarkdownViewer() {
     window.registerMarkdownViewerAiCompanionModelsSettings(app, {
       registry: aiCompanionModelRegistry,
       openDocumentSourceFile,
-      onRegistryChanged: function() { app.modules?.aiCompanionPanel?.refreshModeMessages?.(); }
+      onRegistryChanged: function() {
+        app.modules?.aiCompanionPanel?.refreshModeMessages?.();
+        updateAiConnectionProviderFields();
+      }
     });
   }
   if (neutralinoAiBridge && typeof window.registerMarkdownViewerAiCompanionPromptsSettings === "function") {
@@ -8870,7 +8873,11 @@ Markdown content is processed client-side in your browser and sanitized before p
     settingsAiHttpProviderFields.forEach((field) => {
       field.hidden = showGeminiFields;
     });
-    window.markdownViewerAiProviderPresets?.populateProviderModelSuggestions(providerMode, settingsAiModelOptionsList);
+    window.markdownViewerAiProviderPresets?.populateProviderModelSuggestions(
+      providerMode,
+      settingsAiModelOptionsList,
+      aiCompanionModelRegistry?.getCachedModels?.() || []
+    );
   }
 
   function applyAiConnectionProviderPreset() {
@@ -8880,7 +8887,8 @@ Markdown content is processed client-side in your browser and sanitized before p
       modelInput: settingsAiModelInput,
       apiKeyInput: settingsAiApiKeyInput,
       modelOptionsList: settingsAiModelOptionsList,
-      requestDelayInput: settingsAiProviderRequestDelayInput
+      requestDelayInput: settingsAiProviderRequestDelayInput,
+      registryModels: aiCompanionModelRegistry?.getCachedModels?.() || []
     });
     updateAiConnectionProviderFields();
   }

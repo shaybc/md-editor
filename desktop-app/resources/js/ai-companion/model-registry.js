@@ -14,24 +14,52 @@
 
   const REGISTRY_STORAGE_KEY = "ai-companion-model-registry";
   const REGISTRY_FILE_NAME = "model-registry.json";
+  const REGISTRY_VERSION = 2;
 
   const BUILTIN_MODELS = Object.freeze([
+    { id: "gpt-5.6-sol", provider: "openai", label: "GPT-5.6 Sol", match: "^gpt-5\\.6-sol", contextWindow: 1050000, maxOutputTokens: 128000, isReasoning: true },
+    { id: "gpt-5.6-terra", provider: "openai", label: "GPT-5.6 Terra", match: "^gpt-5\\.6-terra", contextWindow: 1050000, maxOutputTokens: 128000, isReasoning: true },
+    { id: "gpt-5.6-luna", provider: "openai", label: "GPT-5.6 Luna", match: "^gpt-5\\.6-luna", contextWindow: 1050000, maxOutputTokens: 128000, isReasoning: true },
     { id: "gpt-5.5", provider: "openai", label: "GPT-5.5", match: "^gpt-5\\.5(?!-pro)", contextWindow: 1050000, maxOutputTokens: 128000, isReasoning: true },
     { id: "gpt-5.5-pro", provider: "openai", label: "GPT-5.5 Pro", match: "^gpt-5\\.5-pro", contextWindow: 1050000, maxOutputTokens: 128000, isReasoning: true },
     { id: "gpt-5.4", provider: "openai", label: "GPT-5.4", match: "^gpt-5\\.4", contextWindow: 1050000, maxOutputTokens: 128000, isReasoning: true },
     { id: "claude-fable-5", provider: "anthropic", label: "Claude Fable 5", match: "^claude-fable-5", contextWindow: 1000000, maxOutputTokens: 128000, isReasoning: true },
+    { id: "claude-opus-5", provider: "anthropic", label: "Claude Opus 5", match: "^claude-opus-5", contextWindow: 1000000, maxOutputTokens: 128000, isReasoning: true },
     { id: "claude-opus-4-8", provider: "anthropic", label: "Claude Opus 4.8", match: "^claude-opus-4-8", contextWindow: 1000000, maxOutputTokens: 128000, isReasoning: true },
     { id: "claude-sonnet-5", provider: "anthropic", label: "Claude Sonnet 5", match: "^claude-sonnet-5", contextWindow: 1000000, maxOutputTokens: 128000, isReasoning: true },
     { id: "claude-haiku-4-5", provider: "anthropic", label: "Claude Haiku 4.5", match: "^claude-haiku-4-5", contextWindow: 200000, maxOutputTokens: 64000, isReasoning: true },
+    { id: "gemini-3.6-flash", provider: "google", label: "Gemini 3.6 Flash", match: "^gemini-3\\.6-flash", contextWindow: 1048576, maxOutputTokens: 65536, isReasoning: true },
     { id: "gemini-3.1-pro", provider: "google", label: "Gemini 3.1 Pro", match: "^gemini-3\\.1-pro", contextWindow: 1048576, maxOutputTokens: 65536, isReasoning: true },
     { id: "gemini-3.5-flash", provider: "google", label: "Gemini 3.5 Flash", match: "^gemini-3\\.5-flash", contextWindow: 1048576, maxOutputTokens: 65535, isReasoning: true },
+    { id: "gemini-3.5-flash-lite", provider: "google", label: "Gemini 3.5 Flash-Lite", match: "^gemini-3\\.5-flash-lite", contextWindow: 1048576, maxOutputTokens: 65536, isReasoning: true },
     { id: "gemini-3.1-flash-lite", provider: "google", label: "Gemini 3.1 Flash-Lite", match: "^gemini-3\\.1-flash-lite", contextWindow: 1048576, maxOutputTokens: 65535, isReasoning: false },
+    { id: "gemini-3.1-pro-preview", provider: "google", label: "Gemini 3.1 Pro Preview", match: "^gemini-3\\.1-pro-preview", contextWindow: 1048576, maxOutputTokens: 65536, isReasoning: true },
     { id: "gemini-2.5-pro", provider: "google", label: "Gemini 2.5 Pro", match: "^gemini-2\\.5-pro", contextWindow: 1048576, maxOutputTokens: 65536, isReasoning: true },
     { id: "gemini-2.5-flash", provider: "google", label: "Gemini 2.5 Flash", match: "^gemini-2\\.5-flash(?!-lite)", contextWindow: 1048576, maxOutputTokens: 65536, isReasoning: true },
     { id: "gemini-2.5-flash-lite", provider: "google", label: "Gemini 2.5 Flash-Lite", match: "^gemini-2\\.5-flash-lite", contextWindow: 1048576, maxOutputTokens: 65536, isReasoning: false },
+    { id: "grok-4.5", provider: "xai", label: "Grok 4.5", match: "^grok-4\\.5", contextWindow: 500000, maxOutputTokens: 0, isReasoning: true },
+    { id: "grok-4.3", provider: "xai", label: "Grok 4.3", match: "^grok-4\\.3", contextWindow: 1000000, maxOutputTokens: 0, isReasoning: true },
+    { id: "grok-4.20-reasoning", provider: "xai", label: "Grok 4.20 Reasoning", match: "^grok-4\\.20-reasoning", contextWindow: 1000000, maxOutputTokens: 0, isReasoning: true },
+    { id: "grok-4.20", provider: "xai", label: "Grok 4.20", match: "^grok-4\\.20", contextWindow: 1000000, maxOutputTokens: 0, isReasoning: true },
+    { id: "grok-4.1-fast-reasoning", provider: "xai", label: "Grok 4.1 Fast Reasoning", match: "^grok-4\\.1-fast-reasoning", contextWindow: 1000000, maxOutputTokens: 0, isReasoning: true },
+    { id: "grok-4.1-fast", provider: "xai", label: "Grok 4.1 Fast", match: "^grok-4\\.1-fast", contextWindow: 1000000, maxOutputTokens: 0, isReasoning: false },
+    { id: "qwen3.5", provider: "ollama", label: "Qwen 3.5 (Ollama)", match: "^qwen3\\.5(?::|$)", contextWindow: 262144, maxOutputTokens: 0, isReasoning: true },
+    { id: "gpt-oss:20b", provider: "ollama", label: "GPT-OSS 20B (Ollama)", match: "^gpt-oss:20b(?:-|$)", contextWindow: 131072, maxOutputTokens: 0, isReasoning: true },
+    { id: "qwen3:8b", provider: "ollama", label: "Qwen 3 8B (Ollama)", match: "^qwen3:8b(?:-|$)", contextWindow: 40960, maxOutputTokens: 0, isReasoning: true },
+    { id: "llama3.2", provider: "ollama", label: "Llama 3.2 (Ollama)", match: "^llama3\\.2(?::|$)", contextWindow: 131072, maxOutputTokens: 0, isReasoning: false },
+    { id: "gemma3", provider: "ollama", label: "Gemma 3 (Ollama)", match: "^gemma3(?::|$)", contextWindow: 131072, maxOutputTokens: 0, isReasoning: false },
     { id: "llama3.1", provider: "meta (local)", label: "Llama 3.1 (Ollama)", match: "^llama3\\.1", contextWindow: 131072, maxOutputTokens: 8192, isReasoning: false },
     { id: "qwen2.5-coder", provider: "alibaba (local)", label: "Qwen 2.5 Coder", match: "^qwen2\\.5-coder", contextWindow: 131072, maxOutputTokens: 8192, isReasoning: false },
     { id: "deepseek-r1", provider: "deepseek (local)", label: "DeepSeek R1", match: "^deepseek-r1", contextWindow: 131072, maxOutputTokens: 32768, isReasoning: true }
+  ]);
+
+  const CONNECTION_PROVIDER_MODEL_IDS = Object.freeze([
+    "gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna", "gpt-5.5", "gpt-5.5-pro", "gpt-5.4",
+    "gemini-3.6-flash", "gemini-3.5-flash", "gemini-3.5-flash-lite", "gemini-3.1-flash-lite",
+    "gemini-3.1-pro-preview", "gemini-3.1-pro", "gemini-2.5-flash", "gemini-2.5-flash-lite", "gemini-2.5-pro",
+    "claude-fable-5", "claude-opus-5", "claude-sonnet-5", "claude-haiku-4-5",
+    "grok-4.5", "grok-4.3", "grok-4.20-reasoning", "grok-4.20", "grok-4.1-fast-reasoning", "grok-4.1-fast",
+    "qwen3.5", "gpt-oss:20b", "qwen3:8b", "llama3.2", "gemma3"
   ]);
 
   function clampPositiveInteger(value, fallback) {
@@ -58,7 +86,7 @@
 
   function createDefaultRegistry() {
     return {
-      version: 1,
+      version: REGISTRY_VERSION,
       models: BUILTIN_MODELS.map((model) => ({ ...model, builtin: true }))
     };
   }
@@ -69,7 +97,15 @@
       .map(normalizeModelEntry)
       .filter(Boolean);
     if (!models.length) return createDefaultRegistry();
-    return { version: 1, models };
+    if (Number(source.version) < REGISTRY_VERSION) {
+      const existingIds = new Set(models.map((model) => model.id));
+      const builtinModelsById = new Map(BUILTIN_MODELS.map((model) => [model.id, model]));
+      CONNECTION_PROVIDER_MODEL_IDS.forEach((id) => {
+        const builtinModel = builtinModelsById.get(id);
+        if (!existingIds.has(id) && builtinModel) models.push({ ...builtinModel, builtin: true });
+      });
+    }
+    return { version: REGISTRY_VERSION, models };
   }
 
   function registerMarkdownViewerAiCompanionModelRegistry(app, deps = {}) {
@@ -107,7 +143,9 @@
       }
       if (rawText) {
         try {
-          cachedRegistry = normalizeRegistryPayload(JSON.parse(rawText));
+          const parsedRegistry = JSON.parse(rawText);
+          cachedRegistry = normalizeRegistryPayload(parsedRegistry);
+          if (Number(parsedRegistry?.version) < REGISTRY_VERSION) await saveRegistry(cachedRegistry);
           return cachedRegistry;
         } catch (_error) {
           // Corrupt JSON: fall through to last valid/defaults and rewrite the file below.

@@ -28,6 +28,13 @@ test("AI model settings use a modal for add and edit saves", () => {
   assert.match(settingsSource, /addButton\?\.addEventListener\("click", \(\) => \{\s*openModelEditor\(null, "add"\)/);
 });
 
+test("AI model settings notify consumers after the initial registry load", () => {
+  assert.match(
+    settingsSource,
+    /async function reload\(\)[\s\S]*?models = loaded\.models\.map[\s\S]*?deps\.onRegistryChanged\?\.\(\)/
+  );
+});
+
 test("AI model editor modal markup and styles are present", () => {
   assert.match(htmlSource, /id="settings-ai-model-editor-modal"/);
   assert.match(htmlSource, /id="settings-ai-model-editor-id"/);
