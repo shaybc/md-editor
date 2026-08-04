@@ -118,7 +118,8 @@ test("AgentState, M3 context, and the typed controller remain Agent-only", () =>
   ].map((filePath) => fs.readFileSync(filePath, "utf8"));
   assert.match(agentSource, /agent-state-shadow/);
   assert.match(agentSource, /agentDecisionControllerEnabled/);
+  assert.match(agentSource, /agentVerifierCompletionEnabled/);
   for (const source of protectedSources) {
-    assert.doesNotMatch(source, /agent-state-shadow|agent-state-snapshot|agent-context-builder|agent-context-comparison|agent-observation-normalizer|agent-artifact-store|agent-decision-controller|agentDecisionControllerEnabled/);
+    assert.doesNotMatch(source, /agent-state-shadow|agent-state-snapshot|agent-context-builder|agent-context-comparison|agent-observation-normalizer|agent-artifact-store|agent-decision-controller|agent-completion-orchestrator|agentDecisionControllerEnabled|agentVerifierCompletionEnabled/);
   }
 });

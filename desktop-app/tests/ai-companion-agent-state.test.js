@@ -61,7 +61,7 @@ test("AgentState accepts sequence gaps while stateVersion counts accepted mutati
   assert.equal(applyAgentStateEvent(completed.state, event("run-1", 7, "steering_observed", {})).reason, "post-terminal-event");
 });
 
-test("AgentState v3 records validated decision lifecycle without raw tool arguments", () => {
+test("AgentState v4 records validated decision lifecycle without raw tool arguments", () => {
   let state = createInitialAgentState({ runId: "run-decisions", prompt: "inspect", controlMode: "controller" });
   const events = [
     event("run-decisions", 1, "run_started"),
@@ -109,7 +109,7 @@ test("AgentState v3 records validated decision lifecycle without raw tool argume
   assert.deepEqual(superseded.recentDecisions[0].runtimeReasonCodes, ["stale_state_version"]);
 });
 
-test("AgentState v3 rejects invalid decision lifecycle transitions", () => {
+test("AgentState v4 rejects invalid decision lifecycle transitions", () => {
   let state = createInitialAgentState({ runId: "invalid-lifecycle", controlMode: "controller" });
   state = applyAgentStateEvent(state, event("invalid-lifecycle", 1, "run_started")).state;
   state = applyAgentStateEvent(state, event("invalid-lifecycle", 2, "decision_proposed", {
@@ -218,8 +218,8 @@ test("shadow callbacks preserve user responses and callback semantics", async ()
 test("terminal snapshot validation checks metadata and generation", () => {
   const shadow = createAgentStateShadow({ requestId: "snapshot-1", prompt: "work", executionGeneration: 3 });
   const snapshot = shadow.emitTerminalSnapshot(() => {}, "completed", { reason: "done" });
-  assert.equal(snapshot.schemaVersion, 3);
-  assert.equal(snapshot.state.schemaVersion, 3);
+  assert.equal(snapshot.schemaVersion, 4);
+  assert.equal(snapshot.state.schemaVersion, 4);
   assert.deepEqual(validateTerminalAgentStateSnapshot(snapshot, { executionGeneration: 3 }), { valid: true, errors: [] });
   const stale = structuredClone(snapshot);
   stale.executionGeneration = 2;
@@ -348,4 +348,38 @@ test("Agent mode emits a failed snapshot and rethrows the original provider erro
   }
   assert.equal(events.at(-1).snapshot.terminalEventType, "run_failed");
   assert.equal(events.at(-1).snapshot.state.terminalReason, "provider failed");
+});
+
+test("M5 Agent failures record semantic failure and one final response before technical failure", async () => {
+  const profileRoot = await fs.mkdtemp(path.join(os.tmpdir(), "md-editor-agent-state-m5-failure-"));
+  const originalCreateProvider = runtime.createProvider;
+  const originalRunAgentToolLoop = runtime.runAgentToolLoop;
+  const failure = new Error("provider failed during verification");
+  runtime.createProvider = () => ({});
+  runtime.runAgentToolLoop = async () => { throw failure; };
+  const events = [];
+  try {
+    await assert.rejects(() => runAgentMode({
+      settings: {
+        enabled: true,
+        agentEnabled: true,
+        agentDecisionControllerEnabled: true,
+        agentVerifierCompletionEnabled: true,
+        intentContractsEnabled: true
+      },
+      workspaceRoot: profileRoot,
+      profileRoot,
+      requestId: "mode-m5-failure",
+      prompt: "work"
+    }, (value) => events.push(value)), (error) => error === failure);
+  } finally {
+    runtime.createProvider = originalCreateProvider;
+    runtime.runAgentToolLoop = originalRunAgentToolLoop;
+    await fs.rm(profileRoot, { recursive: true, force: true });
+  }
+  const state = events.at(-1).snapshot.state;
+  assert.equal(state.lifecycle.status, "failed");
+  assert.equal(state.completion.status, "failed");
+  assert.equal(state.completion.finalResponse.outcome, "failed");
+  assert.equal(state.verificationContextVersion > 0, true);
 });

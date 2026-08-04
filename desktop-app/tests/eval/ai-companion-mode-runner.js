@@ -264,6 +264,36 @@ function summarizeDecisionLifecycle(events = []) {
   };
 }
 
+function summarizeVerifierCompletion(events = []) {
+  const verificationEvents = events.filter((event) => event.type === "agent-verification");
+  const completionEvents = events.filter((event) => event.type === "agent-completion");
+  const assessmentEvents = events.filter((event) => event.type === "completion-assessment");
+  const started = verificationEvents.filter((event) => event.status === "started");
+  const attempts = new Set(started.map((event) => event.completionAttemptId).filter(Boolean));
+  const requestsByAttempt = {};
+  for (const event of started) {
+    requestsByAttempt[event.completionAttemptId] = (requestsByAttempt[event.completionAttemptId] || 0) + 1;
+  }
+  const finalSnapshot = [...events].reverse().find((event) => event.type === "agent-state-snapshot");
+  const finalResponse = finalSnapshot?.state?.completion?.finalResponse;
+  return {
+    completionAttempts: attempts.size,
+    completionProposals: events.filter((event) => event.type === "agent-decision" && event.decisionType === "propose_completion" && event.decisionStatus === "proposed").length,
+    verificationRequests: started.length,
+    verificationRequestsPerAttempt: requestsByAttempt,
+    staleResults: verificationEvents.filter((event) => event.status === "stale").length,
+    staleRetryRate: attempts.size ? Math.max(0, started.length - attempts.size) / attempts.size : 0,
+    acceptedResults: verificationEvents.filter((event) => event.status === "accepted").length,
+    fallbackResults: assessmentEvents.filter((event) => (event.diagnostics || []).length > 0).length,
+    gateOutcomes: completionEvents.map((event) => ({ status: event.status, reasonCodes: event.reasonCodes || [] })),
+    unsupportedResponseClaims: finalResponse?.claimValidation?.valid === false ? 1 : 0,
+    duplicateFinalizations: Math.max(0, completionEvents.filter((event) => event.status !== "rejected").length - 1),
+    verificationLatencyMs: verificationEvents.filter((event) => event.status !== "started").reduce((sum, event) => sum + Number(event.durationMs || 0), 0),
+    verificationTokens: verificationEvents.filter((event) => event.status !== "started").reduce((sum, event) => sum + Number(event.totalTokens || 0), 0),
+    semanticOutcome: finalSnapshot?.state?.completion?.status || ""
+  };
+}
+
 function scoreDeterministicOutcome(mode, expectations, response, toolCalls, events, workspaceDiff, clarificationCount) {
   const toolNames = toolCalls.map((toolCall) => toolCall.name);
   const signatures = toolCalls.map((toolCall) => `${toolCall.name}:${JSON.stringify(toolCall.arguments)}`);
@@ -299,7 +329,7 @@ function scoreDeterministicOutcome(mode, expectations, response, toolCalls, even
 }
 
 /** Execute one dataset case against one provider in disposable workspace and profile roots. */
-async function runEvaluationCase({ testCase, providerConfiguration, repetition = 1, providerFactory, controllerEnabled = false }) {
+async function runEvaluationCase({ testCase, providerConfiguration, repetition = 1, providerFactory, controllerEnabled = false, verifierCompletionEnabled = false }) {
   if (!EVALUATED_MODES.includes(testCase?.mode)) throw new Error(`Evaluation mode is outside the M0 boundary: ${testCase?.mode}`);
   const parentRoot = await fs.mkdtemp(path.join(os.tmpdir(), "md-editor-ai-m0-"));
   const workspaceRoot = path.join(parentRoot, "workspace");
@@ -310,12 +340,15 @@ async function runEvaluationCase({ testCase, providerConfiguration, repetition =
 
   const telemetry = createTelemetry();
   const originalCreateProvider = runtime.createProvider;
+  const verifierVariant = testCase.mode === "agent" && controllerEnabled === true && verifierCompletionEnabled === true;
   const settings = {
     ...resolveProviderSettings(providerConfiguration),
     enabled: true,
     chatEnabled: true,
     agentEnabled: true,
     agentDecisionControllerEnabled: testCase.mode === "agent" && controllerEnabled === true,
+    agentVerifierCompletionEnabled: verifierVariant,
+    ...(verifierVariant ? { intentContractsEnabled: true } : {}),
     providerRequestDelayMs: 0
   };
   runtime.createProvider = (requestedSettings) => instrumentProvider(
@@ -381,6 +414,7 @@ async function runEvaluationCase({ testCase, providerConfiguration, repetition =
         legacyValidToolDecisions: settings.agentDecisionControllerEnabled ? 0 : toolCalls.length
       };
       const deterministic = scoreDeterministicOutcome(testCase.mode, turn.expectations, response, toolCalls, events, workspaceDiff, clarifications.length);
+      const verifierCompletionMetrics = summarizeVerifierCompletion(events);
       const record = {
         schemaVersion: 1,
         datasetVersion: 1,
@@ -402,6 +436,7 @@ async function runEvaluationCase({ testCase, providerConfiguration, repetition =
         totalTokens: telemetry.totalTokens - usageBefore.totalTokens,
         toolCalls,
         decisionMetrics,
+        verifierCompletionMetrics,
         failedProviderCalls: calls.filter((call) => call.failed).length,
         approvals,
         clarifications,
@@ -431,6 +466,7 @@ module.exports = {
   sanitizeProviderMetadata,
   scoreDeterministicOutcome,
   summarizeDecisionLifecycle,
+  summarizeVerifierCompletion,
   validateEvaluationConfig,
   validateEvaluationDataset
 };

@@ -37,6 +37,7 @@ const DEFAULT_AI_COMPANION_SETTINGS = Object.freeze({
   agentConfirmBeforeWrite: true,
   chatRequestRoutingEnabled: true,
   agentDecisionControllerEnabled: false,
+  agentVerifierCompletionEnabled: false,
   // Intent-contract feature (M1). `intentContractsEnabled` is the user-facing master
   // switch; when off, the intent phase is fully disabled. The remaining keys are
   // thresholds shared by the headless and browser normalizers.
@@ -131,6 +132,7 @@ function normalizeAiCompanionSettings(settings = {}) {
     agentConfirmBeforeWrite: source.agentConfirmBeforeWrite !== false,
     chatRequestRoutingEnabled: source.chatRequestRoutingEnabled !== false,
     agentDecisionControllerEnabled: source.agentDecisionControllerEnabled === true,
+    agentVerifierCompletionEnabled: source.agentVerifierCompletionEnabled === true,
     intentContractsEnabled,
     intentExperiment: intentExperiment.resolveIntentExperiment(source.intentExperiment, intentContractsEnabled, { rejectInvalid: true }),
     intentClarificationMode: ["ask", "assume", "off"].includes(source.intentClarificationMode) ? source.intentClarificationMode : "assume",

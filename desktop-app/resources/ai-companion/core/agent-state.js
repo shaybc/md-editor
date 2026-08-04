@@ -4,8 +4,15 @@
 
 "use strict";
 
-const AGENT_STATE_SCHEMA_VERSION = 3;
-const AGENT_STATE_EVENT_SCHEMA_VERSION = 3;
+const {
+  COMPLETION_EVENT_TYPES,
+  applyAgentCompletionTransition,
+  createInitialCompletionState,
+  createInitialVerificationState
+} = require("./agent-completion-state");
+
+const AGENT_STATE_SCHEMA_VERSION = 4;
+const AGENT_STATE_EVENT_SCHEMA_VERSION = 4;
 const MAX_RECENT_ACTIONS = 50;
 const MAX_RECENT_DECISIONS = 50;
 const MAX_RECENT_INTERACTIONS = 25;
@@ -30,9 +37,37 @@ const EVENT_TYPES = new Set([
   "user_input_requested",
   "user_input_resolved",
   "verification_recorded",
+  "completion_attempt_started",
+  "completion_attempt_superseded",
+  "verification_result_recorded",
+  "verification_result_rejected",
+  "completion_accepted",
+  "completion_rejected",
+  "completion_terminated",
+  "final_response_recorded",
   "steering_observed",
   "run_summary_observed",
   "run_completed",
+  "run_failed",
+  "run_cancelled"
+]);
+const VERIFICATION_RELEVANT_EVENT_TYPES = new Set([
+  "intent_contract_observed",
+  "decision_proposed",
+  "decision_accepted",
+  "decision_rejected",
+  "decision_execution_authorized",
+  "decision_executed",
+  "decision_superseded",
+  "action_started",
+  "action_finished",
+  "observation_recorded",
+  "approval_requested",
+  "approval_resolved",
+  "user_input_requested",
+  "user_input_resolved",
+  "steering_observed",
+  "run_summary_observed",
   "run_failed",
   "run_cancelled"
 ]);
@@ -228,11 +263,13 @@ function createInitialAgentState(options = {}) {
     },
     pendingInteractions: [],
     interactions: [],
-    verification: { overallStatus: "not_assessed", criteria: [], assessedAt: null },
+    verification: createInitialVerificationState(),
+    completion: createInitialCompletionState(),
     artifacts: { evidenceRefs: [], changedFiles: [], attemptedFiles: [], blockedChanges: [] },
     steering: { revisionCount: 0, lastReason: "" },
     terminalReason: null,
     lastAcceptedSequence: 0,
+    verificationContextVersion: 0,
     stateVersion: 0
   };
 }
@@ -391,6 +428,9 @@ function reconcileTerminalState(state, status, reason, occurredAt) {
 }
 
 function applyTransition(next, event) {
+  if (COMPLETION_EVENT_TYPES.has(event.type)) {
+    return applyAgentCompletionTransition(next, event);
+  }
   const payload = event.payload;
   switch (event.type) {
     case "run_started":
@@ -483,7 +523,7 @@ function applyTransition(next, event) {
     case "verification_recorded": {
       const assessment = normalizeAssessment(payload.assessment);
       const verdictById = new Map(assessment.criteria.map((criterion) => [criterion.id, criterion]));
-      next.verification = { ...assessment, assessedAt: event.occurredAt };
+      next.verification = { ...next.verification, ...assessment, assessedAt: event.occurredAt };
       next.criteria = next.criteria.map((criterion) => {
         const verdict = verdictById.get(criterion.id);
         return verdict ? { ...criterion, status: verdict.status, evidenceRefs: [...verdict.evidenceIds] } : criterion;
@@ -537,6 +577,9 @@ function applyAgentStateEvent(state, event) {
   if (transitionError) return rejectTransition(state, transitionError);
   next.lastAcceptedSequence = event.sequence;
   next.stateVersion = state.stateVersion + 1;
+  if (VERIFICATION_RELEVANT_EVENT_TYPES.has(event.type)) {
+    next.verificationContextVersion = (Number(state.verificationContextVersion) || 0) + 1;
+  }
   return { accepted: true, state: next };
 }
 
@@ -549,9 +592,9 @@ function applyAgentStateEvent(state, event) {
 function validateTerminalAgentStateSnapshot(snapshot, options = {}) {
   const errors = [];
   const state = snapshot?.state;
-  if (!snapshot || snapshot.schemaVersion !== AGENT_STATE_SCHEMA_VERSION) errors.push("unsupported-snapshot-schema");
+  if (!snapshot || ![1, 2, 3, AGENT_STATE_SCHEMA_VERSION].includes(snapshot.schemaVersion)) errors.push("unsupported-snapshot-schema");
   if (snapshot?.snapshotKind !== "terminal") errors.push("snapshot-not-terminal");
-  if (!state || state.schemaVersion !== AGENT_STATE_SCHEMA_VERSION) errors.push("invalid-state");
+  if (!state || state.schemaVersion !== snapshot?.schemaVersion) errors.push("invalid-state");
   if (!state) return { valid: false, errors };
   if (!TERMINAL_RUN_STATUSES.has(state.lifecycle?.status)) errors.push("run-not-terminal");
   if ((state.activeActions || []).length) errors.push("active-actions-remain");
@@ -572,6 +615,7 @@ module.exports = {
   AGENT_STATE_EVENT_SCHEMA_VERSION,
   AGENT_STATE_SCHEMA_VERSION,
   EVENT_TYPES,
+  VERIFICATION_RELEVANT_EVENT_TYPES,
   applyAgentStateEvent,
   createInitialAgentState,
   validateTerminalAgentStateSnapshot

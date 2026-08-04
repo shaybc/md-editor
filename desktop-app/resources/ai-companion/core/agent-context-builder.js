@@ -75,6 +75,8 @@ function collectUserInstructions(state) {
 }
 
 function buildStateProjection(state) {
+  const latestVerification = state?.verification?.latestResult;
+  const activeAttempt = state?.verification?.activeAttempt;
   const projection = {
     run: state?.run || null,
     controlMode: state?.controlMode || "shadow",
@@ -93,7 +95,36 @@ function buildStateProjection(state) {
       artifactRef: observation.artifactRef?.id || ""
     })),
     observationCounts: state?.observationCounts || null,
-    verification: state?.verification || null,
+    verificationContextVersion: Number(state?.verificationContextVersion) || 0,
+    verification: state?.schemaVersion >= 4 ? {
+      activeAttempt: activeAttempt ? {
+        completionAttemptId: activeAttempt.completionAttemptId,
+        proposalDecisionId: activeAttempt.proposalDecisionId,
+        verificationId: activeAttempt.verificationId,
+        status: activeAttempt.status,
+        requestCount: activeAttempt.requestCount
+      } : null,
+      latestResult: latestVerification ? {
+        completionAttemptId: latestVerification.completionAttemptId,
+        verificationId: latestVerification.verificationId,
+        verificationStatus: latestVerification.verificationStatus,
+        criteria: latestVerification.criteria,
+        blockers: latestVerification.blockers,
+        unresolvedIssues: latestVerification.unresolvedIssues,
+        reasonCodes: latestVerification.reasonCodes
+      } : null,
+      acceptedCount: state.verification.acceptedCount,
+      rejectedCount: state.verification.rejectedCount,
+      staleCount: state.verification.staleCount
+    } : (state?.verification || null),
+    completion: state?.completion ? {
+      status: state.completion.status,
+      completionAttemptId: state.completion.completionAttemptId,
+      proposalDecisionId: state.completion.proposalDecisionId,
+      verificationId: state.completion.verificationId,
+      reasonCodes: state.completion.reasonCodes,
+      unresolvedIssues: state.completion.unresolvedIssues
+    } : null,
     artifacts: state?.artifacts || null,
     steering: state?.steering || null
   };

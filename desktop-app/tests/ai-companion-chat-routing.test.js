@@ -257,4 +257,8 @@ test("browser and headless settings normalize the routing kill switch identicall
   assert.equal(normalizeAiCompanionSettings({}).agentDecisionControllerEnabled, false);
   assert.equal(browserApi.normalize({ agentDecisionControllerEnabled: true }).agentDecisionControllerEnabled, true);
   assert.equal(normalizeAiCompanionSettings({ agentDecisionControllerEnabled: true }).agentDecisionControllerEnabled, true);
+  assert.equal(browserApi.normalize({}).agentVerifierCompletionEnabled, false);
+  assert.equal(normalizeAiCompanionSettings({}).agentVerifierCompletionEnabled, false);
+  assert.equal(browserApi.normalize({ agentVerifierCompletionEnabled: true }).agentVerifierCompletionEnabled, true);
+  assert.equal(normalizeAiCompanionSettings({ agentVerifierCompletionEnabled: true }).agentVerifierCompletionEnabled, true);
 });

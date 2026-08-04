@@ -18,6 +18,7 @@ const {
   runEvaluationCase,
   scoreDeterministicOutcome,
   summarizeDecisionLifecycle,
+  summarizeVerifierCompletion,
   validateEvaluationConfig,
   validateEvaluationDataset
 } = require("./eval/ai-companion-mode-runner");
@@ -110,6 +111,28 @@ test("M4 evaluation metrics count safe decision lifecycle events", () => {
     decoratedToolProposals: 1,
     decoratedValidToolDecisions: 1
   });
+});
+
+test("M5 evaluation metrics count attempts, stale retries, outcomes, and verification cost", () => {
+  const metrics = summarizeVerifierCompletion([
+    { type: "agent-decision", decisionStatus: "proposed", decisionType: "propose_completion" },
+    { type: "agent-verification", status: "started", completionAttemptId: "A1", verificationId: "V1" },
+    { type: "agent-verification", status: "stale", completionAttemptId: "A1", verificationId: "V1", durationMs: 10, totalTokens: 5 },
+    { type: "agent-verification", status: "started", completionAttemptId: "A1", verificationId: "V2" },
+    { type: "agent-verification", status: "accepted", completionAttemptId: "A1", verificationId: "V2", durationMs: 12, totalTokens: 7 },
+    { type: "completion-assessment", stateOwned: true, diagnostics: [] },
+    { type: "agent-completion", status: "succeeded", reasonCodes: [] },
+    { type: "agent-state-snapshot", state: { completion: { status: "succeeded", finalResponse: { claimValidation: { valid: true } } } } }
+  ]);
+  assert.equal(metrics.completionAttempts, 1);
+  assert.equal(metrics.completionProposals, 1);
+  assert.equal(metrics.verificationRequests, 2);
+  assert.equal(metrics.staleResults, 1);
+  assert.equal(metrics.staleRetryRate, 1);
+  assert.equal(metrics.acceptedResults, 1);
+  assert.equal(metrics.verificationLatencyMs, 22);
+  assert.equal(metrics.verificationTokens, 12);
+  assert.equal(metrics.semanticOutcome, "succeeded");
 });
 
 test("report summaries stay separated by provider role, mode, and category", () => {

@@ -38,6 +38,8 @@ const completionAssessment = require("./completion-assessment");
 const completionEvidence = require("./completion-evidence-ledger");
 const completionResponseRewrite = require("./completion-response-rewrite");
 const completionSteering = require("./completion-steering");
+const { createAgentCompletionOrchestrator } = require("./agent-completion-orchestrator");
+const { composeFinalResponse } = require("./agent-final-response-composer");
 const planFinalization = require("./plan-finalization");
 const { createIntentEvaluationTracker } = require("./intent-evaluation");
 const intentExperiment = require("../../js/ai-companion/intent-experiment");
@@ -2739,8 +2741,44 @@ async function runAgentToolLoop(provider, settings, root, prompt, mode, emit, ru
   let priorUnmetIds = new Set();
   let steeringFinalReason = "";
   let steeringConverged = false;
-  const finishRun = (content) => {
-    const finalContent = appendToolReliabilityNote(content, loopOptions.toolReliability);
+  const verifierCompletionEnabled = mode === "agent"
+    && settings.agentVerifierCompletionEnabled === true
+    && settings.agentDecisionControllerEnabled === true
+    && settings.intentContractsEnabled === true
+    && settings.intentExperiment?.intentCompletionAssessment === true
+    && Boolean(loopOptions.agentStateSession);
+  const finishRun = (content, semanticOutcome = {}) => {
+    let finalContent = appendToolReliabilityNote(content, loopOptions.toolReliability);
+    let semanticCompletion = null;
+    if (verifierCompletionEnabled) {
+      let state = loopOptions.agentStateSession.getState();
+      if (!["succeeded", "blocked", "provisional", "unverified", "budget_exhausted", "failed", "cancelled"].includes(state.completion?.status)) {
+        const status = ["blocked", "provisional", "unverified", "budget_exhausted", "failed", "cancelled"].includes(semanticOutcome.status)
+          ? semanticOutcome.status
+          : "failed";
+        loopOptions.agentStateSession.applyControllerEvent("completion_terminated", {
+          status,
+          reasonCodes: semanticOutcome.reasonCodes?.length ? semanticOutcome.reasonCodes : ["untyped_agent_exit"],
+          unresolvedIssues: semanticOutcome.unresolvedIssues || []
+        });
+        state = loopOptions.agentStateSession.getState();
+      }
+      if (!state.completion?.finalResponse) {
+        const response = composeFinalResponse({
+          state,
+          outcome: state.completion.status,
+          proposalContent: content,
+          reasonCodes: state.completion.reasonCodes
+        });
+        response.content = appendToolReliabilityNote(response.content, loopOptions.toolReliability);
+        loopOptions.agentStateSession.applyControllerEvent("final_response_recorded", { response });
+        state = loopOptions.agentStateSession.getState();
+      }
+      finalContent = state.completion.finalResponse.content;
+      semanticCompletion = state.completion;
+      steeringConverged = state.completion.status === "succeeded";
+      if (!steeringFinalReason) steeringFinalReason = state.completion.status;
+    }
     if (!evaluationEmitted && INTENT_CONTRACT_MODES.has(mode)) {
       evaluationEmitted = true;
       emit({
@@ -2754,7 +2792,7 @@ async function runAgentToolLoop(provider, settings, root, prompt, mode, emit, ru
         })
       });
     }
-    if (shouldEmitActivitySummary && activityRun) emit(activityRun.createSummary(finalContent));
+    if (shouldEmitActivitySummary && activityRun) emit(activityRun.createSummary(finalContent, semanticCompletion));
     return finalContent;
   };
   const hasToolDefinitionsOverride = Array.isArray(loopOptions.toolDefinitionsOverride);
@@ -2767,6 +2805,20 @@ async function runAgentToolLoop(provider, settings, root, prompt, mode, emit, ru
   const controllerEnabled = mode === "agent" && settings.agentDecisionControllerEnabled === true;
   if (controllerEnabled && !loopOptions.agentStateSession) throw new Error("Agent decision controller requires an authoritative state session.");
   if (controllerEnabled) loadAgentDecisionController();
+  const completionOrchestrator = verifierCompletionEnabled
+    ? createAgentCompletionOrchestrator({
+        provider,
+        settings,
+        prompts: loopOptions.prompts,
+        signal: loopOptions.signal,
+        stateSession: loopOptions.agentStateSession,
+        activityRun,
+        emit,
+        onUsage: (usage) => emit({ type: "usage", ...usage, reported: true }),
+        onDebug: createProviderDebugEmitter(emit),
+        finalizeContent: (content) => appendToolReliabilityNote(content, loopOptions.toolReliability)
+      })
+    : null;
   const controllerToolDefinitions = controllerEnabled
     ? agentDecisionController.createControllerToolDefinitions(toolDefinitions)
     : toolDefinitions;
@@ -2857,11 +2909,17 @@ async function runAgentToolLoop(provider, settings, root, prompt, mode, emit, ru
     if (intentPhase.usedTools) usedTools = true;
     if (intentPhase.recoveryState === "blocked") {
       const blockerCandidate = "The interrupted task could not resume because its pending approval instruction could not be validated after one bounded repair attempt. The instruction remains preserved, and no mutation was executed.";
-      const content = shouldAssessCompletion(settings, loopOptions.intentContract)
+      const content = !verifierCompletionEnabled && shouldAssessCompletion(settings, loopOptions.intentContract)
         ? (await finalizeAssessedCandidate(provider, settings, mode, blockerCandidate, loopOptions, activityRun, emit)).content
         : blockerCandidate;
-      return finishRun(content);
+      return finishRun(content, { status: "blocked", reasonCodes: ["approval_recovery_blocked"] });
     }
+  }
+  if (verifierCompletionEnabled && !loopOptions.intentContract) {
+    return finishRun("The Agent task cannot be verified because no intent contract is available.", {
+      status: "failed",
+      reasonCodes: ["missing_intent_contract"]
+    });
   }
   const resumedAction = await replayResumeCheckpoint(root, settings, mode, messages, activityRun, emit, loopOptions);
   if (resumedAction.usedTools) usedTools = true;
@@ -2903,7 +2961,7 @@ async function runAgentToolLoop(provider, settings, root, prompt, mode, emit, ru
       const tokenBudgetReservation = await reserveTokenMinuteBudget(tokenBudget, estimatedTokens, mode, loopOptions, providerMessages);
       if (!tokenBudgetReservation.approved) {
         const content = tokenBudgetReservation.content || createTaskLimitFallbackContent({ reason: "max_tokens", mode, phase: "chat token budget" });
-        return finishRun(content);
+        return finishRun(content, { status: "budget_exhausted", reasonCodes: ["token_budget_exhausted"] });
       }
       let message;
       try {
@@ -2930,7 +2988,7 @@ async function runAgentToolLoop(provider, settings, root, prompt, mode, emit, ru
         const continuation = await requestTaskContinuation(context, loopOptions);
         if (!continuation.approved) {
           const content = continuation.content || createTaskLimitFallbackContent(context);
-          return finishRun(content);
+          return finishRun(content, { status: "budget_exhausted", reasonCodes: ["max_tokens"] });
         }
         compactToolResultMessagesForContinuation(messages);
         messages.push(createContinuationMessage(context, continuation));
@@ -2968,7 +3026,10 @@ async function runAgentToolLoop(provider, settings, root, prompt, mode, emit, ru
           }, emit);
           if (controllerRepairDecision) {
             loopOptions.agentStateSession.setControllerTerminationReason("controller-invalid-decision");
-            return finishRun(agentDecisionController.createControllerBlockedContent(normalized.validationCodes));
+            return finishRun(agentDecisionController.createControllerBlockedContent(normalized.validationCodes), {
+              status: "blocked",
+              reasonCodes: ["controller_invalid_decision", ...normalized.validationCodes]
+            });
           }
           controllerRepairDecision = controllerDecision;
           continue;
@@ -2983,7 +3044,10 @@ async function runAgentToolLoop(provider, settings, root, prompt, mode, emit, ru
           const payload = controllerDecisionPayload || {};
           if (typeof loopOptions.requestClarification !== "function") {
             loopOptions.agentStateSession.setControllerTerminationReason("controller-clarification-unavailable");
-            return finishRun("The task is blocked because required user input cannot be requested in this session.");
+            return finishRun("The task is blocked because required user input cannot be requested in this session.", {
+              status: "blocked",
+              reasonCodes: ["clarification_channel_unavailable"]
+            });
           }
           const answer = String(await loopOptions.requestClarification({
             decisionId: controllerDecision.decisionId,
@@ -3039,13 +3103,17 @@ async function runAgentToolLoop(provider, settings, root, prompt, mode, emit, ru
           const continuation = await requestTaskContinuation(context, loopOptions);
           if (!continuation.approved) {
             const content = [String(message.content || "").trim(), continuation.content].filter(Boolean).join("\n\n");
-            return finishRun(content);
+            return finishRun(content, { status: "budget_exhausted", reasonCodes: ["max_tokens"] });
           }
           compactToolResultMessagesForContinuation(messages);
           messages.push(createContinuationMessage(context, continuation));
           continue taskPass;
         }
-        if (shouldAssessCompletion(settings, loopOptions.intentContract)) {
+        if (verifierCompletionEnabled && controllerReportedBlocked) {
+          loopOptions.agentStateSession.applyControllerEvent("decision_executed", { decisionId: controllerDecision.decisionId });
+          return finishRun(controllerCompletionCandidate, { status: "blocked", reasonCodes: ["controller_reported_blocked"] });
+        }
+        if (verifierCompletionEnabled || shouldAssessCompletion(settings, loopOptions.intentContract)) {
           const gate = controllerReportedBlocked
             ? { rerunPlanning: false, unresolved: [] }
             : await runPlanFinalizationGate(provider, settings, loopOptions, messages, emit, activityRun);
@@ -3053,26 +3121,43 @@ async function runAgentToolLoop(provider, settings, root, prompt, mode, emit, ru
           addPlanAmbiguityContext(messages, gate.unresolved, loopOptions);
           const candidate = controllerCompletionCandidate
             || await generateHiddenCandidate(provider, messages, emit, { ...loopOptions, requestChatTitle: false });
-          const finalized = await finalizeAssessedCandidate(provider, settings, mode, candidate, loopOptions, activityRun, emit);
+          let verifierResult = null;
+          let assessedCandidate = verifierCompletionEnabled
+            ? null
+            : await finalizeAssessedCandidate(provider, settings, mode, candidate, loopOptions, activityRun, emit);
+          if (verifierCompletionEnabled) {
+            if (!controllerDecision || controllerDecision.type !== agentDecisionController.DECISION_TYPES.PROPOSE_COMPLETION) {
+              return finishRun(candidate, { status: "failed", reasonCodes: ["invalid_completion_proposal"] });
+            }
+            verifierResult = await completionOrchestrator.runCompletionAttempt({
+              decision: controllerDecision,
+              candidate,
+              contract: loopOptions.intentContract
+            });
+            if (verifierResult.action === "stop") {
+              return finishRun(verifierResult.content, { status: verifierResult.outcome, reasonCodes: verifierResult.reasonCodes });
+            }
+            assessedCandidate = { content: candidate, assessment: verifierResult.assessment };
+          }
           // Closed-loop steering: on an incomplete verdict, route by arbiter class and, when
           // the decision is to keep going, inject the steering feedback and run another bounded
           // agent pass instead of returning. Blocked and out-of-budget stop and report honestly.
-          if (!controllerReportedBlocked && steeringEnabled && finalized.assessment?.overallStatus === "incomplete") {
+          if (!controllerReportedBlocked && steeringEnabled && assessedCandidate.assessment?.overallStatus === "incomplete") {
             const decision = completionSteering.decideSteering({
-              assessment: finalized.assessment,
+              assessment: assessedCandidate.assessment,
               contract: loopOptions.intentContract,
               iteration: revisionIterations,
               maxRevisions,
               priorUnmetIds
             });
             if (decision.action !== "stop" && decision.feedback) {
-              priorUnmetIds = new Set([...priorUnmetIds, ...completionSteering.unmetCriterionIds(finalized.assessment)]);
+              priorUnmetIds = new Set([...priorUnmetIds, ...completionSteering.unmetCriterionIds(assessedCandidate.assessment)]);
               revisionIterations += 1;
               steeringFinalReason = decision.reason;
               // Ambiguity / spec-gap: auto-ask one clarification and fold the answer into the
               // contract before the next pass. Falls back to feedback-only if unavailable.
               if (decision.action === "revise-contract") {
-                await runSteeringClarification(provider, settings, loopOptions, messages, emit, decision, finalized.assessment);
+                await runSteeringClarification(provider, settings, loopOptions, messages, emit, decision, assessedCandidate.assessment);
               }
               const contractCriteria = loopOptions.intentContract?.acceptanceCriteria || [];
               emit({
@@ -3081,7 +3166,7 @@ async function runAgentToolLoop(provider, settings, root, prompt, mode, emit, ru
                 action: decision.action,
                 revision: revisionIterations,
                 maxRevisions,
-                unmet: (finalized.assessment?.criteria || [])
+                unmet: (assessedCandidate.assessment?.criteria || [])
                   .filter((verdict) => verdict.status === "unmet")
                   .map((verdict) => {
                     const criterion = contractCriteria.find((entry) => entry.id === verdict.id);
@@ -3093,10 +3178,16 @@ async function runAgentToolLoop(provider, settings, root, prompt, mode, emit, ru
             }
             steeringFinalReason = decision.reason;
           }
-          steeringConverged = finalized.assessment?.overallStatus === "complete";
+          steeringConverged = assessedCandidate.assessment?.overallStatus === "complete";
           if (steeringConverged) steeringFinalReason = "converged";
-          else if (!steeringFinalReason) steeringFinalReason = String(finalized.assessment?.overallStatus || "");
-          return finishRun(finalized.content);
+          else if (!steeringFinalReason) steeringFinalReason = String(assessedCandidate.assessment?.overallStatus || "");
+          if (verifierCompletionEnabled) {
+            const status = steeringFinalReason === "blocked"
+              ? "blocked"
+              : (steeringFinalReason === "budget-exhausted" ? "budget_exhausted" : "failed");
+            return finishRun(assessedCandidate.content, { status, reasonCodes: verifierResult?.reasonCodes || ["verification_unsatisfied"] });
+          }
+          return finishRun(assessedCandidate.content);
         }
         const content = controllerCompletionCandidate
           || (usedTools ? await streamFinalAnswer(provider, messages, emit, loopOptions) : String(message.content || "").trim());
@@ -3417,17 +3508,17 @@ async function runAgentToolLoop(provider, settings, root, prompt, mode, emit, ru
       if (terminalDecisionBlockOutcome) {
         const decisionId = terminalDecisionBlockOutcome.control?.decision?.id || "unknown";
         const blockerCandidate = `Mutation work stopped because unresolved decision ${decisionId} blocked more than one proposal. No repeated proposal was executed.`;
-        const content = shouldAssessCompletion(settings, loopOptions.intentContract)
+        const content = !verifierCompletionEnabled && shouldAssessCompletion(settings, loopOptions.intentContract)
           ? (await finalizeAssessedCandidate(provider, settings, mode, blockerCandidate, loopOptions, activityRun, emit)).content
           : blockerCandidate;
-        return finishRun(content);
+        return finishRun(content, { status: "blocked", reasonCodes: ["repeated_mutation_block"] });
       }
       if (approvalAmendmentOutcome?.state === "blocked") {
         const blockerCandidate = "The task could not continue because the approval instruction could not be validated after one bounded repair attempt. The instruction was preserved, and no corrected mutation was executed.";
-        const content = shouldAssessCompletion(settings, loopOptions.intentContract)
+        const content = !verifierCompletionEnabled && shouldAssessCompletion(settings, loopOptions.intentContract)
           ? (await finalizeAssessedCandidate(provider, settings, mode, blockerCandidate, loopOptions, activityRun, emit)).content
           : blockerCandidate;
-        return finishRun(content);
+        return finishRun(content, { status: "blocked", reasonCodes: ["approval_amendment_blocked"] });
       }
       if (approvalAmendmentOutcome?.state === "applied") continue;
     }
@@ -3436,7 +3527,7 @@ async function runAgentToolLoop(provider, settings, root, prompt, mode, emit, ru
     const continuation = await requestTaskContinuation(context, loopOptions);
     if (!continuation.approved) {
       const content = continuation.content || createTaskLimitFallbackContent(context);
-      return finishRun(content);
+      return finishRun(content, { status: "budget_exhausted", reasonCodes: ["max_actions"] });
     }
     messages.push(createContinuationMessage(context, continuation));
   }

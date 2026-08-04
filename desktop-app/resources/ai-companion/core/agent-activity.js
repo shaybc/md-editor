@@ -388,7 +388,7 @@ function createActivityRun(root, tools, options = {}) {
     };
   }
 
-  function createSummary(finalContent = "") {
+  function createSummary(finalContent = "", semanticCompletion = null) {
     const files = Array.from(changedFiles.values()).map((file) => ({
       path: file.path,
       name: file.name,
@@ -413,13 +413,17 @@ function createActivityRun(root, tools, options = {}) {
     return {
       type: "agent-summary",
       elapsedMs: Date.now() - startedAt,
-      outcome: files.length
+      outcome: semanticCompletion
+        ? (semanticCompletion.status === "succeeded"
+          ? "Completed the requested Agent task after verification."
+          : `The Agent run ended with semantic outcome: ${semanticCompletion.status}.`)
+        : (files.length
         ? "Completed the requested workspace changes."
         : attempted.length
           ? "The agent inspected the workspace and attempted changes, but no file edits were applied."
           : blocked.length
             ? `No changes were applied; ${blocked.reduce((total, group) => total + group.count, 0)} proposed mutation(s) were blocked.`
-          : (finalResponse.split(/\n+/)[0] || "Completed the agent run."),
+          : (finalResponse.split(/\n+/)[0] || "Completed the agent run.")),
       finalResponse,
       changedFiles: files,
       attemptedChanges: attempted,
@@ -427,7 +431,13 @@ function createActivityRun(root, tools, options = {}) {
       notes: [],
       validation: [],
       evidenceLedger: completionEvidence.listEvidence(),
-      completionAssessment
+      completionAssessment,
+      semanticCompletion: semanticCompletion ? {
+        status: String(semanticCompletion.status || ""),
+        completionAttemptId: String(semanticCompletion.completionAttemptId || ""),
+        verificationId: String(semanticCompletion.verificationId || ""),
+        reasonCodes: Array.isArray(semanticCompletion.reasonCodes) ? [...semanticCompletion.reasonCodes] : []
+      } : null
     };
   }
 
@@ -452,6 +462,10 @@ function createActivityRun(root, tools, options = {}) {
     return completionEvidence.listEvidence();
   }
 
+  function getEvidenceSnapshot() {
+    return completionEvidence.getEvidenceSnapshot();
+  }
+
   function setCompletionAssessment(assessment) {
     completionAssessment = assessment ? { ...assessment } : null;
   }
@@ -467,6 +481,7 @@ function createActivityRun(root, tools, options = {}) {
     recordToolEvidence,
     recordCandidateEvidence,
     listEvidence,
+    getEvidenceSnapshot,
     setCompletionAssessment
   };
 }

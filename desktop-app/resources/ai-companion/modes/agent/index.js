@@ -5,6 +5,7 @@
 "use strict";
 
 const runtime = require("../../core/agent-runtime");
+const { composeFinalResponse } = require("../../core/agent-final-response-composer");
 const { createAgentStateShadow, isAgentCancellation, terminalReasonForError } = require("../../core/agent-state-shadow");
 const { AGENT_APPROVAL_RATIONALE_INSTRUCTION, AGENT_COMPLETION_REPORTING_INSTRUCTION, LEGACY_AGENT_COMPLETION_REPORTING_INSTRUCTION, DEFAULT_AI_COMPANION_PROMPTS, loadAiCompanionPrompts } = require("../../config/prompts");
 const AGENT_MODE_SYSTEM_PROMPT = `${DEFAULT_AI_COMPANION_PROMPTS.agentSystem} ${AGENT_APPROVAL_RATIONALE_INSTRUCTION} ${LEGACY_AGENT_COMPLETION_REPORTING_INSTRUCTION}`;
@@ -12,6 +13,7 @@ const AGENT_MODE_SYSTEM_PROMPT = `${DEFAULT_AI_COMPANION_PROMPTS.agentSystem} ${
 async function runAgentMode(request, emit) {
   const prompt = String(request.prompt || "");
   let stateSession = null;
+  let verifierCompletionEnabled = false;
   let observedEmit = emit;
   try {
     const settings = runtime.normalizeAiCompanionSettings(request.settings);
@@ -26,6 +28,13 @@ async function runAgentMode(request, emit) {
     });
     observedEmit = stateSession.wrapEmit(emit);
     if (!settings.enabled || !settings.agentEnabled) throw new Error("AI Companion agent mode is disabled.");
+    if (settings.agentVerifierCompletionEnabled === true
+      && (settings.agentDecisionControllerEnabled !== true
+        || settings.intentContractsEnabled !== true
+        || settings.intentExperiment?.intentCompletionAssessment !== true)) {
+      throw new Error("Agent verifier completion requires the Agent decision controller, intent contracts, and completion assessment.");
+    }
+    verifierCompletionEnabled = settings.agentVerifierCompletionEnabled === true;
     runtime.throwIfAborted(request.signal);
     const provider = runtime.createProvider(settings);
     const prompts = await loadAiCompanionPrompts({ profileRoot: request.profileRoot });
@@ -56,6 +65,27 @@ async function runAgentMode(request, emit) {
     return { content: response };
   } catch (error) {
     const status = isAgentCancellation(error, request.signal) ? "cancelled" : "failed";
+    if (verifierCompletionEnabled && stateSession) {
+      let state = stateSession.getState();
+      if (!["succeeded", "blocked", "provisional", "unverified", "budget_exhausted", "failed", "cancelled"].includes(state.completion?.status)) {
+        stateSession.applyControllerEvent("completion_terminated", {
+          status,
+          reasonCodes: [status === "cancelled" ? "run_cancelled" : "runtime_failure"],
+          unresolvedIssues: [{ description: terminalReasonForError(error, status) }]
+        });
+        state = stateSession.getState();
+      }
+      if (!state.completion?.finalResponse) {
+        stateSession.applyControllerEvent("final_response_recorded", {
+          response: composeFinalResponse({
+            state,
+            outcome: state.completion.status,
+            proposalContent: "",
+            reasonCodes: state.completion.reasonCodes
+          })
+        });
+      }
+    }
     stateSession?.emitTerminalSnapshot(emit, status, { reason: terminalReasonForError(error, status) });
     throw error;
   }

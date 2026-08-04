@@ -292,6 +292,10 @@ function createAgentStateShadow(options = {}) {
       return;
     }
     if (event.type === "completion-assessment") {
+      if (isControllerMode && event.stateOwned === true) {
+        diagnostics.ignoredEventCount += 1;
+        return;
+      }
       applyAtObservation("verification_recorded", {
         assessment: event.assessment || {},
         evidenceRefs: (Array.isArray(event.evidenceLedger) ? event.evidenceLedger : []).map((entry) => entry?.id).filter(Boolean)

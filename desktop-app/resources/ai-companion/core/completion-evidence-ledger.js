@@ -7,6 +7,8 @@
 
 "use strict";
 
+const crypto = require("node:crypto");
+
 const CANDIDATE_EVIDENCE_ID = "EV-CANDIDATE-1";
 const MAX_EVIDENCE_SUMMARY_CHARS = 1200;
 const EXECUTION_TOOLS = new Set(["run_command", "run_test", "compile_project", "run_tests", "restore_dependencies", "manage_package"]);
@@ -20,6 +22,16 @@ const LOCALIZATION_FILE_TOOLS = new Set([
 function boundedText(value, maximum = MAX_EVIDENCE_SUMMARY_CHARS) {
   const text = String(value || "").replace(/\s+/g, " ").trim();
   return text.length > maximum ? `${text.slice(0, maximum)}...[truncated]` : text;
+}
+
+function canonicalize(value) {
+  if (Array.isArray(value)) return value.map(canonicalize);
+  if (!value || typeof value !== "object") return value;
+  return Object.fromEntries(Object.keys(value).sort().map((key) => [key, canonicalize(value[key])]));
+}
+
+function evidenceFingerprint(entries) {
+  return crypto.createHash("sha256").update(JSON.stringify(canonicalize(entries))).digest("hex");
 }
 
 function containsTruncationSignal(value, depth = 0) {
@@ -106,6 +118,7 @@ function localizationFiles(tool, args = {}, result = {}) {
 
 function createCompletionEvidenceLedger(initialEntries = []) {
   const entries = Array.isArray(initialEntries) ? initialEntries.map((entry) => ({ ...entry })) : [];
+  let evidenceVersion = entries.length;
   let nextId = entries.reduce((maximum, entry) => {
     const match = String(entry?.id || "").match(/^EV(\d+)$/);
     return match ? Math.max(maximum, Number(match[1]) + 1) : maximum;
@@ -145,6 +158,7 @@ function createCompletionEvidenceLedger(initialEntries = []) {
       }));
     }
     entries.push(entry);
+    evidenceVersion += 1;
     return entry;
   }
 
@@ -161,8 +175,15 @@ function createCompletionEvidenceLedger(initialEntries = []) {
       confirmationSource: "candidate-normalization",
       contentLength: String(candidate || "").length
     };
-    if (existingIndex >= 0) entries[existingIndex] = entry;
-    else entries.push(entry);
+    if (existingIndex >= 0) {
+      if (JSON.stringify(entries[existingIndex]) !== JSON.stringify(entry)) {
+        entries[existingIndex] = entry;
+        evidenceVersion += 1;
+      }
+    } else {
+      entries.push(entry);
+      evidenceVersion += 1;
+    }
     return entry;
   }
 
@@ -170,11 +191,26 @@ function createCompletionEvidenceLedger(initialEntries = []) {
     return entries.map((entry) => ({ ...entry }));
   }
 
-  return { recordToolEvidence, recordCandidateEvidence, listEvidence };
+  function getEvidenceById(evidenceId) {
+    const entry = entries.find((candidate) => candidate.id === String(evidenceId || ""));
+    return entry ? { ...entry } : null;
+  }
+
+  function getEvidenceSnapshot() {
+    const normalizedEntries = listEvidence();
+    return {
+      evidenceVersion,
+      evidenceFingerprint: evidenceFingerprint(normalizedEntries),
+      entries: normalizedEntries
+    };
+  }
+
+  return { recordToolEvidence, recordCandidateEvidence, listEvidence, getEvidenceById, getEvidenceSnapshot };
 }
 
 module.exports = {
   CANDIDATE_EVIDENCE_ID,
   createCompletionEvidenceLedger,
+  evidenceFingerprint,
   isEvidenceAdmissible
 };

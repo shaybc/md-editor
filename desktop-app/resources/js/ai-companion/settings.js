@@ -54,6 +54,7 @@
       agentConfirmBeforeWrite: true,
       chatRequestRoutingEnabled: true,
       agentDecisionControllerEnabled: false,
+      agentVerifierCompletionEnabled: false,
       // Intent-contract feature (M1). Keep in sync with the headless defaults in
       // ai-companion/config/defaults.js so headless and browser runs behave identically.
       intentContractsEnabled: false,
@@ -144,6 +145,7 @@
         agentConfirmBeforeWrite: source.agentConfirmBeforeWrite !== false,
         chatRequestRoutingEnabled: source.chatRequestRoutingEnabled !== false,
         agentDecisionControllerEnabled: source.agentDecisionControllerEnabled === true,
+        agentVerifierCompletionEnabled: source.agentVerifierCompletionEnabled === true,
         intentContractsEnabled,
         intentExperiment: intentExperiment.resolveIntentExperiment(source.intentExperiment, intentContractsEnabled, { rejectInvalid: true }),
         intentClarificationMode: ["ask", "assume", "off"].includes(source.intentClarificationMode) ? source.intentClarificationMode : "assume",
