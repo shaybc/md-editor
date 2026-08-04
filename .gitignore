@@ -24,7 +24,6 @@ desktop-app/*.log
 # Bundled Kotlin tools materialized by desktop-app setup
 /desktop-app/vendor/kotlin-lsp/
 /desktop-app/vendor/kotlin-compiler/
-#/desktop-app/vendor/.downloads/
 
 # Internal tooling JDK materialized by desktop-app setup
 /desktop-app/bin/tooling-jdk/
