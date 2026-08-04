@@ -123,7 +123,10 @@ async function main() {
   fs.mkdirSync(downloads, { recursive: true });
   if (!fs.existsSync(archive) || digest(archive) !== platform.sha256) {
     const restored = restoreBundledArchive(downloads, archive, platform.sha256);
-    if (!restored) await download(platform.url, archive);
+    if (!restored) {
+      console.log(`Downloading MD-Editor tooling JDK ${manifest.version}: ${platform.archive}`);
+      await download(platform.url, archive);
+    }
   }
   const actual = digest(archive);
   if (actual !== platform.sha256) throw new Error(`Tooling JDK checksum mismatch: ${actual}`);

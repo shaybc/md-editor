@@ -14,7 +14,6 @@ const DOWNLOAD_ROOT = path.join(DESKTOP_ROOT, "vendor", ".downloads");
 const EXTRACTION_ROOT = path.join(DESKTOP_ROOT, "vendor", ".drawio-extract");
 const DESTINATION_ROOT = path.join(DESKTOP_ROOT, "resources", "vendor", "diagram-editor");
 const VERIFY_ONLY = process.argv.includes("--verify-only");
-const FORCE = process.argv.includes("--force");
 
 function readJson(filePath) {
   return JSON.parse(fs.readFileSync(filePath, "utf8").replace(/^\uFEFF/, ""));
@@ -191,7 +190,7 @@ async function ensureArchive(manifest) {
   const suppliedArchive = String(process.env.MDEDITOR_DRAWIO_ARCHIVE || "").trim();
   if (suppliedArchive) {
     fs.copyFileSync(path.resolve(suppliedArchive), archivePath);
-  } else if (!fs.existsSync(archivePath) || FORCE) {
+  } else if (!fs.existsSync(archivePath)) {
     const partialPath = `${archivePath}.part`;
     if (fs.existsSync(partialPath)) fs.rmSync(partialPath, { force: true });
     console.log(`Downloading draw.io ${manifest.version}...`);
