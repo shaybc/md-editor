@@ -3,12 +3,10 @@
 /**
  * setup-binaries.js — Idempotent Neutralinojs binary setup.
  *
- * Ensures the bin/ folder contains platform binaries matching the version
- * pinned in neutralino.config.json (cli.binaryVersion). Downloads them
- * via `neu update` only when missing or when the pinned version changes.
+ * Ensures the bin/ folder contains the current platform binary. Downloads it
+ * via `neu update` only when the required runtime is missing.
  *
- * A version marker (bin/.version) tracks the installed version so that
- * repeated builds and dev runs skip the download entirely.
+ * Existing runtime binaries are never replaced automatically.
  *
  * Run from the desktop-app/ directory:
  *   node setup-binaries.js
@@ -66,6 +64,22 @@ function readJsonFile(filePath) {
   return JSON.parse(fs.readFileSync(filePath, "utf-8").replace(/^\uFEFF/, ""));
 }
 
+function getCurrentPlatformRuntimeBinary() {
+  const platformBinaries = {
+    win32: "neutralino-win_x64.exe",
+    linux: process.arch === "arm64" ? "neutralino-linux_arm64" : "neutralino-linux_x64",
+    darwin: process.arch === "arm64" ? "neutralino-mac_arm64" : "neutralino-mac_x64",
+  };
+  const binaryName = platformBinaries[process.platform];
+  return binaryName ? path.join(BIN_DIR, binaryName) : null;
+}
+
+const currentRuntimeBinary = getCurrentPlatformRuntimeBinary();
+if (currentRuntimeBinary && fs.existsSync(currentRuntimeBinary)) {
+  console.log(`Neutralinojs runtime already present at ${currentRuntimeBinary} - skipping automatic download`);
+  process.exit(0);
+}
+
 const config = readJsonFile(CONFIG_FILE);
 const expectedVersion = config.cli.binaryVersion;
 
@@ -77,7 +91,7 @@ if (!expectedVersion) {
 /** Check if binaries are already present and match the expected version */
 if (fs.existsSync(VERSION_MARKER)) {
   const installed = fs.readFileSync(VERSION_MARKER, "utf-8").trim();
-  if (installed === expectedVersion) {
+  if (installed === expectedVersion && currentRuntimeBinary && fs.existsSync(currentRuntimeBinary)) {
     console.log(
       `✓ Neutralinojs binaries v${expectedVersion} already present — skipping download`,
     );
