@@ -2160,6 +2160,7 @@ async function startMarkdownViewer() {
   let javaWorkspaceController = null;
   let jdtTerminalFailureHandler = null;
   let jdkRegistry = null;
+  let windowsJdkDetector = null;
   let javaProjectRuntime = null;
   let javaAnalysisFailureMonitor = null;
   let javaAnalysisProblems = null;
@@ -2521,6 +2522,16 @@ async function startMarkdownViewer() {
       pathExists: canAccessLocalPath,
       detectFeature: getJavaFeatureForJdkHome,
       getOsName: function() { return typeof NL_OS !== "undefined" ? NL_OS : "Windows"; }
+    });
+  }
+  if (jdkRegistry && typeof window.registerMarkdownViewerWindowsJdkDetector === "function") {
+    windowsJdkDetector = window.registerMarkdownViewerWindowsJdkDetector(app, {
+      execCommand: function(command) { return Neutralino.os.execCommand(command); },
+      getBundledToolingJdkHome: function() { return `${getDesktopAppRootPath()}/bin/tooling-jdk`; },
+      getEnv: function(name) { return Neutralino.os.getEnv(name); },
+      getOsName: function() { return typeof NL_OS !== "undefined" ? NL_OS : ""; },
+      readDirectory: function(path) { return Neutralino.filesystem.readDirectory(path); },
+      validateJdk: function(entry) { return jdkRegistry.validate(entry); }
     });
   }
   if (jdkRegistry && typeof window.registerMarkdownViewerJavaProjectRuntime === "function") {
@@ -4372,7 +4383,9 @@ async function startMarkdownViewer() {
   const settingsLspWindowsScriptingAutoStartInput = document.getElementById("settings-lsp-windows-scripting-autostart");
   const settingsJdkList = document.getElementById("settings-jdk-list");
   const settingsJdkEmpty = document.getElementById("settings-jdk-empty");
+  const settingsDetectJdksButton = document.getElementById("settings-detect-jdks");
   const settingsAddJdkButton = document.getElementById("settings-add-jdk");
+  if (settingsDetectJdksButton) settingsDetectJdksButton.hidden = !windowsJdkDetector?.isSupported?.();
   const settingsGradleModeInputs = document.querySelectorAll('input[name="settings-gradle-mode"]');
   const settingsGradleOfflineInput = document.getElementById("settings-gradle-offline");
   const settingsGradleMetadataFailureInput = document.getElementById("settings-gradle-metadata-failure");
@@ -4514,6 +4527,7 @@ async function startMarkdownViewer() {
     "settings-lsp-dockerfile-autostart": "Toggle automatic Dockerfile language server startup for matching open files.",
     "settings-lsp-windows-scripting-toggle": "Start or stop the Windows scripting language server for the active workspace.",
     "settings-lsp-windows-scripting-autostart": "Toggle automatic Windows scripting language server startup for matching open files.",
+    "settings-detect-jdks": "Find and add installed Windows JDKs.",
     "settings-add-jdk": "Add a JDK home folder for the Java converter.",
     "settings-gradle-mode-auto": "Try the project Gradle wrapper first, with local Gradle available for configured offline runs.",
     "settings-gradle-mode-wrapper": "Use the project Gradle wrapper and the converter's existing PATH fallback.",
@@ -10574,6 +10588,45 @@ Markdown content is processed client-side in your browser and sanitized before p
     } catch (error) {
       console.warn("Failed to choose JDK folder:", error);
       alert("Unable to choose that JDK folder.");
+    }
+  }
+
+  async function autoDetectSettingsJdks() {
+    if (!settingsDetectJdksButton || !windowsJdkDetector?.isSupported?.()) return;
+    const buttonLabel = settingsDetectJdksButton.querySelector("span");
+    const defaultLabel = buttonLabel?.textContent || "Auto-detect JDKs";
+    settingsDetectJdksButton.disabled = true;
+    settingsDetectJdksButton.setAttribute("aria-busy", "true");
+    if (buttonLabel) buttonLabel.textContent = "Detecting...";
+    try {
+      settingsJavaConverterJdksDraft = collectSettingsJdkRows();
+      const detectedJdks = await windowsJdkDetector.detectInstalledJdks();
+      if (!detectedJdks.length) {
+        alert("No valid installed JDKs were detected. Use Add JDK to choose a JDK home manually.");
+        return;
+      }
+
+      const existingPaths = new Set(settingsJavaConverterJdksDraft.map((jdk) => jdk.path.toLowerCase()));
+      const newJdks = detectedJdks.filter((jdk) => !existingPaths.has(jdk.path.toLowerCase()));
+      if (!newJdks.length) {
+        alert("All detected JDKs are already configured.");
+        return;
+      }
+
+      settingsJavaConverterJdksDraft = normalizeJavaConverterJdks([
+        ...settingsJavaConverterJdksDraft,
+        ...newJdks
+      ]);
+      renderSettingsJdkTable();
+      const suffix = newJdks.length === 1 ? "" : "s";
+      alert(`Added ${newJdks.length} detected JDK${suffix}. Click Save settings to keep ${newJdks.length === 1 ? "it" : "them"}.`);
+    } catch (error) {
+      console.warn("Failed to auto-detect installed JDKs:", error);
+      alert("Unable to auto-detect installed JDKs.");
+    } finally {
+      settingsDetectJdksButton.disabled = false;
+      settingsDetectJdksButton.removeAttribute("aria-busy");
+      if (buttonLabel) buttonLabel.textContent = defaultLabel;
     }
   }
 
@@ -17229,6 +17282,10 @@ async function* collectWorkspaceSearchFilesFromNeutralinoDirectory(parentPath, p
 
   if (settingsAddJdkButton) {
     settingsAddJdkButton.addEventListener("click", () => chooseSettingsJdkFolder());
+  }
+
+  if (settingsDetectJdksButton) {
+    settingsDetectJdksButton.addEventListener("click", autoDetectSettingsJdks);
   }
 
   if (settingsAddGradleButton) {

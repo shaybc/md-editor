@@ -67,6 +67,7 @@ test.describe("application-wide desktop menu", () => {
     await selectSettingsTab(page, "jdks");
 
     await expect(page.getByRole("heading", { name: "Java Runtimes" })).toBeVisible();
+    await expect(page.locator("#settings-detect-jdks")).toBeVisible();
     await expect(page.locator("#settings-jdk-list")).toHaveCount(1);
     await expect(page.locator("#settings-jdk-empty")).toBeVisible();
     await expect(page.locator("#java-build-path-project-jdk")).toHaveCount(1);
@@ -74,6 +75,76 @@ test.describe("application-wide desktop menu", () => {
     await expect(page.locator("#java-build-path-gradle-installation")).toHaveCount(1);
     await expect(page.locator("#java-build-path-manage-gradle")).toHaveText("Manage Gradle installations...");
     await expect(page.locator("#java-build-path-manage-jdks")).toHaveText("Manage JDKs...");
+  });
+
+  test("auto-detected JDKs follow Settings Save and Cancel behavior", async ({ page }) => {
+    const existingJdk = {
+      id: "jdk:c:/existing/jdk-17",
+      name: "Custom Java",
+      path: "C:/Existing/jdk-17",
+      feature: 17,
+      detectedName: "JDK 17"
+    };
+    await openApp(page, {
+      localStorage: {
+        markdownViewerGlobalState: JSON.stringify({ codeConverterJavaJdks: [existingJdk] })
+      }
+    });
+    await page.evaluate(() => {
+      window.__jdkDetectionAlerts = [];
+      window.__jdkGlobalStateWrites = [];
+      const originalSetItem = Storage.prototype.setItem;
+      Storage.prototype.setItem = function(key, value) {
+        if (key === "markdownViewerGlobalState") {
+          const state = JSON.parse(String(value || "{}"));
+          window.__jdkGlobalStateWrites.push(state.codeConverterJavaJdks?.map((jdk) => jdk.name) || []);
+        }
+        return originalSetItem.call(this, key, value);
+      };
+      window.alert = (message) => window.__jdkDetectionAlerts.push(String(message));
+      window.markdownViewerApp.modules.windowsJdkDetector.detectInstalledJdks = async () => [
+        {
+          id: "jdk:c:/existing/jdk-17",
+          name: "JDK 17",
+          path: "C:/Existing/jdk-17",
+          feature: 17,
+          detectedName: "JDK 17"
+        },
+        {
+          id: "jdk:c:/detected/jdk-25",
+          name: "JDK 25",
+          path: "C:/Detected/jdk-25",
+          feature: 25,
+          detectedName: "JDK 25"
+        }
+      ];
+    });
+    await selectSettingsTab(page, "jdks");
+
+    await page.locator("#settings-detect-jdks").click();
+    await expect(page.locator("#settings-jdk-list .settings-table-row")).toHaveCount(2);
+    const detectedNames = page.locator("#settings-jdk-list .settings-jdk-name-input");
+    await expect(detectedNames.nth(0)).toHaveValue("Custom Java");
+    await expect(detectedNames.nth(1)).toHaveValue("JDK 25");
+    await expect.poll(() => page.evaluate(() => window.__jdkDetectionAlerts.at(-1))).toBe(
+      "Added 1 detected JDK. Click Save settings to keep it."
+    );
+
+    await page.locator("#settings-modal-cancel").click();
+    await selectSettingsTab(page, "jdks");
+    await expect(page.locator("#settings-jdk-list .settings-table-row")).toHaveCount(1);
+    await expect(page.locator("#settings-jdk-list .settings-jdk-name-input")).toHaveValue("Custom Java");
+    await expect(page.locator("#settings-jdk-list .settings-jdk-name-input")).not.toHaveValue("JDK 25");
+
+    await page.locator("#settings-detect-jdks").click();
+    await expect(page.locator("#settings-jdk-list .settings-table-row")).toHaveCount(2);
+    await page.locator("#settings-modal-save").click();
+    await expect(page.locator("#settings-modal")).toBeHidden();
+    await expect.poll(() => page.evaluate(() => {
+      return window.__jdkGlobalStateWrites.some((names) => (
+        names.length === 2 && names[0] === "Custom Java" && names[1] === "JDK 25"
+      ));
+    })).toBe(true);
   });
 
   test("full File menu places New Project directly after the New submenu", async ({ page }) => {

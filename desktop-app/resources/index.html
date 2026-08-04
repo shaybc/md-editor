@@ -2668,10 +2668,16 @@
                 <div class="settings-subsection">
                   <div class="settings-section-toolbar">
                     <h4 class="settings-subsection-title">Installed JDKs</h4>
-                    <button type="button" class="reset-modal-btn settings-secondary-action" id="settings-add-jdk">
-                      <i class="bi bi-plus-lg" aria-hidden="true"></i>
-                      <span>Add JDK</span>
-                    </button>
+                    <span class="settings-table-actions">
+                      <button type="button" class="reset-modal-btn settings-secondary-action" id="settings-detect-jdks" hidden>
+                        <i class="bi bi-search" aria-hidden="true"></i>
+                        <span>Auto-detect JDKs</span>
+                      </button>
+                      <button type="button" class="reset-modal-btn settings-secondary-action" id="settings-add-jdk">
+                        <i class="bi bi-plus-lg" aria-hidden="true"></i>
+                        <span>Add JDK</span>
+                      </button>
+                    </span>
                   </div>
                   <div class="settings-table settings-jdk-table" role="table" aria-label="Configured JDK homes">
                     <div class="settings-table-header" role="row">
@@ -4908,6 +4914,7 @@
     <script src="js/recent/index.js"></script>
     <script src="js/recent/actions.js"></script>
     <script src="js/java/jdk-registry.js"></script>
+    <script src="js/java/windows-jdk-detector.js"></script>
     <script src="js/lsp/lsp-frame-parser.js"></script>
     <script src="js/lsp/jdt-activity-tracker.js"></script>
     <script src="js/lsp/diagnostic-lifecycle-trace.js"></script>
