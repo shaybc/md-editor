@@ -107,7 +107,7 @@ test("connection testing calls the provider testConnection method directly", () 
   assert.match(source, /return createProvider\(settings\)\.testConnection\(\{ signal: options\.signal, onDebug: options\.onDebug \}\)/);
 });
 
-test("shadow AgentState and M3 context components remain Agent-only", () => {
+test("AgentState, M3 context, and the typed controller remain Agent-only", () => {
   const modeRoot = path.join(__dirname, "..", "resources", "ai-companion", "modes");
   const agentSource = fs.readFileSync(path.join(modeRoot, "agent", "index.js"), "utf8");
   const protectedSources = [
@@ -117,7 +117,8 @@ test("shadow AgentState and M3 context components remain Agent-only", () => {
     path.join(modeRoot, "git-summary", "index.js")
   ].map((filePath) => fs.readFileSync(filePath, "utf8"));
   assert.match(agentSource, /agent-state-shadow/);
+  assert.match(agentSource, /agentDecisionControllerEnabled/);
   for (const source of protectedSources) {
-    assert.doesNotMatch(source, /agent-state-shadow|agent-state-snapshot|agent-context-builder|agent-context-comparison|agent-observation-normalizer|agent-artifact-store/);
+    assert.doesNotMatch(source, /agent-state-shadow|agent-state-snapshot|agent-context-builder|agent-context-comparison|agent-observation-normalizer|agent-artifact-store|agent-decision-controller|agentDecisionControllerEnabled/);
   }
 });

@@ -17,6 +17,7 @@ const {
   resolveProviderSettings,
   runEvaluationCase,
   scoreDeterministicOutcome,
+  summarizeDecisionLifecycle,
   validateEvaluationConfig,
   validateEvaluationDataset
 } = require("./eval/ai-companion-mode-runner");
@@ -86,6 +87,29 @@ test("deterministic scoring catches mutations, unnecessary tools, missing eviden
   assert.equal(result.unnecessaryToolUse, true);
   assert.equal(result.evidenceFailure, true);
   assert.equal(result.falseCompletion, true);
+});
+
+test("M4 evaluation metrics count safe decision lifecycle events", () => {
+  const metrics = summarizeDecisionLifecycle([
+    { type: "agent-decision", decisionId: "d1", decisionStatus: "proposed", decisionType: "tool_call" },
+    { type: "agent-decision", decisionId: "d1", decisionStatus: "accepted", decisionType: "tool_call" },
+    { type: "agent-decision", decisionId: "d1", decisionStatus: "executed", decisionType: "tool_call" },
+    { type: "agent-decision", decisionId: "d2", decisionStatus: "proposed", decisionType: "invalid", replacesDecisionId: "d0" },
+    { type: "agent-decision", decisionId: "d2", decisionStatus: "rejected", runtimeReasonCodes: ["missing_decision_metadata"] }
+  ]);
+  assert.deepEqual(metrics, {
+    proposed: 2,
+    accepted: 1,
+    rejected: 1,
+    executed: 1,
+    superseded: 0,
+    repairs: 1,
+    staleDecisions: 0,
+    metadataRejections: 1,
+    originalToolArgumentRejections: 0,
+    decoratedToolProposals: 1,
+    decoratedValidToolDecisions: 1
+  });
 });
 
 test("report summaries stay separated by provider role, mode, and category", () => {

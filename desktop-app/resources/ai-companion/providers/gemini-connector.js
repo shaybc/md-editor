@@ -467,6 +467,7 @@ function buildToolConfig(toolChoice) {
   if (!toolChoice) return undefined;
   if (toolChoice === "none") return { functionCallingConfig: { mode: "NONE" } };
   if (toolChoice === "auto") return { functionCallingConfig: { mode: "AUTO" } };
+  if (toolChoice === "required") return { functionCallingConfig: { mode: "ANY" } };
   if (toolChoice?.type === "function" && toolChoice?.function?.name) {
     return {
       functionCallingConfig: {

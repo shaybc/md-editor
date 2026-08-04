@@ -87,6 +87,12 @@ const DEFAULT_MAX_TOKENS_PER_CHAT_MINUTE = 0;
 const DEFAULT_MAX_TASKS_PER_CHAT = 30;
 const COMPACTED_TOOL_RESULT_CHARS = 1200;
 const EMPTY_FILE_SEARCH_TOOLS = new Set(["glob", "list_files", "search_grep", "search_vault", "read_open_tabs"]);
+let agentDecisionController = null;
+
+function loadAgentDecisionController() {
+  if (!agentDecisionController) agentDecisionController = require("./agent-decision-controller");
+  return agentDecisionController;
+}
 
 function truncateText(value, maxLength = MAX_TOOL_RESULT_CHARS) {
   const text = String(value || "");
@@ -949,6 +955,7 @@ function emitAutoApproval(name, args, approval, options = {}) {
   if (!approval?.autoApproved || typeof options.emit !== "function") return;
   options.emit({
     type: "approval",
+    decisionId: String(options.controllerDecision?.decisionId || ""),
     tool: name,
     input: options.approvalInput || args.path || args.command || name,
     approvalReason: String(args.approvalReason || "").trim(),
@@ -1040,9 +1047,15 @@ async function loadApprovalContext(root, name, args, options) {
 }
 
 async function ensureToolApproval(root, settings, name, args, options = {}) {
+  const authorizeApprovedExecution = async (approval) => {
+    if (typeof options.authorizeDecisionExecution === "function") {
+      await options.authorizeDecisionExecution({ tool: name, args, approval });
+    }
+    return approval;
+  };
   const verifiability = String(options.intentContract?.verifiability || "verified");
   const configuredRequirement = getApprovalRequirement(settings, name);
-  if (configuredRequirement === "none" && verifiability === "verified") return true;
+  if (configuredRequirement === "none" && verifiability === "verified") return authorizeApprovedExecution(true);
   const requirement = configuredRequirement === "none" ? "action" : configuredRequirement;
   const compare = name === "apply_edit"
     ? await createApprovalFileCompare(root, name, args, { signal: options.signal })
@@ -1064,7 +1077,7 @@ async function ensureToolApproval(root, settings, name, args, options = {}) {
     if (approvalContext.decision.scope === "workspace") await approvalContext.store?.touch?.(approvalContext.decision.ruleId);
     if (approvalContext.decision.scope === "task" && approvalContext.decision.rule) approvalContext.decision.rule.lastUsedAt = new Date().toISOString();
     await recordApprovalAudit({ ...options, workspaceRoot: root }, { tool: name, capability: approvalContext.descriptor?.capability, decision: "auto-approved", ruleId: approvalContext.decision.ruleId, scope: approvalContext.decision.scope });
-    return { approved: true, autoApproved: true, policy: approvalContext.decision, descriptor: approvalContext.descriptor, compare, actionAnalysis, preparedEdit: compare?.preparedEdit || null };
+    return authorizeApprovedExecution({ approved: true, autoApproved: true, policy: approvalContext.decision, descriptor: approvalContext.descriptor, compare, actionAnalysis, preparedEdit: compare?.preparedEdit || null });
   }
   if (typeof options.requestApproval !== "function") {
     throw new Error(requirement === "write"
@@ -1086,6 +1099,7 @@ async function ensureToolApproval(root, settings, name, args, options = {}) {
     actionAnalysis
   });
   const decision = normalizeApprovalDecision(await options.requestApproval({
+    decisionId: String(options.controllerDecision?.decisionId || ""),
     tool: name,
     input: args.path || args.command || name,
     approvalReason: String(args.approvalReason || "").trim(),
@@ -1138,7 +1152,7 @@ async function ensureToolApproval(root, settings, name, args, options = {}) {
     } else {
       await recordApprovalAudit({ ...options, workspaceRoot: root }, { tool: name, capability: approvalContext.descriptor?.capability, decision: "approved-once" });
     }
-    return { approved: true, descriptor: approvalContext.descriptor, grantedRule, compare, actionAnalysis, preparedEdit: compare?.preparedEdit || null };
+    return authorizeApprovedExecution({ approved: true, descriptor: approvalContext.descriptor, grantedRule, compare, actionAnalysis, preparedEdit: compare?.preparedEdit || null });
   }
   await recordApprovalAudit({ ...options, workspaceRoot: root }, { tool: name, capability: approvalContext.descriptor?.capability, decision: decision.decision === "instruct" ? "instructions" : "rejected" });
   const actionLabel = requirement === "write" ? "file write" : (requirement === "git" ? "git action" : "command");
@@ -1186,7 +1200,12 @@ async function requestPreferenceAction(name, args = {}, options = {}) {
 }
 
 async function ensurePreferenceApproval(root, settings, name, args, previewResult, options = {}) {
-  if (previewResult?.changed === false) return true;
+  if (previewResult?.changed === false) {
+    if (typeof options.authorizeDecisionExecution === "function") {
+      await options.authorizeDecisionExecution({ tool: name, args, approval: null });
+    }
+    return true;
+  }
   return ensureToolApproval(root, settings, name, args, {
     ...options,
     approvalInput: getPreferenceInputSummary(name, args),
@@ -1260,6 +1279,9 @@ async function runFreeFormCommand(root, settings, args, options) {
   const security = getExecutionSecurityOptions(root, settings, options);
   const classification = classifyCommand(command);
   if (security.policy.shell.mode !== "sandbox-shell") {
+    if (typeof options.authorizeDecisionExecution === "function") {
+      await options.authorizeDecisionExecution({ tool: "run_command", args, approval: null });
+    }
     const auditError = await recordCommandAudit(security.auditLogger, createCommandAuditRecord(root, settings, options, command, classification.classification, "deny", {
       suggestion: classification.suggestion
     }));
@@ -1339,6 +1361,9 @@ async function executeAgentTool(root, settings, mode, toolCall, options = {}) {
       error.preExecution = true;
       throw error;
     }
+  }
+  if (typeof options.authorizeDecisionExecution === "function" && !toolRequiresApprovalReason(name)) {
+    await options.authorizeDecisionExecution({ tool: name, args, approval: null });
   }
   switch (name) {
     case "list_files": {
@@ -2614,6 +2639,68 @@ function appendToolReliabilityNote(content, reliability) {
   return [text, notes.join(" ")].filter(Boolean).join("\n\n");
 }
 
+function getControllerDecision(session, decisionId) {
+  return session?.getState?.().recentDecisions?.find((decision) => decision.decisionId === decisionId) || null;
+}
+
+function transitionControllerDecision(session, type, payload, emit) {
+  session.applyControllerEvent(type, payload);
+  const decisionId = String(payload?.decisionId || payload?.decision?.decisionId || "");
+  const decision = getControllerDecision(session, decisionId);
+  if (decision) emit(agentDecisionController.createDecisionEvent(decision));
+  return decision;
+}
+
+function createSupersededDecisionError(decisionId) {
+  const error = new Error("The accepted Agent decision became stale before execution. No action was executed.");
+  error.code = "agent-decision-superseded";
+  error.decisionId = decisionId;
+  error.preExecution = true;
+  error.executed = false;
+  error.retryable = true;
+  return error;
+}
+
+function createControllerExecutionAuthorizer(session, decision, emit, runtime, signal) {
+  let authorized = false;
+  return async () => {
+    if (authorized) return;
+    runtime.throwIfAborted(signal);
+    const invalidating = agentDecisionController.findInvalidatingTransitions(
+      decision,
+      session.getTransitionsSince(decision.basedOnStateVersion)
+    );
+    if (invalidating.length) {
+      transitionControllerDecision(session, "decision_superseded", {
+        decisionId: decision.decisionId,
+        runtimeReasonCodes: ["stale_state_version"]
+      }, emit);
+      throw createSupersededDecisionError(decision.decisionId);
+    }
+    transitionControllerDecision(session, "decision_execution_authorized", { decisionId: decision.decisionId }, emit);
+    const authorizedAtStateVersion = session.getState().stateVersion;
+    runtime.throwIfAborted(signal);
+    if (session.getState().stateVersion !== authorizedAtStateVersion) {
+      transitionControllerDecision(session, "decision_superseded", {
+        decisionId: decision.decisionId,
+        runtimeReasonCodes: ["stale_state_version"]
+      }, emit);
+      throw createSupersededDecisionError(decision.decisionId);
+    }
+    transitionControllerDecision(session, "decision_executed", { decisionId: decision.decisionId }, emit);
+    authorized = true;
+  };
+}
+
+function markControllerDecisionRejected(session, decision, codes, emit) {
+  const current = getControllerDecision(session, decision?.decisionId);
+  if (!current || !new Set(["proposed", "accepted"]).has(current.status)) return current;
+  return transitionControllerDecision(session, "decision_rejected", {
+    decisionId: decision.decisionId,
+    runtimeReasonCodes: codes
+  }, emit);
+}
+
 async function runAgentToolLoop(provider, settings, root, prompt, mode, emit, runtime, options = {}) {
   const resolvedExperiment = intentExperiment.resolveIntentExperiment(settings?.intentExperiment, settings?.intentContractsEnabled === true, { rejectInvalid: true });
   settings = { ...settings, intentExperiment: resolvedExperiment };
@@ -2677,12 +2764,20 @@ async function runAgentToolLoop(provider, settings, root, prompt, mode, emit, ru
   // The read-only conflict-reporting tool is exposed in the workspace loop when the
   // intent phase is active, so the model can flag semantic contradictions it finds.
   if (!hasToolDefinitionsOverride && resolvedExperiment.intentRevision === true && INTENT_CONTRACT_MODES.has(mode)) toolDefinitions.push(intentConflict.REPORT_INTENT_CONFLICT_TOOL);
+  const controllerEnabled = mode === "agent" && settings.agentDecisionControllerEnabled === true;
+  if (controllerEnabled && !loopOptions.agentStateSession) throw new Error("Agent decision controller requires an authoritative state session.");
+  if (controllerEnabled) loadAgentDecisionController();
+  const controllerToolDefinitions = controllerEnabled
+    ? agentDecisionController.createControllerToolDefinitions(toolDefinitions)
+    : toolDefinitions;
   // Modes that carry their own grounding context (like gitSummary's changes
   // digest) skip the forced workspace-discovery tool call: tools stay
   // available, but a direct answer on the first round is a valid outcome.
-  const requireInitialDiscovery = typeof loopOptions.requireInitialDiscoveryOverride === "boolean"
+  const requireInitialDiscovery = controllerEnabled
+    ? false
+    : (typeof loopOptions.requireInitialDiscoveryOverride === "boolean"
     ? loopOptions.requireInitialDiscoveryOverride
-    : mode !== "gitSummary";
+    : mode !== "gitSummary");
   // Narration is a chat/agent/plan feature: gitSummary answers from a digest and
   // rarely chains tools, so it gets no filter and emits no narration events.
   const narrationFilter = loopOptions.narrationEnabled === false
@@ -2772,38 +2867,53 @@ async function runAgentToolLoop(provider, settings, root, prompt, mode, emit, ru
   if (resumedAction.usedTools) usedTools = true;
   const titleState = { requested: loopOptions.requestChatTitle === true, emitted: false };
   const onDebug = createProviderDebugEmitter(emit);
+  let controllerDecisionSequence = 0;
+  let controllerRepairDecision = null;
 
   taskPass: while (true) {
     for (let round = 0; round < maxRounds; round++) {
       runtime.throwIfAborted(loopOptions.signal);
+      let contextBundle = null;
+      if (mode === "agent" && typeof loopOptions.observeDecisionContext === "function") {
+        try {
+          contextBundle = loopOptions.observeDecisionContext({ messages, round });
+        } catch (error) {
+          if (controllerEnabled) throw error;
+          // M3 shadow context cannot affect the legacy provider call.
+        }
+      }
+      const providerMessages = controllerEnabled
+        ? [
+            ...(contextBundle?.messages || []),
+            agentDecisionController.createControllerInstructionMessage(),
+            ...(controllerRepairDecision
+              ? [agentDecisionController.createRepairMessage(controllerRepairDecision, loopOptions.agentStateSession.getState().stateVersion)]
+              : [])
+          ]
+        : messages;
+      if (controllerEnabled && !contextBundle) throw new Error("Agent controller could not build authoritative decision context.");
+      const providerToolDefinitions = controllerEnabled ? controllerToolDefinitions : toolDefinitions;
       // Fallback context estimate: message contents plus the tool-definition JSON the request
       // carries, plus ~4 tokens of per-message chat framing overhead. Providers that report
       // real `usage` override this in the UI (see the `usage` event emitted below).
-      const estimatedTokens = runtime.estimateTokens(messages.map((message) => getMessageContentEstimateText(message.content)).join("\n"))
-        + runtime.estimateTokens(JSON.stringify(toolDefinitions))
-        + messages.length * 4;
+      const estimatedTokens = runtime.estimateTokens(providerMessages.map((entry) => getMessageContentEstimateText(entry.content)).join("\n"))
+        + runtime.estimateTokens(JSON.stringify(providerToolDefinitions))
+        + providerMessages.length * 4;
       emit({ type: "context", estimatedTokens });
-      const tokenBudgetReservation = await reserveTokenMinuteBudget(tokenBudget, estimatedTokens, mode, loopOptions, messages);
+      const tokenBudgetReservation = await reserveTokenMinuteBudget(tokenBudget, estimatedTokens, mode, loopOptions, providerMessages);
       if (!tokenBudgetReservation.approved) {
         const content = tokenBudgetReservation.content || createTaskLimitFallbackContent({ reason: "max_tokens", mode, phase: "chat token budget" });
         return finishRun(content);
       }
       let message;
       try {
-        if (mode === "agent" && typeof loopOptions.observeDecisionContext === "function") {
-          try {
-            loopOptions.observeDecisionContext({ messages, round });
-          } catch (_error) {
-            // M3 context construction is shadow-only and cannot affect the provider call.
-          }
-        }
-        message = await provider.completeMessage(messages, {
+        message = await provider.completeMessage(providerMessages, {
           temperature: 0.2,
           maxTokens: getRoundResponseMaxTokens(loopOptions),
           signal: loopOptions.signal,
-          tools: toolDefinitions,
-          toolChoice: toolDefinitions.length
-            ? (requireInitialDiscovery ? getToolChoiceForRound(usedTools, prompt) : "auto")
+          tools: providerToolDefinitions,
+          toolChoice: providerToolDefinitions.length
+            ? (controllerEnabled ? "required" : (requireInitialDiscovery ? getToolChoiceForRound(usedTools, prompt) : "auto"))
             : undefined,
           onUsage: (usage) => emit({ type: "usage", ...usage, reported: true }),
           onDebug
@@ -2832,6 +2942,89 @@ async function runAgentToolLoop(provider, settings, root, prompt, mode, emit, ru
       if (message.reasoning) emit({ type: "reasoning-delta", content: message.reasoning });
       message = consumeChatTitleFromMessage(message, titleState, emit);
       let toolCalls = Array.isArray(message.toolCalls) ? message.toolCalls : [];
+      let controllerDecision = null;
+      let controllerDecisionPayload = null;
+      let controllerCompletionCandidate = "";
+      let controllerReportedBlocked = false;
+      if (controllerEnabled) {
+        controllerDecisionSequence += 1;
+        const normalized = agentDecisionController.normalizeDecisionAttempt(
+          message,
+          toolDefinitions,
+          loopOptions.agentStateSession.getState(),
+          {
+            decisionId: `${loopOptions.requestId || "agent"}:decision:${controllerDecisionSequence}`,
+            replacesDecisionId: controllerRepairDecision?.decisionId || "",
+            hasClarificationChannel: typeof loopOptions.requestClarification === "function"
+          }
+        );
+        controllerDecision = normalized.decision;
+        controllerDecisionPayload = normalized.decision.payload;
+        transitionControllerDecision(loopOptions.agentStateSession, "decision_proposed", { decision: controllerDecision }, emit);
+        if (normalized.validationCodes.length) {
+          controllerDecision = transitionControllerDecision(loopOptions.agentStateSession, "decision_rejected", {
+            decisionId: controllerDecision.decisionId,
+            runtimeReasonCodes: normalized.validationCodes
+          }, emit);
+          if (controllerRepairDecision) {
+            loopOptions.agentStateSession.setControllerTerminationReason("controller-invalid-decision");
+            return finishRun(agentDecisionController.createControllerBlockedContent(normalized.validationCodes));
+          }
+          controllerRepairDecision = controllerDecision;
+          continue;
+        }
+        transitionControllerDecision(loopOptions.agentStateSession, "decision_accepted", { decisionId: controllerDecision.decisionId }, emit);
+        controllerDecision = getControllerDecision(loopOptions.agentStateSession, controllerDecision.decisionId);
+        controllerRepairDecision = null;
+
+        if (controllerDecision.type === agentDecisionController.DECISION_TYPES.REQUEST_USER_INPUT) {
+          const authorize = createControllerExecutionAuthorizer(loopOptions.agentStateSession, controllerDecision, emit, runtime, loopOptions.signal);
+          await authorize();
+          const payload = controllerDecisionPayload || {};
+          if (typeof loopOptions.requestClarification !== "function") {
+            loopOptions.agentStateSession.setControllerTerminationReason("controller-clarification-unavailable");
+            return finishRun("The task is blocked because required user input cannot be requested in this session.");
+          }
+          const answer = String(await loopOptions.requestClarification({
+            decisionId: controllerDecision.decisionId,
+            ambiguityId: `controller-${controllerDecision.decisionId}`,
+            question: payload.question,
+            reason: payload.reason,
+            answerType: payload.answerType,
+            choices: Array.isArray(payload.choices) ? payload.choices : []
+          }) || "").trim();
+          if (answer && settings.intentContractsEnabled === true && loopOptions.intentContract) {
+            const refreshed = await intentAnalysis.refreshContractFromUserContext({
+              provider,
+              settings,
+              prompts: loopOptions.prompts,
+              contract: loopOptions.intentContract,
+              userContext: `Controller clarification:\nQuestion: ${payload.question}\nAnswer: ${answer}`,
+              signal: loopOptions.signal
+            });
+            if (refreshed.contract && refreshed.validation.valid) {
+              applyContractUpdate(loopOptions, messages, settings, emit, refreshed.contract, "controller-clarification", "refreshed");
+            }
+          }
+          continue;
+        }
+
+        if (controllerDecision.type === agentDecisionController.DECISION_TYPES.PROPOSE_COMPLETION
+          || controllerDecision.type === agentDecisionController.DECISION_TYPES.REPORT_BLOCKED) {
+          const authorize = createControllerExecutionAuthorizer(loopOptions.agentStateSession, controllerDecision, emit, runtime, loopOptions.signal);
+          await authorize();
+          controllerReportedBlocked = controllerDecision.type === agentDecisionController.DECISION_TYPES.REPORT_BLOCKED;
+          controllerCompletionCandidate = controllerReportedBlocked
+            ? agentDecisionController.createReportedBlockerContent(controllerDecisionPayload)
+            : String(controllerDecisionPayload?.content || "").trim();
+          message = { ...message, content: controllerCompletionCandidate };
+          toolCalls = [];
+          if (controllerReportedBlocked) loopOptions.agentStateSession.setControllerTerminationReason("controller-reported-blocked");
+          else loopOptions.agentStateSession.setControllerTerminationReason("controller-proposed-completion");
+        } else {
+          toolCalls = [normalized.sanitizedToolCall];
+        }
+      }
       // When the loop injects the forced discovery call, keep the model's own
       // content on the history message instead of discarding it — that text is
       // the model's plan and doubles as the first narration.
@@ -2853,15 +3046,18 @@ async function runAgentToolLoop(provider, settings, root, prompt, mode, emit, ru
           continue taskPass;
         }
         if (shouldAssessCompletion(settings, loopOptions.intentContract)) {
-          const gate = await runPlanFinalizationGate(provider, settings, loopOptions, messages, emit, activityRun);
+          const gate = controllerReportedBlocked
+            ? { rerunPlanning: false, unresolved: [] }
+            : await runPlanFinalizationGate(provider, settings, loopOptions, messages, emit, activityRun);
           if (gate.rerunPlanning) continue taskPass;
           addPlanAmbiguityContext(messages, gate.unresolved, loopOptions);
-          const candidate = await generateHiddenCandidate(provider, messages, emit, { ...loopOptions, requestChatTitle: false });
+          const candidate = controllerCompletionCandidate
+            || await generateHiddenCandidate(provider, messages, emit, { ...loopOptions, requestChatTitle: false });
           const finalized = await finalizeAssessedCandidate(provider, settings, mode, candidate, loopOptions, activityRun, emit);
           // Closed-loop steering: on an incomplete verdict, route by arbiter class and, when
           // the decision is to keep going, inject the steering feedback and run another bounded
           // agent pass instead of returning. Blocked and out-of-budget stop and report honestly.
-          if (steeringEnabled && finalized.assessment?.overallStatus === "incomplete") {
+          if (!controllerReportedBlocked && steeringEnabled && finalized.assessment?.overallStatus === "incomplete") {
             const decision = completionSteering.decideSteering({
               assessment: finalized.assessment,
               contract: loopOptions.intentContract,
@@ -2902,7 +3098,8 @@ async function runAgentToolLoop(provider, settings, root, prompt, mode, emit, ru
           else if (!steeringFinalReason) steeringFinalReason = String(finalized.assessment?.overallStatus || "");
           return finishRun(finalized.content);
         }
-        const content = usedTools ? await streamFinalAnswer(provider, messages, emit, loopOptions) : String(message.content || "").trim();
+        const content = controllerCompletionCandidate
+          || (usedTools ? await streamFinalAnswer(provider, messages, emit, loopOptions) : String(message.content || "").trim());
         return finishRun(content);
       }
       // Tool calls follow, so this round's content is pre-tool narration, not
@@ -2911,6 +3108,9 @@ async function runAgentToolLoop(provider, settings, root, prompt, mode, emit, ru
       usedTools = true;
       let approvalAmendmentOutcome = null;
       let terminalDecisionBlockOutcome = null;
+      const controllerExecutionAuthorizer = controllerDecision
+        ? createControllerExecutionAuthorizer(loopOptions.agentStateSession, controllerDecision, emit, runtime, loopOptions.signal)
+        : null;
 
       for (let toolIndex = 0; toolIndex < toolCalls.length; toolIndex += 1) {
         const toolCall = toolCalls[toolIndex];
@@ -2930,6 +3130,7 @@ async function runAgentToolLoop(provider, settings, root, prompt, mode, emit, ru
         const intentBlockSignature = createIntentMutationBlockSignature(currentMutationControl);
         const decisionBlockSignature = createIntentDecisionBlockSignature(currentMutationControl);
         if (decisionBlockSignature && (loopOptions.intentDecisionBlockAttempts.get(decisionBlockSignature) || 0) >= 1) {
+          if (controllerDecision) markControllerDecisionRejected(loopOptions.agentStateSession, controllerDecision, ["pre_execution_rejected"], emit);
           const result = createIntentBlockFailure(currentMutationControl, {
             repeatedWithoutExecution: true,
             terminalDecisionBlock: true
@@ -2945,6 +3146,7 @@ async function runAgentToolLoop(provider, settings, root, prompt, mode, emit, ru
         const priorFailure = (intentBlockSignature && loopOptions.intentMutationBlockResults.get(intentBlockSignature))
           || loopOptions.nonRetryableToolResults.get(toolSignature);
         if (priorFailure) {
+          if (controllerDecision) markControllerDecisionRejected(loopOptions.agentStateSession, controllerDecision, ["non_retryable_repeat"], emit);
           const repeatedFailure = { ...priorFailure, executed: false, preExecution: true, repeatedWithoutExecution: true };
           const repeatedActivityId = toolCall.id || `${name}-${round}-${Date.now()}`;
           const repeatedStartedActivity = activityRun?.createStartedActivity(repeatedActivityId, name, args, input) || null;
@@ -2971,6 +3173,7 @@ async function runAgentToolLoop(provider, settings, root, prompt, mode, emit, ru
         // Intercept the read-only conflict report before normal tool dispatch: it never
         // executes a workspace action; the harness validates and applies the outcome.
         if (name === "report_intent_conflict") {
+          if (controllerExecutionAuthorizer) await controllerExecutionAuthorizer();
           const outcome = await handleIntentConflictReport(args, provider, loopOptions, messages, settings, emit);
           recordToolReliability(loopOptions, outcome);
           activityRun?.recordToolEvidence?.({
@@ -2985,10 +3188,16 @@ async function runAgentToolLoop(provider, settings, root, prompt, mode, emit, ru
         }
         const activityId = toolCall.id || `${name}-${round}-${Date.now()}`;
         const startedActivity = activityRun?.createStartedActivity(activityId, name, args, input) || null;
-        emit({ type: "tool", tool: name, input, summary: "running", activity: startedActivity });
+        emit({ type: "tool", decisionId: controllerDecision?.decisionId || "", tool: name, input, summary: "running", activity: startedActivity });
         try {
           await activityRun?.captureBefore(name, args, loopOptions.signal);
-          const result = await executeAgentTool(root, settings, mode, toolCall, { ...loopOptions, emit, activityId });
+          const result = await executeAgentTool(root, settings, mode, toolCall, {
+            ...loopOptions,
+            emit,
+            activityId,
+            controllerDecision,
+            authorizeDecisionExecution: controllerExecutionAuthorizer
+          });
           const summary = summarizeToolResult(name, result);
           if (result?.status === "failed") {
             recordToolReliability(loopOptions, result);
@@ -3045,7 +3254,7 @@ async function runAgentToolLoop(provider, settings, root, prompt, mode, emit, ru
           });
           messages.push(createToolOutcomeHistoryMessage(toolCall, name, args, createToolResultContent(name, args, result)));
           if (resolvedExperiment.intentRevision === true) recordSearchAndDetectAbsence(name, args, result, toolCall.id, loopOptions, messages, settings, emit);
-          const fallbackToolCall = createFileSearchFallbackToolCall(name, args, result, round);
+          const fallbackToolCall = controllerEnabled ? null : createFileSearchFallbackToolCall(name, args, result, round);
           if (fallbackToolCall) {
             messages.push(createAssistantToolMessage({ content: "The previous file search returned no matches; trying a broader filename glob." }, [fallbackToolCall]));
             const fallbackName = fallbackToolCall.function.name;
@@ -3106,6 +3315,18 @@ async function runAgentToolLoop(provider, settings, root, prompt, mode, emit, ru
             }
           }
         } catch (error) {
+          if (controllerDecision) {
+            const currentDecision = getControllerDecision(loopOptions.agentStateSession, controllerDecision.decisionId);
+            if (currentDecision?.status === "accepted" && error?.userInstructions) {
+              transitionControllerDecision(loopOptions.agentStateSession, "decision_superseded", {
+                decisionId: controllerDecision.decisionId,
+                runtimeReasonCodes: ["stale_state_version"]
+              }, emit);
+            } else if (currentDecision?.status === "accepted") {
+              const code = /^approval-/.test(String(error?.code || "")) ? "authorization_denied" : "pre_execution_rejected";
+              markControllerDecisionRejected(loopOptions.agentStateSession, controllerDecision, [code], emit);
+            }
+          }
           recordToolReliability(loopOptions, null, error);
           const errorMessage = error?.message || String(error);
           const structuredFailure = createStructuredToolFailure(error);

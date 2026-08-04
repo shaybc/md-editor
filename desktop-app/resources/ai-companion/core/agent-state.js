@@ -1,12 +1,13 @@
 /**
- * Shadow AgentState schema and its single-writer transition reducer.
+ * AgentState schema and its single-writer transition reducer.
  */
 
 "use strict";
 
-const AGENT_STATE_SCHEMA_VERSION = 2;
-const AGENT_STATE_EVENT_SCHEMA_VERSION = 2;
+const AGENT_STATE_SCHEMA_VERSION = 3;
+const AGENT_STATE_EVENT_SCHEMA_VERSION = 3;
 const MAX_RECENT_ACTIONS = 50;
+const MAX_RECENT_DECISIONS = 50;
 const MAX_RECENT_INTERACTIONS = 25;
 const MAX_RECENT_OBSERVATIONS = 50;
 const MAX_OBSERVATION_IDS = 500;
@@ -15,6 +16,12 @@ const TERMINAL_ACTION_STATUSES = new Set(["succeeded", "partial", "failed", "den
 const EVENT_TYPES = new Set([
   "run_started",
   "intent_contract_observed",
+  "decision_proposed",
+  "decision_accepted",
+  "decision_rejected",
+  "decision_execution_authorized",
+  "decision_executed",
+  "decision_superseded",
   "action_started",
   "action_finished",
   "observation_recorded",
@@ -130,6 +137,53 @@ function normalizeObservation(observation, occurredAt) {
   };
 }
 
+function normalizeDecision(decision = {}) {
+  const payload = decision.payload && typeof decision.payload === "object" && !Array.isArray(decision.payload)
+    ? decision.payload
+    : {};
+  const normalizedPayload = decision.type === "request_user_input"
+    ? {
+        question: stringValue(payload.question),
+        reason: stringValue(payload.reason),
+        answerType: stringValue(payload.answerType, 40),
+        choices: uniqueStrings(payload.choices).slice(0, 10)
+      }
+    : (decision.type === "propose_completion"
+      ? { evidenceIds: uniqueStrings(payload.evidenceIds).slice(0, 50) }
+      : (decision.type === "report_blocked"
+        ? {
+            blockerType: stringValue(payload.blockerType, 80),
+            description: stringValue(payload.description),
+            attemptedDecisionIds: uniqueStrings(payload.attemptedDecisionIds).slice(0, 50),
+            recoverableByUser: payload.recoverableByUser === true,
+            requiredUserAction: stringValue(payload.requiredUserAction),
+            requiredCapability: stringValue(payload.requiredCapability, 200)
+          }
+        : null));
+  return {
+    schemaVersion: 1,
+    decisionId: stringValue(decision.decisionId, 200),
+    basedOnStateVersion: Math.max(0, Number(decision.basedOnStateVersion) || 0),
+    type: stringValue(decision.type || "invalid", 80),
+    intentId: stringValue(decision.intentId, 160),
+    rationale: stringValue(decision.rationale, 1000),
+    expectedObservation: stringValue(decision.expectedObservation, 1000),
+    status: "proposed",
+    proposedAtStateVersion: null,
+    acceptedAtStateVersion: null,
+    authorizedAtStateVersion: null,
+    executedAtStateVersion: null,
+    runtimeReasonCodes: uniqueStrings(decision.runtimeReasonCodes).slice(0, 20),
+    replacesDecisionId: stringValue(decision.replacesDecisionId, 200),
+    tool: decision.tool ? {
+      name: stringValue(decision.tool.name, 200),
+      providerCallId: stringValue(decision.tool.providerCallId, 200)
+    } : null,
+    payload: normalizedPayload,
+    observationIds: uniqueStrings(decision.observationIds).slice(0, 20)
+  };
+}
+
 /**
  * Create an initialized state that cannot become active until `run_started` is accepted.
  * @param {object} options Run identity and original user request.
@@ -138,7 +192,7 @@ function normalizeObservation(observation, occurredAt) {
 function createInitialAgentState(options = {}) {
   return {
     schemaVersion: AGENT_STATE_SCHEMA_VERSION,
-    controlMode: "shadow",
+    controlMode: options.controlMode === "controller" ? "controller" : "shadow",
     run: {
       runId: String(options.runId || ""),
       requestId: String(options.requestId || ""),
@@ -153,6 +207,8 @@ function createInitialAgentState(options = {}) {
     intentContract: null,
     intentContractMeta: null,
     criteria: [],
+    recentDecisions: [],
+    decisionCounts: { proposed: 0, accepted: 0, rejected: 0, executed: 0, superseded: 0 },
     activeActions: [],
     recentActions: [],
     actionCounts: {
@@ -239,7 +295,28 @@ function recordObservation(state, payload, occurredAt) {
   state.recentObservations = [...state.recentObservations, observation].slice(-MAX_RECENT_OBSERVATIONS);
   state.observationCounts.execution[observation.executionStatus] += 1;
   state.observationCounts.outcome[observation.outcome] += 1;
+  const decisionIndex = state.recentDecisions.findIndex((decision) => decision.tool?.providerCallId && decision.tool.providerCallId === observation.toolCallId);
+  if (decisionIndex >= 0) {
+    const decision = state.recentDecisions[decisionIndex];
+    state.recentDecisions[decisionIndex] = {
+      ...decision,
+      observationIds: uniqueStrings([...(decision.observationIds || []), observation.observationId]).slice(-20)
+    };
+  }
   return "";
+}
+
+function updateDecision(state, decisionId, allowedStatuses, update) {
+  const index = state.recentDecisions.findIndex((decision) => decision.decisionId === String(decisionId || ""));
+  if (index < 0) return "unknown-decision";
+  const current = state.recentDecisions[index];
+  if (!allowedStatuses.has(current.status)) return "invalid-decision-status";
+  state.recentDecisions[index] = { ...current, ...update };
+  return "";
+}
+
+function recordDecisionCount(state, status) {
+  state.decisionCounts[status] = (Number(state.decisionCounts[status]) || 0) + 1;
 }
 
 function appendInteraction(state, interaction) {
@@ -252,6 +329,7 @@ function requestInteraction(state, payload, kind, occurredAt) {
   if (state.pendingInteractions.some((entry) => entry.interactionId === interactionId)) return "duplicate-interaction";
   state.pendingInteractions.push({
     interactionId,
+    decisionId: stringValue(payload.decisionId, 200),
     kind,
     status: "pending",
     prompt: cloneSerializable(payload.prompt ?? payload.details ?? ""),
@@ -267,6 +345,7 @@ function resolveInteraction(state, payload, kind, occurredAt) {
   const pendingIndex = state.pendingInteractions.findIndex((entry) => entry.interactionId === interactionId && entry.kind === kind);
   const pending = pendingIndex >= 0 ? state.pendingInteractions[pendingIndex] : {
     interactionId,
+    decisionId: stringValue(payload.decisionId, 200),
     kind,
     prompt: null,
     source: "agent",
@@ -328,12 +407,59 @@ function applyTransition(next, event) {
         .filter((criterion) => criterion.id);
       return "";
     }
+    case "decision_proposed": {
+      const decision = normalizeDecision(payload.decision);
+      if (!decision.decisionId) return "missing-decision-id";
+      if (next.recentDecisions.some((entry) => entry.decisionId === decision.decisionId)) return "duplicate-decision";
+      decision.proposedAtStateVersion = next.stateVersion + 1;
+      next.recentDecisions = [...next.recentDecisions, decision].slice(-MAX_RECENT_DECISIONS);
+      recordDecisionCount(next, "proposed");
+      return "";
+    }
+    case "decision_accepted": {
+      const result = updateDecision(next, payload.decisionId, new Set(["proposed"]), {
+        status: "accepted",
+        acceptedAtStateVersion: next.stateVersion + 1,
+        runtimeReasonCodes: []
+      });
+      if (!result) recordDecisionCount(next, "accepted");
+      return result;
+    }
+    case "decision_rejected": {
+      const result = updateDecision(next, payload.decisionId, new Set(["proposed", "accepted"]), {
+        status: "rejected",
+        runtimeReasonCodes: uniqueStrings(payload.runtimeReasonCodes).slice(0, 20)
+      });
+      if (!result) recordDecisionCount(next, "rejected");
+      return result;
+    }
+    case "decision_execution_authorized":
+      return updateDecision(next, payload.decisionId, new Set(["accepted"]), {
+        authorizedAtStateVersion: next.stateVersion + 1
+      });
+    case "decision_executed": {
+      const result = updateDecision(next, payload.decisionId, new Set(["accepted"]), {
+        status: "executed",
+        executedAtStateVersion: next.stateVersion + 1
+      });
+      if (!result) recordDecisionCount(next, "executed");
+      return result;
+    }
+    case "decision_superseded": {
+      const result = updateDecision(next, payload.decisionId, new Set(["accepted"]), {
+        status: "superseded",
+        runtimeReasonCodes: uniqueStrings(payload.runtimeReasonCodes).slice(0, 20)
+      });
+      if (!result) recordDecisionCount(next, "superseded");
+      return result;
+    }
     case "action_started": {
       const actionId = String(payload.actionId || "");
       if (!actionId || !payload.tool) return "invalid-action-start";
       if (next.activeActions.some((action) => action.actionId === actionId)) return "duplicate-active-action";
       next.activeActions.push({
         actionId,
+        decisionId: stringValue(payload.decisionId, 200),
         tool: stringValue(payload.tool, 200),
         input: stringValue(payload.input),
         status: "running",

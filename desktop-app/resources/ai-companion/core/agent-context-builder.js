@@ -77,8 +77,11 @@ function collectUserInstructions(state) {
 function buildStateProjection(state) {
   const projection = {
     run: state?.run || null,
+    controlMode: state?.controlMode || "shadow",
     lifecycle: state?.lifecycle || null,
     criteria: state?.criteria || [],
+    recentDecisions: state?.recentDecisions || [],
+    decisionCounts: state?.decisionCounts || {},
     activeActions: state?.activeActions || [],
     recentActions: state?.recentActions || [],
     observationRefs: (state?.recentObservations || []).map((observation) => ({

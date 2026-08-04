@@ -24,6 +24,7 @@ const IGNORED_RUNTIME_EVENT_TYPES = new Set([
   "usage",
   "context",
   "narration",
+  "agent-decision",
   "intent-evaluation",
   "intent-uninterpreted",
   "chat-title",
@@ -73,6 +74,7 @@ function createClarificationPrompt(details = {}) {
 
 function createApprovalPrompt(details = {}) {
   return {
+    decisionId: String(details.decisionId || ""),
     tool: String(details.tool || ""),
     input: String(details.input || ""),
     approvalReason: String(details.approvalReason || ""),
@@ -111,18 +113,21 @@ function isAgentCancellation(error, signal) {
 }
 
 /**
- * Create one request-local observer that can never intentionally control Agent execution.
+ * Create one request-local Agent state session in shadow or controller mode.
  * @param {object} options Agent request identity plus optional deterministic clock.
- * @returns {object} Shadow observation and snapshot API.
+ * @returns {object} State observation, controller-transition, and snapshot API.
  */
 function createAgentStateShadow(options = {}) {
   const clock = typeof options.clock === "function" ? options.clock : Date.now;
   const runId = String(options.runId || options.requestId || `agent-shadow-${++fallbackRunId}-${clock()}`);
+  const isControllerMode = options.controlMode === "controller";
   let sequence = 0;
   let state = createInitialAgentState({ ...options, runId });
   const artifactStore = createAgentArtifactStore();
   const observationIdsByToolCall = new Map();
+  const transitionJournal = [];
   let contextSources = {};
+  let controllerTerminationReason = "";
   const diagnostics = {
     ignoredEventCount: 0,
     unmappedEventCount: 0,
@@ -142,6 +147,7 @@ function createAgentStateShadow(options = {}) {
   }
 
   function applyAtObservation(type, payload, observation) {
+    const beforeStateVersion = state.stateVersion;
     try {
       const result = applyAgentStateEvent(state, {
         schemaVersion: AGENT_STATE_EVENT_SCHEMA_VERSION,
@@ -153,18 +159,40 @@ function createAgentStateShadow(options = {}) {
       });
       if (!result.accepted) {
         diagnostics.rejectedTransitionCount += 1;
+        if (isControllerMode) throw new Error(`Agent controller rejected ${type}: ${result.reason}`);
         return false;
       }
       state = result.state;
+      transitionJournal.push({
+        type,
+        payload: cloneSerializable(payload || {}),
+        sequence: observation.sequence,
+        beforeStateVersion,
+        afterStateVersion: state.stateVersion
+      });
       return true;
-    } catch (_error) {
+    } catch (error) {
       diagnostics.shadowErrorCount += 1;
+      if (isControllerMode) throw error;
       return false;
     }
   }
 
   function applyNewObservation(type, payload) {
     return applyAtObservation(type, payload, allocateObservation());
+  }
+
+  /** Apply a typed controller event through the same single-writer reducer. */
+  function applyControllerEvent(type, payload = {}) {
+    if (!isControllerMode) throw new Error("Controller events require controller mode.");
+    applyNewObservation(type, payload);
+    return cloneSerializable(state);
+  }
+
+  /** Return accepted transitions after the supplied state version without exposing mutable state. */
+  function getTransitionsSince(stateVersion) {
+    const minimum = Number(stateVersion) || 0;
+    return cloneSerializable(transitionJournal.filter((entry) => entry.afterStateVersion > minimum));
   }
 
   applyNewObservation("run_started", {});
@@ -193,9 +221,10 @@ function createAgentStateShadow(options = {}) {
       if (observation.toolCallId) observationIdsByToolCall.set(observation.toolCallId, observation.observationId);
       diagnostics.normalizedObservationCount += 1;
       return observation;
-    } catch (_error) {
+    } catch (error) {
       diagnostics.observationNormalizationErrorCount += 1;
       diagnostics.shadowErrorCount += 1;
+      if (isControllerMode) throw error;
       return null;
     }
   }
@@ -211,9 +240,10 @@ function createAgentStateShadow(options = {}) {
       diagnostics.contextBuildCount += 1;
       diagnostics.latestContextComparison = compareAgentContexts(details.messages, contextBundle);
       return contextBundle;
-    } catch (_error) {
+    } catch (error) {
       diagnostics.contextBuildErrorCount += 1;
       diagnostics.shadowErrorCount += 1;
+      if (isControllerMode) throw error;
       return null;
     }
   }
@@ -224,6 +254,7 @@ function createAgentStateShadow(options = {}) {
     if (isStart) {
       applyAtObservation("action_started", {
         actionId,
+        decisionId: String(event.decisionId || ""),
         tool: String(event.tool || event.activity?.tool || ""),
         input: String(event.input || "")
       }, observation);
@@ -232,6 +263,7 @@ function createAgentStateShadow(options = {}) {
     if (!state.activeActions.some((action) => action.actionId === actionId)) diagnostics.unmatchedActionFinishCount += 1;
     applyAtObservation("action_finished", {
       actionId,
+      decisionId: String(event.decisionId || ""),
       tool: String(event.tool || event.activity?.tool || ""),
       input: String(event.input || ""),
       status: actionStatusForEvent(event),
@@ -281,6 +313,7 @@ function createAgentStateShadow(options = {}) {
     if (event.type === "approval") {
       applyAtObservation("approval_resolved", {
         interactionId: String(event.approvalId || `approval-${observation.sequence}`),
+        decisionId: String(event.decisionId || ""),
         status: event.approved === false ? "denied" : "resolved",
         decision: event.approved === false ? "reject" : "approve",
         response: { approved: event.approved !== false, autoApproved: event.autoApproved === true },
@@ -309,8 +342,9 @@ function createAgentStateShadow(options = {}) {
   function observeRuntimeEvent(event) {
     try {
       observeRuntimeEventUnsafe(event);
-    } catch (_error) {
+    } catch (error) {
       diagnostics.shadowErrorCount += 1;
+      if (isControllerMode) throw error;
     }
   }
 
@@ -332,10 +366,14 @@ function createAgentStateShadow(options = {}) {
     return async (details) => {
       const requested = allocateObservation();
       const id = interactionId(details, "clarification", requested);
-      applyAtObservation("user_input_requested", { interactionId: id, prompt: createClarificationPrompt(details) }, requested);
+      applyAtObservation("user_input_requested", {
+        interactionId: id,
+        decisionId: String(details.decisionId || ""),
+        prompt: createClarificationPrompt(details)
+      }, requested);
       try {
         const response = await callback(details);
-        applyNewObservation("user_input_resolved", { interactionId: id, response });
+        applyNewObservation("user_input_resolved", { interactionId: id, decisionId: String(details.decisionId || ""), response });
         return response;
       } catch (error) {
         allocateObservation();
@@ -350,12 +388,14 @@ function createAgentStateShadow(options = {}) {
     return async (details) => {
       const requested = allocateObservation();
       const id = interactionId(details, "approval", requested);
-      applyAtObservation("approval_requested", { interactionId: id, prompt: createApprovalPrompt(details) }, requested);
+      const decisionId = String(details.decisionId || "");
+      applyAtObservation("approval_requested", { interactionId: id, decisionId, prompt: createApprovalPrompt(details) }, requested);
       try {
         const response = await callback(details);
         const decision = response === true ? "approve" : response === false ? "reject" : String(response?.decision || (response?.approved === true ? "approve" : "reject"));
         applyNewObservation("approval_resolved", {
           interactionId: id,
+          decisionId,
           status: decision === "approve" ? "resolved" : "denied",
           decision,
           instructions: response && typeof response === "object" ? String(response.instructions || response.prompt || "") : "",
@@ -402,27 +442,35 @@ function createAgentStateShadow(options = {}) {
     let snapshot = null;
     try {
       snapshot = createTerminalSnapshot(status, details);
-    } catch (_error) {
+    } catch (error) {
       diagnostics.shadowErrorCount += 1;
+      if (isControllerMode) throw error;
       return null;
     }
     if (!snapshot || typeof emit !== "function") return snapshot;
     try {
       emit({ type: "agent-state-snapshot", snapshot });
-    } catch (_error) {
+    } catch (error) {
       diagnostics.shadowErrorCount += 1;
+      if (isControllerMode) throw error;
     }
     return snapshot;
   }
 
   return {
+    applyControllerEvent,
     configureContextSources,
     emitTerminalSnapshot,
+    getControllerTerminationReason: () => controllerTerminationReason,
     getDiagnostics: () => cloneSerializable(diagnostics),
     getState: () => cloneSerializable(state),
+    getTransitionsSince,
     observeDecisionContext,
     observeRuntimeEvent,
     observeToolEvidence,
+    setControllerTerminationReason: (reason) => {
+      controllerTerminationReason = String(reason || "");
+    },
     wrapApproval,
     wrapClarification,
     wrapEmit

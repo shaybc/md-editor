@@ -61,6 +61,69 @@ test("AgentState accepts sequence gaps while stateVersion counts accepted mutati
   assert.equal(applyAgentStateEvent(completed.state, event("run-1", 7, "steering_observed", {})).reason, "post-terminal-event");
 });
 
+test("AgentState v3 records validated decision lifecycle without raw tool arguments", () => {
+  let state = createInitialAgentState({ runId: "run-decisions", prompt: "inspect", controlMode: "controller" });
+  const events = [
+    event("run-decisions", 1, "run_started"),
+    event("run-decisions", 2, "decision_proposed", {
+      decision: {
+        decisionId: "D1",
+        basedOnStateVersion: 1,
+        type: "tool_call",
+        intentId: "task",
+        rationale: "Inspect the file",
+        expectedObservation: "File contents",
+        tool: { name: "read_file", providerCallId: "call-1", arguments: { path: "secret.txt" } }
+      }
+    }),
+    event("run-decisions", 3, "decision_accepted", { decisionId: "D1" }),
+    event("run-decisions", 4, "decision_execution_authorized", { decisionId: "D1" }),
+    event("run-decisions", 5, "decision_executed", { decisionId: "D1" })
+  ];
+  for (const nextEvent of events) {
+    const result = applyAgentStateEvent(state, nextEvent);
+    assert.equal(result.accepted, true);
+    state = result.state;
+  }
+  assert.equal(state.controlMode, "controller");
+  assert.equal(state.recentDecisions[0].status, "executed");
+  assert.equal(state.recentDecisions[0].proposedAtStateVersion, 2);
+  assert.equal(state.recentDecisions[0].acceptedAtStateVersion, 3);
+  assert.equal(state.recentDecisions[0].authorizedAtStateVersion, 4);
+  assert.equal(state.recentDecisions[0].executedAtStateVersion, 5);
+  assert.equal(JSON.stringify(state.recentDecisions).includes("secret.txt"), false);
+  assert.deepEqual(state.decisionCounts, { proposed: 1, accepted: 1, rejected: 0, executed: 1, superseded: 0 });
+
+  let superseded = createInitialAgentState({ runId: "run-superseded", controlMode: "controller" });
+  for (const nextEvent of [
+    event("run-superseded", 1, "run_started"),
+    event("run-superseded", 2, "decision_proposed", { decision: { decisionId: "D2", type: "tool_call", intentId: "task" } }),
+    event("run-superseded", 3, "decision_accepted", { decisionId: "D2" }),
+    event("run-superseded", 4, "decision_superseded", { decisionId: "D2", runtimeReasonCodes: ["stale_state_version"] })
+  ]) {
+    const result = applyAgentStateEvent(superseded, nextEvent);
+    assert.equal(result.accepted, true);
+    superseded = result.state;
+  }
+  assert.equal(superseded.recentDecisions[0].status, "superseded");
+  assert.deepEqual(superseded.recentDecisions[0].runtimeReasonCodes, ["stale_state_version"]);
+});
+
+test("AgentState v3 rejects invalid decision lifecycle transitions", () => {
+  let state = createInitialAgentState({ runId: "invalid-lifecycle", controlMode: "controller" });
+  state = applyAgentStateEvent(state, event("invalid-lifecycle", 1, "run_started")).state;
+  state = applyAgentStateEvent(state, event("invalid-lifecycle", 2, "decision_proposed", {
+    decision: { decisionId: "D-invalid", type: "tool_call", intentId: "task" }
+  })).state;
+  state = applyAgentStateEvent(state, event("invalid-lifecycle", 3, "decision_rejected", {
+    decisionId: "D-invalid", runtimeReasonCodes: ["unknown_tool"]
+  })).state;
+  const executed = applyAgentStateEvent(state, event("invalid-lifecycle", 4, "decision_executed", { decisionId: "D-invalid" }));
+  assert.equal(executed.accepted, false);
+  assert.equal(executed.reason, "invalid-decision-status");
+  assert.equal(executed.state.recentDecisions[0].status, "rejected");
+});
+
 test("terminal transitions reconcile active actions and pending interactions", () => {
   let state = createInitialAgentState({ runId: "run-reconcile", prompt: "work" });
   for (const nextEvent of [
@@ -155,8 +218,8 @@ test("shadow callbacks preserve user responses and callback semantics", async ()
 test("terminal snapshot validation checks metadata and generation", () => {
   const shadow = createAgentStateShadow({ requestId: "snapshot-1", prompt: "work", executionGeneration: 3 });
   const snapshot = shadow.emitTerminalSnapshot(() => {}, "completed", { reason: "done" });
-  assert.equal(snapshot.schemaVersion, 2);
-  assert.equal(snapshot.state.schemaVersion, 2);
+  assert.equal(snapshot.schemaVersion, 3);
+  assert.equal(snapshot.state.schemaVersion, 3);
   assert.deepEqual(validateTerminalAgentStateSnapshot(snapshot, { executionGeneration: 3 }), { valid: true, errors: [] });
   const stale = structuredClone(snapshot);
   stale.executionGeneration = 2;

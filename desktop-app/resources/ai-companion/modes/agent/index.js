@@ -11,17 +11,20 @@ const AGENT_MODE_SYSTEM_PROMPT = `${DEFAULT_AI_COMPANION_PROMPTS.agentSystem} ${
 
 async function runAgentMode(request, emit) {
   const prompt = String(request.prompt || "");
-  const shadow = createAgentStateShadow({
-    requestId: request.requestId,
-    chatId: request.chatId,
-    turnIndex: request.turnIndex,
-    executionKind: request.executionKind,
-    executionGeneration: request.executionGeneration,
-    prompt
-  });
-  const observedEmit = shadow.wrapEmit(emit);
+  let stateSession = null;
+  let observedEmit = emit;
   try {
     const settings = runtime.normalizeAiCompanionSettings(request.settings);
+    stateSession = createAgentStateShadow({
+      requestId: request.requestId,
+      chatId: request.chatId,
+      turnIndex: request.turnIndex,
+      executionKind: request.executionKind,
+      executionGeneration: request.executionGeneration,
+      prompt,
+      controlMode: settings.agentDecisionControllerEnabled === true ? "controller" : "shadow"
+    });
+    observedEmit = stateSession.wrapEmit(emit);
     if (!settings.enabled || !settings.agentEnabled) throw new Error("AI Companion agent mode is disabled.");
     runtime.throwIfAborted(request.signal);
     const provider = runtime.createProvider(settings);
@@ -30,7 +33,7 @@ async function runAgentMode(request, emit) {
       ? AGENT_COMPLETION_REPORTING_INSTRUCTION
       : LEGACY_AGENT_COMPLETION_REPORTING_INSTRUCTION;
     const loopOptions = { signal: request.signal, profileRoot: request.profileRoot, activeFile: request.activeFile, editorReadContext: request.editorReadContext, attachments: request.attachments, conversationHistory: request.conversationHistory, resumeCheckpoint: request.resumeCheckpoint, resumeIntentContext: request.resumeIntentContext, requestApproval: request.requestApproval, requestAppAction: request.requestAppAction, requestClarification: request.requestClarification, requestChatTitle: request.requestChatTitle === true, requestId: request.requestId, chatId: request.chatId, turnIndex: request.turnIndex, executionKind: request.executionKind, executionGeneration: request.executionGeneration, savedIntentContract: request.savedIntentContract, savedIntentContractMeta: request.savedIntentContractMeta, priorIntentContract: request.priorIntentContract, priorIntentContractMeta: request.priorIntentContractMeta, appVersion: request.appVersion, securityContext: request.securityContext, systemPrompt: `${prompts.agentSystem} ${AGENT_APPROVAL_RATIONALE_INSTRUCTION} ${completionInstruction}`, prompts };
-    shadow.configureContextSources({
+    stateSession.configureContextSources({
       requestId: request.requestId,
       systemPrompt: loopOptions.systemPrompt,
       prompt,
@@ -40,17 +43,20 @@ async function runAgentMode(request, emit) {
       conversationHistory: request.conversationHistory,
       intentInjectedMaxChars: settings.intentInjectedMaxChars
     });
-    loopOptions.observeToolEvidence = shadow.observeToolEvidence;
-    loopOptions.observeDecisionContext = shadow.observeDecisionContext;
-    loopOptions.requestApproval = shadow.wrapApproval(loopOptions.requestApproval);
-    loopOptions.requestClarification = shadow.wrapClarification(loopOptions.requestClarification);
+    loopOptions.observeToolEvidence = stateSession.observeToolEvidence;
+    loopOptions.observeDecisionContext = stateSession.observeDecisionContext;
+    loopOptions.requestApproval = stateSession.wrapApproval(loopOptions.requestApproval);
+    loopOptions.requestClarification = stateSession.wrapClarification(loopOptions.requestClarification);
+    if (settings.agentDecisionControllerEnabled === true) loopOptions.agentStateSession = stateSession;
     const response = await runtime.runAgentToolLoop(provider, settings, request.workspaceRoot, prompt, "agent", observedEmit, runtime, loopOptions);
     observedEmit({ type: "content", content: response });
-    shadow.emitTerminalSnapshot(emit, "completed", { reason: "agent-run-completed" });
+    stateSession.emitTerminalSnapshot(emit, "completed", {
+      reason: stateSession.getControllerTerminationReason() || "agent-run-completed"
+    });
     return { content: response };
   } catch (error) {
     const status = isAgentCancellation(error, request.signal) ? "cancelled" : "failed";
-    shadow.emitTerminalSnapshot(emit, status, { reason: terminalReasonForError(error, status) });
+    stateSession?.emitTerminalSnapshot(emit, status, { reason: terminalReasonForError(error, status) });
     throw error;
   }
 }

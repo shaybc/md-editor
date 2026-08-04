@@ -253,4 +253,8 @@ test("browser and headless settings normalize the routing kill switch identicall
   assert.equal(normalizeAiCompanionSettings({}).chatRequestRoutingEnabled, true);
   assert.equal(browserApi.normalize({ chatRequestRoutingEnabled: false }).chatRequestRoutingEnabled, false);
   assert.equal(normalizeAiCompanionSettings({ chatRequestRoutingEnabled: false }).chatRequestRoutingEnabled, false);
+  assert.equal(browserApi.normalize({}).agentDecisionControllerEnabled, false);
+  assert.equal(normalizeAiCompanionSettings({}).agentDecisionControllerEnabled, false);
+  assert.equal(browserApi.normalize({ agentDecisionControllerEnabled: true }).agentDecisionControllerEnabled, true);
+  assert.equal(normalizeAiCompanionSettings({ agentDecisionControllerEnabled: true }).agentDecisionControllerEnabled, true);
 });

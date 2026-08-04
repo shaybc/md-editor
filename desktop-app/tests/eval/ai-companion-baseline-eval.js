@@ -118,18 +118,19 @@ function isHumanScoringComplete(record) {
 function summarizeRecords(records) {
   const groups = new Map();
   for (const record of records) {
-    const key = [record.provider.role, record.mode, record.category].join("\u0000");
+    const key = [record.provider.role, record.mode, record.category, record.controllerVariant || "legacy"].join("\u0000");
     if (!groups.has(key)) groups.set(key, []);
     groups.get(key).push(record);
   }
   return [...groups.entries()].map(([key, entries]) => {
-    const [providerRole, mode, category] = key.split("\u0000");
+    const [providerRole, mode, category, controllerVariant] = key.split("\u0000");
     const scored = entries.filter((entry) => typeof entry.human?.taskSuccess === "boolean");
     const falseCompletions = entries.filter((entry) => entry.deterministic?.falseCompletion === true).length;
     return {
       providerRole,
       mode,
       category,
+      controllerVariant,
       runs: entries.length,
       scoredRuns: scored.length,
       taskSuccessRate: ratio(scored.filter((entry) => entry.human.taskSuccess).length, scored.length),
@@ -151,9 +152,20 @@ function summarizeRecords(records) {
       meanTotalTokens: average(entries, "totalTokens"),
       p95TotalTokens: percentile(entries.map((entry) => entry.totalTokens), 0.95),
       clarificationCount: entries.reduce((sum, entry) => sum + (entry.clarifications?.length || 0), 0),
-      approvalCount: entries.reduce((sum, entry) => sum + (entry.approvals?.length || 0), 0)
+      approvalCount: entries.reduce((sum, entry) => sum + (entry.approvals?.length || 0), 0),
+      decisionProposed: entries.reduce((sum, entry) => sum + (entry.decisionMetrics?.proposed || 0), 0),
+      decisionAccepted: entries.reduce((sum, entry) => sum + (entry.decisionMetrics?.accepted || 0), 0),
+      decisionRejected: entries.reduce((sum, entry) => sum + (entry.decisionMetrics?.rejected || 0), 0),
+      decisionExecuted: entries.reduce((sum, entry) => sum + (entry.decisionMetrics?.executed || 0), 0),
+      decisionSuperseded: entries.reduce((sum, entry) => sum + (entry.decisionMetrics?.superseded || 0), 0),
+      repairRate: ratio(entries.reduce((sum, entry) => sum + (entry.decisionMetrics?.repairs || 0), 0), entries.reduce((sum, entry) => sum + (entry.decisionMetrics?.proposed || 0), 0)),
+      staleDecisionRate: ratio(entries.reduce((sum, entry) => sum + (entry.decisionMetrics?.staleDecisions || 0), 0), entries.reduce((sum, entry) => sum + (entry.decisionMetrics?.proposed || 0), 0)),
+      decisionMetadataRejectionRate: ratio(entries.reduce((sum, entry) => sum + (entry.decisionMetrics?.metadataRejections || 0), 0), entries.reduce((sum, entry) => sum + (entry.decisionMetrics?.proposed || 0), 0)),
+      originalToolArgumentRejectionRate: ratio(entries.reduce((sum, entry) => sum + (entry.decisionMetrics?.originalToolArgumentRejections || 0), 0), entries.reduce((sum, entry) => sum + (entry.decisionMetrics?.decoratedToolProposals || 0), 0)),
+      legacyToolArgumentValidity: ratio(entries.reduce((sum, entry) => sum + (entry.decisionMetrics?.legacyValidToolDecisions || 0), 0), entries.reduce((sum, entry) => sum + (entry.decisionMetrics?.legacyToolProposals || 0), 0)),
+      decoratedToolArgumentValidity: ratio(entries.reduce((sum, entry) => sum + (entry.decisionMetrics?.decoratedValidToolDecisions || 0), 0), entries.reduce((sum, entry) => sum + (entry.decisionMetrics?.decoratedToolProposals || 0), 0))
     };
-  }).sort((left, right) => `${left.providerRole}:${left.mode}:${left.category}`.localeCompare(`${right.providerRole}:${right.mode}:${right.category}`));
+  }).sort((left, right) => `${left.providerRole}:${left.mode}:${left.category}:${left.controllerVariant}`.localeCompare(`${right.providerRole}:${right.mode}:${right.category}:${right.controllerVariant}`));
 }
 
 function mergeBlindScores(records, scores, key) {
@@ -197,6 +209,7 @@ function createMarkdownReport(aggregate) {
     group.providerRole,
     group.mode,
     group.category,
+    group.controllerVariant,
     group.runs,
     group.taskSuccessRate == null ? "unscored" : `${(group.taskSuccessRate * 100).toFixed(1)}%`,
     `${(group.falseCompletionRate * 100).toFixed(1)}%`,
@@ -212,8 +225,8 @@ function createMarkdownReport(aggregate) {
     "",
     `Status: ${aggregate.status}`,
     "",
-    "Provider | Mode | Category | Runs | Success | False completion | Unnecessary tools | Mutation violation | Median ms | P95 ms | Mean calls | Mean tokens",
-    "--- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---:",
+    "Provider | Mode | Category | Controller | Runs | Success | False completion | Unnecessary tools | Mutation violation | Median ms | P95 ms | Mean calls | Mean tokens",
+    "--- | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---:",
     ...rows,
     ""
   ].join("\n");
@@ -243,11 +256,14 @@ async function runBaseline(options) {
   for (const providerConfiguration of configuration.providers) {
     for (let repetition = 1; repetition <= repetitions; repetition += 1) {
       for (const testCase of cases) {
-        const caseRecords = await runEvaluationCase({ testCase, providerConfiguration, repetition });
-        for (const record of caseRecords) {
-          const identified = { ...record, datasetVersion: dataset.datasetVersion, runId: crypto.randomUUID() };
-          records.push(identified);
-          await appendJsonLine(runsPath, identified);
+        const variants = testCase.mode === "agent" ? [false, true] : [false];
+        for (const controllerEnabled of variants) {
+          const caseRecords = await runEvaluationCase({ testCase, providerConfiguration, repetition, controllerEnabled });
+          for (const record of caseRecords) {
+            const identified = { ...record, datasetVersion: dataset.datasetVersion, runId: crypto.randomUUID() };
+            records.push(identified);
+            await appendJsonLine(runsPath, identified);
+          }
         }
       }
     }

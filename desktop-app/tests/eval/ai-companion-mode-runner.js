@@ -214,6 +214,18 @@ function matchesApprovalRule(rule, details, turnId) {
 }
 
 function getToolCalls(calls, events = []) {
+  const decisionEvents = events.filter((event) => event.type === "agent-decision");
+  if (decisionEvents.length) {
+    const executedCallIds = new Set(decisionEvents
+      .filter((event) => event.decisionStatus === "executed" && event.decisionType === "tool_call")
+      .map((event) => String(event.providerCallId || ""))
+      .filter(Boolean));
+    return calls.flatMap((call) => call.toolCalls || []).map((toolCall) => ({
+      id: String(toolCall.id || ""),
+      name: String(toolCall.name || toolCall.function?.name || ""),
+      arguments: cloneJsonSafe(toolCall.arguments ?? toolCall.function?.arguments ?? {})
+    })).filter((toolCall) => toolCall.name && executedCallIds.has(toolCall.id));
+  }
   const observed = events.filter((event) => event.type === "tool" && event.summary === "running").map((event) => ({
     id: String(event.activityId || event.activity?.id || ""),
     name: String(event.tool || ""),
@@ -225,6 +237,31 @@ function getToolCalls(calls, events = []) {
     name: String(toolCall.name || toolCall.function?.name || ""),
     arguments: cloneJsonSafe(toolCall.arguments ?? toolCall.function?.arguments ?? {})
   })).filter((toolCall) => toolCall.name);
+}
+
+function summarizeDecisionLifecycle(events = []) {
+  const decisionEvents = events.filter((event) => event.type === "agent-decision");
+  const byStatus = (status) => decisionEvents.filter((event) => event.decisionStatus === status);
+  const proposed = byStatus("proposed");
+  const rejected = byStatus("rejected");
+  const decoratedToolProposals = proposed.filter((event) => event.decisionType === "tool_call");
+  const acceptedToolDecisions = new Set(byStatus("accepted")
+    .filter((event) => event.decisionType === "tool_call")
+    .map((event) => event.decisionId));
+  const includesCode = (event, code) => Array.isArray(event.runtimeReasonCodes) && event.runtimeReasonCodes.includes(code);
+  return {
+    proposed: proposed.length,
+    accepted: byStatus("accepted").length,
+    rejected: rejected.length,
+    executed: byStatus("executed").length,
+    superseded: byStatus("superseded").length,
+    repairs: proposed.filter((event) => event.replacesDecisionId).length,
+    staleDecisions: decisionEvents.filter((event) => includesCode(event, "stale_state_version")).length,
+    metadataRejections: rejected.filter((event) => includesCode(event, "missing_decision_metadata") || includesCode(event, "invalid_decision_metadata")).length,
+    originalToolArgumentRejections: rejected.filter((event) => includesCode(event, "invalid_tool_arguments")).length,
+    decoratedToolProposals: decoratedToolProposals.length,
+    decoratedValidToolDecisions: decoratedToolProposals.filter((event) => acceptedToolDecisions.has(event.decisionId)).length
+  };
 }
 
 function scoreDeterministicOutcome(mode, expectations, response, toolCalls, events, workspaceDiff, clarificationCount) {
@@ -262,7 +299,7 @@ function scoreDeterministicOutcome(mode, expectations, response, toolCalls, even
 }
 
 /** Execute one dataset case against one provider in disposable workspace and profile roots. */
-async function runEvaluationCase({ testCase, providerConfiguration, repetition = 1, providerFactory }) {
+async function runEvaluationCase({ testCase, providerConfiguration, repetition = 1, providerFactory, controllerEnabled = false }) {
   if (!EVALUATED_MODES.includes(testCase?.mode)) throw new Error(`Evaluation mode is outside the M0 boundary: ${testCase?.mode}`);
   const parentRoot = await fs.mkdtemp(path.join(os.tmpdir(), "md-editor-ai-m0-"));
   const workspaceRoot = path.join(parentRoot, "workspace");
@@ -278,6 +315,7 @@ async function runEvaluationCase({ testCase, providerConfiguration, repetition =
     enabled: true,
     chatEnabled: true,
     agentEnabled: true,
+    agentDecisionControllerEnabled: testCase.mode === "agent" && controllerEnabled === true,
     providerRequestDelayMs: 0
   };
   runtime.createProvider = (requestedSettings) => instrumentProvider(
@@ -336,6 +374,12 @@ async function runEvaluationCase({ testCase, providerConfiguration, repetition =
       const profileDiff = diffSnapshots(beforeProfile, afterProfile);
       const calls = telemetry.calls.slice(callsBefore);
       const toolCalls = getToolCalls(calls, events);
+      const providerToolCallCount = calls.reduce((sum, call) => sum + (call.toolCalls?.length || 0), 0);
+      const decisionMetrics = {
+        ...summarizeDecisionLifecycle(events),
+        legacyToolProposals: settings.agentDecisionControllerEnabled ? 0 : providerToolCallCount,
+        legacyValidToolDecisions: settings.agentDecisionControllerEnabled ? 0 : toolCalls.length
+      };
       const deterministic = scoreDeterministicOutcome(testCase.mode, turn.expectations, response, toolCalls, events, workspaceDiff, clarifications.length);
       const record = {
         schemaVersion: 1,
@@ -348,6 +392,7 @@ async function runEvaluationCase({ testCase, providerConfiguration, repetition =
         category: testCase.category,
         suite: testCase.suite,
         provider: sanitizeProviderMetadata(providerConfiguration),
+        controllerVariant: settings.agentDecisionControllerEnabled ? "typed" : "legacy",
         prompt: turn.prompt,
         rubric: cloneJsonSafe(turn.humanRubric),
         durationMs: Date.now() - startedAt,
@@ -356,6 +401,7 @@ async function runEvaluationCase({ testCase, providerConfiguration, repetition =
         completionTokens: telemetry.completionTokens - usageBefore.completionTokens,
         totalTokens: telemetry.totalTokens - usageBefore.totalTokens,
         toolCalls,
+        decisionMetrics,
         failedProviderCalls: calls.filter((call) => call.failed).length,
         approvals,
         clarifications,
@@ -384,6 +430,7 @@ module.exports = {
   runEvaluationCase,
   sanitizeProviderMetadata,
   scoreDeterministicOutcome,
+  summarizeDecisionLifecycle,
   validateEvaluationConfig,
   validateEvaluationDataset
 };

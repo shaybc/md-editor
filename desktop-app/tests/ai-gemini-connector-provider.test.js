@@ -3,6 +3,7 @@ const test = require("node:test");
 
 const {
   GeminiConnectorClient,
+  buildToolConfig,
   createGeminiConnectorProvider,
   extractGeminiParts,
   loadGeminiConnectorSettings,
@@ -164,6 +165,7 @@ test("Gemini connector wraps array tool results for function responses", () => {
 });
 
 test("Gemini connector normalizes tool schemas and usage metadata", () => {
+  assert.deepEqual(buildToolConfig("required"), { functionCallingConfig: { mode: "ANY" } });
   const tools = normalizeGeminiTools([{
     type: "function",
     function: {
