@@ -84,6 +84,28 @@ function validateEvaluationDataset(dataset) {
   return dataset;
 }
 
+/** Validate deterministic restart fault scenarios without contacting a provider. */
+function validateRecoveryScenarios(dataset) {
+  if (!dataset || dataset.schemaVersion !== 1 || dataset.mode !== "agent") throw new Error("Recovery scenarios must use schemaVersion 1 and Agent mode.");
+  if (dataset.featureFlagDefault !== false) throw new Error("Durable recovery must remain default-off during M7 evaluation.");
+  if (!Array.isArray(dataset.protectedModes) || !["chat", "plan", "autocomplete", "gitSummary", "testConnection"].every((mode) => dataset.protectedModes.includes(mode))) {
+    throw new Error("Recovery scenarios must preserve Chat, Plan, and specialized mode boundaries.");
+  }
+  if (!Array.isArray(dataset.cases) || dataset.cases.length < 10) throw new Error("Recovery scenarios must cover every mandatory barrier family.");
+  const phases = new Set(["decision_ready", "model_pending", "interaction_pending", "action_prepared", "action_dispatching", "action_observed", "verification_pending", "finalizing", "terminal"]);
+  const continuations = new Set(["resume", "reconcile", "restart_decision", "user_confirmation", "repair_terminal_projection", "blocked", "none"]);
+  const ids = new Set();
+  for (const scenario of dataset.cases) {
+    if (!scenario?.id || ids.has(scenario.id)) throw new Error("Recovery scenario ids must be present and unique.");
+    if (!phases.has(scenario.phase) || !scenario.failurePoint || !continuations.has(scenario.expectedContinuation)) {
+      throw new Error(`Recovery scenario ${scenario.id} has invalid phase or continuation metadata.`);
+    }
+    if (scenario.automaticReplay !== false) throw new Error(`Recovery scenario ${scenario.id} must forbid automatic effect replay.`);
+    ids.add(scenario.id);
+  }
+  return dataset;
+}
+
 /** Validate the two-provider target/reference configuration without resolving secrets. */
 function validateEvaluationConfig(configuration) {
   if (!configuration || configuration.schemaVersion !== 1 || !Array.isArray(configuration.providers)) throw new Error("Evaluation configuration schemaVersion must be 1 and include providers.");
@@ -491,5 +513,6 @@ module.exports = {
   summarizeProgressControl,
   summarizeVerifierCompletion,
   validateEvaluationConfig,
-  validateEvaluationDataset
+  validateEvaluationDataset,
+  validateRecoveryScenarios
 };

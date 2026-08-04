@@ -107,7 +107,7 @@ test("connection testing calls the provider testConnection method directly", () 
   assert.match(source, /return createProvider\(settings\)\.testConnection\(\{ signal: options\.signal, onDebug: options\.onDebug \}\)/);
 });
 
-test("AgentState, controller, verifier, and progress control remain Agent-only", () => {
+test("AgentState, controller, progress control, and durable recovery remain Agent-only", () => {
   const modeRoot = path.join(__dirname, "..", "resources", "ai-companion", "modes");
   const agentSource = fs.readFileSync(path.join(modeRoot, "agent", "index.js"), "utf8");
   const protectedSources = [
@@ -122,6 +122,8 @@ test("AgentState, controller, verifier, and progress control remain Agent-only",
   assert.match(agentSource, /agentProgressEvaluationEnabled/);
   assert.match(agentSource, /agentProgressControlEnabled/);
   for (const source of protectedSources) {
-    assert.doesNotMatch(source, /agent-state-shadow|agent-state-snapshot|agent-context-builder|agent-context-comparison|agent-observation-normalizer|agent-artifact-store|agent-decision-controller|agent-completion-orchestrator|agent-progress-policy|agent-progress-evaluator|agent-strategy-signature|agentDecisionControllerEnabled|agentVerifierCompletionEnabled|agentProgressEvaluationEnabled|agentProgressControlEnabled/);
+  assert.match(agentSource, /agent-checkpoint-runtime/);
+  assert.match(agentSource, /agentDurableRecoveryEnabled/);
+    assert.doesNotMatch(source, /agent-state-shadow|agent-state-snapshot|agent-context-builder|agent-context-comparison|agent-observation-normalizer|agent-artifact-store|agent-decision-controller|agent-completion-orchestrator|agent-progress-policy|agent-progress-evaluator|agent-strategy-signature|agent-checkpoint-runtime|agent-recovery-coordinator|agentDecisionControllerEnabled|agentVerifierCompletionEnabled|agentProgressEvaluationEnabled|agentProgressControlEnabled|agentDurableRecoveryEnabled/);
   }
 });

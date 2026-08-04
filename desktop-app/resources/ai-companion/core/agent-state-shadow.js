@@ -9,7 +9,8 @@ const {
   AGENT_STATE_SCHEMA_VERSION,
   applyAgentStateEvent,
   createInitialAgentState,
-  validateTerminalAgentStateSnapshot
+  validateTerminalAgentStateSnapshot,
+  validateRestorableAgentState
 } = require("./agent-state");
 const { createAgentArtifactStore } = require("./agent-artifact-store");
 const { buildAgentContext } = require("./agent-context-builder");
@@ -119,11 +120,21 @@ function isAgentCancellation(error, signal) {
  */
 function createAgentStateShadow(options = {}) {
   const clock = typeof options.clock === "function" ? options.clock : Date.now;
-  const runId = String(options.runId || options.requestId || `agent-shadow-${++fallbackRunId}-${clock()}`);
+  const restoredState = options.restoredState ? cloneSerializable(options.restoredState) : null;
+  if (restoredState) {
+    const validation = validateRestorableAgentState(restoredState, {
+      runId: options.runId || restoredState.run?.runId,
+      chatId: options.chatId,
+      executionGeneration: options.executionGeneration
+    });
+    if (!validation.valid) throw new Error(`AgentState restore rejected: ${validation.errors.join(", ")}`);
+  }
+  const runId = String(restoredState?.run?.runId || options.runId || options.requestId || `agent-shadow-${++fallbackRunId}-${clock()}`);
   const isControllerMode = options.controlMode === "controller";
-  let sequence = 0;
-  let state = createInitialAgentState({ ...options, runId });
+  let sequence = Number(restoredState?.lastAcceptedSequence) || 0;
+  let state = restoredState || createInitialAgentState({ ...options, runId });
   const artifactStore = createAgentArtifactStore();
+  if (options.artifactRecords) artifactStore.hydrate(options.artifactRecords);
   const observationIdsByToolCall = new Map();
   const transitionJournal = [];
   let contextSources = {};
@@ -195,7 +206,22 @@ function createAgentStateShadow(options = {}) {
     return cloneSerializable(transitionJournal.filter((entry) => entry.afterStateVersion > minimum));
   }
 
-  applyNewObservation("run_started", {});
+  if (!restoredState) applyNewObservation("run_started", {});
+
+  /** Persist the current accepted state and newly-created artifacts at a mandatory barrier. */
+  async function checkpoint(phase, continuation = {}) {
+    if (typeof options.checkpointBarrier !== "function") return null;
+    const result = await options.checkpointBarrier({
+      phase,
+      continuation: cloneSerializable(continuation),
+      state: cloneSerializable(state),
+      artifactRecords: artifactStore.exportRecords(),
+      diagnostics: cloneSerializable(diagnostics)
+    });
+    const ids = result?.artifactManifest?.refs?.filter((reference) => reference.available === true).map((reference) => reference.id) || [];
+    artifactStore.markDurable(ids);
+    return result;
+  }
 
   /** Configure immutable request sources after the Agent prompt profile is loaded. */
   function configureContextSources(sources = {}) {
@@ -375,9 +401,11 @@ function createAgentStateShadow(options = {}) {
         decisionId: String(details.decisionId || ""),
         prompt: createClarificationPrompt(details)
       }, requested);
+      await checkpoint("interaction_pending", { interactionId: id, decisionId: String(details.decisionId || ""), nextRuntimeStep: "await_clarification" });
       try {
         const response = await callback(details);
         applyNewObservation("user_input_resolved", { interactionId: id, decisionId: String(details.decisionId || ""), response });
+        await checkpoint("decision_ready", { interactionId: id, decisionId: String(details.decisionId || ""), nextRuntimeStep: "continue_after_clarification" });
         return response;
       } catch (error) {
         allocateObservation();
@@ -394,6 +422,7 @@ function createAgentStateShadow(options = {}) {
       const id = interactionId(details, "approval", requested);
       const decisionId = String(details.decisionId || "");
       applyAtObservation("approval_requested", { interactionId: id, decisionId, prompt: createApprovalPrompt(details) }, requested);
+      await checkpoint("interaction_pending", { interactionId: id, decisionId, nextRuntimeStep: "await_approval" });
       try {
         const response = await callback(details);
         const decision = response === true ? "approve" : response === false ? "reject" : String(response?.decision || (response?.approved === true ? "approve" : "reject"));
@@ -405,6 +434,7 @@ function createAgentStateShadow(options = {}) {
           instructions: response && typeof response === "object" ? String(response.instructions || response.prompt || "") : "",
           response
         });
+        await checkpoint("decision_ready", { interactionId: id, decisionId, nextRuntimeStep: "continue_after_approval" });
         return response;
       } catch (error) {
         allocateObservation();
@@ -463,10 +493,15 @@ function createAgentStateShadow(options = {}) {
 
   return {
     applyControllerEvent,
+    checkpoint,
     configureContextSources,
     emitTerminalSnapshot,
+    exportArtifactRecords: (options) => artifactStore.exportRecords(options),
+    hydrateArtifactRecords: (records) => artifactStore.hydrate(records),
+    markArtifactsDurable: (ids) => artifactStore.markDurable(ids),
     getControllerTerminationReason: () => controllerTerminationReason,
     getDiagnostics: () => cloneSerializable(diagnostics),
+    isCheckpointEnabled: () => typeof options.checkpointBarrier === "function",
     readArtifactExcerpt: (reference, maximum) => artifactStore.readExcerpt(reference, maximum),
     getState: () => cloneSerializable(state),
     getTransitionsSince,

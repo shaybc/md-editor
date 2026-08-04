@@ -81,3 +81,105 @@ Real-model evaluations will be opt-in and local. The full baseline will compare 
 - Existing intent-contract evaluation files and their rollout gates remain unchanged.
 - Chat, Plan, Agent, Git Summary, Autocomplete, provider transport, security policy, approvals, tools, UI, storage, and prompts remain behaviorally unchanged.
 - No unrelated code is modified.
+
+## Recommended base project for testing: Spring PetClinic
+
+Clone the official repository:
+
+```bash
+git clone https://github.com/spring-projects/spring-petclinic.git
+cd spring-petclinic
+```
+
+Spring PetClinic is a good evaluation base because it is:
+
+* Large enough for repository exploration and multi-file changes
+* Small enough that evaluation runs remain affordable
+* A realistic Spring Boot application
+* Structured into controllers, services, repositories, entities and views
+* Equipped with Maven and Gradle wrappers
+* Already covered by unit and integration tests
+* Runnable with Java 17 or newer ([GitHub][1])
+
+Verify the baseline on Windows:
+
+```bat
+mvnw.cmd test
+```
+
+Run it:
+
+```bat
+mvnw.cmd spring-boot:run
+```
+
+## Why not Apache Commons Lang?
+
+Apache Commons Lang has an excellent test suite, but it mainly consists of isolated utility classes. It is better for testing precise algorithmic fixes than for evaluating whether your agent can understand architecture, trace request flows, modify several layers and verify an application. It is tested across several Java LTS versions, so it could later become your second benchmark repository. ([GitHub][2])
+
+## Freeze a specific revision
+
+Do not continuously evaluate against the moving `main` branch. After cloning:
+
+```bat
+git rev-parse HEAD
+git tag agent-eval-base-v1
+```
+
+For every evaluation task:
+
+```bat
+git reset --hard agent-eval-base-v1
+git clean -fd
+```
+
+Run those reset commands from your evaluation harness, **not through the coding agent**.
+
+## Initial test set
+
+Create approximately 30 tasks against separate copies or branches:
+
+| Difficulty | Example                                                              |
+| ---------- | -------------------------------------------------------------------- |
+| Easy       | Add validation preventing an empty pet name                          |
+| Easy       | Add a repository query for owners by city                            |
+| Easy       | Improve an exception message and its test                            |
+| Medium     | Add phone-number search for owners                                   |
+| Medium     | Add pagination to veterinarian results                               |
+| Medium     | Add a new pet attribute across entity, form and view                 |
+| Medium     | Fix a deliberately introduced transaction bug                        |
+| Hard       | Add appointment cancellation with business rules                     |
+| Hard       | Add an audit record when a visit is created                          |
+| Hard       | Add a REST endpoint without breaking the existing web UI             |
+| Safety     | Request a feature while forbidding changes outside three files       |
+| Recovery   | Introduce a failing test whose cause is in another application layer |
+
+For each task, first implement the correct solution yourself and save:
+
+```text
+task prompt
+baseline commit
+reference patch
+hidden tests
+allowed files
+forbidden files
+expected commands
+maximum tool calls
+```
+
+Then restore the clean baseline and give only the task prompt to the agent.
+
+## Important limitation
+
+One repository is sufficient for building the evaluation infrastructure, but not for proving general coding ability. An agent could become unusually optimized for Spring PetClinic.
+
+A sensible progression is:
+
+1. **Spring PetClinic** — application architecture and multi-file work
+2. **Apache Commons Lang** — algorithms, edge cases and strong unit testing
+3. A small unfamiliar Java repository kept completely hidden until final evaluation
+
+Start with Spring PetClinic as your M0 benchmark. It gives you the broadest range of realistic agent tasks without creating an excessively heavy test environment.
+
+[1]: https://github.com/spring-projects/spring-petclinic?utm_source=chatgpt.com "spring-projects/spring-petclinic: A sample Spring-based ..."
+[2]: https://github.com/apache/commons-lang?utm_source=chatgpt.com "Apache Commons Lang"

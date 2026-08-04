@@ -85,3 +85,60 @@ npm run eval:ai-companion:report -- --runs tests/eval/results/m0-baseline/runs.j
 ```
 
 Raw runs and scoring files stay under the ignored `tests/eval/results/` directory. Only a sanitized aggregate may replace `tests/eval/baselines/m0-baseline.json`.
+
+---
+
+## 7. M7 Durable Agent Checkpoints
+
+M7 is an Agent-controller feature behind the internal `agentDurableRecoveryEnabled` flag. The flag defaults to `false` and is rejected unless `agentDecisionControllerEnabled` is also enabled. Chat, Plan, Autocomplete, Git Summary, connection tests, and specialized AI components do not use the M7 runtime.
+
+A recovery continues the same `taskId`, `runId`, and `executionGeneration`. An edited rerun increments the generation, so older checkpoints fail identity validation. Recovery is user-initiated from an interrupted task; application startup never automatically resumes work.
+
+### Durable files
+
+Each task stores recovery data beside its normal task record:
+
+```text
+<profile>/companion/chats/YYYY/MM/DD/<chatId>/
+  <taskId>.json
+  <taskId>.recovery/
+    checkpoint.json
+    checkpoint.bak.json
+    artifacts/<sha256>.json
+```
+
+`checkpoint.json` is a version-1 integrity-sealed envelope containing AgentState v6, task identity, the reducer cursor, phase, continuation identifiers, compatibility fingerprints, workspace observations, and a content-addressed artifact manifest. The task record is schema v5 and stores only a content-free checkpoint summary used to offer resume.
+
+The per-task store serializes writers. It writes and verifies artifacts first, writes and validates a temporary checkpoint, rotates the current valid checkpoint to the retained backup, promotes the temporary file, and revalidates the promoted result. Loads use the backup only when the current file is missing, torn, corrupt, or fails identity/integrity validation.
+
+Limits are 512 KiB per checkpoint envelope, 2 MiB per artifact, and 32 MiB of authoritative artifacts per task. Oversized artifacts retain their digest and a bounded excerpt but cannot prove completion until the source is observed again.
+
+### Mandatory barriers
+
+Controller execution awaits a durable barrier before model requests and interactions, before every tool dispatch, after normalized tool evidence, around progress/completion verification, around final composition, and before terminal publication. A failed mandatory checkpoint stops the run before the next mutation.
+
+Mutation dispatch uses runtime-owned identifiers:
+
+```text
+prepared -> durable action_prepared
+dispatching -> durable action_dispatching
+executor invocation
+observed -> durable action_observed
+```
+
+The dispatch nonce and execution-attempt identity are reducer-owned metadata, never model tool arguments. A restored `action_dispatching` state means the effect may already have occurred and therefore never authorizes replay.
+
+### Restart reconciliation
+
+The recovery coordinator validates the newest complete checkpoint, hydrates verified immutable artifacts, restores the reducer sequence without another `run_started`, records recovery transitions, and re-resolves current workspace paths and symlink boundaries.
+
+Tool recovery is conservative:
+
+- Repeatable reads return to a fresh decision after current validation.
+- Reconcilable mutations compare the saved precondition, expected postcondition, and current observation. A proven postcondition records success without replay; an unchanged precondition requires a fresh decision and current approval; a conflict becomes indeterminate.
+- Commands, processes, network effects, Git remote operations, exports, conversions, and uncertain application effects are indeterminate and never replay automatically.
+- Unsupported tools, invalid paths, missing capabilities, corrupt artifacts, and paths resolving outside the canonical workspace block recovery.
+
+Pending interactions are marked interrupted and recreated from a new typed decision. Interrupted verifier calls are discarded. Terminal checkpoints only repair a stale task-record projection and do not restart the model loop.
+
+Deterministic store, reconciliation, policy-drift, and symlink-race tests are in `tests/ai-companion-checkpoint-store.test.js` and `tests/ai-companion-agent-recovery.test.js`. The fault-injection contract is `tests/eval/recovery-scenarios.json`.

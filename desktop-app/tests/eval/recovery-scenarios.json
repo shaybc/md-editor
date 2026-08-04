@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 1,
+  "mode": "agent",
+  "featureFlagDefault": false,
+  "protectedModes": ["chat", "plan", "autocomplete", "gitSummary", "testConnection"],
+  "cases": [
+    { "id": "before-model-request", "phase": "decision_ready", "failurePoint": "before-model-request", "expectedContinuation": "resume", "automaticReplay": false },
+    { "id": "during-model-request", "phase": "model_pending", "failurePoint": "during-model-request", "expectedContinuation": "restart_decision", "automaticReplay": false },
+    { "id": "pending-approval", "phase": "interaction_pending", "failurePoint": "during-approval", "expectedContinuation": "restart_decision", "automaticReplay": false },
+    { "id": "prepared-mutation", "phase": "action_prepared", "failurePoint": "before-dispatch", "expectedContinuation": "reconcile", "automaticReplay": false },
+    { "id": "dispatching-mutation", "phase": "action_dispatching", "failurePoint": "after-dispatch-before-observation", "expectedContinuation": "reconcile", "automaticReplay": false },
+    { "id": "observed-read", "phase": "action_observed", "failurePoint": "after-read-observation", "expectedContinuation": "resume", "automaticReplay": false },
+    { "id": "pending-verification", "phase": "verification_pending", "failurePoint": "during-verifier", "expectedContinuation": "restart_decision", "automaticReplay": false },
+    { "id": "before-final-composition", "phase": "finalizing", "failurePoint": "before-final-composition", "expectedContinuation": "resume", "automaticReplay": false },
+    { "id": "terminal-projection", "phase": "terminal", "failurePoint": "before-task-record-projection", "expectedContinuation": "repair_terminal_projection", "automaticReplay": false },
+    { "id": "policy-upgrade-prepared-action", "phase": "action_prepared", "failurePoint": "tool-or-policy-version-change", "expectedContinuation": "reconcile", "automaticReplay": false },
+    { "id": "symlink-race", "phase": "action_prepared", "failurePoint": "ancestor-replaced-by-external-symlink", "expectedContinuation": "blocked", "automaticReplay": false }
+  ]
+}

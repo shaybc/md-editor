@@ -102,6 +102,7 @@
     const CHAT_HISTORY_SELECT_LIMIT = 25;
     const WORKSPACE_TOOLS_PREVIEW_LIMIT = 6;
     const WORKSPACE_ID_COPY_FEEDBACK_MS = 1200;
+    const durableResumeTaskIds = new Set();
     const CONVERSATION_HISTORY_TURN_LIMIT = 12;
     const CONVERSATION_HISTORY_MESSAGE_MAX_CHARS = 4000;
     const APPROVAL_PILL_MAX_CHARS = 18;
@@ -132,6 +133,7 @@
     let timerId = null;
     let startedAt = 0;
     let activeRequest = null;
+    let activeAgentRunEventToken = null;
     let streamingChatResponse = null;
     let chatResponseRecorded = false;
     let activeRunMode = null;
@@ -4136,11 +4138,53 @@
       appendExecutePlanButton(actions, entry);
     }
 
+    function canResumeDurableAgentTask(record = {}) {
+      return record.mode === "agent"
+        && record.status === "interrupted"
+        && ["recoverable", "terminal"].includes(record.checkpointSummary?.checkpointKind)
+        && getCurrentSettings().agentDurableRecoveryEnabled === true;
+    }
+
+    function appendDurableResumeButton(actions, entry) {
+      if (!actions || !canResumeDurableAgentTask(entry?.record) || actions.querySelector?.(".ai-companion-box-resume-task")) return;
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "ai-companion-box-copy ai-companion-box-resume-task";
+      button.title = `Resume from ${entry.record.checkpointSummary.phase || "the last durable checkpoint"}`;
+      button.setAttribute("aria-label", "Resume task from durable checkpoint");
+      const icon = document.createElement("i");
+      icon.className = "bi bi-arrow-clockwise";
+      icon.setAttribute("aria-hidden", "true");
+      button.append(icon);
+      button.addEventListener("click", async (event) => {
+        event.preventDefault?.();
+        event.stopPropagation?.();
+        const taskId = String(entry.record?.id || "");
+        if (isAgentRunning() || !taskId || durableResumeTaskIds.has(taskId)) return;
+        durableResumeTaskIds.add(taskId);
+        button.disabled = true;
+        try {
+          const attachments = await loadExistingWorkspaceAttachmentPayloads(entry.record.attachments || []);
+          await runCompanionPrompt({
+            prompt: interruptedTaskResume?.recoverRootPrompt?.(entry.record) || entry.record.rootPrompt || entry.record.prompt || "",
+            mode: "agent", entry, attachments, persistedAttachments: entry.record.attachments || [],
+            executionKind: "resume", executionGeneration: entry.record.executionGeneration,
+            durableResume: true, savedIntentState: getTaskIntentState(entry.record)
+          });
+        } finally {
+          durableResumeTaskIds.delete(taskId);
+          button.disabled = false;
+        }
+      });
+      actions.append(button);
+    }
+
     function attachPromptActions(entry) {
       const { details } = getPromptEntryParts(entry);
       if (!details) return;
       const actions = attachCopyAction(details, () => String(entry.record?.prompt || ""), "Copy prompt as Markdown", { timestamp: entry.record?.createdAt });
       actions?.append(createPromptEditButton(entry));
+      appendDurableResumeButton(actions, entry);
     }
 
     function getVisibleLineHeight(element) {
@@ -4296,10 +4340,19 @@
         return;
       }
       const removeFile = deps.Neutralino?.filesystem?.removeFile || deps.Neutralino?.filesystem?.deleteFile;
-      if (typeof removeFile !== "function") return;
       const filePath = await getAgentTaskFilePath(record);
       if (!filePath) return;
       try {
+        const chatDir = await getAgentChatDirPath();
+        const recoveryPath = chatDir ? deps.joinPath(chatDir, `${record.id}.recovery`) : "";
+        if (recoveryPath && typeof deps.Neutralino?.filesystem?.remove === "function") {
+          await deps.Neutralino.filesystem.remove(recoveryPath);
+        }
+      } catch (_error) {
+        // Recovery data is best-effort cleanup; deleting the task record remains authoritative.
+      }
+      try {
+        if (typeof removeFile !== "function") return;
         await removeFile(filePath);
       } catch (_error) {
         // Stale unreferenced task files should not block prompt reruns.
@@ -4338,6 +4391,7 @@
         evidenceLedger: [],
         intentEvaluation: null,
         agentStateSnapshot: null,
+        checkpointSummary: null,
         resume: null,
         plan: null,
         executionGeneration,
@@ -4379,7 +4433,7 @@
       const chat = savedRecord ? activeAgentChat : ensureActiveAgentChat();
       const record = savedRecord ? {
         ...savedRecord,
-        version: Math.max(4, Number(savedRecord.version) || 1),
+        version: Math.max(5, Number(savedRecord.version) || 1),
         rootPrompt: savedRecord.rootPrompt || interruptedTaskResume?.recoverRootPrompt?.(savedRecord) || savedRecord.prompt || "",
         chatId: savedRecord.chatId || chat?.id || "",
         id,
@@ -4389,11 +4443,14 @@
         updatedAt: savedRecord.updatedAt || savedRecord.createdAt || createdAt,
         attachments: normalizeAttachmentReferences(savedRecord.attachments),
         executionGeneration: Math.max(1, Number(savedRecord.executionGeneration) || 1),
-        agentStateSnapshot: Number(savedRecord.version) >= 4 ? (savedRecord.agentStateSnapshot || null) : null
+        runId: String(savedRecord.runId || id),
+        agentStateSnapshot: Number(savedRecord.version) >= 4 ? (savedRecord.agentStateSnapshot || null) : null,
+        checkpointSummary: Number(savedRecord.version) >= 5 ? (savedRecord.checkpointSummary || null) : null
       } : {
-        version: 4,
+        version: 5,
         chatId: chat.id,
         id,
+        runId: id,
         fileName: `${id}.json`,
         sequence,
         createdAt,
@@ -4408,6 +4465,7 @@
         mode: normalizeCompanionMode(activeRunMode || activeTab),
         executionGeneration: 1,
         agentStateSnapshot: null,
+        checkpointSummary: null,
         lastExecutionKind: "new"
       };
       const row = document.createElement("section");
@@ -4462,8 +4520,8 @@
       const errors = [];
       const state = snapshot?.state;
       const status = state?.lifecycle?.status;
-      if (![1, 2, 3, 4, 5].includes(snapshot?.schemaVersion) || snapshot?.snapshotKind !== "terminal") errors.push("invalid-snapshot-envelope");
-      if (!state || ![1, 2, 3, 4, 5].includes(state.schemaVersion)) errors.push("invalid-agent-state");
+      if (![1, 2, 3, 4, 5, 6].includes(snapshot?.schemaVersion) || snapshot?.snapshotKind !== "terminal") errors.push("invalid-snapshot-envelope");
+      if (!state || ![1, 2, 3, 4, 5, 6].includes(state.schemaVersion)) errors.push("invalid-agent-state");
       if (snapshot?.schemaVersion !== state?.schemaVersion) errors.push("snapshot-state-schema-mismatch");
       if (!["completed", "failed", "cancelled"].includes(status)) errors.push("run-not-terminal");
       if ((state?.activeActions || []).length) errors.push("active-actions-remain");
@@ -4494,6 +4552,27 @@
       activeAgentEntry.isDirty = true;
       scheduleAgentEntrySave(activeAgentEntry);
       return snapshot;
+    }
+
+    function recordAgentCheckpoint(event) {
+      if (!activeAgentEntry) return null;
+      const summary = {
+        checkpointId: String(event.checkpointId || ""),
+        checkpointKind: event.checkpointKind === "terminal" ? "terminal" : "recoverable",
+        phase: String(event.phase || ""),
+        checkpointRevision: Math.max(0, Number(event.checkpointRevision) || 0),
+        stateVersion: Math.max(0, Number(event.stateVersion) || 0),
+        capturedAt: Date.now(),
+        artifactCount: Math.max(0, Number(event.artifactCount) || 0),
+        checkpointBytes: Math.max(0, Number(event.checkpointBytes) || 0),
+        durationMs: Math.max(0, Number(event.durationMs) || 0)
+      };
+      activeAgentEntry.record.version = Math.max(5, Number(activeAgentEntry.record.version) || 1);
+      activeAgentEntry.record.checkpointSummary = summary;
+      activeAgentEntry.record.updatedAt = summary.capturedAt;
+      activeAgentEntry.isDirty = true;
+      void saveAgentEntryImmediately(activeAgentEntry);
+      return summary;
     }
 
     function recordAgentEvent(event) {
@@ -5428,9 +5507,13 @@
       resumeButton.textContent = "Resume task";
       resumeButton.title = "Start a new agent run that continues this task from its saved progress";
       resumeButton.addEventListener("click", async () => {
-        if (isAgentRunning()) return;
+        const taskId = String(entry.record?.id || "");
+        if (isAgentRunning() || !taskId || durableResumeTaskIds.has(taskId)) return;
+        durableResumeTaskIds.add(taskId);
+        resumeButton.disabled = true;
+        try {
         const request = buildResumeTaskRequest(entry.record, event);
-        entry.record.version = 2;
+        entry.record.version = Math.max(5, Number(entry.record.version) || 1);
         entry.record.rootPrompt = request.prompt;
         entry.record.status = "interrupted";
         entry.record.updatedAt = Date.now();
@@ -5441,15 +5524,21 @@
         const title = row.querySelector(".ai-companion-approval-title");
         if (title) title.textContent = "Approval resumed";
         interruption.textContent = "The task was resumed. Use the new live approval request to approve, reject, or provide instructions.";
-        void runCompanionPrompt({
+        await runCompanionPrompt({
           prompt: request.prompt,
           mode: "agent",
           resume: request.resume,
           resumeCheckpoint: request.resumeCheckpoint,
           executionKind: "resume",
           executionGeneration: Math.max(1, Number(entry.record.executionGeneration) || 1),
-          savedIntentState: getTaskIntentState(entry.record)
+          savedIntentState: getTaskIntentState(entry.record),
+          entry: request.durableResume ? entry : null,
+          persistedAttachments: entry.record.attachments || [],
+          durableResume: request.durableResume === true
         });
+        } finally {
+          durableResumeTaskIds.delete(taskId);
+        }
       });
       actions.appendChild(resumeButton);
       getApprovalFooter(row).appendChild(actions);
@@ -5573,6 +5662,7 @@
       if (entry.record.status === "running") {
         entry.record.status = "interrupted";
         entry.isDirty = true;
+        attachPromptActions(entry);
       }
       resetSyntheticActivityState();
       const events = record.events || [];
@@ -6337,6 +6427,35 @@
       for (const entry of agentEntries) await saveAgentEntry(entry);
     }
 
+    async function discoverAgentCheckpointSummary(taskId) {
+      if (!taskId || !deps.Neutralino?.filesystem?.readFile || getCurrentSettings().agentDurableRecoveryEnabled !== true) return null;
+      const chatDir = await getAgentChatDirPath();
+      if (!chatDir) return null;
+      const recoveryDir = deps.joinPath(chatDir, `${taskId}.recovery`);
+      for (const fileName of ["checkpoint.json", "checkpoint.bak.json"]) {
+        try {
+          const checkpoint = JSON.parse(await deps.Neutralino.filesystem.readFile(deps.joinPath(recoveryDir, fileName)) || "null");
+          if (checkpoint?.checkpointVersion !== 1
+            || checkpoint?.identity?.mode !== "agent"
+            || String(checkpoint?.identity?.taskId || "") !== String(taskId)
+            || !["recoverable", "terminal"].includes(checkpoint?.checkpointKind)) continue;
+          return {
+            checkpointId: String(checkpoint.checkpointId || ""),
+            checkpointKind: checkpoint.checkpointKind,
+            phase: String(checkpoint.phase || ""),
+            checkpointRevision: Math.max(0, Number(checkpoint.cursor?.checkpointRevision) || 0),
+            stateVersion: Math.max(0, Number(checkpoint.cursor?.stateVersion) || 0),
+            capturedAt: Date.parse(checkpoint.capturedAt) || Date.now(),
+            artifactCount: Math.max(0, Number(checkpoint.artifactManifest?.refs?.length) || 0),
+            discovered: true
+          };
+        } catch (_error) {
+          // The Node recovery runtime performs authoritative integrity and identity validation.
+        }
+      }
+      return null;
+    }
+
     async function readAgentTaskRecord(itemOrId) {
       const id = typeof itemOrId === "object" ? itemOrId?.id : itemOrId;
       if (!id) return null;
@@ -6352,7 +6471,11 @@
         : await getAgentTaskFilePath(typeof itemOrId === "object" ? itemOrId : id);
       if (!filePath) return null;
       try {
-        return JSON.parse(await deps.Neutralino.filesystem.readFile(filePath) || "null");
+        const record = JSON.parse(await deps.Neutralino.filesystem.readFile(filePath) || "null");
+        if (record && Number(record.version) >= 5 && !record.checkpointSummary && itemOrId?.storage !== "legacy") {
+          record.checkpointSummary = await discoverAgentCheckpointSummary(id);
+        }
+        return record;
       } catch (_error) {
         return null;
       }
@@ -6851,14 +6974,21 @@
     }
 
     function resumeInterruptedClarification(entry, clarificationEvent) {
+      const taskId = String(entry?.record?.id || "");
+      if (!taskId || durableResumeTaskIds.has(taskId) || isAgentRunning()) return;
       const request = interruptedTaskResume?.buildClarificationResumeRequest?.(entry.record, clarificationEvent, deps.getWorkspaceRoot?.());
       if (!request?.prompt) return;
+      durableResumeTaskIds.add(taskId);
       void runCompanionPrompt({
         prompt: request.prompt,
         mode: normalizeCompanionMode(entry.record.mode),
         resume: request.resume,
-        resumeIntentContext: request.resumeIntentContext
-      });
+        resumeIntentContext: request.resumeIntentContext,
+        entry: request.durableResume ? entry : null,
+        persistedAttachments: entry.record.attachments || [],
+        executionKind: "resume",
+        durableResume: request.durableResume === true
+      }).finally(() => durableResumeTaskIds.delete(taskId));
     }
 
     function appendApproval(event) {
@@ -7211,6 +7341,14 @@
       await deps.bridge?.respondAppAction?.(actionId, result || {});
     }
     function handleEvent(event) {
+      if (event.type === "agent-checkpoint") {
+        recordAgentCheckpoint(event);
+        return;
+      }
+      if (event.type === "agent-recovery") {
+        recordAgentEvent(event);
+        return;
+      }
       if (event.type === "agent-state-snapshot") {
         recordAgentStateSnapshot(event);
         return;
@@ -7548,7 +7686,13 @@
         ? normalizeAttachmentReferences(overrides.persistedAttachments)
         : (attachments.length ? normalizeAttachmentReferences(attachments) : normalizeAttachmentReferences(existingEntry?.record?.attachments));
       if (existingEntry) {
-        prepareEntryForPromptRun(existingEntry, prompt, persistedAttachments, executionKind, executionGeneration);
+        if (executionKind === "resume" && overrides.durableResume === true) {
+          existingEntry.record.status = "running";
+          existingEntry.record.lastExecutionKind = "resume";
+          existingEntry.isDirty = true;
+        } else {
+          prepareEntryForPromptRun(existingEntry, prompt, persistedAttachments, executionKind, executionGeneration);
+        }
         await saveAgentEntry(existingEntry);
       }
       const conversationHistory = await buildConversationHistory(existingEntry);
@@ -7560,7 +7704,7 @@
       activeAgentEntry.record.executionGeneration = executionGeneration;
       activeAgentEntry.record.lastExecutionKind = executionKind;
       if (overrides.resume) {
-        activeAgentEntry.record.version = 4;
+        activeAgentEntry.record.version = 5;
         activeAgentEntry.record.rootPrompt = prompt;
         activeAgentEntry.record.resume = { ...overrides.resume };
         activeAgentEntry.isDirty = true;
@@ -7593,6 +7737,10 @@
         resumeCheckpoint: overrides.resumeCheckpoint || null,
         resumeIntentContext: overrides.resumeIntentContext || null,
         chatId: activeAgentChat?.id || "",
+        taskId: activeAgentEntry?.record?.id || "",
+        runId: activeAgentEntry?.record?.runId || activeAgentEntry?.record?.id || "",
+        chatCreatedAt: activeAgentChat?.createdAt || activeAgentEntry?.record?.createdAt || Date.now(),
+        durableResume: mode === "agent" && overrides.durableResume === true,
         turnIndex: requestTurnIndex,
         executionKind,
         executionGeneration,
@@ -7606,7 +7754,14 @@
         requestPayload.sourceTaskId = activeAgentEntry?.record?.id || "";
       }
       if (requestChatTitle) requestPayload.requestChatTitle = true;
-      const request = mode === "agent" ? deps.bridge.agent(requestPayload, handleEvent) : (mode === "plan" ? deps.bridge.plan(requestPayload, handleEvent) : deps.bridge.chat(requestPayload, handleEvent));
+      const agentEventToken = mode === "agent" ? {} : null;
+      if (agentEventToken) activeAgentRunEventToken = agentEventToken;
+      const requestEventHandler = agentEventToken
+        ? (event) => {
+            if (activeAgentRunEventToken === agentEventToken) handleEvent(event);
+          }
+        : handleEvent;
+      const request = mode === "agent" ? deps.bridge.agent(requestPayload, requestEventHandler) : (mode === "plan" ? deps.bridge.plan(requestPayload, handleEvent) : deps.bridge.chat(requestPayload, handleEvent));
       activeRequest = request;
       let runOutcome = { status: "running", entryId: activeAgentEntry?.record?.id || "" };
       updateAgentRunButton();
@@ -7653,6 +7808,7 @@
         if (activeAgentEntry) await saveAgentEntry(activeAgentEntry);
         void refreshChatSelectOptions();
         if (activeRequest === request) activeRequest = null;
+        if (activeAgentRunEventToken === agentEventToken) activeAgentRunEventToken = null;
         activeAgentEntry = null;
         activeActivityRenderer = null;
         activeRunMode = null;

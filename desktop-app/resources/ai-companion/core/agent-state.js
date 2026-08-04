@@ -19,8 +19,8 @@ const {
   requireReplan
 } = require("./agent-progress-policy");
 
-const AGENT_STATE_SCHEMA_VERSION = 5;
-const AGENT_STATE_EVENT_SCHEMA_VERSION = 5;
+const AGENT_STATE_SCHEMA_VERSION = 6;
+const AGENT_STATE_EVENT_SCHEMA_VERSION = 6;
 const MAX_RECENT_ACTIONS = 50;
 const MAX_RECENT_DECISIONS = 50;
 const MAX_RECENT_INTERACTIONS = 25;
@@ -30,6 +30,17 @@ const TERMINAL_RUN_STATUSES = new Set(["completed", "failed", "cancelled"]);
 const TERMINAL_ACTION_STATUSES = new Set(["succeeded", "partial", "failed", "denied", "cancelled", "interrupted", "unknown"]);
 const EVENT_TYPES = new Set([
   "run_started",
+  "run_restored",
+  "recovery_started",
+  "interaction_interrupted",
+  "action_dispatch_prepared",
+  "action_dispatching",
+  "action_reconciliation_started",
+  "action_reconciled",
+  "action_marked_indeterminate",
+  "verification_interrupted",
+  "recovery_resumed",
+  "recovery_blocked",
   "intent_contract_observed",
   "decision_proposed",
   "decision_accepted",
@@ -87,6 +98,20 @@ const VERIFICATION_RELEVANT_EVENT_TYPES = new Set([
   "run_summary_observed",
   "run_failed",
   "run_cancelled"
+]);
+
+const RECOVERY_RELEVANT_EVENT_TYPES = new Set([
+  "run_restored",
+  "recovery_started",
+  "interaction_interrupted",
+  "action_dispatch_prepared",
+  "action_dispatching",
+  "action_reconciliation_started",
+  "action_reconciled",
+  "action_marked_indeterminate",
+  "verification_interrupted",
+  "recovery_resumed",
+  "recovery_blocked"
 ]);
 
 function cloneSerializable(value) {
@@ -301,6 +326,22 @@ function createInitialAgentState(options = {}) {
     }),
     artifacts: { evidenceRefs: [], changedFiles: [], attemptedFiles: [], blockedChanges: [] },
     steering: { revisionCount: 0, lastReason: "" },
+    recovery: {
+      status: "fresh",
+      resumeAttempt: 0,
+      restoredCheckpointId: "",
+      restoredStateVersion: 0,
+      restoredAt: null,
+      interruptedDecisionId: "",
+      interruptedActionId: "",
+      interruptedInteractionId: "",
+      lastCheckpointId: "",
+      lastCheckpointPhase: "",
+      lastCheckpointStateVersion: 0,
+      recoveryDecision: "",
+      reconciliationOutcome: "",
+      lastReasonCode: ""
+    },
     terminalReason: null,
     lastAcceptedSequence: 0,
     verificationContextVersion: 0,
@@ -436,6 +477,27 @@ function resolveInteraction(state, payload, kind, occurredAt) {
   return "";
 }
 
+function interruptInteraction(state, payload, occurredAt) {
+  const interactionId = String(payload.interactionId || "");
+  if (!interactionId) return "missing-interaction-id";
+  const pendingIndex = state.pendingInteractions.findIndex((entry) => entry.interactionId === interactionId);
+  if (pendingIndex < 0) return "unknown-interaction";
+  const pending = state.pendingInteractions[pendingIndex];
+  state.pendingInteractions.splice(pendingIndex, 1);
+  appendInteraction(state, {
+    ...pending,
+    status: "interrupted",
+    resolvedAt: occurredAt,
+    terminalReason: "process-restart"
+  });
+  state.recovery.interruptedInteractionId = interactionId;
+  return "";
+}
+
+function findActiveAction(state, actionId) {
+  return state.activeActions.find((action) => action.actionId === String(actionId || ""));
+}
+
 function reconcileTerminalState(state, status, reason, occurredAt) {
   const actionStatus = status === "cancelled" ? "cancelled" : "interrupted";
   for (const action of state.activeActions) {
@@ -470,6 +532,105 @@ function applyTransition(next, event) {
     case "run_started":
       if (next.lifecycle.status !== "initialized") return "run-already-started";
       next.lifecycle = { status: "running", startedAt: event.occurredAt, endedAt: null };
+      return "";
+    case "run_restored":
+      if (next.lifecycle.status !== "running") return "run-not-recoverable";
+      next.recovery = {
+        ...next.recovery,
+        status: "restored",
+        resumeAttempt: Math.max(0, Number(next.recovery?.resumeAttempt) || 0) + 1,
+        restoredCheckpointId: stringValue(payload.checkpointId, 200),
+        restoredStateVersion: Math.max(0, Number(payload.stateVersion) || 0),
+        restoredAt: event.occurredAt,
+        recoveryDecision: stringValue(payload.recoveryDecision, 80),
+        lastCheckpointId: stringValue(payload.checkpointId, 200),
+        lastCheckpointPhase: stringValue(payload.phase, 80),
+        lastCheckpointStateVersion: Math.max(0, Number(payload.stateVersion) || 0),
+        lastReasonCode: stringValue(payload.reasonCode, 160)
+      };
+      return "";
+    case "recovery_started":
+      next.recovery = {
+        ...next.recovery,
+        status: "reconciling",
+        recoveryDecision: stringValue(payload.recoveryDecision, 80),
+        lastReasonCode: stringValue(payload.reasonCode, 160)
+      };
+      return "";
+    case "interaction_interrupted":
+      return interruptInteraction(next, payload, event.occurredAt);
+    case "action_dispatch_prepared": {
+      const action = findActiveAction(next, payload.actionId);
+      if (!action) return "unknown-action";
+      Object.assign(action, {
+        executionAttemptId: stringValue(payload.executionAttemptId, 200),
+        dispatchNonce: stringValue(payload.dispatchNonce, 200),
+        dispatchState: "prepared",
+        workspacePath: stringValue(payload.workspacePath, 1000),
+        preconditionFingerprint: stringValue(payload.preconditionFingerprint, 128),
+        expectedPostcondition: stringValue(payload.expectedPostcondition, 128)
+      });
+      return "";
+    }
+    case "action_dispatching": {
+      const action = findActiveAction(next, payload.actionId);
+      if (!action) return "unknown-action";
+      if (action.dispatchState !== "prepared") return "action-not-prepared";
+      if (action.executionAttemptId !== String(payload.executionAttemptId || "")
+        || action.dispatchNonce !== String(payload.dispatchNonce || "")) return "dispatch-identity-mismatch";
+      action.dispatchState = "dispatching";
+      return "";
+    }
+    case "action_reconciliation_started": {
+      const action = findActiveAction(next, payload.actionId);
+      if (!action) return "unknown-action";
+      next.recovery.interruptedActionId = action.actionId;
+      next.recovery.lastReasonCode = stringValue(payload.reasonCode, 160);
+      return "";
+    }
+    case "action_reconciled": {
+      const action = findActiveAction(next, payload.actionId);
+      if (!action) return "unknown-action";
+      action.dispatchState = "reconciled";
+      next.recovery.reconciliationOutcome = "reconciled";
+      next.recovery.lastReasonCode = stringValue(payload.reasonCode, 160);
+      return finishAction(next, {
+        ...payload,
+        status: "succeeded",
+        terminalReason: payload.reasonCode || "postcondition-proven"
+      }, event.occurredAt);
+    }
+    case "action_marked_indeterminate": {
+      const action = findActiveAction(next, payload.actionId);
+      if (!action) return "unknown-action";
+      action.dispatchState = "indeterminate";
+      next.recovery.reconciliationOutcome = "indeterminate";
+      next.recovery.lastReasonCode = stringValue(payload.reasonCode, 160);
+      return finishAction(next, {
+        ...payload,
+        status: "unknown",
+        terminalReason: payload.reasonCode || "action-indeterminate"
+      }, event.occurredAt);
+    }
+    case "verification_interrupted":
+      next.recovery.lastReasonCode = "verification-interrupted";
+      return "";
+    case "recovery_resumed":
+      next.recovery = {
+        ...next.recovery,
+        status: "resumed",
+        recoveryDecision: stringValue(payload.recoveryDecision, 80),
+        reconciliationOutcome: stringValue(payload.reconciliationOutcome, 80),
+        lastReasonCode: stringValue(payload.reasonCode, 160)
+      };
+      return "";
+    case "recovery_blocked":
+      next.recovery = {
+        ...next.recovery,
+        status: "blocked",
+        recoveryDecision: "blocked",
+        lastReasonCode: stringValue(payload.reasonCode, 160)
+      };
       return "";
     case "intent_contract_observed": {
       if (!payload.contract || typeof payload.contract !== "object") return "missing-intent-contract";
@@ -538,7 +699,13 @@ function applyTransition(next, event) {
         input: stringValue(payload.input),
         status: "running",
         matchStatus: "matched",
-        startedAt: event.occurredAt
+        startedAt: event.occurredAt,
+        executionAttemptId: stringValue(payload.executionAttemptId, 200),
+        dispatchNonce: stringValue(payload.dispatchNonce, 200),
+        dispatchState: stringValue(payload.dispatchState, 40),
+        workspacePath: stringValue(payload.workspacePath, 1000),
+        preconditionFingerprint: stringValue(payload.preconditionFingerprint, 128),
+        expectedPostcondition: stringValue(payload.expectedPostcondition, 128)
       });
       return "";
     }
@@ -681,7 +848,29 @@ function applyAgentStateEvent(state, event) {
   if (VERIFICATION_RELEVANT_EVENT_TYPES.has(event.type)) {
     next.verificationContextVersion = (Number(state.verificationContextVersion) || 0) + 1;
   }
+  if (RECOVERY_RELEVANT_EVENT_TYPES.has(event.type) && next.recovery?.interruptedDecisionId === "") {
+    next.recovery.interruptedDecisionId = String(next.recentDecisions.findLast?.((decision) => decision.status === "accepted")?.decisionId || "");
+  }
   return { accepted: true, state: next };
+}
+
+/** Validate a non-terminal AgentState before sequence-continuing restoration. */
+function validateRestorableAgentState(state, options = {}) {
+  const errors = [];
+  if (!state || state.schemaVersion !== AGENT_STATE_SCHEMA_VERSION) return { valid: false, errors: ["unsupported-state-schema"] };
+  if (state.run?.mode !== "agent") errors.push("invalid-mode");
+  if (state.lifecycle?.status !== "running") errors.push("run-not-recoverable");
+  if (!Number.isInteger(state.lastAcceptedSequence) || state.lastAcceptedSequence < 1) errors.push("invalid-sequence");
+  if (!Number.isInteger(state.stateVersion) || state.stateVersion < 1) errors.push("invalid-state-version");
+  if (Number(state.lastAcceptedSequence) < Number(state.stateVersion)) errors.push("invalid-state-cursor");
+  if (!state.recovery || typeof state.recovery !== "object") errors.push("missing-recovery-state");
+  if (options.runId !== undefined && String(state.run?.runId || "") !== String(options.runId || "")) errors.push("run-id-mismatch");
+  if (options.chatId !== undefined && String(state.run?.chatId || "") !== String(options.chatId || "")) errors.push("chat-id-mismatch");
+  if (options.executionGeneration !== undefined
+    && Number(state.run?.executionGeneration) !== Number(options.executionGeneration)) {
+    errors.push("execution-generation-mismatch");
+  }
+  return { valid: errors.length === 0, errors };
 }
 
 /**
@@ -693,7 +882,7 @@ function applyAgentStateEvent(state, event) {
 function validateTerminalAgentStateSnapshot(snapshot, options = {}) {
   const errors = [];
   const state = snapshot?.state;
-  if (!snapshot || ![1, 2, 3, 4, AGENT_STATE_SCHEMA_VERSION].includes(snapshot.schemaVersion)) errors.push("unsupported-snapshot-schema");
+  if (!snapshot || ![1, 2, 3, 4, 5, AGENT_STATE_SCHEMA_VERSION].includes(snapshot.schemaVersion)) errors.push("unsupported-snapshot-schema");
   if (snapshot?.snapshotKind !== "terminal") errors.push("snapshot-not-terminal");
   if (!state || state.schemaVersion !== snapshot?.schemaVersion) errors.push("invalid-state");
   if (!state) return { valid: false, errors };
@@ -716,8 +905,10 @@ module.exports = {
   AGENT_STATE_EVENT_SCHEMA_VERSION,
   AGENT_STATE_SCHEMA_VERSION,
   EVENT_TYPES,
+  RECOVERY_RELEVANT_EVENT_TYPES,
   VERIFICATION_RELEVANT_EVENT_TYPES,
   applyAgentStateEvent,
   createInitialAgentState,
+  validateRestorableAgentState,
   validateTerminalAgentStateSnapshot
 };

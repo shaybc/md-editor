@@ -18,10 +18,11 @@ function loadBrowserSettings() {
   return api;
 }
 
-test("M6 flags remain hidden default-off and progress budgets are normalized", () => {
+test("M6/M7 flags remain hidden default-off and progress budgets are normalized", () => {
   const defaults = backend.DEFAULT_AI_COMPANION_SETTINGS;
   assert.equal(defaults.agentProgressEvaluationEnabled, false);
   assert.equal(defaults.agentProgressControlEnabled, false);
+  assert.equal(defaults.agentDurableRecoveryEnabled, false);
   assert.equal(defaults.agentNoProgressActionLimit, 3);
   assert.equal(defaults.agentMaxStrategyReplans, 2);
   const normalized = backend.normalizeAiCompanionSettings({
@@ -36,17 +37,18 @@ test("M6 flags remain hidden default-off and progress budgets are normalized", (
   assert.equal(normalized.agentMaxStrategyReplans, 0);
 });
 
-test("browser and backend M6 normalization remain identical", () => {
+test("browser and backend M6/M7 normalization remain identical", () => {
   const browser = loadBrowserSettings();
   for (const input of [{}, {
     agentProgressEvaluationEnabled: true,
     agentProgressControlEnabled: true,
+    agentDurableRecoveryEnabled: true,
     agentNoProgressActionLimit: 7,
     agentMaxStrategyReplans: 4
   }]) {
     const frontend = browser.normalize(input);
     const headless = backend.normalizeAiCompanionSettings(input);
-    for (const key of ["agentProgressEvaluationEnabled", "agentProgressControlEnabled", "agentNoProgressActionLimit", "agentMaxStrategyReplans"]) {
+    for (const key of ["agentProgressEvaluationEnabled", "agentProgressControlEnabled", "agentNoProgressActionLimit", "agentMaxStrategyReplans", "agentDurableRecoveryEnabled"]) {
       assert.equal(frontend[key], headless[key], key);
     }
   }

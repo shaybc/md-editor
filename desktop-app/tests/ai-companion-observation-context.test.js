@@ -140,7 +140,7 @@ test("observation normalization separates execution disposition outcome and prov
   }
 });
 
-test("AgentState v5 records bounded normalized observations without raw payloads", () => {
+test("AgentState v6 records bounded normalized observations without raw payloads", () => {
   const runId = "observation-state";
   let state = createInitialAgentState({ runId, prompt: "inspect" });
   state = applyAgentStateEvent(state, stateEvent(runId, 1, "run_started")).state;
@@ -152,7 +152,7 @@ test("AgentState v5 records bounded normalized observations without raw payloads
   }, createAgentArtifactStore());
   const recorded = applyAgentStateEvent(state, stateEvent(runId, 2, "observation_recorded", { observation }));
   assert.equal(recorded.accepted, true);
-  assert.equal(recorded.state.schemaVersion, 5);
+  assert.equal(recorded.state.schemaVersion, 6);
   assert.equal(recorded.state.recentObservations[0].outcome, "succeeded");
   assert.equal(recorded.state.observationCounts.execution.executed, 1);
   assert.equal(recorded.state.observationCounts.outcome.succeeded, 1);
@@ -160,7 +160,7 @@ test("AgentState v5 records bounded normalized observations without raw payloads
   assert.equal(applyAgentStateEvent(recorded.state, stateEvent(runId, 3, "observation_recorded", { observation })).reason, "duplicate-observation");
 });
 
-test("AgentState v5 keeps only the latest 50 observations while retaining aggregate counts", () => {
+test("AgentState v6 keeps only the latest 50 observations while retaining aggregate counts", () => {
   const runId = "bounded-observation-state";
   let state = createInitialAgentState({ runId, prompt: "inspect" });
   state = applyAgentStateEvent(state, stateEvent(runId, 1, "run_started")).state;

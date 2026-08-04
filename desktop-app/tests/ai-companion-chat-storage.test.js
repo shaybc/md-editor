@@ -125,16 +125,17 @@ test("AI Companion persists task-level changed file summaries", () => {
   assert.ok(panelSource.includes('event?.type === "agent-summary"'));
 });
 
-test("AI Companion persists completion evidence and AgentState in task schema v4", () => {
-  assert.match(panelSource, /version: Math\.max\(4, Number\(savedRecord\.version\) \|\| 1\)/);
-  assert.match(panelSource, /version: 4/);
+test("AI Companion persists completion evidence and checkpoint summary in task schema v5", () => {
+  assert.match(panelSource, /version: Math\.max\(5, Number\(savedRecord\.version\) \|\| 1\)/);
+  assert.match(panelSource, /version: 5/);
   assert.ok(panelSource.includes('savedEvent.type === "completion-assessment"'));
   assert.ok(panelSource.includes("activeAgentEntry.record.completionAssessment = savedEvent.assessment || null"));
   assert.ok(panelSource.includes("activeAgentEntry.record.evidenceLedger = Array.isArray(savedEvent.evidenceLedger) ? savedEvent.evidenceLedger : []"));
   assert.ok(panelSource.includes("completionAssessment: null"));
   assert.ok(panelSource.includes("evidenceLedger: []"));
+  assert.ok(panelSource.includes("checkpointSummary: null"));
+  assert.ok(panelSource.includes("function recordAgentCheckpoint(event)"));
 });
-
 test("AI Companion persists M4 experiment assignment, feedback, and evaluation data", () => {
   assert.match(panelSource, /chat\.intentExperiment = intentExperiment\.assignIntentExperiment/);
   assert.match(panelSource, /getCurrentSettings\(\)\.intentContractsEnabled === true/);
@@ -157,8 +158,8 @@ test("AI Companion persists one validated terminal AgentState snapshot outside t
   assert.ok(panelSource.includes("agentStateSnapshot: null"));
   assert.ok(panelSource.includes("Number(savedRecord.version) >= 4 ? (savedRecord.agentStateSnapshot || null) : null"));
   assert.ok(panelSource.includes("function validateAgentStateSnapshotForTask(snapshot, record)"));
-  assert.ok(panelSource.includes("[1, 2, 3, 4, 5].includes(snapshot?.schemaVersion)"));
-  assert.ok(panelSource.includes("[1, 2, 3, 4, 5].includes(state.schemaVersion)"));
+  assert.ok(panelSource.includes("[1, 2, 3, 4, 5, 6].includes(snapshot?.schemaVersion)"));
+  assert.ok(panelSource.includes("[1, 2, 3, 4, 5, 6].includes(state.schemaVersion)"));
   assert.ok(panelSource.includes("snapshot-state-schema-mismatch"));
   assert.ok(panelSource.includes("function recordAgentStateSnapshot(event)"));
   assert.ok(panelSource.includes("activeAgentEntry.record.agentStateSnapshot = snapshot"));

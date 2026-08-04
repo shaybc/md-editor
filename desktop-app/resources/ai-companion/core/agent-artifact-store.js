@@ -1,5 +1,5 @@
 /**
- * Request-local immutable storage for raw Agent tool artifacts.
+ * Immutable storage for raw Agent tool artifacts, including durable export and hydration.
  */
 
 "use strict";
@@ -24,6 +24,25 @@ function serializeArtifactPayload(payload) {
 function createAgentArtifactStore(options = {}) {
   const digestValue = typeof options.digest === "function" ? options.digest : defaultDigest;
   const records = new Map();
+  const durableIds = new Set();
+
+  /** Hydrate already-verified durable records without changing their content identity. */
+  function hydrate(values = []) {
+    for (const value of Array.isArray(values) ? values : []) {
+      const serialized = String(value?.serialized || "");
+      const reference = value?.reference;
+      const digest = String(reference?.digest || "");
+      const id = String(reference?.id || "");
+      if (!id || id !== `artifact:${digest}` || String(digestValue(serialized)) !== digest) {
+        throw new Error(`Agent artifact hydration failed for ${id || "unknown artifact"}.`);
+      }
+      const existing = records.get(id);
+      if (existing && existing.serialized !== serialized) throw new Error(`Agent artifact identity collision for ${id}.`);
+      records.set(id, Object.freeze({ reference: Object.freeze({ ...reference }), serialized }));
+      durableIds.add(id);
+    }
+    return records.size;
+  }
 
   /** Store serialized bytes once and return their immutable content-addressed reference. */
   function put(payload, metadata = {}) {
@@ -72,7 +91,17 @@ function createAgentArtifactStore(options = {}) {
     put,
     get,
     readExcerpt,
-    size: () => records.size
+    size: () => records.size,
+    /** Export immutable records that still need durable acknowledgement. */
+    exportRecords: ({ onlyUndurable = false } = {}) => [...records.values()]
+      .filter((record) => !onlyUndurable || !durableIds.has(record.reference.id))
+      .map((record) => ({ reference: { ...record.reference }, serialized: record.serialized })),
+    /** Mark records durable only after the checkpoint store commits them. */
+    markDurable: (ids = []) => {
+      for (const id of ids) if (records.has(String(id))) durableIds.add(String(id));
+      return durableIds.size;
+    },
+    hydrate
   };
 }
 

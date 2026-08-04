@@ -47,6 +47,7 @@
     const rootTaskId = String(record.resume?.rootTaskId || record.id || "");
     return {
       prompt: rootPrompt,
+      durableResume: Number(record.version) >= 5 && record.checkpointSummary?.checkpointKind === "recoverable",
       resume: { sourceTaskId: String(record.id || ""), rootTaskId },
       resumeCheckpoint: {
         version: 1,
@@ -79,6 +80,7 @@
     }));
     return {
       prompt: rootPrompt,
+      durableResume: Number(record.version) >= 5 && record.checkpointSummary?.checkpointKind === "recoverable",
       resume: { sourceTaskId: String(record.id || ""), rootTaskId: String(record.resume?.rootTaskId || record.id || ""), kind: "intent-clarification" },
       resumeIntentContext: {
         interruptedClarificationId: String(clarificationEvent.clarificationId || ""),

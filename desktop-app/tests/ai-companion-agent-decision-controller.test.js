@@ -28,8 +28,8 @@ function toolCall(name, args, id = `call-${name}`, extra = {}) {
   return { ...call, raw: JSON.parse(JSON.stringify(call)) };
 }
 
-function createControllerSession(requestId, prompt) {
-  const session = createAgentStateShadow({ requestId, prompt, controlMode: "controller" });
+function createControllerSession(requestId, prompt, options = {}) {
+  const session = createAgentStateShadow({ requestId, prompt, controlMode: "controller", ...options });
   session.configureContextSources({ requestId, prompt, systemPrompt: "You are the Agent." });
   return session;
 }
@@ -361,6 +361,60 @@ test("plain approval authorizes the latest state and executes the write once", a
     assert.equal(await fs.readFile(path.join(root, "approved.txt"), "utf8"), "written once");
     assert.equal(result.state.recentDecisions[0].status, "executed");
     assert.ok(Number.isInteger(result.state.recentDecisions[0].authorizedAtStateVersion));
+  } finally {
+    await fs.rm(root, { recursive: true, force: true });
+  }
+});
+
+test("durable mutation barriers are committed before dispatch and after observation", async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "md-editor-m7-barriers-"));
+  const target = path.join(root, "durable.txt");
+  const barriers = [];
+  const session = createControllerSession("durable-barriers", "Write a file", {
+    checkpointBarrier: async ({ phase, state }) => {
+      let fileExists = true;
+      try { await fs.access(target); } catch (_error) { fileExists = false; }
+      barriers.push({ phase, fileExists, stateVersion: state.stateVersion });
+      return { artifactManifest: { refs: [] } };
+    }
+  });
+  let round = 0;
+  const provider = {
+    completeMessage: async () => {
+      round += 1;
+      if (round === 1) return {
+        content: "",
+        toolCalls: [toolCall("write_file", {
+          path: "durable.txt",
+          content: "durable",
+          approvalReason: "Create the requested file.",
+          _decision: metadata("The file is durably written")
+        }, "write-durable")]
+      };
+      return {
+        content: "",
+        toolCalls: [toolCall("agent_propose_completion", {
+          _decision: metadata(""),
+          content: "The durable file was written.",
+          evidenceIds: []
+        }, "complete-durable")]
+      };
+    }
+  };
+  try {
+    await runController(root, provider, session, {
+      requestId: "durable-barriers",
+      requestApproval: async () => true
+    });
+    assert.equal(await fs.readFile(target, "utf8"), "durable");
+    const prepared = barriers.find((entry) => entry.phase === "action_prepared");
+    const dispatching = barriers.find((entry) => entry.phase === "action_dispatching");
+    const observed = barriers.find((entry) => entry.phase === "action_observed");
+    assert.equal(prepared.fileExists, false);
+    assert.equal(dispatching.fileExists, false);
+    assert.equal(observed.fileExists, true);
+    assert.ok(barriers.indexOf(prepared) < barriers.indexOf(dispatching));
+    assert.ok(barriers.indexOf(dispatching) < barriers.indexOf(observed));
   } finally {
     await fs.rm(root, { recursive: true, force: true });
   }

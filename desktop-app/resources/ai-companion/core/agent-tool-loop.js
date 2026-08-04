@@ -5,8 +5,11 @@
 
 "use strict";
 
+const crypto = require("node:crypto");
 const fs = require("node:fs/promises");
 const path = require("node:path");
+const { observeWorkspacePath } = require("./agent-action-recovery-policy");
+const { fingerprint } = require("./companion-checkpoint-schema");
 const tools = require("../tools/workspace-tools");
 const { canonicalizeEditSearch } = require("../tools/workspace-edit-matcher");
 const correctionConsistency = require("./intent-correction-consistency");
@@ -2666,7 +2669,31 @@ function createSupersededDecisionError(decisionId) {
   return error;
 }
 
-function createControllerExecutionAuthorizer(session, decision, emit, runtime, signal) {
+function expectedActionPostcondition(name, args) {
+  if (["write_file", "create_document_tab"].includes(name) && typeof args?.content === "string") return fingerprint(args.content);
+  if (name === "delete_file") return fingerprint("");
+  return "";
+}
+
+async function prepareDurableActionDispatch(root, session, context = {}) {
+  if (!context.activityId || session?.isCheckpointEnabled?.() !== true) return;
+  const workspacePath = String(context.args?.path || context.args?.sourcePath || context.args?.expectedPath || "");
+  const observation = workspacePath ? await observeWorkspacePath(root, workspacePath) : null;
+  const payload = {
+    actionId: context.activityId,
+    executionAttemptId: `${context.activityId}:attempt:${session.getState().recovery?.resumeAttempt || 0}`,
+    dispatchNonce: crypto.randomUUID(),
+    workspacePath,
+    preconditionFingerprint: observation?.valid ? observation.contentFingerprint : "",
+    expectedPostcondition: expectedActionPostcondition(context.name, context.args)
+  };
+  session.applyControllerEvent("action_dispatch_prepared", payload);
+  await session.checkpoint("action_prepared", { actionId: context.activityId, decisionId: context.decisionId, nextRuntimeStep: "dispatch_tool" });
+  session.applyControllerEvent("action_dispatching", payload);
+  await session.checkpoint("action_dispatching", { actionId: context.activityId, decisionId: context.decisionId, nextRuntimeStep: "await_tool_outcome" });
+}
+
+function createControllerExecutionAuthorizer(session, decision, emit, runtime, signal, checkpointOptions = {}) {
   let authorized = false;
   return async () => {
     if (authorized) return;
@@ -2693,6 +2720,7 @@ function createControllerExecutionAuthorizer(session, decision, emit, runtime, s
       throw createSupersededDecisionError(decision.decisionId);
     }
     transitionControllerDecision(session, "decision_executed", { decisionId: decision.decisionId }, emit);
+    await prepareDurableActionDispatch(checkpointOptions.root, session, checkpointOptions.getActionContext?.() || {});
     authorized = true;
   };
 }
@@ -2899,7 +2927,10 @@ async function runAgentToolLoop(provider, settings, root, prompt, mode, emit, ru
     && settings.intentContractsEnabled === true
     && settings.intentExperiment?.intentCompletionAssessment === true
     && Boolean(loopOptions.agentStateSession);
-  const finishRun = (content, semanticOutcome = {}) => {
+  const finishRun = async (content, semanticOutcome = {}) => {
+    if (loopOptions.agentStateSession?.isCheckpointEnabled?.() === true) {
+      await loopOptions.agentStateSession.checkpoint("finalizing", { nextRuntimeStep: "compose_final_response" });
+    }
     let finalContent = appendToolReliabilityNote(content, loopOptions.toolReliability);
     let semanticCompletion = null;
     if (verifierCompletionEnabled) {
@@ -2924,6 +2955,9 @@ async function runAgentToolLoop(provider, settings, root, prompt, mode, emit, ru
         });
         response.content = appendToolReliabilityNote(response.content, loopOptions.toolReliability);
         loopOptions.agentStateSession.applyControllerEvent("final_response_recorded", { response });
+        if (loopOptions.agentStateSession.isCheckpointEnabled?.() === true) {
+          await loopOptions.agentStateSession.checkpoint("finalizing", { nextRuntimeStep: "publish_final_response" });
+        }
         state = loopOptions.agentStateSession.getState();
       }
       finalContent = state.completion.finalResponse.content;
@@ -2943,6 +2977,9 @@ async function runAgentToolLoop(provider, settings, root, prompt, mode, emit, ru
           finalReason: steeringFinalReason
         })
       });
+    }
+    if (loopOptions.agentStateSession?.isCheckpointEnabled?.() === true) {
+      await loopOptions.agentStateSession.checkpoint("finalizing", { nextRuntimeStep: "return_final_response" });
     }
     if (shouldEmitActivitySummary && activityRun) emit(activityRun.createSummary(finalContent, semanticCompletion));
     return finalContent;
@@ -3127,6 +3164,9 @@ async function runAgentToolLoop(provider, settings, root, prompt, mode, emit, ru
       }
       let message;
       try {
+        if (controllerEnabled) {
+          await loopOptions.agentStateSession.checkpoint("model_pending", { nextRuntimeStep: "request_typed_decision", round });
+        }
         message = await provider.completeMessage(providerMessages, {
           temperature: 0.2,
           maxTokens: getRoundResponseMaxTokens(loopOptions),
@@ -3388,6 +3428,9 @@ async function runAgentToolLoop(provider, settings, root, prompt, mode, emit, ru
             ? null
             : await finalizeAssessedCandidate(provider, settings, mode, candidate, loopOptions, activityRun, emit);
           if (verifierCompletionEnabled) {
+            await loopOptions.agentStateSession.checkpoint("verification_pending", {
+              decisionId: controllerDecision?.decisionId || "", nextRuntimeStep: "verify_completion"
+            });
             if (!controllerDecision || controllerDecision.type !== agentDecisionController.DECISION_TYPES.PROPOSE_COMPLETION) {
               return finishRun(candidate, { status: "failed", reasonCodes: ["invalid_completion_proposal"] });
             }
@@ -3395,6 +3438,9 @@ async function runAgentToolLoop(provider, settings, root, prompt, mode, emit, ru
               decision: controllerDecision,
               candidate,
               contract: loopOptions.intentContract
+            });
+            await loopOptions.agentStateSession.checkpoint("decision_ready", {
+              decisionId: controllerDecision.decisionId, nextRuntimeStep: "apply_verification_result"
             });
             if (verifierResult.action === "stop") {
               return finishRun(verifierResult.content, { status: verifierResult.outcome, reasonCodes: verifierResult.reasonCodes });
@@ -3461,8 +3507,12 @@ async function runAgentToolLoop(provider, settings, root, prompt, mode, emit, ru
       usedTools = true;
       let approvalAmendmentOutcome = null;
       let terminalDecisionBlockOutcome = null;
+      let currentDurableActionContext = null;
       const controllerExecutionAuthorizer = controllerDecision
-        ? createControllerExecutionAuthorizer(loopOptions.agentStateSession, controllerDecision, emit, runtime, loopOptions.signal)
+        ? createControllerExecutionAuthorizer(loopOptions.agentStateSession, controllerDecision, emit, runtime, loopOptions.signal, {
+            root,
+            getActionContext: () => currentDurableActionContext
+          })
         : null;
 
       for (let toolIndex = 0; toolIndex < toolCalls.length; toolIndex += 1) {
@@ -3542,6 +3592,7 @@ async function runAgentToolLoop(provider, settings, root, prompt, mode, emit, ru
         const activityId = toolCall.id || `${name}-${round}-${Date.now()}`;
         const startedActivity = activityRun?.createStartedActivity(activityId, name, args, input) || null;
         emit({ type: "tool", decisionId: controllerDecision?.decisionId || "", tool: name, input, summary: "running", activity: startedActivity });
+        currentDurableActionContext = { activityId, name, args, decisionId: controllerDecision?.decisionId || "" };
         try {
           await activityRun?.captureBefore(name, args, loopOptions.signal);
           const result = await executeAgentTool(root, settings, mode, toolCall, {
@@ -3566,6 +3617,7 @@ async function runAgentToolLoop(provider, settings, root, prompt, mode, emit, ru
               activity: startedActivity ? activityRun?.createFailedActivity(startedActivity, args, failure.message || failure.code, result) : null
             });
             messages.push(createToolOutcomeHistoryMessage(toolCall, name, args, createToolResultContent(name, args, result), "failed"));
+            if (controllerEnabled) await loopOptions.agentStateSession.checkpoint("action_observed", { actionId: activityId, decisionId: controllerDecision?.decisionId || "", nextRuntimeStep: "choose_next_action" });
             continue;
           }
           const mutationDetails = await activityRun?.completeMutation(name, args, loopOptions.signal);
@@ -3593,6 +3645,7 @@ async function runAgentToolLoop(provider, settings, root, prompt, mode, emit, ru
               : null;
             emit({ type: "tool-error", tool: name, input, error: verificationResult.error.message, structuredResult: verificationResult, activity: failedActivity });
             messages.push(createToolOutcomeHistoryMessage(toolCall, name, args, createToolResultContent(name, args, verificationResult), "failed"));
+            if (controllerEnabled) await loopOptions.agentStateSession.checkpoint("action_observed", { actionId: activityId, decisionId: controllerDecision?.decisionId || "", nextRuntimeStep: "choose_next_action" });
             continue;
           }
           recordToolReliability(loopOptions, result);
@@ -3606,6 +3659,7 @@ async function runAgentToolLoop(provider, settings, root, prompt, mode, emit, ru
             activity: result?.status === "partial" && finishedActivity ? { ...finishedActivity, status: "partial" } : finishedActivity
           });
           messages.push(createToolOutcomeHistoryMessage(toolCall, name, args, createToolResultContent(name, args, result)));
+          if (controllerEnabled) await loopOptions.agentStateSession.checkpoint("action_observed", { actionId: activityId, decisionId: controllerDecision?.decisionId || "", nextRuntimeStep: "choose_next_action" });
           if (resolvedExperiment.intentRevision === true) recordSearchAndDetectAbsence(name, args, result, toolCall.id, loopOptions, messages, settings, emit);
           const fallbackToolCall = controllerEnabled ? null : createFileSearchFallbackToolCall(name, args, result, round);
           if (fallbackToolCall) {
@@ -3708,6 +3762,7 @@ async function runAgentToolLoop(provider, settings, root, prompt, mode, emit, ru
             activity: startedActivity ? activityRun?.createFailedActivity(startedActivity, args, errorMessage, structuredFailure) : null
           });
           messages.push(createToolOutcomeHistoryMessage(toolCall, name, args, createToolResultContent(name, args, structuredFailure), "failed"));
+          if (controllerEnabled) await loopOptions.agentStateSession.checkpoint("action_observed", { actionId: activityId, decisionId: controllerDecision?.decisionId || "", nextRuntimeStep: "choose_next_action" });
           // Approval-instruction amendment: a rejection carrying user instructions is a
           // user-authoritative change to the contract. Refresh (or scope-block on
           // failure), re-inject, and continue -- the tool error above already told the
@@ -3768,6 +3823,9 @@ async function runAgentToolLoop(provider, settings, root, prompt, mode, emit, ru
         }
       }
       if (controllerEnabled && controllerDecision?.type === agentDecisionController.DECISION_TYPES.TOOL_CALL && progressEvaluationEnabled) {
+        if (loopOptions.agentStateSession.isCheckpointEnabled?.() === true) {
+          await loopOptions.agentStateSession.checkpoint("verification_pending", { decisionId: controllerDecision.decisionId, nextRuntimeStep: "evaluate_progress" });
+        }
         const progressOutcome = await assessControllerProgress({
           session: loopOptions.agentStateSession,
           evaluator: progressEvaluator,
@@ -3775,6 +3833,9 @@ async function runAgentToolLoop(provider, settings, root, prompt, mode, emit, ru
           requestId: loopOptions.requestId,
           emit
         });
+        if (loopOptions.agentStateSession.isCheckpointEnabled?.() === true) {
+          await loopOptions.agentStateSession.checkpoint("decision_ready", { decisionId: controllerDecision.decisionId, nextRuntimeStep: "apply_progress_control" });
+        }
         if (progressOutcome.action === "terminate") {
           loopOptions.agentStateSession.setControllerTerminationReason("no-progress-budget-exhausted");
           return finishRun("The Agent stopped after repeated actions failed to make enough progress and the strategy-replan budget was exhausted.", {
