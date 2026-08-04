@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "datasetVersion": 1,
+  "status": "pending-live-evaluation",
+  "note": "Replace this placeholder only with the sanitized aggregate produced after the opt-in target/reference run and blind scoring. Raw prompts, responses, credentials, and scoring identities must remain under the ignored tests/eval/results directory.",
+  "repositoryCommit": "",
+  "generatedAt": "",
+  "repetitions": 0,
+  "providers": [],
+  "groups": []
+}

@@ -1,0 +1,30 @@
+{
+  "schemaVersion": 1,
+  "providers": [
+    {
+      "id": "current-model",
+      "role": "target",
+      "settings": {
+        "providerMode": "openai-compatible",
+        "baseUrl": "http://localhost:11434/v1",
+        "apiKey": "",
+        "model": "llama3.1",
+        "intentContractsEnabled": false
+      }
+    },
+    {
+      "id": "reference-model",
+      "role": "reference",
+      "settings": {
+        "providerMode": "openai-compatible",
+        "baseUrl": "https://example.invalid/v1",
+        "apiKey": "",
+        "model": "replace-with-reference-model",
+        "intentContractsEnabled": false
+      },
+      "credentials": {
+        "apiKeyEnv": "AI_COMPANION_EVAL_REFERENCE_API_KEY"
+      }
+    }
+  ]
+}
