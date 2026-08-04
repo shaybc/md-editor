@@ -1,0 +1,40 @@
+{
+  "schemaVersion": 1,
+  "purpose": "Frozen M6 ruler for progress classification, strategy repetition, replanning, and bounded non-success termination.",
+  "evalFields": [
+    "classifications",
+    "duplicateOrOscillationDetections",
+    "requiredReplans",
+    "acceptedReplans",
+    "rejectedReplans",
+    "terminatedForNoProgress"
+  ],
+  "scenarios": [
+    {
+      "id": "three-no-progress-actions-require-replan",
+      "sequence": ["no_progress", "no_progress", "no_progress"],
+      "expect": { "requiredReplans": 1, "terminatedForNoProgress": 0 }
+    },
+    {
+      "id": "five-inconclusive-actions-require-replan",
+      "sequence": ["inconclusive", "inconclusive", "inconclusive", "inconclusive", "inconclusive"],
+      "expect": { "requiredReplans": 1, "terminatedForNoProgress": 0 }
+    },
+    {
+      "id": "read-edit-read-advances-epoch",
+      "sequence": ["no_progress", "meaningful", "meaningful"],
+      "expect": { "requiredReplans": 0, "sameReadAllowedAfterMeaningfulProgress": true }
+    },
+    {
+      "id": "semantic-search-repetition",
+      "queries": ["token validation", "validate token", "authentication token check"],
+      "expect": { "oneStrategyCluster": true, "thirdProposalBlocked": true }
+    },
+    {
+      "id": "replan-budget-exhausted",
+      "maxStrategyReplans": 2,
+      "replanOutcomes": ["rejected", "rejected"],
+      "expect": { "terminatedForNoProgress": 1, "semanticOutcome": "budget_exhausted" }
+    }
+  ]
+}

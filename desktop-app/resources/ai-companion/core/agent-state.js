@@ -10,9 +10,17 @@ const {
   createInitialCompletionState,
   createInitialVerificationState
 } = require("./agent-completion-state");
+const {
+  acceptStrategyRevision,
+  applyProgressAssessment,
+  createInitialProgressState,
+  exhaustProgressBudget,
+  recordReplanAttempt,
+  requireReplan
+} = require("./agent-progress-policy");
 
-const AGENT_STATE_SCHEMA_VERSION = 4;
-const AGENT_STATE_EVENT_SCHEMA_VERSION = 4;
+const AGENT_STATE_SCHEMA_VERSION = 5;
+const AGENT_STATE_EVENT_SCHEMA_VERSION = 5;
 const MAX_RECENT_ACTIONS = 50;
 const MAX_RECENT_DECISIONS = 50;
 const MAX_RECENT_INTERACTIONS = 25;
@@ -45,6 +53,11 @@ const EVENT_TYPES = new Set([
   "completion_rejected",
   "completion_terminated",
   "final_response_recorded",
+  "progress_recorded",
+  "replan_required",
+  "replan_attempted",
+  "strategy_revised",
+  "progress_budget_exhausted",
   "steering_observed",
   "run_summary_observed",
   "run_completed",
@@ -66,6 +79,10 @@ const VERIFICATION_RELEVANT_EVENT_TYPES = new Set([
   "approval_resolved",
   "user_input_requested",
   "user_input_resolved",
+  "replan_required",
+  "replan_attempted",
+  "strategy_revised",
+  "progress_budget_exhausted",
   "steering_observed",
   "run_summary_observed",
   "run_failed",
@@ -210,6 +227,17 @@ function normalizeDecision(decision = {}) {
     executedAtStateVersion: null,
     runtimeReasonCodes: uniqueStrings(decision.runtimeReasonCodes).slice(0, 20),
     replacesDecisionId: stringValue(decision.replacesDecisionId, 200),
+    strategyRevision: Math.max(0, Number(decision.strategyRevision) || 0),
+    replan: decision.replan && typeof decision.replan === "object" ? {
+      triggerAssessmentIds: uniqueStrings(decision.replan.triggerAssessmentIds).slice(0, 20),
+      abandonedApproach: stringValue(decision.replan.abandonedApproach, 1000),
+      revisedApproach: stringValue(decision.replan.revisedApproach, 1000)
+    } : null,
+    actionSignature: stringValue(decision.actionSignature, 128),
+    strategySignature: stringValue(decision.strategySignature, 128),
+    strategyClass: stringValue(decision.strategyClass || "other", 80),
+    targetScope: stringValue(decision.targetScope, 1000),
+    conceptTokens: uniqueStrings(decision.conceptTokens).slice(0, 20),
     tool: decision.tool ? {
       name: stringValue(decision.tool.name, 200),
       providerCallId: stringValue(decision.tool.providerCallId, 200)
@@ -265,6 +293,12 @@ function createInitialAgentState(options = {}) {
     interactions: [],
     verification: createInitialVerificationState(),
     completion: createInitialCompletionState(),
+    progress: createInitialProgressState({
+      evaluationEnabled: options.progressEvaluationEnabled === true,
+      controlEnabled: options.progressControlEnabled === true,
+      noProgressThreshold: options.noProgressThreshold,
+      maxStrategyReplans: options.maxStrategyReplans
+    }),
     artifacts: { evidenceRefs: [], changedFiles: [], attemptedFiles: [], blockedChanges: [] },
     steering: { revisionCount: 0, lastReason: "" },
     terminalReason: null,
@@ -535,6 +569,73 @@ function applyTransition(next, event) {
       ]);
       return "";
     }
+    case "progress_recorded": {
+      const assessment = payload.assessment;
+      if (!assessment || typeof assessment !== "object" || Array.isArray(assessment)) return "missing-progress-assessment";
+      if (next.progress?.mode === "off") return "progress-disabled";
+      if (!assessment.assessmentId || next.progress.recentAssessments.some((entry) => entry.assessmentId === assessment.assessmentId)) return "duplicate-progress-assessment";
+      if (Number(assessment.basedOnStateVersion) !== Number(next.stateVersion)) return "stale-progress-state-version";
+      if (Number(assessment.progressEpoch) !== Number(next.progress.progressEpoch)) return "stale-progress-epoch";
+      if (Number(assessment.strategyRevision) !== Number(next.progress.strategyRevision)) return "stale-strategy-revision";
+      if (!["meaningful", "no_progress", "inconclusive"].includes(assessment.status)) return "invalid-progress-status";
+      if (!["deterministic", "semantic-evaluator"].includes(assessment.source)) return "invalid-progress-source";
+      const decision = next.recentDecisions.find((entry) => entry.decisionId === String(assessment.decisionId || ""));
+      const observation = next.recentObservations.find((entry) => entry.observationId === String(assessment.observationId || ""));
+      if (!decision || !observation) return "invalid-progress-reference";
+      if (decision.intentId !== String(assessment.intentId || "")) return "stale-progress-intent";
+      if (!(decision.observationIds || []).includes(observation.observationId)) return "unlinked-progress-observation";
+      const allowedEvidenceIds = new Set([observation.evidenceRef].filter(Boolean));
+      if ((assessment.evidenceIds || []).some((id) => !allowedEvidenceIds.has(String(id)))) return "invalid-progress-evidence";
+      next.progress = applyProgressAssessment(next.progress, assessment);
+      return "";
+    }
+    case "replan_required":
+      if (next.progress?.mode !== "enforce") return "progress-control-disabled";
+      if (next.progress.replanRequired) return "replan-already-required";
+      if (next.progress.lastControlAction !== "require_replan") {
+        const actionSignature = String(payload.actionSignature || "");
+        const strategySignature = String(payload.strategySignature || "");
+        const unproductive = next.progress.recentAssessments.filter((assessment) => assessment.status !== "meaningful");
+        const last = unproductive.slice(-3);
+        const repeatedBlockedProposal = payload.reasonCode === "blocked_proposal_repeated"
+          && (next.progress.blockedActionSignatures.includes(actionSignature)
+            || next.progress.blockedStrategySignatures.includes(strategySignature));
+        const repeatedStalledStrategy = payload.reasonCode === "proposal_loop_detected"
+          && unproductive.filter((assessment) => assessment.strategySignature === strategySignature).length >= 2;
+        const actionOscillation = payload.reasonCode === "proposal_loop_detected"
+          && last.length === 3
+          && last[0].actionSignature === last[2].actionSignature
+          && last[1].actionSignature === actionSignature
+          && last[0].actionSignature !== last[1].actionSignature;
+        const strategyOscillation = payload.reasonCode === "proposal_loop_detected"
+          && last.length === 3
+          && last[0].strategySignature === last[2].strategySignature
+          && last[1].strategySignature === strategySignature
+          && last[0].strategySignature !== last[1].strategySignature;
+        if (!repeatedBlockedProposal && !repeatedStalledStrategy && !actionOscillation && !strategyOscillation) {
+          return "replan-threshold-not-reached";
+        }
+      }
+      next.progress = requireReplan(next.progress);
+      return "";
+    case "replan_attempted":
+      if (next.progress?.mode !== "enforce" || !next.progress.replanRequired) return "replan-not-required";
+      if (next.progress.replanAttemptCount >= next.progress.budgets.maxStrategyReplans) return "replan-budget-exhausted";
+      next.progress = recordReplanAttempt(next.progress);
+      return "";
+    case "strategy_revised": {
+      if (next.progress?.mode !== "enforce" || !next.progress.replanRequired) return "replan-not-required";
+      const decision = next.recentDecisions.find((entry) => entry.decisionId === String(payload.decisionId || ""));
+      if (!decision?.replan) return "missing-replan-decision";
+      if (decision.strategyRevision !== next.progress.strategyRevision + 1) return "invalid-strategy-revision";
+      if (!decision.replan.revisedApproach || !decision.replan.abandonedApproach) return "invalid-replan-approach";
+      next.progress = acceptStrategyRevision(next.progress);
+      return "";
+    }
+    case "progress_budget_exhausted":
+      if (next.progress?.mode !== "enforce") return "progress-control-disabled";
+      next.progress = exhaustProgressBudget(next.progress);
+      return "";
     case "steering_observed":
       next.steering = {
         revisionCount: Math.max(next.steering.revisionCount, Number(payload.revision) || next.steering.revisionCount + 1),
@@ -592,7 +693,7 @@ function applyAgentStateEvent(state, event) {
 function validateTerminalAgentStateSnapshot(snapshot, options = {}) {
   const errors = [];
   const state = snapshot?.state;
-  if (!snapshot || ![1, 2, 3, AGENT_STATE_SCHEMA_VERSION].includes(snapshot.schemaVersion)) errors.push("unsupported-snapshot-schema");
+  if (!snapshot || ![1, 2, 3, 4, AGENT_STATE_SCHEMA_VERSION].includes(snapshot.schemaVersion)) errors.push("unsupported-snapshot-schema");
   if (snapshot?.snapshotKind !== "terminal") errors.push("snapshot-not-terminal");
   if (!state || state.schemaVersion !== snapshot?.schemaVersion) errors.push("invalid-state");
   if (!state) return { valid: false, errors };

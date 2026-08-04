@@ -64,7 +64,7 @@ function defaultSummary(outcome) {
 
 /**
  * Project only authoritative, user-visible completion facts from AgentState.
- * @param {object} state Accepted AgentState v4.
+ * @param {object} state Accepted AgentState.
  * @param {string} outcome Semantic outcome.
  * @returns {object} FinalResponseViewV1.
  */
@@ -97,6 +97,13 @@ function createFinalResponseView(state, outcome) {
     validationEvidence,
     remainingIssues: (state?.completion?.unresolvedIssues || []).map((issue) => String(issue?.description || issue)).filter(Boolean),
     requiredUserActions: blockers.map((blocker) => String(blocker?.requiredAction || "")).filter(Boolean),
+    progress: state?.progress ? {
+      terminalReason: String(state.progress.terminalReason || ""),
+      stallScore: Number(state.progress.stallScore) || 0,
+      unproductiveActions: (state.progress.recentAssessments || []).filter((assessment) => assessment.status !== "meaningful").length,
+      replanAttemptCount: Number(state.progress.replanAttemptCount) || 0,
+      acceptedReplanCount: Number(state.progress.acceptedReplanCount) || 0
+    } : null,
     allowedEvidenceClaims: (state?.recentObservations || []).map((observation) => ({
       evidenceRef: String(observation?.evidenceRef || ""),
       summary: String(observation?.summary?.text || ""),
@@ -140,6 +147,18 @@ function renderRemainingIssues(view) {
   return sections.join("\n");
 }
 
+function renderProgressBudget(view) {
+  if (view.outcome !== "budget_exhausted" || view.progress?.terminalReason !== "no_progress_budget_exhausted") return "";
+  return [
+    "## Progress limit",
+    "",
+    `- Unproductive actions: ${view.progress.unproductiveActions}`,
+    `- Current stall score: ${view.progress.stallScore}`,
+    `- Strategy revisions attempted: ${view.progress.replanAttemptCount}`,
+    `- Strategy revisions accepted: ${view.progress.acceptedReplanCount}`
+  ].join("\n");
+}
+
 /**
  * Build the immutable state view and deterministic content returned to the user.
  * @param {{state: object, outcome: string, proposalContent?: string, reasonCodes?: string[]}} input Composition inputs.
@@ -151,7 +170,7 @@ function composeFinalResponse(input = {}) {
   const view = createFinalResponseView(state, outcome);
   const claimValidation = unsupportedProposalClaims(input.proposalContent, state, outcome);
   const narrative = claimValidation.length ? defaultSummary(outcome) : (boundedText(input.proposalContent) || defaultSummary(outcome));
-  const sections = [narrative, renderChanges(view), renderCriteria(view), renderValidation(view), renderRemainingIssues(view)].filter(Boolean);
+  const sections = [narrative, renderProgressBudget(view), renderChanges(view), renderCriteria(view), renderValidation(view), renderRemainingIssues(view)].filter(Boolean);
   return {
     schemaVersion: 1,
     outcome,

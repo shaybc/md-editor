@@ -4,6 +4,8 @@
 
 "use strict";
 
+const { compareApproachText } = require("./agent-strategy-signature");
+
 const DECISION_SCHEMA_VERSION = 1;
 const DECISION_METADATA_KEY = "_decision";
 const DECISION_TYPES = Object.freeze({
@@ -30,7 +32,18 @@ const DECISION_METADATA_SCHEMA = Object.freeze({
   properties: {
     intentId: { type: "string", description: "Primary task or acceptance-criterion id served by this action." },
     rationale: { type: "string", description: "Concise untrusted rationale for selecting this action." },
-    expectedObservation: { type: "string", description: "What new evidence or result this action is expected to produce." }
+    expectedObservation: { type: "string", description: "What new evidence or result this action is expected to produce." },
+    strategyRevision: { type: "integer", minimum: 0 },
+    replan: {
+      type: "object",
+      additionalProperties: false,
+      required: ["triggerAssessmentIds", "abandonedApproach", "revisedApproach"],
+      properties: {
+        triggerAssessmentIds: { type: "array", minItems: 1, maxItems: 20, items: { type: "string" } },
+        abandonedApproach: { type: "string", minLength: 1, maxLength: 1000 },
+        revisedApproach: { type: "string", minLength: 1, maxLength: 1000 }
+      }
+    }
   }
 });
 
@@ -232,10 +245,37 @@ function decisionRecord(options = {}) {
     executedAtStateVersion: null,
     runtimeReasonCodes: uniqueCodes(options.runtimeReasonCodes),
     replacesDecisionId: String(options.replacesDecisionId || ""),
+    strategyRevision: Math.max(0, Number(options.strategyRevision) || 0),
+    replan: cloneSerializable(options.replan || null),
+    actionSignature: String(options.actionSignature || ""),
+    strategySignature: String(options.strategySignature || ""),
+    strategyClass: String(options.strategyClass || "other"),
+    targetScope: String(options.targetScope || ""),
     tool: options.tool ? { name: String(options.tool.name || ""), providerCallId: String(options.tool.providerCallId || "") } : null,
     payload: cloneSerializable(options.payload || null),
     observationIds: []
   };
+}
+
+function currentStallAssessmentIds(state) {
+  const entries = state?.progress?.recentAssessments || [];
+  const lastMeaningful = entries.map((entry) => entry.status).lastIndexOf("meaningful");
+  return new Set(entries.slice(lastMeaningful + 1).map((entry) => String(entry.assessmentId || "")).filter(Boolean));
+}
+
+function validateReplanMetadata(metadata, state, decisionType) {
+  const progress = state?.progress;
+  if (progress?.mode !== "enforce" || progress.replanRequired !== true) return [];
+  if ([DECISION_TYPES.PROPOSE_COMPLETION, DECISION_TYPES.REQUEST_USER_INPUT, DECISION_TYPES.REPORT_BLOCKED].includes(decisionType)) return [];
+  const codes = [];
+  if (!isPlainObject(metadata?.replan)) return ["missing_replan_metadata"];
+  if (Number(metadata.strategyRevision) !== Number(progress.strategyRevision) + 1) codes.push("invalid_strategy_revision");
+  const currentIds = currentStallAssessmentIds(state);
+  const triggerIds = Array.isArray(metadata.replan.triggerAssessmentIds) ? metadata.replan.triggerAssessmentIds.map(String) : [];
+  if (!triggerIds.length || triggerIds.some((id) => !currentIds.has(id))) codes.push("invalid_replan_trigger");
+  const comparison = compareApproachText(metadata.replan.abandonedApproach, metadata.replan.revisedApproach);
+  if (!comparison.different && !comparison.ambiguous) codes.push(comparison.reasonCode);
+  return codes;
 }
 
 function validateBlockedClaim(args, state, availableToolNames, hasClarificationChannel) {
@@ -345,6 +385,7 @@ function normalizeDecisionAttempt(message, realDefinitions, state, options = {})
     }
     if (!expectedObservation) validationCodes.push("missing_expected_observation");
   }
+  validationCodes.push(...validateReplanMetadata(metadata, state, type));
 
   const uniqueValidationCodes = uniqueCodes(validationCodes);
   const decision = decisionRecord({
@@ -354,6 +395,8 @@ function normalizeDecisionAttempt(message, realDefinitions, state, options = {})
     intentId,
     rationale,
     expectedObservation,
+    strategyRevision: metadata?.strategyRevision,
+    replan: metadata?.replan,
     runtimeReasonCodes: uniqueValidationCodes,
     replacesDecisionId: options.replacesDecisionId,
     tool: type === DECISION_TYPES.TOOL_CALL ? { name, providerCallId: call?.id } : null,
@@ -382,7 +425,10 @@ function createRepairMessage(decision, currentStateVersion) {
 }
 
 /** Describe the provider-native one-decision protocol without changing the Agent's goal. */
-function createControllerInstructionMessage() {
+function createControllerInstructionMessage(state = null) {
+  const replanInstruction = state?.progress?.mode === "enforce" && state.progress.replanRequired === true
+    ? `Progress control requires a materially different strategy revision ${state.progress.strategyRevision + 1}. Include _decision.strategyRevision and _decision.replan with current trigger assessment ids.`
+    : "Do not include replan metadata unless authoritative progress state requires it.";
   return {
     role: "system",
     content: [
@@ -392,6 +438,7 @@ function createControllerInstructionMessage() {
       "Use agent_request_user_input only for blocking information unavailable through tools.",
       "Use agent_propose_completion only when the requested work is ready for runtime completion assessment.",
       "Use agent_report_blocked only when its blocker can be supported by current state.",
+      replanInstruction,
       "Model rationale is descriptive only; the runtime independently validates and authorizes every action."
     ].join("\n")
   };
@@ -406,7 +453,7 @@ function isSameDecisionTransition(transition, decisionId) {
  * Decision bookkeeping and a plain approval for the same decision remain valid.
  */
 function findInvalidatingTransitions(decision, transitions) {
-  const allowedDecisionEvents = new Set(["decision_proposed", "decision_accepted", "decision_execution_authorized"]);
+  const allowedDecisionEvents = new Set(["decision_proposed", "decision_accepted", "decision_execution_authorized", "replan_attempted", "strategy_revised"]);
   return (Array.isArray(transitions) ? transitions : []).filter((transition) => {
     if (allowedDecisionEvents.has(transition.type) && isSameDecisionTransition(transition, decision.decisionId)) return false;
     if (transition.type === "approval_requested" && isSameDecisionTransition(transition, decision.decisionId)) return false;

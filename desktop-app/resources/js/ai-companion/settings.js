@@ -55,6 +55,10 @@
       chatRequestRoutingEnabled: true,
       agentDecisionControllerEnabled: false,
       agentVerifierCompletionEnabled: false,
+      agentProgressEvaluationEnabled: false,
+      agentProgressControlEnabled: false,
+      agentNoProgressActionLimit: 3,
+      agentMaxStrategyReplans: 2,
       // Intent-contract feature (M1). Keep in sync with the headless defaults in
       // ai-companion/config/defaults.js so headless and browser runs behave identically.
       intentContractsEnabled: false,
@@ -146,6 +150,10 @@
         chatRequestRoutingEnabled: source.chatRequestRoutingEnabled !== false,
         agentDecisionControllerEnabled: source.agentDecisionControllerEnabled === true,
         agentVerifierCompletionEnabled: source.agentVerifierCompletionEnabled === true,
+        agentProgressEvaluationEnabled: source.agentProgressEvaluationEnabled === true,
+        agentProgressControlEnabled: source.agentProgressControlEnabled === true,
+        agentNoProgressActionLimit: clampInteger(source.agentNoProgressActionLimit, defaults.agentNoProgressActionLimit, 1, 10),
+        agentMaxStrategyReplans: clampInteger(source.agentMaxStrategyReplans, defaults.agentMaxStrategyReplans, 0, 10),
         intentContractsEnabled,
         intentExperiment: intentExperiment.resolveIntentExperiment(source.intentExperiment, intentContractsEnabled, { rejectInvalid: true }),
         intentClarificationMode: ["ask", "assume", "off"].includes(source.intentClarificationMode) ? source.intentClarificationMode : "assume",

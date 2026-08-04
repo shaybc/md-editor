@@ -170,7 +170,7 @@ function createControllerHarness(runId, provider, contract = CONTRACT) {
   return { stateSession, activity, emitted, orchestrator };
 }
 
-test("AgentState v4 changes global stateVersion without staling completion bookkeeping", () => {
+test("AgentState v5 changes global stateVersion without staling completion bookkeeping", () => {
   const beforeAttempt = createReducerAttempt();
   assert.equal(beforeAttempt.verificationContextVersion, 4);
   assert.equal(beforeAttempt.stateVersion, 6);

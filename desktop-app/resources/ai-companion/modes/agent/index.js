@@ -24,7 +24,11 @@ async function runAgentMode(request, emit) {
       executionKind: request.executionKind,
       executionGeneration: request.executionGeneration,
       prompt,
-      controlMode: settings.agentDecisionControllerEnabled === true ? "controller" : "shadow"
+      controlMode: settings.agentDecisionControllerEnabled === true ? "controller" : "shadow",
+      progressEvaluationEnabled: settings.agentProgressEvaluationEnabled === true,
+      progressControlEnabled: settings.agentProgressControlEnabled === true,
+      noProgressThreshold: settings.agentNoProgressActionLimit,
+      maxStrategyReplans: settings.agentMaxStrategyReplans
     });
     observedEmit = stateSession.wrapEmit(emit);
     if (!settings.enabled || !settings.agentEnabled) throw new Error("AI Companion agent mode is disabled.");
@@ -33,6 +37,14 @@ async function runAgentMode(request, emit) {
         || settings.intentContractsEnabled !== true
         || settings.intentExperiment?.intentCompletionAssessment !== true)) {
       throw new Error("Agent verifier completion requires the Agent decision controller, intent contracts, and completion assessment.");
+    }
+    if (settings.agentProgressEvaluationEnabled === true
+      && (settings.agentDecisionControllerEnabled !== true || settings.intentContractsEnabled !== true)) {
+      throw new Error("Agent progress evaluation requires the Agent decision controller and intent contracts.");
+    }
+    if (settings.agentProgressControlEnabled === true
+      && (settings.agentProgressEvaluationEnabled !== true || settings.agentVerifierCompletionEnabled !== true)) {
+      throw new Error("Agent progress control requires progress evaluation and verifier-owned completion.");
     }
     verifierCompletionEnabled = settings.agentVerifierCompletionEnabled === true;
     runtime.throwIfAborted(request.signal);

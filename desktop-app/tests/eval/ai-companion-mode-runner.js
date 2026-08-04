@@ -294,6 +294,26 @@ function summarizeVerifierCompletion(events = []) {
   };
 }
 
+function summarizeProgressControl(events = []) {
+  const assessments = events.filter((event) => event.type === "agent-progress");
+  const replans = events.filter((event) => event.type === "agent-replan");
+  const counts = { meaningful: 0, no_progress: 0, inconclusive: 0 };
+  assessments.forEach((event) => {
+    if (Object.prototype.hasOwnProperty.call(counts, event.status)) counts[event.status] += 1;
+  });
+  return {
+    assessments: assessments.length,
+    classifications: counts,
+    semanticAssessments: assessments.filter((event) => event.source === "semantic-evaluator").length,
+    shadowDecisions: assessments.filter((event) => event.shadow === true && event.controlAction !== "continue").length,
+    duplicateOrOscillationDetections: assessments.filter((event) => /repeat|oscillation/.test(String(event.reasonCode || ""))).length,
+    requiredReplans: assessments.filter((event) => event.controlAction === "require_replan").length,
+    terminatedForNoProgress: assessments.filter((event) => event.controlAction === "terminate").length,
+    acceptedReplans: replans.filter((event) => event.status === "accepted").length,
+    rejectedReplans: replans.filter((event) => event.status === "rejected").length
+  };
+}
+
 function scoreDeterministicOutcome(mode, expectations, response, toolCalls, events, workspaceDiff, clarificationCount) {
   const toolNames = toolCalls.map((toolCall) => toolCall.name);
   const signatures = toolCalls.map((toolCall) => `${toolCall.name}:${JSON.stringify(toolCall.arguments)}`);
@@ -415,6 +435,7 @@ async function runEvaluationCase({ testCase, providerConfiguration, repetition =
       };
       const deterministic = scoreDeterministicOutcome(testCase.mode, turn.expectations, response, toolCalls, events, workspaceDiff, clarifications.length);
       const verifierCompletionMetrics = summarizeVerifierCompletion(events);
+      const progressControlMetrics = summarizeProgressControl(events);
       const record = {
         schemaVersion: 1,
         datasetVersion: 1,
@@ -437,6 +458,7 @@ async function runEvaluationCase({ testCase, providerConfiguration, repetition =
         toolCalls,
         decisionMetrics,
         verifierCompletionMetrics,
+        progressControlMetrics,
         failedProviderCalls: calls.filter((call) => call.failed).length,
         approvals,
         clarifications,
@@ -466,6 +488,7 @@ module.exports = {
   sanitizeProviderMetadata,
   scoreDeterministicOutcome,
   summarizeDecisionLifecycle,
+  summarizeProgressControl,
   summarizeVerifierCompletion,
   validateEvaluationConfig,
   validateEvaluationDataset

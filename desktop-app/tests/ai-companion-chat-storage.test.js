@@ -157,8 +157,8 @@ test("AI Companion persists one validated terminal AgentState snapshot outside t
   assert.ok(panelSource.includes("agentStateSnapshot: null"));
   assert.ok(panelSource.includes("Number(savedRecord.version) >= 4 ? (savedRecord.agentStateSnapshot || null) : null"));
   assert.ok(panelSource.includes("function validateAgentStateSnapshotForTask(snapshot, record)"));
-  assert.ok(panelSource.includes("[1, 2, 3, 4].includes(snapshot?.schemaVersion)"));
-  assert.ok(panelSource.includes("[1, 2, 3, 4].includes(state.schemaVersion)"));
+  assert.ok(panelSource.includes("[1, 2, 3, 4, 5].includes(snapshot?.schemaVersion)"));
+  assert.ok(panelSource.includes("[1, 2, 3, 4, 5].includes(state.schemaVersion)"));
   assert.ok(panelSource.includes("snapshot-state-schema-mismatch"));
   assert.ok(panelSource.includes("function recordAgentStateSnapshot(event)"));
   assert.ok(panelSource.includes("activeAgentEntry.record.agentStateSnapshot = snapshot"));

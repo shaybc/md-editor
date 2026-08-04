@@ -38,6 +38,10 @@ const DEFAULT_AI_COMPANION_SETTINGS = Object.freeze({
   chatRequestRoutingEnabled: true,
   agentDecisionControllerEnabled: false,
   agentVerifierCompletionEnabled: false,
+  agentProgressEvaluationEnabled: false,
+  agentProgressControlEnabled: false,
+  agentNoProgressActionLimit: 3,
+  agentMaxStrategyReplans: 2,
   // Intent-contract feature (M1). `intentContractsEnabled` is the user-facing master
   // switch; when off, the intent phase is fully disabled. The remaining keys are
   // thresholds shared by the headless and browser normalizers.
@@ -133,6 +137,10 @@ function normalizeAiCompanionSettings(settings = {}) {
     chatRequestRoutingEnabled: source.chatRequestRoutingEnabled !== false,
     agentDecisionControllerEnabled: source.agentDecisionControllerEnabled === true,
     agentVerifierCompletionEnabled: source.agentVerifierCompletionEnabled === true,
+    agentProgressEvaluationEnabled: source.agentProgressEvaluationEnabled === true,
+    agentProgressControlEnabled: source.agentProgressControlEnabled === true,
+    agentNoProgressActionLimit: clampInteger(source.agentNoProgressActionLimit, DEFAULT_AI_COMPANION_SETTINGS.agentNoProgressActionLimit, 1, 10),
+    agentMaxStrategyReplans: clampInteger(source.agentMaxStrategyReplans, DEFAULT_AI_COMPANION_SETTINGS.agentMaxStrategyReplans, 0, 10),
     intentContractsEnabled,
     intentExperiment: intentExperiment.resolveIntentExperiment(source.intentExperiment, intentContractsEnabled, { rejectInvalid: true }),
     intentClarificationMode: ["ask", "assume", "off"].includes(source.intentClarificationMode) ? source.intentClarificationMode : "assume",

@@ -184,6 +184,44 @@ test("blocked reports require internally consistent state evidence", () => {
   }).validationCodes.includes("contradictory_capability_blocker"));
 });
 
+test("controller requires a current materially different replan when progress control stalls", () => {
+  const definitions = [{
+    type: "function",
+    function: { name: "search_grep", parameters: { type: "object", required: ["query"], properties: { query: { type: "string" } } } }
+  }];
+  const state = createInitialAgentState({
+    runId: "replan",
+    controlMode: "controller",
+    progressEvaluationEnabled: true,
+    progressControlEnabled: true
+  });
+  state.progress.replanRequired = true;
+  state.progress.lastControlAction = "require_replan";
+  state.progress.recentAssessments = [{ assessmentId: "P1", status: "no_progress" }];
+
+  const attempt = (revisedApproach) => controller.normalizeDecisionAttempt({
+    toolCalls: [toolCall("search_grep", {
+      query: "parser callers",
+      _decision: {
+        ...metadata("Call sites of the parser"),
+        strategyRevision: 1,
+        replan: {
+          triggerAssessmentIds: ["P1"],
+          abandonedApproach: "Search for the parser",
+          revisedApproach
+        }
+      }
+    }, "replan-search")]
+  }, definitions, state, { decisionId: "D-replan" });
+
+  assert.ok(attempt("Search more carefully for the parser").validationCodes.some((code) =>
+    ["unchanged_replan_approach", "superficial_replan_approach"].includes(code)));
+  const valid = attempt("Trace callers from the parser entry point");
+  assert.deepEqual(valid.validationCodes, []);
+  assert.equal(valid.decision.strategyRevision, 1);
+  assert.equal(valid.decision.replan.triggerAssessmentIds[0], "P1");
+});
+
 test("controller uses state-built context and executes one native tool per decision", async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "md-editor-m4-controller-"));
   await fs.writeFile(path.join(root, "README.md"), "hello", "utf8");

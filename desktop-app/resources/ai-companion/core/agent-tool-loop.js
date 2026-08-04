@@ -40,6 +40,9 @@ const completionResponseRewrite = require("./completion-response-rewrite");
 const completionSteering = require("./completion-steering");
 const { createAgentCompletionOrchestrator } = require("./agent-completion-orchestrator");
 const { composeFinalResponse } = require("./agent-final-response-composer");
+const { createAgentProgressEvaluator } = require("./agent-progress-evaluator");
+const { classifyDeterministicProgress } = require("./agent-progress-policy");
+const { compareApproachText, createActionSignature, createStrategyDescriptor } = require("./agent-strategy-signature");
 const planFinalization = require("./plan-finalization");
 const { createIntentEvaluationTracker } = require("./intent-evaluation");
 const intentExperiment = require("../../js/ai-companion/intent-experiment");
@@ -2703,6 +2706,155 @@ function markControllerDecisionRejected(session, decision, codes, emit) {
   }, emit);
 }
 
+function progressEvent(assessment, state, controlAction, extra = {}) {
+  return {
+    type: "agent-progress",
+    assessmentId: assessment?.assessmentId || "",
+    decisionId: assessment?.decisionId || "",
+    observationId: assessment?.observationId || "",
+    intentId: assessment?.intentId || "",
+    status: assessment?.status || "",
+    source: assessment?.source || "",
+    reasonCode: assessment?.reasonCode || "",
+    actionSignature: assessment?.actionSignature || "",
+    strategySignature: assessment?.strategySignature || "",
+    progressEpoch: Number(state?.progress?.progressEpoch) || 0,
+    strategyRevision: Number(state?.progress?.strategyRevision) || 0,
+    stallScore: Number(state?.progress?.stallScore) || 0,
+    consecutiveInconclusive: Number(state?.progress?.consecutiveInconclusive) || 0,
+    replanAttemptCount: Number(state?.progress?.replanAttemptCount) || 0,
+    controlAction: String(controlAction || "continue"),
+    ...extra
+  };
+}
+
+async function describeProgressCandidate(decision, sanitizedToolCall, state, evaluator) {
+  if (!decision || decision.type !== "tool_call" || !sanitizedToolCall) return null;
+  const name = String(sanitizedToolCall.function?.name || sanitizedToolCall.name || "");
+  let args = {};
+  try { args = parseToolArguments(sanitizedToolCall.function?.arguments || sanitizedToolCall.arguments || "{}"); } catch (_error) { args = {}; }
+  const actionSignature = createActionSignature(name, args);
+  let strategy = createStrategyDescriptor({ toolName: name, args, intentId: decision.intentId });
+  const recent = (state?.progress?.recentStrategies || []).filter((entry) =>
+    entry.progressEpoch === state.progress.progressEpoch
+    && entry.strategyClass === strategy.strategyClass
+    && entry.targetScope === strategy.targetScope
+    && entry.strategySignature !== strategy.strategySignature).slice(-6);
+  if (evaluator && recent.length) {
+    const compared = await evaluator.compareStrategies({ candidate: strategy, recentStrategies: recent });
+    const equivalent = recent.find((entry) => entry.strategyId === compared.equivalentToStrategyId);
+    if (equivalent) strategy = { ...strategy, strategySignature: equivalent.strategySignature, equivalentToStrategyId: equivalent.strategyId };
+  }
+  return { args, actionSignature, ...strategy };
+}
+
+function candidateProgressValidationCodes(state, candidate) {
+  if (state?.progress?.mode === "off" || !candidate) return [];
+  const codes = [];
+  if (state.progress.blockedActionSignatures.includes(candidate.actionSignature)) codes.push("repeated_blocked_action");
+  if (state.progress.blockedStrategySignatures.includes(candidate.strategySignature)) codes.push("repeated_blocked_strategy");
+  const unproductive = (state.progress.recentAssessments || []).filter((entry) => entry.status !== "meaningful");
+  if (unproductive.filter((entry) => entry.strategySignature === candidate.strategySignature).length >= 2) codes.push("repeated_stalled_strategy");
+  const last = unproductive.slice(-3);
+  if (last.length === 3
+    && last[0].actionSignature === last[2].actionSignature
+    && last[1].actionSignature === candidate.actionSignature
+    && last[0].actionSignature !== last[1].actionSignature) codes.push("action_oscillation");
+  if (last.length === 3
+    && last[0].strategySignature === last[2].strategySignature
+    && last[1].strategySignature === candidate.strategySignature
+    && last[0].strategySignature !== last[1].strategySignature) codes.push("strategy_oscillation");
+  return [...new Set(codes)];
+}
+
+async function validateAmbiguousReplan(decision, state, candidate, evaluator) {
+  if (state?.progress?.mode !== "enforce" || state.progress.replanRequired !== true || !decision?.replan || !candidate) return [];
+  const deterministic = compareApproachText(decision.replan.abandonedApproach, decision.replan.revisedApproach);
+  if (!deterministic.ambiguous) return deterministic.different ? [] : [deterministic.reasonCode];
+  if (!evaluator) return ["replan_comparison_unavailable"];
+  const previousStrategy = (state.progress.recentStrategies || []).at(-1) || null;
+  const result = await evaluator.validateReplan({
+    intent: { id: decision.intentId },
+    abandonedApproach: decision.replan.abandonedApproach,
+    revisedApproach: decision.replan.revisedApproach,
+    previousStrategy,
+    proposedStrategy: candidate
+  });
+  return result.materiallyDifferent ? [] : [result.reasonCode || "replan_not_materially_different"];
+}
+
+async function assessControllerProgress(options = {}) {
+  const session = options.session;
+  let state = session.getState();
+  if (state.progress?.mode === "off") return { action: "continue" };
+  const decision = state.recentDecisions.find((entry) => entry.decisionId === options.decisionId);
+  if (!decision || decision.type !== "tool_call" || !decision.observationIds?.length) return { action: "continue" };
+  const observationId = decision.observationIds.at(-1);
+  const observation = state.recentObservations.find((entry) => entry.observationId === observationId);
+  if (!observation || observation.executionStatus === "cancelled") return { action: "continue" };
+  const binding = {
+    basedOnStateVersion: state.stateVersion,
+    progressEpoch: state.progress.progressEpoch,
+    strategyRevision: state.progress.strategyRevision
+  };
+  const deterministic = classifyDeterministicProgress({
+    state,
+    decision,
+    observation,
+    actionSignature: decision.actionSignature,
+    strategySignature: decision.strategySignature
+  });
+  let judgment = deterministic;
+  let source = "deterministic";
+  if (!judgment) {
+    source = "semantic-evaluator";
+    const excerpt = session.readArtifactExcerpt?.(observation.artifactRef, 6000);
+    judgment = options.evaluator
+      ? await options.evaluator.evaluateProgress({
+          intent: { id: decision.intentId, statement: state.criteria.find((entry) => entry.id === decision.intentId)?.statement || state.originalPrompt },
+          decision,
+          observation,
+          artifactExcerpt: excerpt?.text || ""
+        })
+      : { status: "inconclusive", reasonCode: "semantic_evaluator_disabled", evidenceIds: [] };
+  }
+  const current = session.getState();
+  if (current.stateVersion !== binding.basedOnStateVersion
+    || current.progress.progressEpoch !== binding.progressEpoch
+    || current.progress.strategyRevision !== binding.strategyRevision) {
+    options.emit(progressEvent(null, current, "stale", { reasonCode: "stale_progress_binding" }));
+    return { action: "continue" };
+  }
+  const assessment = {
+    assessmentId: `${options.requestId || "agent"}:progress:${current.progress.recentAssessments.length + 1}`,
+    status: judgment.status,
+    source,
+    decisionId: decision.decisionId,
+    observationId: observation.observationId,
+    intentId: decision.intentId,
+    ...binding,
+    reasonCode: String(judgment.reasonCode || "progress_unclassified"),
+    evidenceIds: Array.isArray(judgment.evidenceIds) ? judgment.evidenceIds : [],
+    actionSignature: decision.actionSignature,
+    strategySignature: decision.strategySignature,
+    strategyId: `${options.requestId || "agent"}:strategy:${current.progress.recentStrategies.length + 1}`,
+    strategyClass: decision.strategyClass,
+    targetScope: decision.targetScope,
+    conceptTokens: decision.conceptTokens
+  };
+  session.applyControllerEvent("progress_recorded", { assessment });
+  state = session.getState();
+  const controlAction = state.progress.lastControlAction;
+  options.emit(progressEvent(assessment, state, controlAction, { shadow: state.progress.mode === "shadow" }));
+  if (state.progress.mode !== "enforce" || controlAction === "continue") return { action: "continue" };
+  if (controlAction === "require_replan") {
+    session.applyControllerEvent("replan_required", { assessmentId: assessment.assessmentId });
+    return { action: "require_replan" };
+  }
+  session.applyControllerEvent("progress_budget_exhausted", { assessmentId: assessment.assessmentId });
+  return { action: "terminate" };
+}
+
 async function runAgentToolLoop(provider, settings, root, prompt, mode, emit, runtime, options = {}) {
   const resolvedExperiment = intentExperiment.resolveIntentExperiment(settings?.intentExperiment, settings?.intentContractsEnabled === true, { rejectInvalid: true });
   settings = { ...settings, intentExperiment: resolvedExperiment };
@@ -2805,6 +2957,15 @@ async function runAgentToolLoop(provider, settings, root, prompt, mode, emit, ru
   const controllerEnabled = mode === "agent" && settings.agentDecisionControllerEnabled === true;
   if (controllerEnabled && !loopOptions.agentStateSession) throw new Error("Agent decision controller requires an authoritative state session.");
   if (controllerEnabled) loadAgentDecisionController();
+  const progressEvaluationEnabled = controllerEnabled && settings.agentProgressEvaluationEnabled === true;
+  const progressEvaluator = progressEvaluationEnabled
+    ? createAgentProgressEvaluator({
+        provider,
+        signal: loopOptions.signal,
+        onUsage: (usage) => emit({ type: "usage", ...usage, reported: true, phase: "agent-progress" }),
+        onDebug: createProviderDebugEmitter(emit)
+      })
+    : null;
   const completionOrchestrator = verifierCompletionEnabled
     ? createAgentCompletionOrchestrator({
         provider,
@@ -2927,6 +3088,7 @@ async function runAgentToolLoop(provider, settings, root, prompt, mode, emit, ru
   const onDebug = createProviderDebugEmitter(emit);
   let controllerDecisionSequence = 0;
   let controllerRepairDecision = null;
+  let blockedProgressProposalCount = 0;
 
   taskPass: while (true) {
     for (let round = 0; round < maxRounds; round++) {
@@ -2943,7 +3105,7 @@ async function runAgentToolLoop(provider, settings, root, prompt, mode, emit, ru
       const providerMessages = controllerEnabled
         ? [
             ...(contextBundle?.messages || []),
-            agentDecisionController.createControllerInstructionMessage(),
+            agentDecisionController.createControllerInstructionMessage(loopOptions.agentStateSession.getState()),
             ...(controllerRepairDecision
               ? [agentDecisionController.createRepairMessage(controllerRepairDecision, loopOptions.agentStateSession.getState().stateVersion)]
               : [])
@@ -3004,6 +3166,7 @@ async function runAgentToolLoop(provider, settings, root, prompt, mode, emit, ru
       let controllerDecisionPayload = null;
       let controllerCompletionCandidate = "";
       let controllerReportedBlocked = false;
+      let progressCandidateValidationCodes = [];
       if (controllerEnabled) {
         controllerDecisionSequence += 1;
         const normalized = agentDecisionController.normalizeDecisionAttempt(
@@ -3018,12 +3181,97 @@ async function runAgentToolLoop(provider, settings, root, prompt, mode, emit, ru
         );
         controllerDecision = normalized.decision;
         controllerDecisionPayload = normalized.decision.payload;
+        const progressStateBeforeDecision = loopOptions.agentStateSession.getState();
+        const progressCandidate = await describeProgressCandidate(
+          controllerDecision,
+          normalized.sanitizedToolCall,
+          progressStateBeforeDecision,
+          progressEvaluator
+        );
+        if (progressCandidate) {
+          Object.assign(controllerDecision, {
+            actionSignature: progressCandidate.actionSignature,
+            strategySignature: progressCandidate.strategySignature,
+            strategyClass: progressCandidate.strategyClass,
+            targetScope: progressCandidate.targetScope,
+            conceptTokens: progressCandidate.conceptTokens
+          });
+          progressCandidateValidationCodes = candidateProgressValidationCodes(progressStateBeforeDecision, progressCandidate);
+          if (progressStateBeforeDecision.progress?.mode === "shadow" && progressCandidateValidationCodes.length) {
+            const loopWouldReplan = progressCandidateValidationCodes.some((code) =>
+              ["repeated_stalled_strategy", "action_oscillation", "strategy_oscillation"].includes(code));
+            emit(progressEvent(null, progressStateBeforeDecision, loopWouldReplan ? "would_replan" : "would_reject", {
+              reasonCode: progressCandidateValidationCodes[0],
+              shadow: true
+            }));
+          } else {
+            normalized.validationCodes.push(...progressCandidateValidationCodes);
+          }
+          normalized.validationCodes.push(...await validateAmbiguousReplan(
+            controllerDecision,
+            progressStateBeforeDecision,
+            progressCandidate,
+            progressEvaluator
+          ));
+          normalized.validationCodes = [...new Set(normalized.validationCodes)];
+          controllerDecision.runtimeReasonCodes = [...normalized.validationCodes];
+        }
         transitionControllerDecision(loopOptions.agentStateSession, "decision_proposed", { decision: controllerDecision }, emit);
         if (normalized.validationCodes.length) {
           controllerDecision = transitionControllerDecision(loopOptions.agentStateSession, "decision_rejected", {
             decisionId: controllerDecision.decisionId,
             runtimeReasonCodes: normalized.validationCodes
           }, emit);
+          const progressState = loopOptions.agentStateSession.getState().progress;
+          const blockedProposalCodes = progressCandidateValidationCodes.filter((code) =>
+            ["repeated_blocked_action", "repeated_blocked_strategy"].includes(code));
+          const proposalLoopCodes = progressCandidateValidationCodes.filter((code) =>
+            ["repeated_stalled_strategy", "action_oscillation", "strategy_oscillation"].includes(code));
+          blockedProgressProposalCount = blockedProposalCodes.length ? blockedProgressProposalCount + 1 : 0;
+          if (progressState?.mode === "enforce"
+            && progressState.replanRequired !== true
+            && (proposalLoopCodes.length || blockedProgressProposalCount >= 2)) {
+            loopOptions.agentStateSession.applyControllerEvent("replan_required", {
+              decisionId: controllerDecision.decisionId,
+              reasonCode: proposalLoopCodes.length ? "proposal_loop_detected" : "blocked_proposal_repeated",
+              actionSignature: controllerDecision.actionSignature,
+              strategySignature: controllerDecision.strategySignature
+            });
+            const replanState = loopOptions.agentStateSession.getState().progress;
+            emit({
+              type: "agent-replan",
+              decisionId: controllerDecision.decisionId,
+              strategyRevision: replanState.strategyRevision,
+              replanAttemptCount: replanState.replanAttemptCount,
+              status: "required",
+              reasonCodes: [...proposalLoopCodes, ...blockedProposalCodes]
+            });
+            blockedProgressProposalCount = 0;
+            controllerRepairDecision = null;
+            continue;
+          }
+          if (controllerRepairDecision && progressState?.mode === "enforce" && progressState.replanRequired === true) {
+            loopOptions.agentStateSession.applyControllerEvent("replan_attempted", { decisionId: controllerDecision.decisionId, accepted: false });
+            const afterAttempt = loopOptions.agentStateSession.getState().progress;
+            emit({
+              type: "agent-replan",
+              decisionId: controllerDecision.decisionId,
+              strategyRevision: afterAttempt.strategyRevision,
+              replanAttemptCount: afterAttempt.replanAttemptCount,
+              status: "rejected",
+              reasonCodes: normalized.validationCodes
+            });
+            controllerRepairDecision = null;
+            if (afterAttempt.replanAttemptCount >= afterAttempt.budgets.maxStrategyReplans) {
+              loopOptions.agentStateSession.applyControllerEvent("progress_budget_exhausted", { decisionId: controllerDecision.decisionId });
+              loopOptions.agentStateSession.setControllerTerminationReason("no-progress-budget-exhausted");
+              return finishRun("The Agent could not produce a materially different valid strategy within the replan budget.", {
+                status: "budget_exhausted",
+                reasonCodes: ["no_progress_budget_exhausted"]
+              });
+            }
+            continue;
+          }
           if (controllerRepairDecision) {
             loopOptions.agentStateSession.setControllerTerminationReason("controller-invalid-decision");
             return finishRun(agentDecisionController.createControllerBlockedContent(normalized.validationCodes), {
@@ -3033,6 +3281,20 @@ async function runAgentToolLoop(provider, settings, root, prompt, mode, emit, ru
           }
           controllerRepairDecision = controllerDecision;
           continue;
+        }
+        blockedProgressProposalCount = 0;
+        if (progressStateBeforeDecision.progress?.mode === "enforce"
+          && progressStateBeforeDecision.progress.replanRequired === true
+          && controllerDecision.type === agentDecisionController.DECISION_TYPES.TOOL_CALL) {
+          loopOptions.agentStateSession.applyControllerEvent("replan_attempted", { decisionId: controllerDecision.decisionId });
+          loopOptions.agentStateSession.applyControllerEvent("strategy_revised", { decisionId: controllerDecision.decisionId });
+          emit({
+            type: "agent-replan",
+            decisionId: controllerDecision.decisionId,
+            strategyRevision: controllerDecision.strategyRevision,
+            replanAttemptCount: loopOptions.agentStateSession.getState().progress.replanAttemptCount,
+            status: "accepted"
+          });
         }
         transitionControllerDecision(loopOptions.agentStateSession, "decision_accepted", { decisionId: controllerDecision.decisionId }, emit);
         controllerDecision = getControllerDecision(loopOptions.agentStateSession, controllerDecision.decisionId);
@@ -3503,6 +3765,22 @@ async function runAgentToolLoop(provider, settings, root, prompt, mode, emit, ru
             }
             break;
           }
+        }
+      }
+      if (controllerEnabled && controllerDecision?.type === agentDecisionController.DECISION_TYPES.TOOL_CALL && progressEvaluationEnabled) {
+        const progressOutcome = await assessControllerProgress({
+          session: loopOptions.agentStateSession,
+          evaluator: progressEvaluator,
+          decisionId: controllerDecision.decisionId,
+          requestId: loopOptions.requestId,
+          emit
+        });
+        if (progressOutcome.action === "terminate") {
+          loopOptions.agentStateSession.setControllerTerminationReason("no-progress-budget-exhausted");
+          return finishRun("The Agent stopped after repeated actions failed to make enough progress and the strategy-replan budget was exhausted.", {
+            status: "budget_exhausted",
+            reasonCodes: ["no_progress_budget_exhausted"]
+          });
         }
       }
       if (terminalDecisionBlockOutcome) {

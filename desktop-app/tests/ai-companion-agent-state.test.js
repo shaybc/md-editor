@@ -61,7 +61,7 @@ test("AgentState accepts sequence gaps while stateVersion counts accepted mutati
   assert.equal(applyAgentStateEvent(completed.state, event("run-1", 7, "steering_observed", {})).reason, "post-terminal-event");
 });
 
-test("AgentState v4 records validated decision lifecycle without raw tool arguments", () => {
+test("AgentState v5 records validated decision lifecycle without raw tool arguments", () => {
   let state = createInitialAgentState({ runId: "run-decisions", prompt: "inspect", controlMode: "controller" });
   const events = [
     event("run-decisions", 1, "run_started"),
@@ -109,7 +109,7 @@ test("AgentState v4 records validated decision lifecycle without raw tool argume
   assert.deepEqual(superseded.recentDecisions[0].runtimeReasonCodes, ["stale_state_version"]);
 });
 
-test("AgentState v4 rejects invalid decision lifecycle transitions", () => {
+test("AgentState v5 rejects invalid decision lifecycle transitions", () => {
   let state = createInitialAgentState({ runId: "invalid-lifecycle", controlMode: "controller" });
   state = applyAgentStateEvent(state, event("invalid-lifecycle", 1, "run_started")).state;
   state = applyAgentStateEvent(state, event("invalid-lifecycle", 2, "decision_proposed", {
@@ -218,8 +218,8 @@ test("shadow callbacks preserve user responses and callback semantics", async ()
 test("terminal snapshot validation checks metadata and generation", () => {
   const shadow = createAgentStateShadow({ requestId: "snapshot-1", prompt: "work", executionGeneration: 3 });
   const snapshot = shadow.emitTerminalSnapshot(() => {}, "completed", { reason: "done" });
-  assert.equal(snapshot.schemaVersion, 4);
-  assert.equal(snapshot.state.schemaVersion, 4);
+  assert.equal(snapshot.schemaVersion, 5);
+  assert.equal(snapshot.state.schemaVersion, 5);
   assert.deepEqual(validateTerminalAgentStateSnapshot(snapshot, { executionGeneration: 3 }), { valid: true, errors: [] });
   const stale = structuredClone(snapshot);
   stale.executionGeneration = 2;

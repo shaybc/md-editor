@@ -467,6 +467,7 @@ function createAgentStateShadow(options = {}) {
     emitTerminalSnapshot,
     getControllerTerminationReason: () => controllerTerminationReason,
     getDiagnostics: () => cloneSerializable(diagnostics),
+    readArtifactExcerpt: (reference, maximum) => artifactStore.readExcerpt(reference, maximum),
     getState: () => cloneSerializable(state),
     getTransitionsSince,
     observeDecisionContext,

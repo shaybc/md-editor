@@ -125,6 +125,21 @@ function buildStateProjection(state) {
       reasonCodes: state.completion.reasonCodes,
       unresolvedIssues: state.completion.unresolvedIssues
     } : null,
+    progress: state?.progress?.mode === "enforce" ? {
+      policyVersion: state.progress.policyVersion,
+      progressEpoch: state.progress.progressEpoch,
+      strategyRevision: state.progress.strategyRevision,
+      stallScore: state.progress.stallScore,
+      consecutiveInconclusive: state.progress.consecutiveInconclusive,
+      replanRequired: state.progress.replanRequired,
+      replanAttemptCount: state.progress.replanAttemptCount,
+      acceptedReplanCount: state.progress.acceptedReplanCount,
+      recentAssessments: (state.progress.recentAssessments || []).slice(-10),
+      blockedActionSignatures: state.progress.blockedActionSignatures || [],
+      blockedStrategySignatures: state.progress.blockedStrategySignatures || [],
+      budgets: state.progress.budgets,
+      terminalReason: state.progress.terminalReason
+    } : null,
     artifacts: state?.artifacts || null,
     steering: state?.steering || null
   };

@@ -18,6 +18,7 @@ const {
   runEvaluationCase,
   scoreDeterministicOutcome,
   summarizeDecisionLifecycle,
+  summarizeProgressControl,
   summarizeVerifierCompletion,
   validateEvaluationConfig,
   validateEvaluationDataset
@@ -133,6 +134,27 @@ test("M5 evaluation metrics count attempts, stale retries, outcomes, and verific
   assert.equal(metrics.verificationLatencyMs, 22);
   assert.equal(metrics.verificationTokens, 12);
   assert.equal(metrics.semanticOutcome, "succeeded");
+});
+
+test("M6 evaluation metrics count classifications and progress-control outcomes", () => {
+  const metrics = summarizeProgressControl([
+    { type: "agent-progress", status: "no_progress", source: "deterministic", reasonCode: "repeated_action", controlAction: "continue" },
+    { type: "agent-progress", status: "inconclusive", source: "semantic-evaluator", reasonCode: "ambiguous_read", controlAction: "require_replan", shadow: true },
+    { type: "agent-progress", status: "meaningful", source: "semantic-evaluator", reasonCode: "new_evidence", controlAction: "continue" },
+    { type: "agent-replan", status: "rejected" },
+    { type: "agent-replan", status: "accepted" }
+  ]);
+  assert.deepEqual(metrics, {
+    assessments: 3,
+    classifications: { meaningful: 1, no_progress: 1, inconclusive: 1 },
+    semanticAssessments: 2,
+    shadowDecisions: 1,
+    duplicateOrOscillationDetections: 1,
+    requiredReplans: 1,
+    terminatedForNoProgress: 0,
+    acceptedReplans: 1,
+    rejectedReplans: 1
+  });
 });
 
 test("report summaries stay separated by provider role, mode, and category", () => {

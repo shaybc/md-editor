@@ -1,5 +1,5 @@
 /**
- * AgentState v4 completion and verification transition reducer.
+ * AgentState completion and verification transition reducer (introduced in v4).
  *
  * This module mutates only the reducer-owned draft passed by agent-state.js.
  */
@@ -35,7 +35,7 @@ function uniqueStrings(values) {
 }
 
 /**
- * Create the verifier-owned portion of AgentState v4.
+ * Create the verifier-owned portion of AgentState.
  * @returns {object} Initial verification state.
  */
 function createInitialVerificationState() {
@@ -53,7 +53,7 @@ function createInitialVerificationState() {
 }
 
 /**
- * Create the runtime-owned semantic completion portion of AgentState v4.
+ * Create the runtime-owned semantic completion portion of AgentState.
  * @returns {object} Initial completion state.
  */
 function createInitialCompletionState() {
