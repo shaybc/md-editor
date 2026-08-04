@@ -30,6 +30,49 @@ function digest(file) {
   return crypto.createHash("sha256").update(fs.readFileSync(file)).digest("hex");
 }
 
+function restoreBundledArchive(downloads, archive, expectedSha256) {
+  const parts = fs.readdirSync(downloads)
+    .filter((name) => /^part-.*\.bin$/.test(name))
+    .sort();
+  if (parts.length === 0) return false;
+
+  const temporary = `${archive}.restore`;
+  const buffer = Buffer.allocUnsafe(1024 * 1024);
+  let output;
+  try {
+    fs.rmSync(temporary, { force: true });
+    output = fs.openSync(temporary, "w");
+    for (const part of parts) {
+      console.log(`Adding bundled tooling JDK archive part: ${part}`);
+      const input = fs.openSync(path.join(downloads, part), "r");
+      try {
+        let bytesRead;
+        while ((bytesRead = fs.readSync(input, buffer, 0, buffer.length, null)) > 0) {
+          let bytesWritten = 0;
+          while (bytesWritten < bytesRead) {
+            bytesWritten += fs.writeSync(output, buffer, bytesWritten, bytesRead - bytesWritten);
+          }
+        }
+      } finally {
+        fs.closeSync(input);
+      }
+    }
+    fs.closeSync(output);
+    output = undefined;
+
+    const actual = digest(temporary);
+    if (actual !== expectedSha256) throw new Error(`Restored tooling JDK checksum mismatch: ${actual}`);
+    fs.rmSync(archive, { force: true });
+    fs.renameSync(temporary, archive);
+    console.log(`Restored the bundled tooling JDK archive in ${archive}.`);
+    return true;
+  } catch (error) {
+    if (output !== undefined) fs.closeSync(output);
+    fs.rmSync(temporary, { force: true });
+    throw error;
+  }
+}
+
 function download(url, destination, redirects = 0) {
   if (redirects > 8) return Promise.reject(new Error("Too many redirects while downloading the tooling JDK."));
   return new Promise((resolve, reject) => {
@@ -78,7 +121,10 @@ async function main() {
   const archive = path.join(downloads, platform.archive);
   const extractionRoot = path.join(binRoot, ".tooling-jdk-extract");
   fs.mkdirSync(downloads, { recursive: true });
-  if (!fs.existsSync(archive) || digest(archive) !== platform.sha256) await download(platform.url, archive);
+  if (!fs.existsSync(archive) || digest(archive) !== platform.sha256) {
+    const restored = restoreBundledArchive(downloads, archive, platform.sha256);
+    if (!restored) await download(platform.url, archive);
+  }
   const actual = digest(archive);
   if (actual !== platform.sha256) throw new Error(`Tooling JDK checksum mismatch: ${actual}`);
   fs.rmSync(extractionRoot, { recursive: true, force: true });
