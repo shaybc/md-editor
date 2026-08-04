@@ -30,6 +30,18 @@ async function runAgentMode(request, emit) {
       ? AGENT_COMPLETION_REPORTING_INSTRUCTION
       : LEGACY_AGENT_COMPLETION_REPORTING_INSTRUCTION;
     const loopOptions = { signal: request.signal, profileRoot: request.profileRoot, activeFile: request.activeFile, editorReadContext: request.editorReadContext, attachments: request.attachments, conversationHistory: request.conversationHistory, resumeCheckpoint: request.resumeCheckpoint, resumeIntentContext: request.resumeIntentContext, requestApproval: request.requestApproval, requestAppAction: request.requestAppAction, requestClarification: request.requestClarification, requestChatTitle: request.requestChatTitle === true, requestId: request.requestId, chatId: request.chatId, turnIndex: request.turnIndex, executionKind: request.executionKind, executionGeneration: request.executionGeneration, savedIntentContract: request.savedIntentContract, savedIntentContractMeta: request.savedIntentContractMeta, priorIntentContract: request.priorIntentContract, priorIntentContractMeta: request.priorIntentContractMeta, appVersion: request.appVersion, securityContext: request.securityContext, systemPrompt: `${prompts.agentSystem} ${AGENT_APPROVAL_RATIONALE_INSTRUCTION} ${completionInstruction}`, prompts };
+    shadow.configureContextSources({
+      requestId: request.requestId,
+      systemPrompt: loopOptions.systemPrompt,
+      prompt,
+      activeFile: request.activeFile,
+      editorReadContext: request.editorReadContext,
+      attachments: request.attachments,
+      conversationHistory: request.conversationHistory,
+      intentInjectedMaxChars: settings.intentInjectedMaxChars
+    });
+    loopOptions.observeToolEvidence = shadow.observeToolEvidence;
+    loopOptions.observeDecisionContext = shadow.observeDecisionContext;
     loopOptions.requestApproval = shadow.wrapApproval(loopOptions.requestApproval);
     loopOptions.requestClarification = shadow.wrapClarification(loopOptions.requestClarification);
     const response = await runtime.runAgentToolLoop(provider, settings, request.workspaceRoot, prompt, "agent", observedEmit, runtime, loopOptions);

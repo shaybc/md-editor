@@ -11,6 +11,10 @@ const {
   createInitialAgentState,
   validateTerminalAgentStateSnapshot
 } = require("./agent-state");
+const { createAgentArtifactStore } = require("./agent-artifact-store");
+const { buildAgentContext } = require("./agent-context-builder");
+const { compareAgentContexts } = require("./agent-context-comparison");
+const { normalizeToolObservation } = require("./agent-observation-normalizer");
 
 const IGNORED_RUNTIME_EVENT_TYPES = new Set([
   "start",
@@ -116,12 +120,20 @@ function createAgentStateShadow(options = {}) {
   const runId = String(options.runId || options.requestId || `agent-shadow-${++fallbackRunId}-${clock()}`);
   let sequence = 0;
   let state = createInitialAgentState({ ...options, runId });
+  const artifactStore = createAgentArtifactStore();
+  const observationIdsByToolCall = new Map();
+  let contextSources = {};
   const diagnostics = {
     ignoredEventCount: 0,
     unmappedEventCount: 0,
     unmatchedActionFinishCount: 0,
     rejectedTransitionCount: 0,
-    shadowErrorCount: 0
+    shadowErrorCount: 0,
+    normalizedObservationCount: 0,
+    observationNormalizationErrorCount: 0,
+    contextBuildCount: 0,
+    contextBuildErrorCount: 0,
+    latestContextComparison: null
   };
 
   function allocateObservation() {
@@ -157,6 +169,55 @@ function createAgentStateShadow(options = {}) {
 
   applyNewObservation("run_started", {});
 
+  /** Configure immutable request sources after the Agent prompt profile is loaded. */
+  function configureContextSources(sources = {}) {
+    contextSources = {
+      requestId: sources.requestId,
+      systemPrompt: sources.systemPrompt,
+      additionalSystemMessages: sources.additionalSystemMessages,
+      prompt: sources.prompt,
+      activeFile: sources.activeFile,
+      editorReadContext: sources.editorReadContext,
+      attachments: sources.attachments,
+      conversationHistory: sources.conversationHistory,
+      intentInjectedMaxChars: sources.intentInjectedMaxChars
+    };
+  }
+
+  /** Normalize one canonical evidence record and submit it through the state reducer. */
+  function observeToolEvidence(details = {}) {
+    try {
+      const observation = normalizeToolObservation(details, artifactStore);
+      if (state.observationIds.includes(observation.observationId)) return observation;
+      if (!applyNewObservation("observation_recorded", { observation })) return null;
+      if (observation.toolCallId) observationIdsByToolCall.set(observation.toolCallId, observation.observationId);
+      diagnostics.normalizedObservationCount += 1;
+      return observation;
+    } catch (_error) {
+      diagnostics.observationNormalizationErrorCount += 1;
+      diagnostics.shadowErrorCount += 1;
+      return null;
+    }
+  }
+
+  /** Build and compare shadow context without changing the messages sent to the provider. */
+  function observeDecisionContext(details = {}) {
+    try {
+      const contextBundle = buildAgentContext({
+        ...contextSources,
+        state,
+        artifactStore
+      });
+      diagnostics.contextBuildCount += 1;
+      diagnostics.latestContextComparison = compareAgentContexts(details.messages, contextBundle);
+      return contextBundle;
+    } catch (_error) {
+      diagnostics.contextBuildErrorCount += 1;
+      diagnostics.shadowErrorCount += 1;
+      return null;
+    }
+  }
+
   function observeActionEvent(event, observation) {
     const actionId = actionIdForEvent(event, observation.sequence);
     const isStart = event.type === "tool" && (event.summary === "running" || event.activity?.status === "running");
@@ -175,7 +236,8 @@ function createAgentStateShadow(options = {}) {
       input: String(event.input || ""),
       status: actionStatusForEvent(event),
       summary: String(event.summary || event.activity?.resultSummary || ""),
-      error: String(event.error || "")
+      error: String(event.error || ""),
+      observationId: observationIdsByToolCall.get(actionId) || ""
     }, observation);
   }
 
@@ -354,10 +416,13 @@ function createAgentStateShadow(options = {}) {
   }
 
   return {
+    configureContextSources,
     emitTerminalSnapshot,
     getDiagnostics: () => cloneSerializable(diagnostics),
     getState: () => cloneSerializable(state),
+    observeDecisionContext,
     observeRuntimeEvent,
+    observeToolEvidence,
     wrapApproval,
     wrapClarification,
     wrapEmit

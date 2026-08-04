@@ -2640,7 +2640,9 @@ async function runAgentToolLoop(provider, settings, root, prompt, mode, emit, ru
     intentDecisionBlockAttempts: new Map()
   };
   loopOptions.intentExperiment = resolvedExperiment;
-  const activityRun = (mode === "agent" || mode === "chat" || mode === "plan") ? createActivityRun(root, tools) : null;
+  const activityRun = (mode === "agent" || mode === "chat" || mode === "plan") ? createActivityRun(root, tools, {
+    observeToolEvidence: mode === "agent" ? loopOptions.observeToolEvidence : null
+  }) : null;
   const shouldEmitActivitySummary = mode === "agent";
   let evaluationEmitted = false;
   // Closed-loop steering state (Phase 1): bounded revisions driven by the completion verdict.
@@ -2788,6 +2790,13 @@ async function runAgentToolLoop(provider, settings, root, prompt, mode, emit, ru
       }
       let message;
       try {
+        if (mode === "agent" && typeof loopOptions.observeDecisionContext === "function") {
+          try {
+            loopOptions.observeDecisionContext({ messages, round });
+          } catch (_error) {
+            // M3 context construction is shadow-only and cannot affect the provider call.
+          }
+        }
         message = await provider.completeMessage(messages, {
           temperature: 0.2,
           maxTokens: getRoundResponseMaxTokens(loopOptions),

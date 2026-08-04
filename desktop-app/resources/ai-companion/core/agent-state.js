@@ -4,10 +4,12 @@
 
 "use strict";
 
-const AGENT_STATE_SCHEMA_VERSION = 1;
-const AGENT_STATE_EVENT_SCHEMA_VERSION = 1;
+const AGENT_STATE_SCHEMA_VERSION = 2;
+const AGENT_STATE_EVENT_SCHEMA_VERSION = 2;
 const MAX_RECENT_ACTIONS = 50;
 const MAX_RECENT_INTERACTIONS = 25;
+const MAX_RECENT_OBSERVATIONS = 50;
+const MAX_OBSERVATION_IDS = 500;
 const TERMINAL_RUN_STATUSES = new Set(["completed", "failed", "cancelled"]);
 const TERMINAL_ACTION_STATUSES = new Set(["succeeded", "partial", "failed", "denied", "cancelled", "interrupted", "unknown"]);
 const EVENT_TYPES = new Set([
@@ -15,6 +17,7 @@ const EVENT_TYPES = new Set([
   "intent_contract_observed",
   "action_started",
   "action_finished",
+  "observation_recorded",
   "approval_requested",
   "approval_resolved",
   "user_input_requested",
@@ -82,6 +85,51 @@ function normalizeBlockedChanges(changes) {
   }));
 }
 
+function normalizeArtifactReference(reference) {
+  if (!reference || typeof reference !== "object") return null;
+  return {
+    id: stringValue(reference.id, 160),
+    digest: stringValue(reference.digest, 128),
+    kind: stringValue(reference.kind || "tool-result", 80),
+    contentType: stringValue(reference.contentType || "application/json", 120),
+    retention: "run",
+    sizeChars: Math.max(0, Number(reference.sizeChars) || 0),
+    truncated: reference.truncated === true
+  };
+}
+
+function normalizeObservation(observation, occurredAt) {
+  const executionStatuses = new Set(["executed", "denied", "skipped", "cancelled"]);
+  const outcomes = new Set(["succeeded", "partial", "failed", "no-op", "unknown"]);
+  const summarySources = new Set(["deterministic", "tool", "model", "legacy-event"]);
+  return {
+    schemaVersion: 1,
+    observationId: stringValue(observation?.observationId, 200),
+    source: "tool",
+    toolCallId: stringValue(observation?.toolCallId, 200),
+    tool: stringValue(observation?.tool, 200),
+    executionStatus: executionStatuses.has(observation?.executionStatus) ? observation.executionStatus : "executed",
+    outcome: outcomes.has(observation?.outcome) ? observation.outcome : "unknown",
+    summary: {
+      text: stringValue(observation?.summary?.text),
+      source: summarySources.has(observation?.summary?.source) ? observation.summary.source : "legacy-event"
+    },
+    effect: stringValue(observation?.effect || "unknown", 80),
+    capability: stringValue(observation?.capability || "unknown", 160),
+    resource: stringValue(observation?.resource, 1000),
+    files: uniqueStrings(observation?.files).slice(0, 20),
+    evidenceRef: stringValue(observation?.evidenceRef, 160),
+    artifactRef: normalizeArtifactReference(observation?.artifactRef),
+    truncated: observation?.truncated === true,
+    verification: {
+      verifiedState: observation?.verification?.verifiedState === true,
+      independentlyConfirmed: observation?.verification?.independentlyConfirmed === true,
+      confirmationSource: stringValue(observation?.verification?.confirmationSource, 160)
+    },
+    observedAt: occurredAt
+  };
+}
+
 /**
  * Create an initialized state that cannot become active until `run_started` is accepted.
  * @param {object} options Run identity and original user request.
@@ -115,6 +163,12 @@ function createInitialAgentState(options = {}) {
       cancelled: 0,
       interrupted: 0,
       unknown: 0
+    },
+    recentObservations: [],
+    observationIds: [],
+    observationCounts: {
+      execution: { executed: 0, denied: 0, skipped: 0, cancelled: 0 },
+      outcome: { succeeded: 0, partial: 0, failed: 0, "no-op": 0, unknown: 0 }
     },
     pendingInteractions: [],
     interactions: [],
@@ -170,9 +224,21 @@ function finishAction(state, payload, occurredAt) {
     status: TERMINAL_ACTION_STATUSES.has(payload.status) ? payload.status : "unknown",
     summary: stringValue(payload.summary),
     error: stringValue(payload.error),
+    observationId: stringValue(payload.observationId, 200),
     endedAt: occurredAt,
     terminalReason: payload.terminalReason ? stringValue(payload.terminalReason) : null
   });
+  return "";
+}
+
+function recordObservation(state, payload, occurredAt) {
+  const observation = normalizeObservation(payload.observation, occurredAt);
+  if (!observation.observationId || !observation.tool) return "invalid-observation";
+  if (state.observationIds.includes(observation.observationId)) return "duplicate-observation";
+  state.observationIds = [...state.observationIds, observation.observationId].slice(-MAX_OBSERVATION_IDS);
+  state.recentObservations = [...state.recentObservations, observation].slice(-MAX_RECENT_OBSERVATIONS);
+  state.observationCounts.execution[observation.executionStatus] += 1;
+  state.observationCounts.outcome[observation.outcome] += 1;
   return "";
 }
 
@@ -278,6 +344,8 @@ function applyTransition(next, event) {
     }
     case "action_finished":
       return finishAction(next, payload, event.occurredAt);
+    case "observation_recorded":
+      return recordObservation(next, payload, event.occurredAt);
     case "approval_requested":
       return requestInteraction(next, payload, "approval", event.occurredAt);
     case "approval_resolved":

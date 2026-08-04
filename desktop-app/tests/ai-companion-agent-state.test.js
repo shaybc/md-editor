@@ -155,6 +155,8 @@ test("shadow callbacks preserve user responses and callback semantics", async ()
 test("terminal snapshot validation checks metadata and generation", () => {
   const shadow = createAgentStateShadow({ requestId: "snapshot-1", prompt: "work", executionGeneration: 3 });
   const snapshot = shadow.emitTerminalSnapshot(() => {}, "completed", { reason: "done" });
+  assert.equal(snapshot.schemaVersion, 2);
+  assert.equal(snapshot.state.schemaVersion, 2);
   assert.deepEqual(validateTerminalAgentStateSnapshot(snapshot, { executionGeneration: 3 }), { valid: true, errors: [] });
   const stale = structuredClone(snapshot);
   stale.executionGeneration = 2;

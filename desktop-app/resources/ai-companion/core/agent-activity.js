@@ -230,13 +230,21 @@ function createComparePayload(tool, args, beforeSnapshot, afterSnapshot) {
   };
 }
 
-function createActivityRun(root, tools) {
+/**
+ * Create request-scoped activity, mutation, and completion-evidence tracking.
+ * @param {string} root Workspace root for snapshots and file comparisons.
+ * @param {object} tools Canonical workspace tool implementation.
+ * @param {{observeToolEvidence?: Function}} [options] Optional fail-open evidence observer.
+ * @returns {object} Activity-run recording API.
+ */
+function createActivityRun(root, tools, options = {}) {
   const startedAt = Date.now();
   const beforeSnapshots = new Map();
   const changedFiles = new Map();
   const attemptedChanges = new Map();
   const blockedChanges = new Map();
   const completionEvidence = createCompletionEvidenceLedger();
+  const observedEvidenceIds = new Set();
   let completionAssessment = null;
 
   function rememberAttemptedChange(tool, args, errorMessage) {
@@ -424,7 +432,16 @@ function createActivityRun(root, tools) {
   }
 
   function recordToolEvidence(details) {
-    return completionEvidence.recordToolEvidence(details);
+    const entry = completionEvidence.recordToolEvidence(details);
+    if (entry?.id && !observedEvidenceIds.has(entry.id) && typeof options.observeToolEvidence === "function") {
+      observedEvidenceIds.add(entry.id);
+      try {
+        options.observeToolEvidence({ ...details, evidenceEntry: entry });
+      } catch (_error) {
+        // Observation is deliberately fail-open and cannot change the existing activity flow.
+      }
+    }
+    return entry;
   }
 
   function recordCandidateEvidence(candidate) {

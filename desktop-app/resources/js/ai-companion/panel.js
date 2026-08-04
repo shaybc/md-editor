@@ -4462,8 +4462,9 @@
       const errors = [];
       const state = snapshot?.state;
       const status = state?.lifecycle?.status;
-      if (snapshot?.schemaVersion !== 1 || snapshot?.snapshotKind !== "terminal") errors.push("invalid-snapshot-envelope");
-      if (!state || state.schemaVersion !== 1) errors.push("invalid-agent-state");
+      if (![1, 2].includes(snapshot?.schemaVersion) || snapshot?.snapshotKind !== "terminal") errors.push("invalid-snapshot-envelope");
+      if (!state || ![1, 2].includes(state.schemaVersion)) errors.push("invalid-agent-state");
+      if (snapshot?.schemaVersion !== state?.schemaVersion) errors.push("snapshot-state-schema-mismatch");
       if (!["completed", "failed", "cancelled"].includes(status)) errors.push("run-not-terminal");
       if ((state?.activeActions || []).length) errors.push("active-actions-remain");
       if ((state?.pendingInteractions || []).length) errors.push("pending-interactions-remain");

@@ -107,7 +107,7 @@ test("connection testing calls the provider testConnection method directly", () 
   assert.match(source, /return createProvider\(settings\)\.testConnection\(\{ signal: options\.signal, onDebug: options\.onDebug \}\)/);
 });
 
-test("shadow AgentState is imported only by Agent mode", () => {
+test("shadow AgentState and M3 context components remain Agent-only", () => {
   const modeRoot = path.join(__dirname, "..", "resources", "ai-companion", "modes");
   const agentSource = fs.readFileSync(path.join(modeRoot, "agent", "index.js"), "utf8");
   const protectedSources = [
@@ -117,5 +117,7 @@ test("shadow AgentState is imported only by Agent mode", () => {
     path.join(modeRoot, "git-summary", "index.js")
   ].map((filePath) => fs.readFileSync(filePath, "utf8"));
   assert.match(agentSource, /agent-state-shadow/);
-  for (const source of protectedSources) assert.doesNotMatch(source, /agent-state-shadow|agent-state-snapshot/);
+  for (const source of protectedSources) {
+    assert.doesNotMatch(source, /agent-state-shadow|agent-state-snapshot|agent-context-builder|agent-context-comparison|agent-observation-normalizer|agent-artifact-store/);
+  }
 });
