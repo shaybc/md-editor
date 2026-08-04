@@ -61,6 +61,80 @@ test.describe("desktop menus and settings UI", () => {
     await expect(page.locator(".settings-search-empty")).toBeHidden();
   });
 
+  test("file opening modes support defaults, drafts, bulk actions, and custom extensions", async ({ page }) => {
+    await openApp(page, {
+      localStorage: {
+        markdownViewerGlobalState: JSON.stringify({ startupBehavior: "empty", defaultOpenViewMode: "preview" })
+      }
+    });
+
+    await selectSettingsTab(page, "file-opening-modes");
+    const untitledMode = page.locator('[data-opening-mode-key="untitled"]');
+    const markdownMode = page.locator('[data-opening-mode-key="extension:md"]');
+    await expect(untitledMode).toHaveValue("editor");
+    await expect(markdownMode).toHaveValue("split");
+    await page.locator("#settings-file-opening-mode-search").fill("markdown");
+    await expect(page.locator(".settings-file-opening-mode-row:visible")).toHaveCount(4);
+    await page.locator("#settings-file-opening-mode-search").fill("");
+
+    await markdownMode.selectOption("preview");
+    await page.locator("#settings-modal-cancel").click();
+    await selectSettingsTab(page, "file-opening-modes");
+    await expect(page.locator('[data-opening-mode-key="extension:md"]')).toHaveValue("split");
+
+    await selectSettingsTab(page, "folder-view");
+    await page.locator("#settings-supported-text-extensions").fill("md markdown java foo");
+    await selectSettingsTab(page, "file-opening-modes");
+    const customMode = page.locator('[data-opening-mode-key="extension:foo"]');
+    await expect(customMode).toHaveValue("editor");
+    await page.locator("#settings-file-opening-mode-set-all").selectOption("preview");
+    await page.locator("#settings-file-opening-mode-apply-all").click();
+    await expect(page.locator('[data-opening-mode-key="extension:java"]')).toHaveValue("preview");
+    await page.locator("#settings-file-opening-mode-restore").click();
+    await expect(page.locator('[data-opening-mode-key="untitled"]')).toHaveValue("editor");
+    await expect(page.locator('[data-opening-mode-key="extension:md"]')).toHaveValue("split");
+    await expect(page.locator('[data-opening-mode-key="extension:html"]')).toHaveValue("split");
+    await page.locator('[data-opening-mode-key="untitled"]').selectOption("preview");
+    await page.locator('[data-opening-mode-key="extension:md"]').selectOption("editor");
+    await page.locator('[data-opening-mode-key="extension:foo"]').selectOption("preview");
+    await page.locator("#settings-modal-save").click();
+    await expect(page.locator("#settings-modal")).toBeHidden();
+
+    await expect.poll(() => page.evaluate(() => {
+      const state = JSON.parse(localStorage.getItem("markdownViewerGlobalState") || "{}");
+      return state.fileOpeningModes;
+    })).toEqual({
+      version: 1,
+      modes: { untitled: "preview", "extension:md": "editor", "extension:foo": "preview" }
+    });
+
+    await page.waitForTimeout(250);
+    await page.reload();
+    await expect(page.locator(".content-container")).toBeVisible();
+    await selectSettingsTab(page, "file-opening-modes");
+    await expect(page.locator('[data-opening-mode-key="untitled"]')).toHaveValue("preview");
+    await expect(page.locator('[data-opening-mode-key="extension:md"]')).toHaveValue("editor");
+    await expect(page.locator('[data-opening-mode-key="extension:foo"]')).toHaveValue("preview");
+    await page.locator("#settings-modal-cancel").click();
+
+    const openedModes = await page.evaluate(() => {
+      const tabs = window.markdownViewerApp.modules.tabs;
+      const untitled = tabs.newTab("", "Untitled preference check");
+      const markdown = tabs.openNewUnsavedFileInTab("notes.md");
+      const custom = tabs.openNewUnsavedFileInTab("notes.foo");
+      const java = tabs.openNewUnsavedFileInTab("Example.java");
+      const html = tabs.openNewUnsavedFileInTab("index.html");
+      return {
+        untitled: untitled?.viewMode,
+        markdown: markdown?.viewMode,
+        custom: custom?.viewMode,
+        java: java?.viewMode,
+        html: html?.viewMode
+      };
+    });
+    expect(openedModes).toEqual({ untitled: "preview", markdown: "editor", custom: "preview", java: "editor", html: "split" });
+  });
+
   test("side rail bar style saves and restores spacious labeled buttons", async ({ page }) => {
     await openApp(page, { localStorage: { markdownViewerGlobalState: JSON.stringify({ startupBehavior: "empty" }) } });
     await selectSettingsTab(page, "interface");

@@ -3,16 +3,16 @@
 
   function registerMarkdownViewerLanguageRegistry(app) {
     const specialNameEntries = [
-      { pattern: /(^|[\\/])pom\.xml$/i, id: "maven" },
-      { pattern: /(^|[\\/])dockerfile(\.[^\\/]+)?$/i, id: "dockerfile" },
-      { pattern: /(^|[\\/])makefile$/i, id: "makefile" },
-      { pattern: /(^|[\\/])rakefile$/i, id: "ruby" },
-      { pattern: /(^|[\\/])gemfile$/i, id: "ruby" },
-      { pattern: /(^|[\\/])license$/i, id: "text" },
-      { pattern: /(^|[\\/])readme$/i, id: "markdown" },
-      { pattern: /(^|[\\/])changelog$/i, id: "markdown" },
-      { pattern: /(^|[\\/])authors$/i, id: "text" },
-      { pattern: /(^|[\\/])contributors$/i, id: "text" }
+      { pattern: /(^|[\\/])pom\.xml$/i, id: "maven", openingModeKey: "extension:pom.xml", openingModeLabel: "pom.xml" },
+      { pattern: /(^|[\\/])dockerfile(\.[^\\/]+)?$/i, id: "dockerfile", openingModeKey: "special:dockerfile", openingModeLabel: "Dockerfile / Dockerfile.*" },
+      { pattern: /(^|[\\/])makefile$/i, id: "makefile", openingModeKey: "special:makefile", openingModeLabel: "Makefile" },
+      { pattern: /(^|[\\/])rakefile$/i, id: "ruby", openingModeKey: "special:rakefile", openingModeLabel: "Rakefile" },
+      { pattern: /(^|[\\/])gemfile$/i, id: "ruby", openingModeKey: "special:gemfile", openingModeLabel: "Gemfile" },
+      { pattern: /(^|[\\/])license$/i, id: "text", openingModeKey: "special:license", openingModeLabel: "LICENSE" },
+      { pattern: /(^|[\\/])readme$/i, id: "markdown", openingModeKey: "special:readme", openingModeLabel: "README" },
+      { pattern: /(^|[\\/])changelog$/i, id: "markdown", openingModeKey: "special:changelog", openingModeLabel: "CHANGELOG" },
+      { pattern: /(^|[\\/])authors$/i, id: "text", openingModeKey: "special:authors", openingModeLabel: "AUTHORS" },
+      { pattern: /(^|[\\/])contributors$/i, id: "text", openingModeKey: "special:contributors", openingModeLabel: "CONTRIBUTORS" }
     ];
 
     const languages = [
@@ -97,6 +97,93 @@
       return match ? languagesById.get(match.id) || null : null;
     }
 
+    function getDefaultOpeningMode(key) {
+      return key === "extension:md"
+        || key === "extension:markdown"
+        || key === "extension:html"
+        || key === "special:readme"
+        || key === "special:changelog"
+        ? "split"
+        : "editor";
+    }
+
+    function createOpeningModeType(key, label, languageLabel) {
+      return Object.freeze({
+        key,
+        label,
+        languageLabel: languageLabel || "Text",
+        defaultMode: getDefaultOpeningMode(key)
+      });
+    }
+
+    /**
+     * Classify a newly opened source into its configurable opening-mode type.
+     * @param {object|null} sourceFile - Source descriptor containing a path or file name.
+     * @returns {object} Stable preference key and display metadata for the source type.
+     */
+    function classifyOpeningModeSource(sourceFile) {
+      if (!sourceFile) return createOpeningModeType("untitled", "Untitled / new document", "New file");
+      const path = sourceFile.path || sourceFile.fullPath || sourceFile.name || sourceFile.file?.name || sourceFile.handle?.name || "";
+      if (!path) return createOpeningModeType("untitled", "Untitled / new document", "New file");
+
+      const special = specialNameEntries.find(function(candidate) {
+        return candidate.pattern.test(String(path));
+      });
+      if (special) {
+        return createOpeningModeType(
+          special.openingModeKey,
+          special.openingModeLabel,
+          languagesById.get(special.id)?.label || "Text"
+        );
+      }
+
+      const extension = getFileExtension(path);
+      if (extension) {
+        const language = extension === "gradle.kts"
+          ? languagesById.get("kotlin")
+          : languagesByExtension.get(extension);
+        return createOpeningModeType(`extension:${extension}`, `.${extension}`, language?.label || "Custom text");
+      }
+      return createOpeningModeType("other", "Extensionless / other text", "Text");
+    }
+
+    /**
+     * List every built-in and currently configured source type shown in opening-mode settings.
+     * @param {string[]|string} additionalExtensions - Custom supported extensions to include.
+     * @returns {object[]} Ordered opening-mode definitions.
+     */
+    function getOpeningModeFileTypes(additionalExtensions) {
+      const definitions = [createOpeningModeType("untitled", "Untitled / new document", "New file")];
+      const seenKeys = new Set(["untitled"]);
+
+      specialNameEntries.forEach(function(entry) {
+        if (seenKeys.has(entry.openingModeKey) || entry.openingModeKey.startsWith("extension:")) return;
+        seenKeys.add(entry.openingModeKey);
+        definitions.push(createOpeningModeType(entry.openingModeKey, entry.openingModeLabel, languagesById.get(entry.id)?.label));
+      });
+
+      const extensions = new Set(defaultSupportedTextExtensions);
+      normalizeSupportedTextExtensions(additionalExtensions).forEach(function(extension) {
+        extensions.add(extension);
+      });
+      extensions.add("pom.xml");
+      extensions.add("gradle.kts");
+      Array.from(extensions).sort().forEach(function(extension) {
+        const key = `extension:${extension}`;
+        if (seenKeys.has(key)) return;
+        seenKeys.add(key);
+        const language = extension === "pom.xml"
+          ? languagesById.get("maven")
+          : extension === "gradle.kts"
+            ? languagesById.get("kotlin")
+            : languagesByExtension.get(extension);
+        definitions.push(createOpeningModeType(key, `.${extension}`, language?.label || "Custom text"));
+      });
+
+      definitions.push(createOpeningModeType("other", "Extensionless / other text", "Text"));
+      return definitions;
+    }
+
     function resolveByShebang(content) {
       const firstLine = String(content || "").split(/\r?\n/, 1)[0] || "";
       if (!firstLine.startsWith("#!")) return null;
@@ -162,11 +249,13 @@
       getFileExtension,
       getFileName,
       getDefaultSupportedTextExtensions,
+      getOpeningModeFileTypes,
       getSupportedTextExtensions,
       isSupportedLanguagePath,
       normalizeSupportedTextExtensions,
       resolveLanguageForPath,
       resolveByShebang,
+      classifyOpeningModeSource,
       setSupportedTextExtensions,
       languages: languages.map(function(language) { return languagesById.get(language.id); })
     };

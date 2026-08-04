@@ -21,7 +21,7 @@ test.describe("desktop editor rendering UI", () => {
     const folderPath = await createWorkspaceTree({ "preview.md": "# Preview Mode\n\nRendered text." });
 
     try {
-      await openApp(page, { localStorage: { markdownViewerGlobalState: JSON.stringify({ startupBehavior: "untitled", defaultOpenViewMode: "preview" }) } });
+      await openApp(page, { localStorage: { markdownViewerGlobalState: JSON.stringify({ startupBehavior: "untitled", fileOpeningModes: { version: 1, modes: { "extension:md": "preview" } } }) } });
       await openDesktopFolder(page, folderPath);
       await page.locator(".folder-tree-file[data-path='preview.md']").click();
 

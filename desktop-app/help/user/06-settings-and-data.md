@@ -16,13 +16,16 @@ Open <kbd>Actions</kbd> -> <kbd>Settings...</kbd>, then choose <kbd>Interface</k
 
 ![Folder View settings](../img/settings-folder-view.png)
 
-Interface settings affect startup, workspace restoration, folder behavior, editor sizing, and visible UI surfaces. Folder View settings focus on lazy-loaded folder navigation, unsupported-file visibility, sorting, filtering, and tree behavior.
+Interface settings affect startup, workspace restoration, file opening modes, folder behavior, editor sizing, and visible UI surfaces. Folder View settings focus on lazy-loaded folder navigation, unsupported-file visibility, sorting, filtering, and tree behavior.
+
+Choose <kbd>Interface</kbd> -> <kbd>File Opening Modes</kbd> to select Editor, Split, or Preview for each supported extension and special filename. Untitled files open in Editor by default; Markdown extensions, HTML files, README, and CHANGELOG open in Split; other supported types open in Editor. Search narrows the list, <kbd>Set all</kbd> applies one mode to every listed type, and <kbd>Restore defaults</kbd> restores those built-in choices. Custom extensions added in Folder View appear in this list. Saved changes affect files opened afterward and do not change existing tabs.
 
 Common decisions:
 
 | Setting Area | Business Benefit |
 | --- | --- |
 | Startup behavior | Start exactly where you left off, with a blank document, or with an empty workspace depending on your workflow. |
+| File opening modes | Choose an Editor, Split, or Preview default independently for each supported file type. |
 | Restore last folder | Reopen long-running documentation or source-analysis projects automatically. |
 | Folder lazy loading | Open folders quickly by showing top-level content first and loading nested content on demand. |
 | Sidebar/dropzone/status bar visibility | Keep the UI focused for writing or expanded for project navigation. |

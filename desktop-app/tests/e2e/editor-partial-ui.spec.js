@@ -21,7 +21,7 @@ test.describe("desktop editor exact migrated UI", () => {
   test("opens new documents in the configured default mode regardless of the current view mode", async ({ page }) => {
     await openApp(page, {
       localStorage: {
-        markdownViewerGlobalState: JSON.stringify({ startupBehavior: "untitled", defaultOpenViewMode: "editor" }),
+        markdownViewerGlobalState: JSON.stringify({ startupBehavior: "untitled", fileOpeningModes: { version: 1, modes: {} } }),
       },
     });
 
@@ -31,12 +31,9 @@ test.describe("desktop editor exact migrated UI", () => {
     await expect(page.locator(".view-mode-btn[data-mode='editor']")).toHaveAttribute("aria-pressed", "true");
     await expect(page.locator(".tab-view.active .editor-pane")).toBeVisible();
     await expect(page.locator(".tab-view.active .preview-pane")).not.toBeVisible();
-    await expect.poll(() => page.evaluate(() => {
-      const activeTabId = localStorage.getItem("markdownViewerActiveTab");
-      const storedTabs = JSON.parse(localStorage.getItem("markdownViewerTabs") || "[]");
-      const tabs = Array.isArray(storedTabs) ? storedTabs : (storedTabs.tabs || []);
-      return tabs.find((tab) => tab.id === activeTabId)?.viewMode;
-    })).toBe("editor");
+    await expect.poll(() => page.evaluate(() => (
+      window.markdownViewerApp.modules.tabs.getActiveTab()?.viewMode
+    ))).toBe("editor");
   });
 
   test("supports document keyboard shortcut for split-view sync scrolling", async ({ page }) => {

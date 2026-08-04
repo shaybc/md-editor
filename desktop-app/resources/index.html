@@ -37,6 +37,7 @@
     <link rel="stylesheet" href="/css/ui/tab-appearance.css">
     <link rel="stylesheet" href="/css/ui/foreground-wait-indicator.css">
     <link rel="stylesheet" href="/css/ui/background-processes.css">
+    <link rel="stylesheet" href="/css/ui/file-opening-mode-settings.css">
     <link rel="stylesheet" href="/css/editor/getter-setter-dialog.css">
     <link rel="stylesheet" href="/css/editor/to-string-dialog.css">
     <link rel="stylesheet" href="/css/editor/constructor-dialog.css">
@@ -1266,6 +1267,10 @@
                       <i class="bi bi-sliders" aria-hidden="true"></i>
                       <span>General</span>
                     </button>
+                    <button class="settings-tab-button settings-tab-child" type="button" data-settings-tab="file-opening-modes" data-settings-parent-tab-group="interface" aria-selected="false" tabindex="-1">
+                      <i class="bi bi-layout-split" aria-hidden="true"></i>
+                      <span>File Opening Modes</span>
+                    </button>
                     <button class="settings-tab-button settings-tab-child" type="button" data-settings-tab="keyboard-shortcuts" data-settings-parent-tab-group="interface" aria-selected="false" tabindex="-1">
                       <i class="bi bi-keyboard" aria-hidden="true"></i>
                       <span>Keyboard Shortcuts</span>
@@ -1667,6 +1672,40 @@
                 </div>
               </section>
 
+              <section id="settings-file-opening-modes-panel" class="settings-panel settings-file-opening-modes-panel" data-settings-panel="file-opening-modes" aria-labelledby="settings-file-opening-modes-title" hidden>
+                <div class="settings-panel-heading">
+                  <span class="settings-panel-icon"><i class="bi bi-layout-split" aria-hidden="true"></i></span>
+                  <div>
+                    <h3 id="settings-file-opening-modes-title" class="settings-panel-title">File Opening Modes</h3>
+                    <p class="settings-panel-description">Choose how each supported file type opens in new tabs. Existing tabs keep their current mode.</p>
+                  </div>
+                </div>
+                <div class="settings-file-opening-mode-toolbar">
+                  <label class="settings-file-opening-mode-search" for="settings-file-opening-mode-search">
+                    <i class="bi bi-search" aria-hidden="true"></i>
+                    <input id="settings-file-opening-mode-search" class="rename-modal-input" type="search" placeholder="Search file types..." autocomplete="off" />
+                  </label>
+                  <div class="settings-file-opening-mode-bulk">
+                    <label class="visually-hidden" for="settings-file-opening-mode-set-all">Mode for all file types</label>
+                    <select id="settings-file-opening-mode-set-all" class="rename-modal-input settings-select-input">
+                      <option value="editor">Editor</option>
+                      <option value="split">Split</option>
+                      <option value="preview">Preview</option>
+                    </select>
+                    <button id="settings-file-opening-mode-apply-all" class="reset-modal-btn settings-secondary-action" type="button">Set all</button>
+                  </div>
+                  <button id="settings-file-opening-mode-restore" class="reset-modal-btn settings-secondary-action" type="button">Restore defaults</button>
+                </div>
+                <div class="settings-file-opening-mode-table" role="table" aria-label="File opening modes">
+                  <div class="settings-file-opening-mode-header" role="row">
+                    <span role="columnheader">File type</span>
+                    <span role="columnheader">Opening mode</span>
+                  </div>
+                  <div id="settings-file-opening-mode-rows" role="rowgroup"></div>
+                  <p id="settings-file-opening-mode-empty" class="settings-panel-description settings-file-opening-mode-empty" hidden>No file types match this search.</p>
+                </div>
+              </section>
+
               <section class="settings-panel settings-keyboard-shortcuts-panel" data-settings-panel="keyboard-shortcuts" aria-labelledby="settings-keyboard-shortcuts-title" hidden>
                 <div class="settings-panel-heading settings-keyboard-shortcuts-heading">
                   <span class="settings-panel-icon"><i class="bi bi-keyboard" aria-hidden="true"></i></span>
@@ -1873,14 +1912,6 @@
                   </div>
                 </div>
                 <div class="settings-subsection">
-                  <label class="settings-field" for="settings-default-open-view-mode">
-                    <span class="settings-field-label">Default open mode</span>
-                    <select id="settings-default-open-view-mode" class="rename-modal-input settings-select-input">
-                      <option value="split">Split mode</option>
-                      <option value="editor">Editor mode</option>
-                      <option value="preview">Preview mode</option>
-                    </select>
-                  </label>
                   <fieldset class="settings-field settings-radio-group">
                     <legend class="settings-field-label">External file changes</legend>
                     <label class="settings-radio-option">
@@ -4867,6 +4898,7 @@
     <script src="js/sidebar/rail-preferences.js"></script>
     <script src="js/ui/layout-preferences.js"></script>
     <script src="js/ui/settings-screen.js"></script>
+    <script src="js/ui/file-opening-mode-settings.js"></script>
     <script src="js/ui/keyboard-shortcuts-settings.js"></script>
     <script src="js/ui/settings-transfer.js"></script>
     <script src="js/ui/application-menu.js"></script>

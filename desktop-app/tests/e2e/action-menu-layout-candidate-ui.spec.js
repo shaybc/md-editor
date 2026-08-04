@@ -181,8 +181,10 @@ test("settings menu updates graph auto-clustering threshold", async ({ page }) =
   await expect(page.locator("#settings-folder-tree-lazy-threshold")).toHaveCount(0);
   await expect(page.locator("#settings-folder-tree-expand-limit-threshold")).toHaveValue("1000");
   await expect(page.locator("#settings-folder-tree-expand-limit-depth")).toHaveValue("5");
+  await selectSettingsTab(page, "file-opening-modes");
+  await expect(page.locator('[data-opening-mode-key="untitled"]')).toHaveValue("editor");
+  await expect(page.locator('[data-opening-mode-key="extension:md"]')).toHaveValue("split");
   await selectEditorSettingsTab(page);
-  await expect(page.locator("#settings-default-open-view-mode")).toHaveValue("split");
   await expect(page.locator("#settings-editor-font-family")).toHaveValue("mono");
   await expect(page.locator("#settings-editor-font-size")).toHaveValue("14");
 
@@ -215,8 +217,10 @@ test("settings menu updates graph auto-clustering threshold", async ({ page }) =
   });
   await page.locator("#settings-folder-tree-expand-limit-threshold").fill("4321");
   await page.locator("#settings-folder-tree-expand-limit-depth").fill("7");
+  await selectSettingsTab(page, "file-opening-modes");
+  await page.locator("#settings-file-opening-mode-set-all").selectOption("preview");
+  await page.locator("#settings-file-opening-mode-apply-all").click();
   await selectEditorSettingsTab(page);
-  await page.locator("#settings-default-open-view-mode").selectOption("preview");
   await page.locator("#settings-editor-font-family").selectOption("serif");
   await page.locator("#settings-editor-font-size").fill("18");
   await selectSettingsTab(page, "debug");
@@ -249,7 +253,8 @@ test("settings menu updates graph auto-clustering threshold", async ({ page }) =
       contextMenuTooltipDelayMs: state.contextMenuTooltipDelayMs,
       startupBehavior: state.startupBehavior,
       restoreLastFolderOnStartup: state.restoreLastFolderOnStartup,
-      defaultOpenViewMode: state.defaultOpenViewMode,
+      untitledOpenMode: state.fileOpeningModes?.modes?.untitled,
+      markdownOpenMode: state.fileOpeningModes?.modes?.["extension:md"],
       hasFolderTreeDefaultExpanded: Object.prototype.hasOwnProperty.call(state, "folderTreeDefaultExpanded"),
       hasFolderTreeLazyThreshold: Object.prototype.hasOwnProperty.call(state, "folderTreeLazyThreshold"),
       folderTreeExpandLimitThreshold: state.folderTreeExpandLimitThreshold,
@@ -282,7 +287,8 @@ test("settings menu updates graph auto-clustering threshold", async ({ page }) =
     contextMenuTooltipDelayMs: 900,
     startupBehavior: "untitled",
     restoreLastFolderOnStartup: false,
-    defaultOpenViewMode: "preview",
+    untitledOpenMode: "preview",
+    markdownOpenMode: "preview",
     hasFolderTreeDefaultExpanded: false,
     hasFolderTreeLazyThreshold: false,
     folderTreeExpandLimitThreshold: 4321,
@@ -324,8 +330,10 @@ test("settings menu updates graph auto-clustering threshold", async ({ page }) =
   await expect(page.locator("#settings-max-open-tabs")).toHaveValue("60");
   await expect(page.locator("#settings-max-recent-files")).toHaveValue("7");
   await expect(page.locator("#settings-max-recent-folders")).toHaveValue("5");
+  await selectSettingsTab(page, "file-opening-modes");
+  await expect(page.locator('[data-opening-mode-key="untitled"]')).toHaveValue("preview");
+  await expect(page.locator('[data-opening-mode-key="extension:md"]')).toHaveValue("preview");
   await selectEditorSettingsTab(page);
-  await expect(page.locator("#settings-default-open-view-mode")).toHaveValue("preview");
   await expect(page.locator("#settings-editor-font-family")).toHaveValue("serif");
   await expect(page.locator("#settings-editor-font-size")).toHaveValue("18");
   await expect.poll(() => page.evaluate(() => {

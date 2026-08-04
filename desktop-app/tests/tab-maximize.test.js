@@ -158,6 +158,7 @@ function createTabsHarness(options = {}) {
   }];
   let activeTabId = options.activeTabId || tabs[0]?.id || null;
   const sidebarCalls = [];
+  const activeTabChanges = [];
   const bottomPanelCalls = [];
   const bottomPanel = {
     SEARCH_RESULTS_TAB_ID: "search-results",
@@ -221,6 +222,7 @@ function createTabsHarness(options = {}) {
     markdownEditor: { value: "# Example", disabled: false, focus() {}, setAttribute() {} },
     contentContainer: new ElementStub("div"),
     currentViewMode: "split",
+    graphRenderCache: new Map(),
     appDebugLog: null,
     suspendActiveGraphRender() {},
     get activeTabId() { return activeTabId; },
@@ -263,12 +265,13 @@ function createTabsHarness(options = {}) {
     isTextDocumentPath: () => true,
     isSupportedFolderTreeDocumentPath: () => true,
     setSidebarVisible: (...args) => sidebarCalls.push(args),
+    onActiveTabChanged: (tab) => activeTabChanges.push(tab?.id || null),
     hideSidebarContextMenus() {},
     closeMobileMenu() {}
   };
   const api = context.window.registerMarkdownViewerTabs(app, deps);
   api.renderTabBar(tabs, activeTabId);
-  return { api, tabs, tabList, sidebarCalls, bottomPanelCalls, bottomPanel, aiCompanionCalls, body, getActiveTabId: () => activeTabId };
+  return { api, tabs, tabList, sidebarCalls, activeTabChanges, bottomPanelCalls, bottomPanel, aiCompanionCalls, body, getActiveTabId: () => activeTabId };
 }
 
 test("API Client tabs render with a distinct tab icon", () => {
@@ -375,6 +378,22 @@ test("plain tab click clears multi-selection and activates the clicked tab", () 
 
   assert.equal(harness.getActiveTabId(), "tab-2");
   assert.deepEqual(visibleTabItems(harness).map((tab) => tab.hasClass("selected")), [false, false, false]);
+});
+
+test("closing the active tab reports the replacement tab", async () => {
+  const harness = multiTabHarness();
+
+  await harness.api.closeTab("tab-1");
+
+  assert.deepEqual(harness.activeTabChanges, ["tab-2"]);
+});
+
+test("closing the final tab reports that no active tab remains", async () => {
+  const harness = createTabsHarness();
+
+  await harness.api.closeTab("tab-1");
+
+  assert.deepEqual(harness.activeTabChanges, [null]);
 });
 
 test("right-clicking an unselected tab clears the previous multi-selection", () => {

@@ -4220,7 +4220,6 @@ async function startMarkdownViewer() {
   const settingsShowGitFolderInput = document.getElementById("settings-show-git-folder");
   const settingsShowMdEditorFolderInput = document.getElementById("settings-show-md-editor-folder");
   const settingsHiddenFolderNamesInput = document.getElementById("settings-hidden-folder-names");
-  const settingsDefaultOpenViewModeInput = document.getElementById("settings-default-open-view-mode");
   const settingsFolderTreeExpandLimitThresholdInput = document.getElementById("settings-folder-tree-expand-limit-threshold");
   const settingsFolderTreeExpandLimitDepthInput = document.getElementById("settings-folder-tree-expand-limit-depth");
   const settingsExternalFileChangeBehaviorInputs = document.querySelectorAll("input[name='settings-external-file-change-behavior']");
@@ -4464,7 +4463,6 @@ async function startMarkdownViewer() {
     "settings-tab-style": "Choose the visual style used by outer document, sidebar, and bottom-panel tabs.",
     "settings-supported-text-extensions": "Edit the file extensions treated as supported text files.",
     "settings-startup-behavior": "Choose what MD-Editor opens when it starts.",
-    "settings-default-open-view-mode": "Choose how Markdown and previewable text files open by default.",
     "settings-folder-tree-expand-limit-threshold": "Set the folder count where Expand All limits itself to a shallow tree expansion.",
     "settings-folder-tree-expand-limit-depth": "Set how many folder levels Expand All opens for large trees.",
     "settings-editor-font-family": "Choose the editor font family.",
@@ -4770,14 +4768,12 @@ async function startMarkdownViewer() {
   const DEFAULT_DEBUG_MAX_LOG_SIZE_MB = 10;
   const DEFAULT_DEBUG_MAX_LOG_FILES = 10;
   const DEFAULT_STARTUP_BEHAVIOR = "last-tabs";
-  const DEFAULT_OPEN_VIEW_MODE = "split";
   const DEFAULT_EXTERNAL_FILE_CHANGE_BEHAVIOR = "prompt";
   const DEFAULT_EDITOR_FONT_FAMILY = "mono";
   const DEFAULT_EDITOR_FONT_SIZE = 14;
   const DEFAULT_SPACES_PER_INDENT_LEVEL = 4;
   const DEFAULT_TABS_PER_INDENT_LEVEL = 1;
   const STARTUP_BEHAVIORS = new Set(["last-tabs", "welcome", "untitled", "empty"]);
-  const DEFAULT_OPEN_VIEW_MODES = new Set(["editor", "split", "preview"]);
   const EXTERNAL_FILE_CHANGE_BEHAVIORS = new Set(["ignore", "prompt", "auto-refresh"]);
   const DEFAULT_GRADLE_MODE = "auto";
   const DEFAULT_GRADLE_METADATA_FAILURE = "parse-only";
@@ -4968,7 +4964,7 @@ async function startMarkdownViewer() {
     debugMaxLogSizeMb: DEFAULT_DEBUG_MAX_LOG_SIZE_MB,
     debugCategories: DEFAULT_DEBUG_CATEGORIES,
     debugWriteToFile: false,
-    defaultOpenViewMode: DEFAULT_OPEN_VIEW_MODE,
+    fileOpeningModes: { version: 1, modes: {} },
     documentWordAutocompleteEnabled: true,
     editorSnippetPreferences: { version: 1, overrides: {}, custom: {} },
     keyboardShortcutOverrides: {},
@@ -5105,6 +5101,11 @@ async function startMarkdownViewer() {
   });
   const loadGlobalState = themePreferences.loadGlobalState;
   const saveGlobalState = themePreferences.saveGlobalState;
+  const fileOpeningModeSettings = window.registerMarkdownViewerFileOpeningModeSettings(app, {
+    languageRegistry,
+    loadGlobalState,
+    supportedExtensionsInput: settingsSupportedTextExtensionsInput
+  });
   const getDefaultGlobalState = themePreferences.getDefaultGlobalState;
   const sidebarRailPreferences = window.registerMarkdownViewerSidebarRailPreferences(app, {
     defaultOrder: DEFAULT_SIDEBAR_RAIL_ICON_ORDER,
@@ -5694,15 +5695,6 @@ async function startMarkdownViewer() {
     if (selectedId) return selectedId;
     const first = getJavaConverterGradleInstallations()[0];
     return first?.id || "";
-  }
-
-  function normalizeDefaultOpenViewMode(value) {
-    const mode = String(value || "").trim();
-    return DEFAULT_OPEN_VIEW_MODES.has(mode) ? mode : DEFAULT_OPEN_VIEW_MODE;
-  }
-
-  function getDefaultOpenViewMode() {
-    return normalizeDefaultOpenViewMode(loadGlobalState().defaultOpenViewMode);
   }
 
   function normalizeExternalFileChangeBehavior(value) {
@@ -8165,7 +8157,7 @@ Markdown content is processed client-side in your browser and sanitized before p
     loadGlobalState,
     saveGlobalState,
     getStartupBehavior,
-    getDefaultOpenViewMode,
+    resolveFileOpeningMode: fileOpeningModeSettings.resolveModeForSource,
     get setGraphViewMode() { return setGraphViewMode; },
     get renderGraphView() { return renderGraphView; },
     applySyntaxHighlightColorsForActiveLanguage,
@@ -9061,9 +9053,6 @@ Markdown content is processed client-side in your browser and sanitized before p
     if (settingsHiddenFolderNamesInput) {
       settingsHiddenFolderNamesInput.value = getHiddenFolderNamesSetting();
     }
-    if (settingsDefaultOpenViewModeInput) {
-      settingsDefaultOpenViewModeInput.value = getDefaultOpenViewMode();
-    }
     if (settingsFolderTreeExpandLimitThresholdInput) {
       settingsFolderTreeExpandLimitThresholdInput.value = String(getFolderTreeExpandLimitThreshold());
     }
@@ -9211,6 +9200,7 @@ Markdown content is processed client-side in your browser and sanitized before p
     renderSyntaxColorSettings();
     keyboardShortcutsSettings?.open?.(loadGlobalState().keyboardShortcutOverrides);
     applySettingsControlTooltips();
+    fileOpeningModeSettings.open();
     settingsModal.style.display = "flex";
     if (settingsScreen) {
       settingsScreen.open();
@@ -9229,6 +9219,7 @@ Markdown content is processed client-side in your browser and sanitized before p
     appThemeDraft = null;
     settingsSnippetPreferencesDraft = null;
     keyboardShortcutsSettings?.discard?.();
+    fileOpeningModeSettings.discard();
     restoreSavedAppTheme();
     applySyntaxHighlightColorsForActiveLanguage();
     renderEditorSyntaxHighlights();
@@ -10981,7 +10972,7 @@ Markdown content is processed client-side in your browser and sanitized before p
     const showMdEditorProjectFolder = settingsShowMdEditorFolderInput?.checked === true;
     const previousHiddenFolderNames = getHiddenFolderNamesSetting();
     const hiddenFolderNames = normalizeHiddenFolderNames(settingsHiddenFolderNamesInput?.value).join(", ");
-    const defaultOpenViewMode = normalizeDefaultOpenViewMode(settingsDefaultOpenViewModeInput?.value);
+    const fileOpeningModes = fileOpeningModeSettings.getDraft();
     const selectedExternalFileChangeBehaviorInput = Array.from(settingsExternalFileChangeBehaviorInputs).find((input) => input.checked);
     const externalFileChangeBehavior = normalizeExternalFileChangeBehavior(selectedExternalFileChangeBehaviorInput?.value);
     const editorFontFamily = normalizeEditorFontFamily(settingsEditorFontFamilyInput?.value);
@@ -11202,7 +11193,7 @@ Markdown content is processed client-side in your browser and sanitized before p
         appHeaderSpacing,
         tabStyle,
         startupBehavior,
-        defaultOpenViewMode,
+        fileOpeningModes,
         folderTreeExpandLimitThreshold: normalizeFolderTreeExpandLimitThreshold(folderTreeExpandLimitThreshold),
         folderTreeExpandLimitDepth: normalizeFolderTreeExpandLimitDepth(folderTreeExpandLimitDepth),
         externalFileChangeBehavior,
@@ -11238,6 +11229,7 @@ Markdown content is processed client-side in your browser and sanitized before p
         syntaxHighlightColors,
         keyboardShortcutOverrides: keyboardShortcutsSettings?.getDraft?.() || {}
       });
+      fileOpeningModeSettings.commit(fileOpeningModes);
       jdtProxyClient?.configure?.();
       if (previousKotlinAutoStart !== languageServerAutoStartPreferences.kotlin) {
         await kotlinWorkspaceCoordinator?.setEnabled?.(languageServerAutoStartPreferences.kotlin);
@@ -11249,7 +11241,7 @@ Markdown content is processed client-side in your browser and sanitized before p
         restoreLastFolderOnStartup,
         showGitProjectFolder,
         showMdEditorProjectFolder,
-        defaultOpenViewMode,
+        fileOpeningModeOverrides: Object.keys(fileOpeningModes.modes).length,
         folderTreeExpandLimitThreshold: normalizeFolderTreeExpandLimitThreshold(folderTreeExpandLimitThreshold),
         folderTreeExpandLimitDepth: normalizeFolderTreeExpandLimitDepth(folderTreeExpandLimitDepth),
         editorFontFamily,

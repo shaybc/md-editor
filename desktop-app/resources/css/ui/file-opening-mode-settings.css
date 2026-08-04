@@ -1,0 +1,103 @@
+/* File opening mode settings screen. */
+.settings-file-opening-modes-panel {
+  min-width: 0;
+}
+
+.settings-file-opening-mode-toolbar {
+  display: grid;
+  grid-template-columns: minmax(220px, 320px) max-content max-content;
+  gap: 10px;
+  align-items: end;
+  margin-bottom: 16px;
+}
+
+.settings-file-opening-mode-search {
+  position: relative;
+}
+
+.settings-file-opening-mode-search i {
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+
+.settings-file-opening-mode-search input {
+  width: 100%;
+  padding-left: 36px;
+}
+
+.settings-file-opening-mode-bulk {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.settings-file-opening-mode-bulk button {
+  white-space: nowrap;
+}
+
+.settings-file-opening-mode-table {
+  border: 1px solid var(--border-color, #30363d);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.settings-file-opening-mode-header,
+.settings-file-opening-mode-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 180px;
+  gap: 16px;
+  align-items: center;
+  padding: 10px 14px;
+}
+
+.settings-file-opening-mode-header {
+  background: var(--secondary-bg, #161b22);
+  color: var(--text-muted, #8b949e);
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.settings-file-opening-mode-row + .settings-file-opening-mode-row {
+  border-top: 1px solid var(--border-color, #30363d);
+}
+
+.settings-file-opening-mode-identity {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.settings-file-opening-mode-identity strong,
+.settings-file-opening-mode-identity small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.settings-file-opening-mode-identity small {
+  color: var(--text-muted, #8b949e);
+}
+
+.settings-file-opening-mode-select {
+  width: 100%;
+}
+
+.settings-file-opening-mode-empty {
+  margin: 16px;
+}
+
+@media (max-width: 720px) {
+  .settings-file-opening-mode-toolbar {
+    grid-template-columns: 1fr;
+  }
+
+  .settings-file-opening-mode-header,
+  .settings-file-opening-mode-row {
+    grid-template-columns: minmax(0, 1fr) 130px;
+  }
+}

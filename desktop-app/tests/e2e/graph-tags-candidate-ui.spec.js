@@ -794,7 +794,7 @@ test("clicking a tag in the tag dialog filters the folder tree", async ({ page }
     window.NL_VERSION = "5.0.0";
     window.NL_OS = "Windows";
     window.confirm = () => true;
-    localStorage.setItem("markdownViewerGlobalState", JSON.stringify({ startupBehavior: "untitled", defaultOpenViewMode: "editor" }));
+    localStorage.setItem("markdownViewerGlobalState", JSON.stringify({ startupBehavior: "untitled", fileOpeningModes: { version: 1, modes: {} } }));
     const files = new Map([
       ["C:/vault/tagged.md", "---\ntags: [project]\n---\n# Tagged"],
       ["C:/vault/docs/nested-tagged.md", "---\ntags: [project]\n---\n# Nested Tagged"],

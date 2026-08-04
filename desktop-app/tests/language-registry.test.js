@@ -89,3 +89,32 @@ test("language registry supports editable extension list", () => {
   assert.equal(registry.getSupportedTextExtensions().includes("foo"), true);
   assert.equal(registry.setSupportedTextExtensions("invalid!"), false);
 });
+
+test("language registry classifies configurable file opening mode types", () => {
+  const context = createContext();
+  vm.runInContext(readWebFile("js/languages/registry.js"), context);
+
+  const registry = context.window.registerMarkdownViewerLanguageRegistry(context.app);
+
+  assert.deepEqual(
+    JSON.parse(JSON.stringify(registry.classifyOpeningModeSource(null))),
+    { key: "untitled", label: "Untitled / new document", languageLabel: "New file", defaultMode: "editor" }
+  );
+  assert.equal(registry.classifyOpeningModeSource({ name: "notes.md" }).key, "extension:md");
+  assert.equal(registry.classifyOpeningModeSource({ name: "notes.md" }).defaultMode, "split");
+  assert.equal(registry.classifyOpeningModeSource({ name: "index.html" }).defaultMode, "split");
+  assert.equal(registry.classifyOpeningModeSource({ name: "App.java" }).defaultMode, "editor");
+  assert.equal(registry.classifyOpeningModeSource({ name: "README" }).key, "special:readme");
+  assert.equal(registry.classifyOpeningModeSource({ name: "CHANGELOG" }).defaultMode, "split");
+  assert.equal(registry.classifyOpeningModeSource({ name: "Dockerfile.dev" }).key, "special:dockerfile");
+  assert.equal(registry.classifyOpeningModeSource({ name: "pom.xml" }).key, "extension:pom.xml");
+  assert.equal(registry.classifyOpeningModeSource({ name: "build.gradle.kts" }).key, "extension:gradle.kts");
+  assert.equal(registry.classifyOpeningModeSource({ name: "LICENSE.custom" }).key, "extension:custom");
+  assert.equal(registry.classifyOpeningModeSource({ name: "NOTICE" }).key, "other");
+
+  const types = registry.getOpeningModeFileTypes("foo md");
+  assert.equal(types.some((type) => type.key === "extension:foo" && type.languageLabel === "Custom text"), true);
+  assert.equal(types.some((type) => type.key === "extension:js"), true);
+  assert.equal(types.some((type) => type.key === "special:license"), true);
+  assert.equal(types.find((type) => type.key === "extension:markdown")?.defaultMode, "split");
+});

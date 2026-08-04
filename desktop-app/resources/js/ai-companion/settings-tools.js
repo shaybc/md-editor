@@ -21,7 +21,7 @@
     editorFontFamily: { category: "editor", label: "Editor font family" },
     editorFontSize: { category: "editor", label: "Editor font size" },
     wordWrapEnabled: { category: "editor", label: "Word wrap" },
-    defaultOpenViewMode: { category: "editor", label: "Default open view mode" },
+    fileOpeningModes: { category: "interface", label: "File opening modes" },
     startupBehavior: { category: "folder-view", label: "Startup behavior" },
     restoreLastFolderOnStartup: { category: "folder-view", label: "Restore last folder on startup" },
     graphAutoClusterThreshold: { category: "graph", label: "Graph auto-clustering threshold" },

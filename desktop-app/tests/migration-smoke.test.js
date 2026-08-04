@@ -1247,7 +1247,6 @@ test("folder view settings can show the git project folder in the tree", () => {
 test("editor settings tabs are grouped under an expandable Editor parent", () => {
   const html = readWebFile("index.html");
   const editorSettingIds = [
-    "settings-default-open-view-mode",
     "settings-external-file-change-behavior",
     "settings-editor-font-family",
     "settings-editor-font-size",
@@ -1275,10 +1274,28 @@ test("editor settings tabs are grouped under an expandable Editor parent", () =>
   assert.ok(html.indexOf('data-settings-tab="folder-view"') < html.indexOf('data-settings-tab-group-toggle="editor"'));
   assert.ok(html.indexOf('data-settings-tab-group-toggle="editor"') < html.indexOf('data-settings-tab-group-toggle="ai"'));
   assert.match(html, /data-settings-tab-group-toggle="editor"[\s\S]*data-settings-tab="editor"[\s\S]*data-settings-tab="snippets"[\s\S]*data-settings-tab="language-servers"[\s\S]*data-settings-tab="syntax"/);
-  assert.match(html, /settings-editor-title[\s\S]*settings-default-open-view-mode[\s\S]*settings-external-file-change-behavior[\s\S]*settings-editor-font-family[\s\S]*settings-editor-font-size[\s\S]*settings-spaces-per-indent-level[\s\S]*settings-tabs-per-indent-level[\s\S]*settings-document-word-autocomplete[\s\S]*settings-language-autocomplete[\s\S]*settings-language-server-autocomplete[\s\S]*settings-snippet-autocomplete[\s\S]*settings-unclosed-bracket-highlight/);
+  assert.match(html, /settings-editor-title[\s\S]*settings-external-file-change-behavior[\s\S]*settings-editor-font-family[\s\S]*settings-editor-font-size[\s\S]*settings-spaces-per-indent-level[\s\S]*settings-tabs-per-indent-level[\s\S]*settings-document-word-autocomplete[\s\S]*settings-language-autocomplete[\s\S]*settings-language-server-autocomplete[\s\S]*settings-snippet-autocomplete[\s\S]*settings-unclosed-bracket-highlight/);
   editorSettingIds.forEach((settingId) => {
     assert.doesNotMatch(interfacePanel, new RegExp(settingId));
   });
+});
+
+test("file opening modes have their own Interface settings page", () => {
+  const html = readWebFile("index.html");
+  const legacyScript = readWebFile("script.js");
+  const settingsScript = readWebFile("js/ui/file-opening-mode-settings.js");
+
+  assert.match(html, /data-settings-tab="file-opening-modes"[^>]*data-settings-parent-tab-group="interface"/);
+  assert.match(html, /data-settings-panel="file-opening-modes"/);
+  assert.match(html, /id="settings-file-opening-mode-search"/);
+  assert.match(html, /id="settings-file-opening-mode-apply-all"/);
+  assert.match(html, /id="settings-file-opening-mode-restore"/);
+  assert.match(html, /src="js\/ui\/file-opening-mode-settings\.js"/);
+  assert.doesNotMatch(html, /settings-default-open-view-mode/);
+  assert.doesNotMatch(legacyScript, /defaultOpenViewMode|getDefaultOpenViewMode/);
+  assert.match(legacyScript, /fileOpeningModes: \{ version: 1, modes: \{\} \}/);
+  assert.match(settingsScript, /resolveModeForSource/);
+  assert.match(settingsScript, /supportedExtensionsInput\?\.addEventListener\("input", render\)/);
 });
 
 test("desktop folder scan always uses lazy top-level loading", () => {

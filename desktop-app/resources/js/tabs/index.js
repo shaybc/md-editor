@@ -2108,9 +2108,9 @@
 
   function getDefaultViewModeForOpenedFile(sourceFile) {
     if (!isPreviewableSourceFile(sourceFile)) return 'editor';
-    return typeof getDefaultOpenViewMode === "function"
-      ? getDefaultOpenViewMode()
-      : 'split';
+    return typeof resolveFileOpeningMode === "function"
+      ? resolveFileOpeningMode(sourceFile)
+      : (isMarkdownPath(sourceFile?.path || sourceFile?.name || "") ? 'split' : 'editor');
   }
 
   function createLargeFileTab(source, title, options = {}) {
@@ -3131,6 +3131,7 @@
       renderMarkdown();
       saveTabsToStorage(tabs);
       renderTabBar(tabs, activeTabId);
+      deps.onActiveTabChanged?.(null);
       return;
     } else if (activeTabId === tabId) {
       const newIdx = Math.max(0, idx - 1);
@@ -3145,6 +3146,7 @@
         updateActiveGraphStatusLine(newActiveTab);
         renderTabBar(tabs, activeTabId);
         syncFolderTreeSelectionToActiveTab();
+        deps.onActiveTabChanged?.(newActiveTab);
         if (activateReusableGraphRender(newActiveTab)) {
           saveTabsToStorage(tabs);
           return;
@@ -3160,10 +3162,12 @@
         if (typeof updateDocumentStats === "function") updateDocumentStats();
         renderTabBar(tabs, activeTabId);
         syncFolderTreeSelectionToActiveTab();
+        deps.onActiveTabChanged?.(newActiveTab);
         saveTabsToStorage(tabs);
         return;
       }
       activateEditableDocumentTab(newActiveTab);
+      deps.onActiveTabChanged?.(newActiveTab);
     }
     saveTabsToStorage(tabs);
     renderTabBar(tabs, activeTabId);
