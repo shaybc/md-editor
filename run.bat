@@ -10,6 +10,10 @@ if defined NEEDS_INSTALL (
     echo [setup] Installing desktop app dependencies...
     call npm install
     if errorlevel 1 exit /b %errorlevel%
+
+    echo [setup] Preparing desktop app binaries and tooling...
+    call npm run setup
+    if errorlevel 1 exit /b %errorlevel%
 )
 
 call npm run prod
