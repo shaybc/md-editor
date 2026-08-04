@@ -18,10 +18,10 @@
     const categories = new Map();
     const fileCategoryNodes = [];
     const hamburgerCategoryDividers = new Map();
-    let currentLayout = "hamburger";
+    let currentLayout = "full";
 
     function normalizeLayout(value) {
-      return value === "full" ? "full" : "hamburger";
+      return value === "hamburger" ? "hamburger" : "full";
     }
 
     function createDivider() {

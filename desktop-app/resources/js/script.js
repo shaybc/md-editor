@@ -5032,7 +5032,7 @@ async function startMarkdownViewer() {
     lastOpenFolderPath: "",
     restoreLastFolderOnStartup: true,
     desktopTerminalTabs: [],
-    menuLayout: "hamburger",
+    menuLayout: "full",
     startupBehavior: DEFAULT_STARTUP_BEHAVIOR,
     syncScrollingEnabled: true,
     tabsPerIndentLevel: DEFAULT_TABS_PER_INDENT_LEVEL,
@@ -9029,7 +9029,7 @@ Markdown content is processed client-side in your browser and sanitized before p
       settingsContextMenuTooltipDelayInput.value = String(getContextMenuTooltipDelayMs());
     }
     if (settingsMenuLayoutInput) {
-      settingsMenuLayoutInput.value = applicationMenu?.getLayout?.() || "hamburger";
+      settingsMenuLayoutInput.value = applicationMenu?.getLayout?.() || "full";
     }
     if (settingsAppHeaderSpacingInput) {
       settingsAppHeaderSpacingInput.value = getAppHeaderSpacing();
@@ -10962,7 +10962,7 @@ Markdown content is processed client-side in your browser and sanitized before p
     const debugMaxLogFiles = Number(settingsDebugMaxLogFilesInput?.value);
     const debugCategories = collectDebugCategorySettings();
     const startupBehavior = normalizeStartupBehavior(settingsStartupBehaviorInput?.value);
-    const menuLayout = applicationMenu?.normalizeLayout?.(settingsMenuLayoutInput?.value) || "hamburger";
+    const menuLayout = applicationMenu?.normalizeLayout?.(settingsMenuLayoutInput?.value) || "full";
     const appHeaderSpacing = normalizeAppHeaderSpacing(settingsAppHeaderSpacingInput?.value);
     const tabStyle = normalizeTabStyle(settingsTabStyleInput?.value);
     const sidebarRailStyle = normalizeSidebarRailStyle(settingsSidebarRailStyleInput?.value);

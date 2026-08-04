@@ -2,6 +2,14 @@ const { test, expect } = require("./desktop-fixture");
 const { openActionMenu, openApp, selectSettingsTab } = require("../helpers/desktop-ui");
 
 test.describe("application-wide desktop menu", () => {
+  test("full desktop menu is the default layout", async ({ page }) => {
+    await openApp(page);
+
+    await expect.poll(() => page.evaluate(() => window.markdownViewerApp.modules.applicationMenu.getLayout())).toBe("full");
+    await expect(page.locator("#desktopActionMenu")).toBeHidden();
+    await expect(page.locator("#desktop-application-menu")).toBeVisible();
+  });
+
   test("hamburger layout includes the New submenu and Project", async ({ page }) => {
     await openApp(page);
     await openActionMenu(page);
@@ -246,6 +254,8 @@ test.describe("application-wide desktop menu", () => {
 
     await selectSettingsTab(page, "interface");
     await page.locator("#settings-menu-layout").selectOption("hamburger");
+    await page.locator("#settings-modal-save").click();
+    await expect(page.locator("#settings-modal")).toBeHidden();
     await expect.poll(() => page.evaluate(() => window.markdownViewerApp.modules.applicationMenu.getLayout())).toBe("hamburger");
     await expect(page.locator("#desktopActionMenu")).toBeVisible();
     await expect(page.locator("#desktop-application-menu")).toBeHidden();

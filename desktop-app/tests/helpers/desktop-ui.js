@@ -95,6 +95,7 @@ async function selectViewMode(page, mode) {
 }
 
 async function openActionMenu(page) {
+  await page.evaluate(() => window.markdownViewerApp?.modules?.applicationMenu?.applyLayout?.("hamburger"));
   await page.locator("#desktopActionMenu").click();
   await expect(page.locator(".header-action-menu .action-menu")).toBeVisible();
 }
