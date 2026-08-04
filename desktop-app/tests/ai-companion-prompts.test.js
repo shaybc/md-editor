@@ -67,6 +67,7 @@ test("prompt profile uses edited strings and fills missing defaults", async () =
   const prompts = await loadAiCompanionPrompts({ profileRoot });
 
   assert.equal(prompts.agentSystem, "Custom agent prompt");
+  assert.equal(prompts.chatDirectSystem, DEFAULT_AI_COMPANION_PROMPTS.chatDirectSystem);
   assert.equal(prompts.planSystem, DEFAULT_AI_COMPANION_PROMPTS.planSystem);
   assert.equal(prompts.autocomplete.line.taskInstruction, "Custom line task");
   assert.equal(prompts.autocomplete.line.systemPrompt, DEFAULT_AI_COMPANION_PROMPTS.autocomplete.line.systemPrompt);
@@ -116,7 +117,8 @@ test("intent extraction prompt requires grounded outcome criteria and conditiona
   assert.match(DEFAULT_AI_COMPANION_PROMPTS.intentExtractionSystem, /at least one criterion verifiable from tool evidence/);
   assert.match(DEFAULT_AI_COMPANION_PROMPTS.intentExtractionSystem, /emit both a finding criterion/);
   assert.match(DEFAULT_AI_COMPANION_PROMPTS.intentExtractionSystem, /Bad criterion: Check the latest git changes/);
-  assert.equal(PROMPTS_DEFAULT_REVISION, 10);
+  assert.match(DEFAULT_AI_COMPANION_PROMPTS.chatDirectSystem, /no workspace evidence/i);
+  assert.equal(PROMPTS_DEFAULT_REVISION, 11);
 });
 
 test("agent mode uses profile prompt override", async () => {
@@ -153,6 +155,7 @@ test("agent mode uses profile prompt override", async () => {
 test("prompt entries expose names descriptions and values", () => {
   const entries = listPromptEntries(DEFAULT_AI_COMPANION_PROMPTS);
   const chatEntry = entries.find((entry) => entry.keyPath === "chatSystem");
+  const directChatEntry = entries.find((entry) => entry.keyPath === "chatDirectSystem");
   const assessmentEntry = entries.find((entry) => entry.keyPath === "completionAssessmentSystem");
   const candidateEntry = entries.find((entry) => entry.keyPath === "completionFinalAnswer");
   const clarificationEntry = entries.find((entry) => entry.keyPath === "intentClarificationSystem");
@@ -164,6 +167,8 @@ test("prompt entries expose names descriptions and values", () => {
   assert.equal(chatEntry.name, "Chat system prompt");
   assert.match(chatEntry.description, /Chat mode/);
   assert.equal(chatEntry.value, DEFAULT_AI_COMPANION_PROMPTS.chatSystem);
+  assert.equal(directChatEntry.name, "Direct Chat system prompt");
+  assert.equal(directChatEntry.value, DEFAULT_AI_COMPANION_PROMPTS.chatDirectSystem);
   assert.equal(assessmentEntry.name, "Completion assessment prompt");
   assert.equal(candidateEntry.name, "Completion candidate prompt");
   assert.equal(clarificationEntry.value, DEFAULT_AI_COMPANION_PROMPTS.intentClarificationSystem);

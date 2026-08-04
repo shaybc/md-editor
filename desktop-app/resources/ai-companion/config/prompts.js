@@ -14,7 +14,7 @@ const PROMPTS_PROFILE_FILE = "companion/prompts.json";
 const PROMPTS_DOCUMENT_TYPE = "md-editor-ai-companion-prompts";
 const PROMPTS_SCHEMA_VERSION = 3;
 // Increment whenever any bundled prompt key or default text changes.
-const PROMPTS_DEFAULT_REVISION = 10;
+const PROMPTS_DEFAULT_REVISION = 11;
 
 const LEGACY_AGENT_COMPLETION_REPORTING_INSTRUCTION = [
   "Before giving the final answer, verify from tool results and inspected state that every requested outcome is actually complete.",
@@ -40,6 +40,7 @@ const AGENT_APPROVAL_RATIONALE_INSTRUCTION = [
 
 const PROMPT_ENTRY_DEFINITIONS = Object.freeze([
   { keyPath: "chatSystem", name: "Chat system prompt", description: "System instructions for read-oriented Chat mode workspace Q&A." },
+  { keyPath: "chatDirectSystem", name: "Direct Chat system prompt", description: "System instructions for conversational Chat responses that require no workspace evidence." },
   { keyPath: "agentSystem", name: "Agent system prompt", description: "System instructions for multi-step Agent mode work with tool use and approvals." },
   { keyPath: "planSystem", name: "Plan system prompt", description: "System instructions for read-only Plan mode research and proposed implementation plans." },
   { keyPath: "planFinalAnswer", name: "Plan final answer prompt", description: "Final-answer instruction used when Plan mode prepares the proposed plan block." },
@@ -71,6 +72,12 @@ const DEFAULT_AI_COMPANION_PROMPTS = Object.freeze({
     "For saved files on disk, prefer list_files or glob, then search_grep, then targeted read_file calls.",
     "Treat every accepted steering correction in the authoritative contract as controlling later references and final reporting; do not reuse superseded resource references.",
     "Chat mode is read-only; answer from inspected workspace evidence."
+  ].join(" "),
+  chatDirectSystem: [
+    "You are AI Companion inside md-editor.",
+    "Answer the current request directly from the user's supplied text and bounded conversation history.",
+    "Do not claim facts about the current workspace, open files, project state, or editor state because this route provides no workspace evidence.",
+    "If the request cannot be answered without inspecting the workspace, say that inspection is required instead of guessing."
   ].join(" "),
   agentSystem: [
     "You are AI Companion inside md-editor.",

@@ -2668,17 +2668,24 @@ async function runAgentToolLoop(provider, settings, root, prompt, mode, emit, ru
     if (shouldEmitActivitySummary && activityRun) emit(activityRun.createSummary(finalContent));
     return finalContent;
   };
-  const toolDefinitions = getAgentToolDefinitions(mode);
+  const hasToolDefinitionsOverride = Array.isArray(loopOptions.toolDefinitionsOverride);
+  const toolDefinitions = hasToolDefinitionsOverride
+    ? [...loopOptions.toolDefinitionsOverride]
+    : getAgentToolDefinitions(mode);
   // The read-only conflict-reporting tool is exposed in the workspace loop when the
   // intent phase is active, so the model can flag semantic contradictions it finds.
-  if (resolvedExperiment.intentRevision === true && INTENT_CONTRACT_MODES.has(mode)) toolDefinitions.push(intentConflict.REPORT_INTENT_CONFLICT_TOOL);
+  if (!hasToolDefinitionsOverride && resolvedExperiment.intentRevision === true && INTENT_CONTRACT_MODES.has(mode)) toolDefinitions.push(intentConflict.REPORT_INTENT_CONFLICT_TOOL);
   // Modes that carry their own grounding context (like gitSummary's changes
   // digest) skip the forced workspace-discovery tool call: tools stay
   // available, but a direct answer on the first round is a valid outcome.
-  const requireInitialDiscovery = mode !== "gitSummary";
+  const requireInitialDiscovery = typeof loopOptions.requireInitialDiscoveryOverride === "boolean"
+    ? loopOptions.requireInitialDiscoveryOverride
+    : mode !== "gitSummary";
   // Narration is a chat/agent/plan feature: gitSummary answers from a digest and
   // rarely chains tools, so it gets no filter and emits no narration events.
-  const narrationFilter = (mode === "agent" || mode === "chat" || mode === "plan") ? createNarrationFilter() : null;
+  const narrationFilter = loopOptions.narrationEnabled === false
+    ? null
+    : ((mode === "agent" || mode === "chat" || mode === "plan") ? createNarrationFilter() : null);
   const baseSystemPrompt = [
     String(loopOptions.systemPrompt || "") || (mode === "agent" ? DEFAULT_AI_COMPANION_PROMPTS.agentSystem : DEFAULT_AI_COMPANION_PROMPTS.chatSystem),
     loopOptions.requestChatTitle === true ? CHAT_TITLE_RESPONSE_PROMPT : "",
@@ -2695,6 +2702,11 @@ async function runAgentToolLoop(provider, settings, root, prompt, mode, emit, ru
   if (activeFileMessage) messages.push(activeFileMessage);
   const attachmentMessage = buildAttachmentContextMessage(loopOptions.attachments);
   if (attachmentMessage) messages.push(attachmentMessage);
+  for (const contextMessage of Array.isArray(loopOptions.additionalSystemMessages) ? loopOptions.additionalSystemMessages : []) {
+    if (contextMessage?.role === "system" && String(contextMessage.content || "").trim()) {
+      messages.push({ role: "system", content: String(contextMessage.content) });
+    }
+  }
   const historyMessages = normalizeConversationHistory(loopOptions.conversationHistory);
   if (historyMessages.length) {
     messages.push(...historyMessages);
@@ -2705,7 +2717,9 @@ async function runAgentToolLoop(provider, settings, root, prompt, mode, emit, ru
   messages.push(buildCurrentUserMessage(prompt, loopOptions.attachments));
   const maxRounds = getMaxToolRounds(mode, settings);
   const tokenBudget = createTokenMinuteBudget(settings);
-  const intentPhaseEnabled = resolvedExperiment.intentExtraction === true && INTENT_CONTRACT_MODES.has(mode);
+  const intentPhaseEnabled = loopOptions.skipIntentPhase !== true
+    && resolvedExperiment.intentExtraction === true
+    && INTENT_CONTRACT_MODES.has(mode);
   let usedTools = false;
   // Intent phase (M1/M2). It runs before resume replay so a persisted mutation is always
   // checked against a ready, request-matching contract. The disabled arm keeps the prior
@@ -2779,7 +2793,9 @@ async function runAgentToolLoop(provider, settings, root, prompt, mode, emit, ru
           maxTokens: getRoundResponseMaxTokens(loopOptions),
           signal: loopOptions.signal,
           tools: toolDefinitions,
-          toolChoice: requireInitialDiscovery ? getToolChoiceForRound(usedTools, prompt) : "auto",
+          toolChoice: toolDefinitions.length
+            ? (requireInitialDiscovery ? getToolChoiceForRound(usedTools, prompt) : "auto")
+            : undefined,
           onUsage: (usage) => emit({ type: "usage", ...usage, reported: true }),
           onDebug
         });

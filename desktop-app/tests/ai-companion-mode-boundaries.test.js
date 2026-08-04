@@ -24,6 +24,20 @@ test("bridge keeps conversational and specialized actions on separate handlers",
   assert.match(source, /message\.action === "testConnection"[\s\S]*testConnection\(requestSettings/);
 });
 
+test("conversational routing is imported only by Chat mode", () => {
+  const modeRoot = path.join(__dirname, "..", "resources", "ai-companion", "modes");
+  const chatSource = fs.readFileSync(path.join(modeRoot, "chat", "index.js"), "utf8");
+  const planSource = fs.readFileSync(path.join(modeRoot, "plan", "index.js"), "utf8");
+  const agentSource = fs.readFileSync(path.join(modeRoot, "agent", "index.js"), "utf8");
+  const autocompleteSource = fs.readFileSync(path.join(modeRoot, "autocomplete", "index.js"), "utf8");
+  const gitSummarySource = fs.readFileSync(path.join(modeRoot, "git-summary", "index.js"), "utf8");
+
+  assert.match(chatSource, /chat-request-router/);
+  for (const source of [planSource, agentSource, autocompleteSource, gitSummarySource]) {
+    assert.doesNotMatch(source, /chat-request-router|chat-route/);
+  }
+});
+
 test("evaluation contract rejects protected specialized modes", () => {
   const dataset = JSON.parse(fs.readFileSync(path.join(__dirname, "eval", "ai-companion-baseline-cases.json"), "utf8"));
   for (const protectedMode of ["autocomplete", "gitSummary", "testConnection"]) {

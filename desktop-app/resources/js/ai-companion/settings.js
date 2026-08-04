@@ -52,6 +52,7 @@
       autocompleteModelFamily: "auto",
       agentAutoRunCommands: false,
       agentConfirmBeforeWrite: true,
+      chatRequestRoutingEnabled: true,
       // Intent-contract feature (M1). Keep in sync with the headless defaults in
       // ai-companion/config/defaults.js so headless and browser runs behave identically.
       intentContractsEnabled: false,
@@ -140,6 +141,7 @@
           : defaults.autocompleteModelFamily,
         agentAutoRunCommands: source.agentAutoRunCommands === true,
         agentConfirmBeforeWrite: source.agentConfirmBeforeWrite !== false,
+        chatRequestRoutingEnabled: source.chatRequestRoutingEnabled !== false,
         intentContractsEnabled,
         intentExperiment: intentExperiment.resolveIntentExperiment(source.intentExperiment, intentContractsEnabled, { rejectInvalid: true }),
         intentClarificationMode: ["ask", "assume", "off"].includes(source.intentClarificationMode) ? source.intentClarificationMode : "assume",
