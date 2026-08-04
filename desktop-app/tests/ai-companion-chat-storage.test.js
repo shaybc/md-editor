@@ -125,9 +125,9 @@ test("AI Companion persists task-level changed file summaries", () => {
   assert.ok(panelSource.includes('event?.type === "agent-summary"'));
 });
 
-test("AI Companion persists M3 completion evidence and assessment in task schema v3", () => {
-  assert.match(panelSource, /version: Math\.max\(3, Number\(savedRecord\.version\) \|\| 1\)/);
-  assert.match(panelSource, /version: 3/);
+test("AI Companion persists completion evidence and AgentState in task schema v4", () => {
+  assert.match(panelSource, /version: Math\.max\(4, Number\(savedRecord\.version\) \|\| 1\)/);
+  assert.match(panelSource, /version: 4/);
   assert.ok(panelSource.includes('savedEvent.type === "completion-assessment"'));
   assert.ok(panelSource.includes("activeAgentEntry.record.completionAssessment = savedEvent.assessment || null"));
   assert.ok(panelSource.includes("activeAgentEntry.record.evidenceLedger = Array.isArray(savedEvent.evidenceLedger) ? savedEvent.evidenceLedger : []"));
@@ -151,4 +151,15 @@ test("AI Companion exposes a task-level Changes inspector section", () => {
   assert.ok(panelSource.includes('const taskChangesPanel = panel.querySelector("#ai-companion-workspace-changes")'));
   assert.ok(panelSource.includes("function renderTaskChangesPanel(record = null)"));
   assert.ok(panelSource.includes("openActivityCompare(file.compare)"));
+});
+
+test("AI Companion persists one validated terminal AgentState snapshot outside task events", () => {
+  assert.ok(panelSource.includes("agentStateSnapshot: null"));
+  assert.ok(panelSource.includes("Number(savedRecord.version) >= 4 ? (savedRecord.agentStateSnapshot || null) : null"));
+  assert.ok(panelSource.includes("function validateAgentStateSnapshotForTask(snapshot, record)"));
+  assert.ok(panelSource.includes("function recordAgentStateSnapshot(event)"));
+  assert.ok(panelSource.includes("activeAgentEntry.record.agentStateSnapshot = snapshot"));
+  assert.ok(panelSource.includes("snapshot?.terminalEventType !== `run_${status}`"));
+  assert.ok(panelSource.includes("Number(snapshot?.executionGeneration) !== Number(record?.executionGeneration)"));
+  assert.ok(panelSource.includes('event.type === "agent-state-snapshot"'));
 });

@@ -106,3 +106,16 @@ test("connection testing calls the provider testConnection method directly", () 
   const source = fs.readFileSync(path.join(__dirname, "..", "resources", "ai-companion", "core", "agent-runtime.js"), "utf8");
   assert.match(source, /return createProvider\(settings\)\.testConnection\(\{ signal: options\.signal, onDebug: options\.onDebug \}\)/);
 });
+
+test("shadow AgentState is imported only by Agent mode", () => {
+  const modeRoot = path.join(__dirname, "..", "resources", "ai-companion", "modes");
+  const agentSource = fs.readFileSync(path.join(modeRoot, "agent", "index.js"), "utf8");
+  const protectedSources = [
+    path.join(modeRoot, "chat", "index.js"),
+    path.join(modeRoot, "plan", "index.js"),
+    path.join(modeRoot, "autocomplete", "index.js"),
+    path.join(modeRoot, "git-summary", "index.js")
+  ].map((filePath) => fs.readFileSync(filePath, "utf8"));
+  assert.match(agentSource, /agent-state-shadow/);
+  for (const source of protectedSources) assert.doesNotMatch(source, /agent-state-shadow|agent-state-snapshot/);
+});

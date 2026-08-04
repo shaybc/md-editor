@@ -4337,6 +4337,7 @@
         completionAssessment: null,
         evidenceLedger: [],
         intentEvaluation: null,
+        agentStateSnapshot: null,
         resume: null,
         plan: null,
         executionGeneration,
@@ -4378,7 +4379,7 @@
       const chat = savedRecord ? activeAgentChat : ensureActiveAgentChat();
       const record = savedRecord ? {
         ...savedRecord,
-        version: Math.max(3, Number(savedRecord.version) || 1),
+        version: Math.max(4, Number(savedRecord.version) || 1),
         rootPrompt: savedRecord.rootPrompt || interruptedTaskResume?.recoverRootPrompt?.(savedRecord) || savedRecord.prompt || "",
         chatId: savedRecord.chatId || chat?.id || "",
         id,
@@ -4387,9 +4388,10 @@
         createdAt: savedRecord.createdAt || createdAt,
         updatedAt: savedRecord.updatedAt || savedRecord.createdAt || createdAt,
         attachments: normalizeAttachmentReferences(savedRecord.attachments),
-        executionGeneration: Math.max(1, Number(savedRecord.executionGeneration) || 1)
+        executionGeneration: Math.max(1, Number(savedRecord.executionGeneration) || 1),
+        agentStateSnapshot: Number(savedRecord.version) >= 4 ? (savedRecord.agentStateSnapshot || null) : null
       } : {
-        version: 3,
+        version: 4,
         chatId: chat.id,
         id,
         fileName: `${id}.json`,
@@ -4405,6 +4407,7 @@
         events: [],
         mode: normalizeCompanionMode(activeRunMode || activeTab),
         executionGeneration: 1,
+        agentStateSnapshot: null,
         lastExecutionKind: "new"
       };
       const row = document.createElement("section");
@@ -4453,6 +4456,43 @@
         agentSaveTimer = null;
       }
       await saveAgentEntry(entry);
+    }
+
+    function validateAgentStateSnapshotForTask(snapshot, record) {
+      const errors = [];
+      const state = snapshot?.state;
+      const status = state?.lifecycle?.status;
+      if (snapshot?.schemaVersion !== 1 || snapshot?.snapshotKind !== "terminal") errors.push("invalid-snapshot-envelope");
+      if (!state || state.schemaVersion !== 1) errors.push("invalid-agent-state");
+      if (!["completed", "failed", "cancelled"].includes(status)) errors.push("run-not-terminal");
+      if ((state?.activeActions || []).length) errors.push("active-actions-remain");
+      if ((state?.pendingInteractions || []).length) errors.push("pending-interactions-remain");
+      if (state?.terminalReason == null) errors.push("missing-terminal-reason");
+      if (!(Number(state?.stateVersion) > 0)) errors.push("invalid-state-version");
+      if (snapshot?.runId !== state?.run?.runId) errors.push("run-id-mismatch");
+      if (snapshot?.stateVersion !== state?.stateVersion) errors.push("state-version-mismatch");
+      if (!Number.isInteger(snapshot?.lastSequence) || snapshot.lastSequence !== state?.lastAcceptedSequence) errors.push("sequence-mismatch");
+      if (!snapshot?.capturedAt || Number.isNaN(Date.parse(snapshot.capturedAt))) errors.push("invalid-captured-at");
+      if (snapshot?.terminalEventType !== `run_${status}`) errors.push("terminal-event-mismatch");
+      if (Number(snapshot?.executionGeneration) !== Number(state?.run?.executionGeneration)) errors.push("execution-generation-mismatch");
+      if (Number(snapshot?.executionGeneration) !== Number(record?.executionGeneration)) errors.push("stale-execution-generation");
+      return errors;
+    }
+
+    function recordAgentStateSnapshot(event) {
+      if (!activeAgentEntry) return null;
+      const snapshot = cloneEvent(event?.snapshot);
+      const errors = validateAgentStateSnapshotForTask(snapshot, activeAgentEntry.record);
+      if (errors.length) {
+        if (snapshot?.diagnostics) snapshot.diagnostics.shadowErrorCount = (Number(snapshot.diagnostics.shadowErrorCount) || 0) + 1;
+        deps.appDebugLog?.("warn", "[ai-companion] rejected invalid AgentState snapshot", { errors, diagnostics: snapshot?.diagnostics || null });
+        return null;
+      }
+      activeAgentEntry.record.agentStateSnapshot = snapshot;
+      activeAgentEntry.record.updatedAt = Date.parse(snapshot.capturedAt) || Date.now();
+      activeAgentEntry.isDirty = true;
+      scheduleAgentEntrySave(activeAgentEntry);
+      return snapshot;
     }
 
     function recordAgentEvent(event) {
@@ -7170,6 +7210,10 @@
       await deps.bridge?.respondAppAction?.(actionId, result || {});
     }
     function handleEvent(event) {
+      if (event.type === "agent-state-snapshot") {
+        recordAgentStateSnapshot(event);
+        return;
+      }
       if (event.type === "app-action") {
         void handleAppActionEvent(event);
         return;
@@ -7515,7 +7559,7 @@
       activeAgentEntry.record.executionGeneration = executionGeneration;
       activeAgentEntry.record.lastExecutionKind = executionKind;
       if (overrides.resume) {
-        activeAgentEntry.record.version = 3;
+        activeAgentEntry.record.version = 4;
         activeAgentEntry.record.rootPrompt = prompt;
         activeAgentEntry.record.resume = { ...overrides.resume };
         activeAgentEntry.isDirty = true;
