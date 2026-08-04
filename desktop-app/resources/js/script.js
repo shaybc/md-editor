@@ -11232,6 +11232,7 @@ Markdown content is processed client-side in your browser and sanitized before p
         closedTabHistoryLimit: Math.min(100, Math.floor(closedTabHistoryLimit)),
         apiClientRecentHistoryLimit: normalizeApiClientRecentHistoryLimit(apiClientRecentHistoryLimit),
         apiClientRequestSettings,
+        theme: getThemeDraftState().theme,
         themeSelections: themeDraft.themeSelections,
         customThemes: themeDraft.customThemes,
         syntaxHighlightColors,

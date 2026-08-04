@@ -34,7 +34,3 @@ desktop-app/*.log
 /desktop-app/vendor/.drawio-extract/
 /drawio-release-report.json
 
-
-# removing git LFS
-/desktop-app/vendor/kotlin-lsp/
-/desktop-app/vendor/kotlin-compiler/
