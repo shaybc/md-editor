@@ -3,6 +3,7 @@
 
   function registerMarkdownViewerAiCompanionSettings(app) {
     const intentExperiment = window.MarkdownViewerIntentExperiment;
+    const toolScopeRegistry = window.MarkdownViewerAiCompanionToolScopes;
     const defaults = Object.freeze({
       enabled: false,
       providerMode: "openai-compatible",
@@ -66,6 +67,9 @@
       planCapabilityGateEnabled: true,
       planRequireSuccessToSaveEnabled: true,
       planGitReadToolsEnabled: true,
+      // Per-domain tool availability allow-list (Settings -> AI). Read scopes on,
+      // write/execution off. Core readers and edit tools are not governed here.
+      toolScopes: toolScopeRegistry ? toolScopeRegistry.defaultToolScopes() : {},
       // Intent-contract feature (M1). Keep in sync with the headless defaults in
       // ai-companion/config/defaults.js so headless and browser runs behave identically.
       intentContractsEnabled: false,
@@ -166,6 +170,7 @@
         planCapabilityGateEnabled: source.planCapabilityGateEnabled !== false,
         planRequireSuccessToSaveEnabled: source.planRequireSuccessToSaveEnabled !== false,
         planGitReadToolsEnabled: source.planGitReadToolsEnabled !== false,
+        toolScopes: toolScopeRegistry ? toolScopeRegistry.normalizeToolScopes(source.toolScopes) : (source.toolScopes || {}),
         intentContractsEnabled,
         intentExperiment: intentExperiment.resolveIntentExperiment(source.intentExperiment, intentContractsEnabled, { rejectInvalid: true }),
         intentClarificationMode: ["ask", "assume", "off"].includes(source.intentClarificationMode) ? source.intentClarificationMode : "assume",

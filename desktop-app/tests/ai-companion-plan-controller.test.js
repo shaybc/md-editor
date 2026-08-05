@@ -6,7 +6,7 @@ const test = require("node:test");
 const { runPlanStatefulController } = require("../resources/ai-companion/core/plan-stateful-controller");
 const { PLAN_ARTIFACT_SCHEMA_VERSION } = require("../resources/ai-companion/core/plan-artifact-schema");
 
-const ALLOWED = new Set(["read_file", "search_grep"]);
+const ALLOWED = new Set(["read_file", "search_text"]);
 
 function scriptedDecisions(list) {
   let i = 0;

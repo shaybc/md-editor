@@ -90,7 +90,7 @@ test("two failed refresh attempts preserve the instruction with bounded diagnost
   // part of the rejected action. Unknown targets remain conservative until refresh.
   assert.equal(evaluateMutationControl("apply_edit", { path: "src/a.js" }, result.contract).blocked, true);
   assert.equal(evaluateMutationControl("write_file", { path: "other.js" }, result.contract).blocked, true);
-  assert.equal(evaluateMutationControl("git_panel_commit", {}, result.contract).blocked, true, "an unassociated mutation target is conservatively blocked");
+  assert.equal(evaluateMutationControl("git_commit", {}, result.contract).blocked, true, "an unassociated mutation target is conservatively blocked");
 });
 
 test("an invalid first refresh is repaired once with a complete replacement", async () => {
@@ -130,7 +130,7 @@ test("an underivable scope blocks all mutations, conservatively", () => {
   const decision = blocked.unresolvedDecisions.at(-1);
   assert.deepEqual(decision.controlledCapabilities, []);
   assert.deepEqual(decision.controlledTargets, []);
-  assert.equal(evaluateMutationControl("git_panel_commit", {}, blocked).blocked, true);
+  assert.equal(evaluateMutationControl("git_commit", {}, blocked).blocked, true);
   assert.equal(evaluateMutationControl("apply_edit", { path: "any.js" }, blocked).blocked, true);
 });
 

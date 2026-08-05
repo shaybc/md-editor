@@ -13,6 +13,7 @@ const approvalPolicy = require("../resources/ai-companion/core/agent-approval-po
 const approvalCapabilities = require("../resources/ai-companion/core/approval-capability-registry");
 const { ApprovalGrantStore } = require("../resources/ai-companion/core/approval-grant-store");
 const { analyzeApprovalAction } = require("../resources/ai-companion/core/approval-action-analysis");
+const { toCanonicalName } = require("../resources/ai-companion/core/tool-scope-registry");
 const { PRODUCT_DEFAULT_POLICY } = require("../resources/ai-companion/security/policy-schema");
 const { getAgentToolDefinitions, runAgentToolLoop } = require("../resources/ai-companion/core/agent-tool-loop");
 const { validateApprovalIntent } = require("../resources/ai-companion/core/approval-intent-validation");
@@ -191,9 +192,9 @@ test("no-op file writes never request approval or reach the filesystem write", a
 
 
 test("plan mode exposes only read-only workspace tools", () => {
-  const names = getAgentToolDefinitions("plan").map((definition) => definition.function.name);
+  const names = getAgentToolDefinitions("plan").map((definition) => toCanonicalName(definition.function.name));
 
-  assert.deepEqual(names, ["get_workspace_state", "read_active_document", "read_open_tabs", "get_document_structure", "search_vault", "get_link_context", "get_recent_activity", "graph_get_state", "graph_search_nodes", "graph_get_node_context", "graph_find_paths", "list_files", "glob", "search_grep", "read_file"]);
+  assert.deepEqual(names, ["get_workspace_state", "read_active_document", "read_open_tabs", "get_document_structure", "search_vault", "get_link_context", "get_recent_activity", "graph_get_state", "graph_search_nodes", "graph_get_node_context", "graph_find_paths", "list_files", "glob", "search_text", "read_file"]);
   assert.equal(names.includes("apply_edit"), false);
   assert.equal(names.includes("write_file"), false);
   assert.equal(names.includes("run_command"), false);
@@ -202,15 +203,15 @@ test("plan mode exposes only read-only workspace tools", () => {
 
 test("approval-capable agent tools require a user-facing rationale", () => {
   const definitions = getAgentToolDefinitions("agent");
-  for (const name of ["write_file", "apply_edit", "run_command", "preferences_update", "git_panel_commit", "create_document_tab"]) {
-    const parameters = definitions.find((definition) => definition.function.name === name)?.function?.parameters;
+  for (const name of ["write_file", "apply_edit", "run_command", "preferences_update", "git_commit", "create_document_tab"]) {
+    const parameters = definitions.find((definition) => toCanonicalName(definition.function.name) === name)?.function?.parameters;
     assert.ok(parameters, `${name} definition`);
     assert.equal(parameters.required.includes("approvalReason"), true, name);
     assert.equal(parameters.properties.approvalReason.maxLength, 160, name);
     assert.equal(parameters.properties.approvalReason.pattern, "^[^\\r\\n]+$", name);
   }
   const readParameters = definitions.find((definition) => definition.function.name === "read_file").function.parameters;
-  assert.equal(readParameters.required.includes("approvalReason"), false);
+  assert.equal((readParameters.required || []).includes("approvalReason"), false);
 });
 
 test("approval intent rejects filesystem deletion claims for non-deleting tools", () => {
@@ -389,7 +390,9 @@ test("M3 Plan mode saves the same normalized assessed body that it displays", as
   runtime.createProvider = () => provider;
   try {
     const result = await runPlanMode({
-      settings: { enabled: true, intentContractsEnabled: true, intentFastPathEnabled: false },
+      // This test asserts the saved body matches the displayed body, so isolate it
+      // from the save-gate (planRequireSuccessToSaveEnabled defaults on now).
+      settings: { enabled: true, intentContractsEnabled: true, intentFastPathEnabled: false, planRequireSuccessToSaveEnabled: false },
       workspaceRoot: workspace,
       profileRoot,
       prompt: "Create a detailed implementation plan for uploader retry state"
@@ -554,7 +557,7 @@ test("capability registry generates safe file grants and keeps high-risk capabil
   assert.equal(approvalCapabilities.describe("delete_file", { path: "src/old.txt" }, { effectiveSecurityPolicy: PRODUCT_DEFAULT_POLICY }).capability, "workspace.file.delete");
   assert.equal(approvalCapabilities.describe("move_path", { sourcePath: "src/old.txt" }, { effectiveSecurityPolicy: PRODUCT_DEFAULT_POLICY }).capability, "workspace.path.move");
   assert.deepEqual(Object.keys(approvalCapabilities.CAPABILITIES).sort(), [
-    "delete_file", "export_active_document", "export_active_folder_graph", "git_panel_commit", "git_panel_create_branch", "git_panel_fetch", "git_panel_pull", "git_panel_push", "git_panel_stage_files", "git_panel_switch_branch", "git_panel_unstage_files", "move_path", "preferences_import", "preferences_reset", "preferences_update", "run_command", "start_code_conversion"
+    "delete_file", "export_active_document", "export_active_folder_graph", "git_commit", "git_branch_create", "git_fetch", "git_pull", "git_push", "git_stage", "git_branch_switch", "git_unstage", "move_path", "preferences_import", "preferences_reset", "preferences_update", "run_command", "start_code_conversion"
   ].sort());
 });
 

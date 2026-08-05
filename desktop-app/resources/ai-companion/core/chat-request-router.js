@@ -215,7 +215,7 @@ async function locateProjectVersion(runtime, request, emit) {
 }
 
 async function locateSearchTarget(runtime, request, emit, target, sourceType) {
-  const observed = await runObservedTool(emit, "search_grep", target, 1, () => runtime.tools.searchGrep(request.workspaceRoot, target, {
+  const observed = await runObservedTool(emit, "search_text", target, 1, () => runtime.tools.searchGrep(request.workspaceRoot, target, {
     maxMatches: MAX_LOCATOR_RESULTS,
     signal: request.signal
   }));

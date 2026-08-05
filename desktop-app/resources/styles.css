@@ -21382,3 +21382,166 @@ html[data-desktop-menu-layout="full"] .header-action-menu {
   display: flex;
   gap: 8px;
 }
+
+/* AI Companion -> Tool Access matrix */
+.settings-ai-tool-access-grid { display: flex; flex-direction: column; gap: 6px; }
+.settings-ai-tool-access-row {
+  display: grid;
+  grid-template-columns: 1fr 84px 84px;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 4px;
+  border-bottom: 1px solid var(--settings-border, rgba(127,127,127,0.18));
+}
+.settings-ai-tool-access-head { font-weight: 600; opacity: 0.8; }
+.settings-ai-tool-access-domain { text-align: left; }
+.settings-ai-tool-access-col { text-align: center; font-size: 0.85em; }
+.settings-ai-tool-access-cell { display: flex; justify-content: center; align-items: center; margin: 0; }
+.settings-ai-tool-access-cell-empty { opacity: 0.4; }
+
+/* AI Companion -> Tool Access (per-tool, grouped by domain) */
+.settings-ai-tool-access-grid { display: flex; flex-direction: column; gap: 14px; }
+.settings-ai-tool-access-domain-section {
+  border: 1px solid var(--settings-border, rgba(127,127,127,0.18));
+  border-radius: 8px;
+  padding: 10px 12px;
+}
+.settings-ai-tool-access-domain-header {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+}
+.settings-ai-tool-access-domain-title { margin: 0; font-size: 1em; font-weight: 600; }
+.settings-ai-tool-access-subgroup { margin-top: 8px; padding-left: 6px; }
+.settings-ai-tool-access-subgroup-title {
+  margin: 6px 0 2px; font-size: 0.75em; text-transform: uppercase; opacity: 0.6; letter-spacing: 0.04em;
+}
+.settings-ai-tool-access-tool-row {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 4px 0 4px 8px;
+}
+.settings-ai-tool-access-tool-label { font-size: 0.92em; }
+.settings-ai-tool-access-switch { margin: 0; }
+.settings-ai-tool-access-domain-section.is-all-off .settings-ai-tool-access-subgroup { opacity: 0.45; }
+
+/* AI Companion -> Tool Access (concept refinement: centered title, row bg, info tooltip) */
+.settings-ai-tool-access-domain-header {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 34px;
+  margin-bottom: 4px;
+}
+.settings-ai-tool-access-domain-title {
+  margin: 0;
+  text-align: center;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-weight: 700;
+  font-size: 0.95em;
+}
+.settings-ai-tool-access-domain-header .settings-ai-tool-access-switch {
+  position: absolute;
+  right: 4px;
+  top: 50%;
+  transform: translateY(-50%);
+}
+.settings-ai-tool-access-tool-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 9px 12px;
+  margin: 6px 0;
+  border-radius: 6px;
+  border: 1px solid var(--border-color, var(--settings-border, rgba(127,127,127,0.18)));
+}
+.settings-ai-tool-access-tool-row--read {
+  background: var(--hover-bg, rgba(127,127,127,0.14));
+}
+.settings-ai-tool-access-tool-row--write {
+  /* One step lighter than read rows, in both light and dark themes. */
+  background: linear-gradient(rgba(255,255,255,0.08), rgba(255,255,255,0.08)), var(--hover-bg, rgba(127,127,127,0.14));
+}
+.settings-ai-tool-access-tool-label { display: flex; align-items: baseline; gap: 6px; min-width: 0; }
+.settings-ai-tool-access-tool-name { font-size: 0.95em; }
+.settings-ai-tool-access-tool-id {
+  font-size: 0.82em;
+  color: var(--muted-text-color, var(--text-secondary, var(--text-muted)));
+  font-family: var(--code-font-family, monospace);
+}
+.settings-ai-tool-access-tool-controls { display: flex; align-items: center; gap: 12px; flex: none; }
+.settings-ai-tool-access-info {
+  width: 18px; height: 18px; padding: 0;
+  border-radius: 50%;
+  border: 1px solid var(--border-color, rgba(127,127,127,0.5));
+  background: transparent;
+  color: var(--muted-text-color, var(--text-secondary));
+  font-size: 11px; font-style: italic; font-family: Georgia, "Times New Roman", serif;
+  line-height: 1; cursor: help;
+  display: inline-flex; align-items: center; justify-content: center;
+}
+.settings-ai-tool-access-info:hover,
+.settings-ai-tool-access-info:focus-visible {
+  color: var(--accent-color, var(--text-color));
+  border-color: var(--accent-color, var(--text-color));
+  outline: none;
+}
+.settings-ai-tool-access-tooltip {
+  position: fixed;
+  z-index: 4000;
+  background: var(--panel-bg, #1e1e1e);
+  color: var(--text-color, #eee);
+  border: 1px solid var(--border-color, rgba(127,127,127,0.4));
+  border-radius: 6px;
+  padding: 8px 10px;
+  font-size: 0.82em;
+  line-height: 1.45;
+  box-shadow: 0 6px 20px rgba(0,0,0,0.35);
+  pointer-events: none;
+}
+
+/* AI Companion -> Tool Access (concept refinement pass 2) */
+/* 1. Switch container blends with the row (no separate box). */
+.settings-ai-tool-access-switch {
+  background: transparent !important;
+  border: none !important;
+  padding: 0 !important;
+  box-shadow: none !important;
+}
+/* 2. Reduce row height back down. */
+.settings-ai-tool-access-tool-row { padding: 5px 12px; margin: 4px 0; }
+/* 3. Slightly bigger info icon. */
+.settings-ai-tool-access-info { width: 20px; height: 20px; font-size: 12px; }
+.settings-ai-tool-access-info--spacer {
+  border: none; background: transparent; visibility: hidden; cursor: default;
+}
+/* 5. Switch + info live in one fixed column so every switch (incl. the master)
+   lines up; the info sits in a fixed slot to the right and never shifts the switch. */
+.settings-ai-tool-access-tool-controls { display: flex; align-items: center; gap: 10px; flex: none; }
+.settings-ai-tool-access-domain-header {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  min-height: 30px;
+  margin-bottom: 2px;
+}
+.settings-ai-tool-access-domain-title {
+  position: absolute; left: 0; right: 0;
+  text-align: center;
+  margin: 0;
+  pointer-events: none;
+}
+/* Undo the earlier absolute-positioning of the master switch (now in the column). */
+.settings-ai-tool-access-domain-header .settings-ai-tool-access-switch {
+  position: static;
+  transform: none;
+  right: auto; top: auto;
+}
+
+/* AI Companion -> Tool Access: read-only Core group */
+.settings-ai-tool-access-switch.is-disabled { opacity: 0.55; cursor: default; }
+.settings-ai-tool-access-core-note {
+  margin: 0 0 6px; text-align: center; font-size: 0.8em;
+  color: var(--muted-text-color, var(--text-secondary));
+}
+.settings-ai-tool-access-core-section .settings-ai-tool-access-tool-row { cursor: default; }

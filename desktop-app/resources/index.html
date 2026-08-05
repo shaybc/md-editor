@@ -1321,14 +1321,6 @@
                       <i class="bi bi-stars" aria-hidden="true"></i>
                       <span>AI Companion</span>
                     </button>
-                    <button class="settings-tab-button settings-tab-child" type="button" data-settings-tab="ai-approvals" data-settings-parent-tab-group="ai" aria-selected="false" tabindex="-1">
-                      <i class="bi bi-shield-lock" aria-hidden="true"></i>
-                      <span>Approvals</span>
-                    </button>
-                    <button class="settings-tab-button settings-tab-child" type="button" data-settings-tab="ai-security" data-settings-parent-tab-group="ai" aria-selected="false" tabindex="-1">
-                      <i class="bi bi-shield-check" aria-hidden="true"></i>
-                      <span>Security</span>
-                    </button>
                     <button class="settings-tab-button settings-tab-child" type="button" data-settings-tab="ai-models" data-settings-parent-tab-group="ai" aria-selected="false" tabindex="-1">
                       <i class="bi bi-cpu" aria-hidden="true"></i>
                       <span>Models</span>
@@ -1340,6 +1332,18 @@
                     <button class="settings-tab-button settings-tab-child" type="button" data-settings-tab="ai-companion-autocomplete" data-settings-parent-tab-group="ai" aria-selected="false" tabindex="-1">
                       <i class="bi bi-magic" aria-hidden="true"></i>
                       <span>Autocomplete</span>
+                    </button>
+                    <button class="settings-tab-button settings-tab-child" type="button" data-settings-tab="ai-approvals" data-settings-parent-tab-group="ai" aria-selected="false" tabindex="-1">
+                      <i class="bi bi-shield-lock" aria-hidden="true"></i>
+                      <span>Approvals</span>
+                    </button>
+                    <button class="settings-tab-button settings-tab-child" type="button" data-settings-tab="ai-security" data-settings-parent-tab-group="ai" aria-selected="false" tabindex="-1">
+                      <i class="bi bi-shield-check" aria-hidden="true"></i>
+                      <span>Security</span>
+                    </button>
+                    <button class="settings-tab-button settings-tab-child" type="button" data-settings-tab="ai-tool-access" data-settings-parent-tab-group="ai" aria-selected="false" tabindex="-1">
+                      <i class="bi bi-toggles" aria-hidden="true"></i>
+                      <span>Tool Access</span>
                     </button>
                   </div>
                   <button class="settings-tab-button" type="button" data-settings-tab="jdks" aria-selected="false" tabindex="-1">
@@ -2655,6 +2659,19 @@
                 <div class="settings-subsection"><h4 class="settings-subsection-title">Idle trigger by scope</h4><p class="settings-panel-description">How long to wait after you stop typing before requesting each kind of suggestion.</p><div class="settings-field-grid settings-field-grid-three"><label class="settings-field" for="settings-ai-autocomplete-idle-ms"><span class="settings-field-label">Line idle trigger (ms)</span><input type="number" id="settings-ai-autocomplete-idle-ms" class="rename-modal-input settings-number-input" min="100" max="10000" step="50" /></label><label class="settings-field" for="settings-ai-autocomplete-block-idle-ms"><span class="settings-field-label">Block idle trigger (ms)</span><input type="number" id="settings-ai-autocomplete-block-idle-ms" class="rename-modal-input settings-number-input" min="100" max="20000" step="50" /></label><label class="settings-field" for="settings-ai-autocomplete-comment-idle-ms"><span class="settings-field-label">Comment idle trigger (ms)</span><input type="number" id="settings-ai-autocomplete-comment-idle-ms" class="rename-modal-input settings-number-input" min="100" max="10000" step="50" /></label></div></div>
                 <div class="settings-subsection"><h4 class="settings-subsection-title">Rejection cooldown</h4><div class="settings-field-grid settings-field-grid-two"><label class="settings-field" for="settings-ai-autocomplete-reject-chars"><span class="settings-field-label">Chars after reject</span><input type="number" id="settings-ai-autocomplete-reject-chars" class="rename-modal-input settings-number-input" min="1" max="1000" step="1" /></label><label class="settings-field" for="settings-ai-autocomplete-reject-delay"><span class="settings-field-label">Delay after reject (ms)</span><input type="number" id="settings-ai-autocomplete-reject-delay" class="rename-modal-input settings-number-input" min="0" max="60000" step="100" /></label></div></div>
                 <div class="settings-subsection"><h4 class="settings-subsection-title">Context (advanced)</h4><div class="settings-field-grid settings-field-grid-three"><label class="settings-field" for="settings-ai-autocomplete-prefix-lines"><span class="settings-field-label">Prefix window (lines)</span><input type="number" id="settings-ai-autocomplete-prefix-lines" class="rename-modal-input settings-number-input" min="5" max="500" step="5" /></label><label class="settings-field" for="settings-ai-autocomplete-suffix-lines"><span class="settings-field-label">Suffix window (lines)</span><input type="number" id="settings-ai-autocomplete-suffix-lines" class="rename-modal-input settings-number-input" min="1" max="200" step="1" /></label><label class="settings-field" for="settings-ai-autocomplete-model-family"><span class="settings-field-label">Model family</span><select id="settings-ai-autocomplete-model-family" class="rename-modal-input settings-select-input"><option value="auto">Auto-detect from model name</option><option value="instruct">Instruct / chat</option><option value="starcoder">StarCoder-style FIM</option><option value="deepseek-coder">DeepSeek Coder FIM</option><option value="codellama">Code Llama FIM</option><option value="codegemma">CodeGemma FIM</option></select></label></div><div class="settings-switch-grid"><label class="settings-switch-row" for="settings-ai-autocomplete-context-providers-enabled"><span><span class="settings-switch-title">Include context from open files</span><span class="settings-switch-description">Send short snippets from other open tabs alongside the cursor context.</span></span><input type="checkbox" id="settings-ai-autocomplete-context-providers-enabled" class="settings-switch-input" /><span class="settings-switch" aria-hidden="true"></span></label></div></div>
+              </section>
+              <section class="settings-panel" data-settings-panel="ai-tool-access" aria-labelledby="settings-ai-tool-access-title" hidden>
+                <div class="settings-panel-heading">
+                  <span class="settings-panel-icon"><i class="bi bi-toggles" aria-hidden="true"></i></span>
+                  <div>
+                    <h3 id="settings-ai-tool-access-title" class="settings-panel-title">Tool Access</h3>
+                    <p class="settings-panel-description">Choose which per-domain tools the model may use. Read tools inspect; write tools change or run. Core file reading (find, search, read) is always available and file editing is governed by mode; both are shown read-only under Core Tools at the bottom for reference.</p>
+                  </div>
+                </div>
+                <div class="settings-subsection">
+                  <div id="settings-ai-tool-access-grid" class="settings-ai-tool-access-grid"></div>
+                  <p id="settings-ai-tool-access-empty" class="settings-panel-description" hidden>Tool scope registry unavailable.</p>
+                </div>
               </section>
               <section class="settings-panel" data-settings-panel="jdks" aria-labelledby="settings-jdks-title" hidden>
                 <div class="settings-panel-heading">
@@ -4949,6 +4966,7 @@
     <script src="js/lsp/request-client.js"></script>
     <script src="js/ai-companion/provider-presets.js"></script>
     <script src="js/ai-companion/intent-experiment.js"></script>
+    <script src="ai-companion/core/tool-scope-registry.js"></script>
     <script src="js/ai-companion/settings.js"></script>
     <script src="js/ai-companion/settings-upgrade.js"></script>
     <script src="js/ai-companion/security-settings.js"></script>
@@ -4958,6 +4976,7 @@
     <script src="js/ai-companion/context-indicator.js"></script>
     <script src="js/ai-companion/models-settings.js"></script>
     <script src="js/ai-companion/prompts-settings.js"></script>
+    <script src="js/ai-companion/tool-access-settings.js"></script>
     <script src="js/ai-companion/neutralino-ai-bridge.js"></script>
     <script src="js/ai-companion/autocomplete/change-classifier.js"></script>
     <script src="js/ai-companion/autocomplete/suggestion-cache.js"></script>

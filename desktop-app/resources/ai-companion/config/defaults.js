@@ -5,6 +5,7 @@
 "use strict";
 
 const intentExperiment = require("../../js/ai-companion/intent-experiment");
+const toolScopeRegistry = require("../core/tool-scope-registry");
 
 const DEFAULT_AI_COMPANION_SETTINGS = Object.freeze({
   enabled: false,
@@ -54,6 +55,10 @@ const DEFAULT_AI_COMPANION_SETTINGS = Object.freeze({
   planRequireSuccessToSaveEnabled: true,
   // Fix 3: expose read-only git tools (status/diff/branches) to Plan mode.
   planGitReadToolsEnabled: true,
+  // Per-domain tool availability allow-list (Settings -> AI). Read scopes default
+  // on, write/execution scopes default off. Core readers and edit tools are not
+  // governed here. See core/tool-scope-registry.js.
+  toolScopes: toolScopeRegistry.defaultToolScopes(),
   // Intent-contract feature (M1). `intentContractsEnabled` is the user-facing master
   // switch; when off, the intent phase is fully disabled. The remaining keys are
   // thresholds shared by the headless and browser normalizers.
@@ -158,6 +163,7 @@ function normalizeAiCompanionSettings(settings = {}) {
     planCapabilityGateEnabled: source.planCapabilityGateEnabled !== false,
     planRequireSuccessToSaveEnabled: source.planRequireSuccessToSaveEnabled !== false,
     planGitReadToolsEnabled: source.planGitReadToolsEnabled !== false,
+    toolScopes: toolScopeRegistry.normalizeToolScopes(source.toolScopes),
     intentContractsEnabled,
     intentExperiment: intentExperiment.resolveIntentExperiment(source.intentExperiment, intentContractsEnabled, { rejectInvalid: true }),
     intentClarificationMode: ["ask", "assume", "off"].includes(source.intentClarificationMode) ? source.intentClarificationMode : "assume",

@@ -89,11 +89,11 @@ test("read-only observations pass the guard; mutating results are flagged violat
 
 test("repeated equivalent reads share an action signature", () => {
   assert.equal(
-    planActionSignature("search_grep", { pattern: "auth" }),
-    planActionSignature("search_grep", { pattern: "auth" })
+    planActionSignature("search_text", { pattern: "auth" }),
+    planActionSignature("search_text", { pattern: "auth" })
   );
   assert.notEqual(
-    planActionSignature("search_grep", { pattern: "auth" }),
-    planActionSignature("search_grep", { pattern: "router" })
+    planActionSignature("search_text", { pattern: "auth" }),
+    planActionSignature("search_text", { pattern: "router" })
   );
 });

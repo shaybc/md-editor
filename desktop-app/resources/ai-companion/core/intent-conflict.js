@@ -23,7 +23,7 @@
 const approvalCapabilities = require("./approval-capability-registry");
 
 /** Search/discovery tools whose results are tracked for conflict evidence. */
-const SEARCH_TOOLS = Object.freeze(new Set(["list_files", "glob", "search_grep", "read_file", "search_vault", "read_open_tabs"]));
+const SEARCH_TOOLS = Object.freeze(new Set(["list_files", "glob", "search_text", "read_file", "search_vault", "read_open_tabs"]));
 
 /** Provenance values that are immutable to discovery evidence. */
 const IMMUTABLE_PROVENANCE = Object.freeze(new Set(["explicit", "clarified", "uninterpreted"]));
@@ -96,7 +96,7 @@ function createSearchTracker() {
 function normalizeSearchRecord(tool, args = {}, result, flags = {}) {
   const items = Array.isArray(result) ? result : (Array.isArray(result?.matches) ? result.matches : (Array.isArray(result?.files) ? result.files : (Array.isArray(result?.tabs) ? result.tabs : null)));
   const query = tool === "read_file" ? normalizePath(args.path)
-    : (tool === "glob" || tool === "search_grep" || tool === "search_vault") ? String(args.pattern || args.query || "")
+    : (tool === "glob" || tool === "search_text" || tool === "search_vault") ? String(args.pattern || args.query || "")
       : (tool === "read_open_tabs") ? "" : "";
   return {
     tool,
@@ -104,7 +104,7 @@ function normalizeSearchRecord(tool, args = {}, result, flags = {}) {
     empty: items ? items.length === 0 : false,
     notFound: flags.notFound === true || result?.notFound === true,
     truncated: result?.truncated === true,
-    exhaustive: flags.exhaustive === true || (["glob", "search_grep", "read_file"].includes(tool) && result?.truncated !== true),
+    exhaustive: flags.exhaustive === true || (["glob", "search_text", "read_file"].includes(tool) && result?.truncated !== true),
     succeeded: flags.failed !== true,
     matches: (items || []).map((item) => typeof item === "string" ? item : (item?.path || item?.value || "")).filter(Boolean)
   };
@@ -146,7 +146,7 @@ function detectAbsentTargets(contract, tracker) {
       });
       if (!hasOpenTab && exactGlobMiss) absent.push({ id: target.id, value: target.value, kind: target.kind });
     } else if (target.kind === "symbol") {
-      const grepMiss = records.some((record) => record.tool === "search_grep" && record.query === target.value && record.empty && record.exhaustive && !record.truncated);
+      const grepMiss = records.some((record) => record.tool === "search_text" && record.query === target.value && record.empty && record.exhaustive && !record.truncated);
       if (grepMiss) absent.push({ id: target.id, value: target.value, kind: target.kind });
     }
   }
@@ -175,7 +175,7 @@ function detectConfirmedTargets(contract, tracker) {
       const filename = normalizePath(target.value).split("/").pop();
       if (records.some((record) => record.matches.some((match) => match.split("/").pop() === filename))) confirmed.push(target.id);
     } else if (target.kind === "symbol") {
-      if (records.some((record) => record.tool === "search_grep" && record.query === target.value && !record.empty)) confirmed.push(target.id);
+      if (records.some((record) => record.tool === "search_text" && record.query === target.value && !record.empty)) confirmed.push(target.id);
     }
   }
   return [...new Set(confirmed)];

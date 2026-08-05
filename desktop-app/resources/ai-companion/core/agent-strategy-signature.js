@@ -20,7 +20,7 @@ const STRATEGY_CLASSES = Object.freeze([
   "other"
 ]);
 
-const SEARCH_TOOLS = new Set(["search_vault", "search_grep", "glob", "list_files", "graph_search_nodes", "api_asset_search", "preferences_search"]);
+const SEARCH_TOOLS = new Set(["search_vault", "search_text", "glob", "list_files", "graph_search_nodes", "api_asset_search", "preferences_search"]);
 const VALIDATION_TOOLS = new Set(["run_tests", "compile_project", "run_command"]);
 const TRACE_TOOLS = new Set(["graph_find_paths", "graph_get_node_context", "get_link_context"]);
 const FILLER_WORDS = new Set(["again", "careful", "carefully", "different", "more", "new", "now", "retry", "thorough", "thoroughly"]);

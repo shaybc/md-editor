@@ -11,7 +11,7 @@ const crypto = require("node:crypto");
 
 const CANDIDATE_EVIDENCE_ID = "EV-CANDIDATE-1";
 const MAX_EVIDENCE_SUMMARY_CHARS = 1200;
-const EXECUTION_TOOLS = new Set(["run_command", "run_test", "compile_project", "run_tests", "restore_dependencies", "manage_package"]);
+const EXECUTION_TOOLS = new Set(["run_command", "run_test", "compile_project", "run_tests", "restore_dependencies", "manage_dependencies"]);
 const MUTATION_TOOLS = new Set(["apply_edit", "write_file"]);
 const LOCALIZATION_FILE_TOOLS = new Set([
   "read_file", "read_active_document", "read_open_tabs",
@@ -89,7 +89,7 @@ function normalizeSuccessConfirmation(tool, result, mutationDetails, outcome) {
       confirmationSource: hasExitStatus ? "exit-status" : (confirmed ? "command-completion" : "")
     };
   }
-  if (/^git_panel_/.test(tool) && !/^git_panel_(?:status|branch_list|compare_file|changes_digest|pr_notes_context)$/.test(tool)) {
+  if (/^git_/.test(tool) && !/^git_(?:status|branches|diff|changes_digest|pr_notes)$/.test(tool)) {
     return { verifiedState: true, successConfirmedIndependently: true, confirmationSource: "git-post-state" };
   }
   if (result?.status === "partial") {

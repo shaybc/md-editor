@@ -12,14 +12,14 @@ const PATH_RESOURCE_TOOLS = new Set([...FILE_WRITE_TOOLS, "delete_file", "move_p
 const CAPABILITIES = Object.freeze({
   delete_file: { id: "workspace.file.delete", risk: "high", label: "Delete workspace files", maxLifetime: "action" },
   move_path: { id: "workspace.path.move", risk: "high", label: "Move workspace paths", maxLifetime: "action" },
-  git_panel_stage_files: { id: "git.index.change", risk: "medium", label: "Change Git index", maxLifetime: "workspace" },
-  git_panel_unstage_files: { id: "git.index.change", risk: "medium", label: "Change Git index", maxLifetime: "workspace" },
-  git_panel_commit: { id: "git.commit.create", risk: "medium", label: "Create Git commits", maxLifetime: "workspace" },
-  git_panel_create_branch: { id: "git.branch.local", risk: "medium", label: "Change local branches", maxLifetime: "workspace" },
-  git_panel_switch_branch: { id: "git.branch.local", risk: "medium", label: "Change local branches", maxLifetime: "workspace" },
-  git_panel_fetch: { id: "git.remote.change", risk: "high", label: "Fetch from Git remotes", maxLifetime: "action" },
-  git_panel_pull: { id: "git.remote.change", risk: "high", label: "Pull from Git remotes", maxLifetime: "action" },
-  git_panel_push: { id: "git.remote.change", risk: "high", label: "Push to Git remotes", maxLifetime: "action" },
+  git_stage: { id: "git.index.change", risk: "medium", label: "Change Git index", maxLifetime: "workspace" },
+  git_unstage: { id: "git.index.change", risk: "medium", label: "Change Git index", maxLifetime: "workspace" },
+  git_commit: { id: "git.commit.create", risk: "medium", label: "Create Git commits", maxLifetime: "workspace" },
+  git_branch_create: { id: "git.branch.local", risk: "medium", label: "Change local branches", maxLifetime: "workspace" },
+  git_branch_switch: { id: "git.branch.local", risk: "medium", label: "Change local branches", maxLifetime: "workspace" },
+  git_fetch: { id: "git.remote.change", risk: "high", label: "Fetch from Git remotes", maxLifetime: "action" },
+  git_pull: { id: "git.remote.change", risk: "high", label: "Pull from Git remotes", maxLifetime: "action" },
+  git_push: { id: "git.remote.change", risk: "high", label: "Push to Git remotes", maxLifetime: "action" },
   export_active_document: { id: "export.document", risk: "low", label: "Export documents", maxLifetime: "workspace" },
   export_active_folder_graph: { id: "export.graph", risk: "low", label: "Export folder graphs", maxLifetime: "workspace" },
   start_code_conversion: { id: "conversion.start", risk: "medium", label: "Start code conversion", maxLifetime: "workspace" },
@@ -98,7 +98,8 @@ function createGenericGrantOptions(descriptor, maximum) {
  * @param {object} context Workspace and effective security policy context.
  * @returns {object|null} Capability descriptor, or null when the tool is not approval-capable.
  */
-function describe(toolName, args = {}, context = {}) {
+function describe(rawToolName, args = {}, context = {}) {
+  const toolName = require("./tool-scope-registry").toCanonicalName(rawToolName);
   let definition = CAPABILITIES[toolName];
   if (FILE_WRITE_TOOLS.has(toolName)) definition = { id: "workspace.file.write", risk: "low", label: "Write workspace files", maxLifetime: "workspace" };
   if (!definition) return null;

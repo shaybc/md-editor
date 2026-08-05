@@ -304,7 +304,7 @@
      */
     function getToolGroupBucket(tool) {
       if (tool === "run_command" || tool === "run_test") return "command";
-      if (tool === "search_grep") return "pattern";
+      if (tool === "search_text") return "pattern";
       if (tool === "read_file") return "readFile";
       if (tool === "apply_edit" || tool === "write_file") return "editFile";
       if (tool === "glob" || tool === "list_files") return "listing";

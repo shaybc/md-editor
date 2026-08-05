@@ -77,7 +77,7 @@ test("grounded retrieval reads one unique symbol target and escalates ambiguous 
     assert.equal(result.evidence.length, 1);
     assert.equal(result.evidence[0].path, "src/cache.js");
     assert.match(result.evidence[0].content, /30000/);
-    assert.deepEqual(events.filter((event) => event.summary === "running").map((event) => event.tool), ["search_grep", "read_file"]);
+    assert.deepEqual(events.filter((event) => event.summary === "running").map((event) => event.tool), ["search_text", "read_file"]);
     assert.equal(events.some((event) => event.tool === "list_files"), false);
 
     await fsPromises.writeFile(path.join(workspaceRoot, "src", "other.js"), "const ttlMs = 45000;\n", "utf8");

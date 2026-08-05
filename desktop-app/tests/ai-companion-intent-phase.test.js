@@ -1134,7 +1134,7 @@ test("semantic conflict ask route refreshes the contract from the user's correct
           return { content: "", toolCalls: [{ id: isRefresh ? "refresh" : "capture", function: { name: "capture_intent_contract", arguments: JSON.stringify(contract) } }] };
         }
         round += 1;
-        if (round === 1) return { content: "searching", toolCalls: [{ id: "g1", function: { name: "search_grep", arguments: JSON.stringify({ pattern: "temp" }) } }] };
+        if (round === 1) return { content: "searching", toolCalls: [{ id: "g1", function: { name: "search_text", arguments: JSON.stringify({ pattern: "temp" }) } }] };
         if (round === 2) return { content: "conflict", toolCalls: [{ id: "c1", function: { name: "report_intent_conflict", arguments: JSON.stringify({ fieldRef: "goal", conflictType: "goal-misread", evidenceToolCallIds: ["g1"], explanation: "The user wants an explanation." }) } }] };
         return { content: "answer", toolCalls: [] };
       },

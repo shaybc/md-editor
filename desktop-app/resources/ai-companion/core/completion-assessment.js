@@ -141,7 +141,7 @@ const FINDING_SHAPES = new Set(["diagnostic-finding", "conformance-inspection", 
 /** Criterion shapes whose requirement is satisfied by an inspection/read having happened. */
 const INSPECTION_SHAPES = new Set(["conformance-inspection", "diagnostic-finding"]);
 /** Tool names that constitute an actual inspection/read action (used by the fallback). */
-const INSPECTION_TOOL_PATTERN = /read|git_panel|search|grep|glob|list|compare|inspect|open_tabs/i;
+const INSPECTION_TOOL_PATTERN = /read|git_status|git_diff|git_branches|git_changes_digest|git_pr_notes|search|glob|list|inspect|open_tabs/i;
 
 /**
  * Narrow the evidence a single criterion is allowed to cite. Returns admissible tool entries

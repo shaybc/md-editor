@@ -26,7 +26,7 @@ test("capability-scoped decision blocks exactly its capability", () => {
   assert.equal(blocked.blocked, true);
   assert.equal(blocked.via, "capability");
   // A different capability under a scoped decision is not blocked.
-  assert.equal(evaluateMutationControl("git_panel_commit", {}, contract).blocked, false);
+  assert.equal(evaluateMutationControl("git_commit", {}, contract).blocked, false);
   // Reads are never blocked.
   assert.equal(evaluateMutationControl("read_file", { path: "x.js" }, contract).blocked, false);
 });
@@ -43,7 +43,7 @@ test("target-scoped decision blocks its target, allows an associated other targe
 
 test("a decision with no scope blocks every effectful tool but no reads", () => {
   const contract = contractWith([{ description: "unresolved", controlsMutation: true }]);
-  assert.equal(evaluateMutationControl("git_panel_commit", {}, contract).via, "unknown-scope");
+  assert.equal(evaluateMutationControl("git_commit", {}, contract).via, "unknown-scope");
   assert.equal(evaluateMutationControl("apply_edit", { path: "x" }, contract).blocked, true);
   assert.equal(evaluateMutationControl("request_send", { requestId: "r" }, contract).blocked, true);
   assert.equal(evaluateMutationControl("read_file", { path: "x" }, contract).blocked, false);

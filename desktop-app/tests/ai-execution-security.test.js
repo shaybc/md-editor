@@ -7,6 +7,7 @@ const vm = require("node:vm");
 const { spawnSync } = require("node:child_process");
 
 const { getAgentToolDefinitions, runAgentToolLoop } = require("../resources/ai-companion/core/agent-tool-loop");
+const { toCanonicalName } = require("../resources/ai-companion/core/tool-scope-registry");
 const { CommandAuditLogger } = require("../resources/ai-companion/security/audit-log");
 const { classifyCommand } = require("../resources/ai-companion/security/command-suggestion");
 const effectivePolicy = require("../resources/ai-companion/security/effective-policy");
@@ -33,13 +34,13 @@ function createRuntime() {
 }
 
 test("agent exposes typed execution tools and no string-based run_test", () => {
-  const names = getAgentToolDefinitions("agent").map((definition) => definition.function.name);
+  const names = getAgentToolDefinitions("agent").map((definition) => toCanonicalName(definition.function.name));
   assert.equal(names.includes("run_command"), true);
   assert.equal(names.includes("run_test"), false);
   assert.equal(names.includes("compile_project"), true);
   assert.equal(names.includes("run_tests"), true);
   assert.equal(names.includes("restore_dependencies"), true);
-  assert.equal(names.includes("manage_package"), true);
+  assert.equal(names.includes("manage_dependencies"), true);
 });
 
 test("fresh policy defaults to deny-and-audit with wildcard package rules and disabled launchers", () => {
@@ -196,7 +197,7 @@ test("command classifier suggests typed tools without executing", () => {
   assert.equal(classifyCommand("mvn test").suggestion.tool, "run_tests");
   assert.equal(classifyCommand("node --test tests/example.test.js").suggestion.tool, "run_tests");
   assert.equal(classifyCommand("npx playwright test").suggestion.tool, "run_tests");
-  assert.equal(classifyCommand("npm install lodash@4.17.21").suggestion.tool, "manage_package");
+  assert.equal(classifyCommand("npm install lodash@4.17.21").suggestion.tool, "manage_dependencies");
 });
 
 test("package providers expose the constrained provider interface for every V1 ecosystem", () => {

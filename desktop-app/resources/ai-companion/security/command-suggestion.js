@@ -29,7 +29,7 @@ function classifyCommand(command) {
   const packageMatch = lower.match(/^(npm|yarn|pnpm)\s+(install|add|update|remove|uninstall)\s+(@?[\w./-]+)(?:@([^\s]+))?/);
   if (packageMatch) {
     const action = ["remove", "uninstall"].includes(packageMatch[2]) ? "remove" : packageMatch[2] === "update" ? "update" : "install";
-    return suggestion("manage_package", {
+    return suggestion("manage_dependencies", {
       targetPath: ".",
       ecosystem: packageMatch[1],
       action,

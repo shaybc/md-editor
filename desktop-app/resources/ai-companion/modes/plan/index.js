@@ -75,7 +75,7 @@ async function runPlanStatefulMode(request, emit, settings, prompt, prompts, pro
     throw new Error("Plan stateful controller is not correctly configured (expected read-only controller policy).");
   }
   const workspaceRoot = request.workspaceRoot;
-  const gitReadOptions = { planGitReadToolsEnabled: settings.planGitReadToolsEnabled === true };
+  const gitReadOptions = { planGitReadToolsEnabled: settings.planGitReadToolsEnabled === true, enabledScopes: settings.toolScopes };
   const planTools = getAgentToolDefinitions("plan", gitReadOptions);
   const controlTools = createPlanControlToolDefinitions();
   const providerTools = [...planTools, ...controlTools];
@@ -166,7 +166,7 @@ async function runPlanMode(request, emit) {
   // Plan tool can produce, stop or ask the user instead of inventing it. The
   // available toolset reflects the Fix 3 flag, so the two fixes compose.
   let effectivePrompt = prompt;
-  const planToolNames = getAgentToolDefinitions("plan", { planGitReadToolsEnabled: settings.planGitReadToolsEnabled === true })
+  const planToolNames = getAgentToolDefinitions("plan", { planGitReadToolsEnabled: settings.planGitReadToolsEnabled === true, enabledScopes: settings.toolScopes })
     .map((definition) => definition?.function?.name).filter(Boolean);
   const capabilityGate = settings.planCapabilityGateEnabled === true
     ? planCapabilityMap.evaluatePlanCapabilityGate({

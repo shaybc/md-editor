@@ -17,8 +17,8 @@ const planCapabilityMap = require("../resources/ai-companion/core/plan-capabilit
 const planRepositoryTools = require("../resources/ai-companion/tools/plan-repository-tools");
 const planMode = require("../resources/ai-companion/modes/plan");
 
-const PLAN_TOOLS_NO_GIT = ["read_file", "search_grep", "list_files", "glob"];
-const PLAN_TOOLS_WITH_GIT = [...PLAN_TOOLS_NO_GIT, "git_panel_status", "git_panel_changes_digest"];
+const PLAN_TOOLS_NO_GIT = ["read_file", "search_text", "list_files", "glob"];
+const PLAN_TOOLS_WITH_GIT = [...PLAN_TOOLS_NO_GIT, "git_status", "git_changes_digest"];
 
 /* ------------------------------------------------------------- pure logic */
 

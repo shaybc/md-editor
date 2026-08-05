@@ -3093,6 +3093,21 @@ async function startMarkdownViewer() {
       onPromptsChanged: function() { app.modules?.aiCompanionPanel?.refreshModeMessages?.(); }
     });
   }
+  if (typeof window.registerMarkdownViewerAiCompanionToolAccessSettings === "function") {
+    window.registerMarkdownViewerAiCompanionToolAccessSettings(app, {
+      getToolScopes: function() { return getAiCompanionSettings().toolScopes; },
+      persistToolScopes: function(toolScopes) {
+        const state = loadGlobalState();
+        const current = state && state.aiCompanionSettings && typeof state.aiCompanionSettings === "object" && !Array.isArray(state.aiCompanionSettings)
+          ? state.aiCompanionSettings : {};
+        const merged = aiCompanionSettings?.normalize
+          ? aiCompanionSettings.normalize(Object.assign({}, current, { toolScopes }))
+          : Object.assign({}, current, { toolScopes });
+        saveGlobalState({ aiCompanionSettings: merged });
+        app.modules?.aiCompanionPanel?.refreshModeMessages?.();
+      }
+    });
+  }
   window.setTimeout(function() { void runAiCompanionSettingsDefaultsUpgrade(); }, 0);
   const sourceRoot = window.registerMarkdownViewerSourceRoot(app, {
     get activeFolderPath() { return activeFolderPath; },
@@ -6778,6 +6793,8 @@ async function startMarkdownViewer() {
 
   function getSettingsControlFallbackTooltip(control) {
     if (!control) return "";
+    // Controls that provide their own custom tooltip opt out of the native title.
+    if (control.dataset?.nativeTooltip === "off") return "";
     const id = control.id || "";
     if (id && SETTINGS_CONTROL_TOOLTIPS[id]) return SETTINGS_CONTROL_TOOLTIPS[id];
     if (control.classList?.contains("settings-tab-button")) {

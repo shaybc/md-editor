@@ -187,7 +187,7 @@ test("blocked reports require internally consistent state evidence", () => {
 test("controller requires a current materially different replan when progress control stalls", () => {
   const definitions = [{
     type: "function",
-    function: { name: "search_grep", parameters: { type: "object", required: ["query"], properties: { query: { type: "string" } } } }
+    function: { name: "search_text", parameters: { type: "object", required: ["query"], properties: { query: { type: "string" } } } }
   }];
   const state = createInitialAgentState({
     runId: "replan",
@@ -200,7 +200,7 @@ test("controller requires a current materially different replan when progress co
   state.progress.recentAssessments = [{ assessmentId: "P1", status: "no_progress" }];
 
   const attempt = (revisedApproach) => controller.normalizeDecisionAttempt({
-    toolCalls: [toolCall("search_grep", {
+    toolCalls: [toolCall("search_text", {
       query: "parser callers",
       _decision: {
         ...metadata("Call sites of the parser"),
@@ -232,7 +232,7 @@ test("controller uses state-built context and executes one native tool per decis
     completeMessage: async (messages, options) => {
       calls.push({ messages: JSON.parse(JSON.stringify(messages)), options: JSON.parse(JSON.stringify({ toolChoice: options.toolChoice, tools: options.tools })) });
       round += 1;
-      if (round === 1) return { content: "I will inspect the workspace.", toolCalls: [toolCall("list_files", { maxFiles: 10, _decision: metadata("Workspace file names") }, "list-1")] };
+      if (round === 1) return { content: "I will inspect the workspace.", toolCalls: [toolCall("glob", { pattern: "*", maxFiles: 10, _decision: metadata("Workspace file names") }, "list-1")] };
       return {
         content: "",
         toolCalls: [toolCall("agent_propose_completion", {
@@ -248,7 +248,7 @@ test("controller uses state-built context and executes one native tool per decis
     assert.equal(result.content, "The workspace contains README.md.");
     assert.equal(calls.length, 2);
     assert.equal(calls[0].options.toolChoice, "required");
-    assert.ok(calls[0].options.tools.find((entry) => entry.function.name === "list_files").function.parameters.required.includes("_decision"));
+    assert.ok(calls[0].options.tools.find((entry) => entry.function.name === "glob").function.parameters.required.includes("_decision"));
     assert.equal(calls[1].messages.some((message) => message.role === "tool"), false, "ordinary decisions must not reuse legacy tool turns");
     assert.match(calls[1].messages.map((message) => String(message.content || "")).join("\n"), /recentDecisions|recentObservations/);
     assert.deepEqual(result.state.recentDecisions.map((decision) => decision.status), ["executed", "executed"]);

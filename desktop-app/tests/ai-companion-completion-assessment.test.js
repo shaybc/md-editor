@@ -161,7 +161,7 @@ test("deterministic fallback rescues an inspection criterion when the model cite
       criteria: [{ id: "AC1", status: "unmet", evidenceQuote: "", evidenceIds: [CANDIDATE_EVIDENCE_ID], explanation: "cited candidate only", claimType: "response-content" }]
     })
   };
-  const evidenceLedger = ledgerEntries({ tool: "git_panel_compare_file", toolCallId: "g1", result: { status: "ok" }, summary: "diff: +new conformance section" });
+  const evidenceLedger = ledgerEntries({ tool: "git_diff", toolCallId: "g1", result: { status: "ok" }, summary: "diff: +new conformance section" });
   const result = await assessAcceptanceCriteria({ provider, settings: {}, prompts: {}, contract: inspectionContract, candidate: "answer", evidenceLedger });
   const ac1 = result.assessment.criteria[0];
   assert.equal(ac1.status, "met", "a succeeded inspection tool establishes that the inspection happened");
@@ -207,7 +207,7 @@ test("inspection fallback does NOT fire from an unrelated discovery tool (target
 
 function noOpWriteLedger(comparisonMet = true) {
   const ledger = createCompletionEvidenceLedger();
-  if (comparisonMet) ledger.recordToolEvidence({ tool: "git_panel_compare_file", toolCallId: "g1", result: { status: "ok" }, summary: "diff: +new section" });
+  if (comparisonMet) ledger.recordToolEvidence({ tool: "git_diff", toolCallId: "g1", result: { status: "ok" }, summary: "diff: +new section" });
   ledger.recordToolEvidence({ tool: "write_file", toolCallId: "w1", args: { path: "doc.md" }, error: { code: "APPROVAL_ACTION_NO_CHANGE", actionAnalysis: { operation: "no-op" }, message: "would not change" } });
   ledger.recordCandidateEvidence("answer");
   return ledger.listEvidence();
@@ -411,10 +411,10 @@ test("Git change claims require a succeeded digest or compare-file result", asyn
   };
   const evidenceLedger = ledgerEntries({
     toolCallId: "digest-1",
-    tool: "git_panel_changes_digest",
+    tool: "git_changes_digest",
     result: { status: "success" }
   });
-  const digestId = evidenceLedger.find((entry) => entry.tool === "git_panel_changes_digest").id;
+  const digestId = evidenceLedger.find((entry) => entry.tool === "git_changes_digest").id;
   const provider = {
     completeMessage: async () => assessmentMessage({
       criteria: [{ id: "AC1", status: "met", evidenceQuote: "quoted evidence span", evidenceIds: [digestId], explanation: "The diff digest establishes the changes.", claimType: "response-content" }]

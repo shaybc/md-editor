@@ -20,6 +20,10 @@ task needs them, not part of every request.
    sensible cap, so output is bounded by default and pages via the same rhythm.
    Prefer counts over absolute endpoints (a count can't invert or require knowing
    the target's size).
+6. **Read/write scope separation per domain.** Every domain splits into a `.read`
+   scope (inspection) and a `.write` scope (mutation), so a mode or a user can
+   grant "look but don't touch" for any domain independently. Execution-only
+   domains have just a write/execute scope.
 
 ---
 
@@ -111,22 +115,27 @@ always present; the model reads a specific tab's content via `read_file`.
 
 ### Scoped sets (loaded only when the task/scope calls for it)
 
+Every domain is split into a `.read` and a `.write` scope (principle 6). The
+file-editing scope is separate and governed by mode/edit-capability, not by the
+per-domain settings matrix below.
+
+**File editing (not domain-toggleable):**
+
 - **edit:** `apply_edit(path, search, replacement, occurrence?, expectedMatches?)`,
   `write_file(path, content, openInTab?)`. Loaded only for modes/tasks that modify
   files (agent / edit tasks); never present in read-only Plan or chat.
-- **git.read:** `git_status` (status+digest), `git_diff(path?)` (compare_file),
-  `git_branches` (branch_list).
-- **git.write:** `git_stage(files)`, `git_unstage(files)`, `git_commit(message)`,
-  `git_push`, `git_pull`, `git_fetch`, `git_branch_create(branch)`,
-  `git_branch_switch(branch|remoteBranch)`.
-- **execution:** `run_command(command)`, `run_tests`, `compile_project`,
-  `manage_dependencies(action)` (restore + manage_package).
-- **plan:** `plan_list`, `plan_read`, `plan_create`, `plan_update` (folds
-  update_status via a `status` field).
-- **apiclient:** the 15 API tools — entirely behind this scope.
-- **graph:** the 8 graph tools + `get_link_context` — behind this scope.
-- **settings:** the 6 preference tools — behind this scope.
-- **conversion:** the 6 conversion/export tools — behind this scope.
+
+**Domain scopes (each independently toggleable in Settings → AI):**
+
+| Domain | `.read` scope | `.write` scope |
+|---|---|---|
+| Git | `git_status`, `git_diff(path?)`, `git_branches` | `git_stage`, `git_unstage`, `git_commit`, `git_push`, `git_pull`, `git_fetch`, `git_branch_create`, `git_branch_switch` |
+| Plan | `plan_list`, `plan_read` | `plan_create`, `plan_update` (folds `update_status` via a `status` field) |
+| API Client | `api_asset_search`, `api_asset_get`, `request_history_get`, `response_analyze`, `environment_get`, `environment_resolve`, `mock_call` | `request_create`, `request_update`, `request_send`, `environment_update`, `mock_create`, `mock_update` |
+| Graph | `graph_get_state`, `graph_search_nodes`, `graph_get_node_context`, `graph_find_paths`, `get_link_context` | `graph_apply_filter`, `graph_focus_nodes`, `graph_show_local`, `graph_clear_focus` (ui-state) |
+| Settings | `preferences_get`, `preferences_search`, `preferences_export` | `preferences_update`, `preferences_reset`, `preferences_import` |
+| Conversion | `get_conversion_export_state`, `get_code_conversion_status`, `read_conversion_report` | `export_active_document`, `export_active_folder_graph`, `start_code_conversion` |
+| Execution | *(none)* | `run_command`, `run_tests`, `compile_project`, `manage_dependencies(action)` (write/execute only) |
 
 ### Remove from the model roster entirely
 
@@ -152,6 +161,44 @@ always present; the model reads a specific tab's content via `read_file`.
 - The merges remove same-job duplicates that cause wrong-tool selection.
 
 ---
+
+## Per-domain tool availability (Settings → AI)
+
+A new tab under **Settings → AI** lets the user choose which **domain** scopes are
+exposed to the model. Because every domain is split read/write (principle 6), the
+control is a **Domain × {Read, Write}** matrix:
+
+| Domain | Read | Write |
+|---|---|---|
+| Git | ☐ | ☐ |
+| Plan | ☐ | ☐ |
+| API Client | ☐ | ☐ |
+| Graph | ☐ | ☐ |
+| Settings | ☐ | ☐ |
+| Conversion | ☐ | ☐ |
+| Execution | — | ☐ |
+
+Rules:
+
+- **Core readers (`glob`, `search_text`, `read_file`) are always on** and are not
+  shown in the matrix.
+- **File-editing tools (`apply_edit`, `write_file`) are not in the matrix** — they
+  are governed by mode/edit-capability, not per-domain settings.
+- Each checked cell makes that scope *eligible* to be seeded into a request; an
+  unchecked cell means those tools are never exposed to the model, in any mode.
+- Effective per-request toolset = core readers + (edit tools if the mode edits) +
+  (task-relevant domain scopes ∩ user-enabled scopes from this matrix). The static
+  per-mode/per-task seeds still decide which enabled scopes a given task pulls in;
+  this matrix is the outer allow-list.
+
+Persistence: store as a scope allow-list in `aiCompanionSettings` (e.g.
+`toolScopes: { "git.read": true, "git.write": false, ... }`), so it flows through
+the existing settings `normalize`/defaults path and is reconciled on future default
+changes by the settings-upgrade mechanism already in place.
+
+**Open sub-decision — defaults:** propose `.read` scopes default **on** and
+`.write`/execution scopes default **off** (safer; user opts in to mutation). Needs
+confirmation.
 
 ## Recorded decisions
 

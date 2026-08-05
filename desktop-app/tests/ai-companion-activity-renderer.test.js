@@ -285,7 +285,7 @@ test("AI Companion keeps pre-execution blocks out of attempted changes and rende
 
 test("AI Companion bounds nested Git status activity details without recursion", () => {
   const activityRun = createActivityRun("C:/project", {});
-  const started = activityRun.createStartedActivity("git-status-1", "git_panel_status", {}, "git_panel_status");
+  const started = activityRun.createStartedActivity("git-status-1", "git_status", {}, "git_status");
   const activity = activityRun.createFinishedActivity(started, {}, {
     action: "status",
     isRepo: true,

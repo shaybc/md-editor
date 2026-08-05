@@ -26,8 +26,8 @@ const {
 test("plan allowlist is derived read-only and excludes every mutation tool", () => {
   const allowed = derivePlanAllowedToolNames();
   assert.ok(allowed.has("read_file"));
-  assert.ok(allowed.has("search_grep"));
-  for (const forbidden of ["write_file", "apply_edit", "run_command", "git_panel_commit", "plan_create"]) {
+  assert.ok(allowed.has("search_text"));
+  for (const forbidden of ["write_file", "apply_edit", "run_command", "git_commit", "plan_create"]) {
     assert.equal(allowed.has(forbidden), false, `${forbidden} must not be allowlisted`);
   }
 });
@@ -56,7 +56,7 @@ test("mutation decisions and mutation tools are rejected", () => {
     { type: "write_file", basedOnStateVersion: 1 },
     { type: "commit", basedOnStateVersion: 1 },
     { toolName: "write_file", basedOnStateVersion: 1 },
-    { toolName: "git_panel_commit", basedOnStateVersion: 1 }
+    { toolName: "git_commit", basedOnStateVersion: 1 }
   ]) {
     const result = validatePlanDecision(decision, { currentStateVersion: 1, allowedToolNames: new Set(["read_file"]) });
     assert.equal(result.valid, false);

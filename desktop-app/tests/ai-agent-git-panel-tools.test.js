@@ -9,6 +9,7 @@ const tools = require("../resources/ai-companion/tools/workspace-tools");
 const gitPanelTools = require("../resources/ai-companion/tools/git-panel-tools");
 const gitBridge = require("../resources/bridges/git-bridge/git-bridge.cjs");
 const { getAgentToolDefinitions, runAgentToolLoop } = require("../resources/ai-companion/core/agent-tool-loop");
+const { toCanonicalName } = require("../resources/ai-companion/core/tool-scope-registry");
 
 function hasGitCli() {
   try {
@@ -59,19 +60,20 @@ function createFixtureRepo() {
 
 test("Git Panel tools are exposed by mode with plan mode unchanged", () => {
   const chatDefinitions = getAgentToolDefinitions("chat");
-  const chatNames = chatDefinitions.map((definition) => definition.function.name);
-  const agentNames = getAgentToolDefinitions("agent").map((definition) => definition.function.name);
-  const planNames = getAgentToolDefinitions("plan").map((definition) => definition.function.name);
+  // Definitions expose model-facing names; canonicalize for these assertions.
+  const chatNames = chatDefinitions.map((definition) => toCanonicalName(definition.function.name));
+  const agentNames = getAgentToolDefinitions("agent").map((definition) => toCanonicalName(definition.function.name));
+  const planNames = getAgentToolDefinitions("plan").map((definition) => toCanonicalName(definition.function.name));
 
-  assert.equal(chatNames.includes("git_panel_status"), true);
-  assert.equal(chatNames.includes("git_panel_changes_digest"), true);
-  assert.equal(chatNames.includes("git_panel_stage_files"), false);
-  assert.equal(agentNames.includes("git_panel_status"), true);
-  assert.equal(agentNames.includes("git_panel_stage_files"), true);
-  assert.equal(agentNames.includes("git_panel_commit"), true);
-  assert.equal(planNames.includes("git_panel_status"), false);
-  assert.equal(planNames.includes("git_panel_stage_files"), false);
-  const statusDefinition = chatDefinitions.find((definition) => definition.function.name === "git_panel_status");
+  assert.equal(chatNames.includes("git_status"), true);
+  assert.equal(chatNames.includes("git_changes_digest"), true);
+  assert.equal(chatNames.includes("git_stage"), false);
+  assert.equal(agentNames.includes("git_status"), true);
+  assert.equal(agentNames.includes("git_stage"), true);
+  assert.equal(agentNames.includes("git_commit"), true);
+  assert.equal(planNames.includes("git_status"), false);
+  assert.equal(planNames.includes("git_stage"), false);
+  const statusDefinition = chatDefinitions.find((definition) => toCanonicalName(definition.function.name) === "git_status");
   assert.equal(statusDefinition.function.parameters.properties.maxFiles.maximum, 1000);
   assert.match(statusDefinition.function.description, /counts are complete; file details may be truncated/i);
 });
@@ -84,7 +86,7 @@ test("Git Panel read tools inspect status, digest, and PR notes context", { skip
     fs.writeFileSync(path.join(repoPath, "untracked.md"), "untracked\n");
     execFileSync("git", ["-C", repoPath, "add", "staged.md"], { stdio: "ignore" });
 
-    const status = await tools.runGitPanelTool(repoPath, "git_panel_status");
+    const status = await tools.runGitPanelTool(repoPath, "git_status");
     assert.equal(status.isRepo, true);
     assert.deepEqual(status.counts, { files: 3, staged: 1, unstaged: 2 });
     assert.equal(status.truncated, false);
@@ -92,12 +94,12 @@ test("Git Panel read tools inspect status, digest, and PR notes context", { skip
     assert.equal(status.status.files.some((file) => file.path === "README.md"), true);
     assert.equal(status.status.staged.some((file) => file.path === "staged.md"), true);
 
-    const digest = await tools.runGitPanelTool(repoPath, "git_panel_changes_digest");
+    const digest = await tools.runGitPanelTool(repoPath, "git_changes_digest");
     assert.match(digest.digest.stagedPatch, /staged/);
     assert.match(digest.digest.unstagedPatch, /changed/);
     assert.equal(digest.digest.untracked.some((entry) => entry.path === "untracked.md"), true);
 
-    const notes = await tools.runGitPanelTool(repoPath, "git_panel_pr_notes_context");
+    const notes = await tools.runGitPanelTool(repoPath, "git_pr_notes");
     assert.match(notes.scaffold, /# PR Notes/);
     assert.equal(notes.digest.clean, false);
   } finally {
@@ -108,7 +110,7 @@ test("Git Panel read tools inspect status, digest, and PR notes context", { skip
 test("Git status preserves the existing non-repository result", { skip: !hasGitCli() }, async () => {
   const folderPath = fs.mkdtempSync(path.join(os.tmpdir(), "md-editor-git-tools-non-repo-"));
   try {
-    const result = await tools.runGitPanelTool(folderPath, "git_panel_status");
+    const result = await tools.runGitPanelTool(folderPath, "git_status");
     assert.equal(result.isRepo, false);
     assert.deepEqual(result.counts, { files: 0, staged: 0, unstaged: 0 });
     assert.equal(result.status.files.length, 0);
@@ -195,7 +197,7 @@ test("successful Git status remains successful after activity formatting", async
   const provider = {
     completeMessage: async () => {
       round += 1;
-      if (round === 1) return { content: "", toolCalls: [createToolCall("git_panel_status", {})] };
+      if (round === 1) return { content: "", toolCalls: [createToolCall("git_status", {})] };
       return { content: "One changed file was found.", toolCalls: [] };
     },
     complete: async () => "One changed file was found."
@@ -207,11 +209,11 @@ test("successful Git status remains successful after activity formatting", async
     gitBridge.runRequest = originalRunRequest;
   }
 
-  assert.equal(events.some((event) => event.type === "tool-error" && event.tool === "git_panel_status"), false);
-  const completed = events.find((event) => event.type === "tool" && event.tool === "git_panel_status" && event.activity?.status === "completed");
+  assert.equal(events.some((event) => event.type === "tool-error" && event.tool === "git_status"), false);
+  const completed = events.find((event) => event.type === "tool" && event.tool === "git_status" && event.activity?.status === "completed");
   assert.equal(completed.activity.resultSummary, "1 changed file(s)");
   const summary = events.find((event) => event.type === "agent-summary");
-  const evidence = summary.evidenceLedger.find((entry) => entry.tool === "git_panel_status");
+  const evidence = summary.evidenceLedger.find((entry) => entry.tool === "git_status");
   assert.equal(evidence.outcome, "succeeded");
   assert.equal(evidence.verifiedState, true);
 });
@@ -232,7 +234,7 @@ test("Git status failures are non-retryable failed evidence and unchanged retrie
   const provider = {
     completeMessage: async () => {
       round += 1;
-      if (round <= 2) return { content: "", toolCalls: [createToolCall("git_panel_status", {})] };
+      if (round <= 2) return { content: "", toolCalls: [createToolCall("git_status", {})] };
       return { content: "Status could not be verified.", toolCalls: [] };
     },
     complete: async () => "Status could not be verified."
@@ -245,12 +247,12 @@ test("Git status failures are non-retryable failed evidence and unchanged retrie
   }
 
   assert.equal(bridgeCalls, 1);
-  const firstFailure = events.find((event) => event.type === "tool-error" && event.tool === "git_panel_status");
+  const firstFailure = events.find((event) => event.type === "tool-error" && event.tool === "git_status");
   assert.equal(firstFailure.structuredResult.status, "failed");
   assert.equal(firstFailure.structuredResult.error.retryable, false);
   assert.equal(JSON.stringify(firstFailure.structuredResult).includes("private raw parser detail"), false);
   const summary = events.find((event) => event.type === "agent-summary");
-  const evidence = summary.evidenceLedger.find((entry) => entry.tool === "git_panel_status");
+  const evidence = summary.evidenceLedger.find((entry) => entry.tool === "git_status");
   assert.equal(evidence.outcome, "failed");
   assert.equal(evidence.verifiedState, false);
 });
@@ -264,21 +266,21 @@ test("Git Panel mutations require approval and can stage and commit after approv
     const provider = {
       completeMessage: async () => {
         round += 1;
-        if (round === 1) return { content: "", toolCalls: [createToolCall("git_panel_stage_files", { files: ["approved.md"] })] };
-        if (round === 2) return { content: "", toolCalls: [createToolCall("git_panel_commit", { message: "Add approved file" })] };
+        if (round === 1) return { content: "", toolCalls: [createToolCall("git_stage", { files: ["approved.md"] })] };
+        if (round === 2) return { content: "", toolCalls: [createToolCall("git_commit", { message: "Add approved file" })] };
         return { content: "done", toolCalls: [] };
       },
       complete: async () => "done"
     };
 
-    await runAgentToolLoop(provider, {}, repoPath, "stage and commit", "agent", () => {}, createRuntime(), {
+    await runAgentToolLoop(provider, { toolScopes: { "git.write": true } }, repoPath, "stage and commit", "agent", () => {}, createRuntime(), {
       requestApproval: async (details) => {
         approvals.push(details);
         return { decision: "approve" };
       }
     });
 
-    assert.deepEqual(approvals.map((approval) => approval.tool), ["git_panel_stage_files", "git_panel_commit"]);
+    assert.deepEqual(approvals.map((approval) => approval.tool), ["git_stage", "git_commit"]);
     assert.match(git("log", "-1", "--pretty=%s"), /Add approved file/);
     assert.match(git("show", "--name-only", "--pretty=", "HEAD"), /approved.md/);
   } finally {
@@ -296,7 +298,7 @@ test("Git Panel mutation rejection prevents the git action", { skip: !hasGitCli(
       completeMessage: async () => {
         round += 1;
         return round === 1
-          ? { content: "", toolCalls: [createToolCall("git_panel_stage_files", { files: ["rejected.md"] })] }
+          ? { content: "", toolCalls: [createToolCall("git_stage", { files: ["rejected.md"] })] }
           : { content: "done", toolCalls: [] };
       },
       complete: async () => "done"

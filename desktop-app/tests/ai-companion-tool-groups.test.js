@@ -155,7 +155,7 @@ test("tools after narration collapse into a single group with an aggregated labe
 test("each rendered narration starts a new group", () => {
   const { container, renderer } = createRendererHarness();
   renderer.appendNarration({ content: "First I'll search the workspace for the storage helper." });
-  renderer.appendActivity(activityEvent("t1", "search_grep", "completed"));
+  renderer.appendActivity(activityEvent("t1", "search_text", "completed"));
   renderer.appendNarration({ content: "The helper lives in panel.js, so now I'm editing the two affected files." });
   renderer.appendActivity(activityEvent("t2", "apply_edit", "completed"));
   renderer.appendActivity(activityEvent("t3", "write_file", "completed"));

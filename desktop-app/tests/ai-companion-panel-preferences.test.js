@@ -4569,7 +4569,7 @@ test("workspace task details activity counts only tool activity events", async (
       { type: "chat-response", content: "Done" },
       { type: "approval", approvalId: "approval-count", title: "Approval count" },
       { type: "tool", tool: "read_file", activity: { title: "read_file", status: "completed" } },
-      { type: "tool-error", tool: "search_grep", error: "No match" }
+      { type: "tool-error", tool: "search_text", error: "No match" }
     ]
   });
   const chatIndex = JSON.parse(harness.storage.get("ai-companion-chats"));
@@ -4906,7 +4906,7 @@ test("workspace tools show terminal saved running activity as ran", async () => 
     mode: "agent",
     events: [
       { type: "tool", tool: "read_file", activity: { title: "read_file", status: "completed" } },
-      { type: "tool", tool: "search_grep", activity: { title: "search_grep", status: "running" } },
+      { type: "tool", tool: "search_text", activity: { title: "search_text", status: "running" } },
       { type: "tool", tool: "write_file", activity: { title: "write_file", status: "completed" } }
     ]
   });
@@ -4922,10 +4922,10 @@ test("workspace tools show terminal saved running activity as ran", async () => 
   assert.match(text, /Running0/);
   assert.match(text, /Completed3/);
   assert.match(text, /Failed0/);
-  assert.match(text, /search_grepRan/);
-  assert.doesNotMatch(text, /search_greprunning/);
-  assert.ok(text.indexOf("write_file") < text.indexOf("search_grep"));
-  assert.ok(text.indexOf("search_grep") < text.indexOf("read_file"));
+  assert.match(text, /search_textRan/);
+  assert.doesNotMatch(text, /search_textrunning/);
+  assert.ok(text.indexOf("write_file") < text.indexOf("search_text"));
+  assert.ok(text.indexOf("search_text") < text.indexOf("read_file"));
 
   assert.deepEqual(restoredActivities.map((activity) => activity.status), ["completed", "completed", "completed"]);
 
@@ -4961,7 +4961,7 @@ test("workspace tools preview expands all tools and restores inspector panels", 
   });
   const events = Array.from({ length: 8 }, (_unused, index) => ({
     type: "tool",
-    tool: index % 2 === 0 ? "read_file" : "search_grep",
+    tool: index % 2 === 0 ? "read_file" : "search_text",
     createdAt: 1783090800000 + index,
     completedAt: 1783090801000 + index,
     activity: { id: `tool-${index}`, title: `Tool ${index}`, status: "completed" }

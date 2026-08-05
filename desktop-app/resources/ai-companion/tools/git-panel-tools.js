@@ -17,22 +17,22 @@ const GIT_STATUS_ERROR_CODES = new Set([
 ]);
 
 const GIT_PANEL_READ_TOOL_NAMES = Object.freeze([
-  "git_panel_status",
-  "git_panel_branch_list",
-  "git_panel_compare_file",
-  "git_panel_changes_digest",
-  "git_panel_pr_notes_context"
+  "git_status",
+  "git_branches",
+  "git_diff",
+  "git_changes_digest",
+  "git_pr_notes"
 ]);
 
 const GIT_PANEL_MUTATING_TOOL_NAMES = Object.freeze([
-  "git_panel_stage_files",
-  "git_panel_unstage_files",
-  "git_panel_commit",
-  "git_panel_fetch",
-  "git_panel_pull",
-  "git_panel_push",
-  "git_panel_create_branch",
-  "git_panel_switch_branch"
+  "git_stage",
+  "git_unstage",
+  "git_commit",
+  "git_fetch",
+  "git_pull",
+  "git_push",
+  "git_branch_create",
+  "git_branch_switch"
 ]);
 
 const GIT_PANEL_TOOL_NAMES = Object.freeze([...GIT_PANEL_READ_TOOL_NAMES, ...GIT_PANEL_MUTATING_TOOL_NAMES]);
@@ -209,7 +209,7 @@ function getGitPanelToolInputSummary(toolName, args = {}) {
 
 function getGitPanelApprovalPreview(toolName, args = {}) {
   const files = getFilesArgument(args);
-  const lines = [`Action: ${toolName.replace(/^git_panel_/, "").replace(/_/g, " ")}`];
+  const lines = [`Action: ${toolName.replace(/^git_/, "").replace(/_/g, " ")}`];
   if (files.length) lines.push(`Files: ${files.join(", ")}`);
   if (args.branch) lines.push(`Branch: ${String(args.branch || "").trim()}`);
   if (args.remoteBranch) lines.push(`Remote branch: ${String(args.remoteBranch || "").trim()}`);
@@ -227,7 +227,7 @@ function isGitPanelMutatingTool(toolName) {
 
 async function runGitPanelTool(root, toolName, args = {}, options = {}) {
   switch (toolName) {
-    case "git_panel_status": {
+    case "git_status": {
       try {
         const result = await runGitRequest(root, { action: "status" }, options);
         return createBoundedGitStatusResult(result, args.maxFiles);
@@ -236,49 +236,49 @@ async function runGitPanelTool(root, toolName, args = {}, options = {}) {
         return createGitStatusFailure(error);
       }
     }
-    case "git_panel_branch_list":
+    case "git_branches":
       return runGitRequest(root, { action: "branchList" }, options);
-    case "git_panel_compare_file":
+    case "git_diff":
       return runGitRequest(root, {
         action: "compareFile",
         filePath: normalizeGitPath(args.filePath || args.path),
         originalPath: normalizeGitPath(args.originalPath),
         scope: String(args.scope || "unstaged")
       }, options);
-    case "git_panel_changes_digest":
+    case "git_changes_digest":
       return runGitRequest(root, { action: "changesDigest" }, options);
-    case "git_panel_pr_notes_context": {
+    case "git_pr_notes": {
       const result = await runGitRequest(root, { action: "changesDigest" }, options);
       return {
-        action: "git_panel_pr_notes_context",
+        action: "git_pr_notes",
         isRepo: result.isRepo,
         digest: result.digest,
         scaffold: createPrNotesScaffold(result.digest),
         instruction: "Use this digest as evidence and write the final PR notes in the assistant response."
       };
     }
-    case "git_panel_stage_files":
+    case "git_stage":
       assertMutationAllowed(options);
       return runGitRequest(root, { action: "stage", files: getFilesArgument(args) }, options);
-    case "git_panel_unstage_files":
+    case "git_unstage":
       assertMutationAllowed(options);
       return runGitRequest(root, { action: "unstage", files: getFilesArgument(args) }, options);
-    case "git_panel_commit":
+    case "git_commit":
       assertMutationAllowed(options);
       return runGitRequest(root, { action: "commit", message: String(args.message || "") }, options);
-    case "git_panel_fetch":
+    case "git_fetch":
       assertMutationAllowed(options);
       return runGitRequest(root, { action: "fetch" }, options);
-    case "git_panel_pull":
+    case "git_pull":
       assertMutationAllowed(options);
       return runGitRequest(root, { action: "pull" }, options);
-    case "git_panel_push":
+    case "git_push":
       assertMutationAllowed(options);
       return runGitRequest(root, { action: "push" }, options);
-    case "git_panel_create_branch":
+    case "git_branch_create":
       assertMutationAllowed(options);
       return runGitRequest(root, { action: "branchCreate", branch: String(args.branch || "") }, options);
-    case "git_panel_switch_branch":
+    case "git_branch_switch":
       assertMutationAllowed(options);
       return runGitRequest(root, { action: "switchBranch", branch: String(args.branch || ""), remoteBranch: String(args.remoteBranch || "") }, options);
     default:

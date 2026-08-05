@@ -108,7 +108,7 @@
     const APPROVAL_PILL_MAX_CHARS = 18;
     const AGENT_INPUT_MAX_VISIBLE_LINES = 4;
     const API_CLIENT_REFRESH_TOOLS = new Set(["request_create", "request_update", "request_send", "environment_update"]);
-    const GIT_PANEL_REFRESH_TOOLS = new Set(["git_panel_stage_files", "git_panel_unstage_files", "git_panel_commit", "git_panel_fetch", "git_panel_pull", "git_panel_push", "git_panel_create_branch", "git_panel_switch_branch"]);
+    const GIT_PANEL_REFRESH_TOOLS = new Set(["git_stage", "git_unstage", "git_commit", "git_fetch", "git_pull", "git_push", "git_branch_create", "git_branch_switch"]);
     const PANEL_VISIBILITY_ANIMATION_MS = 240;
     const TOOL_LOG_END_TOLERANCE_PX = 1;
     const TASK_CHANGES_INLINE_ENTRY_LIMIT = 2;
@@ -4622,7 +4622,7 @@
       switch (tool) {
         case "list_files": return { icon: "bi-list-ul", title: "Listing workspace files" };
         case "glob": return { icon: "bi-folder2-open", title: "Finding files" };
-        case "search_grep": return { icon: "bi-search", title: "Searching workspace" };
+        case "search_text": return { icon: "bi-search", title: "Searching workspace" };
         case "read_file": return { icon: "bi-file-earmark-text", title: "Reading file" };
         case "rate-limit": return { icon: "bi-hourglass-split", title: "Waiting for provider" };
         default: return { icon: "bi-gear", title: tool || "Tool activity" };
@@ -4688,7 +4688,7 @@
         case "extract_selection_to_note": return "Create note";
         case "list_files":
         case "glob": return "List";
-        case "search_grep": return "Search";
+        case "search_text": return "Search";
         case "run_command": return "Run command";
         case "run_test": return "Run test";
         case "browse": return "Browse";
@@ -4719,7 +4719,7 @@
         case "read_file": return "Allow the agent to read the displayed file.";
         case "list_files":
         case "glob": return "Allow the agent to list matching workspace files.";
-        case "search_grep": return "Allow the agent to search workspace file contents.";
+        case "search_text": return "Allow the agent to search workspace file contents.";
         case "browse": return "Allow the agent to open the displayed web location.";
         default: return normalizeApprovalDetailText(event.summary, "Allow the displayed agent action.");
       }

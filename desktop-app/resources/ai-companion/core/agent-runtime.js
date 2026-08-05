@@ -44,7 +44,7 @@ async function gatherWorkspaceContext(root, prompt, emit, options = {}) {
   for (const term of terms) {
     throwIfAborted(options.signal);
     const termMatches = await tools.searchGrep(root, term, { maxMatches: 20, signal: options.signal });
-    emit({ type: "tool", tool: "search_grep", input: term, summary: `${termMatches.length} matches` });
+    emit({ type: "tool", tool: "search_text", input: term, summary: `${termMatches.length} matches` });
     matches.push(...termMatches);
   }
 

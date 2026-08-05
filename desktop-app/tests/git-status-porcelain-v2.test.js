@@ -22,7 +22,7 @@ test("iterative parser reads the captured current-workspace porcelain status", (
   assert.equal(status.ahead, 0);
   assert.equal(status.behind, 0);
   assert.equal(status.files.length >= 19, true);
-  assert.equal(status.files.some((file) => file.path === "PLAN-fix-git_panel_status-stack-overflow.md"), true);
+  assert.equal(status.files.some((file) => file.path === "PLAN-fix-git_status-stack-overflow.md"), true);
   assert.equal(status.files.some((file) => file.path === "desktop-app/resources/bridges/git-bridge/git-status-porcelain-v2.cjs"), true);
 });
 

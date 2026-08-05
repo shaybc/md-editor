@@ -6,6 +6,7 @@
 
 const path = require("node:path");
 const { createCompletionEvidenceLedger } = require("./completion-evidence-ledger");
+const { toCanonicalName } = require("./tool-scope-registry");
 
 const MAX_RAW_DETAIL_CHARS = 3000;
 const MAX_RAW_STRING_CHARS = 800;
@@ -84,13 +85,14 @@ function createCodeSpan(value) {
   return `\`${String(value || "").replace(/`/g, "'")}\``;
 }
 
-function getToolPresentation(tool) {
+function getToolPresentation(rawTool) {
+  const tool = toCanonicalName(rawTool);
   switch (tool) {
     case "list_files":
       return { icon: "bi-list-ul", title: "Listing workspace files" };
     case "glob":
       return { icon: "bi-folder2-open", title: "Finding files" };
-    case "search_grep":
+    case "search_text":
       return { icon: "bi-search", title: "Searching workspace" };
     case "read_file":
       return { icon: "bi-file-earmark-text", title: "Reading file" };
@@ -116,31 +118,31 @@ function getToolPresentation(tool) {
       return { icon: "bi-check2-square", title: "Running test command" };
     case "run_command":
       return { icon: "bi-terminal", title: "Running command" };
-    case "git_panel_status":
+    case "git_status":
       return { icon: "bi-git", title: "Reading Git status" };
-    case "git_panel_branch_list":
+    case "git_branches":
       return { icon: "bi-diagram-3", title: "Reading Git branches" };
-    case "git_panel_compare_file":
+    case "git_diff":
       return { icon: "bi-file-diff", title: "Reading Git comparison" };
-    case "git_panel_changes_digest":
+    case "git_changes_digest":
       return { icon: "bi-card-checklist", title: "Reading Git changes" };
-    case "git_panel_pr_notes_context":
+    case "git_pr_notes":
       return { icon: "bi-journal-text", title: "Preparing PR notes context" };
-    case "git_panel_stage_files":
+    case "git_stage":
       return { icon: "bi-plus-square", title: "Staging files" };
-    case "git_panel_unstage_files":
+    case "git_unstage":
       return { icon: "bi-dash-square", title: "Unstaging files" };
-    case "git_panel_commit":
+    case "git_commit":
       return { icon: "bi-check2-circle", title: "Creating Git commit" };
-    case "git_panel_fetch":
+    case "git_fetch":
       return { icon: "bi-cloud-download", title: "Fetching Git remotes" };
-    case "git_panel_pull":
+    case "git_pull":
       return { icon: "bi-arrow-down-circle", title: "Pulling Git branch" };
-    case "git_panel_push":
+    case "git_push":
       return { icon: "bi-arrow-up-circle", title: "Pushing Git branch" };
-    case "git_panel_create_branch":
+    case "git_branch_create":
       return { icon: "bi-diagram-2", title: "Creating Git branch" };
-    case "git_panel_switch_branch":
+    case "git_branch_switch":
       return { icon: "bi-arrow-left-right", title: "Switching Git branch" };
     case "get_conversion_export_state":
       return { icon: "bi-box-arrow-up", title: "Reading conversion/export state" };
@@ -174,9 +176,9 @@ function getSecondaryText(tool, args) {
     return `Lines ${args.startLine || 1}-${args.endLine || "end"}`;
   }
   if (tool === "glob" && args.maxFiles) return `Limit ${args.maxFiles} files`;
-  if ((tool === "search_grep" || tool === "search_vault") && (args.maxMatches || args.maxResults)) return `Limit ${args.maxMatches || args.maxResults} matches`;
-  if (tool === "git_panel_compare_file" && args.scope) return String(args.scope || "");
-  if ((tool === "git_panel_stage_files" || tool === "git_panel_unstage_files") && (args.files || args.paths)) return `${(args.files || args.paths || []).length} file(s)`;
+  if ((tool === "search_text" || tool === "search_vault") && (args.maxMatches || args.maxResults)) return `Limit ${args.maxMatches || args.maxResults} matches`;
+  if (tool === "git_diff" && args.scope) return String(args.scope || "");
+  if ((tool === "git_stage" || tool === "git_unstage") && (args.files || args.paths)) return `${(args.files || args.paths || []).length} file(s)`;
   return "";
 }
 
@@ -188,7 +190,7 @@ function getActivityLinks(root, tool, args, result) {
   if (tool === "run_command" || tool === "run_test") {
     links.push({ kind: "folder", path: path.resolve(String(root || "")), label: "Workspace" });
   }
-  if ((tool === "search_grep" || tool === "search_vault") && Array.isArray(result)) {
+  if ((tool === "search_text" || tool === "search_vault") && Array.isArray(result)) {
     result.slice(0, 8).forEach((match) => {
       if (match?.path) links.push({ kind: "file", path: normalizePath(match.path), line: Number(match.line || 0) || undefined });
     });

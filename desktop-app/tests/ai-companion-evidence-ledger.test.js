@@ -25,7 +25,7 @@ test("completion evidence ledger records files actually read or edited for local
   const read = ledger.recordToolEvidence({ toolCallId: "read-local", tool: "read_file", args: { path: "src\\app.js" }, result: { content: "ok" } });
   const tabs = ledger.recordToolEvidence({ toolCallId: "tabs-local", tool: "read_open_tabs", result: { tabs: [{ path: "README.md" }] } });
   const editorWrite = ledger.recordToolEvidence({ toolCallId: "write-local", tool: "create_document_tab", args: { path: "docs\\guide.md" }, result: { status: "success" } });
-  const search = ledger.recordToolEvidence({ toolCallId: "search-local", tool: "search_grep", args: { path: "src" }, result: [] });
+  const search = ledger.recordToolEvidence({ toolCallId: "search-local", tool: "search_text", args: { path: "src" }, result: [] });
   assert.deepEqual(read.files, ["src/app.js"]);
   assert.deepEqual(tabs.files, ["README.md"]);
   assert.deepEqual(editorWrite.files, ["docs/guide.md"]);

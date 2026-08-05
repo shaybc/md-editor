@@ -193,11 +193,11 @@ test("a repeated successful action in the same epoch is deterministically no-pro
 
 test("action signatures ignore key order and strategy normalization recognizes superficial replans", () => {
   assert.equal(
-    createActionSignature("search_grep", { query: "token", path: "src" }),
-    createActionSignature("search_grep", { path: "src", query: "token" })
+    createActionSignature("search_text", { query: "token", path: "src" }),
+    createActionSignature("search_text", { path: "src", query: "token" })
   );
-  const first = createStrategyDescriptor({ toolName: "search_grep", args: { query: "token validation", path: "src" }, intentId: "C1" });
-  const second = createStrategyDescriptor({ toolName: "search_grep", args: { query: "validate token", path: "src" }, intentId: "C1" });
+  const first = createStrategyDescriptor({ toolName: "search_text", args: { query: "token validation", path: "src" }, intentId: "C1" });
+  const second = createStrategyDescriptor({ toolName: "search_text", args: { query: "validate token", path: "src" }, intentId: "C1" });
   assert.equal(first.strategySignature, second.strategySignature);
   assert.equal(compareApproachText("Search for the parser", "Search more carefully for the parser").different, false);
 });

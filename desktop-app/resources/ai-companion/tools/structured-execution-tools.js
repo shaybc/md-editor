@@ -395,9 +395,9 @@ async function managePackage(workspaceRoot, args, options) {
       throw new Error("This package operation is disabled because transitive dependencies are not allowed by policy.");
     }
     const operation = await createPackageDescriptor(workspaceRoot, args, options.policy);
-    return executeAudited("manage_package", args, operation.descriptor, executionOptions, { ecosystem: operation.operation.ecosystem });
+    return executeAudited("manage_dependencies", args, operation.descriptor, executionOptions, { ecosystem: operation.operation.ecosystem });
   } catch (error) {
-    if (!error.auditRecorded) await recordDenied("manage_package", args, executionOptions, error);
+    if (!error.auditRecorded) await recordDenied("manage_dependencies", args, executionOptions, error);
     throw error;
   }
 }

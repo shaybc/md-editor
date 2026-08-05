@@ -14,6 +14,7 @@ const tools = require("../tools/workspace-tools");
 const { canonicalizeEditSearch } = require("../tools/workspace-edit-matcher");
 const correctionConsistency = require("./intent-correction-consistency");
 const toolEffectRegistry = require("./agent-tool-effect-registry");
+const toolScopeRegistry = require("./tool-scope-registry");
 const { DEFAULT_AI_COMPANION_PROMPTS } = require("../config/prompts");
 const { createActivityRun } = require("./agent-activity");
 const { analyzeApprovalAction } = require("./approval-action-analysis");
@@ -95,7 +96,7 @@ const TOKEN_LIMIT_WINDOW_MS = 60000;
 const DEFAULT_MAX_TOKENS_PER_CHAT_MINUTE = 0;
 const DEFAULT_MAX_TASKS_PER_CHAT = 30;
 const COMPACTED_TOOL_RESULT_CHARS = 1200;
-const EMPTY_FILE_SEARCH_TOOLS = new Set(["glob", "list_files", "search_grep", "search_vault", "read_open_tabs"]);
+const EMPTY_FILE_SEARCH_TOOLS = new Set(["glob", "list_files", "search_text", "search_vault", "read_open_tabs"]);
 let agentDecisionController = null;
 
 function loadAgentDecisionController() {
@@ -148,7 +149,7 @@ function createEmptyFileSearchGuidance(name, args = {}) {
     `${name} returned no matches for ${JSON.stringify(target)}.`,
     "Treat this as an empty result, not as file content.",
     "Do not answer from conversation history as if the file was inspected.",
-    "Next, inspect open tabs with read_open_tabs if you have not already, then try a broader filename glob such as **/<fileName>, then search_grep for the class or filename before answering."
+    "Next, inspect open tabs with read_open_tabs if you have not already, then try a broader filename glob such as **/<fileName>, then search_text for the class or filename before answering."
   ].join(" ");
 }
 
@@ -219,14 +220,14 @@ function summarizeToolResult(name, result) {
   if (name === "graph_get_node_context") return result?.node?.label || result?.node?.nodeId || "node context";
   if (name === "graph_find_paths") return `${result?.paths?.length || 0} path(s)`;
   if (tools.isGraphActionTool?.(name)) return "graph action complete";
-  if (name === "git_panel_status") {
+  if (name === "git_status") {
     if (result?.status === "failed") return result?.error?.message || "Git status failed";
     return result?.isRepo === false ? "not a git repository" : `${result?.counts?.files ?? result?.status?.files?.length ?? 0} changed file(s)`;
   }
-  if (name === "git_panel_branch_list") return `${result?.branches?.length || 0} branch(es)`;
-  if (name === "git_panel_compare_file") return "comparison ready";
-  if (name === "git_panel_changes_digest") return result?.digest?.clean ? "working tree clean" : "changes digest ready";
-  if (name === "git_panel_pr_notes_context") return "PR notes context ready";
+  if (name === "git_branches") return `${result?.branches?.length || 0} branch(es)`;
+  if (name === "git_diff") return "comparison ready";
+  if (name === "git_changes_digest") return result?.digest?.clean ? "working tree clean" : "changes digest ready";
+  if (name === "git_pr_notes") return "PR notes context ready";
   if (tools.isGitPanelMutatingTool?.(name)) return result?.status ? `${result.status.files?.length || 0} changed file(s)` : "git action complete";
   if (name === "preferences_get") {
     const suffix = result?.status === "partial" ? `, ${result?.errors?.length || 0} unavailable` : "";
@@ -278,14 +279,14 @@ function extractEvidenceContent(name, result) {
   if (name === "read_file" || name === "read_active_document") {
     return firstString("content", "text", "body", "excerpt") || boundedJson(result.lines);
   }
-  if (name === "git_panel_compare_file") {
+  if (name === "git_diff") {
     return firstString("diff", "patch", "unified", "comparison", "content")
       || boundedJson(result.hunks || result.changes || result.left || result);
   }
-  if (name === "git_panel_changes_digest") {
+  if (name === "git_changes_digest") {
     return firstString("text", "summary") || boundedJson(result.digest || result.files || result);
   }
-  if (name === "search_grep" || name === "search_workspace" || name === "search_vault") {
+  if (name === "search_text" || name === "search_workspace" || name === "search_vault") {
     return boundedJson(result.matches || result.results || result);
   }
   return "";
@@ -339,7 +340,7 @@ function getPlanRepositoryToolDefinitions() {
     { type: "function", function: { name: "plan_create", description: "Create a saved implementation plan Markdown file in the AI Companion profile plan repository.", parameters: { type: "object", properties: { title: stringProperty("Plan title."), body: stringProperty("Markdown plan body."), content: stringProperty("Markdown plan body."), status: stringProperty("planned, implementing, or implemented."), archived: { type: "boolean", description: "Whether the plan is archived." }, workspaceRoot: stringProperty("Workspace root this plan belongs to."), sourceChatId: stringProperty("Optional source chat id."), sourceTaskId: stringProperty("Optional source task id."), milestones: { type: "array", items: { type: "object" } } } } } },
     { type: "function", function: { name: "plan_list", description: "List saved implementation plans from the AI Companion profile plan repository.", parameters: { type: "object", properties: { status: stringProperty("Optional plan status filter."), query: stringProperty("Optional title, path, or body search text."), workspaceRoot: stringProperty("Optional workspace root filter."), maxResults: { type: "number", description: "Maximum plans to return." } } } } },
     { type: "function", function: { name: "plan_read", description: "Read one saved implementation plan by id or profile-relative path.", parameters: { type: "object", properties: planLocatorProperties } } },
-    { type: "function", function: { name: "plan_update", description: "Update one saved implementation plan body or frontmatter fields while preserving its id and file path.", parameters: { type: "object", properties: { ...planLocatorProperties, title: stringProperty("Updated plan title."), body: stringProperty("Updated Markdown plan body."), content: stringProperty("Updated Markdown plan body."), patch: { type: "object", description: "Frontmatter fields to update." }, milestones: { type: "array", items: { type: "object" } } } } } },
+    { type: "function", function: { name: "plan_update", description: "Update one saved implementation plan body, frontmatter, and/or status while preserving its id and file path.", parameters: { type: "object", properties: { ...planLocatorProperties, title: stringProperty("Updated plan title."), body: stringProperty("Updated Markdown plan body."), content: stringProperty("Updated Markdown plan body."), patch: { type: "object", description: "Frontmatter fields to update." }, milestones: { type: "array", items: { type: "object" } }, status: stringProperty("Optional: planned, implementing, implemented, or legacy archived."), archived: { type: "boolean", description: "Optional: archive or unarchive the plan without changing implementation status." } } } } },
     { type: "function", function: { name: "plan_update_status", description: "Update one saved implementation plan status.", parameters: { type: "object", properties: { ...planLocatorProperties, status: stringProperty("planned, implementing, implemented, or legacy archived."), archived: { type: "boolean", description: "Archive or unarchive the plan without changing implementation status." } } } } },
     { type: "function", function: { name: "plan_rebuild_index", description: "Rebuild the saved implementation plans index by scanning plan Markdown files.", parameters: { type: "object", properties: {} } } }
   ];
@@ -437,25 +438,25 @@ function getEditorActionToolDefinitions() {
 function getGitPanelReadToolDefinitions() {
   const stringProperty = (description) => ({ type: "string", description });
   return [
-    { type: "function", function: { name: "git_panel_status", description: "Read Git status for the current md-editor workspace repository. Aggregate counts are complete; file details may be truncated. Use file-specific Git or workspace tools for additional detail.", parameters: { type: "object", properties: { maxFiles: { type: "integer", minimum: 1, maximum: 1000, description: "Maximum file-detail records to return. Defaults to 200." } } } } },
-    { type: "function", function: { name: "git_panel_branch_list", description: "Read local branches, remote branches, and tags from the Git panel repository.", parameters: { type: "object", properties: {} } } },
-    { type: "function", function: { name: "git_panel_compare_file", description: "Read a staged or unstaged Git comparison descriptor for one repository-relative file.", parameters: { type: "object", required: ["path"], properties: { path: stringProperty("Repository-relative file path."), originalPath: stringProperty("Original path for renamed files."), scope: stringProperty("staged or unstaged. Defaults to unstaged.") } } } },
-    { type: "function", function: { name: "git_panel_changes_digest", description: "Read the capped Git changes digest used by the Git panel AI summary.", parameters: { type: "object", properties: {} } } },
-    { type: "function", function: { name: "git_panel_pr_notes_context", description: "Read Git changes context and a PR notes scaffold; write the final PR notes in the assistant response.", parameters: { type: "object", properties: {} } } }
+    { type: "function", function: { name: "git_status", description: "Read Git status for the current md-editor workspace repository. Aggregate counts are complete; file details may be truncated. Use file-specific Git or workspace tools for additional detail.", parameters: { type: "object", properties: { maxFiles: { type: "integer", minimum: 1, maximum: 1000, description: "Maximum file-detail records to return. Defaults to 200." } } } } },
+    { type: "function", function: { name: "git_branches", description: "Read local branches, remote branches, and tags from the Git panel repository.", parameters: { type: "object", properties: {} } } },
+    { type: "function", function: { name: "git_diff", description: "Read a staged or unstaged Git comparison descriptor for one repository-relative file.", parameters: { type: "object", required: ["path"], properties: { path: stringProperty("Repository-relative file path."), originalPath: stringProperty("Original path for renamed files."), scope: stringProperty("staged or unstaged. Defaults to unstaged.") } } } },
+    { type: "function", function: { name: "git_changes_digest", description: "Read the capped Git changes digest used by the Git panel AI summary.", parameters: { type: "object", properties: {} } } },
+    { type: "function", function: { name: "git_pr_notes", description: "Read Git changes context and a PR notes scaffold; write the final PR notes in the assistant response.", parameters: { type: "object", properties: {} } } }
   ];
 }
 
 function getGitPanelMutatingToolDefinitions() {
   const stringProperty = (description) => ({ type: "string", description });
   return [
-    { type: "function", function: { name: "git_panel_stage_files", description: "Stage repository-relative files through the Git panel tool bridge after approval.", parameters: { type: "object", required: ["files"], properties: { files: { type: "array", items: { type: "string" }, description: "Repository-relative files to stage." } } } } },
-    { type: "function", function: { name: "git_panel_unstage_files", description: "Unstage repository-relative files through the Git panel tool bridge after approval.", parameters: { type: "object", required: ["files"], properties: { files: { type: "array", items: { type: "string" }, description: "Repository-relative files to unstage." } } } } },
-    { type: "function", function: { name: "git_panel_commit", description: "Create a Git commit from staged files after approval.", parameters: { type: "object", required: ["message"], properties: { message: stringProperty("Commit message.") } } } },
-    { type: "function", function: { name: "git_panel_fetch", description: "Fetch repository remotes after approval.", parameters: { type: "object", properties: {} } } },
-    { type: "function", function: { name: "git_panel_pull", description: "Pull the current branch after approval.", parameters: { type: "object", properties: {} } } },
-    { type: "function", function: { name: "git_panel_push", description: "Push the current branch after approval.", parameters: { type: "object", properties: {} } } },
-    { type: "function", function: { name: "git_panel_create_branch", description: "Create and switch to a new local branch after approval.", parameters: { type: "object", required: ["branch"], properties: { branch: stringProperty("New branch name.") } } } },
-    { type: "function", function: { name: "git_panel_switch_branch", description: "Switch to a local branch, or track a remote branch, after approval.", parameters: { type: "object", properties: { branch: stringProperty("Local branch name."), remoteBranch: stringProperty("Remote branch name such as origin/feature.") } } } }
+    { type: "function", function: { name: "git_stage", description: "Stage repository-relative files through the Git panel tool bridge after approval.", parameters: { type: "object", required: ["files"], properties: { files: { type: "array", items: { type: "string" }, description: "Repository-relative files to stage." } } } } },
+    { type: "function", function: { name: "git_unstage", description: "Unstage repository-relative files through the Git panel tool bridge after approval.", parameters: { type: "object", required: ["files"], properties: { files: { type: "array", items: { type: "string" }, description: "Repository-relative files to unstage." } } } } },
+    { type: "function", function: { name: "git_commit", description: "Create a Git commit from staged files after approval.", parameters: { type: "object", required: ["message"], properties: { message: stringProperty("Commit message.") } } } },
+    { type: "function", function: { name: "git_fetch", description: "Fetch repository remotes after approval.", parameters: { type: "object", properties: {} } } },
+    { type: "function", function: { name: "git_pull", description: "Pull the current branch after approval.", parameters: { type: "object", properties: {} } } },
+    { type: "function", function: { name: "git_push", description: "Push the current branch after approval.", parameters: { type: "object", properties: {} } } },
+    { type: "function", function: { name: "git_branch_create", description: "Create and switch to a new local branch after approval.", parameters: { type: "object", required: ["branch"], properties: { branch: stringProperty("New branch name.") } } } },
+    { type: "function", function: { name: "git_branch_switch", description: "Switch to a local branch, or track a remote branch, after approval.", parameters: { type: "object", properties: { branch: stringProperty("Local branch name."), remoteBranch: stringProperty("Remote branch name such as origin/feature.") } } } }
   ];
 }
 
@@ -725,7 +726,7 @@ function getAgentToolDefinitions(mode, options = {}) {
     {
       type: "function",
       function: {
-        name: "search_grep",
+        name: "search_text",
         description: "Search workspace file contents with ripgrep when available, falling back to a JS scanner.",
         parameters: {
           type: "object",
@@ -741,14 +742,13 @@ function getAgentToolDefinitions(mode, options = {}) {
       type: "function",
       function: {
         name: "read_file",
-        description: "Read a targeted file slice by workspace-relative path.",
+        description: "Read a workspace file slice by path. Omit path to read the active editor document. Bounded by maxLines (defaults to a cap); page by advancing startLine.",
         parameters: {
           type: "object",
-          required: ["path"],
           properties: {
-            path: { type: "string", description: "Workspace-relative file path." },
+            path: { type: "string", description: "Workspace-relative file path. Omit to read the active document." },
             startLine: { type: "number", description: "Optional 1-based start line." },
-            endLine: { type: "number", description: "Optional 1-based end line." }
+            maxLines: { type: "number", description: "Maximum lines to return from startLine (bounded by default)." }
           }
         }
       }
@@ -869,15 +869,15 @@ function getAgentToolDefinitions(mode, options = {}) {
       {
         type: "function",
         function: {
-          name: "manage_package",
-          description: "Install, update, remove, or download one policy-whitelisted package.",
+          name: "manage_dependencies",
+          description: "Manage dependencies: install, update, remove, or download one policy-whitelisted package, or action \"restore\" to restore all project dependencies.",
           parameters: {
             type: "object",
             required: ["targetPath", "ecosystem", "action", "packageId", "version", "development"],
             properties: {
               targetPath: { type: "string" },
               ecosystem: { type: "string", enum: ["npm", "yarn", "pnpm"] },
-              action: { type: "string", enum: ["install", "update", "remove", "download"] },
+              action: { type: "string", enum: ["install", "update", "remove", "download", "restore"] },
               packageId: { type: "string" },
               version: { type: "string" },
               development: { type: "boolean" }
@@ -889,7 +889,20 @@ function getAgentToolDefinitions(mode, options = {}) {
     );
   }
 
-  return definitions.map(addApprovalReasonRequirement);
+  // Scope filter (opt-in): when the caller supplies the user allow-list, prune the
+  // definitions to the small per-request set (core readers + edit + enabled domain
+  // scopes) and drop tools removed from the roster. Callers that omit
+  // `enabledScopes` (e.g. tests, drift guard) get the full legacy set unchanged.
+  let scopedDefinitions = definitions;
+  if (options.enabledScopes) {
+    const keep = new Set(toolScopeRegistry.filterToolNames(
+      definitions.map((definition) => definition?.function?.name).filter(Boolean),
+      { mode, enabledScopes: options.enabledScopes, taskScopes: options.taskScopes }
+    ));
+    scopedDefinitions = definitions.filter((definition) => keep.has(definition?.function?.name));
+  }
+  // Tool names are canonical end-to-end, so no relabeling is needed here.
+  return scopedDefinitions.map(addApprovalReasonRequirement);
 }
 
 function getApprovalPreview(name, args) {
@@ -1345,7 +1358,7 @@ async function runFreeFormCommand(root, settings, args, options) {
 }
 
 async function executeAgentTool(root, settings, mode, toolCall, options = {}) {
-  const name = toolCall.function?.name || toolCall.name || "";
+  const name = toolScopeRegistry.toCanonicalName(toolCall.function?.name || toolCall.name || "");
   const args = parseToolArguments(toolCall.function?.arguments || toolCall.arguments || "{}");
   const intentValidation = validateApprovalIntent(name, args);
   if (!intentValidation.allowed) {
@@ -1386,10 +1399,17 @@ async function executeAgentTool(root, settings, mode, toolCall, options = {}) {
     }
     case "glob":
       return tools.globFiles(root, args.pattern, { maxFiles: args.maxFiles, signal: options.signal });
-    case "search_grep":
+    case "search_text":
       return tools.searchGrep(root, args.pattern, { maxMatches: args.maxMatches, signal: options.signal });
-    case "read_file":
-      return tools.readFile(root, args.path, { startLine: args.startLine, endLine: args.endLine, signal: options.signal });
+    case "read_file": {
+      // No path -> read the active editor document. maxLines is the count-based
+      // bound; endLine is still honored for back-compat.
+      if (!args.path) return tools.readActiveDocument(root, args, { editorReadContext: options.editorReadContext, signal: options.signal });
+      const endLine = args.endLine != null
+        ? args.endLine
+        : (args.startLine != null && args.maxLines != null ? args.startLine + args.maxLines - 1 : undefined);
+      return tools.readFile(root, args.path, { startLine: args.startLine, endLine, signal: options.signal });
+    }
     case "get_workspace_state":
       return tools.getWorkspaceState(root, args, { editorReadContext: options.editorReadContext, signal: options.signal });
     case "read_active_document":
@@ -1440,20 +1460,20 @@ async function executeAgentTool(root, settings, mode, toolCall, options = {}) {
     case "graph_clear_focus":
       if (mode === "plan") throw new Error(`${name} is not available in plan mode.`);
       return tools.requestGraphAction(root, name, args, { requestAppAction: options.requestAppAction, signal: options.signal });
-    case "git_panel_status":
-    case "git_panel_branch_list":
-    case "git_panel_compare_file":
-    case "git_panel_changes_digest":
-    case "git_panel_pr_notes_context":
+    case "git_status":
+    case "git_branches":
+    case "git_diff":
+    case "git_changes_digest":
+    case "git_pr_notes":
       return tools.runGitPanelTool(root, name, args, { signal: options.signal });
-    case "git_panel_stage_files":
-    case "git_panel_unstage_files":
-    case "git_panel_commit":
-    case "git_panel_fetch":
-    case "git_panel_pull":
-    case "git_panel_push":
-    case "git_panel_create_branch":
-    case "git_panel_switch_branch":
+    case "git_stage":
+    case "git_unstage":
+    case "git_commit":
+    case "git_fetch":
+    case "git_pull":
+    case "git_push":
+    case "git_branch_create":
+    case "git_branch_switch":
       if (mode !== "agent") throw new Error(`${name} is only available in agent mode.`);
       emitAutoApproval(name, args, await ensureToolApproval(root, settings, name, args, options), options);
       return tools.runGitPanelTool(root, name, args, { allowGitMutation: true, signal: options.signal });
@@ -1475,9 +1495,16 @@ async function executeAgentTool(root, settings, mode, toolCall, options = {}) {
     case "plan_read":
       if (mode !== "agent") throw new Error("plan_read is only available in agent mode.");
       return tools.planRead(root, args, { signal: options.signal });
-    case "plan_update":
+    case "plan_update": {
       if (mode !== "agent") throw new Error("plan_update is only available in agent mode.");
-      return tools.planUpdate(root, args, { signal: options.signal });
+      const updated = await tools.planUpdate(root, args, { signal: options.signal });
+      // Folds the former plan_update_status tool: a status/archived change on the
+      // same call is applied through the status handler.
+      if (args.status != null || args.archived != null) {
+        return tools.planUpdateStatus(root, args, { signal: options.signal });
+      }
+      return updated;
+    }
     case "plan_update_status":
       if (mode !== "agent") throw new Error("plan_update_status is only available in agent mode.");
       return tools.planUpdateStatus(root, args, { signal: options.signal });
@@ -1513,8 +1540,10 @@ async function executeAgentTool(root, settings, mode, toolCall, options = {}) {
     case "restore_dependencies":
       if (mode !== "agent") throw new Error("restore_dependencies is only available in agent mode.");
       return tools.restoreDependencies(root, args, getExecutionSecurityOptions(root, settings, options));
-    case "manage_package":
-      if (mode !== "agent") throw new Error("manage_package is only available in agent mode.");
+    case "manage_dependencies":
+      if (mode !== "agent") throw new Error("manage_dependencies is only available in agent mode.");
+      // Folds the former restore_dependencies tool: action "restore" runs a restore.
+      if (args.action === "restore") return tools.restoreDependencies(root, args, getExecutionSecurityOptions(root, settings, options));
       return tools.managePackage(root, args, getExecutionSecurityOptions(root, settings, options));
     case "api_asset_search":
       return tools.apiAssetSearch(root, args, { signal: options.signal });
@@ -2994,7 +3023,10 @@ async function runAgentToolLoop(provider, settings, root, prompt, mode, emit, ru
   const hasToolDefinitionsOverride = Array.isArray(loopOptions.toolDefinitionsOverride);
   const toolDefinitions = hasToolDefinitionsOverride
     ? [...loopOptions.toolDefinitionsOverride]
-    : getAgentToolDefinitions(mode, { planGitReadToolsEnabled: settings.planGitReadToolsEnabled === true });
+    : getAgentToolDefinitions(mode, {
+      planGitReadToolsEnabled: settings.planGitReadToolsEnabled === true,
+      enabledScopes: settings.toolScopes
+    });
   // The read-only conflict-reporting tool is exposed in the workspace loop when the
   // intent phase is active, so the model can flag semantic contradictions it finds.
   if (!hasToolDefinitionsOverride && resolvedExperiment.intentRevision === true && INTENT_CONTRACT_MODES.has(mode)) toolDefinitions.push(intentConflict.REPORT_INTENT_CONFLICT_TOOL);
@@ -3209,6 +3241,9 @@ async function runAgentToolLoop(provider, settings, root, prompt, mode, emit, ru
       if (message.reasoning) emit({ type: "reasoning-delta", content: message.reasoning });
       message = consumeChatTitleFromMessage(message, titleState, emit);
       let toolCalls = Array.isArray(message.toolCalls) ? message.toolCalls : [];
+      // Model-facing names are preserved in the transcript/activity; each internal
+      // consumer (execution, effect, approval, recovery, activity labels) translates
+      // to the canonical name itself via toCanonicalName.
       let controllerDecision = null;
       let controllerDecisionPayload = null;
       let controllerCompletionCandidate = "";

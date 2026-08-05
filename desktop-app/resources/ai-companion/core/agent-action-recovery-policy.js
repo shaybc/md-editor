@@ -10,9 +10,9 @@ const path = require("node:path");
 
 const RECOVERY_POLICY_VERSION = 1;
 const REPEATABLE_READ_TOOLS = new Set([
-  "read_file", "list_files", "glob", "search_grep", "get_editor_state", "get_active_document",
+  "read_file", "list_files", "glob", "search_text", "get_editor_state", "get_active_document",
   "get_open_documents", "get_selection", "graph_get_state", "graph_list_nodes", "graph_list_edges",
-  "git_panel_status", "git_panel_diff", "git_panel_log", "preferences_get", "preferences_list",
+  "git_status", "git_diff", "git_branches", "preferences_get", "preferences_list",
   "plan_list", "plan_read", "inspect_api_collection"
 ]);
 const RECONCILABLE_MUTATION_TOOLS = new Set([
@@ -20,9 +20,9 @@ const RECONCILABLE_MUTATION_TOOLS = new Set([
   "replace_selection", "replace_document_range", "extract_selection_to_note"
 ]);
 const INDETERMINATE_EXTERNAL_TOOLS = new Set([
-  "run_command", "run_java_build", "restore_dependencies", "manage_package", "git_panel_stage_files",
-  "git_panel_unstage_files", "git_panel_commit", "git_panel_fetch", "git_panel_pull", "git_panel_push",
-  "git_panel_create_branch", "git_panel_switch_branch", "export_active_document", "export_active_folder_graph",
+  "run_command", "run_java_build", "restore_dependencies", "manage_dependencies", "git_stage",
+  "git_unstage", "git_commit", "git_fetch", "git_pull", "git_push",
+  "git_branch_create", "git_branch_switch", "export_active_document", "export_active_folder_graph",
   "start_code_conversion", "preferences_update", "preferences_reset", "preferences_import"
 ]);
 

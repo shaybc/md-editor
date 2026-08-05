@@ -28,19 +28,19 @@ function contractWithTargets() {
 test("a direct read miss proves file absence; a single empty grep does not", () => {
   const tracker = createSearchTracker();
   tracker.add({ toolCallId: "r1", tool: "read_file", query: "src/missing.js", notFound: true });
-  tracker.add({ toolCallId: "g1", tool: "search_grep", query: "doThing", empty: true, exhaustive: true });
+  tracker.add({ toolCallId: "g1", tool: "search_text", query: "doThing", empty: true, exhaustive: true });
   const absent = detectAbsentTargets(contractWithTargets(), tracker).map((entry) => entry.id);
   assert.ok(absent.includes("T1"), "read miss proves file absence");
   assert.ok(absent.includes("T2"), "exhaustive empty symbol grep proves symbol absence");
 
   const onlyGrepForFile = createSearchTracker();
-  onlyGrepForFile.add({ toolCallId: "g9", tool: "search_grep", query: "src/missing.js", empty: true });
+  onlyGrepForFile.add({ toolCallId: "g9", tool: "search_text", query: "src/missing.js", empty: true });
   assert.equal(detectAbsentTargets(contractWithTargets(), onlyGrepForFile).some((entry) => entry.id === "T1"), false);
 });
 
 test("a truncated search never proves absence and an open tab defeats a disk miss", () => {
   const truncated = createSearchTracker();
-  truncated.add({ toolCallId: "g1", tool: "search_grep", query: "doThing", empty: true, truncated: true });
+  truncated.add({ toolCallId: "g1", tool: "search_text", query: "doThing", empty: true, truncated: true });
   assert.equal(detectAbsentTargets(contractWithTargets(), truncated).some((entry) => entry.id === "T2"), false);
 
   const openTab = createSearchTracker();
@@ -82,7 +82,7 @@ test("resolveFieldRef resolves singletons and id-addressed nodes", () => {
 test("validateConflictReport enforces evidence existence and per-type admissibility", () => {
   const contract = contractWithTargets();
   const tracker = createSearchTracker();
-  tracker.add({ toolCallId: "e1", tool: "search_grep", query: "parser found in lib", empty: false });
+  tracker.add({ toolCallId: "e1", tool: "search_text", query: "parser found in lib", empty: false });
 
   assert.deepEqual(validateConflictReport({ fieldRef: "target:T9", conflictType: "target-relocated", evidenceToolCallIds: ["e1"] }, { contract, tracker }).errors, ["unresolvable-fieldRef"]);
   assert.ok(validateConflictReport({ fieldRef: "target:T1", conflictType: "target-relocated", evidenceToolCallIds: ["nope"] }, { contract, tracker }).errors.includes("unknown-evidence"));
@@ -91,7 +91,7 @@ test("validateConflictReport enforces evidence existence and per-type admissibil
   assert.equal(relocated.valid, true);
 
   const emptyOnly = createSearchTracker();
-  emptyOnly.add({ toolCallId: "e2", tool: "search_grep", query: "x", empty: true });
+  emptyOnly.add({ toolCallId: "e2", tool: "search_text", query: "x", empty: true });
   assert.ok(validateConflictReport({ fieldRef: "target:T1", conflictType: "target-relocated", evidenceToolCallIds: ["e2"] }, { contract, tracker: emptyOnly }).errors.includes("no-positive-match"));
 
   const assumptionOk = validateConflictReport({ fieldRef: "assumption:A1", conflictType: "assumption-contradicted", evidenceToolCallIds: ["e1"] }, { contract, tracker });

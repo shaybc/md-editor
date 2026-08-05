@@ -18,6 +18,7 @@
 "use strict";
 
 const approvalCapabilities = require("./approval-capability-registry");
+const { toCanonicalName } = require("./tool-scope-registry");
 
 /** The five effect categories a tool may fall into. */
 const EFFECT_CATEGORIES = Object.freeze(["read", "ui-state", "workspace-write", "external-write", "execution"]);
@@ -27,7 +28,7 @@ const EFFECTFUL_CATEGORIES = Object.freeze(new Set(["workspace-write", "external
 
 /** Tool families whose successful results can establish specific criterion outcomes. */
 const EVIDENCE_TOOL_FAMILIES = Object.freeze({
-  "git-change-content": Object.freeze(["git_panel_changes_digest", "git_panel_compare_file"]),
+  "git-change-content": Object.freeze(["git_changes_digest", "git_diff"]),
   "file-write": Object.freeze(["apply_edit", "write_file", "create_document_tab", "insert_at_cursor", "replace_selection", "replace_document_range", "extract_selection_to_note"]),
   "file-read": Object.freeze(["read_file", "read_open_tabs", "read_active_document"]),
   "test-result": Object.freeze(["run_tests"]),
@@ -38,10 +39,10 @@ const EVIDENCE_TOOL_FAMILIES = Object.freeze({
  * Tools whose resource is a workspace path, resolved from path-like arguments. Reuses
  * the approval registry's file-write set and adds the read tools that also target a path.
  */
-const PATH_RESOURCE_TOOLS = Object.freeze(new Set([...approvalCapabilities.FILE_WRITE_TOOLS, "read_file", "git_panel_compare_file"]));
+const PATH_RESOURCE_TOOLS = Object.freeze(new Set([...approvalCapabilities.FILE_WRITE_TOOLS, "read_file", "git_diff"]));
 
 /** Tools whose resource is a Git branch reference. */
-const BRANCH_RESOURCE_TOOLS = Object.freeze(new Set(["git_panel_create_branch", "git_panel_switch_branch"]));
+const BRANCH_RESOURCE_TOOLS = Object.freeze(new Set(["git_branch_create", "git_branch_switch"]));
 
 /** Tools whose resource is a saved-plan identity. */
 const PLAN_RESOURCE_TOOLS = Object.freeze(new Set(["plan_create", "plan_read", "plan_update", "plan_update_status", "plan_rebuild_index"]));
@@ -59,8 +60,8 @@ const PRODUCED_EFFECT_ARGUMENT_PATHS = Object.freeze({
   replace_selection: ["path", "expectedPath", "replacement"],
   replace_document_range: ["path", "replacement"],
   extract_selection_to_note: ["path", "title"],
-  git_panel_stage_files: ["files"],
-  git_panel_unstage_files: ["files"]
+  git_stage: ["files"],
+  git_unstage: ["files"]
 });
 
 /**
@@ -75,7 +76,7 @@ const TOOL_EFFECTS = Object.freeze({
   get_recent_activity: { effect: "read", capability: "read.workspace" },
   list_files: { effect: "read", capability: "read.workspace" },
   glob: { effect: "read", capability: "read.workspace" },
-  search_grep: { effect: "read", capability: "read.workspace" },
+  search_text: { effect: "read", capability: "read.workspace" },
   read_file: { effect: "read", capability: "read.workspace" },
   read_conversion_report: { effect: "read", capability: "read.workspace" },
 
@@ -92,11 +93,11 @@ const TOOL_EFFECTS = Object.freeze({
   graph_find_paths: { effect: "read", capability: "read.graph" },
 
   // --- read: git -------------------------------------------------------------------
-  git_panel_status: { effect: "read", capability: "read.git" },
-  git_panel_branch_list: { effect: "read", capability: "read.git" },
-  git_panel_compare_file: { effect: "read", capability: "read.git" },
-  git_panel_changes_digest: { effect: "read", capability: "read.git" },
-  git_panel_pr_notes_context: { effect: "read", capability: "read.git" },
+  git_status: { effect: "read", capability: "read.git" },
+  git_branches: { effect: "read", capability: "read.git" },
+  git_diff: { effect: "read", capability: "read.git" },
+  git_changes_digest: { effect: "read", capability: "read.git" },
+  git_pr_notes: { effect: "read", capability: "read.git" },
 
   // --- read: settings --------------------------------------------------------------
   preferences_get: { effect: "read", capability: "read.settings" },
@@ -138,11 +139,11 @@ const TOOL_EFFECTS = Object.freeze({
   replace_selection: { effect: "workspace-write", capability: "workspace.file.write" },
   replace_document_range: { effect: "workspace-write", capability: "workspace.file.write" },
   extract_selection_to_note: { effect: "workspace-write", capability: "workspace.file.write" },
-  git_panel_stage_files: { effect: "workspace-write", capability: "git.index.change" },
-  git_panel_unstage_files: { effect: "workspace-write", capability: "git.index.change" },
-  git_panel_commit: { effect: "workspace-write", capability: "git.commit.create" },
-  git_panel_create_branch: { effect: "workspace-write", capability: "git.branch.local" },
-  git_panel_switch_branch: { effect: "workspace-write", capability: "git.branch.local" },
+  git_stage: { effect: "workspace-write", capability: "git.index.change" },
+  git_unstage: { effect: "workspace-write", capability: "git.index.change" },
+  git_commit: { effect: "workspace-write", capability: "git.commit.create" },
+  git_branch_create: { effect: "workspace-write", capability: "git.branch.local" },
+  git_branch_switch: { effect: "workspace-write", capability: "git.branch.local" },
   export_active_document: { effect: "workspace-write", capability: "export.document" },
   export_active_folder_graph: { effect: "workspace-write", capability: "export.graph" },
   plan_create: { effect: "workspace-write", capability: "plan.write" },
@@ -158,9 +159,9 @@ const TOOL_EFFECTS = Object.freeze({
   // --- external-write: state outside the project workspace (network / remote / prefs)
   // Persisted app settings live outside the project tree and Git remote operations and
   // API sends leave the machine, so all three are grouped as external-write.
-  git_panel_fetch: { effect: "external-write", capability: "git.remote.change" },
-  git_panel_pull: { effect: "external-write", capability: "git.remote.change" },
-  git_panel_push: { effect: "external-write", capability: "git.remote.change" },
+  git_fetch: { effect: "external-write", capability: "git.remote.change" },
+  git_pull: { effect: "external-write", capability: "git.remote.change" },
+  git_push: { effect: "external-write", capability: "git.remote.change" },
   request_send: { effect: "external-write", capability: "apiclient.send" },
   preferences_update: { effect: "external-write", capability: "settings.change" },
   preferences_reset: { effect: "external-write", capability: "settings.change" },
@@ -171,7 +172,7 @@ const TOOL_EFFECTS = Object.freeze({
   compile_project: { effect: "execution", capability: "execution.compile" },
   run_tests: { effect: "execution", capability: "execution.test" },
   restore_dependencies: { effect: "execution", capability: "deps.restore" },
-  manage_package: { effect: "execution", capability: "package.manage" },
+  manage_dependencies: { effect: "execution", capability: "package.manage" },
   start_code_conversion: { effect: "execution", capability: "conversion.start" }
 });
 
@@ -182,7 +183,8 @@ const TOOL_EFFECTS = Object.freeze({
  * @returns {{ effect: string, capability: string } | null} The entry, or null if unknown.
  */
 function getToolEffect(toolName) {
-  return Object.hasOwn(TOOL_EFFECTS, toolName) ? TOOL_EFFECTS[toolName] : null;
+  const canonical = toCanonicalName(toolName);
+  return Object.hasOwn(TOOL_EFFECTS, canonical) ? TOOL_EFFECTS[canonical] : null;
 }
 
 /**
@@ -206,7 +208,8 @@ function isEffectfulTool(toolName) {
  * @param {object} [args] - Parsed tool arguments.
  * @returns {string} The normalized resource identity (may be empty).
  */
-function resolveToolResource(toolName, args = {}) {
+function resolveToolResource(rawToolName, args = {}) {
+  const toolName = toCanonicalName(rawToolName);
   if (PATH_RESOURCE_TOOLS.has(toolName)) {
     return approvalCapabilities.normalizePath(args.path || args.sourcePath || args.expectedPath || args.file);
   }

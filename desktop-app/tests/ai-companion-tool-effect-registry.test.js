@@ -15,11 +15,14 @@ const {
   isToolInEvidenceFamily,
   listCoveredTools
 } = require("../resources/ai-companion/core/agent-tool-effect-registry");
+const { toCanonicalName } = require("../resources/ai-companion/core/tool-scope-registry");
 
+// Definitions expose model-facing names (consolidation renames); the registry is
+// keyed on canonical names, so compare after canonicalizing.
 function everyExposedToolName() {
   const names = new Set();
   for (const mode of ["chat", "plan", "agent"]) {
-    for (const definition of getAgentToolDefinitions(mode)) names.add(definition.function.name);
+    for (const definition of getAgentToolDefinitions(mode)) names.add(toCanonicalName(definition.function.name));
   }
   return [...names];
 }
@@ -52,19 +55,19 @@ test("registry capability matches the approval registry for every approval-cover
 });
 
 test("git commit uses the canonical git.commit.create capability", () => {
-  assert.equal(getToolEffect("git_panel_commit").capability, "git.commit.create");
+  assert.equal(getToolEffect("git_commit").capability, "git.commit.create");
 });
 
 test("effectful predicate distinguishes mutations from reads and ui-state", () => {
   assert.equal(isEffectfulTool("apply_edit"), true);
   assert.equal(isEffectfulTool("write_file"), true);
-  assert.equal(isEffectfulTool("git_panel_commit"), true);
+  assert.equal(isEffectfulTool("git_commit"), true);
   assert.equal(isEffectfulTool("request_send"), true);
   assert.equal(isEffectfulTool("preferences_update"), true);
   assert.equal(isEffectfulTool("run_tests"), true);
 
   assert.equal(isEffectfulTool("read_file"), false);
-  assert.equal(isEffectfulTool("search_grep"), false);
+  assert.equal(isEffectfulTool("search_text"), false);
   assert.equal(isEffectfulTool("graph_apply_filter"), false, "ui-state is not a mutation");
   assert.equal(isEffectfulTool("open_file_in_tab"), false);
 
@@ -74,7 +77,7 @@ test("effectful predicate distinguishes mutations from reads and ui-state", () =
 test("resource resolver normalizes paths and identities", () => {
   assert.equal(resolveToolResource("apply_edit", { path: "./src/parser.js" }), "src/parser.js");
   assert.equal(resolveToolResource("write_file", { path: "/notes/a.md" }), "notes/a.md");
-  assert.equal(resolveToolResource("git_panel_switch_branch", { branch: "feature/x" }), "feature/x");
+  assert.equal(resolveToolResource("git_branch_switch", { branch: "feature/x" }), "feature/x");
   assert.equal(resolveToolResource("start_code_conversion", { sourceRoot: "src", destinationRoot: "out" }), "src -> out");
   assert.equal(resolveToolResource("plan_update", { planId: "P-42" }), "P-42");
   assert.equal(resolveToolResource("request_send", { requestId: "req-1" }), "req-1");
@@ -99,9 +102,9 @@ test("criterion evidence families distinguish Git status from change content", (
     { namedTargets: {} }
   );
   assert.deepEqual(families, ["git-change-content"]);
-  assert.equal(isToolInEvidenceFamily("git_panel_changes_digest", "git-change-content"), true);
-  assert.equal(isToolInEvidenceFamily("git_panel_compare_file", "git-change-content"), true);
-  assert.equal(isToolInEvidenceFamily("git_panel_status", "git-change-content"), false);
+  assert.equal(isToolInEvidenceFamily("git_changes_digest", "git-change-content"), true);
+  assert.equal(isToolInEvidenceFamily("git_diff", "git-change-content"), true);
+  assert.equal(isToolInEvidenceFamily("git_status", "git-change-content"), false);
 });
 
 test("criterion evidence families derive named-file writes and verification reads", () => {

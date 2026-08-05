@@ -63,12 +63,12 @@ const FORBIDDEN_PLAN_DECISION_TYPES = Object.freeze(new Set([
  */
 const FORBIDDEN_PLAN_TOOL_NAMES = Object.freeze(new Set([
   "apply_edit", "write_file", "run_command", "compile_project", "run_tests",
-  "restore_dependencies", "manage_package", "start_code_conversion",
+  "restore_dependencies", "manage_dependencies", "start_code_conversion",
   "open_file_in_tab", "create_document_tab", "insert_at_cursor",
   "replace_selection", "replace_document_range", "extract_selection_to_note",
-  "git_panel_stage_files", "git_panel_unstage_files", "git_panel_commit",
-  "git_panel_fetch", "git_panel_pull", "git_panel_push",
-  "git_panel_create_branch", "git_panel_switch_branch",
+  "git_stage", "git_unstage", "git_commit",
+  "git_fetch", "git_pull", "git_push",
+  "git_branch_create", "git_branch_switch",
   "preferences_update", "preferences_reset", "preferences_import",
   "request_create", "request_update", "request_send",
   "environment_update", "mock_create", "mock_update", "mock_call",

@@ -25,11 +25,11 @@ const CAPABILITY_SIGNALS = Object.freeze({
 /** Capability -> the tool names that satisfy it (any one is sufficient). */
 const CAPABILITY_TOOLS = Object.freeze({
   inspect_git: [
-    "git_panel_status",
-    "git_panel_changes_digest",
-    "git_panel_compare_file",
-    "git_panel_branch_list",
-    "git_panel_pr_notes_context"
+    "git_status",
+    "git_changes_digest",
+    "git_diff",
+    "git_branches",
+    "git_pr_notes"
   ]
 });
 
