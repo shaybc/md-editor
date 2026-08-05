@@ -44,6 +44,7 @@ const completionSteering = require("./completion-steering");
 const { createAgentCompletionOrchestrator } = require("./agent-completion-orchestrator");
 const { composeFinalResponse } = require("./agent-final-response-composer");
 const { createAgentProgressEvaluator } = require("./agent-progress-evaluator");
+const { resolveModePolicy } = require("./companion-mode-policy");
 const { classifyDeterministicProgress } = require("./agent-progress-policy");
 const { compareApproachText, createActionSignature, createStrategyDescriptor } = require("./agent-strategy-signature");
 const planFinalization = require("./plan-finalization");
@@ -689,7 +690,7 @@ function addApprovalReasonRequirement(definition) {
   };
 }
 
-function getAgentToolDefinitions(mode) {
+function getAgentToolDefinitions(mode, options = {}) {
   const definitions = [
     ...getEditorReadToolDefinitions(),
     ...getGraphReadToolDefinitions(),
@@ -754,7 +755,12 @@ function getAgentToolDefinitions(mode) {
     }
   ];
 
-  if (mode !== "plan") definitions.push(...getGitPanelReadToolDefinitions());
+  // Fix 3 (flag-gated): read-only git inspection is safe and essential for
+  // planning tasks about the repository (status/diff are read-only). Non-plan
+  // modes always get git reads. Plan gets them only when planGitReadToolsEnabled
+  // is set. Mutating git tools stay agent-only, enforced in executeAgentTool.
+  const includePlanGitReads = mode === "plan" && options.planGitReadToolsEnabled === true;
+  if (mode !== "plan" || includePlanGitReads) definitions.push(...getGitPanelReadToolDefinitions());
   if (mode !== "plan") definitions.push(...getPreferenceReadToolDefinitions());
   if (mode !== "plan") definitions.push(...getGraphActionToolDefinitions());
 
@@ -2921,11 +2927,12 @@ async function runAgentToolLoop(provider, settings, root, prompt, mode, emit, ru
   let priorUnmetIds = new Set();
   let steeringFinalReason = "";
   let steeringConverged = false;
-  const verifierCompletionEnabled = mode === "agent"
-    && settings.agentVerifierCompletionEnabled === true
-    && settings.agentDecisionControllerEnabled === true
-    && settings.intentContractsEnabled === true
-    && settings.intentExperiment?.intentCompletionAssessment === true
+  // Controller eligibility is resolved through the shared mode-policy seam (M8.1)
+  // instead of hard-coded `mode === "agent"` checks. For Agent this is logically
+  // identical to the previous inline expressions; the runtime-only state-session
+  // guard stays inline so the composition is unchanged.
+  const modePolicy = resolveModePolicy(mode, settings);
+  const verifierCompletionEnabled = modePolicy.verifierCompletionEligible
     && Boolean(loopOptions.agentStateSession);
   const finishRun = async (content, semanticOutcome = {}) => {
     if (loopOptions.agentStateSession?.isCheckpointEnabled?.() === true) {
@@ -2987,14 +2994,14 @@ async function runAgentToolLoop(provider, settings, root, prompt, mode, emit, ru
   const hasToolDefinitionsOverride = Array.isArray(loopOptions.toolDefinitionsOverride);
   const toolDefinitions = hasToolDefinitionsOverride
     ? [...loopOptions.toolDefinitionsOverride]
-    : getAgentToolDefinitions(mode);
+    : getAgentToolDefinitions(mode, { planGitReadToolsEnabled: settings.planGitReadToolsEnabled === true });
   // The read-only conflict-reporting tool is exposed in the workspace loop when the
   // intent phase is active, so the model can flag semantic contradictions it finds.
   if (!hasToolDefinitionsOverride && resolvedExperiment.intentRevision === true && INTENT_CONTRACT_MODES.has(mode)) toolDefinitions.push(intentConflict.REPORT_INTENT_CONFLICT_TOOL);
-  const controllerEnabled = mode === "agent" && settings.agentDecisionControllerEnabled === true;
+  const controllerEnabled = modePolicy.controllerEligible;
   if (controllerEnabled && !loopOptions.agentStateSession) throw new Error("Agent decision controller requires an authoritative state session.");
   if (controllerEnabled) loadAgentDecisionController();
-  const progressEvaluationEnabled = controllerEnabled && settings.agentProgressEvaluationEnabled === true;
+  const progressEvaluationEnabled = modePolicy.progressEvaluationEligible;
   const progressEvaluator = progressEvaluationEnabled
     ? createAgentProgressEvaluator({
         provider,
@@ -3874,5 +3881,9 @@ async function runAgentToolLoop(provider, settings, root, prompt, mode, emit, ru
 module.exports = {
   getAgentToolDefinitions,
   runAgentToolLoop,
+  // Exported (additive) so the Plan stateful controller can execute allowlisted
+  // read-only tools without re-entering the full Agent loop. Does not change
+  // Agent behavior.
+  executeAgentTool,
   _test: { appendToolReliabilityNote, recordToolReliability, shouldAssessCompletion, summarizeToolEvidence, extractEvidenceContent }
 };

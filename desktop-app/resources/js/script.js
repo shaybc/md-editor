@@ -3093,6 +3093,7 @@ async function startMarkdownViewer() {
       onPromptsChanged: function() { app.modules?.aiCompanionPanel?.refreshModeMessages?.(); }
     });
   }
+  window.setTimeout(function() { void runAiCompanionSettingsDefaultsUpgrade(); }, 0);
   const sourceRoot = window.registerMarkdownViewerSourceRoot(app, {
     get activeFolderPath() { return activeFolderPath; },
     joinPath,
@@ -5848,8 +5849,232 @@ async function startMarkdownViewer() {
 
   function getAiCompanionSettings(state = loadGlobalState()) {
     const fallback = aiCompanionSettings?.defaults || {};
-    return aiCompanionSettings?.normalize ? aiCompanionSettings.normalize(state.aiCompanionSettings || fallback) : fallback;
-  }  function getEditorSnippetPreferences(state = loadGlobalState()) {
+    const normalized = aiCompanionSettings?.normalize ? aiCompanionSettings.normalize(state.aiCompanionSettings || fallback) : fallback;
+    return applyPendingAiCompanionDefaultUpgrades(normalized, state);
+  }
+
+  /**
+   * Read-time safety net: overlay the non-conflicting default upgrades so the
+   * effective settings are correct even before the startup reconciliation has
+   * persisted them (e.g. on the first launch after a defaults change). Pure — no
+   * writes. Once the store's revision is stamped, detection returns nothing to
+   * apply and this is a no-op. Conflicts are never auto-applied here; they wait
+   * for the user's decision via the startup dialog.
+   */
+  function applyPendingAiCompanionDefaultUpgrades(normalized, state) {
+    const upgrade = window.MarkdownViewerAiCompanionSettingsUpgrade;
+    if (!upgrade || !normalized || !aiCompanionSettings?.defaults) return normalized;
+    let result = normalized;
+    const persistedRaw = state && state.aiCompanionSettings;
+    const persisted = persistedRaw && typeof persistedRaw === "object" && !Array.isArray(persistedRaw) ? persistedRaw : null;
+    // General mechanism: overlay non-conflicting default upgrades until the
+    // startup reconciliation persists them.
+    if (persisted) {
+      try {
+        const detection = upgrade.detectSettingsUpgrade({
+          persisted,
+          storedRevision: state.aiCompanionSettingsDefaultsRevision,
+          currentDefaults: aiCompanionSettings.defaults
+        });
+        const autoUpgraded = detection && detection.autoUpgraded;
+        if (autoUpgraded && Object.keys(autoUpgraded).length) result = Object.assign({}, normalized, autoUpgraded);
+      } catch (_error) { /* fall through to forced defaults */ }
+    }
+    // Internal flags with no UI control always follow the code default, so a
+    // stale persisted value can never pin them regardless of revision state.
+    if (typeof upgrade.applyForcedDefaults === "function") {
+      try { result = upgrade.applyForcedDefaults(result, aiCompanionSettings.defaults); } catch (_error) { /* keep result */ }
+    }
+    return result;
+  }
+
+  let aiCompanionSettingsUpgradeChecked = false;
+
+  function persistUpgradedAiCompanionSettings(rawSettings, revision) {
+    const normalized = aiCompanionSettings?.normalize ? aiCompanionSettings.normalize(rawSettings) : rawSettings;
+    saveGlobalState({ aiCompanionSettings: normalized, aiCompanionSettingsDefaultsRevision: revision });
+    app.modules?.aiCompanionPanel?.refreshModeMessages?.();
+  }
+
+  function formatAiCompanionSettingValue(value) {
+    if (value === true) return "On";
+    if (value === false) return "Off";
+    if (value == null) return "";
+    if (typeof value === "object") return JSON.stringify(value);
+    return String(value);
+  }
+
+  /**
+   * Reconcile persisted AI Companion settings against changed defaults once per
+   * launch. Values the user never customised silently adopt the new default;
+   * genuine conflicts (the user set a value AND the default moved) surface the
+   * keep-mine / use-new-defaults / review dialog. Mirrors the prompt upgrade flow.
+   */
+  async function runAiCompanionSettingsDefaultsUpgrade() {
+    if (aiCompanionSettingsUpgradeChecked) return;
+    aiCompanionSettingsUpgradeChecked = true;
+    const upgrade = window.MarkdownViewerAiCompanionSettingsUpgrade;
+    if (!upgrade || !aiCompanionSettings?.defaults) return;
+    let state;
+    try { state = loadGlobalState(); } catch (_error) { return; }
+    const persistedRaw = state && state.aiCompanionSettings;
+    const persisted = persistedRaw && typeof persistedRaw === "object" && !Array.isArray(persistedRaw) ? persistedRaw : null;
+    const currentDefaults = aiCompanionSettings.defaults;
+    // Fresh install (nothing saved yet): stamp the current revision so later
+    // saves are already reconciled and never trigger a needless upgrade prompt.
+    if (!persisted) {
+      if (state?.aiCompanionSettingsDefaultsRevision !== upgrade.CURRENT_DEFAULTS_REVISION) {
+        saveGlobalState({ aiCompanionSettingsDefaultsRevision: upgrade.CURRENT_DEFAULTS_REVISION });
+      }
+      return;
+    }
+    const storedRevision = state.aiCompanionSettingsDefaultsRevision;
+    let detection;
+    try {
+      detection = upgrade.detectSettingsUpgrade({ persisted, storedRevision, currentDefaults });
+    } catch (_error) { return; }
+
+    if (detection.status === "current") {
+      if (storedRevision !== detection.toRevision) saveGlobalState({ aiCompanionSettingsDefaultsRevision: detection.toRevision });
+      return;
+    }
+    if (detection.status === "migrated") {
+      const applied = upgrade.applySettingsUpgrade({ persisted, currentDefaults, detection, strategy: "manual" });
+      persistUpgradedAiCompanionSettings(applied.settings, applied.revision);
+      return;
+    }
+
+    // status === "conflicts": let the user decide.
+    let choice;
+    try {
+      choice = await notificationModal?.show?.({
+        title: "AI Companion settings updated",
+        message: `${detection.conflicts.length} setting${detection.conflicts.length === 1 ? "" : "s"} changed defaults in this version and differ from your saved values.`,
+        dedupeKey: `ai-settings-upgrade-${detection.toRevision}`,
+        dismissValue: "later",
+        buttons: [
+          { id: "later", label: "Later", value: "later", variant: "cancel" },
+          { id: "mine", label: "Keep my settings", value: "mine" },
+          { id: "defaults", label: "Use new defaults", value: "defaults" },
+          { id: "review", label: "Review and merge", value: "review", variant: "primary", autoFocus: true }
+        ]
+      });
+    } catch (_error) { choice = "later"; }
+
+    if (!choice || choice === "later") {
+      // Apply only the non-conflicting auto-upgrades; leave the revision unstamped
+      // so the conflict prompt returns on the next launch.
+      if (Object.keys(detection.autoUpgraded).length) {
+        persistUpgradedAiCompanionSettings(Object.assign({}, persisted, detection.autoUpgraded), storedRevision);
+      }
+      return;
+    }
+    if (choice === "review") { openAiCompanionSettingsUpgradeDialog(detection); return; }
+    const strategy = choice === "defaults" ? "use-defaults" : "keep-user";
+    const applied = upgrade.applySettingsUpgrade({ persisted, currentDefaults, detection, strategy });
+    persistUpgradedAiCompanionSettings(applied.settings, applied.revision);
+  }
+
+  function openAiCompanionSettingsUpgradeDialog(detection) {
+    const upgrade = window.MarkdownViewerAiCompanionSettingsUpgrade;
+    if (!upgrade) return;
+    document.querySelector(".settings-ai-settings-upgrade-modal")?.remove();
+    const conflicts = Array.isArray(detection?.conflicts) ? detection.conflicts.slice() : [];
+    if (!conflicts.length) return;
+    const resolutions = new Map();
+    let selectedIndex = 0;
+
+    const modal = document.createElement("div");
+    modal.className = "reset-modal-overlay settings-ai-settings-upgrade-modal";
+    modal.setAttribute("role", "dialog");
+    modal.setAttribute("aria-modal", "true");
+    modal.innerHTML = `<div class="reset-modal-box settings-ai-prompt-upgrade-box">
+      <h2>Review settings updates</h2>
+      <div class="settings-ai-prompt-upgrade-layout">
+        <div class="settings-ai-prompt-upgrade-list"></div>
+        <div class="settings-ai-prompt-upgrade-editor">
+          <p class="settings-ai-prompt-upgrade-key"></p>
+          <p class="settings-ai-settings-upgrade-desc" aria-live="polite"></p>
+          <div class="settings-ai-prompt-upgrade-columns">
+            <label>Previous default<input type="text" readonly data-upgrade-base></label>
+            <label>My value<input type="text" readonly data-upgrade-mine></label>
+            <label>New default<input type="text" readonly data-upgrade-theirs></label>
+          </div>
+          <div class="settings-ai-prompt-upgrade-choices">
+            <button type="button" class="reset-modal-btn" data-upgrade-choice="mine">Use mine</button>
+            <button type="button" class="reset-modal-btn" data-upgrade-choice="theirs">Use new default</button>
+          </div>
+        </div>
+      </div>
+      <div class="reset-modal-actions">
+        <button type="button" class="reset-modal-btn reset-modal-cancel" data-upgrade-cancel>Cancel</button>
+        <button type="button" class="reset-modal-btn" data-upgrade-all-mine>Use all mine</button>
+        <button type="button" class="reset-modal-btn" data-upgrade-all-theirs>Use all new defaults</button>
+        <button type="button" class="reset-modal-btn settings-primary-action" data-upgrade-save disabled>Save all resolutions</button>
+      </div>
+    </div>`;
+    document.body.appendChild(modal);
+    const list = modal.querySelector(".settings-ai-prompt-upgrade-list");
+    const save = modal.querySelector("[data-upgrade-save]");
+
+    function render() {
+      list.replaceChildren();
+      conflicts.forEach((conflict, index) => {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = index === selectedIndex ? "is-active" : "";
+        const mark = resolutions.has(conflict.keyPath) ? "✓ " : "";
+        button.textContent = `${mark}${conflict.name || conflict.keyPath}`;
+        button.addEventListener("click", () => { selectedIndex = index; render(); });
+        list.appendChild(button);
+      });
+      const conflict = conflicts[selectedIndex];
+      if (!conflict) return;
+      modal.querySelector(".settings-ai-prompt-upgrade-key").textContent = conflict.name || conflict.keyPath;
+      modal.querySelector(".settings-ai-settings-upgrade-desc").textContent = conflict.description || conflict.keyPath;
+      modal.querySelector("[data-upgrade-base]").value = formatAiCompanionSettingValue(conflict.previousDefault);
+      modal.querySelector("[data-upgrade-mine]").value = formatAiCompanionSettingValue(conflict.userValue);
+      modal.querySelector("[data-upgrade-theirs]").value = formatAiCompanionSettingValue(conflict.newDefault);
+      modal.querySelectorAll("[data-upgrade-choice]").forEach((choiceButton) => {
+        choiceButton.classList.toggle("is-active", resolutions.get(conflict.keyPath)?.choice === choiceButton.dataset.upgradeChoice);
+      });
+      save.disabled = resolutions.size !== conflicts.length;
+    }
+
+    modal.querySelectorAll("[data-upgrade-choice]").forEach((button) => button.addEventListener("click", () => {
+      const conflict = conflicts[selectedIndex];
+      resolutions.set(conflict.keyPath, { keyPath: conflict.keyPath, choice: button.dataset.upgradeChoice });
+      render();
+    }));
+    modal.querySelector("[data-upgrade-all-mine]").addEventListener("click", () => {
+      conflicts.forEach((conflict) => resolutions.set(conflict.keyPath, { keyPath: conflict.keyPath, choice: "mine" }));
+      render();
+    });
+    modal.querySelector("[data-upgrade-all-theirs]").addEventListener("click", () => {
+      conflicts.forEach((conflict) => resolutions.set(conflict.keyPath, { keyPath: conflict.keyPath, choice: "theirs" }));
+      render();
+    });
+    modal.querySelector("[data-upgrade-cancel]").addEventListener("click", () => modal.remove());
+    save.addEventListener("click", () => {
+      save.disabled = true;
+      try {
+        const state = loadGlobalState();
+        const persisted = state && state.aiCompanionSettings && typeof state.aiCompanionSettings === "object" ? state.aiCompanionSettings : {};
+        const applied = upgrade.applySettingsUpgrade({
+          persisted,
+          currentDefaults: aiCompanionSettings.defaults,
+          detection,
+          strategy: "manual",
+          resolutions: [...resolutions.values()]
+        });
+        persistUpgradedAiCompanionSettings(applied.settings, applied.revision);
+        modal.remove();
+      } catch (_error) { save.disabled = false; }
+    });
+    render();
+  }
+
+  function getEditorSnippetPreferences(state = loadGlobalState()) {
     return snippetRegistry?.normalizeSnippetPreferences
       ? snippetRegistry.normalizeSnippetPreferences(state.editorSnippetPreferences)
       : { version: 1, overrides: {}, custom: {} };

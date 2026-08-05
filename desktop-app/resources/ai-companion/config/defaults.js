@@ -43,6 +43,17 @@ const DEFAULT_AI_COMPANION_SETTINGS = Object.freeze({
   agentProgressControlEnabled: false,
   agentNoProgressActionLimit: 3,
   agentMaxStrategyReplans: 2,
+  // Plan-mode stateful controller (M8). Internal, default-off; no visible Settings control.
+  // When false, Plan mode uses the legacy direct-prompting path. When true, Plan mode runs
+  // through the shared M2–M7 controller under a read-only policy resolved by companion-mode-policy.
+  planStatefulControllerEnabled: false,
+  // Plan-mode reliability fixes (internal, default-off; enable independently to test each).
+  // Fix 2: stop or ask when required data is unreachable in Plan mode, instead of inventing it.
+  planCapabilityGateEnabled: true,
+  // Fix 1: only save a plan when the run's completion assessment is successful.
+  planRequireSuccessToSaveEnabled: true,
+  // Fix 3: expose read-only git tools (status/diff/branches) to Plan mode.
+  planGitReadToolsEnabled: true,
   // Intent-contract feature (M1). `intentContractsEnabled` is the user-facing master
   // switch; when off, the intent phase is fully disabled. The remaining keys are
   // thresholds shared by the headless and browser normalizers.
@@ -143,6 +154,10 @@ function normalizeAiCompanionSettings(settings = {}) {
     agentProgressControlEnabled: source.agentProgressControlEnabled === true,
     agentNoProgressActionLimit: clampInteger(source.agentNoProgressActionLimit, DEFAULT_AI_COMPANION_SETTINGS.agentNoProgressActionLimit, 1, 10),
     agentMaxStrategyReplans: clampInteger(source.agentMaxStrategyReplans, DEFAULT_AI_COMPANION_SETTINGS.agentMaxStrategyReplans, 0, 10),
+    planStatefulControllerEnabled: source.planStatefulControllerEnabled === true,
+    planCapabilityGateEnabled: source.planCapabilityGateEnabled !== false,
+    planRequireSuccessToSaveEnabled: source.planRequireSuccessToSaveEnabled !== false,
+    planGitReadToolsEnabled: source.planGitReadToolsEnabled !== false,
     intentContractsEnabled,
     intentExperiment: intentExperiment.resolveIntentExperiment(source.intentExperiment, intentContractsEnabled, { rejectInvalid: true }),
     intentClarificationMode: ["ask", "assume", "off"].includes(source.intentClarificationMode) ? source.intentClarificationMode : "assume",

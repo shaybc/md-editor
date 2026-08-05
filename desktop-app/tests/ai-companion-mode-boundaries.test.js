@@ -107,6 +107,17 @@ test("connection testing calls the provider testConnection method directly", () 
   assert.match(source, /return createProvider\(settings\)\.testConnection\(\{ signal: options\.signal, onDebug: options\.onDebug \}\)/);
 });
 
+test("Plan stateful controller is opt-in, default-off, and preserves the legacy path (M8)", () => {
+  const defaults = fs.readFileSync(path.join(__dirname, "..", "resources", "ai-companion", "config", "defaults.js"), "utf8");
+  assert.match(defaults, /planStatefulControllerEnabled: false/, "flag must default to false");
+  const planSource = fs.readFileSync(path.join(__dirname, "..", "resources", "ai-companion", "modes", "plan", "index.js"), "utf8");
+  assert.match(planSource, /settings\.planStatefulControllerEnabled === true/, "stateful path must be flag-gated");
+  // The legacy Plan path (direct planCreate from an extracted plan body) remains present.
+  assert.match(planSource, /planRepositoryTools\.planCreate/);
+  // Plan adopts the controller via its own plan-* wrappers, never Agent-internal modules directly.
+  assert.doesNotMatch(planSource, /agent-state-shadow|agent-decision-controller|agent-completion-orchestrator|agent-recovery-coordinator/);
+});
+
 test("AgentState, controller, progress control, and durable recovery remain Agent-only", () => {
   const modeRoot = path.join(__dirname, "..", "resources", "ai-companion", "modes");
   const agentSource = fs.readFileSync(path.join(modeRoot, "agent", "index.js"), "utf8");

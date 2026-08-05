@@ -60,6 +60,12 @@
       agentProgressControlEnabled: false,
       agentNoProgressActionLimit: 3,
       agentMaxStrategyReplans: 2,
+      // Plan-mode stateful controller (M8). Internal, default-off; no visible control.
+      planStatefulControllerEnabled: false,
+      // Plan-mode reliability fixes (internal, default-on; disable independently).
+      planCapabilityGateEnabled: true,
+      planRequireSuccessToSaveEnabled: true,
+      planGitReadToolsEnabled: true,
       // Intent-contract feature (M1). Keep in sync with the headless defaults in
       // ai-companion/config/defaults.js so headless and browser runs behave identically.
       intentContractsEnabled: false,
@@ -156,6 +162,10 @@
         agentProgressControlEnabled: source.agentProgressControlEnabled === true,
         agentNoProgressActionLimit: clampInteger(source.agentNoProgressActionLimit, defaults.agentNoProgressActionLimit, 1, 10),
         agentMaxStrategyReplans: clampInteger(source.agentMaxStrategyReplans, defaults.agentMaxStrategyReplans, 0, 10),
+        planStatefulControllerEnabled: source.planStatefulControllerEnabled === true,
+        planCapabilityGateEnabled: source.planCapabilityGateEnabled !== false,
+        planRequireSuccessToSaveEnabled: source.planRequireSuccessToSaveEnabled !== false,
+        planGitReadToolsEnabled: source.planGitReadToolsEnabled !== false,
         intentContractsEnabled,
         intentExperiment: intentExperiment.resolveIntentExperiment(source.intentExperiment, intentContractsEnabled, { rejectInvalid: true }),
         intentClarificationMode: ["ask", "assume", "off"].includes(source.intentClarificationMode) ? source.intentClarificationMode : "assume",
