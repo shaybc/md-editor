@@ -65,6 +65,20 @@ const MODE_CONTROLLER_SPECS = Object.freeze({
     durableRecoveryFlag: "planDurableRecoveryEnabled",
     requiresIntentContracts: true,
     requiresCompletionAssessment: false
+  }),
+  // M9.1 — Chat adoption. Read-only, routed (direct/grounded/complex depth is
+  // chosen by chat-request-router.js). Capability flags follow the same cascade
+  // as agent/plan; peer flags default false via defaults.js.
+  chat: Object.freeze({
+    mutability: "read-only",
+    routed: true,
+    controllerFlag: "chatStatefulControllerEnabled",
+    verifierCompletionFlag: "chatVerifierCompletionEnabled",
+    progressEvaluationFlag: "chatProgressEvaluationEnabled",
+    progressControlFlag: "chatProgressControlEnabled",
+    durableRecoveryFlag: "chatDurableRecoveryEnabled",
+    requiresIntentContracts: true,
+    requiresCompletionAssessment: false
   })
 });
 
@@ -151,6 +165,36 @@ function resolveModePolicy(mode, settings = {}) {
   });
 }
 
+/**
+ * Validate the feature-flag dependency matrix for a mode. Detects contradictory
+ * combinations (a sub-capability flag enabled while a prerequisite is not), so a
+ * caller can fail closed to the legacy path before the first model call rather
+ * than run a half-configured controller. Pure; does not change resolveModePolicy.
+ *
+ * @returns {{ valid: boolean, errors: string[] }}
+ */
+function validateModeFlags(mode, settings = {}) {
+  const spec = MODE_CONTROLLER_SPECS[mode];
+  if (!spec) return { valid: true, errors: [] };
+  const on = (key) => flagOn(settings, key);
+  const controller = on(spec.controllerFlag);
+  const errors = [];
+  for (const flagKey of ["verifierCompletionFlag", "progressEvaluationFlag", "durableRecoveryFlag"]) {
+    if (spec[flagKey] && on(spec[flagKey]) && !controller) {
+      errors.push(`${spec[flagKey]} requires ${spec.controllerFlag}`);
+    }
+  }
+  if (spec.progressControlFlag && on(spec.progressControlFlag)) {
+    if (spec.progressEvaluationFlag && !on(spec.progressEvaluationFlag)) {
+      errors.push(`${spec.progressControlFlag} requires ${spec.progressEvaluationFlag}`);
+    }
+    if (spec.verifierCompletionFlag && !on(spec.verifierCompletionFlag)) {
+      errors.push(`${spec.progressControlFlag} requires ${spec.verifierCompletionFlag}`);
+    }
+  }
+  return { valid: errors.length === 0, errors };
+}
+
 /** True when the mode has a controller spec at all (independent of flags). */
 function isControllerMode(mode) {
   return Boolean(MODE_CONTROLLER_SPECS[mode]);
@@ -165,6 +209,7 @@ module.exports = {
   MODE_CONTROLLER_SPECS,
   CONVERSATIONAL_MODES,
   resolveModePolicy,
+  validateModeFlags,
   isControllerMode,
   isConversationalMode
 };

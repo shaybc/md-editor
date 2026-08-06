@@ -106,7 +106,8 @@ test("plan sub-capabilities stay off until their own flags exist (later M8 sub-m
 });
 
 test("non-controller modes are never controller-eligible", () => {
-  for (const mode of ["chat", "autocomplete", "gitSummary", "testConnection", "unknown"]) {
+  // Chat became a (default-off) controller mode in M9; it is covered separately.
+  for (const mode of ["autocomplete", "gitSummary", "testConnection", "unknown"]) {
     const policy = resolveModePolicy(mode, {
       agentDecisionControllerEnabled: true,
       planStatefulControllerEnabled: true,
@@ -119,10 +120,19 @@ test("non-controller modes are never controller-eligible", () => {
   }
 });
 
+test("chat is a controller mode but stays legacy unless its flag is set", () => {
+  const off = resolveModePolicy("chat", { agentDecisionControllerEnabled: true, intentContractsEnabled: true });
+  assert.equal(off.isControllerMode, true);
+  assert.equal(off.controllerEligible, false, "chat controller off without chatStatefulControllerEnabled");
+  const on = resolveModePolicy("chat", { chatStatefulControllerEnabled: true });
+  assert.equal(on.controllerEligible, true);
+  assert.equal(on.mutability, "read-only");
+});
+
 test("mode classification helpers", () => {
   assert.equal(isControllerMode("agent"), true);
   assert.equal(isControllerMode("plan"), true);
-  assert.equal(isControllerMode("chat"), false);
+  assert.equal(isControllerMode("chat"), true);
   assert.equal(isConversationalMode("chat"), true);
   assert.equal(isConversationalMode("plan"), true);
   assert.equal(isConversationalMode("gitSummary"), false);

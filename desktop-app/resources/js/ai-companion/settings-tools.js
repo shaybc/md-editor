@@ -93,6 +93,29 @@
       return asObject(getDefaultState()[topKey]);
     }
 
+    /**
+     * For a bare (single-segment) key that does not resolve at the top level,
+     * find full paths where a known namespace has a child leaf of that name — e.g.
+     * "chatStatefulControllerEnabled" -> "aiCompanionSettings.chatStatefulControllerEnabled".
+     * Used to suggest (never auto-apply) a correction back to the model.
+     * @returns {string[]} candidate full paths (usually zero or one).
+     */
+    function findPreferenceKeySuggestions(key) {
+      const parts = Array.isArray(key)
+        ? key.map((part) => String(part || "").trim()).filter(Boolean)
+        : String(key || "").split(".").map((part) => part.trim()).filter(Boolean);
+      if (parts.length !== 1) return [];
+      const bare = parts[0];
+      const suggestions = [];
+      for (const topKey of Object.keys(getDefaultState())) {
+        const nested = getKnownNestedDefaults(topKey);
+        if (nested && typeof nested === "object" && Object.prototype.hasOwnProperty.call(nested, bare)) {
+          suggestions.push(`${topKey}.${bare}`);
+        }
+      }
+      return suggestions;
+    }
+
     function assertKnownPreferencePath(key) {
       const parts = splitPreferencePath(key);
       const defaults = getDefaultState();
@@ -611,13 +634,37 @@
 
     async function updatePreferences(args = {}) {
       const sourceChanges = Array.isArray(args.changes) ? args.changes : [];
-      const changes = sourceChanges.map((change) => createChange(change?.key, change?.value, "update"));
+      const changes = [];
+      const unresolved = [];
+      for (const change of sourceChanges) {
+        const key = change?.key;
+        try {
+          // Resolve first so an unknown bare key becomes a suggestion, not a hard
+          // failure that aborts the whole call.
+          assertKnownPreferencePath(key);
+        } catch (error) {
+          if (error && error.code === "unknown-preference") {
+            const suggestions = findPreferenceKeySuggestions(key);
+            unresolved.push({
+              key: Array.isArray(key) ? key.join(".") : String(key || ""),
+              found: false,
+              suggestions,
+              message: suggestions.length
+                ? `Preference "${Array.isArray(key) ? key.join(".") : key}" was not found. Did you mean ${suggestions.map((s) => `"${s}"`).join(" or ")}? Nothing was changed — re-call preferences_update with the full path if that is the setting you want, or ask the user.`
+                : `Preference "${Array.isArray(key) ? key.join(".") : key}" was not found and no similar key exists. Nothing was changed.`
+            });
+            continue;
+          }
+          throw error;
+        }
+        changes.push(createChange(key, change?.value, "update"));
+      }
       const changed = changes.some((change) => change.changed);
       if (changed && args.previewOnly !== true) {
         deps.saveGlobalState?.(buildPatchFromChanges(changes.filter((change) => change.changed)));
         await refreshPreferences();
       }
-      return { changed, changes: changes.map(({ rawNewValue, ...change }) => change) };
+      return { changed, changes: changes.map(({ rawNewValue, ...change }) => change), unresolved };
     }
 
     async function resetPreferences(args = {}) {

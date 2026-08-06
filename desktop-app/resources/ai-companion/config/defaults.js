@@ -48,6 +48,15 @@ const DEFAULT_AI_COMPANION_SETTINGS = Object.freeze({
   // When false, Plan mode uses the legacy direct-prompting path. When true, Plan mode runs
   // through the shared M2–M7 controller under a read-only policy resolved by companion-mode-policy.
   planStatefulControllerEnabled: false,
+  // Chat-mode stateful controller (M9). Internal, default-off; no visible Settings control.
+  // When false, Chat uses its legacy routing/one-shot path. When true, Chat runs through the
+  // shared controller under a read-only, routed policy resolved by companion-mode-policy.
+  // Peer capability flags follow the same dependency cascade as agent/plan.
+  chatStatefulControllerEnabled: false,
+  chatVerifierCompletionEnabled: false,
+  chatProgressEvaluationEnabled: false,
+  chatProgressControlEnabled: false,
+  chatDurableRecoveryEnabled: false,
   // Plan-mode reliability fixes (internal, default-off; enable independently to test each).
   // Fix 2: stop or ask when required data is unreachable in Plan mode, instead of inventing it.
   planCapabilityGateEnabled: true,
@@ -160,6 +169,11 @@ function normalizeAiCompanionSettings(settings = {}) {
     agentNoProgressActionLimit: clampInteger(source.agentNoProgressActionLimit, DEFAULT_AI_COMPANION_SETTINGS.agentNoProgressActionLimit, 1, 10),
     agentMaxStrategyReplans: clampInteger(source.agentMaxStrategyReplans, DEFAULT_AI_COMPANION_SETTINGS.agentMaxStrategyReplans, 0, 10),
     planStatefulControllerEnabled: source.planStatefulControllerEnabled === true,
+    chatStatefulControllerEnabled: source.chatStatefulControllerEnabled === true,
+    chatVerifierCompletionEnabled: source.chatVerifierCompletionEnabled === true,
+    chatProgressEvaluationEnabled: source.chatProgressEvaluationEnabled === true,
+    chatProgressControlEnabled: source.chatProgressControlEnabled === true,
+    chatDurableRecoveryEnabled: source.chatDurableRecoveryEnabled === true,
     planCapabilityGateEnabled: source.planCapabilityGateEnabled !== false,
     planRequireSuccessToSaveEnabled: source.planRequireSuccessToSaveEnabled !== false,
     planGitReadToolsEnabled: source.planGitReadToolsEnabled !== false,

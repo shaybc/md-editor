@@ -3108,6 +3108,21 @@ async function startMarkdownViewer() {
       }
     });
   }
+  if (typeof window.registerMarkdownViewerAiCompanionExperimentalSettings === "function") {
+    window.registerMarkdownViewerAiCompanionExperimentalSettings(app, {
+      getSettings: function() { return getAiCompanionSettings(); },
+      persistFlags: function(patch) {
+        const state = loadGlobalState();
+        const current = state && state.aiCompanionSettings && typeof state.aiCompanionSettings === "object" && !Array.isArray(state.aiCompanionSettings)
+          ? state.aiCompanionSettings : {};
+        const merged = aiCompanionSettings?.normalize
+          ? aiCompanionSettings.normalize(Object.assign({}, current, patch))
+          : Object.assign({}, current, patch);
+        saveGlobalState({ aiCompanionSettings: merged });
+        app.modules?.aiCompanionPanel?.refreshModeMessages?.();
+      }
+    });
+  }
   window.setTimeout(function() { void runAiCompanionSettingsDefaultsUpgrade(); }, 0);
   const sourceRoot = window.registerMarkdownViewerSourceRoot(app, {
     get activeFolderPath() { return activeFolderPath; },

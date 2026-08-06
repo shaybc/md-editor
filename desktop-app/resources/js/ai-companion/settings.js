@@ -63,6 +63,12 @@
       agentMaxStrategyReplans: 2,
       // Plan-mode stateful controller (M8). Internal, default-off; no visible control.
       planStatefulControllerEnabled: false,
+      // Chat-mode stateful controller (M9). Internal, default-off; no visible control.
+      chatStatefulControllerEnabled: false,
+      chatVerifierCompletionEnabled: false,
+      chatProgressEvaluationEnabled: false,
+      chatProgressControlEnabled: false,
+      chatDurableRecoveryEnabled: false,
       // Plan-mode reliability fixes (internal, default-on; disable independently).
       planCapabilityGateEnabled: true,
       planRequireSuccessToSaveEnabled: true,
@@ -167,6 +173,11 @@
         agentNoProgressActionLimit: clampInteger(source.agentNoProgressActionLimit, defaults.agentNoProgressActionLimit, 1, 10),
         agentMaxStrategyReplans: clampInteger(source.agentMaxStrategyReplans, defaults.agentMaxStrategyReplans, 0, 10),
         planStatefulControllerEnabled: source.planStatefulControllerEnabled === true,
+        chatStatefulControllerEnabled: source.chatStatefulControllerEnabled === true,
+        chatVerifierCompletionEnabled: source.chatVerifierCompletionEnabled === true,
+        chatProgressEvaluationEnabled: source.chatProgressEvaluationEnabled === true,
+        chatProgressControlEnabled: source.chatProgressControlEnabled === true,
+        chatDurableRecoveryEnabled: source.chatDurableRecoveryEnabled === true,
         planCapabilityGateEnabled: source.planCapabilityGateEnabled !== false,
         planRequireSuccessToSaveEnabled: source.planRequireSuccessToSaveEnabled !== false,
         planGitReadToolsEnabled: source.planGitReadToolsEnabled !== false,

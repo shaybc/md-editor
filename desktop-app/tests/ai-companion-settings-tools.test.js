@@ -386,3 +386,36 @@ test("preview update does not persist or refresh", async () => {
   assert.equal(harness.savedState.editorFontSize, undefined);
   assert.equal(harness.refreshes.length, 0);
 });
+
+test("bare nested key is suggested, never auto-applied", async () => {
+  const harness = loadSettingsTools();
+  const result = await harness.api.execute("preferences_update", { changes: [{ key: "agentEnabled", value: true }] });
+  assert.equal(result.changed, false, "nothing is applied for an unresolved bare key");
+  assert.ok(Array.isArray(result.unresolved) && result.unresolved.length === 1);
+  assert.equal(result.unresolved[0].found, false);
+  assert.deepEqual(JSON.parse(JSON.stringify(result.unresolved[0].suggestions)), ["aiCompanionSettings.agentEnabled"]);
+  assert.match(result.unresolved[0].message, /Did you mean "aiCompanionSettings\.agentEnabled"/);
+  assert.equal(harness.savedState.aiCompanionSettings, undefined, "state untouched");
+  assert.equal(harness.refreshes.length, 0);
+});
+
+test("valid full path applies while a sibling bare key is only suggested", async () => {
+  const harness = loadSettingsTools();
+  const result = await harness.api.execute("preferences_update", { changes: [
+    { key: "aiCompanionSettings.agentEnabled", value: true },
+    { key: "model", value: "x" }
+  ] });
+  assert.equal(result.changed, true, "the valid full-path change applies");
+  assert.equal(harness.savedState.aiCompanionSettings.agentEnabled, true);
+  assert.ok(result.unresolved.some((u) => u.suggestions.includes("aiCompanionSettings.model")));
+  // The bare "model" key was not applied.
+  assert.notEqual(harness.savedState.aiCompanionSettings.model, "x");
+});
+
+test("unknown key with no namespace match returns an empty-suggestion notice", async () => {
+  const harness = loadSettingsTools();
+  const result = await harness.api.execute("preferences_update", { changes: [{ key: "totallyMadeUpKey", value: 1 }] });
+  assert.equal(result.changed, false);
+  assert.equal(result.unresolved.length, 1);
+  assert.equal(result.unresolved[0].suggestions.length, 0);
+});
