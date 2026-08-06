@@ -211,6 +211,25 @@
       return root;
     }
 
+    // Coerce a string value to the preference's declared type. Some providers (e.g.
+    // Gemini) cannot express a polymorphic value and send booleans/numbers as strings;
+    // this lets those round-trip. No-op when the value already matches the type.
+    function coercePreferenceValue(key, value) {
+      if (typeof value !== "string") return value;
+      const defaultValue = getPreferencePathValue(getDefaultTopValue, key);
+      if (typeof defaultValue === "boolean") {
+        const lowered = value.trim().toLowerCase();
+        if (lowered === "true") return true;
+        if (lowered === "false") return false;
+        return value;
+      }
+      if (typeof defaultValue === "number") {
+        const asNumber = Number(value);
+        return value.trim() !== "" && Number.isFinite(asNumber) ? asNumber : value;
+      }
+      return value;
+    }
+
     function validateValueType(key, nextValue) {
       const defaultValue = getPreferencePathValue(getDefaultTopValue, key);
       if (Array.isArray(defaultValue)) {
@@ -657,7 +676,7 @@
           }
           throw error;
         }
-        changes.push(createChange(key, change?.value, "update"));
+        changes.push(createChange(key, coercePreferenceValue(key, change?.value), "update"));
       }
       const changed = changes.some((change) => change.changed);
       if (changed && args.previewOnly !== true) {

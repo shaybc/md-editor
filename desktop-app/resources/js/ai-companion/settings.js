@@ -69,6 +69,10 @@
       chatProgressEvaluationEnabled: false,
       chatProgressControlEnabled: false,
       chatDurableRecoveryEnabled: false,
+      // Intent provenance boundary (M11.1). Internal, default-off; no visible control.
+      intentProvenanceBoundaryEnabled: false,
+      // Task-profile routing (M11.2). Internal, default-off; no visible control.
+      taskProfileRoutingEnabled: false,
       // Plan-mode reliability fixes (internal, default-on; disable independently).
       planCapabilityGateEnabled: true,
       planRequireSuccessToSaveEnabled: true,
@@ -178,6 +182,8 @@
         chatProgressEvaluationEnabled: source.chatProgressEvaluationEnabled === true,
         chatProgressControlEnabled: source.chatProgressControlEnabled === true,
         chatDurableRecoveryEnabled: source.chatDurableRecoveryEnabled === true,
+        intentProvenanceBoundaryEnabled: source.intentProvenanceBoundaryEnabled === true,
+        taskProfileRoutingEnabled: source.taskProfileRoutingEnabled === true,
         planCapabilityGateEnabled: source.planCapabilityGateEnabled !== false,
         planRequireSuccessToSaveEnabled: source.planRequireSuccessToSaveEnabled !== false,
         planGitReadToolsEnabled: source.planGitReadToolsEnabled !== false,

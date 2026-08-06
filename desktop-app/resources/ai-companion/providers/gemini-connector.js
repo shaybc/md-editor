@@ -437,14 +437,39 @@ function toGeminiContents(messages = []) {
   return { contents, system };
 }
 
+// Gemini function declarations accept only an OpenAPI-3 subset. Fields outside this set
+// (pattern, minLength/maxLength, minItems/maxItems, minimum/maximum, default, examples,
+// $schema, additionalProperties, title, ...) cause an INVALID_ARGUMENT rejection of the
+// whole request, and every schema node must carry a `type`. We therefore allow-list the
+// supported keys and guarantee a type rather than passing the raw JSON Schema through.
+const GEMINI_SCHEMA_KEYS = new Set(["type", "description", "enum", "items", "properties", "required", "nullable"]);
+
+function inferGeminiSchemaType(node) {
+  if (node.properties && typeof node.properties === "object") return "object";
+  if (node.items) return "array";
+  // A typeless leaf (e.g. a polymorphic value) has no Gemini representation for "any";
+  // string is the safe carrier. Preference writers coerce string values back to the
+  // declared type, so booleans/numbers still round-trip.
+  return "string";
+}
+
 function sanitizeGeminiSchema(schema) {
   if (!schema || typeof schema !== "object") return schema;
   if (Array.isArray(schema)) return schema.map(sanitizeGeminiSchema);
   const result = {};
   for (const [key, value] of Object.entries(schema)) {
-    if (key === "additionalProperties") continue;
-    result[key] = sanitizeGeminiSchema(value);
+    if (!GEMINI_SCHEMA_KEYS.has(key)) continue; // drop unsupported JSON-Schema keywords
+    if (key === "properties" && value && typeof value === "object") {
+      const properties = {};
+      for (const [propName, propSchema] of Object.entries(value)) properties[propName] = sanitizeGeminiSchema(propSchema);
+      result.properties = properties;
+    } else if (key === "items") {
+      result.items = sanitizeGeminiSchema(value);
+    } else {
+      result[key] = value;
+    }
   }
+  if (!result.type) result.type = inferGeminiSchemaType(result);
   return result;
 }
 

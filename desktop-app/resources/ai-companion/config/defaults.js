@@ -57,6 +57,15 @@ const DEFAULT_AI_COMPANION_SETTINGS = Object.freeze({
   chatProgressEvaluationEnabled: false,
   chatProgressControlEnabled: false,
   chatDurableRecoveryEnabled: false,
+  // Intent provenance boundary (M11.1). Internal, default-off; no visible Settings control.
+  // When true, ambient editor context (active file / open tabs) is demoted to supporting
+  // evidence and never enters a criterion's mustInspect or namedTargets unless the user
+  // named it or an observation confirmed it.
+  intentProvenanceBoundaryEnabled: false,
+  // Task-profile routing (M11.2). Internal, default-off; no visible Settings control.
+  // When true, a deterministically-certain task profile (e.g. preferences-update)
+  // restricts the exposed tool surface to the profile's allow-list.
+  taskProfileRoutingEnabled: false,
   // Plan-mode reliability fixes (internal, default-off; enable independently to test each).
   // Fix 2: stop or ask when required data is unreachable in Plan mode, instead of inventing it.
   planCapabilityGateEnabled: true,
@@ -174,6 +183,8 @@ function normalizeAiCompanionSettings(settings = {}) {
     chatProgressEvaluationEnabled: source.chatProgressEvaluationEnabled === true,
     chatProgressControlEnabled: source.chatProgressControlEnabled === true,
     chatDurableRecoveryEnabled: source.chatDurableRecoveryEnabled === true,
+    intentProvenanceBoundaryEnabled: source.intentProvenanceBoundaryEnabled === true,
+    taskProfileRoutingEnabled: source.taskProfileRoutingEnabled === true,
     planCapabilityGateEnabled: source.planCapabilityGateEnabled !== false,
     planRequireSuccessToSaveEnabled: source.planRequireSuccessToSaveEnabled !== false,
     planGitReadToolsEnabled: source.planGitReadToolsEnabled !== false,

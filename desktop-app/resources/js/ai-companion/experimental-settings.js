@@ -19,7 +19,9 @@
     { key: "chatVerifierCompletionEnabled", label: "Chat groundedness verification (M9.4)", description: "Verify answers against evidence. Requires the Chat controller and intent contracts." },
     { key: "chatProgressEvaluationEnabled", label: "Chat progress evaluation (M9.6)", description: "Detect progress / loops on the complex Chat route. Requires the Chat controller." },
     { key: "chatProgressControlEnabled", label: "Chat progress control (M9.6)", description: "Force strategy revision on stalls. Requires progress evaluation + verification." },
-    { key: "chatDurableRecoveryEnabled", label: "Chat durable recovery (M9.7)", description: "Checkpoint/restart recovery for long complex Chat turns. Requires the Chat controller." }
+    { key: "chatDurableRecoveryEnabled", label: "Chat durable recovery (M9.7)", description: "Checkpoint/restart recovery for long complex Chat turns. Requires the Chat controller." },
+    { key: "intentProvenanceBoundaryEnabled", label: "Intent provenance boundary (M11.1)", description: "Keep the active file / open tabs as supporting context only — never a required inspection target unless you named it." },
+    { key: "taskProfileRoutingEnabled", label: "Task-profile routing (M11.2)", description: "For a clearly-typed task (e.g. a preferences update), restrict the tool surface to that task's tools. Requires the Agent decision controller." }
   ];
 
   function registerMarkdownViewerAiCompanionExperimentalSettings(app, deps = {}) {

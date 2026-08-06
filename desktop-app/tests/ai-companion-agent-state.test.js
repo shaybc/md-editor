@@ -61,6 +61,72 @@ test("AgentState accepts sequence gaps while stateVersion counts accepted mutati
   assert.equal(applyAgentStateEvent(completed.state, event("run-1", 7, "steering_observed", {})).reason, "post-terminal-event");
 });
 
+test("M11 task-profile slice drives readiness through the reducer (golden preferences flow)", () => {
+  const { createWorkflowState, getProfile } = require("../resources/ai-companion/core/task-profiles");
+  const { createTaskState } = require("../resources/ai-companion/core/task-observation-projection");
+  const profile = getProfile("preferences-update");
+  const keys = ["aiCompanionSettings.a", "aiCompanionSettings.b"];
+  const desired = { [keys[0]]: true, [keys[1]]: true };
+
+  let state = createInitialAgentState({ runId: "run-prefs", prompt: "set prefs", controlMode: "controller" });
+  state = applyAgentStateEvent(state, event("run-prefs", 1, "run_started")).state;
+
+  // Seed: nothing resolved yet -> incomplete.
+  const seed = applyAgentStateEvent(state, event("run-prefs", 2, "task_profile_seeded", {
+    profileId: profile.profileId,
+    profileVersion: profile.profileVersion,
+    workflowVersion: profile.workflowVersion,
+    requiredActionTool: profile.mutationTool,
+    capableToolAvailable: true,
+    requestedKeys: keys,
+    desiredValues: desired,
+    taskState: createTaskState({ requestedKeys: keys, desiredValues: desired, requiredActionTool: profile.mutationTool }),
+    workflowState: createWorkflowState(profile)
+  }));
+  assert.equal(seed.accepted, true);
+  assert.equal(seed.state.actionReadiness.status, "incomplete");
+  assert.equal(seed.state.taskProfile.workflowState.activeStepId, "resolve");
+
+  // Resolve all keys via preferences_search -> ready_for_action, resolve step completed.
+  const resolved = applyAgentStateEvent(seed.state, event("run-prefs", 3, "task_profile_updated", {
+    observation: { tool: "preferences_search", accepted: true, resolvedAllKeys: true, matches: keys.map((key) => ({ key, descriptor: "d" })) }
+  }));
+  assert.equal(resolved.state.actionReadiness.status, "ready_for_action");
+  assert.equal(resolved.state.taskProfile.workflowState.steps[0].status, "completed");
+  assert.equal(resolved.state.taskProfile.workflowState.activeStepId, "update");
+  assert.equal(resolved.state.actionReadiness.readiness.requiredAction, "preferences_update");
+
+  // Approval required flips it to ready_for_approval (never bypasses approval).
+  const needsApproval = applyAgentStateEvent(resolved.state, event("run-prefs", 4, "task_profile_updated", { approvalRequired: true }));
+  assert.equal(needsApproval.state.actionReadiness.status, "ready_for_approval");
+
+  // Update applied -> update step completes.
+  const updated = applyAgentStateEvent(needsApproval.state, event("run-prefs", 5, "task_profile_updated", {
+    approvalGranted: true,
+    observation: { tool: "preferences_update", accepted: true }
+  }));
+  assert.equal(updated.state.taskProfile.workflowState.steps[1].status, "completed");
+  assert.equal(updated.state.taskProfile.workflowState.activeStepId, "verify");
+
+  // Read-back verifies -> verify step completes, profile completed.
+  const verified = applyAgentStateEvent(updated.state, event("run-prefs", 6, "task_profile_updated", {
+    observation: { tool: "preferences_get", accepted: true, verified: true, matches: keys.map((key) => ({ key, value: true })) }
+  }));
+  assert.equal(verified.state.taskProfile.workflowState.profileStatus, "completed");
+  assert.equal(verified.state.taskProfile.taskState.observedValues[keys[0]], true);
+});
+
+test("M11 reducer does not create a task-profile slice without a seed (legacy runs unaffected)", () => {
+  let state = createInitialAgentState({ runId: "run-legacy", prompt: "x", controlMode: "controller" });
+  state = applyAgentStateEvent(state, event("run-legacy", 1, "run_started")).state;
+  assert.equal(state.taskProfile, null);
+  assert.equal(state.actionReadiness, null);
+  // An update without a seed is rejected.
+  const r = applyAgentStateEvent(state, event("run-legacy", 2, "task_profile_updated", { observation: { tool: "preferences_search", accepted: true } }));
+  assert.equal(r.accepted, false);
+  assert.equal(r.reason, "task-profile-not-seeded");
+});
+
 test("AgentState v5 records validated decision lifecycle without raw tool arguments", () => {
   let state = createInitialAgentState({ runId: "run-decisions", prompt: "inspect", controlMode: "controller" });
   const events = [

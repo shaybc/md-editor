@@ -145,6 +145,42 @@ test("controller rejects missing, multiple, malformed, and unsupported blocked d
   assert.ok(blocked.validationCodes.includes("use_request_user_input"));
 });
 
+test("action-readiness constraint rejects discovery reads once action-ready (M11.4a)", () => {
+  const definitions = [
+    { type: "function", function: { name: "read_file", parameters: { type: "object", required: ["path"], properties: { path: { type: "string" } } } } },
+    { type: "function", function: { name: "preferences_update", parameters: { type: "object", required: ["key", "value"], properties: { key: { type: "string" }, value: {} } } } }
+  ];
+  const readyState = {
+    ...createInitialAgentState({ runId: "ready", controlMode: "controller" }),
+    actionReadiness: { status: "ready_for_action", requiredAction: "preferences_update" }
+  };
+
+  // A discovery read is rejected pre-execution.
+  const read = controller.normalizeDecisionAttempt({
+    toolCalls: [toolCall("read_file", { path: "resources/config/defaults.js", _decision: metadata("the source") }, "r1")]
+  }, definitions, readyState, { decisionId: "R1" });
+  assert.ok(read.validationCodes.includes("discovery_disallowed_when_action_ready"));
+  assert.equal(read.sanitizedToolCall, null, "rejected read is not executable");
+
+  // The required action itself is permitted.
+  const act = controller.normalizeDecisionAttempt({
+    toolCalls: [toolCall("preferences_update", { key: "aiCompanionSettings.x", value: true, _decision: metadata("the update result") }, "a1")]
+  }, definitions, readyState, { decisionId: "A1" });
+  assert.ok(!act.validationCodes.includes("discovery_disallowed_when_action_ready"));
+
+  // Control decisions (ask/block) remain permitted even when action-ready.
+  const ask = controller.normalizeDecisionAttempt({
+    toolCalls: [toolCall("agent_request_user_input", { _decision: metadata("an answer"), question: "Proceed?", reason: "confirm", answerType: "single_choice", choices: ["yes", "no"] }, "q1")]
+  }, definitions, readyState, { decisionId: "Q1", hasClarificationChannel: true });
+  assert.ok(!ask.validationCodes.includes("discovery_disallowed_when_action_ready"));
+
+  // No readiness verdict => no constraint (legacy runs unaffected).
+  const legacy = controller.normalizeDecisionAttempt({
+    toolCalls: [toolCall("read_file", { path: "x.js", _decision: metadata("x") }, "l1")]
+  }, definitions, createInitialAgentState({ runId: "legacy", controlMode: "controller" }), { decisionId: "L1" });
+  assert.ok(!legacy.validationCodes.includes("discovery_disallowed_when_action_ready"));
+});
+
 test("blocked reports require internally consistent state evidence", () => {
   const definitions = [{
     type: "function",

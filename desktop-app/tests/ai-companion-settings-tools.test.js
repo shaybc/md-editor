@@ -127,6 +127,25 @@ test("updates boolean string number and nested preferences", async () => {
   assert.equal(harness.refreshes.length, 1);
 });
 
+test("coerces string values to the preference's declared type (Gemini round-trip)", async () => {
+  const harness = loadSettingsTools();
+
+  // A provider that can only send strings passes "true"/"18"; they must round-trip.
+  const result = await harness.api.execute("preferences_update", {
+    changes: [
+      { key: "wordWrapEnabled", value: "true" },
+      { key: "editorFontSize", value: "18" }
+    ]
+  });
+
+  assert.equal(result.changed, true);
+  assert.equal(harness.savedState.wordWrapEnabled, true, "string 'true' coerced to boolean");
+  assert.equal(harness.savedState.editorFontSize, 18, "numeric string coerced to number");
+  // A genuine string preference is untouched.
+  await harness.api.execute("preferences_update", { changes: [{ key: "theme", value: "dark" }] });
+  assert.equal(harness.savedState.theme, "dark");
+});
+
 test("persists multiple nested updates that share one parent setting", async () => {
   const defaultState = {
     theme: "light",

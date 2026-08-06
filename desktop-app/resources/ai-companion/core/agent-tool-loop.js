@@ -15,6 +15,9 @@ const { canonicalizeEditSearch } = require("../tools/workspace-edit-matcher");
 const correctionConsistency = require("./intent-correction-consistency");
 const toolEffectRegistry = require("./agent-tool-effect-registry");
 const toolScopeRegistry = require("./tool-scope-registry");
+const { resolveTaskProfile } = require("./task-routing");
+const { parseExplicitPreferenceTargets, deriveTaskObservation } = require("./task-preference-bridge");
+const { createTaskState } = require("./task-observation-projection");
 const { DEFAULT_AI_COMPANION_PROMPTS } = require("../config/prompts");
 const { createActivityRun } = require("./agent-activity");
 const { analyzeApprovalAction } = require("./approval-action-analysis");
@@ -900,6 +903,14 @@ function getAgentToolDefinitions(mode, options = {}) {
       { mode, enabledScopes: options.enabledScopes, taskScopes: options.taskScopes }
     ));
     scopedDefinitions = definitions.filter((definition) => keep.has(definition?.function?.name));
+  }
+  // Task-profile narrowing (M11.2): when a certain task profile is active, expose only
+  // its explicit workspace tools — tighter than scope granularity. The caller resolves
+  // the allow-list (task-profiles.resolveProfileToolNames) and passes it in; control
+  // tools are added by the decision controller, not here.
+  if (Array.isArray(options.taskProfileToolNames)) {
+    const allow = new Set(options.taskProfileToolNames);
+    scopedDefinitions = scopedDefinitions.filter((definition) => allow.has(definition?.function?.name));
   }
   // Tool names are canonical end-to-end, so no relabeling is needed here.
   return scopedDefinitions.map(addApprovalReasonRequirement);
@@ -3021,7 +3032,7 @@ async function runAgentToolLoop(provider, settings, root, prompt, mode, emit, ru
     return finalContent;
   };
   const hasToolDefinitionsOverride = Array.isArray(loopOptions.toolDefinitionsOverride);
-  const toolDefinitions = hasToolDefinitionsOverride
+  let toolDefinitions = hasToolDefinitionsOverride
     ? [...loopOptions.toolDefinitionsOverride]
     : getAgentToolDefinitions(mode, {
       planGitReadToolsEnabled: settings.planGitReadToolsEnabled === true,
@@ -3033,6 +3044,47 @@ async function runAgentToolLoop(provider, settings, root, prompt, mode, emit, ru
   const controllerEnabled = modePolicy.controllerEligible;
   if (controllerEnabled && !loopOptions.agentStateSession) throw new Error("Agent decision controller requires an authoritative state session.");
   if (controllerEnabled) loadAgentDecisionController();
+
+  // M11 task-profile engagement (flag-gated, controller + agent only). When a certain
+  // profile is resolved, restrict the tool surface to the profile's allow-list and seed
+  // the reducer's task-profile slice. Requested keys/values are parsed from the prompt
+  // only when explicit; otherwise the slice still tracks the workflow and restricts
+  // tools while readiness stays incomplete (the gate never forces an action).
+  let taskProfileEngagement = null;
+  if (controllerEnabled && mode === "agent" && !hasToolDefinitionsOverride && settings.taskProfileRoutingEnabled === true) {
+    const routed = resolveTaskProfile({ prompt, mode, settings, enabledScopes: settings.toolScopes });
+    if (routed.engaged && routed.profile.profileId === "preferences-update") {
+      const targets = parseExplicitPreferenceTargets(prompt);
+      const allow = new Set(routed.toolNames);
+      toolDefinitions = toolDefinitions.filter((definition) => allow.has(definition?.function?.name));
+      const capableToolAvailable = routed.toolNames.includes(routed.profile.mutationTool);
+      loopOptions.agentStateSession.applyControllerEvent("task_profile_seeded", {
+        profileId: routed.profile.profileId,
+        profileVersion: routed.profile.profileVersion,
+        workflowVersion: routed.profile.workflowVersion,
+        requiredActionTool: routed.profile.mutationTool,
+        capableToolAvailable,
+        requestedKeys: targets.requestedKeys,
+        desiredValues: targets.desiredValues,
+        taskState: createTaskState({ requestedKeys: targets.requestedKeys, desiredValues: targets.desiredValues, requiredActionTool: routed.profile.mutationTool }),
+        workflowState: routed.workflowState
+      });
+      taskProfileEngagement = { profile: routed.profile, requestedKeys: targets.requestedKeys, desiredValues: targets.desiredValues };
+      emit({ type: "task-profile", stage: "engaged", profileId: routed.profile.profileId, toolCount: toolDefinitions.length });
+    }
+  }
+  // Emit the reducer observation for an accepted preferences result while a task profile
+  // is engaged. No-op otherwise. Degrades safely: an unrecognized result shape yields an
+  // observation that resolves nothing, so readiness simply stays incomplete.
+  const emitTaskProfileObservation = (toolName, toolResult) => {
+    if (!taskProfileEngagement) return;
+    const observation = deriveTaskObservation(toolName, toolResult, {
+      requestedKeys: taskProfileEngagement.requestedKeys,
+      desiredValues: taskProfileEngagement.desiredValues
+    });
+    if (observation) loopOptions.agentStateSession.applyControllerEvent("task_profile_updated", { observation });
+  };
+
   const progressEvaluationEnabled = modePolicy.progressEvaluationEligible;
   const progressEvaluator = progressEvaluationEnabled
     ? createAgentProgressEvaluator({
@@ -3702,6 +3754,7 @@ async function runAgentToolLoop(provider, settings, root, prompt, mode, emit, ru
           });
           messages.push(createToolOutcomeHistoryMessage(toolCall, name, args, createToolResultContent(name, args, result)));
           if (controllerEnabled) await loopOptions.agentStateSession.checkpoint("action_observed", { actionId: activityId, decisionId: controllerDecision?.decisionId || "", nextRuntimeStep: "choose_next_action" });
+          emitTaskProfileObservation(name, result);
           if (resolvedExperiment.intentRevision === true) recordSearchAndDetectAbsence(name, args, result, toolCall.id, loopOptions, messages, settings, emit);
           const fallbackToolCall = controllerEnabled ? null : createFileSearchFallbackToolCall(name, args, result, round);
           if (fallbackToolCall) {

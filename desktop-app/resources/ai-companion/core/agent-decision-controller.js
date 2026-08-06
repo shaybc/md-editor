@@ -278,6 +278,31 @@ function validateReplanMetadata(metadata, state, decisionType) {
   return codes;
 }
 
+/** Readiness statuses under which discovery reads are no longer permitted (M11.3/M11.4a). */
+const READINESS_ACTIONABLE = new Set(["ready_for_action", "ready_for_approval"]);
+
+/**
+ * Action-readiness precondition. When the authoritative state carries an actionable
+ * readiness verdict, a workspace tool_call to anything other than the required action is
+ * rejected pre-execution — discovery is complete, so the only permitted next steps are
+ * the action itself or a control decision (ask / block / propose completion).
+ *
+ * No-op when no readiness verdict is present (every legacy run), so this is additive.
+ *
+ * @param {string} type - The decision type.
+ * @param {string} toolName - The tool_call name (for TOOL_CALL decisions).
+ * @param {object} state - Authoritative AgentState (reads state.actionReadiness).
+ * @returns {string[]} Validation codes (empty when permitted).
+ */
+function validateActionReadinessConstraint(type, toolName, state) {
+  const readiness = state?.actionReadiness;
+  if (!isPlainObject(readiness) || !READINESS_ACTIONABLE.has(readiness.status)) return [];
+  if (type !== DECISION_TYPES.TOOL_CALL) return []; // control decisions always permitted
+  const required = String(readiness.requiredAction || "");
+  if (required && String(toolName) === required) return [];
+  return ["discovery_disallowed_when_action_ready"];
+}
+
 function validateBlockedClaim(args, state, availableToolNames, hasClarificationChannel) {
   const codes = [];
   if (!BLOCKER_TYPES.has(args.blockerType) || !stringValue(args.description)) codes.push("invalid_blocker_claim");
@@ -386,6 +411,7 @@ function normalizeDecisionAttempt(message, realDefinitions, state, options = {})
     if (!expectedObservation) validationCodes.push("missing_expected_observation");
   }
   validationCodes.push(...validateReplanMetadata(metadata, state, type));
+  validationCodes.push(...validateActionReadinessConstraint(type, name, state));
 
   const uniqueValidationCodes = uniqueCodes(validationCodes);
   const decision = decisionRecord({
@@ -511,5 +537,6 @@ module.exports = {
   createReportedBlockerContent,
   findInvalidatingTransitions,
   normalizeDecisionAttempt,
+  validateActionReadinessConstraint,
   _test: { validateBlockedClaim, validateSchemaValue }
 };

@@ -18,6 +18,9 @@ const {
   recordReplanAttempt,
   requireReplan
 } = require("./agent-progress-policy");
+const { evaluateActionReadiness } = require("./action-readiness");
+const { projectObservation } = require("./task-observation-projection");
+const { advanceWorkflowStep, derivePreferencesStepEvent } = require("./workflow-progression");
 
 const AGENT_STATE_SCHEMA_VERSION = 6;
 const AGENT_STATE_EVENT_SCHEMA_VERSION = 6;
@@ -71,6 +74,8 @@ const EVENT_TYPES = new Set([
   "progress_budget_exhausted",
   "steering_observed",
   "run_summary_observed",
+  "task_profile_seeded",
+  "task_profile_updated",
   "run_completed",
   "run_failed",
   "run_cancelled"
@@ -326,6 +331,11 @@ function createInitialAgentState(options = {}) {
     }),
     artifacts: { evidenceRefs: [], changedFiles: [], attemptedFiles: [], blockedChanges: [] },
     steering: { revisionCount: 0, lastReason: "" },
+    // M11 task-profile slice. Null unless a certain task profile is engaged for the run.
+    // Populated deterministically by the reducer from task_profile_* events; the model
+    // never advances workflow steps or declares readiness.
+    taskProfile: null,
+    actionReadiness: null,
     recovery: {
       status: "fresh",
       resumeAttempt: 0,
@@ -521,6 +531,39 @@ function reconcileTerminalState(state, status, reason, occurredAt) {
   state.pendingInteractions = [];
   state.lifecycle = { ...state.lifecycle, status, endedAt: occurredAt };
   state.terminalReason = reason;
+}
+
+/**
+ * Recompute the action-readiness verdict from the current task-profile slice (M11.3).
+ * Sets next.actionReadiness (or null when no profile is engaged). Deterministic; reads
+ * only reducer-owned typed state, never model self-report.
+ */
+function recomputeTaskReadiness(next) {
+  const tp = next.taskProfile;
+  if (!tp || !tp.taskState) {
+    next.actionReadiness = null;
+    return;
+  }
+  const ts = tp.taskState;
+  const verdict = evaluateActionReadiness({
+    requestedTargets: ts.requestedKeys,
+    resolvedTargets: ts.resolvedKeys,
+    desiredValues: ts.desiredValues,
+    capableToolAvailable: tp.capableToolAvailable === true,
+    requiredAction: tp.requiredActionTool,
+    taskAuthorized: tp.taskAuthorized !== false,
+    approvalRequired: tp.approvalRequired === true,
+    approvalGranted: tp.approvalGranted === true,
+    stateVersion: next.stateVersion + 1
+  });
+  next.actionReadiness = {
+    status: verdict.status,
+    requiredAction: verdict.requiredAction,
+    missingFacts: verdict.missingFacts,
+    approvalRequired: verdict.approvalRequired,
+    resolution: verdict.resolution,
+    readiness: verdict.readiness
+  };
 }
 
 function applyTransition(next, event) {
@@ -817,6 +860,42 @@ function applyTransition(next, event) {
         blockedChanges: normalizeBlockedChanges(payload.blockedChanges)
       };
       return "";
+    case "task_profile_seeded": {
+      if (next.taskProfile) return "task-profile-already-seeded";
+      if (!payload.workflowState || !payload.taskState) return "invalid-task-profile-seed";
+      next.taskProfile = {
+        profileId: stringValue(payload.profileId, 80),
+        profileVersion: Number(payload.profileVersion) || 1,
+        workflowVersion: Number(payload.workflowVersion) || 1,
+        requiredActionTool: stringValue(payload.requiredActionTool, 80),
+        capableToolAvailable: payload.capableToolAvailable === true,
+        taskAuthorized: payload.taskAuthorized !== false,
+        approvalRequired: payload.approvalRequired === true,
+        approvalGranted: payload.approvalGranted === true,
+        taskState: cloneSerializable(payload.taskState),
+        workflowState: cloneSerializable(payload.workflowState)
+      };
+      recomputeTaskReadiness(next);
+      return "";
+    }
+    case "task_profile_updated": {
+      if (!next.taskProfile) return "task-profile-not-seeded";
+      const tp = next.taskProfile;
+      if (payload.observation) {
+        tp.taskState = projectObservation(tp.taskState, payload.observation);
+        // Reducer-owned advancement: derive the step event from the accepted
+        // observation; a model claim can never advance a step.
+        const stepEvent = derivePreferencesStepEvent(tp.workflowState, payload.observation);
+        if (stepEvent) {
+          const advanced = advanceWorkflowStep(tp.workflowState, stepEvent);
+          if (advanced.changed) tp.workflowState = advanced.workflowState;
+        }
+      }
+      if (Object.prototype.hasOwnProperty.call(payload, "approvalGranted")) tp.approvalGranted = payload.approvalGranted === true;
+      if (Object.prototype.hasOwnProperty.call(payload, "approvalRequired")) tp.approvalRequired = payload.approvalRequired === true;
+      recomputeTaskReadiness(next);
+      return "";
+    }
     case "run_completed":
     case "run_failed":
     case "run_cancelled": {

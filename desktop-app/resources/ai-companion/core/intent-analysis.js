@@ -27,6 +27,34 @@ const { isRelationshipOnly, validateRawIntentContract } = require("./intent-cont
 const { UNCERTAIN_CONTRACT_MODES, buildUncertainContract, mergeIntentContracts } = require("./intent-relationship");
 
 const { collectCanonicalFieldRefs } = require("./intent-field-references");
+const { applyIntentProvenanceBoundary } = require("./intent-provenance");
+
+/**
+ * Demote ambient-only editor context out of an extracted contract's required
+ * structures (M11.1). No-op unless `intentProvenanceBoundaryEnabled` is set and the
+ * result carries a contract. Never throws; on any issue the original result is returned.
+ *
+ * @param {object} result - An extractContract result ({ contract, source, ... }).
+ * @param {object} params - The extraction params (settings, prompt, activeFile).
+ * @returns {object} The result, possibly with a provenance-bounded contract.
+ */
+function applyProvenanceBoundaryToResult(result, params) {
+  if (!params?.settings?.intentProvenanceBoundaryEnabled) return result;
+  if (!result || !result.contract) return result;
+  try {
+    const openTabPaths = Array.isArray(params.openTabs)
+      ? params.openTabs.map((tab) => tab?.path || tab).filter(Boolean)
+      : [];
+    const { contract, report } = applyIntentProvenanceBoundary(result.contract, {
+      prompt: params.prompt,
+      ambient: { activeFilePath: params.activeFile?.path, openTabPaths }
+    });
+    if (!report.changed) return result;
+    return { ...result, contract, provenanceReport: report };
+  } catch (_error) {
+    return result;
+  }
+}
 /**
  * The internal forced function used to capture a structured intent contract. Its
  * arguments are the contract fields; the harness validates and consumes them. It is
@@ -577,7 +605,7 @@ async function extractContractWithDeadline(params) {
   const extraction = extractContract({ ...params, signal: controller.signal }).then((result) => (
     state.timedOut
       ? fallbackResult(params.prompt, "late-extraction-discarded", [createExtractionDiagnostic(1, "deadline", "late-extraction-discarded")])
-      : result
+      : applyProvenanceBoundaryToResult(result, params)
   ));
   try {
     return await Promise.race([extraction, deadline, aborted]);

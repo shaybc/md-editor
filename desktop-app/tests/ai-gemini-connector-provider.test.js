@@ -203,6 +203,63 @@ test("Gemini connector normalizes tool schemas and usage metadata", () => {
   });
 });
 
+test("Gemini connector drops unsupported schema keywords and guarantees a type", () => {
+  const [tool] = normalizeGeminiTools([{
+    type: "function",
+    function: {
+      name: "preferences_update",
+      description: "Update prefs",
+      parameters: {
+        type: "object",
+        required: ["changes"],
+        properties: {
+          changes: {
+            type: "array",
+            items: {
+              type: "object",
+              properties: {
+                // pattern/minLength are unsupported by Gemini and must be dropped.
+                key: { type: "string", pattern: "^[a-z.]+$", minLength: 1, maxLength: 200 },
+                // A typeless polymorphic value must gain a type (string carrier).
+                value: { description: "New JSON value for the preference." }
+              }
+            }
+          }
+        }
+      }
+    }
+  }]);
+
+  const decl = tool.functionDeclarations[0];
+  const change = decl.parameters.properties.changes.items;
+  assert.equal(change.properties.key.type, "string");
+  assert.equal("pattern" in change.properties.key, false, "pattern dropped");
+  assert.equal("minLength" in change.properties.key, false, "minLength dropped");
+  assert.equal("maxLength" in change.properties.key, false, "maxLength dropped");
+  assert.equal(change.properties.value.type, "string", "typeless value gains a type");
+});
+
+test("Gemini connector drops numeric/array constraint keywords from _decision-style schemas", () => {
+  const [tool] = normalizeGeminiTools([{
+    type: "function",
+    function: {
+      name: "act",
+      parameters: {
+        type: "object",
+        properties: {
+          strategyRevision: { type: "integer", minimum: 0 },
+          triggerIds: { type: "array", minItems: 1, maxItems: 20, items: { type: "string" } }
+        }
+      }
+    }
+  }]);
+  const props = tool.functionDeclarations[0].parameters.properties;
+  assert.equal("minimum" in props.strategyRevision, false);
+  assert.equal("minItems" in props.triggerIds, false);
+  assert.equal("maxItems" in props.triggerIds, false);
+  assert.equal(props.triggerIds.items.type, "string");
+});
+
 test("Gemini connector test connection emits full request debug payloads", async () => {
   const previousFetch = globalThis.fetch;
   const events = [];
