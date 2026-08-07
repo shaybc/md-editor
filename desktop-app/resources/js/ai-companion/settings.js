@@ -131,7 +131,7 @@
       const intentContractsEnabled = source.intentContractsEnabled === true;
       return {
         enabled: source.enabled === true,
-        providerMode: ["openai", "google-gemini", "anthropic", "xai", "ollama", "openai-compatible", "litellm", "gemini-connector", "gemini-connector-raw"].includes(source.providerMode) ? source.providerMode : "openai-compatible",
+        providerMode: ["openai", "google-gemini", "google-gemini-native", "anthropic", "xai", "ollama", "openai-compatible", "litellm", "gemini-connector", "gemini-connector-raw"].includes(source.providerMode) ? source.providerMode : "openai-compatible",
         baseUrl: String(source.baseUrl || defaults.baseUrl).trim(),
         apiKey: String(source.apiKey || ""),
         model: String(source.model || defaults.model).trim(),
@@ -172,8 +172,10 @@
         agentDecisionControllerEnabled: source.agentDecisionControllerEnabled === true,
         agentDurableRecoveryEnabled: source.agentDurableRecoveryEnabled === true,
         agentVerifierCompletionEnabled: source.agentVerifierCompletionEnabled === true,
-        agentProgressEvaluationEnabled: source.agentProgressEvaluationEnabled === true,
-        agentProgressControlEnabled: source.agentProgressControlEnabled === true,
+        agentProgressEvaluationEnabled: source.agentProgressEvaluationEnabled === true
+          || (source.agentDecisionControllerEnabled === true && source.intentContractsEnabled === true && source.agentProgressEvaluationEnabled !== false),
+        agentProgressControlEnabled: source.agentProgressControlEnabled === true
+          || (source.agentDecisionControllerEnabled === true && source.intentContractsEnabled === true && source.agentVerifierCompletionEnabled === true && source.agentProgressEvaluationEnabled !== false && source.agentProgressControlEnabled !== false),
         agentNoProgressActionLimit: clampInteger(source.agentNoProgressActionLimit, defaults.agentNoProgressActionLimit, 1, 10),
         agentMaxStrategyReplans: clampInteger(source.agentMaxStrategyReplans, defaults.agentMaxStrategyReplans, 0, 10),
         planStatefulControllerEnabled: source.planStatefulControllerEnabled === true,

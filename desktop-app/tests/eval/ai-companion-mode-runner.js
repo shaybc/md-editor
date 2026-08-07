@@ -391,7 +391,7 @@ async function runEvaluationCase({ testCase, providerConfiguration, repetition =
     agentDecisionControllerEnabled: testCase.mode === "agent" && controllerEnabled === true,
     agentVerifierCompletionEnabled: verifierVariant,
     ...(verifierVariant ? { intentContractsEnabled: true } : {}),
-    providerRequestDelayMs: 0
+    providerRequestDelayMs: Number.isFinite(Number(providerConfiguration?.settings?.providerRequestDelayMs)) ? Number(providerConfiguration.settings.providerRequestDelayMs) : 0
   };
   runtime.createProvider = (requestedSettings) => instrumentProvider(
     providerFactory ? providerFactory(requestedSettings) : originalCreateProvider(requestedSettings),
@@ -516,3 +516,4 @@ module.exports = {
   validateEvaluationDataset,
   validateRecoveryScenarios
 };
+

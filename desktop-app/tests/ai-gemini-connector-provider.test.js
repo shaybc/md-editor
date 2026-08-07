@@ -181,14 +181,15 @@ test("Gemini connector normalizes tool schemas and usage metadata", () => {
     }
   }]);
 
+  // Native generateContent requires UPPERCASE type enums.
   assert.deepEqual(tools, [{
     functionDeclarations: [{
       name: "search",
       description: "Search files",
       parameters: {
-        type: "object",
+        type: "OBJECT",
         properties: {
-          query: { type: "string" }
+          query: { type: "STRING" }
         }
       }
     }]
@@ -232,11 +233,11 @@ test("Gemini connector drops unsupported schema keywords and guarantees a type",
 
   const decl = tool.functionDeclarations[0];
   const change = decl.parameters.properties.changes.items;
-  assert.equal(change.properties.key.type, "string");
+  assert.equal(change.properties.key.type, "STRING");
   assert.equal("pattern" in change.properties.key, false, "pattern dropped");
   assert.equal("minLength" in change.properties.key, false, "minLength dropped");
   assert.equal("maxLength" in change.properties.key, false, "maxLength dropped");
-  assert.equal(change.properties.value.type, "string", "typeless value gains a type");
+  assert.equal(change.properties.value.type, "STRING", "typeless value gains a type");
 });
 
 test("Gemini connector drops numeric/array constraint keywords from _decision-style schemas", () => {
@@ -257,7 +258,7 @@ test("Gemini connector drops numeric/array constraint keywords from _decision-st
   assert.equal("minimum" in props.strategyRevision, false);
   assert.equal("minItems" in props.triggerIds, false);
   assert.equal("maxItems" in props.triggerIds, false);
-  assert.equal(props.triggerIds.items.type, "string");
+  assert.equal(props.triggerIds.items.type, "STRING");
 });
 
 test("Gemini connector test connection emits full request debug payloads", async () => {

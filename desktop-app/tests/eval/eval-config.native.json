@@ -1,0 +1,35 @@
+{
+    "schemaVersion":  1,
+    "providers":  [
+                      {
+                          "id":  "gemini-native-target",
+                          "role":  "target",
+                          "settings":  {
+                                           "providerMode":  "google-gemini-native",
+                                           "baseUrl":  "https://generativelanguage.googleapis.com",
+                                           "apiKey":  "",
+                                           "model":  "gemini-3.5-flash-lite",
+                                           "intentContractsEnabled":  false,
+                                           "providerRequestDelayMs":  4500
+                                       },
+                          "credentials":  {
+                                              "apiKeyEnv":  "AI_COMPANION_EVAL_API_KEY"
+                                          }
+                      },
+                      {
+                          "id":  "gemini-native-reference",
+                          "role":  "reference",
+                          "settings":  {
+                                           "providerMode":  "google-gemini-native",
+                                           "baseUrl":  "https://generativelanguage.googleapis.com",
+                                           "apiKey":  "",
+                                           "model":  "gemini-3.5-flash-lite",
+                                           "intentContractsEnabled":  false,
+                                           "providerRequestDelayMs":  4500
+                                       },
+                          "credentials":  {
+                                              "apiKeyEnv":  "AI_COMPANION_EVAL_API_KEY"
+                                          }
+                      }
+                  ]
+}

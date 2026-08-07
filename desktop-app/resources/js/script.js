@@ -9374,6 +9374,8 @@ Markdown content is processed client-side in your browser and sanitized before p
     }
     const aiSettings = getAiCompanionSettings();
     if (settingsAiEnabledInput) settingsAiEnabledInput.checked = aiSettings.enabled;
+    app.modules?.aiCompanionExperimentalSettings?.render?.();
+    app.modules?.aiCompanionToolAccessSettings?.refresh?.();
     if (settingsAiIntentContractsEnabledInput) settingsAiIntentContractsEnabledInput.checked = aiSettings.intentContractsEnabled === true;
     if (settingsAiIntentSteeringEnabledInput) settingsAiIntentSteeringEnabledInput.checked = aiSettings.intentCompletionSteeringEnabled !== false;
     if (settingsAiIntentMaxRevisionsInput) settingsAiIntentMaxRevisionsInput.value = aiSettings.intentMaxCompletionRevisions ?? 3;
@@ -11361,7 +11363,10 @@ Markdown content is processed client-side in your browser and sanitized before p
       alert("Enter AI autocomplete delay after reject of 0 ms or higher.");
       return;
     }
-    const aiCompanionSettingsValue = aiCompanionSettings?.normalize ? aiCompanionSettings.normalize({
+    // Start from the current persisted settings and overlay only the form fields, so
+    // flags that have no widget on this form (Experimental toggles, Tool Access scopes,
+    // internal controller flags) are preserved instead of being reset to defaults.
+    const aiCompanionSettingsValue = aiCompanionSettings?.normalize ? aiCompanionSettings.normalize(Object.assign({}, getAiCompanionSettings(), {
       enabled: !!settingsAiEnabledInput?.checked,
       intentContractsEnabled: !!settingsAiIntentContractsEnabledInput?.checked,
       intentCompletionSteeringEnabled: !!settingsAiIntentSteeringEnabledInput?.checked,
@@ -11402,7 +11407,7 @@ Markdown content is processed client-side in your browser and sanitized before p
       agentAutoRunCommands: !!settingsAiAgentAutoRunCommandsInput?.checked,
       agentConfirmBeforeWrite: settingsAiAgentConfirmBeforeWriteInput?.checked !== false,
       aiSecurityPolicy: aiSecuritySettings?.collect?.() || aiCompanionSettings?.defaults?.aiSecurityPolicy
-    }) : {};
+    })) : {};
     const languageServerAutoStartPreferences = {
       typescript: settingsLspTypeScriptAutoStartInput?.checked !== false,
       java: settingsLspJavaAutoStartInput?.checked !== false,

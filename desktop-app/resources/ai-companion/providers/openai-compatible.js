@@ -6,6 +6,7 @@
 
 const { TextDecoder } = require("node:util");
 const { createRateLimitRetryPlan } = require("./rate-limit-retry");
+const { isGeminiEndpoint, sanitizeOpenAiToolsForGemini, coerceGeminiToolChoice } = require("./gemini-schema");
 
 function joinEndpoint(baseUrl, path) {
   const base = String(baseUrl || "").replace(/\/+$/, "");
@@ -16,7 +17,20 @@ function parseProviderError(status, body) {
   try {
     const parsed = JSON.parse(body || "{}");
     const value = Array.isArray(parsed) ? parsed[0] : parsed;
-    return value?.error?.message || value?.message || `Provider request failed with HTTP ${status}.`;
+    let message = value?.error?.message || value?.message || `Provider request failed with HTTP ${status}.`;
+    // Gemini's INVALID_ARGUMENT often carries the offending field only in error.details
+    // (e.g. a fieldViolations[].description). Append it so the specific cause is visible
+    // instead of the generic "Request contains an invalid argument."
+    const details = value?.error?.details;
+    if (Array.isArray(details) && details.length) {
+      const violations = details
+        .flatMap((detail) => Array.isArray(detail?.fieldViolations) ? detail.fieldViolations : [])
+        .map((violation) => [violation.field, violation.description].filter(Boolean).join(": "))
+        .filter(Boolean);
+      const extra = violations.length ? violations.join(" | ") : details.map((detail) => detail?.reason || detail?.["@type"]).filter(Boolean).join(", ");
+      if (extra) message = `${message} (${extra})`;
+    }
+    return message;
   } catch (_error) {
     return body || `Provider request failed with HTTP ${status}.`;
   }
@@ -24,6 +38,24 @@ function parseProviderError(status, body) {
 
 function isProviderTokenLimitMessage(message) {
   return /max[_\s-]*tokens?|output limit|token limit|context length|finish(?:ed)? the message/i.test(String(message || ""));
+}
+
+/**
+ * Coerce a forced tool_choice to what the request actually offers. If a specific
+ * function is named but that function is not among the sent tools, downgrade to "auto"
+ * instead of sending an impossible constraint. Strict providers (e.g. Gemini's
+ * OpenAI-compat endpoint) reject a forced name that is not a subset of the declared
+ * functions with "allowed_function_names should be a subset of function_declarations".
+ *
+ * @param {*} toolChoice - "auto"|"none"|"required"|{type:"function",function:{name}}
+ * @param {object[]} tools - the tools included in the request (may be undefined).
+ * @returns {*} A safe tool_choice.
+ */
+function coerceToolChoiceToTools(toolChoice, tools) {
+  const name = toolChoice && typeof toolChoice === "object" ? toolChoice.function?.name : "";
+  if (!name) return toolChoice;
+  const available = new Set((Array.isArray(tools) ? tools : []).map((tool) => tool?.function?.name).filter(Boolean));
+  return available.has(name) ? toolChoice : "auto";
 }
 
 function createProviderRequestError(status, body) {
@@ -192,6 +224,7 @@ const PARAM_FIXUPS = [
 
 function createOpenAiCompatibleProvider(settings) {
   const baseUrl = settings.baseUrl;
+  const geminiCompat = isGeminiEndpoint(baseUrl, settings.providerMode);
   const model = settings.model;
   const apiKey = settings.apiKey;
   const extraBody = settings.extraBody && typeof settings.extraBody === "object" && !Array.isArray(settings.extraBody) ? settings.extraBody : {};
@@ -371,13 +404,34 @@ function createOpenAiCompatibleProvider(settings) {
       stream: false,
       ...(options.reasoningEffort ? { reasoning_effort: options.reasoningEffort } : {})
     };
-    if (Array.isArray(options.tools) && options.tools.length) requestBody.tools = options.tools;
-    if (options.toolChoice) requestBody.tool_choice = options.toolChoice;
+    if (Array.isArray(options.tools) && options.tools.length) {
+      // Gemini's OpenAI-compat endpoint rejects JSON-Schema keywords outside its subset
+      // (pattern, minLength, minItems, minimum, …) and requires a type on every node —
+      // sanitize tool schemas when the target is Gemini.
+      requestBody.tools = geminiCompat ? sanitizeOpenAiToolsForGemini(options.tools) : options.tools;
+    }
+    if (options.toolChoice) {
+      let toolChoice = coerceToolChoiceToTools(options.toolChoice, requestBody.tools);
+      if (geminiCompat) toolChoice = coerceGeminiToolChoice(toolChoice);
+      requestBody.tool_choice = toolChoice;
+    }
 
     const result = await postCompletionsRequest("/chat/completions", requestBody, { signal: options.signal, onDebug });
     if (!result.ok) {
       const error = createProviderRequestError(result.status, result.bodyText);
       onDebug?.({ kind: "error", pathname: "/chat/completions", status: result.status, message: error.message });
+      // Opt-in request-shape dump for diagnosing opaque provider rejections (no secrets:
+      // headers/apiKey are not included). Enable with MD_EDITOR_AI_DUMP_REQUEST=1.
+      if (typeof process !== "undefined" && process.env && process.env.MD_EDITOR_AI_DUMP_REQUEST === "1") {
+        try {
+          process.stderr.write(`\n[ai-request-dump] status=${result.status} ${error.message}\n` + JSON.stringify({
+            tool_choice: requestBody.tool_choice,
+            toolNames: Array.isArray(requestBody.tools) ? requestBody.tools.map((t) => t?.function?.name) : undefined,
+            messageRoles: Array.isArray(requestBody.messages) ? requestBody.messages.map((m) => m?.role + (Array.isArray(m?.tool_calls) ? `(tool_calls:${m.tool_calls.length})` : (m?.tool_call_id ? "(tool_result)" : ""))) : undefined,
+            responseBody: String(result.bodyText || "").slice(0, 800)
+          }, null, 2) + "\n");
+        } catch (_dumpError) { /* diagnostics only */ }
+      }
       throw error;
     }
     const bodyText = await result.response.text();
@@ -480,5 +534,6 @@ function createOpenAiCompatibleProvider(settings) {
 }
 
 module.exports = {
-  createOpenAiCompatibleProvider
+  createOpenAiCompatibleProvider,
+  coerceToolChoiceToTools
 };

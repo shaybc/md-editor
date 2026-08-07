@@ -464,7 +464,10 @@ test("tool loop broadens empty file glob results before final answer", async () 
   const content = await runAgentToolLoop(provider, {}, workspace, "look at the ASPH.java class", "chat", (event) => events.push(event), createRuntime(), {});
 
   assert.equal(content, "Found ASPH.java.");
-  assert.equal(firstToolChoice?.function?.name, "read_open_tabs");
+  // Forced initial discovery must name an always-available tool (glob); the old
+  // list_files/read_open_tabs names were removed by the tool consolidation and would be
+  // rejected by strict providers (Gemini: allowed_function_names subset error).
+  assert.equal(firstToolChoice?.function?.name, "glob");
   assert.equal(events.some((event) => event.type === "tool" && event.tool === "glob" && event.input === "**/ASPH.java"), true);
   const finalText = JSON.stringify(finalMessages);
   assert.match(finalText, /glob returned no matches/);

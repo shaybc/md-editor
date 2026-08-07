@@ -1,0 +1,105 @@
+{
+  "generatedAt": "2026-08-06T10:30:00.568Z",
+  "signatures": [
+    {
+      "id": "typed-explicit-mutation",
+      "applicability": "certain",
+      "taskType": "preferences-update",
+      "engaged": true,
+      "baselineToolCount": 29,
+      "candidateToolCount": 3,
+      "baselineHasDiscovery": true,
+      "candidateRestricted": true
+    },
+    {
+      "id": "typed-two-keys",
+      "applicability": "certain",
+      "taskType": "preferences-update",
+      "engaged": true,
+      "baselineToolCount": 29,
+      "candidateToolCount": 3,
+      "baselineHasDiscovery": true,
+      "candidateRestricted": true
+    },
+    {
+      "id": "typed-generic-setting",
+      "applicability": "certain",
+      "taskType": "preferences-update",
+      "engaged": true,
+      "baselineToolCount": 29,
+      "candidateToolCount": 3,
+      "baselineHasDiscovery": true,
+      "candidateRestricted": true
+    },
+    {
+      "id": "question-which-flags",
+      "applicability": "not_applicable",
+      "taskType": null,
+      "engaged": false,
+      "baselineToolCount": 29,
+      "candidateToolCount": 29,
+      "baselineHasDiscovery": true,
+      "candidateRestricted": false
+    },
+    {
+      "id": "question-explain-tool",
+      "applicability": "not_applicable",
+      "taskType": null,
+      "engaged": false,
+      "baselineToolCount": 29,
+      "candidateToolCount": 29,
+      "baselineHasDiscovery": true,
+      "candidateRestricted": false
+    },
+    {
+      "id": "question-what-settings",
+      "applicability": "not_applicable",
+      "taskType": null,
+      "engaged": false,
+      "baselineToolCount": 29,
+      "candidateToolCount": 29,
+      "baselineHasDiscovery": true,
+      "candidateRestricted": false
+    },
+    {
+      "id": "compound-investigate-and-change",
+      "applicability": "uncertain",
+      "taskType": "preferences-update",
+      "engaged": false,
+      "baselineToolCount": 29,
+      "candidateToolCount": 29,
+      "baselineHasDiscovery": true,
+      "candidateRestricted": false
+    },
+    {
+      "id": "open-refactor",
+      "applicability": "not_applicable",
+      "taskType": null,
+      "engaged": false,
+      "baselineToolCount": 29,
+      "candidateToolCount": 29,
+      "baselineHasDiscovery": true,
+      "candidateRestricted": false
+    },
+    {
+      "id": "open-fix-bug",
+      "applicability": "not_applicable",
+      "taskType": null,
+      "engaged": false,
+      "baselineToolCount": 29,
+      "candidateToolCount": 29,
+      "baselineHasDiscovery": true,
+      "candidateRestricted": false
+    },
+    {
+      "id": "readonly-mode-mutation",
+      "applicability": "rejected",
+      "taskType": "preferences-update",
+      "engaged": false,
+      "baselineToolCount": 14,
+      "candidateToolCount": 14,
+      "baselineHasDiscovery": true,
+      "candidateRestricted": false
+    }
+  ]
+}

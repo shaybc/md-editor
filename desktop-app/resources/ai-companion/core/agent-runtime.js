@@ -21,7 +21,8 @@ function throwIfAborted(signal) {
 }
 
 function createProvider(settings) {
-  if (settings.providerMode === "gemini-connector" || settings.providerMode === "gemini-connector-raw") {
+  if (settings.providerMode === "gemini-connector" || settings.providerMode === "gemini-connector-raw"
+    || settings.providerMode === "google-gemini-native") {
     return createGeminiConnectorProvider(settings);
   }
   return settings.providerMode === "litellm"

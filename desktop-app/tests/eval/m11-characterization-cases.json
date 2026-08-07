@@ -1,0 +1,15 @@
+{
+  "description": "M11.4b characterization corpus. Each case records the expected routing/tool-surface decision so promoting the Tier-1 flags to default-on can be proven not to regress. 'restricted' means the candidate config narrows the exposed tool surface (no discovery tools) for that request.",
+  "cases": [
+    { "id": "typed-explicit-mutation", "prompt": "Set aiCompanionSettings.chatStatefulControllerEnabled to true", "mode": "agent", "expect": { "applicability": "certain", "engaged": true, "restricted": true } },
+    { "id": "typed-two-keys", "prompt": "Enable aiCompanionSettings.a and aiCompanionSettings.b", "mode": "agent", "expect": { "applicability": "certain", "engaged": true, "restricted": true } },
+    { "id": "typed-generic-setting", "prompt": "Turn on the autocomplete setting", "mode": "agent", "expect": { "applicability": "certain", "engaged": true, "restricted": true } },
+    { "id": "question-which-flags", "prompt": "which flags need to be enabled so the M11 plan is active?", "mode": "agent", "expect": { "applicability": "not_applicable", "engaged": false, "restricted": false } },
+    { "id": "question-explain-tool", "prompt": "Explain how preferences_update works", "mode": "agent", "expect": { "applicability": "not_applicable", "engaged": false, "restricted": false } },
+    { "id": "question-what-settings", "prompt": "what settings are currently enabled?", "mode": "agent", "expect": { "applicability": "not_applicable", "engaged": false, "restricted": false } },
+    { "id": "compound-investigate-and-change", "prompt": "Find where autocompleteEnabled is implemented and then change it to true", "mode": "agent", "expect": { "applicability": "uncertain", "engaged": false, "restricted": false } },
+    { "id": "open-refactor", "prompt": "Refactor the payment service for clarity", "mode": "agent", "expect": { "applicability": "not_applicable", "engaged": false, "restricted": false } },
+    { "id": "open-fix-bug", "prompt": "Fix the crash when opening a large file", "mode": "agent", "expect": { "applicability": "not_applicable", "engaged": false, "restricted": false } },
+    { "id": "readonly-mode-mutation", "prompt": "Set aiCompanionSettings.a to true", "mode": "chat", "expect": { "applicability": "rejected", "engaged": false, "restricted": false } }
+  ]
+}

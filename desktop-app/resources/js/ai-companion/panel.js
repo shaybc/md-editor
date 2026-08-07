@@ -154,6 +154,7 @@
     let mainPromptComposer = null;
     let activeChatActionMenu = null;
     let activeChatActionToggle = null;
+    const workspaceChatActionToggleToMenu = new WeakMap();
     let activeNativeDropComposer = null;
     const nativeDropComposers = new Set();
     let nativeDropListenerAttached = false;
@@ -1234,11 +1235,12 @@
     }
 
     function createWorkspaceChatRow(chat = {}) {
-      const row = document.createElement("button");
-      row.type = "button";
+      const row = document.createElement("div");
       row.className = "ai-companion-workspace-chat-item";
       row.classList?.add?.("ai-companion-workspace-chat-item");
       row.dataset.chatId = chat.id || "";
+      row.setAttribute("role", "button");
+      row.tabIndex = 0;
       const isRunningChat = isAgentRunning() && !!chat.id && chat.id === activeAgentChat?.id;
       row.classList.toggle("active", !!chat.id && chat.id === activeAgentChat?.id);
       row.classList.toggle("running", isRunningChat);
@@ -1286,6 +1288,8 @@
       status.setAttribute("aria-label", getWorkspaceStatusLabel(chatStatus));
       status.title = getWorkspaceStatusLabel(chatStatus);
       applyWorkspaceStatusClass(status, chatStatus);
+      const actions = document.createElement("div");
+      actions.className = "ai-companion-chat-actions";
       const actionToggle = document.createElement("button");
       actionToggle.type = "button";
       actionToggle.className = "ai-companion-chat-action-toggle";
@@ -1294,12 +1298,27 @@
       actionToggle.setAttribute("aria-expanded", "false");
       actionToggle.innerHTML = '<i class="bi bi-three-dots-vertical" aria-hidden="true"></i>';
       const actionMenu = createWorkspaceChatActionMenu(chat);
-      actionToggle.addEventListener("click", (event) => {
+      workspaceChatActionToggleToMenu.set(actionToggle, actionMenu);
+      const openWorkspaceChatActionMenu = (event) => {
         event.preventDefault?.();
         event.stopPropagation?.();
+        event.stopImmediatePropagation?.();
         setChatActionMenuOpen(actionToggle, actionMenu, actionMenu.hidden === true);
+      };
+      actionToggle.addEventListener("click", openWorkspaceChatActionMenu);
+      actions.addEventListener("click", (event) => {
+        if (event.defaultPrevented) return;
+        const actionMenuToggle = event.target?.closest?.(".ai-companion-chat-action-toggle");
+        if (actionMenuToggle === actionToggle) openWorkspaceChatActionMenu(event);
       });
-      row.addEventListener("click", () => {
+      row.addEventListener("click", (event) => {
+        if (event.defaultPrevented) return;
+        const actionMenuToggle = event.target?.closest?.(".ai-companion-chat-action-toggle");
+        if (actionMenuToggle === actionToggle) {
+          setChatActionMenuOpen(actionToggle, actionMenu, actionMenu.hidden === true);
+          return;
+        }
+        if (event.target?.closest?.(".ai-companion-chat-actions")) return;
         if (isAgentRunning()) {
           if (workspaceOpen) {
             void viewSavedChatInWorkspaceDuringRun(chat);
@@ -1310,13 +1329,20 @@
         }
         void switchToSavedChat(chat.id, chat);
       });
+      row.addEventListener("keydown", (event) => {
+        if (event.key !== "Enter" && event.key !== " ") return;
+        if (event.target?.closest?.(".ai-companion-chat-actions")) return;
+        event.preventDefault?.();
+        row.click();
+      });
       row.addEventListener("contextmenu", (event) => {
         event.preventDefault?.();
         event.stopPropagation?.();
         setChatActionMenuOpen(actionToggle, actionMenu, true, { x: event.clientX, y: event.clientY });
       });
       document.body?.appendChild(actionMenu);
-      row.append(iconColumn, body, status, actionToggle);
+      row.append(iconColumn, body, status, actions);
+      actions.append(actionToggle);
       return row;
     }
 
@@ -6666,11 +6692,11 @@
 
     function renderChatSelectOptions(chats) {
       workspaceChatIndexes = Array.isArray(chats) ? chats : [];
+      closeChatActionMenu();
+      removeChatActionMenus();
       renderWorkspaceChatHistory(workspaceChatIndexes);
       renderWorkspaceHeader();
       if (!chatSelect || !chatMenu) return;
-      closeChatActionMenu();
-      removeChatActionMenus();
       if (typeof chatMenu.replaceChildren === "function") chatMenu.replaceChildren();
       else chatMenu.innerHTML = "";
       const activeId = activeAgentChat?.id || "";
@@ -6707,6 +6733,7 @@
         actionMenu.dataset.aiCompanionChatActionMenu = "true";
         actionMenu.setAttribute("role", "menu");
         actionMenu.hidden = true;
+      workspaceChatActionToggleToMenu.set(actionToggle, actionMenu);
         const createActionItem = (label, handler, extraClass = "") => {
           const button = document.createElement("button");
           button.type = "button";
@@ -6729,6 +6756,7 @@
         actionToggle.addEventListener("click", (event) => {
           event.preventDefault?.();
           event.stopPropagation?.();
+          event.stopImmediatePropagation?.();
           setChatActionMenuOpen(actionToggle, actionMenu, actionMenu.hidden === true);
         });
         actions.append(actionToggle);
@@ -7891,12 +7919,23 @@
     toggleButtons.forEach((button) => button.addEventListener("click", () => setOpen(!document.body.classList.contains("ai-companion-open"))));
     closeButton?.addEventListener("click", () => setOpen(!document.body.classList.contains("ai-companion-open")));
     document.addEventListener("click", (event) => {
+      const actionMenuToggle = event.target?.closest?.(".ai-companion-chat-action-toggle");
+      if (actionMenuToggle) {
+        const actionMenu = workspaceChatActionToggleToMenu.get(actionMenuToggle);
+        if (actionMenu) {
+          event.preventDefault?.();
+          event.stopImmediatePropagation?.();
+          event.stopPropagation?.();
+          setChatActionMenuOpen(actionMenuToggle, actionMenu, actionMenu.hidden === true);
+          return;
+        }
+      }
       if (editingPromptEntry) {
         const { details } = getPromptEntryParts(editingPromptEntry.entry);
         if (event.target?.closest?.(".ai-companion-agent-task-prompt") !== details) cancelPromptEdit(editingPromptEntry.entry);
       }
       if (!event.target?.closest?.(".ai-companion-mode-menu")) closeModeMenus();
-      if (!event.target?.closest?.(".ai-companion-chat-actions")) closeChatActionMenu();
+      if (!event.target?.closest?.(".ai-companion-chat-actions, .ai-companion-chat-action-menu, .ai-companion-chat-action-toggle")) closeChatActionMenu();
       if (!event.target?.closest?.(".ai-companion-chat-picker")) setChatMenuOpen(false);
       if (!event.target?.closest?.("#ai-companion-workspace-task-details-toggle, #ai-companion-workspace-task-details-popover")) closeWorkspaceTaskDetails();
       if (!event.target?.closest?.("#ai-companion-workspace-inspector-info-popover, [data-ai-companion-inspector-info]")) closeWorkspaceInfoPopover();
@@ -8017,3 +8056,4 @@
 
   window.registerMarkdownViewerAiCompanionPanel = registerMarkdownViewerAiCompanionPanel;
 })(window, document);
+

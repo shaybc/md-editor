@@ -117,7 +117,7 @@ function clampInteger(value, fallback, min, max) {
 }
 
 function normalizeProviderMode(value) {
-  return ["openai", "google-gemini", "anthropic", "xai", "ollama", "openai-compatible", "litellm", "gemini-connector", "gemini-connector-raw"].includes(value) ? value : "openai-compatible";
+  return ["openai", "google-gemini", "google-gemini-native", "anthropic", "xai", "ollama", "openai-compatible", "litellm", "gemini-connector", "gemini-connector-raw"].includes(value) ? value : "openai-compatible";
 }
 function normalizeTrustedCertificates(value) {
   if (!Array.isArray(value)) return [];
@@ -173,8 +173,14 @@ function normalizeAiCompanionSettings(settings = {}) {
     agentDecisionControllerEnabled: source.agentDecisionControllerEnabled === true,
     agentDurableRecoveryEnabled: source.agentDurableRecoveryEnabled === true,
     agentVerifierCompletionEnabled: source.agentVerifierCompletionEnabled === true,
-    agentProgressEvaluationEnabled: source.agentProgressEvaluationEnabled === true,
-    agentProgressControlEnabled: source.agentProgressControlEnabled === true,
+    // Progress evaluation auto-ons only when its dependencies hold (decision controller +
+    // intent contracts); progress control additionally needs the verifier. Cascading only
+    // as far as the prerequisites allow guarantees a valid config — turning on the
+    // controller alone never yields a crashing "progress requires …" combination.
+    agentProgressEvaluationEnabled: source.agentProgressEvaluationEnabled === true
+      || (source.agentDecisionControllerEnabled === true && source.intentContractsEnabled === true && source.agentProgressEvaluationEnabled !== false),
+    agentProgressControlEnabled: source.agentProgressControlEnabled === true
+      || (source.agentDecisionControllerEnabled === true && source.intentContractsEnabled === true && source.agentVerifierCompletionEnabled === true && source.agentProgressEvaluationEnabled !== false && source.agentProgressControlEnabled !== false),
     agentNoProgressActionLimit: clampInteger(source.agentNoProgressActionLimit, DEFAULT_AI_COMPANION_SETTINGS.agentNoProgressActionLimit, 1, 10),
     agentMaxStrategyReplans: clampInteger(source.agentMaxStrategyReplans, DEFAULT_AI_COMPANION_SETTINGS.agentMaxStrategyReplans, 0, 10),
     planStatefulControllerEnabled: source.planStatefulControllerEnabled === true,

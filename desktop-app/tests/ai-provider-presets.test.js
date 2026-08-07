@@ -231,8 +231,10 @@ test("connection tests route provider presets through their OpenAI-compatible en
     };
   };
 
+  // The native Gemini preset is not OpenAI-compat; it is asserted separately below.
+  const openAiCompatPresets = Object.values(providerPresets.presets).filter((preset) => preset.id !== "google-gemini-native");
   try {
-    for (const preset of Object.values(providerPresets.presets)) {
+    for (const preset of openAiCompatPresets) {
       await testConnection({
         providerMode: preset.id,
         baseUrl: preset.baseUrl,
@@ -245,8 +247,28 @@ test("connection tests route provider presets through their OpenAI-compatible en
     global.fetch = originalFetch;
   }
 
-  assert.deepEqual(requestedUrls, Object.values(providerPresets.presets).map((preset) => ({
+  assert.deepEqual(requestedUrls, openAiCompatPresets.map((preset) => ({
     url: `${preset.baseUrl}/chat/completions`,
     authorization: "Bearer provider-key"
   })));
+});
+
+test("the native Gemini preset routes through generateContent with x-goog-api-key", async () => {
+  const preset = providerPresets.presets["google-gemini-native"];
+  assert.ok(preset, "native preset exists");
+  const calls = [];
+  const originalFetch = global.fetch;
+  global.fetch = async (url, options) => {
+    calls.push({ url, apiKey: options.headers["x-goog-api-key"], authorization: options.headers.Authorization });
+    return { ok: true, status: 200, body: null, text: async () => JSON.stringify({ candidates: [{ content: { parts: [{ text: "ok" }] } }] }) };
+  };
+  try {
+    await testConnection({ providerMode: preset.id, baseUrl: preset.baseUrl, model: preset.defaultModel, apiKey: "provider-key", providerRequestDelayMs: 0 });
+  } finally {
+    global.fetch = originalFetch;
+  }
+  assert.equal(calls.length, 1);
+  assert.match(calls[0].url, /\/v1beta\/models\/.+:generateContent$/);
+  assert.equal(calls[0].apiKey, "provider-key");
+  assert.equal(calls[0].authorization, undefined);
 });

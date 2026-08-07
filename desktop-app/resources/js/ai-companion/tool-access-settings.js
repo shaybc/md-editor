@@ -226,7 +226,11 @@
       if (coreSection) grid.appendChild(coreSection);
     }
 
-    render();
+    if (typeof window.setTimeout === "function") {
+      window.setTimeout(render, 0);
+    } else {
+      render();
+    }
     const api = { render, refresh() { state = readState(); render(); } };
     app.registerModule?.("aiCompanionToolAccessSettings", api);
     return api;

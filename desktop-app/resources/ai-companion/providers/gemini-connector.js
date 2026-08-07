@@ -52,6 +52,47 @@ function getTrustedCertificateCa(trustedCertificates) {
   return certificates.length ? certificates.map((certificate) => certificate.pem).join("\n") : "";
 }
 
+const MAX_PROVIDER_REQUEST_DELAY_MS = 60000;
+let providerRequestQueue = Promise.resolve();
+let nextProviderRequestAt = 0;
+
+function clampDelayMs(value, fallback, min = 0, max = MAX_PROVIDER_REQUEST_DELAY_MS) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) return fallback;
+  return Math.max(min, Math.min(max, Math.floor(number)));
+}
+
+function sleep(ms, signal) {
+  const delayMs = Math.max(0, Math.floor(Number(ms) || 0));
+  if (!delayMs) return Promise.resolve();
+  if (signal?.aborted) return Promise.reject(new Error("AI Companion request cancelled."));
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(resolve, delayMs);
+    const abort = () => {
+      clearTimeout(timer);
+      reject(new Error("AI Companion request cancelled."));
+    };
+    signal?.addEventListener?.("abort", abort, { once: true });
+  });
+}
+
+async function waitForProviderPace(delayMs, signal, onDebug, pathname) {
+  const spacingMs = clampDelayMs(delayMs, 0);
+  if (!spacingMs) return;
+  const previous = providerRequestQueue.catch(() => {});
+  const current = previous.then(async () => {
+    const waitMs = Math.max(0, nextProviderRequestAt - Date.now());
+    if (waitMs > 0) {
+      onDebug?.({ kind: "pace", pathname, delayMs: waitMs });
+      await sleep(waitMs, signal);
+    }
+    nextProviderRequestAt = Date.now() + spacingMs;
+  });
+  providerRequestQueue = current;
+  await current;
+}
+
+
 function sendTrustedHttpsRequest(url, options, ca) {
   const parsed = new URL(url);
   if (parsed.protocol !== "https:") throw new Error("Trusted certificate requests require HTTPS.");
@@ -137,30 +178,48 @@ class GeminiConnectorClient {
     connectorId,
     baseUrl,
     mode = "raw",
+    publicNative = false,
     textParam = "text",
+    providerRequestDelayMs = 0,
     trustedCertificates = [],
     onDebug
   } = {}) {
-    if (!connectorId) throw new Error("Gemini connector ID is required.");
+    // Public-native mode targets Google's public Generative Language API directly
+    // (generativelanguage.googleapis.com) with an AI Studio key — no enterprise
+    // connector id / gateway path. It always uses the native generateContent format so
+    // forced tool calls (functionCallingConfig ANY) are available.
+    this.publicNative = publicNative === true;
+    if (!this.publicNative && !connectorId) throw new Error("Gemini connector ID is required.");
     if (!baseUrl) throw new Error("Gemini connector base URL is required.");
 
     this.apiKey = String(apiKey || "");
     this.model = normalizeModelName(model);
     this.connectorId = String(connectorId || "").trim();
     this.baseUrl = String(baseUrl || "").replace(/\/+$/, "");
-    this.mode = normalizeConnectorMode(mode);
+    this.mode = this.publicNative ? "raw" : normalizeConnectorMode(mode);
     this.textParam = textParam;
+    this.providerRequestDelayMs = clampDelayMs(providerRequestDelayMs, 0);
     this.trustedCertificates = normalizeTrustedCertificates(trustedCertificates);
     this.onDebug = typeof onDebug === "function" ? onDebug : null;
   }
 
   connectorUrl(mode = this.mode) {
+    if (this.publicNative) {
+      // Accept a base URL with or without a trailing /v1beta or /v1beta/openai and
+      // rebuild the native generateContent path.
+      const root = this.baseUrl.replace(/\/v1beta(\/openai)?\/?$/i, "").replace(/\/+$/, "");
+      return `${root}/v1beta/models/${encodeURIComponent(this.model)}:generateContent`;
+    }
     const connectorPath = `/api/connectors/${encodeURIComponent(this.connectorId)}`;
     const rawSuffix = `/v1beta/models/${encodeURIComponent(this.model)}:generateContent`;
     return `${this.baseUrl}${connectorPath}${mode === "raw" ? rawSuffix : ""}`;
   }
 
   headers() {
+    if (this.publicNative) {
+      // Public Gemini API authenticates with the x-goog-api-key header, not Bearer.
+      return { "Content-Type": "application/json", ...(this.apiKey ? { "x-goog-api-key": this.apiKey } : {}) };
+    }
     return {
       "Content-Type": "application/json",
       ...(this.apiKey ? { Authorization: `Bearer ${this.apiKey}` } : {})
@@ -171,6 +230,8 @@ class GeminiConnectorClient {
     if (typeof fetch !== "function") {
       throw new Error("This Node.js runtime does not provide fetch.");
     }
+
+    await waitForProviderPace(this.providerRequestDelayMs, options.signal, this.onDebug, "generateContent");
 
     const url = this.connectorUrl();
     const body = this.mode === "raw"
@@ -231,6 +292,22 @@ class GeminiConnectorClient {
     });
 
     if (!response.ok) {
+      // Opt-in native request-shape dump (no secrets) for diagnosing opaque 400s.
+      // Enable with MD_EDITOR_AI_DUMP_REQUEST=1.
+      if (typeof process !== "undefined" && process.env && process.env.MD_EDITOR_AI_DUMP_REQUEST === "1") {
+        try {
+          process.stderr.write(`\n[gemini-native-request-dump] status=${response.status}\n` + JSON.stringify({
+            url,
+            hasSystemInstruction: Boolean(body.systemInstruction),
+            toolFunctionNames: Array.isArray(body.tools) ? body.tools.flatMap((t) => (t.functionDeclarations || []).map((f) => f.name)) : undefined,
+            toolConfig: body.toolConfig,
+            contentRoles: Array.isArray(body.contents) ? body.contents.map((c) => c.role) : undefined,
+            responseBody: String(bodyText || "").slice(0, 1200),
+            schemaLintIssues: lintGeminiNativeTools(body.tools),
+            firstToolParams: Array.isArray(body.tools) && body.tools[0]?.functionDeclarations?.[0] ? body.tools[0].functionDeclarations[0].parameters : undefined
+          }, null, 2) + "\n");
+        } catch (_dumpError) { /* diagnostics only */ }
+      }
       throw createProviderError(response.status, bodyText, "Gemini connector generateContent");
     }
 
@@ -310,13 +387,23 @@ function isGeminiProviderMode(settings) {
   return settings?.providerMode === "gemini-connector" || settings?.providerMode === "gemini-connector-raw";
 }
 
+/** Public native Gemini API mode (generativelanguage.googleapis.com, AI Studio key). */
+function isGeminiNativeMode(settings) {
+  return settings?.providerMode === "google-gemini-native";
+}
+
 function resolveConnectorBaseUrl(settings) {
+  // Native public mode uses the standard baseUrl field (points at generativelanguage…).
+  if (isGeminiNativeMode(settings)) {
+    return String(settings?.baseUrl || settings?.geminiConnectorBaseUrl || "https://generativelanguage.googleapis.com").trim();
+  }
   const connectorBaseUrl = String(settings?.geminiConnectorBaseUrl || "").trim();
   if (connectorBaseUrl) return connectorBaseUrl;
   return isGeminiProviderMode(settings) ? "" : String(settings?.baseUrl || "").trim();
 }
 
 function resolveConnectorApiKey(settings) {
+  if (isGeminiNativeMode(settings)) return String(settings?.apiKey || settings?.geminiConnectorApiKey || "");
   const connectorApiKey = String(settings?.geminiConnectorApiKey || "");
   if (connectorApiKey) return connectorApiKey;
   return isGeminiProviderMode(settings) ? "" : String(settings?.apiKey || "");
@@ -334,11 +421,13 @@ function loadGeminiConnectorSettings(source = {}) {
     connectorId: String(settings.geminiConnectorId || settings.connectorId || "").trim(),
     baseUrl: resolveConnectorBaseUrl(settings),
     apiKey: resolveConnectorApiKey(settings),
+    publicNative: isGeminiNativeMode(settings),
     mode: resolveConnectorMode(settings),
     temperature: Number.isFinite(Number(settings.temperature)) ? Number(settings.temperature) : 0.2,
     maxTokens: Number.isFinite(Number(settings.maxTokens)) ? Number(settings.maxTokens) : 2000,
     debugLogFullAiPayloads: settings.debugLogFullAiPayloads === true,
-    trustedCertificates: normalizeTrustedCertificates(settings.trustedCertificates)
+    trustedCertificates: normalizeTrustedCertificates(settings.trustedCertificates),
+    providerRequestDelayMs: clampDelayMs(settings.providerRequestDelayMs, 0)
   };
 }
 
@@ -434,44 +523,26 @@ function toGeminiContents(messages = []) {
     });
   }
 
-  return { contents, system };
-}
-
-// Gemini function declarations accept only an OpenAPI-3 subset. Fields outside this set
-// (pattern, minLength/maxLength, minItems/maxItems, minimum/maximum, default, examples,
-// $schema, additionalProperties, title, ...) cause an INVALID_ARGUMENT rejection of the
-// whole request, and every schema node must carry a `type`. We therefore allow-list the
-// supported keys and guarantee a type rather than passing the raw JSON Schema through.
-const GEMINI_SCHEMA_KEYS = new Set(["type", "description", "enum", "items", "properties", "required", "nullable"]);
-
-function inferGeminiSchemaType(node) {
-  if (node.properties && typeof node.properties === "object") return "object";
-  if (node.items) return "array";
-  // A typeless leaf (e.g. a polymorphic value) has no Gemini representation for "any";
-  // string is the safe carrier. Preference writers coerce string values back to the
-  // declared type, so booleans/numbers still round-trip.
-  return "string";
-}
-
-function sanitizeGeminiSchema(schema) {
-  if (!schema || typeof schema !== "object") return schema;
-  if (Array.isArray(schema)) return schema.map(sanitizeGeminiSchema);
-  const result = {};
-  for (const [key, value] of Object.entries(schema)) {
-    if (!GEMINI_SCHEMA_KEYS.has(key)) continue; // drop unsupported JSON-Schema keywords
-    if (key === "properties" && value && typeof value === "object") {
-      const properties = {};
-      for (const [propName, propSchema] of Object.entries(value)) properties[propName] = sanitizeGeminiSchema(propSchema);
-      result.properties = properties;
-    } else if (key === "items") {
-      result.items = sanitizeGeminiSchema(value);
-    } else {
-      result[key] = value;
-    }
+  // Native generateContent expects alternating roles; consecutive same-role turns can
+  // be rejected as an invalid argument. The OpenAI-compat shim tolerates them, but the
+  // native API does not — merge adjacent same-role contents by concatenating their parts.
+  const merged = [];
+  for (const entry of contents) {
+    const last = merged[merged.length - 1];
+    if (last && last.role === entry.role) last.parts = [...last.parts, ...entry.parts];
+    else merged.push({ role: entry.role, parts: [...entry.parts] });
   }
-  if (!result.type) result.type = inferGeminiSchemaType(result);
-  return result;
+
+  return { contents: merged, system };
 }
+
+// Shared with the openai-compatible provider (google-gemini mode targets the same API).
+const { sanitizeGeminiSchema, uppercaseGeminiSchemaTypes, lintGeminiNativeTools, coerceGeminiToolChoice } = require("./gemini-schema");
+
+// Max functions Gemini flash-lite will accept under forced calling (mode ANY) before it
+// returns INVALID_ARGUMENT. Small task-profile tool sets stay forced; the full roster
+// falls back to AUTO. Conservative default; task profiles use ~3 tools.
+const MAX_FORCED_FUNCTIONS = 8;
 
 function normalizeGeminiTools(tools) {
   if (!Array.isArray(tools) || !tools.length) return undefined;
@@ -481,18 +552,26 @@ function normalizeGeminiTools(tools) {
       return {
         name: tool.function.name,
         description: tool.function.description,
-        parameters: sanitizeGeminiSchema(tool.function.parameters)
+        parameters: uppercaseGeminiSchemaTypes(sanitizeGeminiSchema(tool.function.parameters))
       };
     })
     .filter(Boolean);
   return functionDeclarations.length ? [{ functionDeclarations }] : undefined;
 }
 
-function buildToolConfig(toolChoice) {
+function buildToolConfig(toolChoice, allowedFunctionNames = []) {
   if (!toolChoice) return undefined;
   if (toolChoice === "none") return { functionCallingConfig: { mode: "NONE" } };
   if (toolChoice === "auto") return { functionCallingConfig: { mode: "AUTO" } };
-  if (toolChoice === "required") return { functionCallingConfig: { mode: "ANY" } };
+  if (toolChoice === "required") {
+    // Forced tool calls (mode ANY). gemini-3.5-flash-lite rejects ANY without an explicit
+    // allowedFunctionNames list, so we constrain it to all the tools we sent — which
+    // preserves forcing (the model MUST call one of them) while satisfying the API.
+    const names = (Array.isArray(allowedFunctionNames) ? allowedFunctionNames : []).filter(Boolean);
+    return names.length
+      ? { functionCallingConfig: { mode: "ANY", allowedFunctionNames: names } }
+      : { functionCallingConfig: { mode: "ANY" } };
+  }
   if (toolChoice?.type === "function" && toolChoice?.function?.name) {
     return {
       functionCallingConfig: {
@@ -545,6 +624,8 @@ function createGeminiConnectorProvider(settingsSource = {}) {
       connectorId: settings.connectorId,
       baseUrl: settings.baseUrl,
       mode: settings.mode,
+      publicNative: settings.publicNative,
+      providerRequestDelayMs: settings.providerRequestDelayMs,
       trustedCertificates: settings.trustedCertificates,
       onDebug: settings.debugLogFullAiPayloads ? onDebug : (event) => {
         if (!onDebug) return;
@@ -562,6 +643,16 @@ function createGeminiConnectorProvider(settingsSource = {}) {
   async function completeMessage(messages, options = {}) {
     const { contents, system } = toGeminiContents(messages);
     const client = createClient(options.onDebug);
+    const nativeTools = normalizeGeminiTools(options.tools);
+    const nativeToolNames = Array.isArray(nativeTools)
+      ? nativeTools.flatMap((entry) => (entry.functionDeclarations || []).map((declaration) => declaration.name))
+      : [];
+    // Empirically, gemini flash-lite accepts forced calling (mode ANY) only over a small
+    // set of functions — 1 works, ~31 returns INVALID_ARGUMENT. When forcing over a large
+    // roster, fall back to AUTO (the controller's evidence gate still enforces tool use).
+    // A small, task-profile-scoped set keeps real forcing.
+    const forcedOverLargeRoster = options.toolChoice === "required" && nativeToolNames.length > MAX_FORCED_FUNCTIONS;
+    const effectiveToolChoice = forcedOverLargeRoster ? "auto" : options.toolChoice;
     const response = await client.generateText({
       contents,
       system,
@@ -569,8 +660,10 @@ function createGeminiConnectorProvider(settingsSource = {}) {
         temperature: Number.isFinite(options.temperature) ? options.temperature : settings.temperature,
         maxOutputTokens: Number.isFinite(options.maxTokens) ? options.maxTokens : settings.maxTokens
       }),
-      tools: normalizeGeminiTools(options.tools),
-      toolConfig: buildToolConfig(options.toolChoice)
+      tools: nativeTools,
+      // Force (mode ANY + allowedFunctionNames) when feasible; degrade to AUTO only when
+      // forcing over too many functions would be rejected by the lite model.
+      toolConfig: buildToolConfig(effectiveToolChoice, nativeToolNames)
     }, { signal: options.signal });
 
     const { text, functionCalls } = extractGeminiParts(response?.candidates?.[0]?.content);
@@ -637,3 +730,4 @@ module.exports = {
   toGeminiContents,
   usageFromGemini
 };
+

@@ -27,6 +27,16 @@
       recommendedRequestDelayMs: 4500,
       registryProviders: Object.freeze(["google", "google-gemini"])
     }),
+    "google-gemini-native": Object.freeze({
+      id: "google-gemini-native",
+      label: "Google Gemini (native)",
+      // Native public Generative Language API — supports forced tool calls, unlike the
+      // OpenAI-compat endpoint. Base URL is the API root (no /v1beta/openai suffix).
+      baseUrl: "https://generativelanguage.googleapis.com",
+      defaultModel: "gemini-3.6-flash",
+      recommendedRequestDelayMs: 4500,
+      registryProviders: Object.freeze(["google", "google-gemini"])
+    }),
     anthropic: Object.freeze({
       id: "anthropic",
       label: "Anthropic Claude",

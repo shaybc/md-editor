@@ -506,8 +506,19 @@ No fallback oscill.   After fallback_active, the run does not auto-narrow back t
   states fully-qualified paths + an unambiguous value; fuzzy prompts still restrict tools and track
   the workflow but leave readiness `incomplete` (safe). Broadening key resolution (mapping fuzzy
   user terms to keys) and adding more profiles are additive follow-ups.
-- **M11.4b — general controller default-on:** unchanged; separate rollout gated on a
-  characterization snapshot.
+- **M11.4b — characterization eval: wired.** `tests/eval/m11-characterization.js` (+ corpus
+  `m11-characterization-cases.json`, snapshot `baselines/m11-characterization.json`, npm
+  `eval:m11:characterization`, CI test `ai-companion-m11-characterization.test.js`) compares the
+  baseline (flags off) and candidate (Tier-1 flags on) routing + tool surface across a corpus and
+  fails on any regression: typed tasks must restrict to the profile's tools, while questions,
+  compound requests, open-ended work, and read-only-mode mutations must not be narrowed/engaged.
+  Tier-1 promotion procedure: (1) `npm run eval:m11:characterization` (offline decision-surface
+  gate); (2) run `eval:ai-companion:baseline` once flags-off and once flags-on (live end-to-end),
+  confirm no regression; then flip the defaults and drop the promoted flags from the Experimental
+  tab (keep a hidden kill-switch). Default-on itself remains deferred to that run. A same-model, no-hand-scoring A/B is also wired: `tests/eval/m11-live-eval.js` (npm `eval:m11:live`, offline-tested by `ai-companion-m11-live-eval.test.js`) runs each agent case flags-off vs flags-on against one model and reports objective deltas (provider calls, tokens, tool calls, completion, deterministic pass), failing on any completion/deterministic regression.
+- **Progress default cascade:** `agentProgressEvaluationEnabled` / `agentProgressControlEnabled`
+  default on whenever `agentDecisionControllerEnabled` is on (explicit off respected), so the
+  controller never runs half-configured and wanders.
 
 ## Guiding principle
 

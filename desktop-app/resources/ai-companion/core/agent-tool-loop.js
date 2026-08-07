@@ -18,6 +18,7 @@ const toolScopeRegistry = require("./tool-scope-registry");
 const { resolveTaskProfile } = require("./task-routing");
 const { parseExplicitPreferenceTargets, deriveTaskObservation } = require("./task-preference-bridge");
 const { createTaskState } = require("./task-observation-projection");
+const { evaluateCompletionEvidence, buildEvidenceSteeringMessage } = require("./completion-evidence-gate");
 const { DEFAULT_AI_COMPANION_PROMPTS } = require("../config/prompts");
 const { createActivityRun } = require("./agent-activity");
 const { analyzeApprovalAction } = require("./approval-action-analysis");
@@ -1675,11 +1676,17 @@ function consumeChatTitleFromMessage(message, titleState, emit) {
   return { ...message, content: parsed.content };
 }
 
-function getInitialDiscoveryToolName(prompt) {
-  return promptMentionsLikelyFile(prompt) ? "read_open_tabs" : "list_files";
+function getInitialDiscoveryToolName(_prompt) {
+  // Must be a tool that is ALWAYS present in the roster; otherwise forcing it via
+  // tool_choice fails on strict providers (e.g. Gemini: "allowed_function_names should
+  // be a subset of function_declarations"). `glob` is a core, always-available reader.
+  // (Previously returned list_files / read_open_tabs, which the tool consolidation
+  // removed — leaving a dead forced tool name.)
+  return "glob";
 }
 
 function getInitialDiscoveryToolArgs(toolName) {
+  if (toolName === "glob") return { pattern: "**/*", maxFiles: DEFAULT_LIST_FILES_TOOL_MAX_FILES };
   return toolName === "read_open_tabs"
     ? { includeContent: false, maxTabs: 25 }
     : { maxFiles: DEFAULT_LIST_FILES_TOOL_MAX_FILES };
@@ -3159,6 +3166,7 @@ async function runAgentToolLoop(provider, settings, root, prompt, mode, emit, ru
     && resolvedExperiment.intentExtraction === true
     && INTENT_CONTRACT_MODES.has(mode);
   let usedTools = false;
+  let evidenceGateRetries = 0;
   // Intent phase (M1/M2). It runs before resume replay so a persisted mutation is always
   // checked against a ready, request-matching contract. The disabled arm keeps the prior
   // resume-first ordering and behavior.
@@ -3504,6 +3512,23 @@ async function runAgentToolLoop(provider, settings, root, prompt, mode, emit, ru
           compactToolResultMessagesForContinuation(messages);
           messages.push(createContinuationMessage(context, continuation));
           continue taskPass;
+        }
+        // Evidence gate (controller-side tool-use enforcement): if the contract requires
+        // inspection but no tool ran, reject this premature completion and steer the model
+        // to inspect first. Handles providers (e.g. Gemini) that can't force tool calls.
+        if (controllerEnabled && loopOptions.intentContract) {
+          const evidence = evaluateCompletionEvidence({
+            contract: loopOptions.intentContract,
+            usedTools,
+            reportedBlocked: controllerReportedBlocked,
+            retriesUsed: evidenceGateRetries
+          });
+          if (evidence.blocked) {
+            evidenceGateRetries += 1;
+            emit({ type: "steering", reason: "completion-requires-evidence", action: "inspect-first", revision: evidenceGateRetries });
+            messages.push({ role: "user", content: buildEvidenceSteeringMessage(loopOptions.intentContract) });
+            continue taskPass;
+          }
         }
         if (verifierCompletionEnabled && controllerReportedBlocked) {
           loopOptions.agentStateSession.applyControllerEvent("decision_executed", { decisionId: controllerDecision.decisionId });
