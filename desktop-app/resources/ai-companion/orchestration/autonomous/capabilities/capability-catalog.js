@@ -15,6 +15,7 @@ class CapabilityCatalog {
     this.mcp = options.mcp;
     this.emit = typeof options.emit === "function" ? options.emit : () => {};
     this.registrationFilter = typeof options.registrationFilter === "function" ? options.registrationFilter : () => true;
+    this.metadataEntries = Array.isArray(options.metadataEntries) ? options.metadataEntries : [];
     const registrations = options.registrations || (options.baseDefinitions || []).map((definition) => ({ definition }));
     this.inventory = new ToolSchemaInventory(registrations);
     this.exposure = new ToolExposurePolicy(this.policy);
@@ -206,7 +207,9 @@ class CapabilityCatalog {
   matchExtensionMetadata(query, maxResults = 12) {
     const needle = String(query || "").replace(/^select:/i, "").toLowerCase();
     const limit = Math.max(1, Math.min(Number(maxResults || 12), 30));
-    return this.fabric.snapshot().entries.filter((entry) => {
+    const entries = [...this.fabric.snapshot().entries.filter((entry) => entry.kind !== "agent"), ...this.metadataEntries];
+    const unique = Array.from(new Map(entries.map((entry) => [entry.id, entry])).values());
+    return unique.filter((entry) => {
       const text = (entry.id + " " + (entry.name || "") + " " + (entry.description || "") + " " + JSON.stringify(entry.metadata || {})).toLowerCase();
       return !needle || needle.split(/[\s,]+/).some((term) => term && text.includes(term.replace(/^\+/, "")));
     }).slice(0, limit);

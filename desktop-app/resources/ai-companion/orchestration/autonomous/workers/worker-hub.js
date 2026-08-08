@@ -21,6 +21,7 @@ class WorkerHub {
     this.provider = provider;
     this.request = request;
     this.fabric = options.fabric;
+    this.agentCatalog = options.agentCatalog;
     this.parentContext = options.parentContext;
     this.events = options.events;
     this.entries = new Map();
@@ -35,7 +36,7 @@ class WorkerHub {
   /** Launch a worker immediately or queue it behind the concurrency ceiling. */
   async launch(args) {
     const id = `worker-${++this.sequence}`;
-    const agent = args.agentId ? await this.fabric?.activate(args.agentId) : null;
+    const agent = args.agentId ? await this.agentCatalog?.activate(args.agentId) : null;
     if (args.agentId && agent?.kind !== "agent") throw new Error(`Unknown agent definition: ${args.agentId}`);
     const authority = this.resolveAuthority(agent, args.isolation);
     const entry = { id, description: String(args.description || "Delegated work"), prompt: String(args.prompt || ""), agentId: agent?.id || "", status: "queued", background: args.background === true, inbox: [], messages: [], result: "", error: "", controller: new AbortController(), agent, authority, isolation: authority.isolation };
@@ -141,8 +142,9 @@ class WorkerHub {
       let agent = null;
       let authority = null;
       try {
-        agent = snapshot.agentId ? await this.fabric?.activate(snapshot.agentId) : null;
-        if (snapshot.agentId && agent?.kind !== "agent") throw new Error(`Unknown agent definition: ${snapshot.agentId}`);
+        const savedAgentId = snapshot.agentLogicalId || snapshot.agentId;
+        agent = savedAgentId ? await this.agentCatalog?.activate(savedAgentId) : null;
+        if (savedAgentId && agent?.kind !== "agent") throw new Error(`Unknown agent definition: ${savedAgentId}`);
         authority = this.resolveAuthority(agent, snapshot.isolation);
       } catch (error) {
         const failed = restoredEntry(snapshot, null, null, "failed");
@@ -155,6 +157,9 @@ class WorkerHub {
       const currentAgentFingerprint = agent ? JSON.stringify({ id: agent.id, metadata: agent.metadata, body: agent.body }) : "";
       if (snapshot.agentFingerprint && snapshot.agentFingerprint !== currentAgentFingerprint) {
         this.events.emit({ type: "recovery-warning", reason: "worker-agent-changed", summary: `Worker ${snapshot.id} will continue with the current agent definition.` });
+      }
+      if (snapshot.agentSourceIdentity && snapshot.agentSourceIdentity !== agent?.sourceIdentity) {
+        this.events.emit({ type: "recovery-warning", reason: "worker-agent-source-changed", summary: `Worker ${snapshot.id} will continue with the current highest-priority agent definition.` });
       }
       if (snapshot.agentAuthorityFingerprint && snapshot.agentAuthorityFingerprint !== authority.fingerprint) {
         this.events.emit({ type: "recovery-warning", reason: "worker-authority-changed", summary: `Worker ${snapshot.id} will continue within the current delegated-agent boundary.` });
@@ -232,6 +237,7 @@ class WorkerHub {
         policy: this.parentContext.policy,
         fabric: this.fabric,
         mcp: workerMcp,
+        metadataEntries: this.agentCatalog?.list?.() || [],
         registrations,
         knownToolNames: parentRegistrations.length ? parentRegistrations.map((record) => record.name) : parentDefinitions.map((definition) => definition.function?.name).filter(Boolean),
         registrationFilter: (record) => AgentAuthorityResolver.filterDefinitions([record.definition], entry.authority).length === 1,
@@ -326,7 +332,9 @@ function privateEntry(entry) {
     observationRelease: JSON.parse(JSON.stringify(entry.observationRelease || {})),
     toolSchemaState: JSON.parse(JSON.stringify(entry.toolSchemaState || {})),
     agentFingerprint: entry.agent ? JSON.stringify({ id: entry.agent.id, metadata: entry.agent.metadata, body: entry.agent.body }) : "",
-    agentAuthorityFingerprint: entry.authority?.fingerprint || ""
+    agentAuthorityFingerprint: entry.authority?.fingerprint || "",
+    agentLogicalId: entry.agent?.id || entry.agentId || "",
+    agentSourceIdentity: entry.agent?.sourceIdentity || ""
   };
 }
 
@@ -335,7 +343,7 @@ function restoredEntry(snapshot, agent, authority, status) {
     id: String(snapshot.id),
     description: String(snapshot.description || "Delegated work"),
     prompt: String(snapshot.prompt || ""),
-    agentId: String(snapshot.agentId || ""),
+    agentId: String(agent?.id || snapshot.agentLogicalId || snapshot.agentId || ""),
     status,
     background: snapshot.background === true,
     inbox: Array.isArray(snapshot.inbox) ? JSON.parse(JSON.stringify(snapshot.inbox)) : [],

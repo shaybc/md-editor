@@ -144,8 +144,39 @@ test("worker launch rejects an agent definition outside the parent mode", async 
     capabilities: { registrations: () => [], definitions: () => [] },
     taskGrants: []
   };
-  const fabric = { activate: async () => ({ id: "planner", kind: "agent", metadata: { allowedModes: ["plan"] }, body: "Plan only." }) };
-  const hub = new WorkerHub({ completeMessage: async () => ({ content: "", toolCalls: [] }) }, request, { fabric, parentContext, events: { emit() {} } });
+  const fabric = {};
+  const agentCatalog = { activate: async () => ({ id: "planner", kind: "agent", metadata: { allowedModes: ["plan"] }, body: "Plan only." }) };
+  const hub = new WorkerHub({ completeMessage: async () => ({ content: "", toolCalls: [] }) }, request, { fabric, agentCatalog, parentContext, events: { emit() {} } });
   await assert.rejects(() => hub.launch({ agentId: "planner", prompt: "Do work", background: true }), (error) => error.code === "AGENT_MODE_NOT_ALLOWED");
   assert.deepEqual(hub.list(), []);
+});
+
+test("worker launch resolves executable definitions through the canonical catalog only", async () => {
+  const request = { action: "agent", workspaceRoot: process.cwd(), profileRoot: "", settings: {}, securityContext: { policy: { shell: { mode: "deny-and-audit" } } } };
+  let catalogActivations = 0;
+  const provider = { async completeMessage(messages) {
+    assert.equal(messages.some((message) => /Catalog-owned instructions/.test(String(message.content))), true);
+    return { content: "Catalog worker complete.", toolCalls: [] };
+  } };
+  const parentContext = {
+    request,
+    policy: { mode: "agent", allowWrites: true, allowCommands: false },
+    capabilities: { registrations: () => [], definitions: () => [] },
+    artifactVault: new ArtifactVault(request),
+    taskGrants: []
+  };
+  const agentCatalog = {
+    activate: async () => {
+      catalogActivations += 1;
+      return { id: "catalog-worker", kind: "agent", sourceIdentity: ".agents/catalog-worker.md", metadata: { allowedModes: ["agent"], capabilities: ["read"] }, body: "Catalog-owned instructions." };
+    },
+    list: () => []
+  };
+  const fabric = { activate: async () => { throw new Error("Bundle activation must not resolve agents."); } };
+  const hub = new WorkerHub(provider, request, { fabric, agentCatalog, parentContext, events: { emit() {} } });
+  const launched = await hub.launch({ agentId: "catalog-worker", prompt: "Complete catalog work", background: true });
+  const completed = await hub.wait(launched.id, { block: true, timeoutMs: 30000 });
+  assert.equal(completed.result, "Catalog worker complete.");
+  assert.equal(catalogActivations, 1);
+  await hub.close();
 });

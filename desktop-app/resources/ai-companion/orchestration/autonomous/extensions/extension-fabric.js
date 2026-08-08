@@ -31,8 +31,6 @@ class ExtensionFabric {
             this.errors.push({ id, error: `Invalid agent definition: ${validation.errors.join(" ")}` });
             continue;
           }
-          const mode = String(this.request.action || "");
-          if (mode && validation.value.allowedModes.length && !validation.value.allowedModes.includes(mode)) continue;
         }
         if (this.entries.has(id)) this.errors.push({ id, error: `Duplicate contribution id: ${id}` });
         else this.entries.set(id, { ...entry, id, localId: entry.id, extensionId: bundle.id, scope: bundle.scope });
@@ -59,8 +57,6 @@ class ExtensionFabric {
     if (entry.kind === "agent") {
       const validation = AgentDefinitionPolicy.validate(parsed.metadata);
       if (!validation.valid) throw new Error(`Invalid agent definition '${id}': ${validation.errors.join(" ")}`);
-      const mode = String(this.request.action || "");
-      if (mode && validation.value.allowedModes.length && !validation.value.allowedModes.includes(mode)) throw new Error(`Agent '${id}' is not available in ${mode} mode.`);
     }
     return { ...entry, metadata: parsed.metadata, body: parsed.body };
   }

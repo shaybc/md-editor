@@ -12,6 +12,10 @@ const { ToolSchemaInventory } = require("../resources/ai-companion/orchestration
 const { normalizeServerConfiguration } = require("../resources/ai-companion/orchestration/autonomous/mcp/server-configuration");
 const { AgentDefinitionPolicy } = require("../resources/ai-companion/orchestration/autonomous/agents/agent-definition-policy");
 const { McpConnectionManager } = require("../resources/ai-companion/orchestration/autonomous/mcp/mcp-connection-manager");
+const { AgentCatalog } = require("../resources/ai-companion/orchestration/autonomous/agents/agent-catalog");
+const { WorkspaceAgentSource } = require("../resources/ai-companion/orchestration/autonomous/agents/workspace-agent-source");
+const { BundleAgentSource } = require("../resources/ai-companion/orchestration/autonomous/agents/bundle-agent-source");
+const { discoverExtensions } = require("../resources/ai-companion/orchestration/autonomous/extension-registry");
 
 async function temporaryRoots(t) {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "md-editor-extensions-"));
@@ -46,14 +50,50 @@ test("bundled workflow metadata is available without loading instruction bodies"
   assert.match((await fabric.activate(skill.id)).body, /smallest coherent change/i);
 });
 
-test("agent discovery hides mode-incompatible definitions and invalid metadata fails closed", async () => {
-  const fabric = new ExtensionFabric({ workspaceRoot: "", profileRoot: "", action: "plan" });
-  const snapshot = await fabric.load();
+test("canonical agent discovery hides mode-incompatible definitions and invalid metadata fails closed", async () => {
+  const request = { workspaceRoot: "", profileRoot: "", action: "plan" };
+  const fabric = new ExtensionFabric(request);
+  await fabric.load();
+  const catalog = new AgentCatalog(request, [new BundleAgentSource(fabric)]);
+  const snapshot = await catalog.load();
   assert.equal(snapshot.entries.some((entry) => entry.id === "core-workflows:change-builder"), false);
-  assert.equal(snapshot.entries.some((entry) => entry.id === "core-workflows:implementation-planner"), true);
+  assert.equal(snapshot.entries.some((entry) => entry.id === "change-builder"), false);
+  assert.equal(snapshot.entries.some((entry) => entry.id === "implementation-planner"), true);
+  await assert.rejects(() => catalog.activate("core-workflows:change-builder"), (error) => error.code === "AGENT_MODE_NOT_ALLOWED");
   const validation = AgentDefinitionPolicy.validate({ allowedModes: ["agent"], permissions: { guessedAuthority: true } });
   assert.equal(validation.valid, false);
   assert.match(validation.errors.join(" "), /unknown permission/i);
+});
+
+test("canonical agent catalog uses workspace precedence for discovery, aliases, and activation", async (t) => {
+  const roots = await temporaryRoots(t);
+  const agentDirectory = path.join(roots.workspaceRoot, ".agents");
+  await fs.mkdir(agentDirectory, { recursive: true });
+  await fs.writeFile(path.join(agentDirectory, "repository-explorer.md"), "---\nid: repository-explorer\nname: Workspace Explorer\ndescription: Workspace override agent\nallowedModes: [agent]\ncapabilities: [read, context]\n---\nWorkspace-specific agent instructions.", "utf8");
+  const request = { ...roots, action: "agent" };
+  const fabric = new ExtensionFabric(request);
+  await fabric.load();
+  const catalog = new AgentCatalog(request, [new WorkspaceAgentSource(request), new BundleAgentSource(fabric)]);
+  const snapshot = await catalog.load();
+  const metadata = snapshot.entries.find((entry) => entry.id === "repository-explorer");
+  assert.equal(metadata.source, "workspace-agent");
+  assert.equal(Object.hasOwn(metadata, "body"), false);
+  assert.match((await catalog.activate(".agents/repository-explorer.md")).body, /Workspace-specific/);
+  assert.match((await catalog.activate("core-workflows:repository-explorer")).body, /Workspace-specific/);
+  assert.equal(snapshot.shadowed.some((entry) => entry.sourceIdentity === "core-workflows:repository-explorer"), true);
+  assert.equal((await discoverExtensions(request)).some((entry) => entry.kind === "agent"), false);
+});
+
+test("canonical agent catalog preserves mode-specific launch errors without advertising the agent", async (t) => {
+  const roots = await temporaryRoots(t);
+  const agentDirectory = path.join(roots.workspaceRoot, ".agents");
+  await fs.mkdir(agentDirectory, { recursive: true });
+  await fs.writeFile(path.join(agentDirectory, "builder.md"), "---\nid: private-builder\nname: Private Builder\ndescription: Agent-only definition\nallowedModes: [agent]\n---\nBuild changes.", "utf8");
+  const request = { ...roots, action: "plan" };
+  const catalog = new AgentCatalog(request, [new WorkspaceAgentSource(request)]);
+  await catalog.load();
+  assert.equal(catalog.list().some((entry) => entry.id === "private-builder"), false);
+  await assert.rejects(() => catalog.activate("private-builder"), (error) => error.code === "AGENT_MODE_NOT_ALLOWED");
 });
 
 test("workspace bundles remain inactive until enabled and trusted for that workspace", async (t) => {

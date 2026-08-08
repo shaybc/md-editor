@@ -74,14 +74,16 @@ async function executeTool(call, context) {
     }
   }
   if (name === "discover_extensions") {
-    const entries = [...context.extensions, ...context.fabric.snapshot().entries];
+    const entries = [...context.extensions, ...context.fabric.snapshot().entries.filter((entry) => entry.kind !== "agent")];
     return args.kind ? entries.filter((entry) => entry.kind === args.kind) : entries;
   }
   if (name === "capability_search") return context.capabilities.search(args.query, { maxResults: args.maxResults });
   if (name === "load_extension") {
-    const extension = context.fabric.entries.has(args.id)
-      ? await context.fabric.activate(args.id)
-      : await loadExtension(context.extensions, args.id);
+    const extension = context.agentCatalog?.owns?.(args.id)
+      ? await context.agentCatalog.activate(args.id)
+      : (context.fabric.entries.has(args.id)
+        ? await context.fabric.activate(args.id)
+        : await loadExtension(context.extensions, args.id));
     context.loadedExtensions.add(args.id);
     context.loadedExtensionBodies?.set?.(args.id, extension);
     return extension;

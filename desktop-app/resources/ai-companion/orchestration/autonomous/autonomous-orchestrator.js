@@ -15,6 +15,9 @@ const { WorkLedger } = require("./work/work-ledger");
 const { WorkerHub } = require("./workers/worker-hub");
 const { loadActiveInstructions } = require("./instruction-loader");
 const { ExtensionFabric } = require("./extensions/extension-fabric");
+const { AgentCatalog } = require("./agents/agent-catalog");
+const { WorkspaceAgentSource } = require("./agents/workspace-agent-source");
+const { BundleAgentSource } = require("./agents/bundle-agent-source");
 const { McpConnectionManager } = require("./mcp/mcp-connection-manager");
 const { CapabilityCatalog } = require("./capabilities/capability-catalog");
 const { HookGateway } = require("./hooks/hook-gateway");
@@ -41,21 +44,26 @@ class AutonomousOrchestrator {
     let context = null;
     let messages = [];
     try {
-      const extensions = await discoverExtensions(request);
+      const discoveredExtensions = await discoverExtensions(request);
       const fabric = new ExtensionFabric(request);
-      const extensionSnapshot = await fabric.load();
+      const fabricSnapshot = await fabric.load();
+      const agentCatalog = new AgentCatalog(request, [new WorkspaceAgentSource(request), new BundleAgentSource(fabric)]);
+      const agentSnapshot = await agentCatalog.load();
+      const extensions = [...discoveredExtensions, ...agentCatalog.list()];
+      const extensionSnapshot = { fabric: fabricSnapshot, agents: agentSnapshot };
       const instructions = await loadActiveInstructions(request, policy);
       const provider = services.provider || createProvider(request.settings, { onDebug: createProviderDebugEmitter(events.emit) });
       const fingerprints = {
         instructions: fingerprint(instructions),
-        extensions: fingerprint(extensionSnapshot)
+        extensions: fingerprint({ extensions, extensionSnapshot })
       };
       mcp = new McpConnectionManager(request, events.emit);
       mcp.register(Array.from(fabric.entries.values()).filter((entry) => entry.kind === "mcp-server"));
       const capabilities = new CapabilityCatalog({
         policy, fabric, mcp, emit: events.emit,
         registrations: policy.allowTools ? getToolRegistrations(policy, request.settings) : [],
-        knownToolNames: getKnownToolNames()
+        knownToolNames: getKnownToolNames(),
+        metadataEntries: agentCatalog.list()
       });
       fingerprints.tools = capabilities.inventory.fingerprint();
       const hooks = new HookGateway(request, Array.from(fabric.entries.values()).filter((entry) => entry.kind === "hook"), events.emit);
@@ -100,7 +108,7 @@ class AutonomousOrchestrator {
       windowSteward.restore(restored?.windowState);
 
       context = {
-        request, services, policy, extensions, extensionSnapshot, fabric, mcp, capabilities, hooks,
+        request, services, policy, extensions, extensionSnapshot, fabric, agentCatalog, mcp, capabilities, hooks,
         instructions, recalledContinuity, fingerprints, chronicle, artifactVault, continuity, windowSteward,
         observationLedger, contextReleaseReminder,
         loadedExtensions: new Set(restored?.loadedExtensions || []),
@@ -155,7 +163,7 @@ class AutonomousOrchestrator {
       };
 
       context.workers = new WorkerHub(provider, request, {
-        fabric, parentContext: context, events: journaledEvents,
+        fabric, agentCatalog, parentContext: context, events: journaledEvents,
         onChange: () => context.saveSnapshot?.("running").catch(() => {})
       });
       workers = context.workers;
@@ -225,9 +233,11 @@ async function buildRenewalAnchors(context, digest, activeFiles) {
 async function refreshLoadedExtensions(context, notices = []) {
   for (const id of Array.from(context.loadedExtensions)) {
     try {
-      const extension = context.fabric.entries.has(id)
-        ? await context.fabric.activate(id)
-        : await loadExtension(context.extensions, id);
+      const extension = context.agentCatalog.owns(id)
+        ? await context.agentCatalog.activate(id)
+        : (context.fabric.entries.has(id)
+          ? await context.fabric.activate(id)
+          : await loadExtension(context.extensions, id));
       context.loadedExtensionBodies.set(id, extension);
     } catch (error) {
       context.loadedExtensions.delete(id);
