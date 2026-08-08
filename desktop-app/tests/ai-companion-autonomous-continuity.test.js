@@ -26,7 +26,7 @@ function createRequest(root, overrides = {}) {
     workspaceRoot: root,
     profileRoot: root,
     taskId: "stage-six-run",
-    durableResume: false,
+    resumeRun: false,
     settings: { enabled: true, agentEnabled: true, provider: "test", model: "custom-stage-six", agentMaxResponseTokens: 0 },
     ...overrides
   };
@@ -138,7 +138,7 @@ test("continuity updates become searchable only inside the same workspace", asyn
 test("run chronicle recovers the latest valid journal snapshot after a torn current write", async (t) => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "md-editor-chronicle-"));
   t.after(() => fs.rm(root, { recursive: true, force: true }));
-  const request = createRequest(root, { durableResume: true });
+  const request = createRequest(root, { resumeRun: true });
   const chronicle = new RunChronicle(request);
   await chronicle.saveSnapshot({ status: "running", messages: [{ role: "user", content: "first" }] });
   await chronicle.saveSnapshot({ status: "completed", messages: [], finalResponse: "done" });
@@ -155,7 +155,7 @@ test("run chronicle recovers the latest valid journal snapshot after a torn curr
 test("run chronicle falls back to the previous snapshot when the journal tail is unusable", async (t) => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "md-editor-chronicle-previous-"));
   t.after(() => fs.rm(root, { recursive: true, force: true }));
-  const request = createRequest(root, { durableResume: true, taskId: "previous-fallback" });
+  const request = createRequest(root, { resumeRun: true, taskId: "previous-fallback" });
   const chronicle = new RunChronicle(request);
   await chronicle.saveSnapshot({ status: "running", messages: [{ role: "user", content: "safe" }] });
   await chronicle.saveSnapshot({ status: "failed", messages: [], error: "newer" });
@@ -169,7 +169,7 @@ test("run chronicle falls back to the previous snapshot when the journal tail is
 test("version-two autonomous checkpoints migrate into the new recovery envelope", async (t) => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "md-editor-checkpoint-migration-"));
   t.after(() => fs.rm(root, { recursive: true, force: true }));
-  const request = createRequest(root, { durableResume: true });
+  const request = createRequest(root, { resumeRun: true });
   const directory = path.join(root, ".md-editor", "companion", "autonomous-checkpoints");
   await fs.mkdir(directory, { recursive: true });
   await fs.writeFile(path.join(directory, `${getRunIdentity(request)}.json`), JSON.stringify({ schemaVersion: 2, status: "running", messages: [{ role: "user", content: "resume" }] }), "utf8");
@@ -263,7 +263,7 @@ test("recoverable runs continue from a safe transcript and publish one final res
   t.after(() => fs.rm(root, { recursive: true, force: true }));
   const base = createRequest(root, {
     taskId: "recoverable-run",
-    settings: { enabled: true, agentEnabled: true, agentLoopArchitecture: "autonomous", provider: "test", model: "custom-stage-six", agentMaxResponseTokens: 0 },
+    settings: { enabled: true, agentEnabled: true, provider: "test", model: "custom-stage-six", agentMaxResponseTokens: 0 },
     securityContext: { policy: { shell: { mode: "deny-and-audit" } } }
   });
   await new RunChronicle(base).saveSnapshot({
@@ -273,7 +273,7 @@ test("recoverable runs continue from a safe transcript and publish one final res
   });
   let calls = 0;
   const events = [];
-  const result = await new AutonomousOrchestrator().run({ ...base, durableResume: true }, {
+  const result = await new AutonomousOrchestrator().run({ ...base, resumeRun: true }, {
     provider: { async completeMessage(messages) {
       calls += 1;
       assert.equal(messages[0].role, "system");

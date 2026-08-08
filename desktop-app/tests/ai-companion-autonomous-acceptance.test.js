@@ -18,17 +18,11 @@ const { PlanRepositorySession, requireSavedPlanMetadata } = require("../resource
 function createRequest(overrides = {}) {
   return {
     action: "agent", prompt: "work", workspaceRoot: process.cwd(), profileRoot: "", taskId: "task-one",
-    settings: { enabled: true, agentEnabled: true, agentLoopArchitecture: "autonomous", agentMaxResponseTokens: 0 },
+    settings: { enabled: true, agentEnabled: true, agentMaxResponseTokens: 0 },
     securityContext: { policy: { shell: { mode: "deny-and-audit" } } },
     ...overrides
   };
 }
-
-test("architecture settings normalize to a closed migration enum", () => {
-  assert.equal(normalizeAiCompanionSettings({}).agentLoopArchitecture, "legacy");
-  assert.equal(normalizeAiCompanionSettings({ agentLoopArchitecture: "autonomous" }).agentLoopArchitecture, "autonomous");
-  assert.equal(normalizeAiCompanionSettings({ agentLoopArchitecture: "unknown" }).agentLoopArchitecture, "legacy");
-});
 
 test("read-only modes do not expose mutation, command, or delegation tools", () => {
   const names = getToolDefinitions({ allowWrites: false, allowCommands: false, allowDelegation: false }).map((entry) => entry.function.name);
@@ -204,7 +198,7 @@ test("completed checkpoints restore without another provider call", async () => 
   const base = createRequest({ profileRoot, workspaceRoot: profileRoot, chatId: "chat", taskId: "stable-task" });
   try {
     await new AutonomousOrchestrator().run(base, { provider }, () => {});
-    const result = await new AutonomousOrchestrator().run({ ...base, requestId: "new-request", durableResume: true }, { provider }, () => {});
+    const result = await new AutonomousOrchestrator().run({ ...base, requestId: "new-request", resumeRun: true }, { provider }, () => {});
     assert.equal(result.recovered, true);
     assert.equal(result.content, "Recovered answer");
     assert.equal(calls, 1);
@@ -225,7 +219,7 @@ test("completed plan recovery restores the authoritative repository pointer with
   const base = createRequest({ action: "plan", prompt: "Create the recovery plan", profileRoot, workspaceRoot: profileRoot, chatId: "plan-chat", taskId: "stable-plan-task", sourceTaskId: "stable-plan-task", planOperation: "create" });
   try {
     const first = await new AutonomousOrchestrator().run(base, { provider }, () => {});
-    const restored = await new AutonomousOrchestrator().run({ ...base, requestId: "new-plan-request", durableResume: true }, { provider }, () => {});
+    const restored = await new AutonomousOrchestrator().run({ ...base, requestId: "new-plan-request", resumeRun: true }, { provider }, () => {});
     assert.equal(restored.recovered, true);
     assert.equal(restored.content, body);
     assert.equal(restored.plan.id, first.plan.id);

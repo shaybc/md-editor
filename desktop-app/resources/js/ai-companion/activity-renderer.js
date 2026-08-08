@@ -525,11 +525,6 @@
       // Explicit flag from the panel's error path (provider failures like quota/rate limits)
       // wins over the text heuristics below, which only catch edit-related failures.
       if (event.isError === true) return { key: "failed", label: "Task Failed", icon: "bi-x-lg" };
-      const assessedStatus = String(event.completionAssessment?.overallStatus || "").trim();
-      if (assessedStatus === "complete") return { key: "succeeded", label: "Task Succeeded", icon: "bi-check-lg" };
-      if (assessedStatus === "incomplete") return { key: "failed", label: "Task Failed", icon: "bi-x-lg" };
-      if (assessedStatus === "provisional") return { key: "provisional", label: "Task Provisional", icon: "bi-exclamation-circle" };
-      if (assessedStatus === "unverified") return { key: "unverified", label: "Task Unverified", icon: "bi-question-circle" };
       const attemptedChanges = Array.isArray(event.attemptedChanges) ? event.attemptedChanges : [];
       const blockedChanges = flattenBlockedChanges(Array.isArray(event.blockedChanges) ? event.blockedChanges : []);
       const failed = attemptedChanges.length > 0 || blockedChanges.length > 0 || /failed|no file edits were applied/i.test(String(event.outcome || ""));

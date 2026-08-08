@@ -4,7 +4,7 @@
 
 "use strict";
 
-const runtime = require("../../core/agent-runtime");
+const runtime = require("../../orchestration/shared/runtime-support");
 const { DEFAULT_AI_COMPANION_PROMPTS, loadAiCompanionPrompts } = require("../../config/prompts");
 const { createProviderDebugEmitter } = require("../../core/provider-debug");
 

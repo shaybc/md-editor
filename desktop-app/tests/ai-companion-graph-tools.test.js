@@ -5,7 +5,7 @@ const test = require("node:test");
 const vm = require("node:vm");
 
 const tools = require("../resources/ai-companion/tools/workspace-tools");
-const { getAgentToolDefinitions } = require("../resources/ai-companion/core/agent-tool-loop");
+const { getAgentToolDefinitions } = require("./helpers/autonomous-tool-harness");
 
 function createEditorReadContext() {
   return {
@@ -163,7 +163,7 @@ test("graph tool definitions are gated by mode", () => {
   }
   for (const name of ["graph_apply_filter", "graph_focus_nodes", "graph_show_local", "graph_clear_focus"]) {
     assert.equal(agentNames.includes(name), true);
-    assert.equal(chatNames.includes(name), true);
+    assert.equal(chatNames.includes(name), false);
     assert.equal(planNames.includes(name), false);
   }
 });

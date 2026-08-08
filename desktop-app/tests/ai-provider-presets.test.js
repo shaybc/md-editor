@@ -7,7 +7,7 @@ const vm = require("node:vm");
 const providerPresets = require("../resources/js/ai-companion/provider-presets");
 const { normalizeAiCompanionSettings } = require("../resources/ai-companion/config/defaults");
 const { BUILTIN_MODELS: bridgeBuiltinModels } = require("../resources/ai-companion/config/model-registry");
-const { testConnection } = require("../resources/ai-companion/core/agent-runtime");
+const { testConnection } = require("../resources/ai-companion/orchestration/shared/runtime-support");
 
 const formerPresetModels = {
   openai: ["gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna", "gpt-5.5", "gpt-5.5-pro", "gpt-5.4"],
@@ -22,7 +22,6 @@ function loadBrowserSettings() {
   const context = { window: {}, globalThis: null };
   context.globalThis = context.window;
   vm.createContext(context);
-  vm.runInContext(fs.readFileSync(path.resolve(__dirname, "../resources/js/ai-companion/intent-experiment.js"), "utf8"), context);
   vm.runInContext(source, context);
   let registered = null;
   context.window.registerMarkdownViewerAiCompanionSettings({

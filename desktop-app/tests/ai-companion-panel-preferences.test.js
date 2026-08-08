@@ -6,26 +6,6 @@ const vm = require("node:vm");
 
 const webRoot = path.resolve(__dirname, "..", "resources");
 
-test("interrupted task checkpoints recover one stable root prompt and truthful progress", () => {
-  const context = vm.createContext({ window: {} });
-  vm.runInContext(fs.readFileSync(path.join(webRoot, "js", "ai-companion", "interrupted-task-resume.js"), "utf8"), context);
-  const resume = context.window.createMarkdownViewerInterruptedTaskResume();
-  const nested = "Resume the previous task that was interrupted by an app restart: Resume the previous task that was interrupted by an app restart: Rename the package - Use the conversation context to see the progress already made, avoid repeating completed work, and finish the task. - Use the conversation context to see the progress already made, avoid repeating completed work, and finish the task.";
-  assert.equal(resume.recoverRootPrompt({ prompt: nested }), "Rename the package");
-  const resumedRequest = resume.buildResumeRequest({ id: "task-2", prompt: nested, workspaceRoot: "C:/workspace", resume: { rootTaskId: "task-1" } }, { resumeAction: { version: 1, replayEligible: true, tool: "write_file", args: { path: "src/App.java" } } }, "C:/other");
-  assert.equal(resumedRequest.prompt, "Rename the package");
-  assert.equal(resumedRequest.resume.rootTaskId, "task-1");
-  assert.equal(resumedRequest.resume.sourceTaskId, "task-2");
-  assert.equal(resumedRequest.resumeCheckpoint.workspaceRoot, "C:/workspace");
-
-  const summary = resume.summarizeProgress({ events: [
-    { type: "tool", tool: "run_command", input: "rm old", activity: { id: "command-1", status: "completed", raw: { result: { executed: false, code: "FREE_FORM_COMMAND_NOT_PERMITTED" } } } },
-    { type: "approval", tool: "write_file", input: "src/App.java", approvalReason: "Update the package." }
-  ] });
-  assert.match(summary, /Denied and not executed \(FREE_FORM_COMMAND_NOT_PERMITTED\)/);
-  assert.match(summary, /Still awaiting approval .* write_file: src\/App\.java; reason: Update the package\./);
-});
-
 test("AI autocomplete builds context from a bounded CodeMirror document window", () => {
   const controllerSource = fs.readFileSync(path.join(webRoot, "js", "ai-companion", "autocomplete", "index.js"), "utf8");
   const contextWindowSource = fs.readFileSync(path.join(webRoot, "js", "ai-companion", "autocomplete", "context-window.js"), "utf8");
@@ -727,7 +707,6 @@ function createPanelHarness(options = {}) {
   context.createMarkdownViewerAiCompanionContextIndicator = options.createContextIndicator;
   context.window = context;
   vm.createContext(context);
-  vm.runInContext(fs.readFileSync(path.join(webRoot, "js", "ai-companion", "intent-experiment.js"), "utf8"), context);
   vm.runInContext(fs.readFileSync(path.join(webRoot, "js", "ai-companion", "copy-actions.js"), "utf8"), context);
   vm.runInContext(fs.readFileSync(path.join(webRoot, "js", "ai-companion", "rate-limit-wait-countdown.js"), "utf8"), context);
   vm.runInContext(fs.readFileSync(path.join(webRoot, "js", "ai-companion", "panel.js"), "utf8"), context);
@@ -1037,53 +1016,12 @@ test("AI Companion mode restore can update selection without writing preferences
 });
 
 
-test("AI Companion Plan mode saves generated plans with milestones", async () => {
-  const planContent = "<proposed_plan>\n# Test Plan\n\n## Milestones\n- M1: Inspect files\n- M2: Patch UI\n</proposed_plan>";
-  const payloads = [];
-  const harness = createPanelHarness({
-    bridge: {
-      plan: async (payload, handleEvent) => {
-        payloads.push(payload);
-        handleEvent({ type: "content", content: planContent });
-        return { content: planContent, plan: { id: "plan_saved_1", title: "Test Plan", path: "companion/plans/2026/07/06/test-plan.md", status: "planned", milestones: [{ id: "M1", title: "Inspect files", status: "pending" }, { id: "M2", title: "Patch UI", status: "pending" }], createdAt: "2026-07-06T00:00:00.000Z", updatedAt: "2026-07-06T00:00:00.000Z" } };
-      }
-    }
-  });
-
-  assert.equal(harness.modeMenuList.querySelectorAll("[data-ai-companion-tab]").some((button) => button.dataset.aiCompanionTab === "plan"), true);
-
-  harness.planTab.click();
-  harness.agentInput.value = "Add plan mode";
-  harness.agentInput.dispatchEvent("input");
-  harness.agentRunButton.click();
-  await new Promise((resolve) => setTimeout(resolve, 20));
-
-  assert.equal(payloads.length, 1);
-  assert.match(payloads[0].sourceChatId, /^chat_/);
-  assert.match(payloads[0].sourceTaskId, /^task_/);
-  assert.equal(payloads[0].planOperation, "create");
-  assert.equal(payloads[0].planTarget, null);
-  const savedIndex = JSON.parse(harness.storage.get("ai-companion-chats"));
-  const savedTask = savedIndex.tasks[0];
-  const savedRecord = JSON.parse(harness.storage.get(`ai-companion-agent-tasks:${savedTask.id}`));
-  assert.equal(savedTask.mode, "plan");
-  assert.equal(savedTask.status, "planned");
-  assert.equal(savedRecord.mode, "plan");
-  assert.equal(savedRecord.status, "planned");
-  assert.equal(savedRecord.plan.status, "planned");
-  assert.equal(savedRecord.plan.id, "plan_saved_1");
-  assert.equal(savedRecord.plan.path, "companion/plans/2026/07/06/test-plan.md");
-  assert.equal(Object.prototype.hasOwnProperty.call(savedRecord.plan, "content"), false);
-  assert.deepEqual(savedRecord.plan.milestones.map((milestone) => milestone.id), ["M1", "M2"]);
-  assert.equal(savedRecord.events.some((event) => event.type === "chat-response" && event.content === planContent), true);
-});
-
 test("autonomous Plan mode accepts repository metadata and refreshes saved plans", async () => {
   const planContent = "# Autonomous Plan\n\n## M1: Persist it";
   const savedPlan = { id: "plan_autonomous_1", title: "Autonomous Plan", path: "companion/plans/2026/08/08/autonomous-plan.md", status: "planned", milestones: [{ id: "M1", title: "Persist it", status: "pending" }] };
   let plansListCalls = 0;
   const harness = createPanelHarness({
-    settings: { enabled: true, chatEnabled: true, agentEnabled: true, agentLoopArchitecture: "autonomous" },
+    settings: { enabled: true, chatEnabled: true, agentEnabled: true },
     bridge: {
       plan: async (_payload, handleEvent) => {
         handleEvent({ type: "run-started", architecture: "autonomous", mode: "plan" });
@@ -1114,7 +1052,7 @@ test("autonomous Plan mode accepts repository metadata and refreshes saved plans
 
 test("autonomous Plan mode does not synthesize saved metadata without a repository result", async () => {
   const harness = createPanelHarness({
-    settings: { enabled: true, chatEnabled: true, agentEnabled: true, agentLoopArchitecture: "autonomous" },
+    settings: { enabled: true, chatEnabled: true, agentEnabled: true },
     bridge: {
       plan: async (_payload, handleEvent) => {
         handleEvent({ type: "assistant-final", content: "# Unsaved Plan" });
@@ -1139,7 +1077,7 @@ test("autonomous Plan mode does not synthesize saved metadata without a reposito
 
 test("autonomous Agent mode does not mark an empty final response completed", async () => {
   const harness = createPanelHarness({
-    settings: { enabled: true, chatEnabled: true, agentEnabled: true, agentLoopArchitecture: "autonomous" },
+    settings: { enabled: true, chatEnabled: true, agentEnabled: true },
     bridge: {
       agent: async (_payload, handleEvent) => {
         handleEvent({ type: "run-started", architecture: "autonomous", mode: "agent" });
@@ -1205,49 +1143,6 @@ test("AI Companion edited prompt composer exposes Plan mode", async () => {
   const modeButtons = entry.querySelectorAll("[data-ai-companion-tab]");
 
   assert.equal(modeButtons.some((button) => button.dataset.aiCompanionTab === "plan"), true);
-});
-
-test("AI Companion Execute plan starts agent run and marks plan implemented", async () => {
-  const planContent = "<proposed_plan>\n# Test Plan\n\n## Milestones\n- M1: Inspect files\n</proposed_plan>";
-  const agentPayloads = [];
-  const harness = createPanelHarness({
-    bridge: {
-      plan: async (_payload, handleEvent) => {
-        handleEvent({ type: "content", content: planContent });
-        return { content: planContent, plan: { id: "plan_saved_execute", title: "Test Plan", path: "companion/plans/2026/07/06/test-plan.md", status: "planned", milestones: [{ id: "M1", title: "Inspect files", status: "pending" }] } };
-      },
-      agent: async (payload, handleEvent) => {
-        agentPayloads.push(payload);
-        handleEvent({ type: "agent-summary", outcome: "Done", finalResponse: "Done", changedFiles: [], attemptedChanges: [] });
-        return { content: "Done" };
-      }
-    }
-  });
-
-  harness.planTab.click();
-  harness.agentInput.value = "Add plan mode";
-  harness.agentInput.dispatchEvent("input");
-  harness.agentRunButton.click();
-  await new Promise((resolve) => setTimeout(resolve, 20));
-
-  const planEntry = harness.toolLog.children[0];
-  const executeButton = planEntry.querySelector(".ai-companion-box-execute-plan");
-  assert.ok(executeButton);
-  executeButton.click();
-  await new Promise((resolve) => setTimeout(resolve, 30));
-
-  assert.equal(agentPayloads.length, 1);
-  assert.match(agentPayloads[0].prompt, /Execute the reviewed saved implementation plan/);
-  assert.match(agentPayloads[0].prompt, /plan_read/);
-  assert.match(agentPayloads[0].prompt, /Plan id: plan_saved_execute/);
-  assert.match(agentPayloads[0].prompt, /Plan path: companion\/plans\/2026\/07\/06\/test-plan\.md/);
-  assert.match(agentPayloads[0].prompt, /M1: Inspect files/);
-  const savedIndex = JSON.parse(harness.storage.get("ai-companion-chats"));
-  const planTask = savedIndex.tasks.find((task) => task.mode === "plan");
-  const savedPlanRecord = JSON.parse(harness.storage.get(`ai-companion-agent-tasks:${planTask.id}`));
-  assert.equal(savedPlanRecord.status, "implemented");
-  assert.equal(savedPlanRecord.plan.status, "implemented");
-  assert.equal(savedPlanRecord.plan.implementationTaskId.startsWith("task_"), true);
 });
 
 test("AI Companion Plans browser lists and manages saved plan cards", async () => {
@@ -2718,42 +2613,6 @@ test("AI Companion context indicator includes files read by tools", async () => 
   assert.equal(snapshots.some((groups) => groups.find((group) => group.title === "Latest request")?.files.some((file) => file.path === "web-app/js/ai-companion/panel.js")), true);
 });
 
-test("AI Companion persists and displays incomplete assessed agent tasks", async () => {
-  const harness = createPanelHarness({
-    isNeutralinoRuntime: false,
-    bridge: {
-      agent: async (_payload, handleEvent) => {
-        const completionAssessment = { overallStatus: "incomplete", criteria: [], unmetSummary: "Git changes were not verified." };
-        handleEvent({ type: "completion-assessment", assessment: completionAssessment, evidenceLedger: [] });
-        handleEvent({
-          type: "agent-summary",
-          outcome: "Git changes were not verified.",
-          finalResponse: "Git changes were not verified.",
-          changedFiles: [],
-          attemptedChanges: [],
-          completionAssessment,
-          evidenceLedger: []
-        });
-        return { content: "Git changes were not verified." };
-      }
-    }
-  });
-
-  harness.agentTab.click();
-  harness.agentInput.value = "Check Git changes";
-  harness.agentInput.dispatchEvent("input");
-  harness.agentRunButton.click();
-  await new Promise((resolve) => setTimeout(resolve, 20));
-  await harness.api.refreshChatSelectOptions();
-  harness.api.setWorkspaceOpen(true, { previousSidebarView: "files" });
-  await new Promise((resolve) => setTimeout(resolve, 0));
-
-  assert.equal(harness.workspaceStatusChip.textContent, "Incomplete");
-  assert.equal(harness.workspaceStatusChip.classList.contains("status-incomplete"), true);
-  const statusDot = harness.workspaceChatList.querySelector(".ai-companion-workspace-chat-status-dot");
-  assert.equal(statusDot.getAttribute("aria-label"), "Incomplete");
-  assert.equal(statusDot.classList.contains("status-incomplete"), true);
-});
 test("AI Companion saved chat responses render through the shared markdown renderer", async () => {
   const renderCalls = [];
   const harness = createPanelHarness({
@@ -2965,14 +2824,10 @@ test("AI Companion prompt inline edit reruns from the edited prompt and truncate
     updatedAt: 1783087802000,
     status: "completed",
     executionGeneration: 1,
-    changes: { files: [{ path: "old.md" }], attempted: [{ path: "attempted.md" }], blocked: [{ code: "intent-mutation-blocked", count: 1, items: [] }] },
-    completionAssessment: { overallStatus: "incomplete" },
-    evidenceLedger: [{ id: "EV1" }],
-    intentEvaluation: { outcome: "false-met" },
+    changes: { files: [{ path: "old.md" }], attempted: [{ path: "attempted.md" }], blocked: [] },
     resume: { reason: "approval" },
     plan: { id: "old-plan" },
     events: [
-      { type: "intent-contract", contract: { amendments: [{ id: "AM1", applied: false }] }, meta: { executionGeneration: 1 } },
       { type: "chat-response", content: "Original answer" }
     ]
   }));
@@ -3008,8 +2863,6 @@ test("AI Companion prompt inline edit reruns from the edited prompt and truncate
   assert.equal(payloads[0].prompt, "Original prompt");
   assert.equal(payloads[0].executionKind, "edited-rerun");
   assert.equal(payloads[0].executionGeneration, 2);
-  assert.equal(payloads[0].savedIntentContract, null);
-  assert.equal(payloads[0].savedIntentContractMeta, null);
   assert.equal(payloads[0].conversationHistory.length, 0);
   assert.equal(harness.toolLog.children.length, 1);
   assert.equal(firstEntry.querySelector("summary").textContent, "Original prompt");
@@ -3023,10 +2876,7 @@ test("AI Companion prompt inline edit reruns from the edited prompt and truncate
   assert.equal(savedRecord.executionGeneration, 2);
   assert.equal(savedRecord.lastExecutionKind, "edited-rerun");
   assert.equal(savedRecord.changes, null);
-  assert.equal(savedRecord.completionAssessment, null);
-  assert.deepEqual(savedRecord.evidenceLedger, []);
-  assert.equal(savedRecord.intentEvaluation, null);
-  assert.equal(savedRecord.resume, null);
+  assert.equal(Object.prototype.hasOwnProperty.call(savedRecord, "resume"), false);
   assert.equal(savedRecord.plan, null);
   assert.equal(savedRecord.events.some((event) => event.content === "Original answer"), false);
   assert.equal(savedRecord.events.some((event) => event.content === "Edited answer"), true);
@@ -3945,11 +3795,6 @@ test("AI Companion previous chat refresh writes debug log breadcrumbs", async ()
   assert.equal(harness.appDebugLogs.some((entry) => entry.message === "[ai-companion] chat history refresh started"), true);
   assert.equal(harness.appDebugLogs.some((entry) => entry.message === "[ai-companion] chat history rendered menu"), true);
   assert.equal(harness.appDebugLogs.some((entry) => entry.message === "[ai-companion] chat history header control clicked"), true);
-});
-test("AI Companion chat mode uses the core agent activity run for tool events", () => {
-  const source = fs.readFileSync(path.resolve(__dirname, "..", "resources", "ai-companion", "core", "agent-tool-loop.js"), "utf8");
-  assert.equal(source.includes('const activityRun = (mode === "agent" || mode === "chat" || mode === "plan") ? createActivityRun(root, tools) : null;'), true);
-  assert.equal(source.includes('const shouldEmitActivitySummary = mode === "agent";'), true);
 });
 test("AI Companion chat mode displays and reloads tool events as activity", async () => {
   const activityEvents = [];
@@ -5243,8 +5088,6 @@ test("workspace visual shell keeps center content intentional", () => {
   assert.match(styles, /body\.ai-companion-workspace-open \.ai-companion-workspace-heading,\s*body\.ai-companion-workspace-open \.ai-companion-workspace-header-meta,\s*body\.ai-companion-workspace-open \.ai-companion-agent-view\s*\{\s*width:\s*min\(100%, var\(--ai-companion-workspace-content-max-width\)\);/);
   assert.match(styles, /body\.ai-companion-workspace-open \.ai-companion-workspace-history,[^{}]*body\.ai-companion-workspace-open \.ai-companion-workspace-inspector,[^{}]*body\.ai-companion-workspace-open \.ai-companion-workspace-chat-list,[^{}]*body\.ai-companion-workspace-open \.ai-companion-workspace-sidebar-plans,[^{}]*body\.ai-companion-workspace-open \.ai-companion-tool-log\s*\{[^}]*scrollbar-width:\s*thin;/s);
   assert.doesNotMatch(workspaceShell, /radial-gradient|linear-gradient\(180deg|linear-gradient\(145deg|box-shadow:\s*(?:inset|0\s+10px|0\s+16px)/);
-  assert.match(styles, /body\.ai-companion-workspace-open \.sidebar-ai-companion-rail-button\s*\{[^}]*width:\s*44px;[^}]*height:\s*56px;/s);
-  assert.match(styles, /body\.ai-companion-workspace-open \.sidebar-ai-companion-rail-button::after\s*\{[^}]*content:\s*"AI";/s);
   assert.match(styles, /body\.ai-companion-workspace-open \.ai-companion-chat-action-toggle\s*\{[^}]*border:\s*1px solid/s);
   assert.match(styles, /body\.ai-companion-workspace-open \.ai-companion-chat-action-menu\s*\{[^}]*z-index:\s*2200;/s);
   assert.match(styles, /\.ai-companion-workspace-menu button\.active::before,\s*\.ai-companion-workspace-menu button\[aria-checked="true"\]::before\s*\{[^}]*content:\s*"\\2713";/s);

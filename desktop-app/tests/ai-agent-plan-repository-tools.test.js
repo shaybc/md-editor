@@ -5,7 +5,7 @@ const path = require("node:path");
 const test = require("node:test");
 
 const planTools = require("../resources/ai-companion/tools/plan-repository-tools");
-const { getAgentToolDefinitions } = require("../resources/ai-companion/core/agent-tool-loop");
+const { getAgentToolDefinitions } = require("./helpers/autonomous-tool-harness");
 const { toCanonicalName } = require("../resources/ai-companion/core/tool-scope-registry");
 
 async function createProfileRoot() {
@@ -175,15 +175,17 @@ test("plan repository list rebuilds index from Markdown files", async () => {
   assert.equal(index.plans[0].id, created.plan.id);
 });
 
-test("plan repository tools are exposed only to Agent mode", () => {
+test("plan repository tools are exposed to Plan and Agent modes", () => {
   const agentNames = getAgentToolDefinitions("agent").map((definition) => toCanonicalName(definition.function.name));
   const chatNames = getAgentToolDefinitions("chat").map((definition) => toCanonicalName(definition.function.name));
   const planNames = getAgentToolDefinitions("plan").map((definition) => toCanonicalName(definition.function.name));
 
-  for (const name of ["plan_create", "plan_list", "plan_read", "plan_update", "plan_update_status", "plan_rebuild_index"]) {
+  for (const name of ["plan_create", "plan_list", "plan_read", "plan_update"]) {
     assert.equal(agentNames.includes(name), true, `${name} should be exposed to Agent mode`);
     assert.equal(chatNames.includes(name), false, `${name} should not be exposed to Chat mode`);
-    assert.equal(planNames.includes(name), false, `${name} should not be exposed to Plan mode`);
+    assert.equal(planNames.includes(name), true, `${name} should be exposed to Plan mode`);
   }
-  assert.deepEqual(planNames, ["get_workspace_state", "read_active_document", "read_open_tabs", "get_document_structure", "search_vault", "get_link_context", "get_recent_activity", "graph_get_state", "graph_search_nodes", "graph_get_node_context", "graph_find_paths", "list_files", "glob", "search_text", "read_file"]);
+  assert.equal(planNames.includes("apply_edit"), false);
+  assert.equal(planNames.includes("write_file"), false);
+  assert.equal(planNames.includes("run_command"), false);
 });

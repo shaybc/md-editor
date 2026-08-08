@@ -74,7 +74,7 @@ class RunChronicle {
 
   /** Load the newest valid recovery state, including version-2 migration. */
   async loadRecovery(options = {}) {
-    if (!this.request.durableResume && !options.applicationRestart) return null;
+    if (!this.request.resumeRun && !options.applicationRestart) return null;
     if (this.directory) {
       const current = await readJsonOptional(path.join(this.directory, "current.json"));
       if (validateSnapshot(current, this.runId)) {

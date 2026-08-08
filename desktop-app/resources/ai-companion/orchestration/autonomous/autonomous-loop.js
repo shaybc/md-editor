@@ -98,7 +98,12 @@ async function runAutonomousLoop(input) {
         events.emit({ type: EVENT_TYPES.TOOL_FAILED, tool: name, callId: call.id, error: message });
         await context.hooks?.run("tool-failure", { tool: name, call, error: message });
         await context.chronicle?.append?.("tool-failed", { round, tool: name, callId: call.id, error: message });
-        return { role: "tool", tool_call_id: call.id, content: JSON.stringify({ error: message, retryable: consecutiveFailures < 3 }) };
+        return { role: "tool", tool_call_id: call.id, content: JSON.stringify({
+          error: message,
+          code: error?.code || undefined,
+          retryable: error?.retryable === false ? false : consecutiveFailures < 3,
+          doNotRetry: error?.doNotRetry === true
+        }) };
       }
     }));
     messages.push(...results);

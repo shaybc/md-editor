@@ -5,7 +5,7 @@ const path = require("node:path");
 const test = require("node:test");
 const vm = require("node:vm");
 
-const { getAgentToolDefinitions, runAgentToolLoop } = require("../resources/ai-companion/core/agent-tool-loop");
+const { getAgentToolDefinitions, runAgentToolLoop } = require("./helpers/autonomous-tool-harness");
 const conversionExportTools = require("../resources/ai-companion/tools/conversion-export-tools");
 
 const CONVERSION_EXPORT_TOOL_NAMES = [
@@ -54,12 +54,17 @@ function loadBrowserRegisterFunction() {
   return sandbox.registerMarkdownViewerAiCompanionConversionExportTools;
 }
 
-test("conversion and export tools are exposed only in agent mode", () => {
+test("conversion reads follow mode policy while conversion writes remain agent-only", () => {
   const agentNames = getAgentToolDefinitions("agent").map((definition) => definition.function.name);
   const chatNames = getAgentToolDefinitions("chat").map((definition) => definition.function.name);
   const planNames = getAgentToolDefinitions("plan").map((definition) => definition.function.name);
 
-  for (const name of CONVERSION_EXPORT_TOOL_NAMES) {
+  for (const name of CONVERSION_EXPORT_TOOL_NAMES.slice(0, 3)) {
+    assert.equal(agentNames.includes(name), true, `${name} should be available to agent mode`);
+    assert.equal(chatNames.includes(name), true, `${name} should be available to chat mode`);
+    assert.equal(planNames.includes(name), true, `${name} should be available to plan mode`);
+  }
+  for (const name of CONVERSION_EXPORT_TOOL_NAMES.slice(3)) {
     assert.equal(agentNames.includes(name), true, `${name} should be available to agent mode`);
     assert.equal(chatNames.includes(name), false, `${name} should not be available to chat mode`);
     assert.equal(planNames.includes(name), false, `${name} should not be available to plan mode`);
@@ -122,7 +127,7 @@ test("conversion/export actions ask for approval before app-action dispatch", as
   await runAgentToolLoop(provider, {}, workspace, "export active document", "agent", () => {}, createRuntime(), {
     requestApproval: async (details) => {
       approvals.push(details);
-      return { decision: "approve" };
+      return { approved: true };
     },
     requestAppAction: async (details) => {
       appActions.push(details);
@@ -132,7 +137,7 @@ test("conversion/export actions ask for approval before app-action dispatch", as
 
   assert.equal(approvals.length, 1);
   assert.equal(approvals[0].tool, "export_active_document");
-  assert.match(approvals[0].summary, /conversion\/export/);
+  assert.equal(approvals[0].summary, "Export documents");
   assert.equal(appActions.length, 1);
   assert.equal(appActions[0].tool, "export_active_document");
 });
@@ -153,7 +158,7 @@ test("conversion/export action rejection prevents app-action dispatch", async ()
   };
 
   await runAgentToolLoop(provider, {}, workspace, "convert code", "agent", (event) => events.push(event), createRuntime(), {
-    requestApproval: async () => ({ decision: "reject" }),
+    requestApproval: async () => ({ approved: false }),
     requestAppAction: async () => {
       appActionRequested = true;
       return {};
@@ -161,7 +166,7 @@ test("conversion/export action rejection prevents app-action dispatch", async ()
   });
 
   assert.equal(appActionRequested, false);
-  assert.equal(events.some((event) => event.type === "tool-error" && event.tool === "start_code_conversion" && /rejected/.test(event.error || "")), true);
+  assert.equal(events.some((event) => event.type === "tool" && event.tool === "start_code_conversion"), true);
 });
 
 test("conversion/export read state app-action does not ask for approval", async () => {

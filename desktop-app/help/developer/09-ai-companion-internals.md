@@ -14,8 +14,9 @@ AI Companion is split between renderer UI, a Neutralino bridge, and a local Node
 | Renderer panel | `desktop-app/resources/js/ai-companion/panel.js` | Panel UI, chat/task records, approvals, composer, activity events. |
 | Renderer bridge client | `desktop-app/resources/js/ai-companion/neutralino-ai-bridge.js` | Starts the bridge and routes request/response events. |
 | Runtime bridge | `desktop-app/resources/bridges/ai-companion-bridge/ai-companion-bridge.cjs` | Node child process protocol for AI actions. |
-| Runtime core | `desktop-app/resources/ai-companion/core/` | Tool loop, runtime requests, approval policy, activity helpers. |
-| Modes | `desktop-app/resources/ai-companion/modes/` | Chat, agent, autocomplete, plan, and Git summary handlers. |
+| Conversational runtime | `desktop-app/resources/ai-companion/orchestration/autonomous/` | Shared Chat, Plan, and Agent kernel, context continuity, extensions, work, workers, and recovery. |
+| Shared core | `desktop-app/resources/ai-companion/core/` | Approval, tool-scope, provider-debug, and certificate helpers. |
+| Focused modes | `desktop-app/resources/ai-companion/modes/` | Autocomplete and Git summary handlers. |
 | Tools | `desktop-app/resources/ai-companion/tools/` | Workspace, editor, graph, Git, plan, and API Client tools. |
 | Provider adapters | `desktop-app/resources/ai-companion/providers/` | OpenAI-compatible, LiteLLM, and Gemini connector adapters. |
 | Demo server | `desktop-app/resources/ai-companion/ai-model-demo/` | Local OpenAI-compatible stub server and fixtures. |
@@ -34,7 +35,7 @@ Bridge actions include `testConnection`, `chat`, `autocomplete`, `agent`, `gitSu
 
 Tool groups include workspace file tools, editor read/action tools, graph tools, Git panel tools, API Client tools, settings tools, and plan repository tools.
 
-Tool availability is not communicated only through prose in the system prompt. The system prompts give the model behavioral guidance, such as when to prefer `read_file` or `git_panel_*` tools, but the callable tool contract is sent separately in the provider request's structured `tools` field. The runtime builds that field in `getAgentToolDefinitions()` in `agent-tool-loop.js`, including each tool name, description, parameter schema, required fields, and mode-specific availability. Provider adapters then translate that structured contract to the target provider's tool-calling format.
+Tool availability is not communicated only through prose in the system prompt. The callable contract is built by `orchestration/autonomous/tool-catalog.js`, filtered through the mode capability policy and configured tool scopes, and sent in the provider request's structured `tools` field. Provider adapters translate that contract to the selected connector's tool-calling format.
 
 Profile-backed prompt files can change instructions about how the model should use tools, but they do not define or customize the tools themselves. Tool schemas, descriptions, allowed modes, approval behavior, and mutating/read-only boundaries remain owned by the runtime tool-definition code.
 
@@ -48,8 +49,7 @@ Current limits:
 | --- | --- | --- |
 | Renderer prior turns | `12` | `CONVERSATION_HISTORY_TURN_LIMIT` in `panel.js` |
 | Renderer chars per history message | `4000` | `CONVERSATION_HISTORY_MESSAGE_MAX_CHARS` in `panel.js` |
-| Runtime history messages | `24` | `MAX_CONVERSATION_HISTORY_MESSAGES` in `agent-tool-loop.js` |
-| Runtime chars per history message | `4000` | `MAX_CONVERSATION_HISTORY_MESSAGE_CHARS` in `agent-tool-loop.js` |
+| Runtime context | Model-specific | `WindowSteward` uses model registry limits, provider usage, artifact references, and structured context renewal. |
 
 The runtime inserts normalized history before the latest user prompt, with a boundary message that tells the model prior turns are background and the newest user message is the current task.
 

@@ -2,6 +2,8 @@
 
 "use strict";
 
+const { getApplicationToolDefinitions } = require("./application-tool-adapter");
+
 function text(description) { return { type: "string", description }; }
 function integer(description) { return { type: "integer", description }; }
 function tool(name, description, properties, required = []) {
@@ -39,8 +41,8 @@ const DEFINITIONS = Object.freeze([
   tool("worker_stop", "Stop one queued or running worker.", { id: text("Worker id") }, ["id"])
 ]);
 
-function getToolDefinitions(policy) {
-  return DEFINITIONS.filter((entry) => {
+function getToolDefinitions(policy, settings = {}) {
+  const core = DEFINITIONS.filter((entry) => {
     const name = entry.function.name;
     if (!policy.allowWrites && ["apply_edit", "write_file"].includes(name)) return false;
     if (!policy.allowCommands && name === "run_command") return false;
@@ -49,6 +51,7 @@ function getToolDefinitions(policy) {
     if (!policy.allowPlanWrites && ["plan_create", "plan_update"].includes(name)) return false;
     return true;
   });
+  return [...core, ...getApplicationToolDefinitions(policy, settings)];
 }
 
 module.exports = { getToolDefinitions };

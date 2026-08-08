@@ -6,7 +6,7 @@ const test = require("node:test");
 const vm = require("node:vm");
 const { spawnSync } = require("node:child_process");
 
-const { getAgentToolDefinitions, runAgentToolLoop } = require("../resources/ai-companion/core/agent-tool-loop");
+const { getAgentToolDefinitions, runAgentToolLoop } = require("./helpers/autonomous-tool-harness");
 const { toCanonicalName } = require("../resources/ai-companion/core/tool-scope-registry");
 const { CommandAuditLogger } = require("../resources/ai-companion/security/audit-log");
 const { classifyCommand } = require("../resources/ai-companion/security/command-suggestion");
@@ -39,7 +39,7 @@ test("agent exposes typed execution tools and no string-based run_test", () => {
   assert.equal(names.includes("run_test"), false);
   assert.equal(names.includes("compile_project"), true);
   assert.equal(names.includes("run_tests"), true);
-  assert.equal(names.includes("restore_dependencies"), true);
+  assert.equal(names.includes("restore_dependencies"), false);
   assert.equal(names.includes("manage_dependencies"), true);
 });
 
@@ -151,9 +151,9 @@ test("denied shell command is audited once, never requests approval, and returns
   assert.equal(audits[0].decision, "deny");
   assert.match(JSON.stringify(finalMessages), /FREE_FORM_COMMAND_NOT_PERMITTED/);
   assert.match(JSON.stringify(finalMessages), /doNotRetry/);
-  const completedCommand = events.find((event) => event.type === "tool" && event.tool === "run_command" && event.activity?.status === "completed");
-  assert.equal(completedCommand.summary, "Not executed — blocked by policy");
-  assert.notEqual(completedCommand.summary, "done");
+ const completedCommand = events.find((event) => event.type === "tool-error" && event.tool === "run_command");
+  assert.ok(completedCommand);
+  assert.match(completedCommand.error, /security policy/i);
 });
 
 test("sandbox-shell preserves auto-run command behavior and audits request and outcome", async () => {

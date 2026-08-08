@@ -6,7 +6,7 @@ const path = require("node:path");
 const test = require("node:test");
 
 const apiTools = require("../resources/ai-companion/tools/api-client-agent-tools");
-const { getAgentToolDefinitions } = require("../resources/ai-companion/core/agent-tool-loop");
+const { getAgentToolDefinitions } = require("./helpers/autonomous-tool-harness");
 
 async function createProfileRoot() {
   return fs.mkdtemp(path.join(os.tmpdir(), "md-editor-api-agent-"));
@@ -33,9 +33,10 @@ function startEchoServer() {
 test("API agent tools are exposed to the AI Companion tool loop", () => {
   const names = getAgentToolDefinitions("agent").map((definition) => definition.function.name);
 
-  for (const name of ["api_asset_search", "api_asset_get", "request_create", "request_update", "request_send", "request_history_get", "response_analyze", "environment_get", "environment_update", "environment_resolve", "secret_redact", "mock_create", "mock_update", "mock_call"]) {
+  for (const name of ["api_asset_search", "api_asset_get", "request_create", "request_update", "request_send", "request_history_get", "response_analyze", "environment_get", "environment_update", "environment_resolve", "mock_create", "mock_update", "mock_call"]) {
     assert.equal(names.includes(name), true, `${name} should be exposed`);
   }
+  assert.equal(names.includes("secret_redact"), false);
 });
 
 test("API agent tools create, find, read, and update saved requests", async () => {

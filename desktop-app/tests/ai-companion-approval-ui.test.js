@@ -77,21 +77,18 @@ test("AI Companion continue approvals keep continue-stop controls without instru
   assert.match(panelSource, /decision === "instruct" && allowInstructions/);
 });
 
-test("AI Companion restored approvals retain review and only the latest can resume", () => {
+test("AI Companion restored approvals remain read-only and recovery uses autonomous inspection", () => {
   assert.match(panelSource, /function canResumeSavedApproval\(record, events, index\)/);
   assert.match(panelSource, /isUnansweredApprovalEvent\(event\) && !hasSavedEventAfter\(events, index\) && !hasSavedTaskAfter\(record\)/);
   assert.match(panelSource, /createInterruptedApprovalCard\(entry, event, \{ showResume: options\.canResumeApproval === true \}\)/);
   assert.match(panelSource, /The app closed before this request was answered\. Resume the task to approve, reject, or provide instructions\./);
   assert.match(panelSource, /reviewButton\.addEventListener\("click", \(\) => reviewApprovalChanges\(event, actionLabel\)\)/);
   assert.match(panelSource, /if \(options\.showResume === false\) \{[\s\S]*getApprovalFooter\(row\)\.appendChild\(actions\);[\s\S]*return row/);
-  assert.match(panelSource, /resumeButton\.className = "ai-companion-approval-approve"/);
-  assert.match(panelSource, /interruption\.textContent = "The task was resumed\. Use the new live approval request to approve, reject, or provide instructions\."/);
-  assert.match(panelSource, /buildResumeTaskRequest\(entry\.record, event\)/);
-  assert.match(panelSource, /await saveAgentEntryImmediately\(entry\)/);
-  assert.match(panelSource, /resumeCheckpoint: request\.resumeCheckpoint/);
-  assert.match(indexSource, /js\/ai-companion\/interrupted-task-resume\.js/);
-  assert.match(panelSource, /hasPendingResume = entry\.record\.status === "interrupted" && \(events\.some\(\(event, index\) => event\?\.type === "approval" && canResumeSavedApproval\(entry\.record, events, index\)\)/);
-  assert.match(panelSource, /findPendingClarification\?\.\(entry\.record\)/);
+  assert.match(panelSource, /function canResumeRun\(record = \{\}\)/);
+  assert.match(panelSource, /record\.recoveryInspection\?\.canResume === true/);
+  assert.match(panelSource, /resumeRun: true/);
+  assert.match(panelSource, /runRecoveryInspect/);
+  assert.doesNotMatch(indexSource, /interrupted-task-resume\.js/);
 });
 
 test("AI Companion approval cards expose request-bound grant choices safely", () => {

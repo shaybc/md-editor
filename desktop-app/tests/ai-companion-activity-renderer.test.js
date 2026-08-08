@@ -3,7 +3,6 @@ const fs = require("node:fs");
 const path = require("node:path");
 const test = require("node:test");
 const vm = require("node:vm");
-const { createActivityRun } = require("../resources/ai-companion/core/agent-activity");
 
 const webRoot = path.resolve(__dirname, "..", "resources");
 
@@ -246,125 +245,6 @@ test("AI Companion summary changed files show line counts and open compare", () 
   assert.equal(compareButton.textContent, "Compare");
   compareButton.dispatch("click");
   assert.deepEqual(opened, [compare]);
-});
-
-test("AI Companion keeps pre-execution blocks out of attempted changes and renders one collapsed group", () => {
-  const activityRun = createActivityRun("C:/project", {});
-  const started = activityRun.createStartedActivity("blocked-1", "write_file", { path: "help/developer/a.md" }, "");
-  activityRun.createFailedActivity(started, { path: "help/developer/a.md" }, "Blocked.", {
-    status: "failed",
-    executed: false,
-    error: {
-      code: "intent-mutation-blocked",
-      decisionId: "D1",
-      capability: "workspace.file.write",
-      resource: "help/developer/a.md",
-      preExecution: true
-    }
-  });
-  activityRun.recordBlockedChange("create_document_tab", { path: "help/developer/b.md" }, {
-    code: "intent-mutation-blocked",
-    decisionId: "D1",
-    capability: "workspace.file.write",
-    resource: "help/developer/b.md",
-    preExecution: true
-  });
-  const event = activityRun.createSummary("No changes were applied.");
-  assert.deepEqual(event.attemptedChanges, []);
-  assert.equal(event.blockedChanges[0].count, 2);
-
-  const harness = createHarness();
-  harness.renderer.appendSummary(event);
-  const summary = harness.container.children[0].children[0];
-  const details = findByClass(summary, "ai-companion-summary-blocked");
-  assert.equal(details.tagName, "DETAILS");
-  assert.notEqual(details.open, true);
-  assert.equal(details.children[0].textContent, "Blocked proposals (2)");
-  assert.equal(findAllByClass(details, "ai-companion-summary-file").length, 2);
-});
-
-test("AI Companion bounds nested Git status activity details without recursion", () => {
-  const activityRun = createActivityRun("C:/project", {});
-  const started = activityRun.createStartedActivity("git-status-1", "git_status", {}, "git_status");
-  const activity = activityRun.createFinishedActivity(started, {}, {
-    action: "status",
-    isRepo: true,
-    status: {
-      branch: "main",
-      staged: [{ path: "staged.md", index: "A", workingDir: " " }],
-      unstaged: [{ path: "changed.md", index: " ", workingDir: "M" }],
-      files: [{ path: "changed.md", index: " ", workingDir: "M" }]
-    }
-  }, "2 changed file(s)");
-
-  assert.equal(activity.status, "completed");
-  assert.equal(activity.raw.result.status.files[0].path, "changed.md");
-});
-
-test("AI Companion validated completion controls status despite superseded blocked proposals", () => {
-  const harness = createHarness();
-  harness.renderer.appendSummary({
-    outcome: "Completed the requested workspace changes.",
-    completionAssessment: { overallStatus: "complete" },
-    changedFiles: [{ path: "help/developer/new.md", description: "Created file." }],
-    attemptedChanges: [],
-    blockedChanges: [{ code: "approval-denied", count: 1, items: [{ path: "help/developer/old.md" }] }]
-  });
-
-  const summary = harness.container.children[0].children[0];
-  const status = findByClass(summary, "ai-companion-task-status");
-  assert.match(status.className, /succeeded/);
-  assert.equal(status.children[1].textContent, "Task Succeeded");
-  assert.ok(findByClass(summary, "ai-companion-summary-blocked"));
-});
-
-test("AI Companion validated incomplete assessment controls status after successful mutations", () => {
-  const harness = createHarness();
-  harness.renderer.appendSummary({
-    outcome: "Some workspace changes were applied.",
-    completionAssessment: { overallStatus: "incomplete" },
-    changedFiles: [{ path: "help/user/index.md", description: "Updated file." }],
-    attemptedChanges: [],
-    blockedChanges: []
-  });
-
-  const summary = harness.container.children[0].children[0];
-  const status = findByClass(summary, "ai-companion-task-status");
-  assert.match(status.className, /failed/);
-  assert.equal(status.children[1].textContent, "Task Failed");
-});
-
-test("AI Companion renders provisional and unverified completion as distinct outcomes", () => {
-  for (const [overallStatus, expectedClass, expectedLabel] of [
-    ["provisional", "provisional", "Task Provisional"],
-    ["unverified", "unverified", "Task Unverified"]
-  ]) {
-    const harness = createHarness();
-    harness.renderer.appendSummary({
-      outcome: "The harness could not assert ordinary completion.",
-      completionAssessment: { overallStatus },
-      changedFiles: [],
-      attemptedChanges: [],
-      blockedChanges: []
-    });
-
-    const summary = harness.container.children[0].children[0];
-    const status = findByClass(summary, "ai-companion-task-status");
-    assert.match(status.className, new RegExp(expectedClass));
-    assert.equal(status.children[1].textContent, expectedLabel);
-  }
-});
-
-test("AI Companion records a dispatched create-document failure as an attempted change", () => {
-  const activityRun = createActivityRun("C:/project", {});
-  const args = { path: "help/developer/a.md" };
-  const started = activityRun.createStartedActivity("failed-create", "create_document_tab", args, "");
-  activityRun.createFailedActivity(started, args, "Bridge failed.");
-
-  const event = activityRun.createSummary("");
-  assert.equal(event.attemptedChanges.length, 1);
-  assert.equal(event.attemptedChanges[0].path, "help/developer/a.md");
-  assert.deepEqual(event.blockedChanges, []);
 });
 
 test("AI Companion activity copy timestamp uses latest completed activity and ignores external rows", () => {

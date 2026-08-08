@@ -48,12 +48,12 @@ test("AI Companion previous chat dropdown uses date-nested saved non-empty chat 
 });
 
 test("AI Companion previous chat dropdown derives compact display names", () => {
-  assert.match(panelSource, /function getChatDisplayName\(chat\)/);
+  assert.match(panelSource, /function getChatDisplayName\(chat, fallbackMode = "chat"\)/);
   assert.match(panelSource, /function stripChatDisplayPrefix\(text\)/);
   assert.match(panelSource, /replace\(\/\^This Chat\\s\*\[-:\]\\s\*\/i, ""\)/);
   assert.match(panelSource, /title && title !== "Chat"/);
   assert.match(panelSource, /const taskTitle = task\?\.title \|\| task\?\.prompt/);
-  assert.match(panelSource, /return `Chat \$\{date\.getFullYear\(\)\}-\$\{pad\(date\.getMonth\(\) \+ 1\)\}-\$\{pad\(date\.getDate\(\)\)\} \$\{pad\(date\.getHours\(\)\)\}:\$\{pad\(date\.getMinutes\(\)\)\}`/);
+  assert.match(panelSource, /return `\$\{chatLabel\} \$\{date\.getFullYear\(\)\}-/);
   assert.match(panelSource, /singleLine\.length > 48/);
   assert.match(panelSource, /function formatChatUpdatedTooltip\(chat\)/);
   assert.match(panelSource, /Last updated:/);
@@ -81,7 +81,7 @@ test("AI Companion previous chat dropdown exposes per-chat actions", () => {
   assert.match(panelSource, /createActionItem\("Delete Chat", deleteSavedChat, "danger"\)/);
   assert.match(panelSource, /createActionItem\("Show Chat Folder", showSavedChatFolder\)/);
   assert.match(panelSource, /function closeChatActionMenu\(\)/);
-  assert.match(panelSource, /if \(!event\.target\?\.closest\?\.\("\.ai-companion-chat-actions"\)\) closeChatActionMenu\(\)/);
+  assert.match(panelSource, /if \(!event\.target\?\.closest\?\.\("\.ai-companion-chat-actions, \.ai-companion-chat-action-menu, \.ai-companion-chat-action-toggle"\)\) closeChatActionMenu\(\)/);
 });
 
 test("AI Companion chat actions rename, delete, and reveal saved chat storage", () => {
@@ -104,15 +104,13 @@ test("AI Companion builds same-chat conversation history for new requests", () =
   assert.match(panelSource, /record\?\.status === "interrupted" \|\| record\?\.status === "running"/);
   assert.match(panelSource, /getVisibleAgentTaskRecord\(item\.id\) \|\| await readAgentTaskRecord\(item\)/);
   assert.match(panelSource, /event\?\.type === "chat-response" && event\.isError !== true/);
-  assert.match(panelSource, /event\?\.type === "agent-summary"/);
   assert.match(panelSource, /event\.finalResponse \|\| event\.outcome/);
   assert.match(panelSource, /const conversationHistory = await buildConversationHistory\(existingEntry\)/);
   assert.match(panelSource, /const requestPayload = \{/);
   assert.match(panelSource, /workspaceRoot: deps\.getWorkspaceRoot\(\)/);
   assert.match(panelSource, /conversationHistory,/);
-  assert.match(panelSource, /savedIntentContract: savedIntentState\?\.contract \|\| null/);
-  assert.match(panelSource, /priorIntentContract: priorIntentState\?\.contract \|\| null/);
-  assert.match(panelSource, /executionKind === "resume" && Number\.isInteger\(resumedTurnIndex\)/);
+  assert.match(panelSource, /if \(executionKind === "resume" && overrides\.resumeRun === true\)/);
+  assert.match(panelSource, /resumeRun: overrides\.resumeRun === true/);
   assert.match(panelSource, /attachments: normalizeAttachmentReferences\(attachments\)/);
 });
 
@@ -125,25 +123,13 @@ test("AI Companion persists task-level changed file summaries", () => {
   assert.ok(panelSource.includes('event?.type === "agent-summary"'));
 });
 
-test("AI Companion persists completion evidence and checkpoint summary in task schema v5", () => {
-  assert.match(panelSource, /version: Math\.max\(5, Number\(savedRecord\.version\) \|\| 1\)/);
-  assert.match(panelSource, /version: 5/);
-  assert.ok(panelSource.includes('savedEvent.type === "completion-assessment"'));
-  assert.ok(panelSource.includes("activeAgentEntry.record.completionAssessment = savedEvent.assessment || null"));
-  assert.ok(panelSource.includes("activeAgentEntry.record.evidenceLedger = Array.isArray(savedEvent.evidenceLedger) ? savedEvent.evidenceLedger : []"));
-  assert.ok(panelSource.includes("completionAssessment: null"));
-  assert.ok(panelSource.includes("evidenceLedger: []"));
-  assert.ok(panelSource.includes("checkpointSummary: null"));
-  assert.ok(panelSource.includes("function recordAgentCheckpoint(event)"));
-});
-test("AI Companion persists M4 experiment assignment, feedback, and evaluation data", () => {
-  assert.match(panelSource, /chat\.intentExperiment = intentExperiment\.assignIntentExperiment/);
-  assert.match(panelSource, /getCurrentSettings\(\)\.intentContractsEnabled === true/);
-  assert.match(panelSource, /intentExperiment: source\.intentExperiment/);
-  assert.match(panelSource, /if \(settings\.intentContractsEnabled === true && !chat\.intentExperiment\)/);
-  assert.match(panelSource, /record\.clarificationFeedback/);
-  assert.match(panelSource, /record\.intentEvaluation/);
-  assert.match(panelSource, /createMarkdownViewerIntentEvaluationLog/);
+test("AI Companion persists version-6 autonomous recovery metadata", () => {
+  assert.match(panelSource, /version: 6/);
+  assert.ok(panelSource.includes("recoverySummary: null"));
+  assert.ok(panelSource.includes("recoveryInspection: null"));
+  assert.ok(panelSource.includes("function migrateTaskRecord(savedRecord = {}, legacyStorage = false)"));
+  assert.ok(panelSource.includes("runRecoveryInspect"));
+  assert.ok(panelSource.includes("resumeRun: true"));
 });
 
 test("AI Companion exposes a task-level Changes inspector section", () => {
@@ -152,18 +138,4 @@ test("AI Companion exposes a task-level Changes inspector section", () => {
   assert.ok(panelSource.includes('const taskChangesPanel = panel.querySelector("#ai-companion-workspace-changes")'));
   assert.ok(panelSource.includes("function renderTaskChangesPanel(record = null)"));
   assert.ok(panelSource.includes("openActivityCompare(file.compare)"));
-});
-
-test("AI Companion persists one validated terminal AgentState snapshot outside task events", () => {
-  assert.ok(panelSource.includes("agentStateSnapshot: null"));
-  assert.ok(panelSource.includes("Number(savedRecord.version) >= 4 ? (savedRecord.agentStateSnapshot || null) : null"));
-  assert.ok(panelSource.includes("function validateAgentStateSnapshotForTask(snapshot, record)"));
-  assert.ok(panelSource.includes("[1, 2, 3, 4, 5, 6].includes(snapshot?.schemaVersion)"));
-  assert.ok(panelSource.includes("[1, 2, 3, 4, 5, 6].includes(state.schemaVersion)"));
-  assert.ok(panelSource.includes("snapshot-state-schema-mismatch"));
-  assert.ok(panelSource.includes("function recordAgentStateSnapshot(event)"));
-  assert.ok(panelSource.includes("activeAgentEntry.record.agentStateSnapshot = snapshot"));
-  assert.ok(panelSource.includes("snapshot?.terminalEventType !== `run_${status}`"));
-  assert.ok(panelSource.includes("Number(snapshot?.executionGeneration) !== Number(record?.executionGeneration)"));
-  assert.ok(panelSource.includes('event.type === "agent-state-snapshot"'));
 });

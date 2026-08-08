@@ -18,7 +18,7 @@ function requireAiCompanionModule(relativePath) {
 
 }
 
-const { normalizeAiCompanionSettings, testConnection } = requireAiCompanionModule("core/agent-runtime");
+const { normalizeAiCompanionSettings, testConnection } = requireAiCompanionModule("orchestration/shared/runtime-support");
 const { createProviderDebugEmitter } = requireAiCompanionModule("core/provider-debug");
 const { inspectServerCertificate } = requireAiCompanionModule("core/tls-certificate");
 const companionOrchestration = requireAiCompanionModule("orchestration");
@@ -31,13 +31,12 @@ const { ApprovalGrantStore } = requireAiCompanionModule("core/approval-grant-sto
 const approvalPolicy = requireAiCompanionModule("core/agent-approval-policy");
 const approvalCapabilities = requireAiCompanionModule("core/approval-capability-registry");
 const extensionService = requireAiCompanionModule("orchestration/autonomous/extensions/extension-service");
+const { inspectRunRecovery } = requireAiCompanionModule("orchestration/autonomous/recovery/recovery-inspector");
 const activeRequests = new Map();
 const pendingApprovals = new Map();
 const pendingAppActions = new Map();
-const pendingClarifications = new Map();
 let nextApprovalId = 1;
 let nextAppActionId = 1;
-let nextClarificationId = 1;
 
 function validatePersistentGrantCapabilities(rules, effectivePolicy) {
   const knownCapabilities = new Set(["workspace.file.write", ...Object.values(approvalCapabilities.CAPABILITIES).map((entry) => entry.id)]);
@@ -94,66 +93,6 @@ function rejectApprovalsForRequest(requestId) {
     pendingApprovals.delete(approvalId);
     approval.reject(new Error("AI Companion request cancelled."));
   }
-}
-
-/**
- * Reject any clarification questions still awaiting an answer for a request. Called on
- * cancel and on request completion so a dead clarification promise never lingers.
- * @param {string} requestId The originating request id.
- */
-function rejectClarificationsForRequest(requestId) {
-  for (const [clarificationId, clarification] of pendingClarifications) {
-    if (clarification.requestId !== requestId) continue;
-    pendingClarifications.delete(clarificationId);
-    clarification.signal?.removeEventListener?.("abort", clarification.abort);
-    clarification.reject(new Error("AI Companion request cancelled."));
-  }
-}
-
-/**
- * Ask the user one clarification question, returning a promise that resolves with the
- * answer when the browser posts a matching clarification response.
- * @param {string} requestId The originating request id.
- * @param {AbortSignal} signal Cancellation signal for the request.
- * @param {object} details Question payload { ambiguityId, question, reason, answerType, choices }.
- * @returns {Promise<string>} The user's answer text.
- */
-function requestClarification(requestId, signal, details = {}) {
-  if (signal?.aborted) return Promise.reject(new Error("AI Companion request cancelled."));
-  const clarificationId = `clarification-${requestId}-${nextClarificationId++}`;
-  send({ id: requestId, type: "clarification", clarificationId, ...details });
-  return new Promise((resolve, reject) => {
-    const abort = () => {
-      pendingClarifications.delete(clarificationId);
-      reject(new Error("AI Companion request cancelled."));
-    };
-    pendingClarifications.set(clarificationId, { requestId, resolve, reject, abort, signal });
-    signal?.addEventListener?.("abort", abort, { once: true });
-  });
-}
-
-/**
- * Resolve a pending clarification with the answer posted by the browser and echo a
- * clarification-resolved event so the panel can render the answered state.
- * @param {object} message The browser response { clarificationId, answer, id }.
- */
-function handleClarification(message) {
-  const clarificationId = String(message.clarificationId || "");
-  const clarification = pendingClarifications.get(clarificationId);
-  if (!clarification) {
-    if (message.id) send({ id: String(message.id), type: "done", action: "clarification", result: { accepted: false, clarificationId } });
-    return;
-  }
-  const answer = String(message.answer || "").trim();
-  if (!answer) {
-    if (message.id) send({ id: String(message.id), type: "done", action: "clarification", result: { accepted: false, clarificationId, error: "A clarification answer is required." } });
-    return;
-  }
-  pendingClarifications.delete(clarificationId);
-  clarification.signal?.removeEventListener?.("abort", clarification.abort);
-  send({ id: clarification.requestId, type: "clarification-resolved", clarificationId, answer });
-  clarification.resolve(answer);
-  if (message.id) send({ id: String(message.id), type: "done", action: "clarification", result: { accepted: true, clarificationId } });
 }
 
 function rejectAppActionsForRequest(requestId) {
@@ -270,7 +209,6 @@ function handleCancel(message) {
   const controller = activeRequests.get(targetId);
   if (controller) controller.abort();
   rejectApprovalsForRequest(targetId);
-  rejectClarificationsForRequest(targetId);
   rejectAppActionsForRequest(targetId);
   if (message.id) send({ id: String(message.id), type: "done", action: "cancel", result: { cancelled: Boolean(controller), targetId } });
 }
@@ -278,10 +216,6 @@ function handleCancel(message) {
 async function handleRequest(session, message) {
   if (message.action === "approval") {
     await handleApproval(message);
-    return;
-  }
-  if (message.action === "clarification") {
-    handleClarification(message);
     return;
   }
   if (message.action === "appActionResult") {
@@ -319,7 +253,6 @@ async function handleRequest(session, message) {
       securityContext,
       signal: controller.signal,
       requestApproval: (details) => requestApproval(id, controller.signal, details, { profileRoot: requestProfileRoot, workspaceRoot: requestWorkspaceRoot, effectiveSecurityPolicy: securityContext.policy, auditLogger: securityContext.auditLogger }),
-      requestClarification: (details) => requestClarification(id, controller.signal, details),
       requestAppAction: (details) => requestAppAction(id, controller.signal, details)
     };
     if (message.action === "testConnection") {
@@ -334,6 +267,8 @@ async function handleRequest(session, message) {
       result = await companionOrchestration.run(request, {}, emit);
     } else if (message.action === "plan") {
       result = await companionOrchestration.run(request, {}, emit);
+    } else if (message.action === "runRecoveryInspect") {
+      result = await inspectRunRecovery(request);
     } else if (message.action === "plansList") {
       result = await planRepositoryTools.planList(request.workspaceRoot, message, { signal: controller.signal });
     } else if (message.action === "planRead") {
@@ -419,7 +354,6 @@ async function handleRequest(session, message) {
   } finally {
     activeRequests.delete(id);
     rejectApprovalsForRequest(id);
-    rejectClarificationsForRequest(id);
     rejectAppActionsForRequest(id);
   }
 }

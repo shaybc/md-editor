@@ -45,7 +45,7 @@ test("parent completion waits for a background worker and receives its summary",
     return { content: "Final after worker evidence.", toolCalls: [] };
   } };
   const events = [];
-  const result = await new AutonomousOrchestrator().run({ action: "agent", prompt: "large task", workspaceRoot: process.cwd(), profileRoot: "", settings: { enabled: true, agentEnabled: true, agentLoopArchitecture: "autonomous", agentMaxResponseTokens: 0 }, securityContext: { policy: { shell: { mode: "deny-and-audit" } } } }, { provider }, (event) => events.push(event));
+  const result = await new AutonomousOrchestrator().run({ action: "agent", prompt: "large task", workspaceRoot: process.cwd(), profileRoot: "", settings: { enabled: true, agentEnabled: true, agentMaxResponseTokens: 0 }, securityContext: { policy: { shell: { mode: "deny-and-audit" } } } }, { provider }, (event) => events.push(event));
   assert.equal(result.content, "Final after worker evidence.");
   assert.equal(events.some((event) => event.type === "worker-completed"), true);
   assert.equal(events.filter((event) => event.type === "assistant-final").length, 1);

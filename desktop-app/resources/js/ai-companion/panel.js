@@ -85,15 +85,6 @@
       onOpenTabError: () => notifyAiCompanionError("Open failed"),
       openMarkdownInNewTab
     }) || null;
-    const interruptedTaskResume = window.createMarkdownViewerInterruptedTaskResume?.() || null;
-    const intentContractRenderer = window.createMarkdownViewerIntentContractRenderer?.() || null;
-    const intentExperiment = window.MarkdownViewerIntentExperiment;
-    const intentEvaluationLog = window.createMarkdownViewerIntentEvaluationLog?.({
-      Neutralino: deps.Neutralino,
-      getProfileDataDirPath: deps.getProfileDataDirPath,
-      joinPath: deps.joinPath,
-      ensureDirectory: ensureProfileDirectory
-    }) || null;
     const rateLimitWaitCountdown = window.createMarkdownViewerAiRateLimitWaitCountdown?.() || null;
     const AGENT_TASK_HISTORY_LIMIT = 20;
     const AGENT_TASKS_STORAGE_KEY = "ai-companion-agent-tasks";
@@ -102,7 +93,7 @@
     const CHAT_HISTORY_SELECT_LIMIT = 25;
     const WORKSPACE_TOOLS_PREVIEW_LIMIT = 6;
     const WORKSPACE_ID_COPY_FEEDBACK_MS = 1200;
-    const durableResumeTaskIds = new Set();
+    const resumingRunTaskIds = new Set();
     const CONVERSATION_HISTORY_TURN_LIMIT = 12;
     const CONVERSATION_HISTORY_MESSAGE_MAX_CHARS = 4000;
     const APPROVAL_PILL_MAX_CHARS = 18;
@@ -396,11 +387,10 @@
       if (activeRunMode === "plan" && !isError) {
         activeAgentEntry.record.mode = "plan";
         const repositoryPlan = activeAgentEntry.pendingPlanMetadata || (activeAgentEntry.record.plan?.path ? activeAgentEntry.record.plan : null);
-        const requiresRepositoryPlan = activeAgentEntry.record.agentLoopArchitecture === "autonomous";
-        if (repositoryPlan?.path || !requiresRepositoryPlan) activeAgentEntry.record.plan = createPlanMetadata(text, activeAgentEntry.record.plan, "planned", repositoryPlan);
+        if (repositoryPlan?.path) activeAgentEntry.record.plan = createPlanMetadata(text, activeAgentEntry.record.plan, "planned", repositoryPlan);
         else delete activeAgentEntry.record.plan;
         delete activeAgentEntry.pendingPlanMetadata;
-        activeAgentEntry.record.status = repositoryPlan?.path || !requiresRepositoryPlan ? "planned" : "error";
+        activeAgentEntry.record.status = repositoryPlan?.path ? "planned" : "error";
         attachPromptActions(activeAgentEntry);
         attachPlanResponseActions(activeAgentEntry, streamingChatResponse);
       } else {
@@ -2850,10 +2840,7 @@
         createdAt,
         updatedAt: createdAt,
         workspaceRoot: deps.getWorkspaceRoot?.() || "",
-        title: "Chat",
-        intentExperiment: getCurrentSettings().intentContractsEnabled === true
-          ? intentExperiment.assignIntentExperiment(id, window.__MD_EDITOR_INTENT_EXPERIMENT_VARIANTS || intentExperiment.ALL_ON)
-          : null
+        title: "Chat"
       };
       return activeAgentChat;
     }
@@ -4167,20 +4154,19 @@
       appendExecutePlanButton(actions, entry);
     }
 
-    function canResumeDurableAgentTask(record = {}) {
-      return record.mode === "agent"
+    function canResumeRun(record = {}) {
+      return ["chat", "plan", "agent"].includes(normalizeCompanionMode(record.mode))
         && record.status === "interrupted"
-        && ["recoverable", "terminal"].includes(record.checkpointSummary?.checkpointKind)
-        && getCurrentSettings().agentDurableRecoveryEnabled === true;
+        && record.recoveryInspection?.canResume === true;
     }
 
     function appendDurableResumeButton(actions, entry) {
-      if (!actions || !canResumeDurableAgentTask(entry?.record) || actions.querySelector?.(".ai-companion-box-resume-task")) return;
+      if (!actions || !canResumeRun(entry?.record) || actions.querySelector?.(".ai-companion-box-resume-task")) return;
       const button = document.createElement("button");
       button.type = "button";
       button.className = "ai-companion-box-copy ai-companion-box-resume-task";
-      button.title = `Resume from ${entry.record.checkpointSummary.phase || "the last durable checkpoint"}`;
-      button.setAttribute("aria-label", "Resume task from durable checkpoint");
+      button.title = "Resume from the latest safe runtime boundary";
+      button.setAttribute("aria-label", "Resume task");
       const icon = document.createElement("i");
       icon.className = "bi bi-arrow-clockwise";
       icon.setAttribute("aria-hidden", "true");
@@ -4189,19 +4175,18 @@
         event.preventDefault?.();
         event.stopPropagation?.();
         const taskId = String(entry.record?.id || "");
-        if (isAgentRunning() || !taskId || durableResumeTaskIds.has(taskId)) return;
-        durableResumeTaskIds.add(taskId);
+        if (isAgentRunning() || !taskId || resumingRunTaskIds.has(taskId)) return;
+        resumingRunTaskIds.add(taskId);
         button.disabled = true;
         try {
-          const attachments = await loadExistingWorkspaceAttachmentPayloads(entry.record.attachments || []);
           await runCompanionPrompt({
-            prompt: interruptedTaskResume?.recoverRootPrompt?.(entry.record) || entry.record.rootPrompt || entry.record.prompt || "",
-            mode: "agent", entry, attachments, persistedAttachments: entry.record.attachments || [],
+            prompt: entry.record.rootPrompt || entry.record.prompt || "",
+            mode: normalizeCompanionMode(entry.record.mode), entry, persistedAttachments: entry.record.attachments || [],
             executionKind: "resume", executionGeneration: entry.record.executionGeneration,
-            durableResume: true, savedIntentState: getTaskIntentState(entry.record)
+            resumeRun: true
           });
         } finally {
-          durableResumeTaskIds.delete(taskId);
+          resumingRunTaskIds.delete(taskId);
           button.disabled = false;
         }
       });
@@ -4416,12 +4401,8 @@
         status: "running",
         events: [],
         changes: null,
-        completionAssessment: null,
-        evidenceLedger: [],
-        intentEvaluation: null,
-        agentStateSnapshot: null,
-        checkpointSummary: null,
-        resume: null,
+        recoverySummary: null,
+        recoveryInspection: null,
         plan: null,
         executionGeneration,
         lastExecutionKind: executionKind,
@@ -4455,15 +4436,35 @@
       }
       await saveAgentEntry(entry);
     }
+    function migrateTaskRecord(savedRecord = {}, legacyStorage = false) {
+      const retained = { ...savedRecord };
+      [
+        ["agent", "LoopArchitecture"], ["agent", "StateSnapshot"], ["checkpoint", "Summary"],
+        ["completion", "Assessment"], ["evidence", "Ledger"], ["intent", "Evaluation"],
+        ["intent", "Contract"], ["intent", "ContractMeta"], ["clarification", "Feedback"],
+        ["resume"]
+      ].forEach((parts) => delete retained[parts.join("")]);
+      const historical = legacyStorage || Number(savedRecord.version) < 6;
+      const wasInterrupted = ["running", "interrupted"].includes(savedRecord.status);
+      return {
+        ...retained,
+        version: 6,
+        status: historical && wasInterrupted ? "historical" : savedRecord.status,
+        migrationNotice: historical && wasInterrupted
+          ? "This task was created by the retired runtime and is available as read-only history."
+          : retained.migrationNotice
+      };
+    }
+
     function createAgentTaskEntry(prompt, savedRecord = null, attachments = []) {
       const createdAt = Date.now();
       const sequence = savedRecord?.sequence || getNextAgentTaskSequence();
       const id = savedRecord?.id || createTaskId(sequence, createdAt);
       const chat = savedRecord ? activeAgentChat : ensureActiveAgentChat();
-      const record = savedRecord ? {
-        ...savedRecord,
-        version: Math.max(5, Number(savedRecord.version) || 1),
-        rootPrompt: savedRecord.rootPrompt || interruptedTaskResume?.recoverRootPrompt?.(savedRecord) || savedRecord.prompt || "",
+      const migratedRecord = savedRecord ? migrateTaskRecord(savedRecord, savedRecord.storage === "legacy") : null;
+      const record = migratedRecord ? {
+        ...migratedRecord,
+        rootPrompt: migratedRecord.rootPrompt || migratedRecord.prompt || "",
         chatId: savedRecord.chatId || chat?.id || "",
         id,
         fileName: savedRecord.fileName || `${createTaskId(sequence, savedRecord.createdAt || createdAt)}.json`,
@@ -4472,11 +4473,9 @@
         updatedAt: savedRecord.updatedAt || savedRecord.createdAt || createdAt,
         attachments: normalizeAttachmentReferences(savedRecord.attachments),
         executionGeneration: Math.max(1, Number(savedRecord.executionGeneration) || 1),
-        runId: String(savedRecord.runId || id),
-        agentStateSnapshot: Number(savedRecord.version) >= 4 ? (savedRecord.agentStateSnapshot || null) : null,
-        checkpointSummary: Number(savedRecord.version) >= 5 ? (savedRecord.checkpointSummary || null) : null
+        runId: String(savedRecord.runId || id)
       } : {
-        version: 5,
+        version: 6,
         chatId: chat.id,
         id,
         runId: id,
@@ -4493,8 +4492,8 @@
         events: [],
         mode: normalizeCompanionMode(activeRunMode || activeTab),
         executionGeneration: 1,
-        agentStateSnapshot: null,
-        checkpointSummary: null,
+        recoverySummary: null,
+        recoveryInspection: null,
         lastExecutionKind: "new"
       };
       const row = document.createElement("section");
@@ -4545,65 +4544,6 @@
       await saveAgentEntry(entry);
     }
 
-    function validateAgentStateSnapshotForTask(snapshot, record) {
-      const errors = [];
-      const state = snapshot?.state;
-      const status = state?.lifecycle?.status;
-      if (![1, 2, 3, 4, 5, 6].includes(snapshot?.schemaVersion) || snapshot?.snapshotKind !== "terminal") errors.push("invalid-snapshot-envelope");
-      if (!state || ![1, 2, 3, 4, 5, 6].includes(state.schemaVersion)) errors.push("invalid-agent-state");
-      if (snapshot?.schemaVersion !== state?.schemaVersion) errors.push("snapshot-state-schema-mismatch");
-      if (!["completed", "failed", "cancelled"].includes(status)) errors.push("run-not-terminal");
-      if ((state?.activeActions || []).length) errors.push("active-actions-remain");
-      if ((state?.pendingInteractions || []).length) errors.push("pending-interactions-remain");
-      if (state?.terminalReason == null) errors.push("missing-terminal-reason");
-      if (!(Number(state?.stateVersion) > 0)) errors.push("invalid-state-version");
-      if (snapshot?.runId !== state?.run?.runId) errors.push("run-id-mismatch");
-      if (snapshot?.stateVersion !== state?.stateVersion) errors.push("state-version-mismatch");
-      if (!Number.isInteger(snapshot?.lastSequence) || snapshot.lastSequence !== state?.lastAcceptedSequence) errors.push("sequence-mismatch");
-      if (!snapshot?.capturedAt || Number.isNaN(Date.parse(snapshot.capturedAt))) errors.push("invalid-captured-at");
-      if (snapshot?.terminalEventType !== `run_${status}`) errors.push("terminal-event-mismatch");
-      if (Number(snapshot?.executionGeneration) !== Number(state?.run?.executionGeneration)) errors.push("execution-generation-mismatch");
-      if (Number(snapshot?.executionGeneration) !== Number(record?.executionGeneration)) errors.push("stale-execution-generation");
-      return errors;
-    }
-
-    function recordAgentStateSnapshot(event) {
-      if (!activeAgentEntry) return null;
-      const snapshot = cloneEvent(event?.snapshot);
-      const errors = validateAgentStateSnapshotForTask(snapshot, activeAgentEntry.record);
-      if (errors.length) {
-        if (snapshot?.diagnostics) snapshot.diagnostics.shadowErrorCount = (Number(snapshot.diagnostics.shadowErrorCount) || 0) + 1;
-        deps.appDebugLog?.("warn", "[ai-companion] rejected invalid AgentState snapshot", { errors, diagnostics: snapshot?.diagnostics || null });
-        return null;
-      }
-      activeAgentEntry.record.agentStateSnapshot = snapshot;
-      activeAgentEntry.record.updatedAt = Date.parse(snapshot.capturedAt) || Date.now();
-      activeAgentEntry.isDirty = true;
-      scheduleAgentEntrySave(activeAgentEntry);
-      return snapshot;
-    }
-
-    function recordAgentCheckpoint(event) {
-      if (!activeAgentEntry) return null;
-      const summary = {
-        checkpointId: String(event.checkpointId || ""),
-        checkpointKind: event.checkpointKind === "terminal" ? "terminal" : "recoverable",
-        phase: String(event.phase || ""),
-        checkpointRevision: Math.max(0, Number(event.checkpointRevision) || 0),
-        stateVersion: Math.max(0, Number(event.stateVersion) || 0),
-        capturedAt: Date.now(),
-        artifactCount: Math.max(0, Number(event.artifactCount) || 0),
-        checkpointBytes: Math.max(0, Number(event.checkpointBytes) || 0),
-        durationMs: Math.max(0, Number(event.durationMs) || 0)
-      };
-      activeAgentEntry.record.version = Math.max(5, Number(activeAgentEntry.record.version) || 1);
-      activeAgentEntry.record.checkpointSummary = summary;
-      activeAgentEntry.record.updatedAt = summary.capturedAt;
-      activeAgentEntry.isDirty = true;
-      void saveAgentEntryImmediately(activeAgentEntry);
-      return summary;
-    }
-
     function recordAgentEvent(event) {
       if (!activeAgentEntry) return null;
       const savedEvent = cloneEvent(event);
@@ -4616,20 +4556,13 @@
         savedEvent.attemptedChanges = changes.attempted;
         savedEvent.blockedChanges = changes.blocked;
         activeAgentEntry.record.changes = changes;
-        activeAgentEntry.record.completionAssessment = savedEvent.completionAssessment || null;
-        activeAgentEntry.record.evidenceLedger = Array.isArray(savedEvent.evidenceLedger) ? savedEvent.evidenceLedger : [];
       }
-      if (savedEvent.type === "completion-assessment") {
-        activeAgentEntry.record.completionAssessment = savedEvent.assessment || null;
-        activeAgentEntry.record.evidenceLedger = Array.isArray(savedEvent.evidenceLedger) ? savedEvent.evidenceLedger : [];
-      }
-      if (savedEvent.type === "intent-evaluation") activeAgentEntry.record.intentEvaluation = savedEvent.record || null;
       activeAgentEntry.record.events.push(savedEvent);
       activeAgentEntry.record.updatedAt = completedAt;
       if (event.type === "agent-summary") {
         activeAgentEntry.record.status = event.isError === true
           ? "error"
-          : (savedEvent.completionAssessment?.overallStatus === "incomplete" ? "incomplete" : "completed");
+          : "completed";
         renderTaskChangesPanel(activeAgentEntry.record);
       }
       activeAgentEntry.isDirty = true;
@@ -5077,218 +5010,6 @@
       trigger.addEventListener("blur", hideTooltip);
     }
 
-    /**
-     * Build the read-only "Intent and acceptance criteria" card for an intent-contract
-     * event. Defensive against missing fields so a fallback contract still renders.
-     * @param {object} event Intent-contract event { contract, variant, source }.
-     * @returns {HTMLElement} The card element.
-     */
-    function createIntentContractCard(event = {}) {
-      if (intentContractRenderer?.createIntentContractCard) return intentContractRenderer.createIntentContractCard(event);
-      const contract = event.contract && typeof event.contract === "object" ? event.contract : {};
-      const criteria = Array.isArray(contract.acceptanceCriteria) ? contract.acceptanceCriteria : [];
-      const isFallback = event.variant === "fallback" || event.source === "raw-prompt-fallback";
-      const row = document.createElement("div");
-      row.className = "ai-companion-intent-card";
-      if (isFallback) row.classList.add("fallback");
-
-      const header = document.createElement("div");
-      header.className = "ai-companion-intent-header";
-      const marker = document.createElement("i");
-      marker.className = "bi bi-bullseye ai-companion-intent-marker";
-      marker.setAttribute("aria-hidden", "true");
-      const title = document.createElement("div");
-      title.className = "ai-companion-intent-title";
-      title.textContent = `Intent: ${String(contract.taskType || "answer")} - ${criteria.length} acceptance ${criteria.length === 1 ? "criterion" : "criteria"}`;
-      header.appendChild(marker);
-      header.appendChild(title);
-      row.appendChild(header);
-
-      const goalText = contract.goal && contract.goal.value ? String(contract.goal.value) : "";
-      if (goalText) {
-        const goal = document.createElement("div");
-        goal.className = "ai-companion-intent-goal";
-        goal.textContent = goalText;
-        row.appendChild(goal);
-      }
-
-      if (isFallback) {
-        const warning = document.createElement("div");
-        warning.className = "ai-companion-intent-warning";
-        warning.textContent = "Structured intent extraction was unavailable; using the raw request.";
-        row.appendChild(warning);
-      }
-
-      if (criteria.length) {
-        const details = document.createElement("details");
-        details.className = "ai-companion-intent-criteria";
-        const summary = document.createElement("summary");
-        summary.textContent = "Acceptance criteria";
-        details.appendChild(summary);
-        const list = document.createElement("ul");
-        for (const criterion of criteria) {
-          const item = document.createElement("li");
-          const id = criterion && criterion.id ? `${criterion.id}: ` : "";
-          item.textContent = `${id}${criterion && criterion.description ? String(criterion.description) : ""}`;
-          list.appendChild(item);
-        }
-        details.appendChild(list);
-        row.appendChild(details);
-      }
-      return row;
-    }
-
-    /**
-     * Build the "closed-loop steering" card shown when an incomplete run is steered for another
-     * bounded pass. Makes the retry and its reason visible in the timeline (revision N of M,
-     * arbiter class, and which criteria are still unmet).
-     * @param {object} event Steering event { reason, action, revision, maxRevisions, unmet }.
-     * @returns {HTMLElement} The card element.
-     */
-    function createSteeringCard(event = {}) {
-      const reasonLabels = {
-        unsatisfied: "retrying the unmet work",
-        ambiguity: "clarifying an ambiguity",
-        "spec-gap": "confirming an inferred requirement",
-        blocked: "blocked",
-        "budget-exhausted": "revision budget reached"
-      };
-      const row = document.createElement("div");
-      row.className = "ai-companion-intent-card ai-companion-steering-card";
-
-      const header = document.createElement("div");
-      header.className = "ai-companion-intent-header";
-      const marker = document.createElement("i");
-      marker.className = "bi bi-arrow-repeat ai-companion-intent-marker";
-      marker.setAttribute("aria-hidden", "true");
-      const title = document.createElement("div");
-      title.className = "ai-companion-intent-title";
-      const rev = Number(event.revision) || 0;
-      const max = Number(event.maxRevisions) || 0;
-      title.textContent = `Steering revision ${rev}${max ? ` of ${max}` : ""} - ${reasonLabels[event.reason] || String(event.reason || "")}`;
-      header.appendChild(marker);
-      header.appendChild(title);
-      row.appendChild(header);
-
-      const unmet = Array.isArray(event.unmet) ? event.unmet : [];
-      if (unmet.length) {
-        const details = document.createElement("details");
-        details.className = "ai-companion-intent-criteria";
-        const summary = document.createElement("summary");
-        summary.textContent = "Still unmet - steering toward";
-        details.appendChild(summary);
-        const list = document.createElement("ul");
-        for (const criterion of unmet) {
-          const item = document.createElement("li");
-          const id = criterion && criterion.id ? `${criterion.id}: ` : "";
-          item.textContent = `${id}${criterion && criterion.statement ? String(criterion.statement) : ""}`;
-          list.appendChild(item);
-        }
-        details.appendChild(list);
-        row.appendChild(details);
-      }
-      return row;
-    }
-
-    /**
-     * Build a clarification question card. Interactive cards submit the answer through
-     * the bridge; restored cards render read-only (the request died with the process).
-     * @param {object} event Clarification event { clarificationId, question, reason, choices }.
-     * @param {object} options { interactive } - default interactive.
-     * @returns {HTMLElement} The card element.
-     */
-    function createClarificationCard(event = {}, options = {}) {
-      if (intentContractRenderer?.createClarificationCard) {
-        return intentContractRenderer.createClarificationCard(event, {
-          ...options,
-          onSubmit: (clarificationId, answer) => deps.bridge?.respondClarification?.(clarificationId, answer),
-          onRate: options.onRate || recordClarificationRating,
-          onError: (error) => setStatus?.(`Clarification failed: ${error?.message || String(error)}`)
-        });
-      }
-      const interactive = options.interactive !== false;
-      const row = document.createElement("div");
-      row.className = "ai-companion-clarification pending";
-      if (event.clarificationId) row.dataset.aiCompanionActivityId = String(event.clarificationId);
-
-      const header = document.createElement("div");
-      header.className = "ai-companion-clarification-header";
-      const marker = document.createElement("i");
-      marker.className = "bi bi-question-circle ai-companion-clarification-marker";
-      marker.setAttribute("aria-hidden", "true");
-      const title = document.createElement("div");
-      title.className = "ai-companion-clarification-title";
-      title.textContent = "Clarification needed";
-      header.appendChild(marker);
-      header.appendChild(title);
-      row.appendChild(header);
-
-      const question = document.createElement("div");
-      question.className = "ai-companion-clarification-question";
-      question.textContent = String(event.question || "");
-      row.appendChild(question);
-      if (event.reason) {
-        const reason = document.createElement("div");
-        reason.className = "ai-companion-clarification-reason";
-        reason.textContent = String(event.reason);
-        row.appendChild(reason);
-      }
-
-      const choices = Array.isArray(event.choices) ? event.choices.filter(Boolean) : [];
-      const form = document.createElement("div");
-      form.className = "ai-companion-clarification-form";
-      let getAnswer = () => "";
-      if (choices.length) {
-        const groupName = `clarification-${event.clarificationId || Math.random().toString(36).slice(2)}`;
-        choices.forEach((choice, index) => {
-          const label = document.createElement("label");
-          const input = document.createElement("input");
-          input.type = "radio";
-          input.name = groupName;
-          input.value = String(choice);
-          if (index === 0) input.checked = true;
-          const span = document.createElement("span");
-          span.textContent = String(choice);
-          label.appendChild(input);
-          label.appendChild(span);
-          form.appendChild(label);
-        });
-        getAnswer = () => (form.querySelector("input[type=radio]:checked") || {}).value || "";
-      } else {
-        const input = document.createElement("textarea");
-        input.className = "ai-companion-clarification-input";
-        input.rows = 2;
-        form.appendChild(input);
-        getAnswer = () => String(input.value || "").trim();
-      }
-      row.appendChild(form);
-
-      if (interactive) {
-        const submit = document.createElement("button");
-        submit.type = "button";
-        submit.className = "ai-companion-clarification-submit";
-        submit.textContent = "Send answer";
-        submit.addEventListener("click", async () => {
-          const answer = getAnswer();
-          submit.disabled = true;
-          try {
-            await deps.bridge?.respondClarification?.(event.clarificationId, answer);
-            row.classList.remove("pending");
-            row.classList.add("resolved");
-            const answered = document.createElement("div");
-            answered.className = "ai-companion-clarification-answer";
-            answered.textContent = `Answered: ${answer}`;
-            row.appendChild(answered);
-          } catch (error) {
-            submit.disabled = false;
-            setStatus?.(`Clarification failed: ${error?.message || String(error)}`);
-          }
-        });
-        row.appendChild(submit);
-      }
-      return row;
-    }
-
     function createApprovalCard(event = {}, options = {}) {
       const row = document.createElement("div");
       row.className = "ai-companion-approval pending";
@@ -5488,19 +5209,6 @@
     }
 
     /**
-     * Build the prompt used to resume an interrupted task as a new agent run.
-     * The interrupted task's progress reaches the model via conversation history
-     * (see createConversationHistoryMessages), so the prompt only has to point at it.
-     */
-    function buildResumeTaskRequest(record = {}, event = {}) {
-      return interruptedTaskResume?.buildResumeRequest?.(record, event, deps.getWorkspaceRoot?.() || "") || {
-        prompt: String(record.rootPrompt || record.prompt || "").trim(),
-        resume: { sourceTaskId: String(record.id || ""), rootTaskId: String(record.resume?.rootTaskId || record.id || "") },
-        resumeCheckpoint: { version: 1, workspaceRoot: record.workspaceRoot || deps.getWorkspaceRoot?.() || "", rootPrompt: String(record.rootPrompt || record.prompt || "").trim(), pendingAction: null, reason: "The saved approval must be re-evaluated." }
-      };
-    }
-
-    /**
      * Render a restored approval that was never answered because the app closed.
      * The original approval channel died with the bridge process, so the card
      * keeps review available and offers to resume the task as a new agent run
@@ -5537,13 +5245,12 @@
       resumeButton.title = "Start a new agent run that continues this task from its saved progress";
       resumeButton.addEventListener("click", async () => {
         const taskId = String(entry.record?.id || "");
-        if (isAgentRunning() || !taskId || durableResumeTaskIds.has(taskId)) return;
-        durableResumeTaskIds.add(taskId);
+        if (isAgentRunning() || !taskId || resumingRunTaskIds.has(taskId) || !canResumeRun(entry.record)) return;
+        resumingRunTaskIds.add(taskId);
         resumeButton.disabled = true;
         try {
-        const request = buildResumeTaskRequest(entry.record, event);
-        entry.record.version = Math.max(5, Number(entry.record.version) || 1);
-        entry.record.rootPrompt = request.prompt;
+        const prompt = String(entry.record.rootPrompt || entry.record.prompt || "").trim();
+        entry.record.version = 6;
         entry.record.status = "interrupted";
         entry.record.updatedAt = Date.now();
         entry.isDirty = true;
@@ -5554,19 +5261,16 @@
         if (title) title.textContent = "Approval resumed";
         interruption.textContent = "The task was resumed. Use the new live approval request to approve, reject, or provide instructions.";
         await runCompanionPrompt({
-          prompt: request.prompt,
-          mode: "agent",
-          resume: request.resume,
-          resumeCheckpoint: request.resumeCheckpoint,
+          prompt,
+          mode: normalizeCompanionMode(entry.record.mode),
           executionKind: "resume",
           executionGeneration: Math.max(1, Number(entry.record.executionGeneration) || 1),
-          savedIntentState: getTaskIntentState(entry.record),
-          entry: request.durableResume ? entry : null,
+          entry,
           persistedAttachments: entry.record.attachments || [],
-          durableResume: request.durableResume === true
+          resumeRun: true
         });
         } finally {
-          durableResumeTaskIds.delete(taskId);
+          resumingRunTaskIds.delete(taskId);
         }
       });
       actions.appendChild(resumeButton);
@@ -5584,7 +5288,7 @@
 
     function canResumeSavedApproval(record, events, index) {
       const event = events[index];
-      return isUnansweredApprovalEvent(event) && !hasSavedEventAfter(events, index) && !hasSavedTaskAfter(record);
+      return canResumeRun(record) && isUnansweredApprovalEvent(event) && !hasSavedEventAfter(events, index) && !hasSavedTaskAfter(record);
     }
 
     function resetSyntheticActivityState() {
@@ -5628,29 +5332,6 @@
       }
       if (event.type === "narration") {
         entry.renderer?.appendNarration?.(event);
-        return;
-      }
-      if (event.type === "steering") {
-        entry.renderer?.appendExternalActivity?.(createSteeringCard(event));
-        return;
-      }
-      if (event.type === "intent-contract") {
-        entry.renderer?.appendExternalActivity?.(createIntentContractCard(event));
-        return;
-      }
-      if (event.type === "clarification") {
-        const resolution = (entry.record.events || []).find((candidate) => candidate?.type === "clarification-resolved" && candidate.clarificationId === event.clarificationId);
-        const pending = interruptedTaskResume?.findPendingClarification?.(entry.record);
-        entry.renderer?.appendExternalActivity?.(createClarificationCard(event, {
-          interactive: false,
-          resolvedAnswer: resolution?.answer || "",
-          canResume: entry.record.status === "interrupted" && pending === event,
-          onResume: () => resumeInterruptedClarification(entry, event),
-          onRate: (clarificationId, rating) => recordClarificationRatingForEntry(entry, clarificationId, rating)
-        }));
-        return;
-      }
-      if (event.type === "clarification-resolved") {
         return;
       }
       if (event.type === "chat-response") {
@@ -5699,8 +5380,8 @@
       events.forEach((event, index) => renderSavedAgentEvent(entry, event, { canResumeApproval: canResumeSavedApproval(entry.record, events, index) }));
       // Keep the timeline expanded when an interrupted approval offers a Resume
       // action; collapsing would bury the only way to continue the task.
-      const hasPendingResume = entry.record.status === "interrupted" && (events.some((event, index) => event?.type === "approval" && canResumeSavedApproval(entry.record, events, index))
-        || !!interruptedTaskResume?.findPendingClarification?.(entry.record));
+      const hasPendingResume = entry.record.status === "interrupted"
+        && events.some((event, index) => event?.type === "approval" && canResumeSavedApproval(entry.record, events, index));
       if (hasRestoredActivity && !hasPendingResume) entry.renderer?.collapseTimeline?.();
       if (prepend && entry.element.parentNode === toolLog) toolLog.prepend(entry.element);
       return entry;
@@ -5747,9 +5428,6 @@
         updatedAt: Number(source.updatedAt || createdAt),
         workspaceRoot: String(source.workspaceRoot || deps.getWorkspaceRoot?.() || ""),
         title: String(source.title || "Chat"),
-        intentExperiment: source.intentExperiment
-          ? intentExperiment.assignIntentExperiment(String(source.id || chatId || ""), source.intentExperiment)
-          : null,
         // Cumulative token accounting for the context indicator tooltip; preserved verbatim so
         // an index round-trip doesn't zero the chat's sent/received history.
         ...(source.tokenTotals && typeof source.tokenTotals === "object" ? { tokenTotals: source.tokenTotals } : {}),
@@ -6456,58 +6134,49 @@
       for (const entry of agentEntries) await saveAgentEntry(entry);
     }
 
-    async function discoverAgentCheckpointSummary(taskId) {
-      if (!taskId || !deps.Neutralino?.filesystem?.readFile || getCurrentSettings().agentDurableRecoveryEnabled !== true) return null;
-      const chatDir = await getAgentChatDirPath();
-      if (!chatDir) return null;
-      const recoveryDir = deps.joinPath(chatDir, `${taskId}.recovery`);
-      for (const fileName of ["checkpoint.json", "checkpoint.bak.json"]) {
-        try {
-          const checkpoint = JSON.parse(await deps.Neutralino.filesystem.readFile(deps.joinPath(recoveryDir, fileName)) || "null");
-          if (checkpoint?.checkpointVersion !== 1
-            || checkpoint?.identity?.mode !== "agent"
-            || String(checkpoint?.identity?.taskId || "") !== String(taskId)
-            || !["recoverable", "terminal"].includes(checkpoint?.checkpointKind)) continue;
-          return {
-            checkpointId: String(checkpoint.checkpointId || ""),
-            checkpointKind: checkpoint.checkpointKind,
-            phase: String(checkpoint.phase || ""),
-            checkpointRevision: Math.max(0, Number(checkpoint.cursor?.checkpointRevision) || 0),
-            stateVersion: Math.max(0, Number(checkpoint.cursor?.stateVersion) || 0),
-            capturedAt: Date.parse(checkpoint.capturedAt) || Date.now(),
-            artifactCount: Math.max(0, Number(checkpoint.artifactManifest?.refs?.length) || 0),
-            discovered: true
-          };
-        } catch (_error) {
-          // The Node recovery runtime performs authoritative integrity and identity validation.
-        }
-      }
-      return null;
-    }
-
     async function readAgentTaskRecord(itemOrId) {
       const id = typeof itemOrId === "object" ? itemOrId?.id : itemOrId;
       if (!id) return null;
+      let record = null;
       if (!deps.isNeutralinoRuntime?.() || !deps.Neutralino?.filesystem?.readFile) {
         try {
-          return JSON.parse(localStorage.getItem(`${AGENT_TASKS_STORAGE_KEY}:${id}`) || "null");
+          record = JSON.parse(localStorage.getItem(`${AGENT_TASKS_STORAGE_KEY}:${id}`) || "null");
+        } catch (_error) {
+          return null;
+        }
+      } else {
+        const filePath = itemOrId?.storage === "legacy"
+          ? await getLegacyAgentTaskFilePath(id)
+          : await getAgentTaskFilePath(typeof itemOrId === "object" ? itemOrId : id);
+        if (!filePath) return null;
+        try {
+          record = JSON.parse(await deps.Neutralino.filesystem.readFile(filePath) || "null");
         } catch (_error) {
           return null;
         }
       }
-      const filePath = itemOrId?.storage === "legacy"
-        ? await getLegacyAgentTaskFilePath(id)
-        : await getAgentTaskFilePath(typeof itemOrId === "object" ? itemOrId : id);
-      if (!filePath) return null;
+      if (!record) return null;
+      const originalVersion = Number(record.version) || 1;
+      record = migrateTaskRecord(record, itemOrId?.storage === "legacy");
+      if (originalVersion < 6 || !["running", "interrupted"].includes(record.status)) return record;
       try {
-        const record = JSON.parse(await deps.Neutralino.filesystem.readFile(filePath) || "null");
-        if (record && Number(record.version) >= 5 && !record.checkpointSummary && itemOrId?.storage !== "legacy") {
-          record.checkpointSummary = await discoverAgentCheckpointSummary(id);
-        }
-        return record;
-      } catch (_error) {
-        return null;
+        const mode = normalizeCompanionMode(record.mode);
+        record.recoveryInspection = await deps.bridge.runRecoveryInspect?.({
+          settings: getCurrentSettings(),
+          workspaceRoot: record.workspaceRoot || deps.getWorkspaceRoot?.() || "",
+          action: mode,
+          chatId: record.chatId || "",
+          taskId: record.id || "",
+          runId: record.runId || record.id || ""
+        });
+        if (record.recoveryInspection?.classification === "recoverable") record.status = "interrupted";
+        else if (record.recoveryInspection?.classification === "completed") record.status = "completed";
+        else record.status = "historical";
+      } catch (error) {
+        record.status = "historical";
+        record.recoveryInspection = { classification: "unavailable", canResume: false, notices: [error?.message || String(error)] };
       }
+      return record;
     }
 
     function truncateConversationHistoryContent(value) {
@@ -6549,7 +6218,6 @@
      * and the approval the task was blocked on when the app closed.
      */
     function getRecordProgressSummary(record) {
-      if (interruptedTaskResume?.summarizeProgress) return interruptedTaskResume.summarizeProgress(record);
       const events = Array.isArray(record?.events) ? record.events : [];
       const lines = [];
       for (const event of events) {
@@ -6963,88 +6631,6 @@
       scrollToolLogToEnd();
     }
 
-    /**
-     * Persist and render the intent-contract card in the active run's timeline.
-     * Routing through recordAgentEvent persists it so restored chats replay the card.
-     * @param {object} event Intent-contract event.
-     */
-    function appendIntentContract(event) {
-      const savedEvent = recordAgentEvent(event) || event;
-      const row = createIntentContractCard(savedEvent);
-      if (activeActivityRenderer?.appendExternalActivity) activeActivityRenderer.appendExternalActivity(row);
-      else toolLog.appendChild(row);
-      scrollToolLogToEnd();
-    }
-
-    /**
-     * Persist and render the closed-loop steering card in the active run's timeline, so the
-     * retry and its reason are visible live and on replay.
-     * @param {object} event Steering event.
-     */
-    function appendSteering(event) {
-      const savedEvent = recordAgentEvent(event) || event;
-      const row = createSteeringCard(savedEvent);
-      if (activeActivityRenderer?.appendExternalActivity) activeActivityRenderer.appendExternalActivity(row);
-      else toolLog.appendChild(row);
-      scrollToolLogToEnd();
-    }
-
-    /**
-     * Persist and render an interactive clarification card in the active run's timeline.
-     * @param {object} event Clarification event.
-     */
-    function appendClarification(event) {
-      const savedEvent = recordAgentEvent(event) || event;
-      const row = createClarificationCard(savedEvent, { interactive: true });
-      if (activeActivityRenderer?.appendExternalActivity) activeActivityRenderer.appendExternalActivity(row);
-      else toolLog.appendChild(row);
-      scrollToolLogToEnd();
-    }
-
-    async function recordClarificationRating(clarificationId, rating) {
-      return recordClarificationRatingForEntry(activeAgentEntry, clarificationId, rating);
-    }
-
-    async function recordClarificationRatingForEntry(entry, clarificationId, rating) {
-      if (!entry?.record || !["useful", "not-useful"].includes(rating)) return;
-      const timestamp = Date.now();
-      const events = entry.record.events || [];
-      const clarification = [...events].reverse().find((event) => event?.type === "clarification" && event.clarificationId === clarificationId);
-      if (!clarification) return;
-      clarification.rating = rating;
-      clarification.ratingTimestamp = timestamp;
-      const feedback = { clarificationId, rating, timestamp };
-      const prior = Array.isArray(entry.record.clarificationFeedback) ? entry.record.clarificationFeedback : [];
-      entry.record.clarificationFeedback = [...prior.filter((item) => item.clarificationId !== clarificationId), feedback];
-      entry.isDirty = true;
-      await saveAgentEntryImmediately(entry);
-      await intentEvaluationLog?.append?.({
-        type: "clarification-feedback",
-        chatId: entry.record.chatId || activeAgentChat?.id || "",
-        taskId: entry.record.id || "",
-        taskType: entry.record.intentContract?.taskType || "",
-        ...feedback
-      });
-    }
-
-    function resumeInterruptedClarification(entry, clarificationEvent) {
-      const taskId = String(entry?.record?.id || "");
-      if (!taskId || durableResumeTaskIds.has(taskId) || isAgentRunning()) return;
-      const request = interruptedTaskResume?.buildClarificationResumeRequest?.(entry.record, clarificationEvent, deps.getWorkspaceRoot?.());
-      if (!request?.prompt) return;
-      durableResumeTaskIds.add(taskId);
-      void runCompanionPrompt({
-        prompt: request.prompt,
-        mode: normalizeCompanionMode(entry.record.mode),
-        resume: request.resume,
-        resumeIntentContext: request.resumeIntentContext,
-        entry: request.durableResume ? entry : null,
-        persistedAttachments: entry.record.attachments || [],
-        executionKind: "resume",
-        durableResume: request.durableResume === true
-      }).finally(() => durableResumeTaskIds.delete(taskId));
-    }
-
     function appendApproval(event) {
       let savedEvent = null;
       const row = createApprovalCard(event, {
@@ -7395,18 +6981,6 @@
       await deps.bridge?.respondAppAction?.(actionId, result || {});
     }
     function handleEvent(event) {
-      if (event.type === "agent-checkpoint") {
-        recordAgentCheckpoint(event);
-        return;
-      }
-      if (event.type === "agent-recovery") {
-        recordAgentEvent(event);
-        return;
-      }
-      if (event.type === "agent-state-snapshot") {
-        recordAgentStateSnapshot(event);
-        return;
-      }
       if (event.type === "app-action") {
         void handleAppActionEvent(event);
         return;
@@ -7427,32 +7001,6 @@
       if (event.type === "content-delta" || event.type === "content" || event.type === "done" || event.type === "cancelled" || event.type === "error") hideThinkingIndicator();
       if (event.type === "chat-title") {
         void persistGeneratedChatTitle(event.chatTitle);
-        return;
-      }
-      if (event.type === "intent-contract") {
-        appendIntentContract(event);
-        return;
-      }
-      if (event.type === "steering") {
-        appendSteering(event);
-        return;
-      }
-      if (event.type === "clarification") {
-        hideThinkingIndicator();
-        appendClarification(event);
-        return;
-      }
-      if (event.type === "clarification-resolved") {
-        recordAgentEvent(event);
-        return;
-      }
-      if (event.type === "completion-assessment") {
-        recordAgentEvent(event);
-        return;
-      }
-      if (event.type === "intent-evaluation") {
-        recordAgentEvent(event);
-        void intentEvaluationLog?.append?.(event.record);
         return;
       }
       // Narration is handled before the chat-mode early returns below so both
@@ -7744,16 +7292,9 @@
         return { status: "blocked", error: "AI Companion mode is disabled." };
       }
       const chat = ensureActiveAgentChat();
-      if (settings.intentContractsEnabled === true && !chat.intentExperiment) {
-        chat.intentExperiment = intentExperiment.assignIntentExperiment(chat.id, window.__MD_EDITOR_INTENT_EXPERIMENT_VARIANTS || intentExperiment.ALL_ON);
-      }
-      settings.intentExperiment = intentExperiment.resolveIntentExperiment(chat.intentExperiment, settings.intentContractsEnabled === true, { rejectInvalid: true });
       renderTaskChangesPanel(null);
       activeRunMode = mode;
       const existingEntry = overrides.entry || null;
-      settings.agentLoopArchitecture = existingEntry?.record?.agentLoopArchitecture === "autonomous"
-        ? "autonomous"
-        : (existingEntry?.record?.agentLoopArchitecture === "legacy" ? "legacy" : settings.agentLoopArchitecture);
       const orderedTaskIndex = [...agentTaskIndex].sort(compareAgentTaskIndexItems);
       const indexedTurn = existingEntry ? orderedTaskIndex.findIndex((item) => item.id === existingEntry.record?.id) : -1;
       let requestTurnIndex = existingEntry
@@ -7761,11 +7302,7 @@
         : Math.max(agentTaskIndex.length, agentEntries.length);
       const executionKind = ["new", "edited-rerun", "resume"].includes(overrides.executionKind)
         ? overrides.executionKind
-        : ((overrides.resume || overrides.resumeCheckpoint) ? "resume" : "new");
-      const resumedTurnIndex = Number(overrides.savedIntentState?.meta?.conversationAnchor?.turnIndex);
-      if (executionKind === "resume" && Number.isInteger(resumedTurnIndex) && resumedTurnIndex >= 0) {
-        requestTurnIndex = resumedTurnIndex;
-      }
+        : (overrides.resumeRun === true ? "resume" : "new");
       const requestedExecutionGeneration = Number(overrides.executionGeneration);
       const currentExecutionGeneration = Number.isInteger(requestedExecutionGeneration) && requestedExecutionGeneration > 0
         ? requestedExecutionGeneration
@@ -7773,15 +7310,11 @@
       const executionGeneration = executionKind === "edited-rerun"
         ? currentExecutionGeneration + 1
         : currentExecutionGeneration;
-      const savedIntentState = executionKind === "resume"
-        ? (overrides.savedIntentState || getTaskIntentState(existingEntry?.record))
-        : null;
-      const priorIntentState = await getPriorTaskIntentState(existingEntry);
       let persistedAttachments = Array.isArray(overrides.persistedAttachments)
         ? normalizeAttachmentReferences(overrides.persistedAttachments)
         : (attachments.length ? normalizeAttachmentReferences(attachments) : normalizeAttachmentReferences(existingEntry?.record?.attachments));
       if (existingEntry) {
-        if (executionKind === "resume" && overrides.durableResume === true) {
+        if (executionKind === "resume" && overrides.resumeRun === true) {
           existingEntry.record.status = "running";
           existingEntry.record.lastExecutionKind = "resume";
           existingEntry.isDirty = true;
@@ -7798,13 +7331,6 @@
       activeAgentEntry = existingEntry || createAgentTaskEntry(prompt, null, persistedAttachments);
       activeAgentEntry.record.executionGeneration = executionGeneration;
       activeAgentEntry.record.lastExecutionKind = executionKind;
-      if (overrides.resume) {
-        activeAgentEntry.record.version = 5;
-        activeAgentEntry.record.rootPrompt = prompt;
-        activeAgentEntry.record.resume = { ...overrides.resume };
-        activeAgentEntry.isDirty = true;
-        await saveAgentEntryImmediately(activeAgentEntry);
-      }
       if (attachments.length) {
         persistedAttachments = await persistPastedImageAttachments(activeAgentEntry, attachments, persistedAttachments);
         activeAgentEntry.record.attachments = persistedAttachments;
@@ -7817,7 +7343,6 @@
       }
       activeActivityRenderer = activeAgentEntry.renderer;
       activeAgentEntry.record.mode = mode;
-      activeAgentEntry.record.agentLoopArchitecture = settings.agentLoopArchitecture;
       resetSyntheticActivityState();
       streamingChatResponse = null;
       chatResponseRecorded = false;
@@ -7830,13 +7355,11 @@
         editorReadContext,
         conversationHistory,
         attachments,
-        resumeCheckpoint: overrides.resumeCheckpoint || null,
-        resumeIntentContext: overrides.resumeIntentContext || null,
         chatId: activeAgentChat?.id || "",
         taskId: activeAgentEntry?.record?.id || "",
         runId: activeAgentEntry?.record?.runId || activeAgentEntry?.record?.id || "",
         chatCreatedAt: activeAgentChat?.createdAt || activeAgentEntry?.record?.createdAt || Date.now(),
-        durableResume: mode === "agent" && overrides.durableResume === true,
+        resumeRun: overrides.resumeRun === true,
         modelLimits: (() => {
           const modelName = settings.providerMode === "litellm" && settings.litellmModelAlias
             ? settings.litellmModelAlias
@@ -7846,11 +7369,7 @@
         })(),
         turnIndex: requestTurnIndex,
         executionKind,
-        executionGeneration,
-        savedIntentContract: savedIntentState?.contract || null,
-        savedIntentContractMeta: savedIntentState?.meta || null,
-        priorIntentContract: priorIntentState?.contract || null,
-        priorIntentContractMeta: priorIntentState?.meta || null
+        executionGeneration
       };
       if (mode === "plan") {
         const existingPlanTarget = existingEntry?.record?.plan?.path ? getPlanLocator(existingEntry.record.plan) : null;

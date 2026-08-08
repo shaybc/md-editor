@@ -3114,21 +3114,6 @@ async function startMarkdownViewer() {
       }
     });
   }
-  if (typeof window.registerMarkdownViewerAiCompanionExperimentalSettings === "function") {
-    window.registerMarkdownViewerAiCompanionExperimentalSettings(app, {
-      getSettings: function() { return getAiCompanionSettings(); },
-      persistFlags: function(patch) {
-        const state = loadGlobalState();
-        const current = state && state.aiCompanionSettings && typeof state.aiCompanionSettings === "object" && !Array.isArray(state.aiCompanionSettings)
-          ? state.aiCompanionSettings : {};
-        const merged = aiCompanionSettings?.normalize
-          ? aiCompanionSettings.normalize(Object.assign({}, current, patch))
-          : Object.assign({}, current, patch);
-        saveGlobalState({ aiCompanionSettings: merged });
-        app.modules?.aiCompanionPanel?.refreshModeMessages?.();
-      }
-    });
-  }
   window.setTimeout(function() { void runAiCompanionSettingsDefaultsUpgrade(); }, 0);
   const sourceRoot = window.registerMarkdownViewerSourceRoot(app, {
     get activeFolderPath() { return activeFolderPath; },
@@ -4285,9 +4270,6 @@ async function startMarkdownViewer() {
   const settingsSnippetAutocompleteInput = document.getElementById("settings-snippet-autocomplete");
   const settingsUnclosedBracketHighlightInput = document.getElementById("settings-unclosed-bracket-highlight");
   const settingsAiEnabledInput = document.getElementById("settings-ai-enabled");
-  const settingsAiIntentContractsEnabledInput = document.getElementById("settings-ai-intent-contracts-enabled");
-  const settingsAiIntentSteeringEnabledInput = document.getElementById("settings-ai-intent-steering-enabled");
-  const settingsAiIntentMaxRevisionsInput = document.getElementById("settings-ai-intent-max-revisions");
   const settingsAiProviderModeInput = document.getElementById("settings-ai-provider-mode");
   const settingsAiBaseUrlInput = document.getElementById("settings-ai-base-url");
   const settingsAiApiKeyInput = document.getElementById("settings-ai-api-key");
@@ -4309,7 +4291,6 @@ async function startMarkdownViewer() {
   const settingsAiChatEnabledInput = document.getElementById("settings-ai-chat-enabled");
   const settingsAiAutocompleteEnabledInput = document.getElementById("settings-ai-autocomplete-enabled");
   const settingsAiAgentEnabledInput = document.getElementById("settings-ai-agent-enabled");
-  const settingsAiAgentLoopArchitectureInput = document.getElementById("settings-ai-agent-loop-architecture");
   const settingsAiGitSummaryEnabledInput = document.getElementById("settings-ai-git-summary-enabled");
   const settingsAiShowReasoningInput = document.getElementById("settings-ai-show-reasoning");
   const settingsAiAutocompleteLineEnabledInput = document.getElementById("settings-ai-autocomplete-line-enabled");
@@ -9381,11 +9362,7 @@ Markdown content is processed client-side in your browser and sanitized before p
     }
     const aiSettings = getAiCompanionSettings();
     if (settingsAiEnabledInput) settingsAiEnabledInput.checked = aiSettings.enabled;
-    app.modules?.aiCompanionExperimentalSettings?.render?.();
     app.modules?.aiCompanionToolAccessSettings?.refresh?.();
-    if (settingsAiIntentContractsEnabledInput) settingsAiIntentContractsEnabledInput.checked = aiSettings.intentContractsEnabled === true;
-    if (settingsAiIntentSteeringEnabledInput) settingsAiIntentSteeringEnabledInput.checked = aiSettings.intentCompletionSteeringEnabled !== false;
-    if (settingsAiIntentMaxRevisionsInput) settingsAiIntentMaxRevisionsInput.value = aiSettings.intentMaxCompletionRevisions ?? 3;
     if (settingsAiProviderModeInput) settingsAiProviderModeInput.value = aiSettings.providerMode;
     if (settingsAiBaseUrlInput) settingsAiBaseUrlInput.value = aiSettings.baseUrl;
     if (settingsAiApiKeyInput) settingsAiApiKeyInput.value = aiSettings.apiKey;
@@ -9404,7 +9381,6 @@ Markdown content is processed client-side in your browser and sanitized before p
     if (settingsAiChatEnabledInput) settingsAiChatEnabledInput.checked = aiSettings.chatEnabled;
     if (settingsAiAutocompleteEnabledInput) settingsAiAutocompleteEnabledInput.checked = aiSettings.autocompleteEnabled;
     if (settingsAiAgentEnabledInput) settingsAiAgentEnabledInput.checked = aiSettings.agentEnabled;
-    if (settingsAiAgentLoopArchitectureInput) settingsAiAgentLoopArchitectureInput.value = aiSettings.agentLoopArchitecture;
     if (settingsAiGitSummaryEnabledInput) settingsAiGitSummaryEnabledInput.checked = aiSettings.gitSummaryEnabled;
     if (settingsAiShowReasoningInput) settingsAiShowReasoningInput.checked = aiSettings.showReasoning !== false;
     if (settingsAiAutocompleteLineEnabledInput) settingsAiAutocompleteLineEnabledInput.checked = aiSettings.autocompleteLineEnabled;
@@ -11376,9 +11352,6 @@ Markdown content is processed client-side in your browser and sanitized before p
     // internal controller flags) are preserved instead of being reset to defaults.
     const aiCompanionSettingsValue = aiCompanionSettings?.normalize ? aiCompanionSettings.normalize(Object.assign({}, getAiCompanionSettings(), {
       enabled: !!settingsAiEnabledInput?.checked,
-      intentContractsEnabled: !!settingsAiIntentContractsEnabledInput?.checked,
-      intentCompletionSteeringEnabled: !!settingsAiIntentSteeringEnabledInput?.checked,
-      intentMaxCompletionRevisions: settingsAiIntentMaxRevisionsInput?.value,
       providerMode: settingsAiProviderModeInput?.value,
       baseUrl: settingsAiBaseUrlInput?.value,
       apiKey: settingsAiApiKeyInput?.value,
@@ -11413,7 +11386,6 @@ Markdown content is processed client-side in your browser and sanitized before p
       autocompleteModelFamily: settingsAiAutocompleteModelFamilyInput?.value,
       autocompleteContextProvidersEnabled: !!settingsAiAutocompleteContextProvidersEnabledInput?.checked,
       agentAutoRunCommands: !!settingsAiAgentAutoRunCommandsInput?.checked,
-      agentLoopArchitecture: settingsAiAgentLoopArchitectureInput?.value,
       agentConfirmBeforeWrite: settingsAiAgentConfirmBeforeWriteInput?.checked !== false,
       aiSecurityPolicy: aiSecuritySettings?.collect?.() || aiCompanionSettings?.defaults?.aiSecurityPolicy
     })) : {};

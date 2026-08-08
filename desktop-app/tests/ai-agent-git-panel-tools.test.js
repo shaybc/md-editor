@@ -8,7 +8,7 @@ const test = require("node:test");
 const tools = require("../resources/ai-companion/tools/workspace-tools");
 const gitPanelTools = require("../resources/ai-companion/tools/git-panel-tools");
 const gitBridge = require("../resources/bridges/git-bridge/git-bridge.cjs");
-const { getAgentToolDefinitions, runAgentToolLoop } = require("../resources/ai-companion/core/agent-tool-loop");
+const { getAgentToolDefinitions, runAgentToolLoop } = require("./helpers/autonomous-tool-harness");
 const { toCanonicalName } = require("../resources/ai-companion/core/tool-scope-registry");
 
 function hasGitCli() {
@@ -58,7 +58,7 @@ function createFixtureRepo() {
   return { repoPath, git };
 }
 
-test("Git Panel tools are exposed by mode with plan mode unchanged", () => {
+test("Git Panel tools follow read-only and mutating mode policies", () => {
   const chatDefinitions = getAgentToolDefinitions("chat");
   // Definitions expose model-facing names; canonicalize for these assertions.
   const chatNames = chatDefinitions.map((definition) => toCanonicalName(definition.function.name));
@@ -66,12 +66,12 @@ test("Git Panel tools are exposed by mode with plan mode unchanged", () => {
   const planNames = getAgentToolDefinitions("plan").map((definition) => toCanonicalName(definition.function.name));
 
   assert.equal(chatNames.includes("git_status"), true);
-  assert.equal(chatNames.includes("git_changes_digest"), true);
+  assert.equal(chatNames.includes("git_diff"), true);
   assert.equal(chatNames.includes("git_stage"), false);
   assert.equal(agentNames.includes("git_status"), true);
   assert.equal(agentNames.includes("git_stage"), true);
   assert.equal(agentNames.includes("git_commit"), true);
-  assert.equal(planNames.includes("git_status"), false);
+  assert.equal(planNames.includes("git_status"), true);
   assert.equal(planNames.includes("git_stage"), false);
   const statusDefinition = chatDefinitions.find((definition) => toCanonicalName(definition.function.name) === "git_status");
   assert.equal(statusDefinition.function.parameters.properties.maxFiles.maximum, 1000);
@@ -177,84 +177,6 @@ test("model-facing Git status sorts and bounds details while keeping complete co
   assert.equal(hardCapped.counts.files, 1001);
   assert.equal(hardCapped.returnedFiles, 1000);
   assert.equal(hardCapped.truncated, true);
-});
-
-test("successful Git status remains successful after activity formatting", async () => {
-  const originalRunRequest = gitBridge.runRequest;
-  const events = [];
-  let round = 0;
-  gitBridge.runRequest = async () => ({
-    action: "status",
-    isRepo: true,
-    status: {
-      branch: "main",
-      tracking: "origin/main",
-      ahead: 0,
-      behind: 0,
-      files: [{ path: "changed.md", originalPath: "", index: " ", workingDir: "M" }]
-    }
-  });
-  const provider = {
-    completeMessage: async () => {
-      round += 1;
-      if (round === 1) return { content: "", toolCalls: [createToolCall("git_status", {})] };
-      return { content: "One changed file was found.", toolCalls: [] };
-    },
-    complete: async () => "One changed file was found."
-  };
-
-  try {
-    await runAgentToolLoop(provider, {}, process.cwd(), "check status", "agent", (event) => events.push(event), createRuntime());
-  } finally {
-    gitBridge.runRequest = originalRunRequest;
-  }
-
-  assert.equal(events.some((event) => event.type === "tool-error" && event.tool === "git_status"), false);
-  const completed = events.find((event) => event.type === "tool" && event.tool === "git_status" && event.activity?.status === "completed");
-  assert.equal(completed.activity.resultSummary, "1 changed file(s)");
-  const summary = events.find((event) => event.type === "agent-summary");
-  const evidence = summary.evidenceLedger.find((entry) => entry.tool === "git_status");
-  assert.equal(evidence.outcome, "succeeded");
-  assert.equal(evidence.verifiedState, true);
-});
-
-test("Git status failures are non-retryable failed evidence and unchanged retries do not execute", async () => {
-  const originalRunRequest = gitBridge.runRequest;
-  const events = [];
-  let bridgeCalls = 0;
-  let round = 0;
-  gitBridge.runRequest = async () => {
-    bridgeCalls += 1;
-    const error = new Error("private raw parser detail");
-    error.code = "GIT_STATUS_PARSE_FAILED";
-    error.stage = "parse";
-    error.retryable = false;
-    throw error;
-  };
-  const provider = {
-    completeMessage: async () => {
-      round += 1;
-      if (round <= 2) return { content: "", toolCalls: [createToolCall("git_status", {})] };
-      return { content: "Status could not be verified.", toolCalls: [] };
-    },
-    complete: async () => "Status could not be verified."
-  };
-
-  try {
-    await runAgentToolLoop(provider, {}, process.cwd(), "check status", "agent", (event) => events.push(event), createRuntime());
-  } finally {
-    gitBridge.runRequest = originalRunRequest;
-  }
-
-  assert.equal(bridgeCalls, 1);
-  const firstFailure = events.find((event) => event.type === "tool-error" && event.tool === "git_status");
-  assert.equal(firstFailure.structuredResult.status, "failed");
-  assert.equal(firstFailure.structuredResult.error.retryable, false);
-  assert.equal(JSON.stringify(firstFailure.structuredResult).includes("private raw parser detail"), false);
-  const summary = events.find((event) => event.type === "agent-summary");
-  const evidence = summary.evidenceLedger.find((entry) => entry.tool === "git_status");
-  assert.equal(evidence.outcome, "failed");
-  assert.equal(evidence.verifiedState, false);
 });
 
 test("Git Panel mutations require approval and can stage and commit after approval", { skip: !hasGitCli() }, async () => {

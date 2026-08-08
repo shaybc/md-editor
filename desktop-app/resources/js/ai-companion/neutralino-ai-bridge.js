@@ -263,16 +263,6 @@
       return result;
     }
 
-    async function respondClarification(clarificationId, answer = "") {
-      const result = await request("clarification", {
-        clarificationId: String(clarificationId || ""),
-        answer: String(answer || "").trim()
-      });
-      if (result.accepted !== true) throw new Error(result.error || "This clarification request is no longer available.");
-      return result;
-    }
-
-
     async function respondAppAction(actionId, result, error = "") {
       const appActionId = String(actionId || "");
       await sendToSession({
@@ -345,7 +335,6 @@
       cancel,
       request,
       respondApproval,
-      respondClarification,
       respondAppAction,
       testConnection: function(settings) { return request("testConnection", { settings, workspaceRoot: deps.getWorkspaceRoot?.() || "" }); },
       inspectCertificate: function(payload) { return request("inspectCertificate", payload || {}); },
@@ -353,6 +342,7 @@
       autocomplete: function(payload, onEvent) { return request("autocomplete", payload, onEvent); },
       gitSummary: function(payload, onEvent) { return request("gitSummary", payload, onEvent); },
       plan: function(payload, onEvent) { return request("plan", payload, onEvent); },
+      runRecoveryInspect: function(payload) { return request("runRecoveryInspect", payload || {}); },
       plansList: function(payload) { return request("plansList", payload || {}); },
       planRead: function(payload) { return request("planRead", payload || {}); },
       planUpdate: function(payload) { return request("planUpdate", payload || {}); },

@@ -6,12 +6,12 @@ const path = require("node:path");
 const test = require("node:test");
 
 const { AutonomousOrchestrator } = require("../resources/ai-companion/orchestration/autonomous/autonomous-orchestrator");
-const { createCompanionOrchestrator } = require("../resources/ai-companion/orchestration");
+const { CompanionOrchestrator } = require("../resources/ai-companion/orchestration");
 
 function request(overrides = {}) {
   return {
     action: "agent", prompt: "hi", workspaceRoot: process.cwd(), profileRoot: "",
-    settings: { enabled: true, agentEnabled: true, agentLoopArchitecture: "autonomous", agentMaxResponseTokens: 0 },
+    settings: { enabled: true, agentEnabled: true, agentMaxResponseTokens: 0 },
     ...overrides
   };
 }
@@ -83,9 +83,10 @@ test("tool calls are observed and the model decides when to finish", async () =>
   assert.equal(events.filter((event) => event.type === "assistant-final").length, 1);
 });
 
-test("factory pins the selected architecture", () => {
-  assert.equal(createCompanionOrchestrator(request()).constructor.name, "AutonomousOrchestrator");
-  assert.equal(createCompanionOrchestrator(request({ settings: { agentLoopArchitecture: "legacy" } })).constructor.name, "LegacyOrchestrator");
+test("public companion entry point always uses the autonomous runtime", async () => {
+  const provider = { completeMessage: async () => ({ content: "Ready.", toolCalls: [] }) };
+  const result = await CompanionOrchestrator.run(request(), { provider }, () => {});
+  assert.equal(result.content, "Ready.");
 });
 
 test("autonomous modules do not import legacy orchestration or M0-M11 controllers", () => {

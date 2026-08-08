@@ -50,7 +50,7 @@ class AutonomousOrchestrator {
       };
       mcp = new McpConnectionManager(request, events.emit);
       mcp.register(Array.from(fabric.entries.values()).filter((entry) => entry.kind === "mcp-server"));
-      const capabilities = new CapabilityCatalog({ policy, fabric, mcp, baseDefinitions: policy.allowTools ? getToolDefinitions(policy) : [] });
+      const capabilities = new CapabilityCatalog({ policy, fabric, mcp, baseDefinitions: policy.allowTools ? getToolDefinitions(policy, request.settings) : [] });
       const hooks = new HookGateway(request, Array.from(fabric.entries.values()).filter((entry) => entry.kind === "hook"), events.emit);
       const chronicle = new RunChronicle(request, events.emit);
       const journaledEvents = createJournaledEvents(events, chronicle);

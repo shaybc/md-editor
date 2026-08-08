@@ -150,38 +150,38 @@ test("persists multiple nested updates that share one parent setting", async () 
   const defaultState = {
     theme: "light",
     aiCompanionSettings: {
-      intentContractsEnabled: false,
-      intentClarificationMode: "assume",
-      intentFastPathEnabled: true
+      enabled: false,
+      agentEnabled: false,
+      chatEnabled: true
     }
   };
   const harness = loadSettingsTools({ defaultState });
 
   const result = await harness.api.execute("preferences_update", {
     changes: [
-      { key: "aiCompanionSettings.intentContractsEnabled", value: true },
-      { key: "aiCompanionSettings.intentClarificationMode", value: "ask" },
-      { key: "aiCompanionSettings.intentFastPathEnabled", value: false }
+      { key: "aiCompanionSettings.enabled", value: true },
+      { key: "aiCompanionSettings.agentEnabled", value: true },
+      { key: "aiCompanionSettings.chatEnabled", value: false }
     ]
   });
   const persisted = await harness.api.execute("preferences_get", {
     keys: [
-      "aiCompanionSettings.intentContractsEnabled",
-      "aiCompanionSettings.intentClarificationMode",
-      "aiCompanionSettings.intentFastPathEnabled"
+      "aiCompanionSettings.enabled",
+      "aiCompanionSettings.agentEnabled",
+      "aiCompanionSettings.chatEnabled"
     ]
   });
 
   assert.equal(result.changed, true);
   assert.deepEqual(JSON.parse(JSON.stringify(harness.savedState.aiCompanionSettings)), {
-    intentContractsEnabled: true,
-    intentClarificationMode: "ask",
-    intentFastPathEnabled: false
+    enabled: true,
+    agentEnabled: true,
+    chatEnabled: false
   });
   assert.deepEqual(Object.fromEntries(persisted.preferences.map((preference) => [preference.key, preference.value])), {
-    "aiCompanionSettings.intentClarificationMode": "ask",
-    "aiCompanionSettings.intentContractsEnabled": true,
-    "aiCompanionSettings.intentFastPathEnabled": false
+    "aiCompanionSettings.agentEnabled": true,
+    "aiCompanionSettings.chatEnabled": false,
+    "aiCompanionSettings.enabled": true
   });
   assert.equal(harness.refreshes.length, 1);
 });
@@ -262,9 +262,9 @@ test("category reads and nested searches avoid unrelated failing preferences", a
   const defaultState = {
     theme: "light",
     aiCompanionSettings: {
-      intentContractsEnabled: true,
-      intentClarificationMode: "ask",
-      intentFastPathEnabled: false
+      enabled: true,
+      agentEnabled: true,
+      chatEnabled: false
     }
   };
   Object.defineProperty(defaultState, "brokenPreference", {
@@ -276,14 +276,14 @@ test("category reads and nested searches avoid unrelated failing preferences", a
   const harness = loadSettingsTools({ defaultState });
 
   const category = await harness.api.execute("preferences_get", { category: "ai-companion" });
-  const search = await harness.api.execute("preferences_search", { query: "intentContractsEnabled", maxResults: 1 });
+  const search = await harness.api.execute("preferences_search", { query: "agentEnabled", maxResults: 1 });
   const fullRead = await harness.api.execute("preferences_get", {});
   const exported = await harness.api.execute("preferences_export", {});
 
   assert.equal(category.complete, true);
   assert.deepEqual(JSON.parse(JSON.stringify(category.errors)), []);
-  assert.equal(category.preferences[0].key, "aiCompanionSettings.intentClarificationMode");
-  assert.equal(search.results[0].key, "aiCompanionSettings.intentContractsEnabled");
+  assert.equal(category.preferences[0].key, "aiCompanionSettings.agentEnabled");
+  assert.equal(search.results[0].key, "aiCompanionSettings.agentEnabled");
   assert.equal(search.results[0].value, true);
   assert.equal(fullRead.complete, false);
   assert.equal(fullRead.status, "partial");
@@ -291,7 +291,7 @@ test("category reads and nested searches avoid unrelated failing preferences", a
   assert.equal(exported.complete, false);
   assert.equal(exported.status, "partial");
   assert.equal(exported.errors[0].code, "preference-resolution-failed");
-  assert.equal(exported.entries.find((entry) => entry.key === "aiCompanionSettings.intentClarificationMode").value, "ask");
+  assert.equal(exported.entries.find((entry) => entry.key === "aiCompanionSettings.agentEnabled").value, true);
 });
 
 test("paginates hierarchical reads before resolving later entries", async () => {
