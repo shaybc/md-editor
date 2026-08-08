@@ -74,9 +74,25 @@ function getApplicationToolRegistrations(policy, settings = {}) {
       description: toolDefinition.function.description,
       searchHint: toolScopes.humanizeTool(name),
       permissionScope: String(toolScopes.scopeForTool(name) || ""),
+      rulePaths: applicationRulePaths(name),
       executionOwner: "application"
     };
   });
+}
+
+function applicationRulePaths(name) {
+  if (name === "get_link_context") return { arguments: ["path"], results: ["document.path", "backlinks[].path", "graphMatches[].path"] };
+  if (name === "graph_search_nodes") return { arguments: ["path"], results: ["results[].path", "results[].file.path"] };
+  if (name === "graph_get_node_context") return {
+    arguments: ["path"],
+    results: ["node.path", "node.file.path", "incoming[].node.path", "incoming[].node.file.path", "outgoing[].node.path", "outgoing[].node.file.path", "localGraph.nodes[].path", "localGraph.nodes[].file.path"]
+  };
+  if (name === "graph_find_paths") return {
+    arguments: ["from", "to"],
+    results: ["from.path", "from.file.path", "to.path", "to.file.path", "paths[].nodes[].path", "paths[].nodes[].file.path"]
+  };
+  if (name === "read_conversion_report") return { arguments: ["path", "destinationRoot"], results: ["root", "jsonPath", "markdownPath"] };
+  return undefined;
 }
 
 function applicationDomain(name) {

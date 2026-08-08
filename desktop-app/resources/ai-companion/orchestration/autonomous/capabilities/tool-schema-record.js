@@ -12,6 +12,7 @@ function createToolSchemaRecord(value = {}) {
   const description = String(value.description || definition.function.description || "").trim();
   const searchHint = String(value.searchHint || "").trim();
   const displayName = String(value.displayName || name.replace(/_/g, " ")).trim();
+  const rulePaths = normalizeRulePaths(value.rulePaths);
   return Object.freeze({
     name, definition, source,
     domain: String(value.domain || source),
@@ -26,7 +27,16 @@ function createToolSchemaRecord(value = {}) {
     external: value.external === true,
     serverId: String(value.serverId || ""),
     remoteName: String(value.remoteName || ""),
-    fingerprint: fingerprint({ name, definition, source, description, searchHint, requiredMode: value.requiredMode, requiredCapability: value.requiredCapability, permissionScope: value.permissionScope, executionOwner: value.executionOwner })
+    rulePaths,
+    fingerprint: fingerprint({ name, definition, source, description, searchHint, requiredMode: value.requiredMode, requiredCapability: value.requiredCapability, permissionScope: value.permissionScope, executionOwner: value.executionOwner, rulePaths })
+  });
+}
+
+function normalizeRulePaths(value) {
+  const source = value && typeof value === "object" ? value : {};
+  return Object.freeze({
+    arguments: Object.freeze((Array.isArray(source.arguments) ? source.arguments : []).map(String)),
+    results: Object.freeze((Array.isArray(source.results) ? source.results : []).map(String))
   });
 }
 

@@ -29,6 +29,8 @@ const { ContextReleaseReminder } = require("./context/context-release-reminder")
 const { RunChronicle } = require("./recovery/run-chronicle");
 const { RestartReconciler } = require("./recovery/restart-reconciler");
 const { PlanRepositorySession } = require("./plan-repository-session");
+const { RuleCatalog } = require("./rules/rule-catalog");
+const { ToolPathObserver } = require("./rules/tool-path-observer");
 
 class AutonomousOrchestrator {
   /** Run Chat, Plan, or Agent through one model-directed kernel. */
@@ -44,6 +46,8 @@ class AutonomousOrchestrator {
     let context = null;
     let messages = [];
     try {
+      const chronicle = new RunChronicle(request, events.emit);
+      const journaledEvents = createJournaledEvents(events, chronicle);
       const discoveredExtensions = await discoverExtensions(request);
       const fabric = new ExtensionFabric(request);
       const fabricSnapshot = await fabric.load();
@@ -51,7 +55,9 @@ class AutonomousOrchestrator {
       const agentSnapshot = await agentCatalog.load();
       const extensions = [...discoveredExtensions, ...agentCatalog.list()];
       const extensionSnapshot = { fabric: fabricSnapshot, agents: agentSnapshot };
-      const instructions = await loadActiveInstructions(request, policy);
+      const ruleCatalog = new RuleCatalog(request, events.emit);
+      await ruleCatalog.load(request.activeFile?.path);
+      let instructions = await loadActiveInstructions(request, policy, ruleCatalog);
       const provider = services.provider || createProvider(request.settings, { onDebug: createProviderDebugEmitter(events.emit) });
       const fingerprints = {
         instructions: fingerprint(instructions),
@@ -67,9 +73,11 @@ class AutonomousOrchestrator {
       });
       fingerprints.tools = capabilities.inventory.fingerprint();
       const hooks = new HookGateway(request, Array.from(fabric.entries.values()).filter((entry) => entry.kind === "hook"), events.emit);
-      const chronicle = new RunChronicle(request, events.emit);
-      const journaledEvents = createJournaledEvents(events, chronicle);
       const restored = await chronicle.loadRecovery({ applicationRestart: request.applicationRestart === true });
+      ruleCatalog.setEmitter(journaledEvents.emit);
+      await ruleCatalog.restore(restored?.ruleState);
+      instructions = await loadActiveInstructions(request, policy, ruleCatalog);
+      fingerprints.instructions = fingerprint(instructions);
       const reconciliation = new RestartReconciler();
       const decision = reconciliation.evaluate(request, restored, fingerprints);
       if (decision.classification === "incompatible") {
@@ -108,13 +116,14 @@ class AutonomousOrchestrator {
       windowSteward.restore(restored?.windowState);
 
       context = {
-        request, services, policy, extensions, extensionSnapshot, fabric, agentCatalog, mcp, capabilities, hooks,
+        request, services, policy, extensions, extensionSnapshot, fabric, agentCatalog, mcp, capabilities, hooks, ruleCatalog,
         instructions, recalledContinuity, fingerprints, chronicle, artifactVault, continuity, windowSteward,
         observationLedger, contextReleaseReminder,
         loadedExtensions: new Set(restored?.loadedExtensions || []),
         loadedExtensionBodies: new Map(Array.isArray(restored?.loadedExtensionBodies) ? restored.loadedExtensionBodies : []),
         work, planRepository, taskGrants: [], workers: null, pendingTools: []
       };
+      context.rulePathObserver = new ToolPathObserver(ruleCatalog);
       context.buildRenewalAnchors = async (digest, activeFiles) => buildRenewalAnchors(context, digest, activeFiles);
       await refreshLoadedExtensions(context, decision.notices);
       const restoredCapabilities = await capabilities.restore(restored?.toolSchemaState || restored?.activeCapabilities);
@@ -152,6 +161,7 @@ class AutonomousOrchestrator {
             ledger: observationLedger.snapshot(),
             reminder: contextReleaseReminder.snapshot()
           },
+          ruleState: ruleCatalog.snapshot(),
           loadedExtensions: Array.from(context.loadedExtensions),
           loadedExtensionBodies: Array.from(context.loadedExtensionBodies.entries()),
           instructionFingerprint: context.fingerprints.instructions,
@@ -211,7 +221,8 @@ class AutonomousOrchestrator {
 }
 
 async function buildRenewalAnchors(context, digest, activeFiles) {
-  const currentInstructions = await loadActiveInstructions(context.request, context.policy);
+  await context.ruleCatalog?.refresh?.();
+  const currentInstructions = await loadActiveInstructions(context.request, context.policy, context.ruleCatalog);
   context.instructions = currentInstructions;
   context.fingerprints.instructions = fingerprint(currentInstructions);
   const system = buildSystemMessage(context.request, context.policy, context.extensions, currentInstructions, context.recalledContinuity);
@@ -261,7 +272,7 @@ function createJournaledEvents(events, chronicle) {
 }
 
 function shouldJournalEvent(type) {
-  return ["artifact-stored", "context-thinned", "observation-released", "observation-release-reminder", "tool-catalog-updated", "tool-schema-activated", "tool-schema-restored", "tool-schema-unavailable", "continuity-updated", "compaction", "recovery-warning", "plan-saved", "plan-updated"].includes(type)
+  return ["artifact-stored", "context-thinned", "observation-released", "observation-release-reminder", "tool-catalog-updated", "tool-schema-activated", "tool-schema-restored", "tool-schema-unavailable", "rules-discovered", "rule-activated", "rule-unavailable", "rules-refreshed", "continuity-updated", "compaction", "recovery-warning", "plan-saved", "plan-updated"].includes(type)
     || /^(work|worker)-/.test(String(type || ""));
 }
 

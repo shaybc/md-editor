@@ -13,6 +13,8 @@ const EVENT_TYPES = Object.freeze({
   OBSERVATION_RELEASED: "observation-released", OBSERVATION_RELEASE_REMINDER: "observation-release-reminder",
   TOOL_CATALOG_UPDATED: "tool-catalog-updated", TOOL_SCHEMA_ACTIVATED: "tool-schema-activated",
   TOOL_SCHEMA_RESTORED: "tool-schema-restored", TOOL_SCHEMA_UNAVAILABLE: "tool-schema-unavailable",
+  RULES_DISCOVERED: "rules-discovered", RULE_ACTIVATED: "rule-activated",
+  RULE_UNAVAILABLE: "rule-unavailable", RULES_REFRESHED: "rules-refreshed",
   RUN_RESTORED: "run-restored", RECOVERY_WARNING: "recovery-warning",
   COMPACTION: "compaction", RUN_COMPLETED: "run-completed", RUN_CANCELLED: "run-cancelled", RUN_FAILED: "run-failed"
 });

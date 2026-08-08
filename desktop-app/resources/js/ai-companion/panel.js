@@ -6606,6 +6606,10 @@
         "tool-schema-activated": "Tool schemas activated",
         "tool-schema-restored": "Tool schemas restored",
         "tool-schema-unavailable": "Tool schema unavailable",
+        "rules-discovered": "Rules discovered",
+        "rule-activated": "Scoped rule activated",
+        "rule-unavailable": "Rule unavailable",
+        "rules-refreshed": "Rules refreshed",
         "continuity-updated": "Continuity record updated",
         "run-restored": "Autonomous run restored",
         "recovery-warning": "Recovery warning",
@@ -6615,7 +6619,7 @@
         ? `${event.estimatedTokensBefore} tokens before, ${event.estimatedTokensAfter || 0} after`
         : "Completed");
       const display = createSyntheticToolActivity({
-        type: event.type === "recovery-warning" ? "tool-error" : "tool",
+        type: ["recovery-warning", "rule-unavailable"].includes(event.type) ? "tool-error" : "tool",
         tool: labels[event.type] || event.type,
         summary,
         callId: `${event.type}-${event.savedAt || event.updatedAt || Date.now()}`
@@ -7032,8 +7036,8 @@
         void loadRepositoryPlans({ force: true });
         return;
       }
-      if (["run-started", "context-thinned", "observation-released", "observation-release-reminder", "tool-catalog-updated", "tool-schema-activated", "tool-schema-restored", "tool-schema-unavailable", "continuity-updated", "chronicle-saved", "run-restored", "recovery-warning", "compaction", "run-completed", "run-cancelled", "run-failed"].includes(event.type) || /^(work|worker)-/.test(event.type)) {
-        if (["context-thinned", "observation-released", "observation-release-reminder", "tool-catalog-updated", "tool-schema-activated", "tool-schema-restored", "tool-schema-unavailable", "continuity-updated", "run-restored", "recovery-warning", "compaction"].includes(event.type)) appendAutonomousRuntimeStatus(event);
+      if (["run-started", "context-thinned", "observation-released", "observation-release-reminder", "tool-catalog-updated", "tool-schema-activated", "tool-schema-restored", "tool-schema-unavailable", "rules-discovered", "rule-activated", "rule-unavailable", "rules-refreshed", "continuity-updated", "chronicle-saved", "run-restored", "recovery-warning", "compaction", "run-completed", "run-cancelled", "run-failed"].includes(event.type) || /^(work|worker)-/.test(event.type)) {
+        if (["context-thinned", "observation-released", "observation-release-reminder", "tool-catalog-updated", "tool-schema-activated", "tool-schema-restored", "tool-schema-unavailable", "rules-discovered", "rule-activated", "rule-unavailable", "rules-refreshed", "continuity-updated", "run-restored", "recovery-warning", "compaction"].includes(event.type)) appendAutonomousRuntimeStatus(event);
         else recordAgentEvent(event);
         if (activeAgentEntry && ["run-restored", "recovery-warning"].includes(event.type)) {
           activeAgentEntry.record.recoverySummary = {

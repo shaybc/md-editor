@@ -50,4 +50,12 @@ function serializeToolResult(value, maxChars = DEFAULT_TOOL_RESULT_CHARS) {
   return `${serialized.slice(0, maxChars)}\n...[tool result truncated; ${serialized.length - maxChars} characters omitted]`;
 }
 
-module.exports = { buildPlanModeInstruction, buildSystemMessage, serializeToolResult };
+function buildRuleActivationMessage(rules) {
+  if (!Array.isArray(rules) || !rules.length) return "";
+  return [
+    "Additional scoped rules became active after workspace paths were accessed. Apply them to subsequent decisions.",
+    ...rules.map((rule) => `Active rule from ${rule.source}${rule.triggerPaths?.length ? ` (matched: ${rule.triggerPaths.join(", ")})` : ""}:\n${rule.content}`)
+  ].join("\n\n");
+}
+
+module.exports = { buildPlanModeInstruction, buildRuleActivationMessage, buildSystemMessage, serializeToolResult };

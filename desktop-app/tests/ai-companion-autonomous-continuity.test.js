@@ -18,6 +18,7 @@ const { RestartReconciler } = require("../resources/ai-companion/orchestration/a
 const { getRunIdentity } = require("../resources/ai-companion/orchestration/autonomous/work/run-identity");
 const { CapabilityCatalog } = require("../resources/ai-companion/orchestration/autonomous/capabilities/capability-catalog");
 const { AutonomousOrchestrator } = require("../resources/ai-companion/orchestration/autonomous/autonomous-orchestrator");
+const { loadActiveInstructions } = require("../resources/ai-companion/orchestration/autonomous/instruction-loader");
 
 function createRequest(root, overrides = {}) {
   return {
@@ -75,6 +76,26 @@ test("system context includes detailed mode-aware operating guidance", () => {
   assert.match(chat, /# Evidence and accuracy/);
   assert.match(chat, /Chat mode is read-oriented/);
   assert.doesNotMatch(chat, /# Safe workspace changes/);
+});
+
+test("user rules load directly beneath the resolved profile root", async (t) => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "md-editor-user-rules-"));
+  t.after(() => fs.rm(root, { recursive: true, force: true }));
+  const rulesDirectory = path.join(root, "companion", "rules");
+  const duplicatedDirectory = path.join(root, ".md-editor", "companion", "rules");
+  await fs.mkdir(rulesDirectory, { recursive: true });
+  await fs.mkdir(duplicatedDirectory, { recursive: true });
+  await fs.writeFile(path.join(rulesDirectory, "current.md"), "Load the current profile rule.", "utf8");
+  await fs.writeFile(path.join(duplicatedDirectory, "wrong.md"), "Do not load the duplicated profile rule.", "utf8");
+
+  const instructions = await loadActiveInstructions({
+    workspaceRoot: root,
+    profileRoot: root,
+    activeFile: null
+  }, { mode: "agent" });
+
+  assert.equal(instructions.rules.some((rule) => rule.content === "Load the current profile rule."), true);
+  assert.equal(instructions.rules.some((rule) => rule.content === "Do not load the duplicated profile rule."), false);
 });
 
 test("continuity excludes assistant and provider identity claims", () => {
@@ -262,7 +283,7 @@ test("provider overflow receives exactly one renewal retry", async () => {
 test("panel forwards model limits and persists autonomous recovery activity", () => {
   const source = require("node:fs").readFileSync(path.resolve(__dirname, "..", "resources", "js", "ai-companion", "panel.js"), "utf8");
   assert.match(source, /modelLimits:\s*\(\(\) =>/);
-  assert.match(source, /"context-thinned", "observation-released", "observation-release-reminder", "tool-catalog-updated", "tool-schema-activated", "tool-schema-restored", "tool-schema-unavailable", "continuity-updated", "chronicle-saved", "run-restored", "recovery-warning"/);
+  assert.match(source, /"context-thinned", "observation-released", "observation-release-reminder", "tool-catalog-updated", "tool-schema-activated", "tool-schema-restored", "tool-schema-unavailable", "rules-discovered", "rule-activated", "rule-unavailable", "rules-refreshed", "continuity-updated", "chronicle-saved", "run-restored", "recovery-warning"/);
   assert.match(source, /activeAgentEntry\.record\.recoverySummary/);
   assert.match(source, /function appendAutonomousRuntimeStatus\(event\)/);
 });

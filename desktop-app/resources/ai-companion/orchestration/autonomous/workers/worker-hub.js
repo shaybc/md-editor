@@ -12,6 +12,9 @@ const { ObservationLedger } = require("../context/observation-ledger");
 const { ContextReleaseReminder } = require("../context/context-release-reminder");
 const { finishWorkerWorkspace, prepareWorkerWorkspace } = require("./worker-workspace");
 const { getRunIdentity } = require("../work/run-identity");
+const { buildRuleActivationMessage } = require("../context-builder");
+const { RuleCatalog } = require("../rules/rule-catalog");
+const { ToolPathObserver } = require("../rules/tool-path-observer");
 
 const MAX_ACTIVE_WORKERS = 10;
 const MAX_RESULT_CHARS = 16000;
@@ -226,9 +229,20 @@ class WorkerHub {
       const registrations = parentRegistrations.length
         ? parentRegistrations.filter((record) => scopedNames.has(record.name))
         : scopedDefinitions.map((definition) => ({ definition }));
-      if (!entry.messages.length) entry.messages.push({ role: "system", content: `${entry.agent?.body || "Complete only the delegated work. Report evidence and do not claim actions you did not perform."}\n\nExecution boundary: mode=${entry.authority.mode}; workspace writes=${entry.authority.workspaceWrites}; commands=${entry.authority.commands}; network=${entry.authority.networkAccess}; isolation=${entry.authority.isolation}. These limits cannot be expanded from this delegated run.\n\nSecondary tool schemas are loaded on demand. Use capability_search with select:<tool_name> or task keywords before calling a deferred tool.\n\nYou may use context_observation_list and context_release to remove only your own older tool observations when they are no longer useful. Preserve recent results, active errors, denials, cancellations, unknown outcomes, and evidence still needed for this delegated task.` }, { role: "user", content: entry.prompt });
       const workerRequest = { ...restrictedRequest, workspaceRoot: entry.workspace.root };
       const workerEvents = { emit: (event) => this.events.emit({ ...event, workerId: entry.id }) };
+      const ruleCatalog = new RuleCatalog(workerRequest, workerEvents.emit);
+      await ruleCatalog.load();
+      await ruleCatalog.restore(entry.ruleState);
+      const activeRuleMessage = buildRuleActivationMessage(ruleCatalog.activeInstructions({ markInjected: true }));
+      if (!entry.messages.length) {
+        entry.messages.push({
+          role: "system",
+          content: `${entry.agent?.body || "Complete only the delegated work. Report evidence and do not claim actions you did not perform."}\n\nExecution boundary: mode=${entry.authority.mode}; workspace writes=${entry.authority.workspaceWrites}; commands=${entry.authority.commands}; network=${entry.authority.networkAccess}; isolation=${entry.authority.isolation}. These limits cannot be expanded from this delegated run.\n\nSecondary tool schemas are loaded on demand. Use capability_search with select:<tool_name> or task keywords before calling a deferred tool.\n\nYou may use context_observation_list and context_release to remove only your own older tool observations when they are no longer useful. Preserve recent results, active errors, denials, cancellations, unknown outcomes, and evidence still needed for this delegated task.${activeRuleMessage ? `\n\n${activeRuleMessage}` : ""}`
+        }, { role: "user", content: entry.prompt });
+      } else if (activeRuleMessage) {
+        entry.messages.push({ role: "system", content: activeRuleMessage });
+      }
       workerMcp = typeof this.parentContext.mcp?.fork === "function"
         ? this.parentContext.mcp.fork(workerRequest, workerEvents.emit)
         : this.parentContext.mcp;
@@ -260,6 +274,8 @@ class WorkerHub {
         loadedExtensions: new Set(),
         loadedExtensionBodies: new Map(),
         hooks: createWorkerHooks(entry),
+        ruleCatalog,
+        rulePathObserver: new ToolPathObserver(ruleCatalog),
         continuity: null,
         windowSteward,
         observationLedger,
@@ -269,13 +285,19 @@ class WorkerHub {
         saveSnapshot: async () => {
           entry.observationRelease = { ledger: observationLedger.snapshot(), reminder: contextReleaseReminder.snapshot() };
           entry.toolSchemaState = capabilities.snapshot();
+          entry.ruleState = ruleCatalog.snapshot();
           this.persistChange();
         },
-        buildRenewalAnchors: async (digest, activeFiles) => [
-          { role: "system", content: entry.agent?.body || "Complete only the delegated work and report observed evidence." },
-          { role: "system", content: `Earlier delegated execution digest:\n${JSON.stringify(digest)}` },
-          ...(activeFiles.length ? [{ role: "system", content: `Recently accessed file anchors:\n${JSON.stringify(activeFiles)}` }] : [])
-        ]
+        buildRenewalAnchors: async (digest, activeFiles) => {
+          await ruleCatalog.refresh();
+          const currentRules = buildRuleActivationMessage(ruleCatalog.activeInstructions({ markInjected: true }));
+          return [
+            { role: "system", content: entry.agent?.body || "Complete only the delegated work and report observed evidence." },
+            ...(currentRules ? [{ role: "system", content: currentRules }] : []),
+            { role: "system", content: `Earlier delegated execution digest:\n${JSON.stringify(digest)}` },
+            ...(activeFiles.length ? [{ role: "system", content: `Recently accessed file anchors:\n${JSON.stringify(activeFiles)}` }] : [])
+          ];
+        }
       };
       const result = await runAutonomousLoop({ provider, messages: entry.messages, tools: capabilities.providerDefinitions(), getTools: () => capabilities.providerDefinitions(), request: context.request, events: workerEvents, context });
       entry.result = String(result || "").slice(0, MAX_RESULT_CHARS);
@@ -331,6 +353,7 @@ function privateEntry(entry) {
     messages: JSON.parse(JSON.stringify(entry.messages || [])),
     observationRelease: JSON.parse(JSON.stringify(entry.observationRelease || {})),
     toolSchemaState: JSON.parse(JSON.stringify(entry.toolSchemaState || {})),
+    ruleState: JSON.parse(JSON.stringify(entry.ruleState || {})),
     agentFingerprint: entry.agent ? JSON.stringify({ id: entry.agent.id, metadata: entry.agent.metadata, body: entry.agent.body }) : "",
     agentAuthorityFingerprint: entry.authority?.fingerprint || "",
     agentLogicalId: entry.agent?.id || entry.agentId || "",
@@ -350,6 +373,7 @@ function restoredEntry(snapshot, agent, authority, status) {
     messages: Array.isArray(snapshot.messages) ? JSON.parse(JSON.stringify(snapshot.messages)) : [],
     observationRelease: snapshot.observationRelease ? JSON.parse(JSON.stringify(snapshot.observationRelease)) : {},
     toolSchemaState: snapshot.toolSchemaState ? JSON.parse(JSON.stringify(snapshot.toolSchemaState)) : {},
+    ruleState: snapshot.ruleState ? JSON.parse(JSON.stringify(snapshot.ruleState)) : {},
     result: String(snapshot.result || ""),
     error: String(snapshot.error || ""),
     controller: new AbortController(),

@@ -4,7 +4,7 @@
 
 const { EVENT_TYPES } = require("../shared/events");
 const { createProviderDebugEmitter } = require("../../core/provider-debug");
-const { serializeToolResult } = require("./context-builder");
+const { buildRuleActivationMessage, serializeToolResult } = require("./context-builder");
 const { executeTool } = require("./tool-executor");
 const { isContextOverflowError } = require("./context/window-steward");
 const { buildModelResponseCorrection, findModelResponseIssue } = require("./model-response-guard");
@@ -24,6 +24,9 @@ async function runAutonomousLoop(input) {
   for (let round = 1; round <= maxRounds; round++) {
     context.currentRound = round;
     context.messages = messages;
+    const activatedRules = context.ruleCatalog?.consumeActivated?.() || [];
+    const ruleMessage = buildRuleActivationMessage(activatedRules);
+    if (ruleMessage) messages.push({ role: "system", content: ruleMessage });
     const workerNotifications = context.workers?.drainNotifications?.() || [];
     if (workerNotifications.length) messages.push({ role: "system", content: `Worker updates:\n${JSON.stringify(workerNotifications)}` });
     if (request.signal?.aborted) throw Object.assign(new Error("AI Companion request cancelled."), { name: "AbortError" });
@@ -96,7 +99,10 @@ async function runAutonomousLoop(input) {
       try {
         const beforeTool = await context.hooks?.run("before-tool", { tool: name, call });
         for (const additionalContext of beforeTool?.additionalContext || []) messages.push({ role: "system", content: `Tool lifecycle context:\n${additionalContext}` });
+        const registration = context.capabilities?.registration?.(name);
+        await context.rulePathObserver?.beforeTool?.(name, parseToolArguments(call), registration);
         const result = await executeTool(call, context);
+        await context.rulePathObserver?.afterTool?.(name, parseToolArguments(call), result, registration);
         consecutiveFailures = 0;
         events.emit({ type: EVENT_TYPES.TOOL_COMPLETED, tool: name, callId: call.id, result });
         await context.hooks?.run("after-tool", { tool: name, call, result });
@@ -128,6 +134,13 @@ async function runAutonomousLoop(input) {
     if (consecutiveFailures >= 3) messages.push({ role: "system", content: "Tool attempts failed repeatedly. Change strategy or explain the blocker; do not repeat an unchanged call." });
   }
   throw new Error(`Autonomous runtime reached its structural limit of ${maxRounds} model rounds.`);
+}
+
+function parseToolArguments(call) {
+  const value = call?.function?.arguments;
+  if (!value) return {};
+  if (typeof value === "object") return value;
+  try { return JSON.parse(value); } catch (_error) { return {}; }
 }
 
 async function completeWithOverflowRecovery(provider, messages, options, context) {

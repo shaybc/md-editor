@@ -5,6 +5,7 @@
 const fs = require("node:fs/promises");
 const path = require("node:path");
 const { loadAiCompanionPrompts } = require("../../config/prompts");
+const { RuleCatalog } = require("./rules/rule-catalog");
 
 async function readOptional(filePath) {
   try { return await fs.readFile(filePath, "utf8"); } catch (error) { if (error?.code === "ENOENT") return ""; throw error; }
@@ -31,17 +32,12 @@ function scopedDirectories(root, activePath) {
 }
 
 /** Load rules that are active for this run; skills and agents remain lazy metadata. */
-async function loadActiveInstructions(request, policy) {
-  const root = path.resolve(String(request.workspaceRoot || ""));
+async function loadActiveInstructions(request, policy, suppliedCatalog = null) {
   const prompts = await loadAiCompanionPrompts({ profileRoot: request.profileRoot });
   const application = policy.mode === "agent" ? prompts.agentSystem : (policy.mode === "plan" ? prompts.planSystem : prompts.chatSystem);
-  const userRules = request.profileRoot ? await readMarkdownDirectory(path.join(request.profileRoot, ".md-editor", "companion", "rules")) : [];
-  const workspaceRules = [];
-  for (const directory of scopedDirectories(root, request.activeFile?.path)) {
-    const content = await readOptional(path.join(directory, "AGENTS.md"));
-    if (content) workspaceRules.push({ source: path.join(directory, "AGENTS.md"), content });
-  }
-  return { application: String(application || ""), rules: [...userRules, ...workspaceRules] };
+  const catalog = suppliedCatalog || new RuleCatalog(request);
+  if (!suppliedCatalog) await catalog.load(request.activeFile?.path);
+  return { application: String(application || ""), rules: catalog.activeInstructions({ markInjected: true }) };
 }
 
 module.exports = { loadActiveInstructions, scopedDirectories };

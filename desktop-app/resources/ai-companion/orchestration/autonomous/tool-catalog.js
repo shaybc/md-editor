@@ -70,9 +70,16 @@ function getToolRegistrations(policy, settings = {}) {
       domain: runtimeDomain(name),
       description: definition.function.description,
       searchHint: name.replace(/_/g, " "),
+      rulePaths: runtimeRulePaths(name),
       executionOwner: "runtime"
     };
   });
+}
+
+function runtimeRulePaths(name) {
+  if (["read_file", "apply_edit", "write_file"].includes(name)) return { arguments: ["path"], results: ["path"] };
+  if (name === "search_text") return { results: ["[].path"] };
+  return undefined;
 }
 
 /** Return canonical names known to the runtime, including names prohibited for this request. */

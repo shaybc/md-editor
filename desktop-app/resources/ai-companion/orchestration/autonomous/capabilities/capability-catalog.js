@@ -47,6 +47,9 @@ class CapabilityCatalog {
   /** Return all current registrations for worker-specific filtering. */
   registrations() { return this.inventory.list(); }
 
+  /** Return runtime metadata for one registered tool without exposing it to the provider. */
+  registration(name) { return this.inventory.find(name); }
+
   /** Return the provider roster and deferred inventory size without schema bodies. */
   metrics() {
     const records = this.inventory.list();
