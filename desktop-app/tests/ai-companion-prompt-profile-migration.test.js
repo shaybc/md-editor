@@ -7,6 +7,11 @@ const {
   migratePromptProfile,
   resolvePromptUpgrade
 } = require("../resources/ai-companion/config/prompt-profile-migration");
+const {
+  DEFAULT_AI_COMPANION_PROMPTS,
+  PROMPTS_DEFAULT_REVISION,
+  createDefaultPromptProfile
+} = require("../resources/ai-companion/config/prompts");
 
 function options(profile, currentDefaults, extra = {}) {
   return {
@@ -99,4 +104,19 @@ test("use-defaults removes every customization, including non-conflicting ones",
 
   assert.deepEqual(resolved.prompts, { conflict: "theirs", userOnly: "default" });
   assert.deepEqual(resolved.retiredPrompts, {});
+});
+
+test("current autonomous defaults contain the expanded operating contracts", () => {
+  assert.equal(PROMPTS_DEFAULT_REVISION, 15);
+  assert.match(DEFAULT_AI_COMPANION_PROMPTS.chatSystem, /focused read or search/i);
+  assert.match(DEFAULT_AI_COMPANION_PROMPTS.agentSystem, /Read every target file before editing/i);
+  assert.match(DEFAULT_AI_COMPANION_PROMPTS.agentSystem, /inspect the resulting diff/i);
+  assert.match(DEFAULT_AI_COMPANION_PROMPTS.agentSystem, /verify behavior/i);
+  assert.match(DEFAULT_AI_COMPANION_PROMPTS.planSystem, /decision-complete Markdown implementation plan/i);
+  assert.match(DEFAULT_AI_COMPANION_PROMPTS.planSystem, /write only to the plan repository/i);
+
+  const profile = createDefaultPromptProfile();
+  assert.equal(profile.resolvedDefaultRevision, 15);
+  assert.equal(profile.prompts.agentSystem, DEFAULT_AI_COMPANION_PROMPTS.agentSystem);
+  assert.equal(profile.basePrompts.planSystem, DEFAULT_AI_COMPANION_PROMPTS.planSystem);
 });

@@ -4,6 +4,7 @@
 
 const { buildRuntimeIdentityInstruction } = require("./runtime-identity");
 const { sanitizeContinuityText } = require("./continuity/continuity-reference-policy");
+const { buildRuntimeGuidance } = require("./prompts/runtime-guidance");
 
 const DEFAULT_TOOL_RESULT_CHARS = 24000;
 
@@ -17,6 +18,7 @@ function buildSystemMessage(request, policy, extensions, instructions = {}, reca
   return [
     "You are MD-Editor's autonomous coding companion.", modeInstruction,
     buildRuntimeIdentityInstruction(request),
+    buildRuntimeGuidance(request, policy),
     "A plain final answer is valid when the user only needs text. Requests that change workspace, repository, or external state require the corresponding successful tool call; do not merely claim that a change was made.",
     "For large work, maintain optional progress with the work tools. React to tool errors and user denials instead of repeating unchanged calls.",
     "When older tool observations are no longer useful, you may activate context_observation_list and context_release through capability_search, inspect candidates, and release selected observation IDs. Never release recent results, active errors, denials, cancellations, unknown outcomes, or evidence still needed for the task.",

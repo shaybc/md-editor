@@ -54,6 +54,29 @@ test("system context reports only the configured runtime connection identity", (
   assert.doesNotMatch(system, /Vendor Z Model Q/);
 });
 
+test("system context includes detailed mode-aware operating guidance", () => {
+  const request = createRequest(process.cwd(), { profileRoot: "" });
+  const agent = buildSystemMessage(request, { mode: "agent" }, [], { application: "", rules: [] }, []);
+  assert.match(agent, /# Working approach/);
+  assert.match(agent, /# Tool use/);
+  assert.match(agent, /# Safe workspace changes/);
+  assert.match(agent, /read the exact region being changed/i);
+  assert.match(agent, /destructively reset or clean repository state/i);
+  assert.match(agent, /# Verification/);
+  assert.match(agent, /# Context continuity/);
+  assert.match(agent, /# User communication/);
+
+  const plan = buildSystemMessage({ ...request, action: "plan" }, { mode: "plan" }, [], { application: "", rules: [] }, []);
+  assert.match(plan, /# Plan grounding/);
+  assert.match(plan, /Plan mode may use workspace readers and plan-repository operations only/);
+  assert.doesNotMatch(plan, /# Safe workspace changes/);
+
+  const chat = buildSystemMessage({ ...request, action: "chat" }, { mode: "chat" }, [], { application: "", rules: [] }, []);
+  assert.match(chat, /# Evidence and accuracy/);
+  assert.match(chat, /Chat mode is read-oriented/);
+  assert.doesNotMatch(chat, /# Safe workspace changes/);
+});
+
 test("continuity excludes assistant and provider identity claims", () => {
   const sanitized = sanitizeContinuityText([
     "Continue parser recovery.",
