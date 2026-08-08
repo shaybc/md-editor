@@ -6,6 +6,7 @@ const fs = require("node:fs/promises");
 const { discoverBundles } = require("./bundle-discovery");
 const { isExtensionEnabled, isExtensionTrusted, loadExtensionState, updateExtensionState } = require("./extension-state-store");
 const { parseMarkdownDefinition } = require("./markdown-definition");
+const { AgentDefinitionPolicy } = require("../agents/agent-definition-policy");
 
 class ExtensionFabric {
   constructor(request) { this.request = request; this.bundles = []; this.errors = []; this.entries = new Map(); }
@@ -24,6 +25,15 @@ class ExtensionFabric {
     for (const bundle of this.bundles.filter((candidate) => candidate.enabled && candidate.trusted)) {
       for (const entry of bundle.contributions) {
         const id = `${bundle.id}:${entry.id}`;
+        if (entry.kind === "agent") {
+          const validation = AgentDefinitionPolicy.validate(entry.metadata);
+          if (!validation.valid) {
+            this.errors.push({ id, error: `Invalid agent definition: ${validation.errors.join(" ")}` });
+            continue;
+          }
+          const mode = String(this.request.action || "");
+          if (mode && validation.value.allowedModes.length && !validation.value.allowedModes.includes(mode)) continue;
+        }
         if (this.entries.has(id)) this.errors.push({ id, error: `Duplicate contribution id: ${id}` });
         else this.entries.set(id, { ...entry, id, localId: entry.id, extensionId: bundle.id, scope: bundle.scope });
       }
@@ -46,6 +56,12 @@ class ExtensionFabric {
     if (!entry) throw new Error(`Unknown or unavailable extension contribution: ${id}`);
     if (entry.kind !== "skill" && entry.kind !== "agent") return { ...entry, metadata: redactMetadata(entry.metadata) };
     const parsed = parseMarkdownDefinition(await fs.readFile(entry.filePath, "utf8"), { source: entry.filePath });
+    if (entry.kind === "agent") {
+      const validation = AgentDefinitionPolicy.validate(parsed.metadata);
+      if (!validation.valid) throw new Error(`Invalid agent definition '${id}': ${validation.errors.join(" ")}`);
+      const mode = String(this.request.action || "");
+      if (mode && validation.value.allowedModes.length && !validation.value.allowedModes.includes(mode)) throw new Error(`Agent '${id}' is not available in ${mode} mode.`);
+    }
     return { ...entry, metadata: parsed.metadata, body: parsed.body };
   }
 

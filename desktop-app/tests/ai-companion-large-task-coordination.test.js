@@ -10,6 +10,8 @@ const { AutonomousOrchestrator } = require("../resources/ai-companion/orchestrat
 const { prepareWorkerWorkspace } = require("../resources/ai-companion/orchestration/autonomous/workers/worker-workspace");
 const { WorkerHub } = require("../resources/ai-companion/orchestration/autonomous/workers/worker-hub");
 const { ArtifactVault } = require("../resources/ai-companion/orchestration/autonomous/artifacts/artifact-vault");
+const { AgentAuthorityResolver } = require("../resources/ai-companion/orchestration/autonomous/agents/agent-authority-resolver");
+const { authorizeTool } = require("../resources/ai-companion/orchestration/autonomous/approval-gateway");
 
 test("work ledger persists monotonic items and symmetric dependencies", async (t) => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "md-editor-work-ledger-"));
@@ -92,4 +94,58 @@ test("interrupted workers resume from private transcripts without replaying unfi
   assert.equal(result.result, "Recovered worker finished.");
   assert.equal(observedUnknownOutcome, true);
   await hub.close();
+});
+
+test("delegated-agent authority only narrows parent tools and blocks disallowed approval prompts", async () => {
+  const definition = (name) => ({ type: "function", function: { name, parameters: { type: "object", properties: {} } } });
+  const parentContext = {
+    policy: { mode: "agent", allowWrites: true, allowCommands: true },
+    request: {
+      action: "agent",
+      securityContext: {
+        policy: {
+          shell: { mode: "sandbox-shell" },
+          execution: { networkAccess: true },
+          approvals: { allowedCapabilities: ["*"], maximumGrantLifetime: { default: "workspace" } }
+        }
+      }
+    }
+  };
+  const agent = { id: "bounded", metadata: {
+    allowedModes: ["agent"],
+    capabilities: ["read", "edit", "execute"],
+    permissions: {
+      workspaceWrites: false,
+      commands: true,
+      networkAccess: false,
+      approvalCapabilities: ["shell.freeform"],
+      maximumGrantLifetime: "action"
+    }
+  } };
+  const definitions = ["read_file", "apply_edit", "run_command", "mcp_read_resource"].map(definition);
+  const authority = AgentAuthorityResolver.resolve(agent, parentContext, { definitions });
+  assert.deepEqual(authority.toolNames, ["read_file", "run_command"]);
+  assert.equal(authority.maximumGrantLifetime, "action");
+  let approvalRequests = 0;
+  await assert.rejects(() => authorizeTool({
+    agentAuthority: authority,
+    profileRoot: "",
+    securityContext: parentContext.request.securityContext,
+    requestApproval: async () => { approvalRequests += 1; return { approved: true }; }
+  }, "write_file", { path: "blocked.md" }, []), (error) => error.code === "AGENT_APPROVAL_NOT_ALLOWED");
+  assert.equal(approvalRequests, 0);
+});
+
+test("worker launch rejects an agent definition outside the parent mode", async () => {
+  const request = { action: "agent", workspaceRoot: process.cwd(), profileRoot: "", securityContext: { policy: {} } };
+  const parentContext = {
+    request,
+    policy: { mode: "agent", allowWrites: true, allowCommands: false },
+    capabilities: { registrations: () => [], definitions: () => [] },
+    taskGrants: []
+  };
+  const fabric = { activate: async () => ({ id: "planner", kind: "agent", metadata: { allowedModes: ["plan"] }, body: "Plan only." }) };
+  const hub = new WorkerHub({ completeMessage: async () => ({ content: "", toolCalls: [] }) }, request, { fabric, parentContext, events: { emit() {} } });
+  await assert.rejects(() => hub.launch({ agentId: "planner", prompt: "Do work", background: true }), (error) => error.code === "AGENT_MODE_NOT_ALLOWED");
+  assert.deepEqual(hub.list(), []);
 });

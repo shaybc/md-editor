@@ -10,6 +10,8 @@ const { HookGateway } = require("../resources/ai-companion/orchestration/autonom
 const { CapabilityCatalog } = require("../resources/ai-companion/orchestration/autonomous/capabilities/capability-catalog");
 const { ToolSchemaInventory } = require("../resources/ai-companion/orchestration/autonomous/capabilities/tool-schema-inventory");
 const { normalizeServerConfiguration } = require("../resources/ai-companion/orchestration/autonomous/mcp/server-configuration");
+const { AgentDefinitionPolicy } = require("../resources/ai-companion/orchestration/autonomous/agents/agent-definition-policy");
+const { McpConnectionManager } = require("../resources/ai-companion/orchestration/autonomous/mcp/mcp-connection-manager");
 
 async function temporaryRoots(t) {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "md-editor-extensions-"));
@@ -42,6 +44,16 @@ test("bundled workflow metadata is available without loading instruction bodies"
   assert.equal(skill.kind, "skill");
   assert.equal(Object.hasOwn(skill, "body"), false);
   assert.match((await fabric.activate(skill.id)).body, /smallest coherent change/i);
+});
+
+test("agent discovery hides mode-incompatible definitions and invalid metadata fails closed", async () => {
+  const fabric = new ExtensionFabric({ workspaceRoot: "", profileRoot: "", action: "plan" });
+  const snapshot = await fabric.load();
+  assert.equal(snapshot.entries.some((entry) => entry.id === "core-workflows:change-builder"), false);
+  assert.equal(snapshot.entries.some((entry) => entry.id === "core-workflows:implementation-planner"), true);
+  const validation = AgentDefinitionPolicy.validate({ allowedModes: ["agent"], permissions: { guessedAuthority: true } });
+  assert.equal(validation.valid, false);
+  assert.match(validation.errors.join(" "), /unknown permission/i);
 });
 
 test("workspace bundles remain inactive until enabled and trusted for that workspace", async (t) => {
@@ -135,4 +147,14 @@ test("external server configuration accepts stdio and protected HTTP transports"
   });
   assert.equal(normalizeServerConfiguration({ id: "loopback", transport: "http", url: "http://localhost:4080/mcp" }).url, "http://localhost:4080/mcp");
   assert.throws(() => normalizeServerConfiguration({ id: "remote", transport: "http", url: "http://example.test/mcp" }), /HTTPS/i);
+});
+
+test("delegated external-server managers inherit metadata without parent task grants", () => {
+  const parent = new McpConnectionManager({ workspaceRoot: process.cwd() });
+  parent.register([{ id: "local", transport: "stdio", command: "server.exe" }]);
+  parent.taskGrants.push({ capability: "external.server.connect", enabled: true });
+  const child = parent.fork({ workspaceRoot: process.cwd() });
+  assert.deepEqual(child.listServers().map((entry) => entry.id), ["local"]);
+  assert.deepEqual(child.taskGrants, []);
+  assert.equal(child.connections.size, 0);
 });

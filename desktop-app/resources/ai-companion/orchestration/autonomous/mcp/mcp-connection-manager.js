@@ -27,6 +27,13 @@ class McpConnectionManager {
     }
   }
 
+  /** Create a worker-owned manager with the same server metadata and no inherited grants or connections. */
+  fork(request, emit = () => {}) {
+    const manager = new McpConnectionManager(request, emit);
+    manager.register(Array.from(this.configurations.values(), (configuration) => JSON.parse(JSON.stringify(configuration))));
+    return manager;
+  }
+
   /** Return connection-free server metadata for lazy discovery. */
   listServers() {
     return Array.from(this.configurations.values(), (configuration) => ({ id: configuration.id, name: configuration.name, description: configuration.description, transport: configuration.transport, connected: this.connections.has(configuration.id) }));

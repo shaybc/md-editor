@@ -14,6 +14,7 @@ class CapabilityCatalog {
     this.fabric = options.fabric;
     this.mcp = options.mcp;
     this.emit = typeof options.emit === "function" ? options.emit : () => {};
+    this.registrationFilter = typeof options.registrationFilter === "function" ? options.registrationFilter : () => true;
     const registrations = options.registrations || (options.baseDefinitions || []).map((definition) => ({ definition }));
     this.inventory = new ToolSchemaInventory(registrations);
     this.exposure = new ToolExposurePolicy(this.policy);
@@ -245,7 +246,7 @@ class CapabilityCatalog {
 
   async indexExternalServer(serverId) {
     if (!serverId) return;
-    const registrations = typeof this.mcp.getToolRegistrations === "function"
+    const registrations = (typeof this.mcp.getToolRegistrations === "function"
       ? await this.mcp.getToolRegistrations(serverId)
       : (await this.mcp.getToolDefinitions(serverId)).map((definition) => ({
           definition,
@@ -254,7 +255,7 @@ class CapabilityCatalog {
           description: definition.function?.description || "",
           external: true,
           serverId
-        }));
+        }))).filter((record) => this.registrationFilter(record));
     const delta = this.inventory.replaceSource("external:" + serverId, registrations);
     if (delta.added.length || delta.removed.length || delta.changed.length) {
       for (const name of [...delta.removed, ...delta.changed]) {

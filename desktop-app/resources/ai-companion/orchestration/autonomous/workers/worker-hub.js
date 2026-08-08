@@ -5,7 +5,7 @@
 const path = require("node:path");
 const { createProvider } = require("../../shared/provider-factory");
 const { runAutonomousLoop } = require("../autonomous-loop");
-const { scopeAgentTools } = require("../agents/agent-scope");
+const { AgentAuthorityResolver } = require("../agents/agent-authority-resolver");
 const { CapabilityCatalog } = require("../capabilities/capability-catalog");
 const { WindowSteward } = require("../context/window-steward");
 const { ObservationLedger } = require("../context/observation-ledger");
@@ -37,7 +37,8 @@ class WorkerHub {
     const id = `worker-${++this.sequence}`;
     const agent = args.agentId ? await this.fabric?.activate(args.agentId) : null;
     if (args.agentId && agent?.kind !== "agent") throw new Error(`Unknown agent definition: ${args.agentId}`);
-    const entry = { id, description: String(args.description || "Delegated work"), prompt: String(args.prompt || ""), agentId: agent?.id || "", status: "queued", background: args.background === true, inbox: [], messages: [], result: "", error: "", controller: new AbortController(), agent, isolation: args.isolation || agent?.metadata?.isolation || "shared" };
+    const authority = this.resolveAuthority(agent, args.isolation);
+    const entry = { id, description: String(args.description || "Delegated work"), prompt: String(args.prompt || ""), agentId: agent?.id || "", status: "queued", background: args.background === true, inbox: [], messages: [], result: "", error: "", controller: new AbortController(), agent, authority, isolation: authority.isolation };
     entry.completion = new Promise((resolve) => { entry.resolveCompletion = resolve; });
     if (!entry.prompt.trim()) throw new Error("Worker launch requires a prompt.");
     this.entries.set(id, entry);
@@ -138,11 +139,13 @@ class WorkerHub {
       const numeric = Number(String(snapshot.id || "").replace(/^worker-/, "")) || 0;
       this.sequence = Math.max(this.sequence, numeric);
       let agent = null;
+      let authority = null;
       try {
         agent = snapshot.agentId ? await this.fabric?.activate(snapshot.agentId) : null;
         if (snapshot.agentId && agent?.kind !== "agent") throw new Error(`Unknown agent definition: ${snapshot.agentId}`);
+        authority = this.resolveAuthority(agent, snapshot.isolation);
       } catch (error) {
-        const failed = restoredEntry(snapshot, null, "failed");
+        const failed = restoredEntry(snapshot, null, null, "failed");
         failed.error = `Worker recovery failed: ${error?.message || String(error)}`;
         this.entries.set(failed.id, failed);
         this.notifications.push(publicEntry(failed));
@@ -153,8 +156,11 @@ class WorkerHub {
       if (snapshot.agentFingerprint && snapshot.agentFingerprint !== currentAgentFingerprint) {
         this.events.emit({ type: "recovery-warning", reason: "worker-agent-changed", summary: `Worker ${snapshot.id} will continue with the current agent definition.` });
       }
+      if (snapshot.agentAuthorityFingerprint && snapshot.agentAuthorityFingerprint !== authority.fingerprint) {
+        this.events.emit({ type: "recovery-warning", reason: "worker-authority-changed", summary: `Worker ${snapshot.id} will continue within the current delegated-agent boundary.` });
+      }
       const resumable = ["queued", "running", "interrupted"].includes(snapshot.status);
-      const entry = restoredEntry(snapshot, agent, resumable ? "queued" : snapshot.status);
+      const entry = restoredEntry(snapshot, agent, authority, resumable ? "queued" : snapshot.status);
       if (resumable) {
         repairInterruptedToolPairs(entry.messages);
         entry.messages.push({ role: "system", content: "This delegated run was interrupted. Reinspect current state before repeating any operation because an unfinished tool outcome may be unknown." });
@@ -170,6 +176,15 @@ class WorkerHub {
   /** Stop all workers owned by the run. */
   async close() { await Promise.all(this.list().filter((entry) => !isTerminal(entry.status)).map((entry) => this.stop(entry.id))); }
 
+  /** Resolve the current parent roster into one immutable delegated-agent boundary. */
+  resolveAuthority(agent, requestedIsolation) {
+    const registrations = this.parentContext.capabilities.registrations?.() || [];
+    const definitions = registrations.length
+      ? registrations.map((record) => record.definition)
+      : (this.parentContext.capabilities.definitions?.() || []);
+    return AgentAuthorityResolver.resolve(agent, this.parentContext, { definitions, requestedIsolation });
+  }
+
   schedule() {
     while (this.activeCount < MAX_ACTIVE_WORKERS && this.pending.length) {
       const entry = this.pending.shift();
@@ -183,27 +198,43 @@ class WorkerHub {
 
   async run(entry) {
     this.events.emit({ type: "worker-started", worker: publicEntry(entry) });
+    let workerMcp = null;
+    let ownsWorkerMcp = false;
     try {
-      entry.workspace = await resolveWorkerWorkspace(this.request, entry, this.parentContext.taskGrants);
+      const restrictedRequest = {
+        ...this.request,
+        agentAuthority: entry.authority,
+        securityContext: AgentAuthorityResolver.restrictSecurityContext(this.request.securityContext, entry.authority),
+        signal: entry.controller.signal
+      };
+      entry.workspace = await resolveWorkerWorkspace(restrictedRequest, entry, []);
+      if (entry.authority.requiresWorktree && entry.workspace.isolation !== "worktree") {
+        throw new Error(`Agent '${entry.agentId || entry.id}' requires worktree isolation, but an isolated workspace could not be created: ${entry.workspace.fallbackReason || "unknown reason"}`);
+      }
       const provider = entry.agent?.metadata?.model ? createProvider({ ...this.request.settings, model: entry.agent.metadata.model }) : this.provider;
       const parentRegistrations = this.parentContext.capabilities.registrations?.() || [];
       const parentDefinitions = parentRegistrations.length
         ? parentRegistrations.map((record) => record.definition)
         : (this.parentContext.capabilities.definitions?.() || []);
-      const scopedDefinitions = scopeAgentTools(parentDefinitions, entry.agent?.metadata || {});
+      const scopedDefinitions = AgentAuthorityResolver.filterDefinitions(parentDefinitions, entry.authority);
       const scopedNames = new Set(scopedDefinitions.map((definition) => definition.function?.name));
       const registrations = parentRegistrations.length
         ? parentRegistrations.filter((record) => scopedNames.has(record.name))
         : scopedDefinitions.map((definition) => ({ definition }));
-      if (!entry.messages.length) entry.messages.push({ role: "system", content: `${entry.agent?.body || "Complete only the delegated work. Report evidence and do not claim actions you did not perform."}\n\nSecondary tool schemas are loaded on demand. Use capability_search with select:<tool_name> or task keywords before calling a deferred tool.\n\nYou may use context_observation_list and context_release to remove only your own older tool observations when they are no longer useful. Preserve recent results, active errors, denials, cancellations, unknown outcomes, and evidence still needed for this delegated task.` }, { role: "user", content: entry.prompt });
-      const workerRequest = { ...this.request, workspaceRoot: entry.workspace.root, signal: entry.controller.signal };
+      if (!entry.messages.length) entry.messages.push({ role: "system", content: `${entry.agent?.body || "Complete only the delegated work. Report evidence and do not claim actions you did not perform."}\n\nExecution boundary: mode=${entry.authority.mode}; workspace writes=${entry.authority.workspaceWrites}; commands=${entry.authority.commands}; network=${entry.authority.networkAccess}; isolation=${entry.authority.isolation}. These limits cannot be expanded from this delegated run.\n\nSecondary tool schemas are loaded on demand. Use capability_search with select:<tool_name> or task keywords before calling a deferred tool.\n\nYou may use context_observation_list and context_release to remove only your own older tool observations when they are no longer useful. Preserve recent results, active errors, denials, cancellations, unknown outcomes, and evidence still needed for this delegated task.` }, { role: "user", content: entry.prompt });
+      const workerRequest = { ...restrictedRequest, workspaceRoot: entry.workspace.root };
       const workerEvents = { emit: (event) => this.events.emit({ ...event, workerId: entry.id }) };
+      workerMcp = typeof this.parentContext.mcp?.fork === "function"
+        ? this.parentContext.mcp.fork(workerRequest, workerEvents.emit)
+        : this.parentContext.mcp;
+      ownsWorkerMcp = workerMcp !== this.parentContext.mcp;
       const capabilities = new CapabilityCatalog({
         policy: this.parentContext.policy,
         fabric: this.fabric,
-        mcp: this.parentContext.mcp,
+        mcp: workerMcp,
         registrations,
         knownToolNames: parentRegistrations.length ? parentRegistrations.map((record) => record.name) : parentDefinitions.map((definition) => definition.function?.name).filter(Boolean),
+        registrationFilter: (record) => AgentAuthorityResolver.filterDefinitions([record.definition], entry.authority).length === 1,
         emit: workerEvents.emit
       });
       await capabilities.restore(entry.toolSchemaState);
@@ -216,7 +247,9 @@ class WorkerHub {
       const context = {
         ...this.parentContext,
         request: workerRequest,
+        taskGrants: [],
         capabilities,
+        mcp: workerMcp,
         workers: blockedWorkers(),
         loadedExtensions: new Set(),
         loadedExtensionBodies: new Map(),
@@ -242,8 +275,10 @@ class WorkerHub {
       entry.result = String(result || "").slice(0, MAX_RESULT_CHARS);
       entry.status = "completed";
       entry.workspace = await finishWorkerWorkspace(this.request, entry.workspace);
+      if (ownsWorkerMcp) await workerMcp.closeAll();
       this.complete(entry, "worker-completed");
     } catch (error) {
+      if (ownsWorkerMcp) await workerMcp.closeAll().catch(() => {});
       entry.error = error?.message || String(error);
       entry.status = entry.controller.signal.aborted ? "stopped" : "failed";
       this.complete(entry, entry.status === "stopped" ? "worker-stopped" : "worker-failed");
@@ -290,11 +325,12 @@ function privateEntry(entry) {
     messages: JSON.parse(JSON.stringify(entry.messages || [])),
     observationRelease: JSON.parse(JSON.stringify(entry.observationRelease || {})),
     toolSchemaState: JSON.parse(JSON.stringify(entry.toolSchemaState || {})),
-    agentFingerprint: entry.agent ? JSON.stringify({ id: entry.agent.id, metadata: entry.agent.metadata, body: entry.agent.body }) : ""
+    agentFingerprint: entry.agent ? JSON.stringify({ id: entry.agent.id, metadata: entry.agent.metadata, body: entry.agent.body }) : "",
+    agentAuthorityFingerprint: entry.authority?.fingerprint || ""
   };
 }
 
-function restoredEntry(snapshot, agent, status) {
+function restoredEntry(snapshot, agent, authority, status) {
   const entry = {
     id: String(snapshot.id),
     description: String(snapshot.description || "Delegated work"),
@@ -310,7 +346,8 @@ function restoredEntry(snapshot, agent, status) {
     error: String(snapshot.error || ""),
     controller: new AbortController(),
     agent,
-    isolation: snapshot.isolation || "shared",
+    authority,
+    isolation: authority?.isolation || snapshot.isolation || "shared",
     workspace: snapshot.workspace ? { ...snapshot.workspace } : undefined
   };
   entry.completion = isTerminal(status)

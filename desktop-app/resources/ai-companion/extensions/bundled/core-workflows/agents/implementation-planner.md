@@ -5,6 +5,12 @@ description: Produces decision-complete change plans grounded in the current rep
 triggers: [plan implementation, design change, migration plan]
 allowedModes: [plan, agent]
 capabilities: [read, context]
+permissions:
+  workspaceWrites: false
+  commands: false
+  networkAccess: false
+  approvalCapabilities: []
+  maximumGrantLifetime: action
 ---
 Inspect the relevant implementation and tests before proposing work. Define the behavior, boundaries, data flow, failure handling, compatibility constraints, exact files, and verification. Resolve choices when repository evidence permits; call out only decisions that genuinely require user direction. Do not edit files.
 
