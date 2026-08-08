@@ -23,11 +23,6 @@
     { id: "gpt-5.5", provider: "openai", label: "GPT-5.5", match: "^gpt-5\\.5(?!-pro)", contextWindow: 1050000, maxOutputTokens: 128000, isReasoning: true },
     { id: "gpt-5.5-pro", provider: "openai", label: "GPT-5.5 Pro", match: "^gpt-5\\.5-pro", contextWindow: 1050000, maxOutputTokens: 128000, isReasoning: true },
     { id: "gpt-5.4", provider: "openai", label: "GPT-5.4", match: "^gpt-5\\.4", contextWindow: 1050000, maxOutputTokens: 128000, isReasoning: true },
-    { id: "claude-fable-5", provider: "anthropic", label: "Claude Fable 5", match: "^claude-fable-5", contextWindow: 1000000, maxOutputTokens: 128000, isReasoning: true },
-    { id: "claude-opus-5", provider: "anthropic", label: "Claude Opus 5", match: "^claude-opus-5", contextWindow: 1000000, maxOutputTokens: 128000, isReasoning: true },
-    { id: "claude-opus-4-8", provider: "anthropic", label: "Claude Opus 4.8", match: "^claude-opus-4-8", contextWindow: 1000000, maxOutputTokens: 128000, isReasoning: true },
-    { id: "claude-sonnet-5", provider: "anthropic", label: "Claude Sonnet 5", match: "^claude-sonnet-5", contextWindow: 1000000, maxOutputTokens: 128000, isReasoning: true },
-    { id: "claude-haiku-4-5", provider: "anthropic", label: "Claude Haiku 4.5", match: "^claude-haiku-4-5", contextWindow: 200000, maxOutputTokens: 64000, isReasoning: true },
     { id: "gemini-3.6-flash", provider: "google", label: "Gemini 3.6 Flash", match: "^gemini-3\\.6-flash", contextWindow: 1048576, maxOutputTokens: 65536, isReasoning: true },
     { id: "gemini-3.1-pro", provider: "google", label: "Gemini 3.1 Pro", match: "^gemini-3\\.1-pro", contextWindow: 1048576, maxOutputTokens: 65536, isReasoning: true },
     { id: "gemini-3.5-flash", provider: "google", label: "Gemini 3.5 Flash", match: "^gemini-3\\.5-flash", contextWindow: 1048576, maxOutputTokens: 65535, isReasoning: true },
@@ -57,7 +52,6 @@
     "gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna", "gpt-5.5", "gpt-5.5-pro", "gpt-5.4",
     "gemini-3.6-flash", "gemini-3.5-flash", "gemini-3.5-flash-lite", "gemini-3.1-flash-lite",
     "gemini-3.1-pro-preview", "gemini-3.1-pro", "gemini-2.5-flash", "gemini-2.5-flash-lite", "gemini-2.5-pro",
-    "claude-fable-5", "claude-opus-5", "claude-sonnet-5", "claude-haiku-4-5",
     "grok-4.5", "grok-4.3", "grok-4.20-reasoning", "grok-4.20", "grok-4.1-fast-reasoning", "grok-4.1-fast",
     "qwen3.5", "gpt-oss:20b", "qwen3:8b", "llama3.2", "gemma3"
   ]);

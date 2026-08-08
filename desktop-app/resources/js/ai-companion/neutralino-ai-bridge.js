@@ -365,6 +365,8 @@
       promptsUpgradeConflicts: function(payload) { return request("promptsUpgradeConflicts", Object.assign({ workspaceRoot: getDesktopRootPath() || "ai-prompts", settings: {} }, payload || {})); },
       promptsUpgradeResolve: function(payload) { return request("promptsUpgradeResolve", Object.assign({ workspaceRoot: getDesktopRootPath() || "ai-prompts", settings: {} }, payload || {})); },
       securityPolicyGet: function(payload) { return request("securityPolicyGet", payload || {}); },
+      extensionsList: function(payload) { return request("extensionsList", payload || {}); },
+      extensionConfigure: function(payload) { return request("extensionConfigure", payload || {}); },
       approvalGrantsList: function(payload) { return request("approvalGrantsList", payload || {}); },
       approvalGrantRevoke: function(payload) { return request("approvalGrantRevoke", payload || {}); },
       approvalGrantsReplace: function(payload) { return request("approvalGrantsReplace", payload || {}); },

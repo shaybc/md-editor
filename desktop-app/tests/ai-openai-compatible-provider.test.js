@@ -3,6 +3,8 @@ const test = require("node:test");
 
 const { formatProviderDebugEvent } = require("../resources/ai-companion/core/provider-debug");
 const { createOpenAiCompatibleProvider } = require("../resources/ai-companion/providers/openai-compatible");
+const { createProvider } = require("../resources/ai-companion/orchestration/shared/provider-factory");
+const { withProviderRateLimitGuard } = require("../resources/ai-companion/providers/provider-rate-limit-guard");
 const {
   calculateAdaptiveRequestPaceMs,
   createRateLimitRetryPlan
@@ -103,7 +105,31 @@ test("provider retry events expose the selected delay source and quota details",
   assert.equal(formatted.details.quota.value, 15);
 });
 
-test("OpenAI-compatible provider applies the parsed Gemini retry plan", async () => {
+test("shared provider guard waits and repeats the same connector operation", async () => {
+  let attempts = 0;
+  const waits = [];
+  const provider = withProviderRateLimitGuard({
+    async completeMessage() {
+      attempts += 1;
+      if (attempts === 1) {
+        const error = new Error("Please retry in 2s.");
+        error.providerStatus = 429;
+        error.providerBody = error.message;
+        throw error;
+      }
+      return { role: "assistant", content: "recovered", toolCalls: [] };
+    }
+  }, {
+    wait: async (delayMs) => waits.push(delayMs)
+  });
+
+  const result = await provider.completeMessage([{ role: "user", content: "test" }]);
+  assert.equal(result.content, "recovered");
+  assert.equal(attempts, 2);
+  assert.deepEqual(waits, [3000]);
+});
+
+test("shared provider guard applies the parsed retry plan to OpenAI-compatible connectors", async () => {
   const originalFetch = global.fetch;
   const controller = new AbortController();
   const debugEvents = [];
@@ -115,7 +141,8 @@ test("OpenAI-compatible provider applies the parsed Gemini retry plan", async ()
   });
 
   try {
-    const provider = createOpenAiCompatibleProvider({
+    const provider = createProvider({
+      providerMode: "openai-compatible",
       baseUrl: "https://generativelanguage.googleapis.com/v1beta/openai",
       model: "gemini-3.5-flash-lite",
       providerRequestDelayMs: 0

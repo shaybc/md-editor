@@ -3006,6 +3006,12 @@ async function startMarkdownViewer() {
       getWorkspaceRoot: function() { return activeFolderPath || getDesktopAppRootPath(); }
     });
   }
+  if (typeof window.registerMarkdownViewerAiExtensionSettings === "function") {
+    window.registerMarkdownViewerAiExtensionSettings(app, {
+      bridge: neutralinoAiBridge,
+      getWorkspaceRoot: function() { return activeFolderPath || getDesktopAppRootPath(); }
+    });
+  }
   // Model registry must register before the panel: the panel's context indicator resolves the
   // configured model's context window through app.modules.aiCompanionModelRegistry.
   const aiCompanionModelRegistry = typeof window.registerMarkdownViewerAiCompanionModelRegistry === "function"
@@ -4303,6 +4309,7 @@ async function startMarkdownViewer() {
   const settingsAiChatEnabledInput = document.getElementById("settings-ai-chat-enabled");
   const settingsAiAutocompleteEnabledInput = document.getElementById("settings-ai-autocomplete-enabled");
   const settingsAiAgentEnabledInput = document.getElementById("settings-ai-agent-enabled");
+  const settingsAiAgentLoopArchitectureInput = document.getElementById("settings-ai-agent-loop-architecture");
   const settingsAiGitSummaryEnabledInput = document.getElementById("settings-ai-git-summary-enabled");
   const settingsAiShowReasoningInput = document.getElementById("settings-ai-show-reasoning");
   const settingsAiAutocompleteLineEnabledInput = document.getElementById("settings-ai-autocomplete-line-enabled");
@@ -9397,6 +9404,7 @@ Markdown content is processed client-side in your browser and sanitized before p
     if (settingsAiChatEnabledInput) settingsAiChatEnabledInput.checked = aiSettings.chatEnabled;
     if (settingsAiAutocompleteEnabledInput) settingsAiAutocompleteEnabledInput.checked = aiSettings.autocompleteEnabled;
     if (settingsAiAgentEnabledInput) settingsAiAgentEnabledInput.checked = aiSettings.agentEnabled;
+    if (settingsAiAgentLoopArchitectureInput) settingsAiAgentLoopArchitectureInput.value = aiSettings.agentLoopArchitecture;
     if (settingsAiGitSummaryEnabledInput) settingsAiGitSummaryEnabledInput.checked = aiSettings.gitSummaryEnabled;
     if (settingsAiShowReasoningInput) settingsAiShowReasoningInput.checked = aiSettings.showReasoning !== false;
     if (settingsAiAutocompleteLineEnabledInput) settingsAiAutocompleteLineEnabledInput.checked = aiSettings.autocompleteLineEnabled;
@@ -11405,6 +11413,7 @@ Markdown content is processed client-side in your browser and sanitized before p
       autocompleteModelFamily: settingsAiAutocompleteModelFamilyInput?.value,
       autocompleteContextProvidersEnabled: !!settingsAiAutocompleteContextProvidersEnabledInput?.checked,
       agentAutoRunCommands: !!settingsAiAgentAutoRunCommandsInput?.checked,
+      agentLoopArchitecture: settingsAiAgentLoopArchitectureInput?.value,
       agentConfirmBeforeWrite: settingsAiAgentConfirmBeforeWriteInput?.checked !== false,
       aiSecurityPolicy: aiSecuritySettings?.collect?.() || aiCompanionSettings?.defaults?.aiSecurityPolicy
     })) : {};

@@ -5,7 +5,6 @@
 "use strict";
 
 const { TextDecoder } = require("node:util");
-const { createRateLimitRetryPlan } = require("./rate-limit-retry");
 const { isGeminiEndpoint, sanitizeOpenAiToolsForGemini, coerceGeminiToolChoice } = require("./gemini-schema");
 
 function joinEndpoint(baseUrl, path) {
@@ -58,10 +57,12 @@ function coerceToolChoiceToTools(toolChoice, tools) {
   return available.has(name) ? toolChoice : "auto";
 }
 
-function createProviderRequestError(status, body) {
+function createProviderRequestError(status, body, response) {
   const message = parseProviderError(status, body);
   const error = new Error(message);
   error.providerStatus = status;
+  error.providerBody = body;
+  error.providerResponse = response;
   if (isProviderTokenLimitMessage(message)) error.aiStopReason = "max_tokens";
   return error;
 }
@@ -229,7 +230,6 @@ function createOpenAiCompatibleProvider(settings) {
   const apiKey = settings.apiKey;
   const extraBody = settings.extraBody && typeof settings.extraBody === "object" && !Array.isArray(settings.extraBody) ? settings.extraBody : {};
   const providerRequestDelayMs = clampDelayMs(settings.providerRequestDelayMs, 1000);
-  let effectiveProviderRequestDelayMs = providerRequestDelayMs;
   const debugLogFullAiPayloads = settings.debugLogFullAiPayloads === true;
 
   async function postJson(pathname, body, options = {}) {
@@ -262,9 +262,7 @@ function createOpenAiCompatibleProvider(settings) {
   async function postCompletionsRequest(pathname, body, options = {}) {
     const onDebug = typeof options.onDebug === "function" ? options.onDebug : null;
     let currentBody = body;
-    let rateLimitRetries = 0;
     const maxAttempts = 8;
-    const maxRateLimitRetries = 3;
 
     for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
       onDebug?.({
@@ -275,7 +273,7 @@ function createOpenAiCompatibleProvider(settings) {
         bodyKeys: Object.keys(currentBody),
         ...(debugLogFullAiPayloads ? { requestBody: currentBody } : {})
       });
-      await waitForProviderPace(effectiveProviderRequestDelayMs, options.signal, onDebug, pathname);
+      await waitForProviderPace(providerRequestDelayMs, options.signal, onDebug, pathname);
       const response = await postJson(pathname, currentBody, options);
       if (response.ok) {
         onDebug?.({ kind: "response", pathname, attempt, status: response.status, ok: true });
@@ -292,30 +290,9 @@ function createOpenAiCompatibleProvider(settings) {
         error: debugLogFullAiPayloads ? errorText : errorText.slice(0, 300),
         ...(debugLogFullAiPayloads ? { responseBody: errorText } : {})
       });
-      if (response.status === 429 && rateLimitRetries < maxRateLimitRetries) {
-        rateLimitRetries += 1;
-        const retryPlan = createRateLimitRetryPlan({ response, errorText, retryNumber: rateLimitRetries });
-        if (retryPlan.adaptivePaceMs !== null) {
-          effectiveProviderRequestDelayMs = Math.max(effectiveProviderRequestDelayMs, retryPlan.adaptivePaceMs);
-        }
-        onDebug?.({
-          kind: "rate-limit-retry",
-          pathname,
-          attempt,
-          delayMs: retryPlan.delayMs,
-          providerDelayMs: retryPlan.providerDelayMs,
-          delaySource: retryPlan.delaySource,
-          adaptivePaceMs: retryPlan.adaptivePaceMs,
-          quota: retryPlan.quota,
-          retry: rateLimitRetries,
-          maxRetries: maxRateLimitRetries
-        });
-        await sleep(retryPlan.delayMs, options.signal);
-        continue;
-      }
       const fixup = PARAM_FIXUPS.find((candidate) => candidate.matches(errorText));
       const nextBody = fixup ? fixup.apply(currentBody, errorText) : null;
-      if (!fixup || !nextBody) return { ok: false, status: response.status, bodyText: errorText };
+      if (!fixup || !nextBody) return { ok: false, status: response.status, bodyText: errorText, response };
 
       onDebug?.({ kind: "retry", pathname, attempt, fixup: fixup.name });
       currentBody = nextBody;
@@ -348,7 +325,7 @@ function createOpenAiCompatibleProvider(settings) {
     }, { signal: options.signal, onDebug });
 
     if (!result.ok) {
-      const error = createProviderRequestError(result.status, result.bodyText);
+      const error = createProviderRequestError(result.status, result.bodyText, result.response);
       onDebug?.({ kind: "error", pathname: "/chat/completions", status: result.status, message: error.message });
       throw error;
     }
@@ -418,7 +395,7 @@ function createOpenAiCompatibleProvider(settings) {
 
     const result = await postCompletionsRequest("/chat/completions", requestBody, { signal: options.signal, onDebug });
     if (!result.ok) {
-      const error = createProviderRequestError(result.status, result.bodyText);
+      const error = createProviderRequestError(result.status, result.bodyText, result.response);
       onDebug?.({ kind: "error", pathname: "/chat/completions", status: result.status, message: error.message });
       // Opt-in request-shape dump for diagnosing opaque provider rejections (no secrets:
       // headers/apiKey are not included). Enable with MD_EDITOR_AI_DUMP_REQUEST=1.
@@ -503,7 +480,7 @@ function createOpenAiCompatibleProvider(settings) {
 
     const result = await postCompletionsRequest("/completions", requestBody, { signal: options.signal, onDebug });
     if (!result.ok) {
-      const error = createProviderRequestError(result.status, result.bodyText);
+      const error = createProviderRequestError(result.status, result.bodyText, result.response);
       onDebug?.({ kind: "error", pathname: "/completions", status: result.status, message: error.message });
       throw error;
     }

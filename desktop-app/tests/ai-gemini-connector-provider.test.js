@@ -302,6 +302,7 @@ test("Gemini connector test connection emits full request debug payloads", async
     const formattedRequest = formatProviderDebugEvent(requestEvent);
     assert.equal(formattedRequest.details.url, requests[0].url);
     assert.deepEqual(formattedRequest.details.requestBody, requestEvent.requestBody);
+    assert.equal(formattedRequest.details.requestHeaders.Authorization, "[redacted]");
 
     const responseEvent = events.find((event) => event.kind === "response");
     assert.equal(responseEvent.responseBody, JSON.stringify({ response: "ok" }));
@@ -355,7 +356,21 @@ test("Gemini connector logs attempted request when fetch fails before response",
     assert.equal(formattedError.details.url, errorEvent.url);
     assert.equal(formattedError.details.errorCause.code, "ENOTFOUND");
     assert.deepEqual(formattedError.details.requestBody, errorEvent.requestBody);
+    assert.equal(formattedError.details.requestHeaders.Authorization, "[redacted]");
   } finally {
     globalThis.fetch = previousFetch;
   }
+});
+
+test("provider debug formatting redacts native API keys and nested credentials", () => {
+  const formatted = formatProviderDebugEvent({
+    kind: "request",
+    provider: "gemini-connector",
+    requestHeaders: { "Content-Type": "application/json", "x-goog-api-key": "native-secret" },
+    requestBody: { prompt: "safe", apiKey: "nested-secret", nested: { Authorization: "Bearer token-value" } }
+  });
+  assert.equal(formatted.details.requestHeaders["x-goog-api-key"], "[redacted]");
+  assert.equal(formatted.details.requestHeaders["Content-Type"], "application/json");
+  assert.equal(formatted.details.requestBody.apiKey, "[redacted]");
+  assert.equal(formatted.details.requestBody.nested.Authorization, "[redacted]");
 });

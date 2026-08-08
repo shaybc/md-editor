@@ -26,6 +26,10 @@ const CAPABILITIES = Object.freeze({
   preferences_update: { id: "settings.change", risk: "high", label: "Change settings", maxLifetime: "action" },
   preferences_reset: { id: "settings.change", risk: "high", label: "Change settings", maxLifetime: "action" },
   preferences_import: { id: "settings.security.change", risk: "high", label: "Import settings", maxLifetime: "action" },
+  mcp_server_connect: { id: "external.server.connect", risk: "high", label: "Connect external capability servers", maxLifetime: "workspace" },
+  mcp_tool_invoke: { id: "external.tool.invoke", risk: "high", label: "Invoke external capabilities", maxLifetime: "task" },
+  extension_hook_run: { id: "extension.hook.execute", risk: "high", label: "Run extension hooks", maxLifetime: "task" },
+  worker_workspace_create: { id: "worker.workspace.create", risk: "high", label: "Create delegated Git worktrees", maxLifetime: "action" },
   run_command: { id: "shell.freeform", risk: "high", label: "Run free-form shell commands", maxLifetime: "action" }
 });
 
@@ -108,7 +112,7 @@ function describe(rawToolName, args = {}, context = {}) {
     : "";
   const resourceValue = PATH_RESOURCE_TOOLS.has(toolName)
     ? normalizePath(args.path || args.sourcePath || args.expectedPath)
-    : conversionResource || normalizePath(args.branch || args.remoteBranch || toolName);
+    : conversionResource || normalizePath(args.serverId || args.hookId || args.branch || args.remoteBranch || toolName);
   const resource = PATH_RESOURCE_TOOLS.has(toolName)
     ? { type: "path-glob", value: resourceValue }
     : { type: "exact", value: resourceValue || toolName };

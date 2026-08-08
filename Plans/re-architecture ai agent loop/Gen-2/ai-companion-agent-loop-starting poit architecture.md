@@ -109,7 +109,7 @@ This component may also be called:
 - Action selector
 - Replanning loop
 
-In diagrams such as the Claude Agent SDK agent loop, this responsibility is represented by the box labeled **Claude evaluates**.
+In reference agent-loop diagrams, this responsibility is represented by the model-evaluation step.
 
 In that context, “evaluates” does not primarily mean grading or testing the agent. It means:
 

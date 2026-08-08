@@ -395,9 +395,12 @@
       activeAgentEntry.record.events.push({ type: "chat-response", content: text, isError, completedAt });
       if (activeRunMode === "plan" && !isError) {
         activeAgentEntry.record.mode = "plan";
-        activeAgentEntry.record.plan = createPlanMetadata(text, activeAgentEntry.record.plan, "planned", activeAgentEntry.pendingPlanMetadata);
+        const repositoryPlan = activeAgentEntry.pendingPlanMetadata || (activeAgentEntry.record.plan?.path ? activeAgentEntry.record.plan : null);
+        const requiresRepositoryPlan = activeAgentEntry.record.agentLoopArchitecture === "autonomous";
+        if (repositoryPlan?.path || !requiresRepositoryPlan) activeAgentEntry.record.plan = createPlanMetadata(text, activeAgentEntry.record.plan, "planned", repositoryPlan);
+        else delete activeAgentEntry.record.plan;
         delete activeAgentEntry.pendingPlanMetadata;
-        activeAgentEntry.record.status = "planned";
+        activeAgentEntry.record.status = repositoryPlan?.path || !requiresRepositoryPlan ? "planned" : "error";
         attachPromptActions(activeAgentEntry);
         attachPlanResponseActions(activeAgentEntry, streamingChatResponse);
       } else {
@@ -6926,6 +6929,29 @@
       renderWorkspaceChatHistory(workspaceChatIndexes);
     }
 
+    function appendAutonomousRuntimeStatus(event) {
+      const labels = {
+        "context-thinned": "Context observations stored",
+        "continuity-updated": "Continuity record updated",
+        "run-restored": "Autonomous run restored",
+        "recovery-warning": "Recovery warning",
+        compaction: "Context renewed"
+      };
+      const summary = event.summary || event.error || event.reason || (event.estimatedTokensBefore
+        ? `${event.estimatedTokensBefore} tokens before, ${event.estimatedTokensAfter || 0} after`
+        : "Completed");
+      const display = createSyntheticToolActivity({
+        type: event.type === "recovery-warning" ? "tool-error" : "tool",
+        tool: labels[event.type] || event.type,
+        summary,
+        callId: `${event.type}-${event.savedAt || event.updatedAt || Date.now()}`
+      });
+      const savedEvent = recordAgentEvent({ ...event, activity: display.activity }) || { ...event, activity: display.activity };
+      activeActivityRenderer?.appendActivity?.(savedEvent);
+      scrollToolLogToEnd();
+      renderWorkspaceInspectorPanels();
+    }
+
     /**
      * Record and render a model narration block (pre-tool commentary) in the
      * active run's timeline. Routing through recordAgentEvent persists it with
@@ -7435,6 +7461,41 @@
         appendNarration(event);
         return;
       }
+      if (event.type === "assistant-final") {
+        if (event.plan?.path && activeAgentEntry) activeAgentEntry.pendingPlanMetadata = event.plan;
+        const finalContent = String(event.content || "").trim();
+        if (!finalContent) {
+          recordAgentEvent({ ...event, invalid: true, error: "The autonomous runtime returned an empty final response." });
+          if (activeAgentEntry) activeAgentEntry.record.status = "error";
+          return;
+        }
+        finishChatResponse(finalContent, false, getWorkedLabelFromCounter());
+        return;
+      }
+      if (["plan-saved", "plan-updated"].includes(event.type)) {
+        recordAgentEvent(event);
+        if (event.plan?.path && activeAgentEntry) activeAgentEntry.pendingPlanMetadata = event.plan;
+        void loadRepositoryPlans({ force: true });
+        return;
+      }
+      if (["run-started", "context-thinned", "continuity-updated", "chronicle-saved", "run-restored", "recovery-warning", "compaction", "run-completed", "run-cancelled", "run-failed"].includes(event.type) || /^(work|worker)-/.test(event.type)) {
+        if (["context-thinned", "continuity-updated", "run-restored", "recovery-warning", "compaction"].includes(event.type)) appendAutonomousRuntimeStatus(event);
+        else recordAgentEvent(event);
+        if (activeAgentEntry && ["run-restored", "recovery-warning"].includes(event.type)) {
+          activeAgentEntry.record.recoverySummary = {
+            type: event.type,
+            summary: event.summary || event.error || event.reason || "",
+            classification: event.classification || "",
+            updatedAt: new Date().toISOString()
+          };
+        }
+        if (activeAgentEntry && event.type === "run-completed") activeAgentEntry.record.status = activeRunMode === "plan"
+          ? (event.plan?.path || activeAgentEntry.record.plan?.path || activeAgentEntry.pendingPlanMetadata?.path ? "planned" : "error")
+          : (String(getRecordFinalResponse(activeAgentEntry.record) || "").trim() ? "completed" : "error");
+        if (activeAgentEntry && event.type === "run-cancelled") activeAgentEntry.record.status = "cancelled";
+        if (activeAgentEntry && event.type === "run-failed") activeAgentEntry.record.status = "error";
+        return;
+      }
       if (activeRunMode === "chat" || activeRunMode === "plan") {
         if (event.type === "content-delta" && event.content) {
           appendChatResponseDelta(event.content);
@@ -7450,6 +7511,9 @@
         }
       }
       if (event.type === "tool" || event.type === "tool-error") appendTool(event);
+      if (event.type === "tool-started") appendTool({ ...event, type: "tool", summary: "Running" });
+      if (event.type === "tool-completed") appendTool({ ...event, type: "tool", summary: "Completed" });
+      if (event.type === "tool-failed") appendTool({ ...event, type: "tool-error" });
       if (event.type === "agent-summary") {
         hideThinkingIndicator();
         const summaryEvent = { ...event, workedLabel: event.workedLabel || getWorkedLabelFromCounter() };
@@ -7687,6 +7751,9 @@
       renderTaskChangesPanel(null);
       activeRunMode = mode;
       const existingEntry = overrides.entry || null;
+      settings.agentLoopArchitecture = existingEntry?.record?.agentLoopArchitecture === "autonomous"
+        ? "autonomous"
+        : (existingEntry?.record?.agentLoopArchitecture === "legacy" ? "legacy" : settings.agentLoopArchitecture);
       const orderedTaskIndex = [...agentTaskIndex].sort(compareAgentTaskIndexItems);
       const indexedTurn = existingEntry ? orderedTaskIndex.findIndex((item) => item.id === existingEntry.record?.id) : -1;
       let requestTurnIndex = existingEntry
@@ -7750,6 +7817,7 @@
       }
       activeActivityRenderer = activeAgentEntry.renderer;
       activeAgentEntry.record.mode = mode;
+      activeAgentEntry.record.agentLoopArchitecture = settings.agentLoopArchitecture;
       resetSyntheticActivityState();
       streamingChatResponse = null;
       chatResponseRecorded = false;
@@ -7769,6 +7837,13 @@
         runId: activeAgentEntry?.record?.runId || activeAgentEntry?.record?.id || "",
         chatCreatedAt: activeAgentChat?.createdAt || activeAgentEntry?.record?.createdAt || Date.now(),
         durableResume: mode === "agent" && overrides.durableResume === true,
+        modelLimits: (() => {
+          const modelName = settings.providerMode === "litellm" && settings.litellmModelAlias
+            ? settings.litellmModelAlias
+            : settings.model;
+          const info = modelRegistry?.resolveModelInfo?.(modelName);
+          return info ? { contextWindow: Number(info.contextWindow) || 0, maxOutputTokens: Number(info.maxOutputTokens) || 0 } : null;
+        })(),
         turnIndex: requestTurnIndex,
         executionKind,
         executionGeneration,
@@ -7778,8 +7853,13 @@
         priorIntentContractMeta: priorIntentState?.meta || null
       };
       if (mode === "plan") {
+        const existingPlanTarget = existingEntry?.record?.plan?.path ? getPlanLocator(existingEntry.record.plan) : null;
         requestPayload.sourceChatId = activeAgentChat?.id || "";
         requestPayload.sourceTaskId = activeAgentEntry?.record?.id || "";
+        requestPayload.planTarget = overrides.planTarget && typeof overrides.planTarget === "object" ? overrides.planTarget : existingPlanTarget;
+        requestPayload.planOperation = ["create", "update", "auto"].includes(overrides.planOperation)
+          ? overrides.planOperation
+          : (requestPayload.planTarget ? "update" : "create");
       }
       if (requestChatTitle) requestPayload.requestChatTitle = true;
       const agentEventToken = mode === "agent" ? {} : null;
@@ -7795,7 +7875,7 @@
       updateAgentRunButton();
       try {
         const result = await request;
-                if (mode === "plan" && result?.plan && activeAgentEntry) {
+        if (mode === "plan" && result?.plan?.path && activeAgentEntry) {
           activeAgentEntry.pendingPlanMetadata = result.plan;
           if (activeAgentEntry.record?.mode === "plan" && activeAgentEntry.record?.plan) {
             const planText = String(result.content || getRecordFinalResponse(activeAgentEntry.record) || "").trim();
@@ -7805,6 +7885,7 @@
             attachPromptActions(activeAgentEntry);
             delete activeAgentEntry.pendingPlanMetadata;
           }
+          void loadRepositoryPlans({ force: true });
         }
         if ((mode === "chat" || mode === "plan") && result?.content) finishChatResponse(result.content, false, getWorkedLabelFromCounter());
 

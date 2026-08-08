@@ -4,6 +4,7 @@ const assert = require("node:assert/strict");
 const test = require("node:test");
 
 const gemini = require("../resources/ai-companion/providers/gemini-connector");
+const { createProvider } = require("../resources/ai-companion/orchestration/shared/provider-factory");
 const { GeminiConnectorClient, loadGeminiConnectorSettings, buildToolConfig } = gemini;
 
 test("native mode loads settings from baseUrl/apiKey (no connector id required)", () => {
@@ -37,6 +38,41 @@ test("native mode does NOT require a connector id (unlike the enterprise connect
   assert.throws(() => new GeminiConnectorClient({ publicNative: false, baseUrl: "https://x", model: "m", apiKey: "k" }), /connector ID is required/);
 });
 
+test("shared provider guard waits and retries native connector rate limits", async () => {
+  const originalFetch = global.fetch;
+  const controller = new AbortController();
+  const debugEvents = [];
+  global.fetch = async () => ({
+    ok: false,
+    status: 429,
+    headers: { get: () => null },
+    text: async () => JSON.stringify({ error: { code: 429, message: "Quota exceeded. Please retry in 3.9s." } })
+  });
+
+  try {
+    const provider = createProvider({
+      providerMode: "google-gemini-native",
+      baseUrl: "https://generativelanguage.googleapis.com",
+      apiKey: "KEY123",
+      model: "gemini-3.5-flash-lite"
+    });
+    await assert.rejects(provider.completeMessage([{ role: "user", content: "test" }], {
+      signal: controller.signal,
+      onDebug(event) {
+        debugEvents.push(event);
+        if (event.kind === "rate-limit-retry") controller.abort();
+      }
+    }), /cancelled/i);
+  } finally {
+    global.fetch = originalFetch;
+  }
+
+  const retryEvent = debugEvents.find((event) => event.kind === "rate-limit-retry");
+  assert.equal(retryEvent.providerDelayMs, 3900);
+  assert.equal(retryEvent.delayMs, 4900);
+  assert.equal(retryEvent.delaySource, "error-message");
+});
+
 async function capturedToolConfig(nTools) {
   let captured;
   const originalFetch = global.fetch;
@@ -52,6 +88,25 @@ async function capturedToolConfig(nTools) {
 test("forcing over a small tool set stays ANY; over a large roster falls back to AUTO", async () => {
   assert.equal(await capturedToolConfig(3), "ANY", "small set -> forced");
   assert.equal(await capturedToolConfig(31), "AUTO", "large roster -> fallback (flash-lite can't force so many)");
+});
+
+test("native connector preserves malformed tool-call finish details", async () => {
+  const originalFetch = global.fetch;
+  global.fetch = async () => ({
+    ok: true,
+    status: 200,
+    text: async () => JSON.stringify({ candidates: [{ content: { role: "model", parts: [] }, finishReason: "MALFORMED_FUNCTION_CALL", finishMessage: "Malformed function call" }] })
+  });
+  try {
+    const provider = gemini.createGeminiConnectorProvider({ providerMode: "google-gemini-native", baseUrl: "https://x", apiKey: "k", model: "gemini-3.5-flash-lite" });
+    const response = await provider.completeMessage([{ role: "user", content: "save" }]);
+    assert.equal(response.finishReason, "MALFORMED_FUNCTION_CALL");
+    assert.equal(response.finishMessage, "Malformed function call");
+    assert.equal(response.content, "");
+    assert.deepEqual(response.toolCalls, []);
+  } finally {
+    global.fetch = originalFetch;
+  }
 });
 
 test("native mode supports forced tool calls (required -> functionCallingConfig ANY)", () => {

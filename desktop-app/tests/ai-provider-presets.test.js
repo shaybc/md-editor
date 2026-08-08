@@ -12,7 +12,7 @@ const { testConnection } = require("../resources/ai-companion/core/agent-runtime
 const formerPresetModels = {
   openai: ["gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna", "gpt-5.5", "gpt-5.5-pro", "gpt-5.4"],
   "google-gemini": ["gemini-3.6-flash", "gemini-3.5-flash", "gemini-3.5-flash-lite", "gemini-3.1-flash-lite", "gemini-3.1-pro-preview", "gemini-3.1-pro", "gemini-2.5-flash", "gemini-2.5-flash-lite", "gemini-2.5-pro"],
-  anthropic: ["claude-fable-5", "claude-opus-5", "claude-sonnet-5", "claude-haiku-4-5"],
+  anthropic: [],
   xai: ["grok-4.5", "grok-4.3", "grok-4.20-reasoning", "grok-4.20", "grok-4.1-fast-reasoning", "grok-4.1-fast"],
   ollama: ["qwen3.5", "gpt-oss:20b", "qwen3:8b", "llama3.2", "gemma3"]
 };
@@ -74,7 +74,7 @@ test("AI provider presets expose bundled connection values and registry provider
   const expected = {
     openai: ["https://api.openai.com/v1", "gpt-5.5", ["openai"]],
     "google-gemini": ["https://generativelanguage.googleapis.com/v1beta/openai", "gemini-3.6-flash", ["google", "google-gemini"]],
-    anthropic: ["https://api.anthropic.com/v1", "claude-sonnet-5", ["anthropic"]],
+    anthropic: ["https://api.anthropic.com/v1", "", ["anthropic"]],
     xai: ["https://api.x.ai/v1", "grok-4.5", ["xai"]],
     ollama: ["http://localhost:11434/v1", "qwen3.5", ["ollama", "meta (local)", "alibaba (local)", "deepseek (local)"]]
   };
@@ -238,7 +238,7 @@ test("connection tests route provider presets through their OpenAI-compatible en
       await testConnection({
         providerMode: preset.id,
         baseUrl: preset.baseUrl,
-        model: preset.defaultModel,
+        model: preset.defaultModel || "account-model",
         apiKey: "provider-key",
         providerRequestDelayMs: 0
       });

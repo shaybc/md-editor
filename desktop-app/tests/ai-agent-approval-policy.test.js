@@ -560,7 +560,7 @@ test("capability registry generates safe file grants and keeps high-risk capabil
   assert.equal(approvalCapabilities.describe("delete_file", { path: "src/old.txt" }, { effectiveSecurityPolicy: PRODUCT_DEFAULT_POLICY }).capability, "workspace.file.delete");
   assert.equal(approvalCapabilities.describe("move_path", { sourcePath: "src/old.txt" }, { effectiveSecurityPolicy: PRODUCT_DEFAULT_POLICY }).capability, "workspace.path.move");
   assert.deepEqual(Object.keys(approvalCapabilities.CAPABILITIES).sort(), [
-    "delete_file", "export_active_document", "export_active_folder_graph", "git_commit", "git_branch_create", "git_fetch", "git_pull", "git_push", "git_stage", "git_branch_switch", "git_unstage", "move_path", "preferences_import", "preferences_reset", "preferences_update", "run_command", "start_code_conversion"
+    "delete_file", "export_active_document", "export_active_folder_graph", "extension_hook_run", "git_commit", "git_branch_create", "git_fetch", "git_pull", "git_push", "git_stage", "git_branch_switch", "git_unstage", "mcp_server_connect", "mcp_tool_invoke", "move_path", "preferences_import", "preferences_reset", "preferences_update", "run_command", "start_code_conversion", "worker_workspace_create"
   ].sort());
 });
 

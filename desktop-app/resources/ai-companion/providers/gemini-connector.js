@@ -23,7 +23,7 @@ function normalizeModelName(value, fallback = "gemini-2.5-flash") {
   return model.startsWith("models/") ? model.slice("models/".length) : model;
 }
 
-function createProviderError(status, bodyText, prefix) {
+function createProviderError(status, bodyText, prefix, response) {
   let message = bodyText || `${prefix} failed with HTTP ${status}.`;
   try {
     const parsed = JSON.parse(bodyText || "{}");
@@ -34,6 +34,7 @@ function createProviderError(status, bodyText, prefix) {
   const error = new Error(`${prefix} failed: ${status} ${message}`);
   error.providerStatus = status;
   error.providerBody = bodyText;
+  error.providerResponse = response;
   return error;
 }
 
@@ -308,7 +309,7 @@ class GeminiConnectorClient {
           }, null, 2) + "\n");
         } catch (_dumpError) { /* diagnostics only */ }
       }
-      throw createProviderError(response.status, bodyText, "Gemini connector generateContent");
+      throw createProviderError(response.status, bodyText, "Gemini connector generateContent", response);
     }
 
     const parsed = JSON.parse(bodyText || "{}");
@@ -666,10 +667,11 @@ function createGeminiConnectorProvider(settingsSource = {}) {
       toolConfig: buildToolConfig(effectiveToolChoice, nativeToolNames)
     }, { signal: options.signal });
 
-    const { text, functionCalls } = extractGeminiParts(response?.candidates?.[0]?.content);
+    const candidate = response?.candidates?.[0] || {};
+    const { text, functionCalls } = extractGeminiParts(candidate.content);
     const usage = usageFromGemini(response);
     if (usage) options.onUsage?.(usage);
-    const finishReason = functionCalls.length ? "tool_calls" : "stop";
+    const finishReason = functionCalls.length ? "tool_calls" : String(candidate.finishReason || "stop");
     options.onFinishReason?.(finishReason);
 
     return {
@@ -677,6 +679,7 @@ function createGeminiConnectorProvider(settingsSource = {}) {
       content: text,
       reasoning: "",
       finishReason,
+      finishMessage: String(candidate.finishMessage || ""),
       toolCalls: toOpenAiToolCalls(functionCalls)
     };
   }
@@ -730,4 +733,3 @@ module.exports = {
   toGeminiContents,
   usageFromGemini
 };
-

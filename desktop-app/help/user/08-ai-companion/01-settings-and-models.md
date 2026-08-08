@@ -38,7 +38,7 @@ AI Companion separates the panel from the provider adapter. The visible workflow
 | --- | --- |
 | OpenAI | Use an OpenAI API key with the bundled OpenAI endpoint and model suggestions. |
 | Google Gemini | Use a Google AI Studio key with Gemini's OpenAI-compatible endpoint. This is separate from the Gemini Connector modes. |
-| Anthropic Claude | Use an Anthropic API key through Anthropic's OpenAI compatibility layer. Some native Claude features are not available through this compatibility path. |
+| Anthropic | Use an Anthropic API key through its OpenAI compatibility layer. Some native provider features are not available through this compatibility path. |
 | xAI Grok | Use an xAI API key with the bundled xAI endpoint and current Grok model suggestions. |
 | Ollama | Use a local Ollama server. The API key is normally blank, and the selected model must already be available to Ollama. |
 | OpenAI-compatible | Use this for local or hosted servers that expose chat-completions style APIs. This is the most general option. |

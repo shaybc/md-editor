@@ -6,9 +6,7 @@
 
 const { normalizeAiCompanionSettings } = require("../config/defaults");
 const { loadAiCompanionPrompts } = require("../config/prompts");
-const { createOpenAiCompatibleProvider } = require("../providers/openai-compatible");
-const { createLiteLlmProvider } = require("../providers/litellm");
-const { createGeminiConnectorProvider } = require("../providers/gemini-connector");
+const { createProvider } = require("../orchestration/shared/provider-factory");
 const { runAgentToolLoop } = require("./agent-tool-loop");
 const tools = require("../tools/workspace-tools");
 
@@ -18,16 +16,6 @@ function estimateTokens(value) {
 
 function throwIfAborted(signal) {
   if (signal?.aborted) throw new Error("AI Companion request cancelled.");
-}
-
-function createProvider(settings) {
-  if (settings.providerMode === "gemini-connector" || settings.providerMode === "gemini-connector-raw"
-    || settings.providerMode === "google-gemini-native") {
-    return createGeminiConnectorProvider(settings);
-  }
-  return settings.providerMode === "litellm"
-    ? createLiteLlmProvider(settings)
-    : createOpenAiCompatibleProvider(settings);
 }
 
 function extractSearchTerms(prompt) {

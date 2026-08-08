@@ -21,17 +21,16 @@ function requireAiCompanionModule(relativePath) {
 const { normalizeAiCompanionSettings, testConnection } = requireAiCompanionModule("core/agent-runtime");
 const { createProviderDebugEmitter } = requireAiCompanionModule("core/provider-debug");
 const { inspectServerCertificate } = requireAiCompanionModule("core/tls-certificate");
-const { runChatMode } = requireAiCompanionModule("modes/chat");
+const companionOrchestration = requireAiCompanionModule("orchestration");
 const { runAutocompleteMode } = requireAiCompanionModule("modes/autocomplete");
-const { runAgentMode } = requireAiCompanionModule("modes/agent");
 const { runGitSummaryMode } = requireAiCompanionModule("modes/git-summary");
-const { runPlanMode } = requireAiCompanionModule("modes/plan");
 const planRepositoryTools = requireAiCompanionModule("tools/plan-repository-tools");
 const promptProfile = requireAiCompanionModule("config/prompts");
 const { createSecurityContext } = requireAiCompanionModule("security/security-context");
 const { ApprovalGrantStore } = requireAiCompanionModule("core/approval-grant-store");
 const approvalPolicy = requireAiCompanionModule("core/agent-approval-policy");
 const approvalCapabilities = requireAiCompanionModule("core/approval-capability-registry");
+const extensionService = requireAiCompanionModule("orchestration/autonomous/extensions/extension-service");
 const activeRequests = new Map();
 const pendingApprovals = new Map();
 const pendingAppActions = new Map();
@@ -328,13 +327,13 @@ async function handleRequest(session, message) {
     } else if (message.action === "inspectCertificate") {
       result = await inspectServerCertificate(message.url, { signal: controller.signal });
     } else if (message.action === "chat") {
-      result = await runChatMode(request, emit);
+      result = await companionOrchestration.run(request, {}, emit);
     } else if (message.action === "autocomplete") {
       result = await runAutocompleteMode(request, emit);
     } else if (message.action === "agent") {
-      result = await runAgentMode(request, emit);
+      result = await companionOrchestration.run(request, {}, emit);
     } else if (message.action === "plan") {
-      result = await runPlanMode(request, emit);
+      result = await companionOrchestration.run(request, {}, emit);
     } else if (message.action === "plansList") {
       result = await planRepositoryTools.planList(request.workspaceRoot, message, { signal: controller.signal });
     } else if (message.action === "planRead") {
@@ -376,6 +375,10 @@ async function handleRequest(session, message) {
         workspace: describePolicySource(securityContext.workspaceSource),
         auditLocation: securityContext.auditLocation
       };
+    } else if (message.action === "extensionsList") {
+      result = await extensionService.listExtensions(request);
+    } else if (message.action === "extensionConfigure") {
+      result = await extensionService.configureExtension(request, message);
     } else if (message.action === "approvalGrantsList") {
       const store = new ApprovalGrantStore(request.profileRoot, request.workspaceRoot);
       const grants = await store.list();

@@ -1061,6 +1061,8 @@ test("AI Companion Plan mode saves generated plans with milestones", async () =>
   assert.equal(payloads.length, 1);
   assert.match(payloads[0].sourceChatId, /^chat_/);
   assert.match(payloads[0].sourceTaskId, /^task_/);
+  assert.equal(payloads[0].planOperation, "create");
+  assert.equal(payloads[0].planTarget, null);
   const savedIndex = JSON.parse(harness.storage.get("ai-companion-chats"));
   const savedTask = savedIndex.tasks[0];
   const savedRecord = JSON.parse(harness.storage.get(`ai-companion-agent-tasks:${savedTask.id}`));
@@ -1074,6 +1076,91 @@ test("AI Companion Plan mode saves generated plans with milestones", async () =>
   assert.equal(Object.prototype.hasOwnProperty.call(savedRecord.plan, "content"), false);
   assert.deepEqual(savedRecord.plan.milestones.map((milestone) => milestone.id), ["M1", "M2"]);
   assert.equal(savedRecord.events.some((event) => event.type === "chat-response" && event.content === planContent), true);
+});
+
+test("autonomous Plan mode accepts repository metadata and refreshes saved plans", async () => {
+  const planContent = "# Autonomous Plan\n\n## M1: Persist it";
+  const savedPlan = { id: "plan_autonomous_1", title: "Autonomous Plan", path: "companion/plans/2026/08/08/autonomous-plan.md", status: "planned", milestones: [{ id: "M1", title: "Persist it", status: "pending" }] };
+  let plansListCalls = 0;
+  const harness = createPanelHarness({
+    settings: { enabled: true, chatEnabled: true, agentEnabled: true, agentLoopArchitecture: "autonomous" },
+    bridge: {
+      plan: async (_payload, handleEvent) => {
+        handleEvent({ type: "run-started", architecture: "autonomous", mode: "plan" });
+        handleEvent({ type: "plan-saved", plan: savedPlan });
+        handleEvent({ type: "assistant-final", content: planContent, plan: savedPlan });
+        handleEvent({ type: "run-completed", mode: "plan", plan: savedPlan });
+        return { content: planContent, architecture: "autonomous", plan: savedPlan };
+      },
+      plansList: async () => { plansListCalls += 1; return { plans: [savedPlan] }; }
+    }
+  });
+
+  harness.planTab.click();
+  harness.agentInput.value = "Create an autonomous plan";
+  harness.agentInput.dispatchEvent("input");
+  harness.agentRunButton.click();
+  await new Promise((resolve) => setTimeout(resolve, 30));
+
+  const savedIndex = JSON.parse(harness.storage.get("ai-companion-chats"));
+  const savedTask = savedIndex.tasks[0];
+  const savedRecord = JSON.parse(harness.storage.get(`ai-companion-agent-tasks:${savedTask.id}`));
+  assert.equal(savedRecord.status, "planned");
+  assert.equal(savedRecord.plan.id, savedPlan.id);
+  assert.equal(savedRecord.plan.path, savedPlan.path);
+  assert.equal(Object.prototype.hasOwnProperty.call(savedRecord.plan, "content"), false);
+  assert.equal(plansListCalls > 0, true);
+});
+
+test("autonomous Plan mode does not synthesize saved metadata without a repository result", async () => {
+  const harness = createPanelHarness({
+    settings: { enabled: true, chatEnabled: true, agentEnabled: true, agentLoopArchitecture: "autonomous" },
+    bridge: {
+      plan: async (_payload, handleEvent) => {
+        handleEvent({ type: "assistant-final", content: "# Unsaved Plan" });
+        handleEvent({ type: "run-completed", mode: "plan" });
+        return { content: "# Unsaved Plan", architecture: "autonomous" };
+      }
+    }
+  });
+
+  harness.planTab.click();
+  harness.agentInput.value = "Create a plan";
+  harness.agentInput.dispatchEvent("input");
+  harness.agentRunButton.click();
+  await new Promise((resolve) => setTimeout(resolve, 20));
+
+  const savedIndex = JSON.parse(harness.storage.get("ai-companion-chats"));
+  const savedTask = savedIndex.tasks[0];
+  const savedRecord = JSON.parse(harness.storage.get(`ai-companion-agent-tasks:${savedTask.id}`));
+  assert.equal(savedRecord.status, "error");
+  assert.equal(Object.prototype.hasOwnProperty.call(savedRecord, "plan"), false);
+});
+
+test("autonomous Agent mode does not mark an empty final response completed", async () => {
+  const harness = createPanelHarness({
+    settings: { enabled: true, chatEnabled: true, agentEnabled: true, agentLoopArchitecture: "autonomous" },
+    bridge: {
+      agent: async (_payload, handleEvent) => {
+        handleEvent({ type: "run-started", architecture: "autonomous", mode: "agent" });
+        handleEvent({ type: "assistant-final", content: "" });
+        handleEvent({ type: "run-completed", mode: "agent" });
+        return { content: "", architecture: "autonomous" };
+      }
+    }
+  });
+
+  harness.agentTab.click();
+  harness.agentInput.value = "Perform a task";
+  harness.agentInput.dispatchEvent("input");
+  harness.agentRunButton.click();
+  await new Promise((resolve) => setTimeout(resolve, 20));
+
+  const savedIndex = JSON.parse(harness.storage.get("ai-companion-chats"));
+  const savedTask = savedIndex.tasks[0];
+  const savedRecord = JSON.parse(harness.storage.get(`ai-companion-agent-tasks:${savedTask.id}`));
+  assert.equal(savedRecord.status, "error");
+  assert.equal(savedRecord.events.some((event) => event.type === "chat-response" && !event.content), false);
 });
 
 test("AI Companion task entries include workspace role badges", async () => {

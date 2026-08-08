@@ -16,9 +16,9 @@ const bridgePath = path.join(__dirname, "..", "resources", "bridges", "ai-compan
 
 test("bridge keeps conversational and specialized actions on separate handlers", () => {
   const source = fs.readFileSync(bridgePath, "utf8");
-  assert.match(source, /message\.action === "chat"[\s\S]*runChatMode\(request, emit\)/);
-  assert.match(source, /message\.action === "plan"[\s\S]*runPlanMode\(request, emit\)/);
-  assert.match(source, /message\.action === "agent"[\s\S]*runAgentMode\(request, emit\)/);
+  assert.match(source, /message\.action === "chat"[\s\S]*companionOrchestration\.run\(request, \{\}, emit\)/);
+  assert.match(source, /message\.action === "plan"[\s\S]*companionOrchestration\.run\(request, \{\}, emit\)/);
+  assert.match(source, /message\.action === "agent"[\s\S]*companionOrchestration\.run\(request, \{\}, emit\)/);
   assert.match(source, /message\.action === "autocomplete"[\s\S]*runAutocompleteMode\(request, emit\)/);
   assert.match(source, /message\.action === "gitSummary"[\s\S]*runGitSummaryMode\(request, emit\)/);
   assert.match(source, /message\.action === "testConnection"[\s\S]*testConnection\(requestSettings/);

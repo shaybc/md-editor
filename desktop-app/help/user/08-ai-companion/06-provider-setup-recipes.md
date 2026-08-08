@@ -20,7 +20,7 @@ AI Companion always needs three decisions:
 | Google Connector | Gemini Connector or Gemini Connector Raw | Your connector service URL | Gemini connector token | `gemini-3.5-flash` |
 | Google Gemini API key | Google Gemini | `https://generativelanguage.googleapis.com/v1beta/openai` | API key/token | `gemini-3.6-flash` |
 | OpenAI | OpenAI | `https://api.openai.com/v1` | API key/token | `gpt-5.5` |
-| Anthropic | Anthropic Claude | `https://api.anthropic.com/v1` | API key/token | `claude-sonnet-5` |
+| Anthropic | Anthropic | `https://api.anthropic.com/v1` | API key/token | Enter a supported model id |
 | xAI | xAI Grok | `https://api.x.ai/v1` | API key/token | `grok-4.5` |
 | Ollama | Ollama | `http://localhost:11434/v1` | Usually blank | `qwen3.5` |
 | Other local LLM | OpenAI-compatible endpoint | The server's OpenAI-compatible base URL | Usually blank | The model id exposed by the server |
@@ -81,16 +81,16 @@ If the provider returns an unsupported-parameter error, AI Companion can retry s
 
 ## Anthropic
 
-Use this when you have an Anthropic API key and want to call Claude through Anthropic's OpenAI compatibility layer. This compatibility path supports the shared AI Companion chat-completions flow, but it does not expose every native Claude Messages API feature.
+Use this when you have an Anthropic API key and want to call its models through the OpenAI compatibility layer. This compatibility path supports the shared AI Companion chat-completions flow, but it does not expose every native Messages API feature.
 
 Set:
 
 | Setting | Value |
 | --- | --- |
-| Connection provider | <kbd>Anthropic Claude</kbd> |
+| Connection provider | <kbd>Anthropic</kbd> |
 | Base URL | `https://api.anthropic.com/v1` |
 | API key/token | Your Anthropic API key |
-| Model | Choose a bundled Claude model such as `claude-sonnet-5`, or type another supported model id |
+| Model | Enter a model id supported by your account |
 
 Use LiteLLM instead when your team needs gateway-managed credentials, routing, or native-provider translation.
 
@@ -127,7 +127,7 @@ Set:
 | Connection provider | <kbd>LiteLLM proxy</kbd> |
 | Base URL | Your LiteLLM proxy URL, for example `http://localhost:4000` |
 | API key/token | The LiteLLM virtual key or proxy key, if required |
-| LiteLLM model alias | The proxy alias to call, for example `default`, `gpt`, `claude`, or `local-coder` |
+| LiteLLM model alias | The proxy alias to call, for example `default`, `gpt`, `team-model`, or `local-coder` |
 | LiteLLM routing config | Optional JSON object sent with the request body |
 
 Use LiteLLM when the desktop app should not store provider-specific keys, when a team wants the same model alias on every machine, or when you need one endpoint that can route between OpenAI, Anthropic, Google, local models, and other suppliers.

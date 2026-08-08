@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "id": "core-workflows",
+  "name": "Core Workflows",
+  "version": "1.0.0",
+  "description": "Built-in agents and skills for software work.",
+  "contributions": {
+    "agents": [
+      "agents/repository-explorer.md",
+      "agents/implementation-planner.md",
+      "agents/change-builder.md",
+      "agents/issue-investigator.md",
+      "agents/change-reviewer.md",
+      "agents/test-auditor.md"
+    ],
+    "skills": [
+      "skills/investigate-defect.md",
+      "skills/develop-change.md",
+      "skills/review-changes.md",
+      "skills/create-plan.md",
+      "skills/verify-work.md"
+    ]
+  }
+}

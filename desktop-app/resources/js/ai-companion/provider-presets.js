@@ -39,9 +39,9 @@
     }),
     anthropic: Object.freeze({
       id: "anthropic",
-      label: "Anthropic Claude",
+      label: "Anthropic",
       baseUrl: "https://api.anthropic.com/v1",
-      defaultModel: "claude-sonnet-5",
+      defaultModel: "",
       registryProviders: Object.freeze(["anthropic"])
     }),
     xai: Object.freeze({

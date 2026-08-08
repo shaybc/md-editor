@@ -12,6 +12,8 @@
 
 "use strict";
 
+const { redactProviderDebugValue } = require("./provider-debug-redaction");
+
 function formatProviderDebugEvent(event) {
   const kind = event?.kind || "";
   if (kind === "request") {
@@ -25,8 +27,8 @@ function formatProviderDebugEvent(event) {
       trustedCertificateFingerprints: event.trustedCertificateFingerprints,
       bodyKeys: event.bodyKeys
     };
-    if (typeof event.requestHeaders !== "undefined") details.requestHeaders = event.requestHeaders;
-    if (typeof event.requestBody !== "undefined") details.requestBody = event.requestBody;
+    if (typeof event.requestHeaders !== "undefined") details.requestHeaders = redactProviderDebugValue(event.requestHeaders);
+    if (typeof event.requestBody !== "undefined") details.requestBody = redactProviderDebugValue(event.requestBody);
     return {
       level: "debug",
       message: `[ai-companion] Request sent (attempt ${(event.attempt || 0) + 1}) ${event.pathname || ""}`,
@@ -44,7 +46,7 @@ function formatProviderDebugEvent(event) {
     return {
       level: "debug",
       message: `[ai-companion] Waiting ${event.delayMs || 0}ms before next provider request`,
-      details: event
+      details: redactProviderDebugValue(event)
     };
   }
   if (kind === "rate-limit-retry") {
@@ -52,7 +54,7 @@ function formatProviderDebugEvent(event) {
     return {
       level: "warning",
       message: `[ai-companion] Rate limited; retrying after ${event.delayMs || 0}ms${source}`,
-      details: event
+      details: redactProviderDebugValue(event)
     };
   }
   if (kind === "response") {
@@ -64,7 +66,7 @@ function formatProviderDebugEvent(event) {
       status: event.status,
       error: event.error
     };
-    if (typeof event.responseBody !== "undefined") details.responseBody = event.responseBody;
+    if (typeof event.responseBody !== "undefined") details.responseBody = redactProviderDebugValue(event.responseBody);
     return {
       level: event.ok ? "debug" : "warning",
       message: `[ai-companion] Response ${event.ok ? "ok" : "error"} (attempt ${(event.attempt || 0) + 1}, status ${event.status})`,
@@ -77,7 +79,7 @@ function formatProviderDebugEvent(event) {
       message: event.empty
         ? `[ai-companion] Completion came back EMPTY (finish_reason=${event.finishReason || "unknown"}) — likely truncated before producing visible output`
         : `[ai-companion] Completion received (${event.contentLength} chars, finish_reason=${event.finishReason || "unknown"})`,
-      details: event
+      details: redactProviderDebugValue(event)
     };
   }
   if (kind === "error") {
@@ -96,15 +98,15 @@ function formatProviderDebugEvent(event) {
       trustedCertificateFingerprints: event.trustedCertificateFingerprints,
       bodyKeys: event.bodyKeys
     };
-    if (typeof event.requestHeaders !== "undefined") details.requestHeaders = event.requestHeaders;
-    if (typeof event.requestBody !== "undefined") details.requestBody = event.requestBody;
+    if (typeof event.requestHeaders !== "undefined") details.requestHeaders = redactProviderDebugValue(event.requestHeaders);
+    if (typeof event.requestBody !== "undefined") details.requestBody = redactProviderDebugValue(event.requestBody);
     return {
       level: "error",
       message: `[ai-companion] Request failed: ${event.message || ""}`,
       details
     };
   }
-  return { level: "debug", message: "[ai-companion] Provider event", details: event };
+  return { level: "debug", message: "[ai-companion] Provider event", details: redactProviderDebugValue(event) };
 }
 
 /**
