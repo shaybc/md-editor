@@ -22,13 +22,18 @@ async function runAutonomousLoop(input) {
   let consecutiveFailures = 0;
   let consecutiveRejectedResponses = 0;
   for (let round = 1; round <= maxRounds; round++) {
+    context.currentRound = round;
+    context.messages = messages;
     const workerNotifications = context.workers?.drainNotifications?.() || [];
     if (workerNotifications.length) messages.push({ role: "system", content: `Worker updates:\n${JSON.stringify(workerNotifications)}` });
     if (request.signal?.aborted) throw Object.assign(new Error("AI Companion request cancelled."), { name: "AbortError" });
 
     const currentTools = typeof getTools === "function" ? getTools() : tools;
     context.currentToolDefinitions = currentTools;
-    await context.windowSteward.prepare(messages, context);
+    context.observationLedger?.refresh?.(messages, { currentRound: round });
+    const prepared = await context.windowSteward.prepare(messages, context);
+    const releaseReminder = context.contextReleaseReminder?.consider?.(context.observationLedger.summary(), { round, renewed: prepared.renewed });
+    if (releaseReminder) messages.push({ role: "system", content: releaseReminder });
     await context.saveSnapshot?.("running", { round, boundary: "before-model" });
     const beforeModel = await context.hooks?.run("before-model", { round });
     for (const additionalContext of beforeModel?.additionalContext || []) messages.push({ role: "system", content: `Lifecycle context:\n${additionalContext}` });
@@ -91,22 +96,27 @@ async function runAutonomousLoop(input) {
         events.emit({ type: EVENT_TYPES.TOOL_COMPLETED, tool: name, callId: call.id, result });
         await context.hooks?.run("after-tool", { tool: name, call, result });
         await context.chronicle?.append?.("tool-completed", { round, tool: name, callId: call.id });
-        return { role: "tool", tool_call_id: call.id, content: await serializeRuntimeToolResult(result, name, call.id, context) };
+        const toolMessage = { role: "tool", tool_call_id: call.id, content: await serializeRuntimeToolResult(result, name, call.id, context) };
+        context.observationLedger?.register?.(toolMessage, { tool: name, callId: call.id, round });
+        return toolMessage;
       } catch (error) {
         consecutiveFailures += 1;
         const message = error?.message || String(error);
         events.emit({ type: EVENT_TYPES.TOOL_FAILED, tool: name, callId: call.id, error: message });
         await context.hooks?.run("tool-failure", { tool: name, call, error: message });
         await context.chronicle?.append?.("tool-failed", { round, tool: name, callId: call.id, error: message });
-        return { role: "tool", tool_call_id: call.id, content: JSON.stringify({
+        const toolMessage = { role: "tool", tool_call_id: call.id, content: JSON.stringify({
           error: message,
           code: error?.code || undefined,
           retryable: error?.retryable === false ? false : consecutiveFailures < 3,
           doNotRetry: error?.doNotRetry === true
         }) };
+        context.observationLedger?.register?.(toolMessage, { tool: name, callId: call.id, round });
+        return toolMessage;
       }
     }));
     messages.push(...results);
+    context.observationLedger?.refresh?.(messages, { currentRound: round });
     context.pendingTools = [];
     context.continuity?.scheduleUpdate?.(messages, { reportedTokens: context.windowSteward.reportedTokens });
     await context.saveSnapshot?.("running", { round, boundary: "after-tools" });

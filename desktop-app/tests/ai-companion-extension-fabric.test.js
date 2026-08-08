@@ -36,7 +36,7 @@ test("bundled workflow metadata is available without loading instruction bodies"
   const bundle = snapshot.bundles.find((entry) => entry.id === "core-workflows");
   assert.equal(bundle.enabled, true);
   assert.equal(bundle.trusted, true);
-  assert.equal(bundle.contributionCount, 11);
+  assert.equal(bundle.contributionCount, 12);
   const skill = snapshot.entries.find((entry) => entry.id === "core-workflows:develop-change");
   assert.equal(skill.kind, "skill");
   assert.equal(Object.hasOwn(skill, "body"), false);

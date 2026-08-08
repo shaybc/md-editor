@@ -87,6 +87,8 @@ async function executeTool(call, context) {
   }
   if (name === "continuity_search") return context.continuity.search(args.query, { maxResults: args.maxResults, includeContent: true });
   if (name === "artifact_read") return context.artifactVault.read(args.id, args);
+  if (name === "context_observation_list") return context.observationLedger.list(context.messages, { currentRound: context.currentRound, maxResults: args.maxResults });
+  if (name === "context_release") return context.observationLedger.release(args.ids, context.messages, { currentRound: context.currentRound, reason: args.reason, initiator: "model" });
   if (["plan_list", "plan_read", "plan_create", "plan_update"].includes(name)) return context.planRepository.execute(name, args);
   if (name === "mcp_search_offerings") return context.mcp.searchOfferings(args.serverId, args.query);
   if (name === "mcp_read_resource") return context.mcp.readResource(args.serverId, args.uri);

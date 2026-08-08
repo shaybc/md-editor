@@ -5,6 +5,7 @@
 const fs = require("node:fs/promises");
 const path = require("node:path");
 const { estimateMessageTokens, estimateTokens, resolveContextLimits } = require("./token-budget");
+const { ObservationLedger } = require("./observation-ledger");
 
 const RECENT_TURN_GROUPS = 5;
 const COLLAPSIBLE_RESULT_CHARACTERS = 4000;
@@ -15,11 +16,12 @@ const RENEWAL_FAILURE_LIMIT = 3;
 const RENEWAL_COOLDOWN_MS = 5 * 60 * 1000;
 
 class WindowSteward {
-  constructor(request, provider, artifactVault, emit = () => {}) {
+  constructor(request, provider, artifactVault, emit = () => {}, observationLedger = null) {
     this.request = request;
     this.provider = provider;
     this.artifactVault = artifactVault;
     this.emit = emit;
+    this.observationLedger = observationLedger || new ObservationLedger(artifactVault, emit);
     this.reportedTokens = 0;
     this.activeFiles = [];
     this.consecutiveFailures = 0;
@@ -49,7 +51,7 @@ class WindowSteward {
   /** Thin large historical observations and renew the window when its threshold is reached. */
   async prepare(messages, context, options = {}) {
     const beforeTokens = estimateContextTokens(messages, context, this.reportedTokens);
-    const thinned = await this.thinObservations(messages);
+    const thinned = await this.thinObservations(messages, context);
     const afterThinningTokens = estimateContextTokens(messages, context);
     if (thinned.length) {
       this.emit({
@@ -154,29 +156,12 @@ class WindowSteward {
     return characters > this.limits.characterLimit;
   }
 
-  async thinObservations(messages) {
-    const boundary = recentBoundary(messages, RECENT_TURN_GROUPS);
-    const toolNames = mapToolNames(messages);
-    const latestErrors = new Map();
-    for (let index = 0; index < boundary; index++) {
-      const content = String(messages[index]?.content || "");
-      if (messages[index]?.role === "tool" && isActiveError(content)) latestErrors.set(normalizeError(content), index);
-    }
-    const stored = [];
-    for (let index = 0; index < boundary; index++) {
-      const message = messages[index];
-      if (message?.role !== "tool") continue;
-      const content = String(message.content || "");
-      const isLatestError = isActiveError(content) && latestErrors.get(normalizeError(content)) === index;
-      if (content.length <= COLLAPSIBLE_RESULT_CHARACTERS || isLatestError || /^\[Observation stored as artifact-/.test(content)) continue;
-      const entry = await this.artifactVault.store(content, {
-        callId: message.tool_call_id,
-        tool: toolNames.get(message.tool_call_id) || "tool"
-      });
-      message.content = this.artifactVault.reference(entry);
-      stored.push(entry);
-    }
-    return stored;
+  async thinObservations(messages, context = {}) {
+    return this.observationLedger.releaseBefore(messages, {
+      currentRound: context.currentRound,
+      minimumCharacters: COLLAPSIBLE_RESULT_CHARACTERS,
+      reason: "window-thinning"
+    });
   }
 
   async activeFileAnchors() {
@@ -218,15 +203,7 @@ function preserveToolPairBoundary(messages, boundary) {
   return boundary;
 }
 
-function mapToolNames(messages) {
-  const names = new Map();
-  for (const message of messages) for (const call of message?.tool_calls || []) names.set(call.id, call.function?.name || "tool");
-  return names;
-}
-
-function isActiveError(content) { return /\b(error|failed|failure|denied|rejected|cancelled|unknown outcome)\b/i.test(content); }
 function countTurnGroups(messages) { return messages.filter((message) => message.role === "assistant").length; }
-function normalizeError(content) { return String(content).replace(/\d+/g, "#").slice(0, 1000); }
 function sanitizeForDigest(messages) {
   return messages.map((message) => ({
     role: message.role,

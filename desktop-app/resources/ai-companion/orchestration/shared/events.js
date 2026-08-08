@@ -10,6 +10,7 @@ const EVENT_TYPES = Object.freeze({
   WORKER_QUEUED: "worker-queued", WORKER_STARTED: "worker-started", WORKER_MESSAGE: "worker-message",
   WORKER_COMPLETED: "worker-completed", WORKER_FAILED: "worker-failed", WORKER_STOPPED: "worker-stopped",
   CONTEXT_THINNED: "context-thinned", CONTINUITY_UPDATED: "continuity-updated", CHRONICLE_SAVED: "chronicle-saved",
+  OBSERVATION_RELEASED: "observation-released", OBSERVATION_RELEASE_REMINDER: "observation-release-reminder",
   RUN_RESTORED: "run-restored", RECOVERY_WARNING: "recovery-warning",
   COMPACTION: "compaction", RUN_COMPLETED: "run-completed", RUN_CANCELLED: "run-cancelled", RUN_FAILED: "run-failed"
 });

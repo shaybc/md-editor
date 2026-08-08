@@ -7,6 +7,8 @@ const { createProvider } = require("../../shared/provider-factory");
 const { runAutonomousLoop } = require("../autonomous-loop");
 const { scopeAgentTools } = require("../agents/agent-scope");
 const { WindowSteward } = require("../context/window-steward");
+const { ObservationLedger } = require("../context/observation-ledger");
+const { ContextReleaseReminder } = require("../context/context-release-reminder");
 const { finishWorkerWorkspace, prepareWorkerWorkspace } = require("./worker-workspace");
 const { getRunIdentity } = require("../work/run-identity");
 
@@ -184,10 +186,15 @@ class WorkerHub {
       entry.workspace = await resolveWorkerWorkspace(this.request, entry, this.parentContext.taskGrants);
       const provider = entry.agent?.metadata?.model ? createProvider({ ...this.request.settings, model: entry.agent.metadata.model }) : this.provider;
       const definitions = scopeAgentTools(this.parentContext.capabilities.definitions(), entry.agent?.metadata || {});
-      if (!entry.messages.length) entry.messages.push({ role: "system", content: entry.agent?.body || "Complete only the delegated work. Report evidence and do not claim actions you did not perform." }, { role: "user", content: entry.prompt });
+      if (!entry.messages.length) entry.messages.push({ role: "system", content: `${entry.agent?.body || "Complete only the delegated work. Report evidence and do not claim actions you did not perform."}\n\nYou may use context_observation_list and context_release to remove only your own older tool observations when they are no longer useful. Preserve recent results, active errors, denials, cancellations, unknown outcomes, and evidence still needed for this delegated task.` }, { role: "user", content: entry.prompt });
       const workerRequest = { ...this.request, workspaceRoot: entry.workspace.root, signal: entry.controller.signal };
       const workerEvents = { emit: (event) => this.events.emit({ ...event, workerId: entry.id }) };
-      const windowSteward = new WindowSteward(workerRequest, provider, this.parentContext.artifactVault, workerEvents.emit);
+      const observationLedger = new ObservationLedger(this.parentContext.artifactVault, workerEvents.emit);
+      observationLedger.restore(entry.observationRelease?.ledger);
+      observationLedger.refresh(entry.messages);
+      const contextReleaseReminder = new ContextReleaseReminder(workerEvents.emit);
+      contextReleaseReminder.restore(entry.observationRelease?.reminder);
+      const windowSteward = new WindowSteward(workerRequest, provider, this.parentContext.artifactVault, workerEvents.emit, observationLedger);
       const context = {
         ...this.parentContext,
         request: workerRequest,
@@ -197,7 +204,14 @@ class WorkerHub {
         hooks: createWorkerHooks(entry),
         continuity: null,
         windowSteward,
+        observationLedger,
+        contextReleaseReminder,
+        messages: entry.messages,
         pendingTools: [],
+        saveSnapshot: async () => {
+          entry.observationRelease = { ledger: observationLedger.snapshot(), reminder: contextReleaseReminder.snapshot() };
+          this.persistChange();
+        },
         buildRenewalAnchors: async (digest, activeFiles) => [
           { role: "system", content: entry.agent?.body || "Complete only the delegated work and report observed evidence." },
           { role: "system", content: `Earlier delegated execution digest:\n${JSON.stringify(digest)}` },
@@ -254,6 +268,7 @@ function privateEntry(entry) {
     prompt: entry.prompt,
     inbox: JSON.parse(JSON.stringify(entry.inbox || [])),
     messages: JSON.parse(JSON.stringify(entry.messages || [])),
+    observationRelease: JSON.parse(JSON.stringify(entry.observationRelease || {})),
     agentFingerprint: entry.agent ? JSON.stringify({ id: entry.agent.id, metadata: entry.agent.metadata, body: entry.agent.body }) : ""
   };
 }
@@ -268,6 +283,7 @@ function restoredEntry(snapshot, agent, status) {
     background: snapshot.background === true,
     inbox: Array.isArray(snapshot.inbox) ? JSON.parse(JSON.stringify(snapshot.inbox)) : [],
     messages: Array.isArray(snapshot.messages) ? JSON.parse(JSON.stringify(snapshot.messages)) : [],
+    observationRelease: snapshot.observationRelease ? JSON.parse(JSON.stringify(snapshot.observationRelease)) : {},
     result: String(snapshot.result || ""),
     error: String(snapshot.error || ""),
     controller: new AbortController(),

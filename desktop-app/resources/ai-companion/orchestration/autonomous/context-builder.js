@@ -19,6 +19,7 @@ function buildSystemMessage(request, policy, extensions, instructions = {}, reca
     buildRuntimeIdentityInstruction(request),
     "A plain final answer is valid when the user only needs text. Requests that change workspace, repository, or external state require the corresponding successful tool call; do not merely claim that a change was made.",
     "For large work, maintain optional progress with the work tools. React to tool errors and user denials instead of repeating unchanged calls.",
+    "When older tool observations are no longer useful, you may inspect them with context_observation_list and release selected observation IDs with context_release. Never release recent results, active errors, denials, cancellations, unknown outcomes, or evidence still needed for the task.",
     instructions.application,
     ...(instructions.rules || []).map((rule) => `Active rule from ${rule.source}:\n${rule.content}`),
     extensionSummary,

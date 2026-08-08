@@ -4,6 +4,7 @@
 
 const CAPABILITY_PREFIXES = Object.freeze({
   read: ["list_", "glob_", "search_", "read_", "discover_", "capability_", "mcp_search_", "mcp_read_", "mcp_get_"],
+  context: ["context_", "artifact_read"],
   edit: ["apply_edit", "write_file"],
   execute: ["run_command", "run_tests", "compile_", "restore_", "manage_"],
   delegate: ["worker_"]

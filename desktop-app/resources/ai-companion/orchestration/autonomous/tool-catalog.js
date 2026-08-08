@@ -23,6 +23,8 @@ const DEFINITIONS = Object.freeze([
   tool("load_extension", "Load one discovered rule, skill, or agent definition.", { id: text("Discovered extension id") }, ["id"]),
   tool("continuity_search", "Search bounded historical run summaries from this exact workspace.", { query: text("Relevant topic, path, or prior outcome"), maxResults: integer("Maximum summaries to return") }, ["query"]),
   tool("artifact_read", "Read a bounded range from a stored observation artifact.", { id: text("Artifact id"), offset: integer("Starting character offset"), length: integer("Maximum characters to return") }, ["id"]),
+  tool("context_observation_list", "List bounded metadata for active tool observations and show which older observations may be released.", { maxResults: integer("Maximum observations to return") }),
+  tool("context_release", "Release selected older tool observations from active context while retaining their artifact references.", { ids: { type: "array", items: text("Observation id") }, reason: text("Short reason the observations are no longer needed") }, ["ids"]),
   tool("plan_list", "List saved implementation plans from the local plan repository.", { status: text("Optional plan status"), query: text("Optional title, path, or body search"), workspaceRoot: text("Optional workspace filter"), maxResults: integer("Maximum plans to return") }),
   tool("plan_read", "Read one saved implementation plan.", { id: text("Plan id"), path: text("Plan repository path") }),
   tool("plan_create", "Save a new implementation plan. Include the complete Markdown plan body.", { title: text("Plan title"), body: text("Complete Markdown plan body"), status: text("Plan status"), milestones: { type: "array", items: { type: "object" } } }, ["body"]),

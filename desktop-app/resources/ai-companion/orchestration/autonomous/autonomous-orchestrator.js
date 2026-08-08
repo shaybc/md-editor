@@ -21,6 +21,8 @@ const { HookGateway } = require("./hooks/hook-gateway");
 const { ArtifactVault } = require("./artifacts/artifact-vault");
 const { ContinuityRecord } = require("./continuity/continuity-record");
 const { WindowSteward } = require("./context/window-steward");
+const { ObservationLedger } = require("./context/observation-ledger");
+const { ContextReleaseReminder } = require("./context/context-release-reminder");
 const { RunChronicle } = require("./recovery/run-chronicle");
 const { RestartReconciler } = require("./recovery/restart-reconciler");
 const { PlanRepositorySession } = require("./plan-repository-session");
@@ -85,12 +87,17 @@ class AutonomousOrchestrator {
       await work.load();
       const planRepository = new PlanRepositorySession(request, policy, journaledEvents.emit);
       planRepository.restore(restored?.planPersistence);
-      const windowSteward = new WindowSteward(request, provider, artifactVault, journaledEvents.emit);
+      const observationLedger = new ObservationLedger(artifactVault, journaledEvents.emit);
+      observationLedger.restore(restored?.observationRelease?.ledger);
+      const contextReleaseReminder = new ContextReleaseReminder(journaledEvents.emit);
+      contextReleaseReminder.restore(restored?.observationRelease?.reminder);
+      const windowSteward = new WindowSteward(request, provider, artifactVault, journaledEvents.emit, observationLedger);
       windowSteward.restore(restored?.windowState);
 
       context = {
         request, services, policy, extensions, extensionSnapshot, fabric, mcp, capabilities, hooks,
         instructions, recalledContinuity, fingerprints, chronicle, artifactVault, continuity, windowSteward,
+        observationLedger, contextReleaseReminder,
         loadedExtensions: new Set(restored?.loadedExtensions || []),
         loadedExtensionBodies: new Map(Array.isArray(restored?.loadedExtensionBodies) ? restored.loadedExtensionBodies : []),
         work, planRepository, taskGrants: [], workers: null, pendingTools: []
@@ -115,6 +122,8 @@ class AutonomousOrchestrator {
           { role: "user", content: String(request.prompt || "") }
         ];
       }
+      context.messages = messages;
+      observationLedger.refresh(messages, { currentRound: Number(restored?.round) || 0 });
       context.saveSnapshot = async (status, extra = {}) => {
         if (["completed", "cancelled", "failed"].includes(status) || extra.flushContinuity === true) await continuity.flush();
         return chronicle.saveSnapshot({
@@ -126,6 +135,10 @@ class AutonomousOrchestrator {
           continuity: continuity.snapshot(),
           artifacts: artifactVault.snapshot(),
           windowState: windowSteward.snapshot(),
+          observationRelease: {
+            ledger: observationLedger.snapshot(),
+            reminder: contextReleaseReminder.snapshot()
+          },
           loadedExtensions: Array.from(context.loadedExtensions),
           loadedExtensionBodies: Array.from(context.loadedExtensionBodies.entries()),
           instructionFingerprint: context.fingerprints.instructions,
@@ -232,7 +245,7 @@ function createJournaledEvents(events, chronicle) {
 }
 
 function shouldJournalEvent(type) {
-  return ["artifact-stored", "context-thinned", "continuity-updated", "compaction", "recovery-warning", "plan-saved", "plan-updated"].includes(type)
+  return ["artifact-stored", "context-thinned", "observation-released", "observation-release-reminder", "continuity-updated", "compaction", "recovery-warning", "plan-saved", "plan-updated"].includes(type)
     || /^(work|worker)-/.test(String(type || ""));
 }
 
