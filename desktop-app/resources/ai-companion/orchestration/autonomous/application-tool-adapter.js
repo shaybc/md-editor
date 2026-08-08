@@ -108,7 +108,7 @@ function applicationDomain(name) {
 async function authorizeIfRequired(name, args, context) {
   const approval = await authorizeTool(context.request, name, args, context.taskGrants);
   if (approval.approved) return null;
-  return { denied: true, instructions: approval.instructions || "The user denied this action." };
+  return { denied: true, doNotRetry: approval.doNotRetry === true, denialFingerprint: approval.denialFingerprint, instructions: approval.instructions || "The user denied this action." };
 }
 
 /** Dispatch a retained application tool, returning undefined when it is not owned here. */

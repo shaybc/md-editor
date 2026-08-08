@@ -46,6 +46,7 @@ class SkillInvocationSession {
       allowedTools: active.definition.allowedTools.slice(),
       allowedCapabilities: active.definition.allowedCapabilities.slice(),
       model: active.definition.model,
+      route: active.definition.route,
       agent: active.definition.agent,
       executionContext: active.definition.executionContext,
       source: active.source,
@@ -55,8 +56,9 @@ class SkillInvocationSession {
       if (active.definition.hooks && !options.context?.hooks?.register) throw new Error("The current execution boundary cannot register workflow hooks.");
       if (active.definition.hooks) options.context.hooks.register(skillHooks(record.name, active.definition.hooks));
       if (record.executionContext === "inline" && record.model && options.context?.selectSkillModel) options.context.selectSkillModel(record.model);
+      if (record.executionContext === "inline" && record.route && options.context?.selectSkillRoute) options.context.selectSkillRoute(record.route);
       if (record.executionContext === "worker" && !options.deferWorker && options.context?.workers) {
-        const worker = await options.context.workers.launch({ description: active.definition.displayName, prompt: expandedBody, agentId: record.agent || undefined, model: record.model || undefined, background: false });
+        const worker = await options.context.workers.launch({ description: active.definition.displayName, prompt: expandedBody, agentId: record.agent || undefined, model: record.model || undefined, routeId: record.route || undefined, background: false });
         this.records.push(record);
         this.activeNames.add(record.name);
         this.emit({ type: "skill-invocation-completed", name: record.name, executionContext: "worker", summary: `Workflow ${record.name} completed in a worker.` });
@@ -106,6 +108,7 @@ class SkillInvocationSession {
       record.allowedTools = active.definition.allowedTools.slice();
       record.allowedCapabilities = active.definition.allowedCapabilities.slice();
       record.model = active.definition.model;
+      record.route = active.definition.route;
       record.agent = active.definition.agent;
       const prefix = `skill:${record.name}:`;
       if (context.hooks?.replacePrefix) context.hooks.replacePrefix(prefix, active.definition.hooks ? skillHooks(record.name, active.definition.hooks) : []);
@@ -113,7 +116,9 @@ class SkillInvocationSession {
     }
     this.records = retained;
     const model = retained.slice().reverse().find((record) => record.executionContext === "inline" && record.model)?.model;
+    const route = retained.slice().reverse().find((record) => record.executionContext === "inline" && record.route)?.route;
     if (context.selectSkillModel) context.selectSkillModel(model || "");
+    if (context.selectSkillRoute) context.selectSkillRoute(route || "");
   }
 
   async restore(snapshot = {}, context = {}) {

@@ -6737,6 +6737,16 @@
         "schedule-completed": "Scheduled task completed",
         "schedule-failed": "Scheduled task failed",
         "continuity-updated": "Continuity record updated",
+        "memory-proposed": "Memory confirmation requested",
+        "memory-confirmed": "Curated memory saved",
+        "memory-rejected": "Memory proposal rejected",
+        "memory-forgotten": "Curated memory removed",
+        "permission-mode-changed": "Permission mode changed",
+        "tool-denied": "Tool action denied",
+        "denial-guard-tripped": "Denial guard activated",
+        "route-selected": "Provider route selected",
+        "route-fallback": "Provider fallback selected",
+        "route-unavailable": "Provider route unavailable",
         "run-restored": "Autonomous run restored",
         "recovery-warning": "Recovery warning",
         compaction: "Context renewed"
@@ -6745,7 +6755,7 @@
         ? `${event.estimatedTokensBefore} tokens before, ${event.estimatedTokensAfter || 0} after`
         : "Completed");
       const display = createSyntheticToolActivity({
-        type: ["recovery-warning", "rule-unavailable", "skill-unavailable", "skill-invocation-failed", "schedule-failed"].includes(event.type) ? "tool-error" : "tool",
+        type: ["recovery-warning", "rule-unavailable", "skill-unavailable", "skill-invocation-failed", "schedule-failed", "memory-rejected", "tool-denied", "denial-guard-tripped", "route-unavailable"].includes(event.type) ? "tool-error" : "tool",
         tool: labels[event.type] || event.type,
         summary,
         callId: `${event.type}-${event.savedAt || event.updatedAt || Date.now()}`
@@ -7167,8 +7177,8 @@
         appendAutonomousRuntimeStatus(event);
         return;
       }
-      if (["run-started", "context-thinned", "observation-released", "observation-release-reminder", "tool-catalog-updated", "tool-schema-activated", "tool-schema-restored", "tool-schema-unavailable", "rules-discovered", "rule-activated", "rule-unavailable", "rules-refreshed", "continuity-updated", "chronicle-saved", "run-restored", "recovery-warning", "compaction", "run-completed", "run-cancelled", "run-failed"].includes(event.type) || /^(work|worker)-/.test(event.type)) {
-        if (["context-thinned", "observation-released", "observation-release-reminder", "tool-catalog-updated", "tool-schema-activated", "tool-schema-restored", "tool-schema-unavailable", "rules-discovered", "rule-activated", "rule-unavailable", "rules-refreshed", "continuity-updated", "run-restored", "recovery-warning", "compaction"].includes(event.type)) appendAutonomousRuntimeStatus(event);
+      if (["run-started", "context-thinned", "observation-released", "observation-release-reminder", "tool-catalog-updated", "tool-schema-activated", "tool-schema-restored", "tool-schema-unavailable", "rules-discovered", "rule-activated", "rule-unavailable", "rules-refreshed", "continuity-updated", "chronicle-saved", "run-restored", "recovery-warning", "compaction", "run-completed", "run-cancelled", "run-failed"].includes(event.type) || /^(work|worker|memory|route)-/.test(event.type) || ["permission-mode-changed", "tool-denied", "denial-guard-tripped"].includes(event.type)) {
+        if (["context-thinned", "observation-released", "observation-release-reminder", "tool-catalog-updated", "tool-schema-activated", "tool-schema-restored", "tool-schema-unavailable", "rules-discovered", "rule-activated", "rule-unavailable", "rules-refreshed", "continuity-updated", "run-restored", "recovery-warning", "compaction", "memory-proposed", "memory-confirmed", "memory-rejected", "memory-forgotten", "permission-mode-changed", "tool-denied", "denial-guard-tripped", "route-selected", "route-fallback", "route-unavailable"].includes(event.type)) appendAutonomousRuntimeStatus(event);
         else recordAgentEvent(event);
         if (activeAgentEntry && ["run-restored", "recovery-warning"].includes(event.type)) {
           activeAgentEntry.record.recoverySummary = {

@@ -31,6 +31,9 @@ const DEFAULT_AI_COMPANION_SETTINGS = Object.freeze({
   autocompleteRejectDelayMs: 2500,
   agentAutoRunCommands: false,
   agentConfirmBeforeWrite: true,
+  permissionMode: "guided",
+  connectionProfiles: [],
+  providerRoutes: [],
   toolScopes: toolScopeRegistry.defaultToolScopes(),
   aiSecurityPolicy: {
     version: 1,
@@ -70,6 +73,31 @@ function normalizeTrustedCertificates(value) {
   }).filter((entry) => entry.host && entry.fingerprint256 && entry.pem);
 }
 
+function normalizeConnectionProfiles(value) {
+  if (!Array.isArray(value)) return [];
+  return value.map((entry) => {
+    const source = entry && typeof entry === "object" && !Array.isArray(entry) ? entry : {};
+    return { ...source, id: String(source.id || "").trim(), providerMode: normalizeProviderMode(source.providerMode), model: String(source.model || "").trim() };
+  }).filter((entry) => entry.id).slice(0, 30);
+}
+
+function normalizeProviderRoutes(value) {
+  if (!Array.isArray(value)) return [];
+  return value.map((entry) => {
+    const source = entry && typeof entry === "object" && !Array.isArray(entry) ? entry : {};
+    return {
+      id: String(source.id || "").trim(), profileId: String(source.profileId || "default").trim(), model: String(source.model || "").trim(),
+      purposes: Array.isArray(source.purposes) ? source.purposes.map(String).slice(0, 10) : ["primary"],
+      fallbacks: Array.isArray(source.fallbacks) ? source.fallbacks.map(String).filter(Boolean).slice(0, 8) : [],
+      allowProviderChange: source.allowProviderChange === true,
+      dataScopes: source.dataScopes && typeof source.dataScopes === "object" ? { ...source.dataScopes } : {},
+      contextWindow: clampInteger(source.contextWindow, 0, 0, 10000000),
+      maxOutputTokens: clampInteger(source.maxOutputTokens, 0, 0, 1000000),
+      capabilities: source.capabilities && typeof source.capabilities === "object" ? { ...source.capabilities } : {}
+    };
+  }).filter((entry) => entry.id).slice(0, 50);
+}
+
 function normalizeAiCompanionSettings(settings = {}) {
   const source = settings && typeof settings === "object" && !Array.isArray(settings) ? settings : {};
   return {
@@ -99,6 +127,9 @@ function normalizeAiCompanionSettings(settings = {}) {
     autocompleteRejectDelayMs: clampInteger(source.autocompleteRejectDelayMs, DEFAULT_AI_COMPANION_SETTINGS.autocompleteRejectDelayMs, 0, 60000),
     agentAutoRunCommands: source.agentAutoRunCommands === true,
     agentConfirmBeforeWrite: source.agentConfirmBeforeWrite !== false,
+    permissionMode: ["guided", "observe-only", "edit-trusted", "risk-routed", "preauthorized-only", "sandbox-unattended"].includes(source.permissionMode) ? source.permissionMode : "guided",
+    connectionProfiles: normalizeConnectionProfiles(source.connectionProfiles),
+    providerRoutes: normalizeProviderRoutes(source.providerRoutes),
     toolScopes: toolScopeRegistry.normalizeToolScopes(source.toolScopes),
     aiSecurityPolicy: source.aiSecurityPolicy && typeof source.aiSecurityPolicy === "object" && !Array.isArray(source.aiSecurityPolicy)
       ? JSON.parse(JSON.stringify(source.aiSecurityPolicy))

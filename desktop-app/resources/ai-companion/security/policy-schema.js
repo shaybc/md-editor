@@ -71,7 +71,8 @@ const PRODUCT_DEFAULT_POLICY = Object.freeze({
       "export.graph": "workspace"
     },
     protectedPathPatterns: DEFAULT_PROTECTED_PATH_PATTERNS,
-    allowWorkspaceWideFileWrites: true
+    allowWorkspaceWideFileWrites: true,
+    allowUnattended: false
   },
   audit: {
     enabled: true,
@@ -169,6 +170,7 @@ function normalizePolicy(value, options = {}) {
     }
     if (!options.partial || Object.hasOwn(approvals, "protectedPathPatterns")) result.approvals.protectedPathPatterns = normalizeStringList(approvals.protectedPathPatterns, fallback.approvals?.protectedPathPatterns || []);
     if (!options.partial || Object.hasOwn(approvals, "allowWorkspaceWideFileWrites")) result.approvals.allowWorkspaceWideFileWrites = approvals.allowWorkspaceWideFileWrites !== false;
+    if (!options.partial || Object.hasOwn(approvals, "allowUnattended")) result.approvals.allowUnattended = approvals.allowUnattended === true;
   }
 
   if (!options.partial || isPlainObject(source.audit)) {

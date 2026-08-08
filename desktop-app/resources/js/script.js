@@ -4285,6 +4285,9 @@ async function startMarkdownViewer() {
   const settingsAiGeminiBaseUrlInput = document.getElementById("settings-ai-gemini-base-url");
   const settingsAiGeminiConnectorIdInput = document.getElementById("settings-ai-gemini-connector-id");
   const settingsAiGeminiApiKeyInput = document.getElementById("settings-ai-gemini-api-key");
+  const settingsAiConnectionProfilesInput = document.getElementById("settings-ai-connection-profiles");
+  const settingsAiProviderRoutesInput = document.getElementById("settings-ai-provider-routes");
+  const settingsAiPermissionModeInput = document.getElementById("settings-ai-permission-mode");
   const settingsAiLiteLlmFields = Array.from(document.querySelectorAll(".settings-ai-litellm-field"));
   const settingsAiGeminiFields = Array.from(document.querySelectorAll(".settings-ai-gemini-field"));
   const settingsAiHttpProviderFields = Array.from(document.querySelectorAll(".settings-ai-http-provider-field"));
@@ -5102,7 +5105,10 @@ async function startMarkdownViewer() {
       autocompleteRejectCharacters: 24,
       autocompleteRejectDelayMs: 2500,
       agentAutoRunCommands: false,
-      agentConfirmBeforeWrite: true
+      agentConfirmBeforeWrite: true,
+      permissionMode: "guided",
+      connectionProfiles: [],
+      providerRoutes: []
     }
   });
   let settingsDialogSaving = false;
@@ -9377,6 +9383,9 @@ Markdown content is processed client-side in your browser and sanitized before p
     if (settingsAiGeminiBaseUrlInput) settingsAiGeminiBaseUrlInput.value = aiSettings.geminiConnectorBaseUrl;
     if (settingsAiGeminiConnectorIdInput) settingsAiGeminiConnectorIdInput.value = aiSettings.geminiConnectorId;
     if (settingsAiGeminiApiKeyInput) settingsAiGeminiApiKeyInput.value = aiSettings.geminiConnectorApiKey;
+    if (settingsAiConnectionProfilesInput) settingsAiConnectionProfilesInput.value = JSON.stringify(aiSettings.connectionProfiles || [], null, 2);
+    if (settingsAiProviderRoutesInput) settingsAiProviderRoutesInput.value = JSON.stringify(aiSettings.providerRoutes || [], null, 2);
+    if (settingsAiPermissionModeInput) settingsAiPermissionModeInput.value = aiSettings.permissionMode || "guided";
     updateAiConnectionProviderFields();
     if (settingsAiChatEnabledInput) settingsAiChatEnabledInput.checked = aiSettings.chatEnabled;
     if (settingsAiAutocompleteEnabledInput) settingsAiAutocompleteEnabledInput.checked = aiSettings.autocompleteEnabled;
@@ -11347,6 +11356,16 @@ Markdown content is processed client-side in your browser and sanitized before p
       alert("Enter AI autocomplete delay after reject of 0 ms or higher.");
       return;
     }
+    let aiConnectionProfiles = [];
+    let aiProviderRoutes = [];
+    try {
+      aiConnectionProfiles = JSON.parse(settingsAiConnectionProfilesInput?.value || "[]");
+      aiProviderRoutes = JSON.parse(settingsAiProviderRoutesInput?.value || "[]");
+      if (!Array.isArray(aiConnectionProfiles) || !Array.isArray(aiProviderRoutes)) throw new Error("Both values must be JSON arrays.");
+    } catch (error) {
+      alert(`AI connection profiles or provider routes are invalid: ${error?.message || String(error)}`);
+      return;
+    }
     // Start from the current persisted settings and overlay only the form fields, so
     // flags that have no widget on this form (Experimental toggles, Tool Access scopes,
     // internal controller flags) are preserved instead of being reset to defaults.
@@ -11387,6 +11406,9 @@ Markdown content is processed client-side in your browser and sanitized before p
       autocompleteContextProvidersEnabled: !!settingsAiAutocompleteContextProvidersEnabledInput?.checked,
       agentAutoRunCommands: !!settingsAiAgentAutoRunCommandsInput?.checked,
       agentConfirmBeforeWrite: settingsAiAgentConfirmBeforeWriteInput?.checked !== false,
+      permissionMode: settingsAiPermissionModeInput?.value || "guided",
+      connectionProfiles: aiConnectionProfiles,
+      providerRoutes: aiProviderRoutes,
       aiSecurityPolicy: aiSecuritySettings?.collect?.() || aiCompanionSettings?.defaults?.aiSecurityPolicy
     })) : {};
     const languageServerAutoStartPreferences = {

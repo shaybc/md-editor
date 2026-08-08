@@ -27,6 +27,7 @@ class SkillDefinitionPolicy {
       allowedCapabilities: normalizeList(source.allowedCapabilities || source.capabilityScopes),
       requiredTools: normalizeList(source.requiredTools),
       model: String(source.model || "").trim(),
+      route: String(source.route || "").trim(),
       agent: String(source.agent || "").trim(),
       executionContext,
       userInvocable: source.userInvocable !== false,

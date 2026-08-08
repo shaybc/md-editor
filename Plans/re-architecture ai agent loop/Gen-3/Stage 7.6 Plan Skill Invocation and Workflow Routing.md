@@ -1,4 +1,4 @@
-# Stage 7.5 Plan: Skill Invocation and Workflow Routing
+# Stage 7.6 Plan: Skill Invocation and Workflow Routing
 
 ## Summary
 

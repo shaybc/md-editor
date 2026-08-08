@@ -36,6 +36,13 @@ const { SkillInvocationSession } = require("./skills/skill-invocation-session");
 const { SkillPathObserver } = require("./skills/skill-path-observer");
 const { SlashWorkflowRouter } = require("./skills/slash-workflow-router");
 const { RunScheduler } = require("./scheduling/run-scheduler");
+const { CuratedMemoryRepository } = require("./memory/curated-memory-repository");
+const { MemoryProposalSession } = require("./memory/memory-proposal-session");
+const { PermissionModePolicy } = require("./permissions/permission-mode-policy");
+const { DenialLedger } = require("./permissions/denial-ledger");
+const { ActionRiskAdvisor } = require("./permissions/action-risk-advisor");
+const { ProviderRouteCatalog } = require("./routing/provider-route-catalog");
+const { ProviderRouteSession } = require("./routing/provider-route-session");
 
 class AutonomousOrchestrator {
   /** Run Chat, Plan, or Agent through one model-directed kernel. */
@@ -63,7 +70,9 @@ class AutonomousOrchestrator {
       const ruleCatalog = new RuleCatalog(request, events.emit);
       await ruleCatalog.load(request.activeFile?.path);
       let instructions = await loadActiveInstructions(request, policy, ruleCatalog);
-      const provider = services.provider || createProvider(request.settings, { onDebug: createProviderDebugEmitter(events.emit) });
+      const routeCatalog = new ProviderRouteCatalog(request.settings);
+      const routeSession = new ProviderRouteSession(request, routeCatalog, journaledEvents.emit, { provider: services.provider });
+      const provider = routeSession.select(request.routeId, { purpose: "primary", reason: request.routeId ? "user-selected route" : "configured primary route", requiredDataScopes: ["workspace"] });
       const fingerprints = {
         instructions: fingerprint(instructions),
         extensions: fingerprint({ extensions, extensionSnapshot })
@@ -116,10 +125,28 @@ class AutonomousOrchestrator {
 
       const artifactVault = new ArtifactVault(request, journaledEvents.emit);
       await artifactVault.load();
+      routeSession.restore(restored?.routing);
       const continuity = new ContinuityRecord(request, provider, journaledEvents.emit);
       await continuity.load();
       continuity.restore(restored?.continuity);
       const recalledContinuity = await continuity.search(request.prompt, { maxResults: 3 });
+      const memoryRepository = new CuratedMemoryRepository(request, journaledEvents.emit);
+      const memoryProposals = new MemoryProposalSession(request, memoryRepository, journaledEvents.emit);
+      memoryProposals.restore(restored?.memoryProposals);
+      const recalledMemory = await memoryRepository.promptIndex(request.prompt);
+      let routeDataScopes = ["workspace", ...(recalledMemory.some((entry) => entry.startsWith("[personal/")) ? ["personalMemory"] : []), ...(recalledMemory.some((entry) => entry.startsWith("[team/")) ? ["teamMemory"] : [])];
+      if (!routeDataScopes.every((scope) => routeSession.active?.route?.dataScopes?.[scope] === true)) {
+        recalledMemory.length = 0;
+        routeDataScopes = ["workspace"];
+      }
+      const denialLedger = new DenialLedger(request, journaledEvents.emit);
+      denialLedger.restore(restored?.denials);
+      const requestedPermissionMode = denialLedger.tripped && request.settings.permissionMode === "risk-routed" ? "guided" : (request.permissionMode || request.settings.permissionMode);
+      const permissionPolicy = new PermissionModePolicy(requestedPermissionMode, request.securityContext?.policy);
+      const permissionMode = permissionPolicy.mode;
+      const riskAdvisor = new ActionRiskAdvisor(routeSession.providerForPurpose("risk"), request, journaledEvents.emit);
+      request.authorizationControls = { permissionPolicy, denialLedger, riskAdvisor };
+      journaledEvents.emit({ type: EVENT_TYPES.PERMISSION_MODE_CHANGED, mode: permissionPolicy.mode, reason: denialLedger.tripped ? "denial guard recovery" : "run configuration", summary: `Permission mode: ${permissionPolicy.mode}.` });
       const work = new WorkLedger(request, journaledEvents.emit);
       await work.load();
       const planRepository = new PlanRepositorySession(request, policy, journaledEvents.emit);
@@ -134,13 +161,14 @@ class AutonomousOrchestrator {
       context = {
         request, services, policy, extensions, extensionSnapshot, fabric, agentCatalog, mcp, capabilities, hooks, ruleCatalog,
         skillCatalog, skillInvocation, scheduler,
-        instructions, recalledContinuity, fingerprints, chronicle, artifactVault, continuity, windowSteward,
+        instructions, recalledContinuity, recalledMemory, fingerprints, chronicle, artifactVault, continuity, windowSteward,
         observationLedger, contextReleaseReminder,
         loadedExtensions: new Set(restored?.loadedExtensions || []),
         loadedExtensionBodies: new Map(Array.isArray(restored?.loadedExtensionBodies) ? restored.loadedExtensionBodies : []),
-        work, planRepository, taskGrants: [], workers: null, pendingTools: []
+        work, planRepository, memoryRepository, memoryProposals, permissionPolicy, denialLedger, riskAdvisor,
+        routeCatalog, routeSession, routeDataScopes, taskGrants: [], workers: null, pendingTools: []
       };
-      context.activeProvider = provider;
+      context.activeProvider = routeSession.active ? routeSession.providerFor(routeSession.active) : provider;
       context.selectSkillModel = (model) => {
         const selected = String(model || "");
         if (!selected || selected === String(request.settings.model || "")) {
@@ -148,6 +176,12 @@ class AutonomousOrchestrator {
           return;
         }
         context.activeProvider = createProvider({ ...request.settings, model: selected }, { onDebug: createProviderDebugEmitter(events.emit) });
+      };
+      context.selectSkillRoute = (routeId) => {
+        context.activeProvider = routeId
+          ? routeSession.select(routeId, { reason: "activated workflow route", requiredDataScopes: context.routeDataScopes })
+          : routeSession.select(request.routeId, { purpose: "primary", reason: "restored primary route", requiredDataScopes: context.routeDataScopes });
+        if (context.windowSteward) context.windowSteward.limits = routeSession.limits();
       };
       const restoredSkillModel = skillInvocation.records.slice().reverse().find((record) => record.executionContext === "inline" && record.model)?.model;
       if (restoredSkillModel) context.selectSkillModel(restoredSkillModel);
@@ -169,7 +203,7 @@ class AutonomousOrchestrator {
       if (decision.classification === "recoverable") {
         const rebuilt = reconciliation.rebuild(restored, decision);
         messages = rebuilt.messages;
-        const currentSystem = { role: "system", content: buildSystemMessage(request, policy, extensions, instructions, recalledContinuity, skillCatalog.advertisement()) };
+        const currentSystem = { role: "system", content: buildSystemMessage(request, policy, extensions, instructions, recalledContinuity, skillCatalog.advertisement(), { recalledMemory, permissionMode, routes: routeSession.list() }) };
         if (messages[0]?.role === "system") messages[0] = currentSystem;
         else messages.unshift(currentSystem);
         context.taskGrants = rebuilt.taskGrants;
@@ -179,7 +213,7 @@ class AutonomousOrchestrator {
           ? await slashRouter.expandTrusted(request.slashInvocation)
           : await slashRouter.expand(request.prompt);
         messages = [
-          { role: "system", content: buildSystemMessage(request, policy, extensions, instructions, recalledContinuity, skillCatalog.advertisement()) },
+          { role: "system", content: buildSystemMessage(request, policy, extensions, instructions, recalledContinuity, skillCatalog.advertisement(), { recalledMemory, permissionMode, routes: routeSession.list() }) },
           ...(Array.isArray(request.conversationHistory) ? request.conversationHistory : []),
           { role: "user", content: String(request.prompt || "") }
         ];
@@ -198,6 +232,10 @@ class AutonomousOrchestrator {
           planPersistence: planRepository.snapshot(),
           workers: context.workers?.snapshot?.({ private: true }) || [],
           continuity: continuity.snapshot(),
+          memoryProposals: memoryProposals.snapshot(),
+          denials: denialLedger.snapshot(),
+          permissionMode,
+          routing: routeSession.snapshot(),
           artifacts: artifactVault.snapshot(),
           windowState: windowSteward.snapshot(),
           observationRelease: {
@@ -260,11 +298,21 @@ class AutonomousOrchestrator {
 async function buildRenewalAnchors(context, digest, activeFiles) {
   await context.ruleCatalog?.refresh?.();
   await context.skillCatalog?.refresh?.();
-  context.skillInvocation?.reconcile?.({ hooks: context.hooks, selectSkillModel: context.selectSkillModel });
+  context.skillInvocation?.reconcile?.({ hooks: context.hooks, selectSkillModel: context.selectSkillModel, selectSkillRoute: context.selectSkillRoute });
   const currentInstructions = await loadActiveInstructions(context.request, context.policy, context.ruleCatalog);
   context.instructions = currentInstructions;
   context.fingerprints.instructions = fingerprint(currentInstructions);
-  const system = buildSystemMessage(context.request, context.policy, context.extensions, currentInstructions, context.recalledContinuity, context.skillCatalog?.advertisement?.());
+  context.recalledMemory = await context.memoryRepository?.promptIndex?.(context.request.prompt) || [];
+  context.routeDataScopes = ["workspace", ...(context.recalledMemory.some((entry) => entry.startsWith("[personal/")) ? ["personalMemory"] : []), ...(context.recalledMemory.some((entry) => entry.startsWith("[team/")) ? ["teamMemory"] : [])];
+  if (!context.routeDataScopes.every((scope) => context.routeSession?.active?.route?.dataScopes?.[scope] === true)) {
+    context.recalledMemory = [];
+    context.routeDataScopes = ["workspace"];
+  }
+  const system = buildSystemMessage(context.request, context.policy, context.extensions, currentInstructions, context.recalledContinuity, context.skillCatalog?.advertisement?.(), {
+    recalledMemory: context.recalledMemory,
+    permissionMode: context.permissionPolicy?.mode,
+    routes: context.routeSession?.list?.() || []
+  });
   const anchors = [
     { role: "system", content: system },
     { role: "system", content: context.capabilities.consumeCatalogNotice({ force: true }) },
@@ -314,8 +362,9 @@ function createJournaledEvents(events, chronicle) {
 
 function shouldJournalEvent(type) {
   if (/^(skill|skills|slash|schedule)-/.test(String(type || ""))) return true;
+  if (/^(memory|route)-/.test(String(type || ""))) return true;
   if (["slash-workflow-expanded", "skill-invocation-failed"].includes(type)) return true;
-  return ["artifact-stored", "context-thinned", "observation-released", "observation-release-reminder", "tool-catalog-updated", "tool-schema-activated", "tool-schema-restored", "tool-schema-unavailable", "rules-discovered", "rule-activated", "rule-unavailable", "rules-refreshed", "skills-discovered", "skill-invocation-started", "skill-invocation-completed", "skill-unavailable", "skills-changed", "schedule-created", "schedule-cancelled", "schedule-fired", "continuity-updated", "compaction", "recovery-warning", "plan-saved", "plan-updated"].includes(type)
+  return ["artifact-stored", "context-thinned", "observation-released", "observation-release-reminder", "tool-catalog-updated", "tool-schema-activated", "tool-schema-restored", "tool-schema-unavailable", "rules-discovered", "rule-activated", "rule-unavailable", "rules-refreshed", "skills-discovered", "skill-invocation-started", "skill-invocation-completed", "skill-unavailable", "skills-changed", "schedule-created", "schedule-cancelled", "schedule-fired", "continuity-updated", "compaction", "recovery-warning", "plan-saved", "plan-updated", "permission-mode-changed", "tool-denied", "denial-guard-tripped"].includes(type)
     || /^(work|worker)-/.test(String(type || ""));
 }
 

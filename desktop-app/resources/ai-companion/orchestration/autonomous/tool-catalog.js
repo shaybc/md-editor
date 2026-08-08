@@ -27,6 +27,14 @@ const DEFINITIONS = Object.freeze([
   tool("schedule_list", "List durable autonomous task schedules for this workspace.", {}),
   tool("schedule_cancel", "Cancel one durable autonomous task schedule.", { id: text("Schedule id") }, ["id"]),
   tool("continuity_search", "Search bounded historical run summaries from this exact workspace.", { query: text("Relevant topic, path, or prior outcome"), maxResults: integer("Maximum summaries to return") }, ["query"]),
+  tool("memory_search", "Search confirmed memory metadata.", { query: text("Topic"), scope: text("personal or team"), maxResults: integer("Maximum topics") }, ["query"]),
+  tool("memory_read", "Read one confirmed curated memory topic.", { id: text("Memory topic id"), scope: text("personal or team") }, ["id"]),
+  tool("memory_propose", "Propose durable memory for user confirmation.", { scope: text("personal or team"), type: text("Topic type"), title: text("Topic title"), summary: text("Reusable summary"), content: text("Complete memory body"), tags: { type: "array", items: text("Topic tag") } }, ["scope", "type", "title", "content"]),
+  tool("memory_update", "Propose a revision while retaining topic identity.", { id: text("Existing topic id"), scope: text("personal or team"), type: text("Topic type"), title: text("Updated title"), summary: text("Updated summary"), content: text("Complete revised body"), tags: { type: "array", items: text("Updated tag") } }, ["id", "scope", "content"]),
+  tool("memory_forget", "Request confirmation to remove one curated memory topic.", { id: text("Memory topic id"), scope: text("personal or team") }, ["id"]),
+  tool("route_list", "List configured credential-free provider routes.", { purpose: text("Optional route purpose") }),
+  tool("route_inspect", "Inspect one configured provider route.", { id: text("Route id") }, ["id"]),
+  tool("route_select", "Select an authorized route for subsequent model calls.", { id: text("Route id"), reason: text("Why this route fits") }, ["id"]),
   tool("artifact_read", "Read a bounded range from a stored observation artifact.", { id: text("Artifact id"), offset: integer("Starting character offset"), length: integer("Maximum characters to return") }, ["id"]),
   tool("context_observation_list", "List bounded metadata for active tool observations and show which older observations may be released.", { maxResults: integer("Maximum observations to return") }),
   tool("context_release", "Release selected older tool observations from active context while retaining their artifact references.", { ids: { type: "array", items: text("Observation id") }, reason: text("Short reason the observations are no longer needed") }, ["ids"]),
@@ -41,7 +49,7 @@ const DEFINITIONS = Object.freeze([
   tool("work_get", "Read one work item.", { id: text("Work item id") }, ["id"]),
   tool("work_list", "List work items in stable order.", {}),
   tool("work_update", "Update, complete, assign, link, or delete a work item.", { id: text("Work item id"), subject: text("New title"), description: text("New description"), activeForm: text("Progress label"), owner: text("Worker id"), status: text("pending, in_progress, completed, or deleted"), addBlocks: { type: "array", items: text("Work item id") }, addBlockedBy: { type: "array", items: text("Work item id") }, metadata: { type: "object" } }, ["id"]),
-  tool("worker_launch", "Launch isolated delegated work synchronously or in the background.", { description: text("Short worker description"), prompt: text("Self-contained delegated task"), agentId: text("Optional discovered agent definition id"), background: { type: "boolean" }, isolation: { type: "string", enum: ["shared", "worktree"] } }, ["description", "prompt"]),
+  tool("worker_launch", "Launch isolated delegated work synchronously or in the background.", { description: text("Short worker description"), prompt: text("Self-contained delegated task"), agentId: text("Optional discovered agent definition id"), routeId: text("Optional configured provider route"), background: { type: "boolean" }, isolation: { type: "string", enum: ["shared", "worktree"] } }, ["description", "prompt"]),
   tool("worker_list", "List delegated workers and current states.", {}),
   tool("worker_message", "Send guidance to a worker, resuming a completed worker when needed.", { id: text("Worker id"), summary: text("Short message summary"), message: text("Message content") }, ["id", "message"]),
   tool("worker_wait", "Wait for a worker or return its current snapshot.", { id: text("Worker id"), block: { type: "boolean" }, timeoutMs: integer("Maximum wait, capped at 30000 ms") }, ["id"]),
@@ -97,6 +105,8 @@ function getKnownToolNames() {
 }
 
 function runtimeDomain(name) {
+  if (name.startsWith("memory_")) return "memory";
+  if (name.startsWith("route_")) return "routing";
   if (name.startsWith("plan_")) return "plans";
   if (name.startsWith("work_")) return "work";
   if (name.startsWith("worker_")) return "workers";

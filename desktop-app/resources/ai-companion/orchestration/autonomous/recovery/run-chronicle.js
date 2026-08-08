@@ -7,7 +7,7 @@ const fs = require("node:fs/promises");
 const path = require("node:path");
 const { getRunIdentity } = require("../work/run-identity");
 
-const SCHEMA_VERSION = 5;
+const SCHEMA_VERSION = 6;
 
 class RunChronicle {
   constructor(request, emit = () => {}) {
@@ -143,7 +143,7 @@ function validateSnapshot(snapshot, runId) {
 }
 
 function migrateEarlierSnapshot(snapshot, runId) {
-  if (!snapshot || ![3, 4].includes(snapshot.schemaVersion) || snapshot.identity?.runId !== runId) return snapshot;
+  if (!snapshot || ![3, 4, 5].includes(snapshot.schemaVersion) || snapshot.identity?.runId !== runId) return snapshot;
   const expected = digest({ ...snapshot, integrity: undefined });
   if (snapshot.integrity !== expected) return null;
   const migrated = { ...snapshot, schemaVersion: SCHEMA_VERSION, migratedFrom: snapshot.migratedFrom || snapshot.schemaVersion };

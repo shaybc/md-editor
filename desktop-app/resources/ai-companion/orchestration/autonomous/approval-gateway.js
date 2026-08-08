@@ -8,16 +8,30 @@ const approvalCapabilities = require("../../core/approval-capability-registry");
 const { LIFETIME_RANK } = approvalCapabilities;
 
 /** Request or resolve authorization for a mutating autonomous tool call. */
-async function authorizeTool(request, name, args, taskGrants) {
+async function authorizeTool(request, name, args, taskGrants, controls) {
+  controls = controls || request.authorizationControls || {};
   let descriptor = approvalCapabilities.describe(name, args, { effectiveSecurityPolicy: request.securityContext?.policy });
   if (!descriptor) return { approved: true };
   descriptor = enforceAgentAuthority(request.agentAuthority, descriptor);
+  const priorDenial = controls.denialLedger?.check?.(name, args, descriptor);
+  if (priorDenial) return { approved: false, doNotRetry: true, denialFingerprint: priorDenial.fingerprint, instructions: priorDenial.instructions || priorDenial.reason };
   const store = request.profileRoot ? new ApprovalGrantStore(request.profileRoot, request.workspaceRoot) : null;
   const workspaceGrants = store ? (await store.list()).rules : [];
   const existing = approvalPolicy.resolveCapabilityApprovalDecision({ descriptor, taskGrants, workspaceGrants, effectiveSecurityPolicy: request.securityContext?.policy });
   if (existing.allowed) {
     if (existing.scope === "workspace") await store?.touch?.(existing.ruleId);
+    controls.denialLedger?.recordSuccess?.();
     return { approved: true, automatic: true };
+  }
+  const modeDecision = existing.protected ? { decision: "prompt", reason: "Protected resources require action-specific confirmation." }
+    : await controls.permissionPolicy?.resolve?.(descriptor, { riskAdvisor: controls.denialLedger?.tripped ? null : controls.riskAdvisor, tool: name, args });
+  if (modeDecision?.decision === "allow") {
+    controls.denialLedger?.recordSuccess?.();
+    return { approved: true, automatic: true, permissionMode: true };
+  }
+  if (modeDecision?.decision === "deny") {
+    const denial = controls.denialLedger?.record?.(name, args, descriptor, { source: "mode", reason: modeDecision.reason });
+    return { approved: false, doNotRetry: true, denialFingerprint: denial?.fingerprint, instructions: modeDecision.reason };
   }
   if (typeof request.requestApproval !== "function") throw new Error("This action requires approval, but no approval channel is available.");
   const decision = await request.requestApproval({
@@ -25,9 +39,13 @@ async function authorizeTool(request, name, args, taskGrants) {
     capability: descriptor.capability, resource: descriptor.resource, maximumGrantLifetime: descriptor.maximumGrantLifetime,
     grantOptions: descriptor.grantOptions, summary: descriptor.label, preview: args.path || args.command || name
   });
-  if (!decision?.approved) return { approved: false, instructions: String(decision?.instructions || "") };
+  if (!decision?.approved) {
+    const denial = controls.denialLedger?.record?.(name, args, descriptor, { source: "user", reason: "The user denied this action.", instructions: String(decision?.instructions || "") });
+    return { approved: false, doNotRetry: true, denialFingerprint: denial?.fingerprint, instructions: String(decision?.instructions || "") };
+  }
   const option = decision.grantOptionId ? approvalPolicy.validateGrantOption(descriptor, decision.grantOptionId, request.securityContext?.policy) : null;
   if (option?.lifetime === "task") taskGrants.push(approvalPolicy.createGrantRule(descriptor, option));
+  controls.denialLedger?.recordSuccess?.();
   return { approved: true };
 }
 

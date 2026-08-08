@@ -40,7 +40,8 @@ async function runAutonomousLoop(input) {
       messages.push({ role: "system", content: catalogNotice });
       events.emit({ type: "tool-catalog-updated", ...context.capabilities.metrics(), summary: "Deferred tool catalog made available to the model." });
     }
-    const currentTools = typeof getTools === "function" ? getTools() : tools;
+    const routeAllowsTools = context.routeSession?.active?.route?.capabilities?.tools !== false;
+    const currentTools = routeAllowsTools ? (typeof getTools === "function" ? getTools() : tools) : [];
     context.currentToolDefinitions = currentTools;
     context.observationLedger?.refresh?.(messages, { currentRound: round });
     const prepared = await context.windowSteward.prepare(messages, context);
@@ -153,11 +154,19 @@ async function completeWithOverflowRecovery(provider, messages, options, context
   try {
     return await provider.completeMessage(messages, options);
   } catch (error) {
-    if (!isContextOverflowError(error)) throw error;
-    const renewal = await context.windowSteward.prepare(messages, context, { force: true, trigger: "provider-overflow" });
-    if (!renewal.renewed) throw error;
-    await context.saveSnapshot?.("running", { boundary: "overflow-renewal" });
-    return provider.completeMessage(messages, options);
+    if (isContextOverflowError(error)) {
+      const renewal = await context.windowSteward.prepare(messages, context, { force: true, trigger: "provider-overflow" });
+      if (!renewal.renewed) throw error;
+      await context.saveSnapshot?.("running", { boundary: "overflow-renewal" });
+      return provider.completeMessage(messages, options);
+    }
+    const fallback = context.routeSession?.fallback?.(error, { requiredDataScopes: ["workspace"] });
+    if (!fallback) throw error;
+    context.activeProvider = fallback.provider;
+    context.windowSteward.limits = context.routeSession.limits();
+    messages.push({ role: "system", content: fallback.notice });
+    await context.saveSnapshot?.("running", { boundary: "provider-route-fallback" });
+    return fallback.provider.completeMessage(messages, options);
   }
 }
 

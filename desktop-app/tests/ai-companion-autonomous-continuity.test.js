@@ -218,7 +218,7 @@ test("version-two autonomous checkpoints migrate into the new recovery envelope"
   await fs.mkdir(directory, { recursive: true });
   await fs.writeFile(path.join(directory, `${getRunIdentity(request)}.json`), JSON.stringify({ schemaVersion: 2, status: "running", messages: [{ role: "user", content: "resume" }] }), "utf8");
   const recovered = await new RunChronicle(request).loadRecovery();
-  assert.equal(recovered.schemaVersion, 5);
+  assert.equal(recovered.schemaVersion, 6);
   assert.equal(recovered.migratedFrom, 2);
   assert.equal(recovered.messages[0].content, "resume");
 });

@@ -45,7 +45,7 @@ class WorkerHub {
     const agent = args.agentId ? await this.agentCatalog?.activate(args.agentId) : null;
     if (args.agentId && agent?.kind !== "agent") throw new Error(`Unknown agent definition: ${args.agentId}`);
     const authority = this.resolveAuthority(agent, args.isolation);
-    const entry = { id, description: String(args.description || "Delegated work"), prompt: String(args.prompt || ""), model: String(args.model || ""), agentId: agent?.id || "", status: "queued", background: args.background === true, inbox: [], messages: [], result: "", error: "", controller: new AbortController(), agent, authority, isolation: authority.isolation };
+    const entry = { id, description: String(args.description || "Delegated work"), prompt: String(args.prompt || ""), model: String(args.model || ""), routeId: String(args.routeId || agent?.metadata?.route || ""), agentId: agent?.id || "", status: "queued", background: args.background === true, inbox: [], messages: [], result: "", error: "", controller: new AbortController(), agent, authority, isolation: authority.isolation };
     entry.completion = new Promise((resolve) => { entry.resolveCompletion = resolve; });
     if (!entry.prompt.trim()) throw new Error("Worker launch requires a prompt.");
     this.entries.set(id, entry);
@@ -223,7 +223,10 @@ class WorkerHub {
         throw new Error(`Agent '${entry.agentId || entry.id}' requires worktree isolation, but an isolated workspace could not be created: ${entry.workspace.fallbackReason || "unknown reason"}`);
       }
       const selectedModel = entry.model || entry.agent?.metadata?.model;
-      const provider = selectedModel ? createProvider({ ...this.request.settings, model: selectedModel }) : this.provider;
+      const selectedRoute = entry.routeId ? this.parentContext.routeCatalog.resolve(entry.routeId, "worker") : null;
+      const provider = selectedRoute
+        ? this.parentContext.routeSession.providerFor(selectedRoute)
+        : (selectedModel ? createProvider({ ...this.request.settings, model: selectedModel }) : this.provider);
       const parentRegistrations = this.parentContext.capabilities.registrations?.() || [];
       const parentDefinitions = parentRegistrations.length
         ? parentRegistrations.map((record) => record.definition)
@@ -233,7 +236,7 @@ class WorkerHub {
       const registrations = parentRegistrations.length
         ? parentRegistrations.filter((record) => scopedNames.has(record.name))
         : scopedDefinitions.map((definition) => ({ definition }));
-      const workerRequest = { ...restrictedRequest, workspaceRoot: entry.workspace.root };
+      const workerRequest = { ...restrictedRequest, workspaceRoot: entry.workspace.root, ...(selectedRoute ? { modelLimits: this.parentContext.routeSession.limitsFor(entry.routeId, "worker") } : {}) };
       const workerEvents = { emit: (event) => this.events.emit({ ...event, workerId: entry.id }) };
       const ruleCatalog = new RuleCatalog(workerRequest, workerEvents.emit);
       await ruleCatalog.load();
@@ -367,7 +370,7 @@ function createWorkerHooks(entry) {
 function blockedWorkers() { return { launch() { throw new Error("Delegated workers cannot launch other workers."); }, list() { return []; }, hasActive() { return false; }, drainNotifications() { return []; } }; }
 function blockedScheduler() { return { create() { throw new Error("Delegated workers cannot create schedules."); }, list() { return []; }, cancel() { throw new Error("Delegated workers cannot cancel schedules."); } }; }
 function isTerminal(status) { return ["completed", "failed", "stopped", "interrupted"].includes(status); }
-function publicEntry(entry) { return { id: entry.id, description: entry.description, agentId: entry.agentId, status: entry.status, background: entry.background, isolation: entry.workspace?.isolation || entry.isolation, workspace: entry.workspace ? { root: entry.workspace.root, branch: entry.workspace.branch, retained: entry.workspace.retained, fallbackReason: entry.workspace.fallbackReason } : undefined, result: entry.result, error: entry.error }; }
+function publicEntry(entry) { return { id: entry.id, description: entry.description, agentId: entry.agentId, routeId: entry.routeId || "", status: entry.status, background: entry.background, isolation: entry.workspace?.isolation || entry.isolation, workspace: entry.workspace ? { root: entry.workspace.root, branch: entry.workspace.branch, retained: entry.workspace.retained, fallbackReason: entry.workspace.fallbackReason } : undefined, result: entry.result, error: entry.error }; }
 
 function privateEntry(entry) {
   return {
@@ -393,6 +396,7 @@ function restoredEntry(snapshot, agent, authority, status) {
     description: String(snapshot.description || "Delegated work"),
     prompt: String(snapshot.prompt || ""),
     model: String(snapshot.model || ""),
+    routeId: String(snapshot.routeId || ""),
     agentId: String(agent?.id || snapshot.agentLogicalId || snapshot.agentId || ""),
     status,
     background: snapshot.background === true,

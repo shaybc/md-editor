@@ -263,7 +263,7 @@ function publicMetadata(entry) {
 }
 
 function publicInstruction(entry) {
-  return { ...publicMetadata(entry), body: entry.body, allowedTools: entry.definition.allowedTools.slice(), allowedCapabilities: entry.definition.allowedCapabilities.slice(), model: entry.definition.model, agent: entry.definition.agent, executionContext: entry.definition.executionContext, contentFingerprint: entry.contentFingerprint };
+  return { ...publicMetadata(entry), body: entry.body, allowedTools: entry.definition.allowedTools.slice(), allowedCapabilities: entry.definition.allowedCapabilities.slice(), model: entry.definition.model, route: entry.definition.route, agent: entry.definition.agent, executionContext: entry.definition.executionContext, contentFingerprint: entry.contentFingerprint };
 }
 
 function fingerprint(value) { return crypto.createHash("sha256").update(typeof value === "string" ? value : JSON.stringify(value || null)).digest("hex"); }

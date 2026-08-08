@@ -1,4 +1,4 @@
-# Plan: Dynamic Scoped Rule Loading
+# Stage 7.5 Plan: Dynamic Scoped Rule Loading
 
 ## Summary
 

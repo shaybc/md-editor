@@ -42,11 +42,18 @@ async function executeTool(call, context) {
       error.doNotRetry = true;
       throw error;
     }
-    const autoRunCommand = name === "run_command" && context.request.settings?.agentAutoRunCommands === true;
+    const autoRunCommand = name === "run_command"
+      && context.request.settings?.agentAutoRunCommands === true
+      && context.permissionPolicy?.mode === "guided"
+      && context.denialLedger?.tripped !== true;
     const approval = autoRunCommand
       ? { approved: true, automatic: true }
-      : await authorizeTool(context.request, name, args, context.taskGrants);
-    if (!approval.approved) return { denied: true, instructions: approval.instructions || "The user denied this action." };
+      : await authorizeTool(context.request, name, args, context.taskGrants, {
+        permissionPolicy: context.permissionPolicy,
+        denialLedger: context.denialLedger,
+        riskAdvisor: context.riskAdvisor
+      });
+    if (!approval.approved) return { denied: true, doNotRetry: approval.doNotRetry === true, denialFingerprint: approval.denialFingerprint, instructions: approval.instructions || "The user denied this action." };
     if (name === "apply_edit") {
       context.windowSteward?.recordFile?.(args.path);
       return workspaceTools.applyEdit(root, args.path, args.search, args.replacement, { ...options, allowWrites: true });
@@ -102,6 +109,30 @@ async function executeTool(call, context) {
     return extension;
   }
   if (name === "continuity_search") return context.continuity.search(args.query, { maxResults: args.maxResults, includeContent: true });
+  if (name === "memory_search") {
+    const allowedScopes = allowedMemoryScopes(context);
+    if (args.scope && !allowedScopes.includes(args.scope)) throw memoryRouteDenied(args.scope);
+    const results = args.scope
+      ? await context.memoryRepository.search(args.query, { scope: args.scope, maxResults: args.maxResults })
+      : (await Promise.all(allowedScopes.map((scope) => context.memoryRepository.search(args.query, { scope, maxResults: args.maxResults })))).flat().slice(0, Math.max(1, Math.min(Number(args.maxResults) || 8, 30)));
+    return results;
+  }
+  if (name === "memory_read") {
+    const topic = await context.memoryRepository.read(args.id, args.scope);
+    if (!allowedMemoryScopes(context).includes(topic.scope)) throw memoryRouteDenied(topic.scope);
+    if (!context.routeDataScopes.includes(topic.scope === "personal" ? "personalMemory" : "teamMemory")) context.routeDataScopes.push(topic.scope === "personal" ? "personalMemory" : "teamMemory");
+    return topic;
+  }
+  if (name === "memory_propose") return context.memoryProposals.propose(args, "create");
+  if (name === "memory_update") return context.memoryProposals.propose(args, "update");
+  if (name === "memory_forget") return context.memoryProposals.propose(args, "forget");
+  if (name === "route_list") return context.routeSession.list({ purpose: args.purpose });
+  if (name === "route_inspect") return context.routeSession.inspect(args.id);
+  if (name === "route_select") {
+    context.activeProvider = context.routeSession.select(args.id, { reason: args.reason || "model selection", requiredDataScopes: context.routeDataScopes });
+    context.windowSteward.limits = context.routeSession.limits();
+    return { selected: true, route: context.routeSession.inspect(args.id) };
+  }
   if (name === "artifact_read") return context.artifactVault.read(args.id, args);
   if (name === "context_observation_list") return context.observationLedger.list(context.messages, { currentRound: context.currentRound, maxResults: args.maxResults });
   if (name === "context_release") return context.observationLedger.release(args.ids, context.messages, { currentRound: context.currentRound, reason: args.reason, initiator: "model" });
@@ -129,3 +160,16 @@ async function executeTool(call, context) {
 }
 
 module.exports = { executeTool, parseArguments };
+
+function allowedMemoryScopes(context) {
+  const scopes = context.routeSession?.active?.route?.dataScopes || {};
+  return [...(scopes.personalMemory === true ? ["personal"] : []), ...(scopes.teamMemory === true ? ["team"] : [])];
+}
+
+function memoryRouteDenied(scope) {
+  const error = new Error(`The active provider route is not authorized to receive ${scope} memory.`);
+  error.code = "ROUTE_DATA_SCOPE_DENIED";
+  error.retryable = false;
+  error.doNotRetry = true;
+  return error;
+}
