@@ -4,7 +4,7 @@
 
 const { EVENT_TYPES } = require("../shared/events");
 const { createProviderDebugEmitter } = require("../../core/provider-debug");
-const { buildRuleActivationMessage, serializeToolResult } = require("./context-builder");
+const { buildRuleActivationMessage, buildSkillActivationMessage, buildSkillDiscoveryMessage, serializeToolResult } = require("./context-builder");
 const { executeTool } = require("./tool-executor");
 const { isContextOverflowError } = require("./context/window-steward");
 const { buildModelResponseCorrection, findModelResponseIssue } = require("./model-response-guard");
@@ -27,6 +27,10 @@ async function runAutonomousLoop(input) {
     const activatedRules = context.ruleCatalog?.consumeActivated?.() || [];
     const ruleMessage = buildRuleActivationMessage(activatedRules);
     if (ruleMessage) messages.push({ role: "system", content: ruleMessage });
+    const skillMessage = buildSkillActivationMessage(context.skillCatalog?.consumeActivated?.() || []);
+    if (skillMessage) messages.push({ role: "system", content: skillMessage });
+    const skillDiscoveryMessage = buildSkillDiscoveryMessage(context.skillCatalog?.consumeDiscoveries?.() || []);
+    if (skillDiscoveryMessage) messages.push({ role: "system", content: skillDiscoveryMessage });
     const workerNotifications = context.workers?.drainNotifications?.() || [];
     if (workerNotifications.length) messages.push({ role: "system", content: `Worker updates:\n${JSON.stringify(workerNotifications)}` });
     if (request.signal?.aborted) throw Object.assign(new Error("AI Companion request cancelled."), { name: "AbortError" });
@@ -45,7 +49,7 @@ async function runAutonomousLoop(input) {
     await context.saveSnapshot?.("running", { round, boundary: "before-model" });
     const beforeModel = await context.hooks?.run("before-model", { round });
     for (const additionalContext of beforeModel?.additionalContext || []) messages.push({ role: "system", content: `Lifecycle context:\n${additionalContext}` });
-    const response = await completeWithOverflowRecovery(provider, messages, {
+    const response = await completeWithOverflowRecovery(context.activeProvider || provider, messages, {
       tools: currentTools,
       toolChoice: currentTools.length ? "auto" : undefined,
       temperature: 0.2,
@@ -101,8 +105,10 @@ async function runAutonomousLoop(input) {
         for (const additionalContext of beforeTool?.additionalContext || []) messages.push({ role: "system", content: `Tool lifecycle context:\n${additionalContext}` });
         const registration = context.capabilities?.registration?.(name);
         await context.rulePathObserver?.beforeTool?.(name, parseToolArguments(call), registration);
+        await context.skillPathObserver?.beforeTool?.(name, parseToolArguments(call), registration);
         const result = await executeTool(call, context);
         await context.rulePathObserver?.afterTool?.(name, parseToolArguments(call), result, registration);
+        await context.skillPathObserver?.afterTool?.(name, result, registration);
         consecutiveFailures = 0;
         events.emit({ type: EVENT_TYPES.TOOL_COMPLETED, tool: name, callId: call.id, result });
         await context.hooks?.run("after-tool", { tool: name, call, result });

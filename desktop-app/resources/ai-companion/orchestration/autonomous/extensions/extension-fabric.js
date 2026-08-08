@@ -7,6 +7,7 @@ const { discoverBundles } = require("./bundle-discovery");
 const { isExtensionEnabled, isExtensionTrusted, loadExtensionState, updateExtensionState } = require("./extension-state-store");
 const { parseMarkdownDefinition } = require("./markdown-definition");
 const { AgentDefinitionPolicy } = require("../agents/agent-definition-policy");
+const { SkillDefinitionPolicy } = require("../skills/skill-definition-policy");
 
 class ExtensionFabric {
   constructor(request) { this.request = request; this.bundles = []; this.errors = []; this.entries = new Map(); }
@@ -29,6 +30,13 @@ class ExtensionFabric {
           const validation = AgentDefinitionPolicy.validate(entry.metadata);
           if (!validation.valid) {
             this.errors.push({ id, error: `Invalid agent definition: ${validation.errors.join(" ")}` });
+            continue;
+          }
+        }
+        if (entry.kind === "skill") {
+          const validation = SkillDefinitionPolicy.validate(entry.metadata);
+          if (!validation.valid) {
+            this.errors.push({ id, error: `Invalid skill definition: ${validation.errors.join(" ")}` });
             continue;
           }
         }
@@ -57,6 +65,10 @@ class ExtensionFabric {
     if (entry.kind === "agent") {
       const validation = AgentDefinitionPolicy.validate(parsed.metadata);
       if (!validation.valid) throw new Error(`Invalid agent definition '${id}': ${validation.errors.join(" ")}`);
+    }
+    if (entry.kind === "skill") {
+      const validation = SkillDefinitionPolicy.validate(parsed.metadata);
+      if (!validation.valid) throw new Error(`Invalid skill definition '${id}': ${validation.errors.join(" ")}`);
     }
     return { ...entry, metadata: parsed.metadata, body: parsed.body };
   }

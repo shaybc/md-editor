@@ -343,6 +343,8 @@
       gitSummary: function(payload, onEvent) { return request("gitSummary", payload, onEvent); },
       plan: function(payload, onEvent) { return request("plan", payload, onEvent); },
       runRecoveryInspect: function(payload) { return request("runRecoveryInspect", payload || {}); },
+      schedulesClaimDue: function(payload) { return request("schedulesClaimDue", payload || {}); },
+      scheduleComplete: function(payload) { return request("scheduleComplete", payload || {}); },
       plansList: function(payload) { return request("plansList", payload || {}); },
       planRead: function(payload) { return request("planRead", payload || {}); },
       planUpdate: function(payload) { return request("planUpdate", payload || {}); },

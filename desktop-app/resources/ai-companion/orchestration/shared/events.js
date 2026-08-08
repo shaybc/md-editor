@@ -15,6 +15,11 @@ const EVENT_TYPES = Object.freeze({
   TOOL_SCHEMA_RESTORED: "tool-schema-restored", TOOL_SCHEMA_UNAVAILABLE: "tool-schema-unavailable",
   RULES_DISCOVERED: "rules-discovered", RULE_ACTIVATED: "rule-activated",
   RULE_UNAVAILABLE: "rule-unavailable", RULES_REFRESHED: "rules-refreshed",
+  SKILLS_DISCOVERED: "skills-discovered", SKILL_INVOCATION_STARTED: "skill-invocation-started",
+  SKILL_INVOCATION_COMPLETED: "skill-invocation-completed", SKILL_UNAVAILABLE: "skill-unavailable", SKILLS_CHANGED: "skills-changed",
+  SKILL_INVOCATION_FAILED: "skill-invocation-failed", SLASH_WORKFLOW_EXPANDED: "slash-workflow-expanded",
+  SCHEDULE_CREATED: "schedule-created", SCHEDULE_CANCELLED: "schedule-cancelled", SCHEDULE_FIRED: "schedule-fired",
+  SCHEDULE_COMPLETED: "schedule-completed", SCHEDULE_FAILED: "schedule-failed",
   RUN_RESTORED: "run-restored", RECOVERY_WARNING: "recovery-warning",
   COMPACTION: "compaction", RUN_COMPLETED: "run-completed", RUN_CANCELLED: "run-cancelled", RUN_FAILED: "run-failed"
 });

@@ -7,7 +7,7 @@ const { createProvider } = require("../shared/provider-factory");
 const { createProviderDebugEmitter } = require("../../core/provider-debug");
 const { EVENT_TYPES, createRunEmitter } = require("../shared/events");
 const { resolveCapabilityPolicy } = require("../shared/capability-policy");
-const { buildSystemMessage } = require("./context-builder");
+const { buildSkillActivationMessage, buildSystemMessage } = require("./context-builder");
 const { discoverExtensions, loadExtension } = require("./extension-registry");
 const { getKnownToolNames, getToolRegistrations } = require("./tool-catalog");
 const { runAutonomousLoop } = require("./autonomous-loop");
@@ -31,6 +31,11 @@ const { RestartReconciler } = require("./recovery/restart-reconciler");
 const { PlanRepositorySession } = require("./plan-repository-session");
 const { RuleCatalog } = require("./rules/rule-catalog");
 const { ToolPathObserver } = require("./rules/tool-path-observer");
+const { SkillCatalog } = require("./skills/skill-catalog");
+const { SkillInvocationSession } = require("./skills/skill-invocation-session");
+const { SkillPathObserver } = require("./skills/skill-path-observer");
+const { SlashWorkflowRouter } = require("./skills/slash-workflow-router");
+const { RunScheduler } = require("./scheduling/run-scheduler");
 
 class AutonomousOrchestrator {
   /** Run Chat, Plan, or Agent through one model-directed kernel. */
@@ -71,11 +76,21 @@ class AutonomousOrchestrator {
         knownToolNames: getKnownToolNames(),
         metadataEntries: agentCatalog.list()
       });
+      const skillCatalog = new SkillCatalog(request, { fabric, capabilities, agentCatalog, emit: events.emit });
+      await skillCatalog.load(request.activeFile?.path);
+      const skillInvocation = new SkillInvocationSession(skillCatalog, journaledEvents.emit);
+      const slashRouter = new SlashWorkflowRouter(skillCatalog, skillInvocation, journaledEvents.emit);
+      const scheduler = new RunScheduler(request, services, journaledEvents.emit);
+      await scheduler.load();
       fingerprints.tools = capabilities.inventory.fingerprint();
+      fingerprints.skills = fingerprint(skillCatalog.list());
       const hooks = new HookGateway(request, Array.from(fabric.entries.values()).filter((entry) => entry.kind === "hook"), events.emit);
       const restored = await chronicle.loadRecovery({ applicationRestart: request.applicationRestart === true });
       ruleCatalog.setEmitter(journaledEvents.emit);
       await ruleCatalog.restore(restored?.ruleState);
+      await skillCatalog.restore(restored?.skillState?.catalog);
+      await skillInvocation.restore(restored?.skillState?.invocation, { hooks });
+      scheduler.restore(restored?.scheduleState);
       instructions = await loadActiveInstructions(request, policy, ruleCatalog);
       fingerprints.instructions = fingerprint(instructions);
       const reconciliation = new RestartReconciler();
@@ -97,6 +112,7 @@ class AutonomousOrchestrator {
         events.emit({ type: EVENT_TYPES.RUN_CANCELLED, message: "Saved run was already cancelled.", recovered: true });
         return { content: "", architecture: "autonomous", recovered: true, cancelled: true };
       }
+      skillCatalog.setEmitter(journaledEvents.emit);
 
       const artifactVault = new ArtifactVault(request, journaledEvents.emit);
       await artifactVault.load();
@@ -117,13 +133,34 @@ class AutonomousOrchestrator {
 
       context = {
         request, services, policy, extensions, extensionSnapshot, fabric, agentCatalog, mcp, capabilities, hooks, ruleCatalog,
+        skillCatalog, skillInvocation, scheduler,
         instructions, recalledContinuity, fingerprints, chronicle, artifactVault, continuity, windowSteward,
         observationLedger, contextReleaseReminder,
         loadedExtensions: new Set(restored?.loadedExtensions || []),
         loadedExtensionBodies: new Map(Array.isArray(restored?.loadedExtensionBodies) ? restored.loadedExtensionBodies : []),
         work, planRepository, taskGrants: [], workers: null, pendingTools: []
       };
+      context.activeProvider = provider;
+      context.selectSkillModel = (model) => {
+        const selected = String(model || "");
+        if (!selected || selected === String(request.settings.model || "")) {
+          context.activeProvider = provider;
+          return;
+        }
+        context.activeProvider = createProvider({ ...request.settings, model: selected }, { onDebug: createProviderDebugEmitter(events.emit) });
+      };
+      const restoredSkillModel = skillInvocation.records.slice().reverse().find((record) => record.executionContext === "inline" && record.model)?.model;
+      if (restoredSkillModel) context.selectSkillModel(restoredSkillModel);
       context.rulePathObserver = new ToolPathObserver(ruleCatalog);
+      context.skillPathObserver = new SkillPathObserver(skillCatalog);
+      context.workers = new WorkerHub(provider, request, {
+        fabric, agentCatalog, parentContext: context, events: journaledEvents,
+        onChange: () => context.saveSnapshot?.("running").catch(() => {})
+      });
+      workers = context.workers;
+      slashRouter.setContext(context);
+      await hooks.run("run-start", { mode: policy.mode, recovered: decision.classification === "recoverable" });
+      await workers.restoreExecutable(restored?.workers);
       context.buildRenewalAnchors = async (digest, activeFiles) => buildRenewalAnchors(context, digest, activeFiles);
       await refreshLoadedExtensions(context, decision.notices);
       const restoredCapabilities = await capabilities.restore(restored?.toolSchemaState || restored?.activeCapabilities);
@@ -132,17 +169,23 @@ class AutonomousOrchestrator {
       if (decision.classification === "recoverable") {
         const rebuilt = reconciliation.rebuild(restored, decision);
         messages = rebuilt.messages;
-        const currentSystem = { role: "system", content: buildSystemMessage(request, policy, extensions, instructions, recalledContinuity) };
+        const currentSystem = { role: "system", content: buildSystemMessage(request, policy, extensions, instructions, recalledContinuity, skillCatalog.advertisement()) };
         if (messages[0]?.role === "system") messages[0] = currentSystem;
         else messages.unshift(currentSystem);
         context.taskGrants = rebuilt.taskGrants;
         recoverySummary = rebuilt.recoverySummary;
       } else {
+        const slash = request.slashInvocation?.name
+          ? await slashRouter.expandTrusted(request.slashInvocation)
+          : await slashRouter.expand(request.prompt);
         messages = [
-          { role: "system", content: buildSystemMessage(request, policy, extensions, instructions, recalledContinuity) },
+          { role: "system", content: buildSystemMessage(request, policy, extensions, instructions, recalledContinuity, skillCatalog.advertisement()) },
           ...(Array.isArray(request.conversationHistory) ? request.conversationHistory : []),
           { role: "user", content: String(request.prompt || "") }
         ];
+        const slashInstructions = slash ? buildSkillActivationMessage(skillCatalog.consumeActivated()) : "";
+        if (slashInstructions) messages.push({ role: "system", content: slashInstructions });
+        else if (slash?.invocation?.executionContext === "worker") messages.push({ role: "system", content: `Workflow marker: workflow:${slash.name}\nThe scoped worker returned: ${JSON.stringify(slash.invocation.worker)}` });
       }
       context.messages = messages;
       observationLedger.refresh(messages, { currentRound: Number(restored?.round) || 0 });
@@ -162,6 +205,8 @@ class AutonomousOrchestrator {
             reminder: contextReleaseReminder.snapshot()
           },
           ruleState: ruleCatalog.snapshot(),
+          skillState: { catalog: skillCatalog.snapshot(), invocation: skillInvocation.snapshot() },
+          scheduleState: scheduler.snapshot(),
           loadedExtensions: Array.from(context.loadedExtensions),
           loadedExtensionBodies: Array.from(context.loadedExtensionBodies.entries()),
           instructionFingerprint: context.fingerprints.instructions,
@@ -171,14 +216,6 @@ class AutonomousOrchestrator {
           ...extra
         });
       };
-
-      context.workers = new WorkerHub(provider, request, {
-        fabric, agentCatalog, parentContext: context, events: journaledEvents,
-        onChange: () => context.saveSnapshot?.("running").catch(() => {})
-      });
-      workers = context.workers;
-      await hooks.run("run-start", { mode: policy.mode, recovered: decision.classification === "recoverable" });
-      await workers.restoreExecutable(restored?.workers);
 
       if (decision.classification === "recoverable") {
         events.emit({ type: EVENT_TYPES.RUN_RESTORED, classification: "recoverable", summary: recoverySummary });
@@ -222,10 +259,12 @@ class AutonomousOrchestrator {
 
 async function buildRenewalAnchors(context, digest, activeFiles) {
   await context.ruleCatalog?.refresh?.();
+  await context.skillCatalog?.refresh?.();
+  context.skillInvocation?.reconcile?.({ hooks: context.hooks, selectSkillModel: context.selectSkillModel });
   const currentInstructions = await loadActiveInstructions(context.request, context.policy, context.ruleCatalog);
   context.instructions = currentInstructions;
   context.fingerprints.instructions = fingerprint(currentInstructions);
-  const system = buildSystemMessage(context.request, context.policy, context.extensions, currentInstructions, context.recalledContinuity);
+  const system = buildSystemMessage(context.request, context.policy, context.extensions, currentInstructions, context.recalledContinuity, context.skillCatalog?.advertisement?.());
   const anchors = [
     { role: "system", content: system },
     { role: "system", content: context.capabilities.consumeCatalogNotice({ force: true }) },
@@ -237,6 +276,8 @@ async function buildRenewalAnchors(context, digest, activeFiles) {
   if (context.loadedExtensionBodies.size) {
     anchors.push({ role: "system", content: `Previously activated extension material:\n${JSON.stringify(Array.from(context.loadedExtensionBodies.entries()))}` });
   }
+  const activeSkills = context.skillCatalog?.activeInstructions?.() || [];
+  if (activeSkills.length) anchors.push({ role: "system", content: buildSkillActivationMessage(activeSkills) });
   if (activeFiles.length) anchors.push({ role: "system", content: `Recently accessed file anchors:\n${JSON.stringify(activeFiles)}` });
   return anchors;
 }
@@ -272,7 +313,9 @@ function createJournaledEvents(events, chronicle) {
 }
 
 function shouldJournalEvent(type) {
-  return ["artifact-stored", "context-thinned", "observation-released", "observation-release-reminder", "tool-catalog-updated", "tool-schema-activated", "tool-schema-restored", "tool-schema-unavailable", "rules-discovered", "rule-activated", "rule-unavailable", "rules-refreshed", "continuity-updated", "compaction", "recovery-warning", "plan-saved", "plan-updated"].includes(type)
+  if (/^(skill|skills|slash|schedule)-/.test(String(type || ""))) return true;
+  if (["slash-workflow-expanded", "skill-invocation-failed"].includes(type)) return true;
+  return ["artifact-stored", "context-thinned", "observation-released", "observation-release-reminder", "tool-catalog-updated", "tool-schema-activated", "tool-schema-restored", "tool-schema-unavailable", "rules-discovered", "rule-activated", "rule-unavailable", "rules-refreshed", "skills-discovered", "skill-invocation-started", "skill-invocation-completed", "skill-unavailable", "skills-changed", "schedule-created", "schedule-cancelled", "schedule-fired", "continuity-updated", "compaction", "recovery-warning", "plan-saved", "plan-updated"].includes(type)
     || /^(work|worker)-/.test(String(type || ""));
 }
 

@@ -120,6 +120,21 @@
     const MAX_WORKSPACE_SIDE_WIDTH = 520;
     const WORKSPACE_CHAT_PAGE_SIZE = 20;
     const WORKSPACE_STATUS_CLASS_NAMES = ["status-completed", "status-incomplete", "status-error", "status-cancelled", "status-planned", "status-running", "status-ready"];
+    const BUNDLED_WORKFLOW_SUGGESTIONS = [
+      { name: "investigate-defect", description: "Investigate a defect from evidence to root cause.", allowedModes: ["plan", "agent"] },
+      { name: "develop-change", description: "Implement a scoped repository change.", allowedModes: ["agent"] },
+      { name: "review-changes", description: "Review local changes for concrete defects.", allowedModes: ["plan", "agent"] },
+      { name: "create-plan", description: "Create or revise an implementation plan.", allowedModes: ["plan", "agent"] },
+      { name: "verify-work", description: "Run risk-based verification for a change.", allowedModes: ["agent"] },
+      { name: "manage-context", description: "Release stale observations during a long run.", allowedModes: ["chat", "plan", "agent"] },
+      { name: "discover-capabilities", description: "Find and activate secondary tools.", allowedModes: ["chat", "plan", "agent"] },
+      { name: "record-change", description: "Record an intentional source-control change.", argumentHint: "[message guidance]", allowedModes: ["agent"] },
+      { name: "refine-change", description: "Simplify selected code while preserving behavior.", argumentHint: "[target or constraint]", allowedModes: ["agent"] },
+      { name: "companion-settings", description: "Inspect or update companion settings.", argumentHint: "<setting request>", allowedModes: ["agent"] },
+      { name: "repeat-work", description: "Create, inspect, or cancel scheduled work.", argumentHint: "<timing and task>", allowedModes: ["agent"] },
+      { name: "build-document", description: "Build and verify a document artifact.", argumentHint: "<document request>", allowedModes: ["agent"] },
+      { name: "inspect-pull-request", description: "Review a pull-request change set.", argumentHint: "[pull request reference]", allowedModes: ["agent"] }
+    ];
     let activeTab = "chat";
     let timerId = null;
     let startedAt = 0;
@@ -168,6 +183,102 @@
     let workspacePlanActionMenu = null;
     let workspaceToolsExpanded = false;
     let workspaceToolsExpandedRecordId = "";
+    let availableWorkflowSkills = BUNDLED_WORKFLOW_SUGGESTIONS.slice();
+    let schedulePollRunning = false;
+
+    function updateWorkflowSkillSuggestions(skills) {
+      for (const skill of Array.isArray(skills) ? skills : []) {
+        if (!skill?.name) continue;
+        const index = availableWorkflowSkills.findIndex((entry) => entry.name === skill.name);
+        if (index >= 0) availableWorkflowSkills[index] = { ...availableWorkflowSkills[index], ...skill };
+        else availableWorkflowSkills.push(skill);
+      }
+    }
+
+    function attachSlashWorkflowSuggestions(textarea, modeProvider = getSelectedRunMode) {
+      if (!textarea?.parentElement) return { destroy() {} };
+      const popup = document.createElement("div");
+      popup.className = "ai-companion-slash-suggestions";
+      popup.hidden = true;
+      textarea.parentElement.append(popup);
+      let matches = [];
+      let selected = 0;
+      const hide = () => { popup.hidden = true; popup.innerHTML = ""; matches = []; selected = 0; };
+      const choose = (index) => {
+        const skill = matches[index];
+        if (!skill) return;
+        textarea.value = `/${skill.name} `;
+        textarea.dispatchEvent?.(new Event("input", { bubbles: true }));
+        textarea.focus?.();
+        hide();
+      };
+      const render = () => {
+        const match = String(textarea.value || "").match(/^\/([a-zA-Z0-9:_-]*)$/);
+        if (!match) return hide();
+        const query = match[1].toLowerCase();
+        const mode = modeProvider();
+        matches = availableWorkflowSkills.filter((skill) =>
+          (!skill.allowedModes?.length || skill.allowedModes.includes(mode))
+          && skill.name.toLowerCase().startsWith(query)
+        ).slice(0, 8);
+        popup.innerHTML = "";
+        matches.forEach((skill, index) => {
+          const button = document.createElement("button");
+          button.type = "button";
+          button.className = `ai-companion-slash-suggestion${index === selected ? " is-selected" : ""}`;
+          const title = document.createElement("strong");
+          title.textContent = `/${skill.name}${skill.argumentHint ? ` ${skill.argumentHint}` : ""}`;
+          const description = document.createElement("span");
+          description.textContent = skill.description || "";
+          button.append(title, description);
+          button.addEventListener("mousedown", (event) => { event.preventDefault?.(); choose(index); });
+          popup.append(button);
+        });
+        popup.hidden = matches.length === 0;
+      };
+      const keydown = (event) => {
+        if (popup.hidden || !matches.length) return;
+        if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+          event.preventDefault?.();
+          selected = (selected + (event.key === "ArrowDown" ? 1 : matches.length - 1)) % matches.length;
+          render();
+        } else if (event.key === "Enter" || event.key === "Tab") {
+          event.preventDefault?.();
+          event.stopImmediatePropagation?.();
+          choose(selected);
+        } else if (event.key === "Escape") {
+          event.preventDefault?.();
+          event.stopImmediatePropagation?.();
+          hide();
+        }
+      };
+      textarea.addEventListener("input", render);
+      textarea.addEventListener("keydown", keydown, true);
+      return { destroy() { textarea.removeEventListener("input", render); textarea.removeEventListener("keydown", keydown, true); popup.remove?.(); } };
+    }
+
+    async function pollDueCompanionSchedules() {
+      if (schedulePollRunning || isAgentRunning() || typeof deps.bridge?.schedulesClaimDue !== "function") return;
+      schedulePollRunning = true;
+      try {
+        const claimed = await deps.bridge.schedulesClaimDue({ workspaceRoot: deps.getWorkspaceRoot?.() || "" });
+        for (const schedule of Array.isArray(claimed?.schedules) ? claimed.schedules : []) {
+          let error = "";
+          try {
+            await startNewAgentChat();
+            const outcome = await runCompanionPrompt({ prompt: schedule.prompt, mode: "agent", executionKind: "new", capabilityBoundary: schedule.capabilityBoundary });
+            if (["error", "cancelled", "blocked"].includes(outcome?.status)) error = `Scheduled task ended with status ${outcome.status}.`;
+          } catch (runError) {
+            error = runError?.message || String(runError);
+          }
+          await deps.bridge.scheduleComplete?.({ workspaceRoot: deps.getWorkspaceRoot?.() || "", scheduleId: schedule.id, error });
+        }
+      } catch (error) {
+        deps.appDebugLog?.("warning", "[ai-companion] Unable to poll scheduled work", { error: error?.message || String(error) });
+      } finally {
+        schedulePollRunning = false;
+      }
+    }
     let workspaceToolsCollapsedSnapshot = null;
     let workspaceOpenRefreshSequence = 0;
     let taskChangesExpanded = false;
@@ -4320,6 +4431,9 @@
         confirmRemovals: shouldConfirmEditedPromptAttachmentRemoval(),
         updateSubmitState: () => {}
       });
+      const editSlashSuggestions = attachSlashWorkflowSuggestions(textarea, getSelectedRunMode);
+      const destroyEditComposer = editComposer.destroy;
+      editComposer.destroy = () => { editSlashSuggestions.destroy(); destroyEditComposer?.(); };
       textarea.addEventListener("input", () => resizePromptEditTextarea(textarea));
       textarea.addEventListener("keydown", (event) => {
         if (event.key === "Escape") {
@@ -6610,6 +6724,18 @@
         "rule-activated": "Scoped rule activated",
         "rule-unavailable": "Rule unavailable",
         "rules-refreshed": "Rules refreshed",
+        "skills-discovered": "Workflow catalog discovered",
+        "skill-invocation-started": "Workflow activated",
+        "skill-invocation-completed": "Workflow completed",
+        "skill-invocation-failed": "Workflow failed",
+        "slash-workflow-expanded": "Slash workflow expanded",
+        "skill-unavailable": "Workflow unavailable",
+        "skills-changed": "Workflow catalog changed",
+        "schedule-created": "Schedule created",
+        "schedule-cancelled": "Schedule cancelled",
+        "schedule-fired": "Scheduled task started",
+        "schedule-completed": "Scheduled task completed",
+        "schedule-failed": "Scheduled task failed",
         "continuity-updated": "Continuity record updated",
         "run-restored": "Autonomous run restored",
         "recovery-warning": "Recovery warning",
@@ -6619,7 +6745,7 @@
         ? `${event.estimatedTokensBefore} tokens before, ${event.estimatedTokensAfter || 0} after`
         : "Completed");
       const display = createSyntheticToolActivity({
-        type: ["recovery-warning", "rule-unavailable"].includes(event.type) ? "tool-error" : "tool",
+        type: ["recovery-warning", "rule-unavailable", "skill-unavailable", "skill-invocation-failed", "schedule-failed"].includes(event.type) ? "tool-error" : "tool",
         tool: labels[event.type] || event.type,
         summary,
         callId: `${event.type}-${event.savedAt || event.updatedAt || Date.now()}`
@@ -7036,6 +7162,11 @@
         void loadRepositoryPlans({ force: true });
         return;
       }
+      if (["skills-discovered", "skill-invocation-started", "skill-invocation-completed", "skill-invocation-failed", "skill-unavailable", "slash-workflow-expanded", "skills-changed", "schedule-created", "schedule-cancelled", "schedule-fired", "schedule-completed", "schedule-failed"].includes(event.type)) {
+        updateWorkflowSkillSuggestions(event.skills);
+        appendAutonomousRuntimeStatus(event);
+        return;
+      }
       if (["run-started", "context-thinned", "observation-released", "observation-release-reminder", "tool-catalog-updated", "tool-schema-activated", "tool-schema-restored", "tool-schema-unavailable", "rules-discovered", "rule-activated", "rule-unavailable", "rules-refreshed", "continuity-updated", "chronicle-saved", "run-restored", "recovery-warning", "compaction", "run-completed", "run-cancelled", "run-failed"].includes(event.type) || /^(work|worker)-/.test(event.type)) {
         if (["context-thinned", "observation-released", "observation-release-reminder", "tool-catalog-updated", "tool-schema-activated", "tool-schema-restored", "tool-schema-unavailable", "rules-discovered", "rule-activated", "rule-unavailable", "rules-refreshed", "continuity-updated", "run-restored", "recovery-warning", "compaction"].includes(event.type)) appendAutonomousRuntimeStatus(event);
         else recordAgentEvent(event);
@@ -7295,6 +7426,12 @@
         : (hasPromptOverride ? [] : await getDraftAttachmentPayloads());
       if (!prompt && !attachments.length) return;
       const settings = { ...getCurrentSettings() };
+      if (overrides.capabilityBoundary?.toolScopes) {
+        const savedScopes = overrides.capabilityBoundary.toolScopes;
+        const currentScopes = settings.toolScopes || {};
+        settings.toolScopes = Object.fromEntries(Array.from(new Set([...Object.keys(currentScopes), ...Object.keys(savedScopes)]), (name) => [name, currentScopes[name] === true && savedScopes[name] === true]));
+        settings.agentAutoRunCommands = settings.agentAutoRunCommands === true && overrides.capabilityBoundary.autoRunCommands === true;
+      }
       const mode = overrides.mode ? normalizeCompanionMode(overrides.mode) : getSelectedRunMode();
       if (!settings.enabled || (mode === "agent" ? !settings.agentEnabled : (mode === "chat" && settings.chatEnabled === false))) {
         updateDisabledNotice(settings, mode);
@@ -7359,6 +7496,10 @@
       const editorReadContext = createEditorReadContext(mode, activeFilePayload);
       const requestPayload = {
         prompt,
+        slashInvocation: (() => {
+          const match = prompt.match(/^\/([a-zA-Z0-9:_-]+)(?:\s+([\s\S]*))?$/);
+          return match ? { name: match[1].toLowerCase(), arguments: String(match[2] || "").trim() } : null;
+        })(),
         settings,
         workspaceRoot: deps.getWorkspaceRoot(),
         activeFile: activeFilePayload,
@@ -7377,6 +7518,7 @@
           const info = modelRegistry?.resolveModelInfo?.(modelName);
           return info ? { contextWindow: Number(info.contextWindow) || 0, maxOutputTokens: Number(info.maxOutputTokens) || 0 } : null;
         })(),
+        configuredModels: modelRegistry?.getCachedModels?.().map((model) => model.id).filter(Boolean) || [],
         turnIndex: requestTurnIndex,
         executionKind,
         executionGeneration
@@ -7525,6 +7667,12 @@
       updateSubmitState: updateAgentRunButton,
       onAttachmentsChanged: renderWorkspaceInspectorPanels
     });
+    attachSlashWorkflowSuggestions(agentInput, getSelectedRunMode);
+    if (typeof deps.bridge?.schedulesClaimDue === "function") {
+      const schedulePollTimer = setInterval(() => { void pollDueCompanionSchedules(); }, 30000);
+      schedulePollTimer?.unref?.();
+      void pollDueCompanionSchedules();
+    }
 
     toggleButtons.forEach((button) => button.addEventListener("click", () => setOpen(!document.body.classList.contains("ai-companion-open"))));
     closeButton?.addEventListener("click", () => setOpen(!document.body.classList.contains("ai-companion-open")));

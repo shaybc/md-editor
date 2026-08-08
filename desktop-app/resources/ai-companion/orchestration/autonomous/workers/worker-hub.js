@@ -12,9 +12,12 @@ const { ObservationLedger } = require("../context/observation-ledger");
 const { ContextReleaseReminder } = require("../context/context-release-reminder");
 const { finishWorkerWorkspace, prepareWorkerWorkspace } = require("./worker-workspace");
 const { getRunIdentity } = require("../work/run-identity");
-const { buildRuleActivationMessage } = require("../context-builder");
+const { buildRuleActivationMessage, buildSkillActivationMessage } = require("../context-builder");
 const { RuleCatalog } = require("../rules/rule-catalog");
 const { ToolPathObserver } = require("../rules/tool-path-observer");
+const { SkillCatalog } = require("../skills/skill-catalog");
+const { SkillInvocationSession } = require("../skills/skill-invocation-session");
+const { SkillPathObserver } = require("../skills/skill-path-observer");
 
 const MAX_ACTIVE_WORKERS = 10;
 const MAX_RESULT_CHARS = 16000;
@@ -42,7 +45,7 @@ class WorkerHub {
     const agent = args.agentId ? await this.agentCatalog?.activate(args.agentId) : null;
     if (args.agentId && agent?.kind !== "agent") throw new Error(`Unknown agent definition: ${args.agentId}`);
     const authority = this.resolveAuthority(agent, args.isolation);
-    const entry = { id, description: String(args.description || "Delegated work"), prompt: String(args.prompt || ""), agentId: agent?.id || "", status: "queued", background: args.background === true, inbox: [], messages: [], result: "", error: "", controller: new AbortController(), agent, authority, isolation: authority.isolation };
+    const entry = { id, description: String(args.description || "Delegated work"), prompt: String(args.prompt || ""), model: String(args.model || ""), agentId: agent?.id || "", status: "queued", background: args.background === true, inbox: [], messages: [], result: "", error: "", controller: new AbortController(), agent, authority, isolation: authority.isolation };
     entry.completion = new Promise((resolve) => { entry.resolveCompletion = resolve; });
     if (!entry.prompt.trim()) throw new Error("Worker launch requires a prompt.");
     this.entries.set(id, entry);
@@ -219,7 +222,8 @@ class WorkerHub {
       if (entry.authority.requiresWorktree && entry.workspace.isolation !== "worktree") {
         throw new Error(`Agent '${entry.agentId || entry.id}' requires worktree isolation, but an isolated workspace could not be created: ${entry.workspace.fallbackReason || "unknown reason"}`);
       }
-      const provider = entry.agent?.metadata?.model ? createProvider({ ...this.request.settings, model: entry.agent.metadata.model }) : this.provider;
+      const selectedModel = entry.model || entry.agent?.metadata?.model;
+      const provider = selectedModel ? createProvider({ ...this.request.settings, model: selectedModel }) : this.provider;
       const parentRegistrations = this.parentContext.capabilities.registrations?.() || [];
       const parentDefinitions = parentRegistrations.length
         ? parentRegistrations.map((record) => record.definition)
@@ -258,6 +262,15 @@ class WorkerHub {
         emit: workerEvents.emit
       });
       await capabilities.restore(entry.toolSchemaState);
+      const skillCatalog = new SkillCatalog(workerRequest, { fabric: this.fabric, capabilities, agentCatalog: this.agentCatalog, emit: workerEvents.emit });
+      await skillCatalog.load();
+      await skillCatalog.restore(entry.skillState?.catalog);
+      const skillInvocation = new SkillInvocationSession(skillCatalog, workerEvents.emit);
+      await skillInvocation.restore(entry.skillState?.invocation);
+      const skillAdvertisement = skillCatalog.advertisement();
+      if (skillAdvertisement) entry.messages.push({ role: "system", content: skillAdvertisement });
+      const restoredSkillInstructions = buildSkillActivationMessage(skillCatalog.consumeActivated());
+      if (restoredSkillInstructions) entry.messages.push({ role: "system", content: restoredSkillInstructions });
       const observationLedger = new ObservationLedger(this.parentContext.artifactVault, workerEvents.emit);
       observationLedger.restore(entry.observationRelease?.ledger);
       observationLedger.refresh(entry.messages);
@@ -276,6 +289,10 @@ class WorkerHub {
         hooks: createWorkerHooks(entry),
         ruleCatalog,
         rulePathObserver: new ToolPathObserver(ruleCatalog),
+        skillCatalog,
+        skillInvocation,
+        skillPathObserver: new SkillPathObserver(skillCatalog),
+        scheduler: blockedScheduler(),
         continuity: null,
         windowSteward,
         observationLedger,
@@ -286,14 +303,20 @@ class WorkerHub {
           entry.observationRelease = { ledger: observationLedger.snapshot(), reminder: contextReleaseReminder.snapshot() };
           entry.toolSchemaState = capabilities.snapshot();
           entry.ruleState = ruleCatalog.snapshot();
+          entry.skillState = { catalog: skillCatalog.snapshot(), invocation: skillInvocation.snapshot() };
           this.persistChange();
         },
         buildRenewalAnchors: async (digest, activeFiles) => {
           await ruleCatalog.refresh();
+          await skillCatalog.refresh();
+          skillInvocation.reconcile();
           const currentRules = buildRuleActivationMessage(ruleCatalog.activeInstructions({ markInjected: true }));
+          const currentSkills = buildSkillActivationMessage(skillCatalog.activeInstructions());
           return [
             { role: "system", content: entry.agent?.body || "Complete only the delegated work and report observed evidence." },
+            { role: "system", content: skillCatalog.advertisement() },
             ...(currentRules ? [{ role: "system", content: currentRules }] : []),
+            ...(currentSkills ? [{ role: "system", content: currentSkills }] : []),
             { role: "system", content: `Earlier delegated execution digest:\n${JSON.stringify(digest)}` },
             ...(activeFiles.length ? [{ role: "system", content: `Recently accessed file anchors:\n${JSON.stringify(activeFiles)}` }] : [])
           ];
@@ -342,6 +365,7 @@ function createWorkerHooks(entry) {
 }
 
 function blockedWorkers() { return { launch() { throw new Error("Delegated workers cannot launch other workers."); }, list() { return []; }, hasActive() { return false; }, drainNotifications() { return []; } }; }
+function blockedScheduler() { return { create() { throw new Error("Delegated workers cannot create schedules."); }, list() { return []; }, cancel() { throw new Error("Delegated workers cannot cancel schedules."); } }; }
 function isTerminal(status) { return ["completed", "failed", "stopped", "interrupted"].includes(status); }
 function publicEntry(entry) { return { id: entry.id, description: entry.description, agentId: entry.agentId, status: entry.status, background: entry.background, isolation: entry.workspace?.isolation || entry.isolation, workspace: entry.workspace ? { root: entry.workspace.root, branch: entry.workspace.branch, retained: entry.workspace.retained, fallbackReason: entry.workspace.fallbackReason } : undefined, result: entry.result, error: entry.error }; }
 
@@ -349,11 +373,13 @@ function privateEntry(entry) {
   return {
     ...publicEntry(entry),
     prompt: entry.prompt,
+    model: entry.model || "",
     inbox: JSON.parse(JSON.stringify(entry.inbox || [])),
     messages: JSON.parse(JSON.stringify(entry.messages || [])),
     observationRelease: JSON.parse(JSON.stringify(entry.observationRelease || {})),
     toolSchemaState: JSON.parse(JSON.stringify(entry.toolSchemaState || {})),
     ruleState: JSON.parse(JSON.stringify(entry.ruleState || {})),
+    skillState: JSON.parse(JSON.stringify(entry.skillState || {})),
     agentFingerprint: entry.agent ? JSON.stringify({ id: entry.agent.id, metadata: entry.agent.metadata, body: entry.agent.body }) : "",
     agentAuthorityFingerprint: entry.authority?.fingerprint || "",
     agentLogicalId: entry.agent?.id || entry.agentId || "",
@@ -366,6 +392,7 @@ function restoredEntry(snapshot, agent, authority, status) {
     id: String(snapshot.id),
     description: String(snapshot.description || "Delegated work"),
     prompt: String(snapshot.prompt || ""),
+    model: String(snapshot.model || ""),
     agentId: String(agent?.id || snapshot.agentLogicalId || snapshot.agentId || ""),
     status,
     background: snapshot.background === true,
@@ -374,6 +401,7 @@ function restoredEntry(snapshot, agent, authority, status) {
     observationRelease: snapshot.observationRelease ? JSON.parse(JSON.stringify(snapshot.observationRelease)) : {},
     toolSchemaState: snapshot.toolSchemaState ? JSON.parse(JSON.stringify(snapshot.toolSchemaState)) : {},
     ruleState: snapshot.ruleState ? JSON.parse(JSON.stringify(snapshot.ruleState)) : {},
+    skillState: snapshot.skillState ? JSON.parse(JSON.stringify(snapshot.skillState)) : {},
     result: String(snapshot.result || ""),
     error: String(snapshot.error || ""),
     controller: new AbortController(),

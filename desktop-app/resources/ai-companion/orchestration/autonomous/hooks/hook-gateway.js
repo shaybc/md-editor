@@ -18,6 +18,17 @@ class HookGateway {
     this.hooks = (entries || []).map(normalizeHook);
   }
 
+  register(entries) {
+    const normalized = Array.from(entries || [], normalizeHook);
+    this.hooks.push(...normalized);
+  }
+
+  replacePrefix(prefix, entries) {
+    const normalized = Array.from(entries || [], normalizeHook);
+    this.hooks = this.hooks.filter((hook) => !hook.id.startsWith(prefix));
+    this.hooks.push(...normalized);
+  }
+
   /** Run matching hooks in declaration order and return bounded injected context. */
   async run(event, payload = {}) {
     if (!SUPPORTED_EVENTS.has(event) || this.running) return { additionalContext: [] };

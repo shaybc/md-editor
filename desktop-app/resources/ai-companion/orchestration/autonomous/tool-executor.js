@@ -19,6 +19,7 @@ async function executeTool(call, context) {
   const name = String(call?.function?.name || "");
   const args = parseArguments(call);
   if (name !== "capability_search") context.capabilities?.assertCallable?.(name);
+  if (name !== "skill_invoke") context.skillInvocation?.assertToolAllowed?.(name);
   const root = context.request.workspaceRoot;
   const options = { signal: context.request.signal };
   if (name === "list_files") return workspaceTools.listFiles(root, { ...options, maxFiles: args.maxFiles });
@@ -78,7 +79,19 @@ async function executeTool(call, context) {
     return args.kind ? entries.filter((entry) => entry.kind === args.kind) : entries;
   }
   if (name === "capability_search") return context.capabilities.search(args.query, { maxResults: args.maxResults });
+  if (name === "skill_invoke") return context.skillInvocation.invoke(args.name, args.arguments, { trigger: "model", context });
+  if (name === "schedule_create") return context.scheduler.create(args);
+  if (name === "schedule_list") return context.scheduler.list();
+  if (name === "schedule_cancel") return context.scheduler.cancel(args.id);
   if (name === "load_extension") {
+    const extensionMetadata = context.fabric.entries.get(args.id) || context.extensions.find((entry) => entry.id === args.id);
+    if (extensionMetadata?.kind === "skill") {
+      const error = new Error("Workflow skills must be activated through skill_invoke.");
+      error.code = "SKILL_INVOCATION_REQUIRED";
+      error.retryable = false;
+      error.doNotRetry = true;
+      throw error;
+    }
     const extension = context.agentCatalog?.owns?.(args.id)
       ? await context.agentCatalog.activate(args.id)
       : (context.fabric.entries.has(args.id)
@@ -93,7 +106,11 @@ async function executeTool(call, context) {
   if (name === "context_observation_list") return context.observationLedger.list(context.messages, { currentRound: context.currentRound, maxResults: args.maxResults });
   if (name === "context_release") return context.observationLedger.release(args.ids, context.messages, { currentRound: context.currentRound, reason: args.reason, initiator: "model" });
   if (["plan_list", "plan_read", "plan_create", "plan_update"].includes(name)) return context.planRepository.execute(name, args);
-  if (name === "mcp_search_offerings") return context.mcp.searchOfferings(args.serverId, args.query);
+  if (name === "mcp_search_offerings") {
+    const offerings = await context.mcp.searchOfferings(args.serverId, args.query);
+    context.skillCatalog?.registerExternalPrompts?.(args.serverId, offerings.prompts, context.mcp);
+    return offerings;
+  }
   if (name === "mcp_read_resource") return context.mcp.readResource(args.serverId, args.uri);
   if (name === "mcp_get_prompt") return context.mcp.getPrompt(args.serverId, args.name, args.arguments);
   if (name === "work_create") return context.work.create(args);

@@ -26,6 +26,29 @@ test("natural text completes without a tool or verifier call", async () => {
   assert.deepEqual(events.filter((event) => event.type === "assistant-final").map((event) => event.content), ["Hello!"]);
 });
 
+test("exact user slash workflow expands before the first provider call", async () => {
+  let calls = 0;
+  const events = [];
+  const provider = { async completeMessage(messages) {
+    calls += 1;
+    assert.equal(messages.some((message) => message.role === "user" && message.content === "/develop-change add a status badge"), true);
+    assert.equal(messages.some((message) => message.role === "system" && /workflow:develop-change/.test(message.content) && /smallest coherent change/i.test(message.content)), true);
+    return { content: "I will follow the selected workflow.", toolCalls: [] };
+  } };
+  await new AutonomousOrchestrator().run(request({ prompt: "/develop-change add a status badge" }), { provider }, (event) => events.push(event));
+  assert.equal(calls, 1);
+  assert.equal(events.some((event) => event.type === "slash-workflow-expanded" && event.name === "develop-change"), true);
+});
+
+test("unknown exact slash workflow fails before calling the provider", async () => {
+  let calls = 0;
+  await assert.rejects(
+    () => new AutonomousOrchestrator().run(request({ prompt: "/not-a-workflow" }), { provider: { async completeMessage() { calls += 1; } } }, () => {}),
+    (error) => error.code === "UNKNOWN_SLASH_WORKFLOW"
+  );
+  assert.equal(calls, 0);
+});
+
 test("empty model completion receives one structural correction", async () => {
   let calls = 0;
   let correctionObserved = false;

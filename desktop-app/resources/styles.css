@@ -14387,6 +14387,7 @@ body.ai-companion-workspace-open .ai-companion-chat-action-menu {
   line-height: 1.35;
 }
 .ai-companion-agent-composer {
+  position: relative;
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: end;
@@ -14586,6 +14587,7 @@ button.ai-companion-saved-attachment:focus-visible {
 
 
 .ai-companion-prompt-edit-composer {
+  position: relative;
   display: grid;
   gap: 8px;
 }
@@ -21392,6 +21394,44 @@ html[data-desktop-menu-layout="full"] .header-action-menu {
   gap: 8px;
   padding: 6px 4px;
   border-bottom: 1px solid var(--settings-border, rgba(127,127,127,0.18));
+}
+
+.ai-companion-slash-suggestions {
+  position: absolute;
+  z-index: 60;
+  right: 8px;
+  bottom: calc(100% + 6px);
+  left: 8px;
+  max-height: 240px;
+  overflow-y: auto;
+  padding: 6px;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  background: var(--panel-bg);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.28);
+}
+
+.ai-companion-slash-suggestion {
+  display: flex;
+  width: 100%;
+  flex-direction: column;
+  gap: 2px;
+  padding: 7px 8px;
+  border: 0;
+  border-radius: 5px;
+  color: var(--text-primary);
+  background: transparent;
+  text-align: left;
+}
+
+.ai-companion-slash-suggestion span {
+  color: var(--text-secondary);
+  font-size: 0.78rem;
+}
+
+.ai-companion-slash-suggestion:hover,
+.ai-companion-slash-suggestion.is-selected {
+  background: color-mix(in srgb, var(--accent-color) 12%, var(--panel-bg));
 }
 .settings-ai-tool-access-head { font-weight: 600; opacity: 0.8; }
 .settings-ai-tool-access-domain { text-align: left; }

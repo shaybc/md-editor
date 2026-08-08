@@ -32,6 +32,7 @@ const approvalPolicy = requireAiCompanionModule("core/agent-approval-policy");
 const approvalCapabilities = requireAiCompanionModule("core/approval-capability-registry");
 const extensionService = requireAiCompanionModule("orchestration/autonomous/extensions/extension-service");
 const { inspectRunRecovery } = requireAiCompanionModule("orchestration/autonomous/recovery/recovery-inspector");
+const { RunScheduler } = requireAiCompanionModule("orchestration/autonomous/scheduling/run-scheduler");
 const activeRequests = new Map();
 const pendingApprovals = new Map();
 const pendingAppActions = new Map();
@@ -269,6 +270,14 @@ async function handleRequest(session, message) {
       result = await companionOrchestration.run(request, {}, emit);
     } else if (message.action === "runRecoveryInspect") {
       result = await inspectRunRecovery(request);
+    } else if (message.action === "schedulesClaimDue") {
+      const scheduler = new RunScheduler(request);
+      await scheduler.load();
+      result = { schedules: await scheduler.claimDue() };
+    } else if (message.action === "scheduleComplete") {
+      const scheduler = new RunScheduler(request);
+      await scheduler.load();
+      result = { schedule: await scheduler.complete(message.scheduleId, message.error) };
     } else if (message.action === "plansList") {
       result = await planRepositoryTools.planList(request.workspaceRoot, message, { signal: controller.signal });
     } else if (message.action === "planRead") {

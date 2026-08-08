@@ -43,11 +43,13 @@ test("bundled workflow metadata is available without loading instruction bodies"
   const bundle = snapshot.bundles.find((entry) => entry.id === "core-workflows");
   assert.equal(bundle.enabled, true);
   assert.equal(bundle.trusted, true);
-  assert.equal(bundle.contributionCount, 13);
+  assert.equal(bundle.contributionCount, 19);
   const skill = snapshot.entries.find((entry) => entry.id === "core-workflows:develop-change");
   assert.equal(skill.kind, "skill");
   assert.equal(Object.hasOwn(skill, "body"), false);
   assert.match((await fabric.activate(skill.id)).body, /smallest coherent change/i);
+  const scheduledSkill = snapshot.entries.find((entry) => entry.id === "core-workflows:repeat-work");
+  assert.equal(Object.hasOwn(scheduledSkill, "body"), false);
 });
 
 test("canonical agent discovery hides mode-incompatible definitions and invalid metadata fails closed", async () => {

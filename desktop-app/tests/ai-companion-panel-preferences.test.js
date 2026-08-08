@@ -1050,6 +1050,18 @@ test("autonomous Plan mode accepts repository metadata and refreshes saved plans
   assert.equal(plansListCalls > 0, true);
 });
 
+test("AI Companion exposes mode-filtered slash workflows and durable schedule polling", () => {
+  const panelSource = fs.readFileSync(path.join(webRoot, "js", "ai-companion", "panel.js"), "utf8");
+  const bridgeSource = fs.readFileSync(path.join(webRoot, "js", "ai-companion", "neutralino-ai-bridge.js"), "utf8");
+  assert.match(panelSource, /attachSlashWorkflowSuggestions\(agentInput, getSelectedRunMode\)/);
+  assert.match(panelSource, /attachSlashWorkflowSuggestions\(textarea, getSelectedRunMode\)/);
+  assert.match(panelSource, /allowedModes\.includes\(mode\)/);
+  assert.match(panelSource, /schedulesClaimDue/);
+  assert.match(panelSource, /capabilityBoundary/);
+  assert.match(bridgeSource, /schedulesClaimDue/);
+  assert.match(bridgeSource, /scheduleComplete/);
+});
+
 test("autonomous Plan mode does not synthesize saved metadata without a repository result", async () => {
   const harness = createPanelHarness({
     settings: { enabled: true, chatEnabled: true, agentEnabled: true },

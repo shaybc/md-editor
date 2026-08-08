@@ -20,7 +20,13 @@
       "skills/create-plan.md",
       "skills/verify-work.md",
       "skills/manage-context.md",
-      "skills/discover-capabilities.md"
+      "skills/discover-capabilities.md",
+      "skills/record-change.md",
+      "skills/refine-change.md",
+      "skills/companion-settings.md",
+      "skills/repeat-work.md",
+      "skills/build-document.md",
+      "skills/inspect-pull-request.md"
     ]
   }
 }

@@ -21,7 +21,11 @@ const DEFINITIONS = Object.freeze([
   tool("run_command", "Run a command in the workspace.", { command: text("Command to run"), timeoutMs: integer("Timeout in milliseconds"), approvalReason: text("Why execution is needed") }, ["command"]),
   tool("discover_extensions", "List available rules, skills, agents, plugins, hooks, MCP servers, and deferred tools.", { kind: text("Optional extension kind") }),
   tool("capability_search", "Search and activate secondary tool schemas. Use select:tool_name for exact selection, comma-separated names for multiple tools, or task keywords for ranked discovery.", { query: text("Exact selection or capability keywords"), maxResults: integer("Maximum metadata results") }, ["query"]),
-  tool("load_extension", "Load one discovered rule, skill, or agent definition.", { id: text("Discovered extension id") }, ["id"]),
+  tool("load_extension", "Load one discovered non-skill extension. Workflow skills must be activated through skill_invoke.", { id: text("Discovered extension id") }, ["id"]),
+  tool("skill_invoke", "Activate one advertised workflow skill by its exact name. The runtime loads its instructions only after this call.", { name: text("Exact advertised workflow name"), arguments: { description: "Optional workflow arguments", oneOf: [{ type: "string" }, { type: "object", additionalProperties: { type: ["string", "number", "boolean"] } }] } }, ["name"]),
+  tool("schedule_create", "Create a durable future or recurring autonomous task for this workspace.", { prompt: text("Task to run"), delayMinutes: integer("Minutes before the first run"), intervalMinutes: integer("Minutes between recurring runs"), recurring: { type: "boolean" }, expiresInDays: integer("Expiration in days, capped at 30") }, ["prompt", "delayMinutes"]),
+  tool("schedule_list", "List durable autonomous task schedules for this workspace.", {}),
+  tool("schedule_cancel", "Cancel one durable autonomous task schedule.", { id: text("Schedule id") }, ["id"]),
   tool("continuity_search", "Search bounded historical run summaries from this exact workspace.", { query: text("Relevant topic, path, or prior outcome"), maxResults: integer("Maximum summaries to return") }, ["query"]),
   tool("artifact_read", "Read a bounded range from a stored observation artifact.", { id: text("Artifact id"), offset: integer("Starting character offset"), length: integer("Maximum characters to return") }, ["id"]),
   tool("context_observation_list", "List bounded metadata for active tool observations and show which older observations may be released.", { maxResults: integer("Maximum observations to return") }),
@@ -52,6 +56,8 @@ function getToolDefinitions(policy, settings = {}) {
     if (!policy.allowDelegation && name.startsWith("worker_")) return false;
     if (!policy.allowPlanReads && ["plan_list", "plan_read"].includes(name)) return false;
     if (!policy.allowPlanWrites && ["plan_create", "plan_update"].includes(name)) return false;
+    if (!policy.allowSkillInvocation && name === "skill_invoke") return false;
+    if (!policy.allowScheduling && name.startsWith("schedule_")) return false;
     return true;
   });
   return [...core, ...getApplicationToolDefinitions(policy, settings)];
@@ -94,6 +100,8 @@ function runtimeDomain(name) {
   if (name.startsWith("plan_")) return "plans";
   if (name.startsWith("work_")) return "work";
   if (name.startsWith("worker_")) return "workers";
+  if (name === "skill_invoke") return "skills";
+  if (name.startsWith("schedule_")) return "scheduling";
   if (name.startsWith("context_") || name === "artifact_read" || name === "continuity_search") return "context";
   if (name.startsWith("mcp_")) return "external";
   if (["discover_extensions", "load_extension", "capability_search"].includes(name)) return "extensions";
