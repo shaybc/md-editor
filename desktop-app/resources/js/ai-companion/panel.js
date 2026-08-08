@@ -6602,6 +6602,10 @@
         "context-thinned": "Context observations stored",
         "observation-released": "Context observations released",
         "observation-release-reminder": "Context release suggested",
+        "tool-catalog-updated": "Tool catalog updated",
+        "tool-schema-activated": "Tool schemas activated",
+        "tool-schema-restored": "Tool schemas restored",
+        "tool-schema-unavailable": "Tool schema unavailable",
         "continuity-updated": "Continuity record updated",
         "run-restored": "Autonomous run restored",
         "recovery-warning": "Recovery warning",
@@ -7028,8 +7032,8 @@
         void loadRepositoryPlans({ force: true });
         return;
       }
-      if (["run-started", "context-thinned", "observation-released", "observation-release-reminder", "continuity-updated", "chronicle-saved", "run-restored", "recovery-warning", "compaction", "run-completed", "run-cancelled", "run-failed"].includes(event.type) || /^(work|worker)-/.test(event.type)) {
-        if (["context-thinned", "observation-released", "observation-release-reminder", "continuity-updated", "run-restored", "recovery-warning", "compaction"].includes(event.type)) appendAutonomousRuntimeStatus(event);
+      if (["run-started", "context-thinned", "observation-released", "observation-release-reminder", "tool-catalog-updated", "tool-schema-activated", "tool-schema-restored", "tool-schema-unavailable", "continuity-updated", "chronicle-saved", "run-restored", "recovery-warning", "compaction", "run-completed", "run-cancelled", "run-failed"].includes(event.type) || /^(work|worker)-/.test(event.type)) {
+        if (["context-thinned", "observation-released", "observation-release-reminder", "tool-catalog-updated", "tool-schema-activated", "tool-schema-restored", "tool-schema-unavailable", "continuity-updated", "run-restored", "recovery-warning", "compaction"].includes(event.type)) appendAutonomousRuntimeStatus(event);
         else recordAgentEvent(event);
         if (activeAgentEntry && ["run-restored", "recovery-warning"].includes(event.type)) {
           activeAgentEntry.record.recoverySummary = {

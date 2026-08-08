@@ -8,6 +8,7 @@ const test = require("node:test");
 const { ExtensionFabric } = require("../resources/ai-companion/orchestration/autonomous/extensions/extension-fabric");
 const { HookGateway } = require("../resources/ai-companion/orchestration/autonomous/hooks/hook-gateway");
 const { CapabilityCatalog } = require("../resources/ai-companion/orchestration/autonomous/capabilities/capability-catalog");
+const { ToolSchemaInventory } = require("../resources/ai-companion/orchestration/autonomous/capabilities/tool-schema-inventory");
 const { normalizeServerConfiguration } = require("../resources/ai-companion/orchestration/autonomous/mcp/server-configuration");
 
 async function temporaryRoots(t) {
@@ -36,7 +37,7 @@ test("bundled workflow metadata is available without loading instruction bodies"
   const bundle = snapshot.bundles.find((entry) => entry.id === "core-workflows");
   assert.equal(bundle.enabled, true);
   assert.equal(bundle.trusted, true);
-  assert.equal(bundle.contributionCount, 12);
+  assert.equal(bundle.contributionCount, 13);
   const skill = snapshot.entries.find((entry) => entry.id === "core-workflows:develop-change");
   assert.equal(skill.kind, "skill");
   assert.equal(Object.hasOwn(skill, "body"), false);
@@ -91,7 +92,40 @@ test("capability discovery adds external schemas only after a metadata match", a
   assert.equal(connects, 0);
   await catalog.discover("records");
   assert.equal(connects, 1);
+  assert.equal(catalog.definitions().length, 0);
+  await catalog.discover("select:mcp__sample__lookup");
   assert.equal(catalog.definitions()[0].function.name, "mcp__sample__lookup");
+});
+
+test("deferred schemas require exact activation and remain isolated per catalog", async () => {
+  const definition = (name, description = name) => ({ type: "function", function: { name, description, parameters: { type: "object", properties: {} } } });
+  const registrations = [definition("capability_search"), definition("work_create"), definition("work_list")];
+  const dependencies = { policy: { mode: "agent" }, fabric: { entries: new Map(), snapshot: () => ({ entries: [] }) }, mcp: { listServers: () => [] } };
+  const parent = new CapabilityCatalog({ ...dependencies, baseDefinitions: registrations, knownToolNames: ["capability_search", "work_create", "work_list", "plan_update"] });
+  const sibling = new CapabilityCatalog({ ...dependencies, baseDefinitions: registrations });
+
+  assert.deepEqual(parent.definitions().map((entry) => entry.function.name), ["capability_search"]);
+  assert.equal(parent.classifyCall("work_create").status, "deferred");
+  assert.equal(parent.classifyCall("plan_update").status, "prohibited");
+  assert.throws(() => parent.assertCallable("work_create"), (error) => error.code === "TOOL_SCHEMA_NOT_ACTIVE");
+
+  const search = await parent.search("select:work_create");
+  assert.deepEqual(search.activatedTools, ["work_create"]);
+  assert.deepEqual(parent.definitions().map((entry) => entry.function.name), ["capability_search", "work_create"]);
+  assert.deepEqual(sibling.definitions().map((entry) => entry.function.name), ["capability_search"]);
+
+  const restored = new CapabilityCatalog({ ...dependencies, baseDefinitions: registrations });
+  assert.deepEqual((await restored.restore(parent.snapshot())).restored, ["work_create"]);
+  assert.equal(restored.classifyCall("work_create").status, "active");
+
+  const changed = new CapabilityCatalog({ ...dependencies, baseDefinitions: [definition("capability_search"), definition("work_create", "Changed definition"), definition("work_list")] });
+  assert.deepEqual((await changed.restore(parent.snapshot())).missing, ["work_create"]);
+  assert.equal(changed.classifyCall("work_create").status, "deferred");
+});
+
+test("schema inventory rejects duplicate canonical names", () => {
+  const duplicate = { type: "function", function: { name: "read_file", parameters: { type: "object", properties: {} } } };
+  assert.throws(() => new ToolSchemaInventory([duplicate, duplicate]), /duplicate autonomous tool schema/i);
 });
 
 test("external server configuration accepts stdio and protected HTTP transports", () => {

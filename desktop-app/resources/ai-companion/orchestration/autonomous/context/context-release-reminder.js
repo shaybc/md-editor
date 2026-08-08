@@ -25,7 +25,7 @@ class ContextReleaseReminder {
     this.lastCount = summary.releasable;
     this.lastTokens = summary.releasableTokens;
     this.emit({ type: "observation-release-reminder", round, count: summary.releasable, estimatedTokens: summary.releasableTokens, summary: `${summary.releasable} older tool observations are eligible for optional release.` });
-    return `Context note: ${summary.releasable} older tool observations (about ${summary.releasableTokens} tokens) can be released if they are no longer useful. Use context_observation_list to inspect candidates and context_release only for observations you choose to discard.`;
+    return `Context note: ${summary.releasable} older tool observations (about ${summary.releasableTokens} tokens) can be released if they are no longer useful. If needed, activate context_observation_list and context_release with capability_search, then inspect candidates and release only observations you choose to discard.`;
   }
 
   snapshot() { return { lastRound: this.lastRound, lastCount: this.lastCount, lastTokens: this.lastTokens }; }

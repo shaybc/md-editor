@@ -174,7 +174,7 @@ test("version-two autonomous checkpoints migrate into the new recovery envelope"
   await fs.mkdir(directory, { recursive: true });
   await fs.writeFile(path.join(directory, `${getRunIdentity(request)}.json`), JSON.stringify({ schemaVersion: 2, status: "running", messages: [{ role: "user", content: "resume" }] }), "utf8");
   const recovered = await new RunChronicle(request).loadRecovery();
-  assert.equal(recovered.schemaVersion, 4);
+  assert.equal(recovered.schemaVersion, 5);
   assert.equal(recovered.migratedFrom, 2);
   assert.equal(recovered.messages[0].content, "resume");
 });
@@ -239,7 +239,7 @@ test("provider overflow receives exactly one renewal retry", async () => {
 test("panel forwards model limits and persists autonomous recovery activity", () => {
   const source = require("node:fs").readFileSync(path.resolve(__dirname, "..", "resources", "js", "ai-companion", "panel.js"), "utf8");
   assert.match(source, /modelLimits:\s*\(\(\) =>/);
-  assert.match(source, /"context-thinned", "observation-released", "observation-release-reminder", "continuity-updated", "chronicle-saved", "run-restored", "recovery-warning"/);
+  assert.match(source, /"context-thinned", "observation-released", "observation-release-reminder", "tool-catalog-updated", "tool-schema-activated", "tool-schema-restored", "tool-schema-unavailable", "continuity-updated", "chronicle-saved", "run-restored", "recovery-warning"/);
   assert.match(source, /activeAgentEntry\.record\.recoverySummary/);
   assert.match(source, /function appendAutonomousRuntimeStatus\(event\)/);
 });

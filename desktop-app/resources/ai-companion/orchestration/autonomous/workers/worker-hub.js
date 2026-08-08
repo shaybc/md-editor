@@ -6,6 +6,7 @@ const path = require("node:path");
 const { createProvider } = require("../../shared/provider-factory");
 const { runAutonomousLoop } = require("../autonomous-loop");
 const { scopeAgentTools } = require("../agents/agent-scope");
+const { CapabilityCatalog } = require("../capabilities/capability-catalog");
 const { WindowSteward } = require("../context/window-steward");
 const { ObservationLedger } = require("../context/observation-ledger");
 const { ContextReleaseReminder } = require("../context/context-release-reminder");
@@ -185,10 +186,27 @@ class WorkerHub {
     try {
       entry.workspace = await resolveWorkerWorkspace(this.request, entry, this.parentContext.taskGrants);
       const provider = entry.agent?.metadata?.model ? createProvider({ ...this.request.settings, model: entry.agent.metadata.model }) : this.provider;
-      const definitions = scopeAgentTools(this.parentContext.capabilities.definitions(), entry.agent?.metadata || {});
-      if (!entry.messages.length) entry.messages.push({ role: "system", content: `${entry.agent?.body || "Complete only the delegated work. Report evidence and do not claim actions you did not perform."}\n\nYou may use context_observation_list and context_release to remove only your own older tool observations when they are no longer useful. Preserve recent results, active errors, denials, cancellations, unknown outcomes, and evidence still needed for this delegated task.` }, { role: "user", content: entry.prompt });
+      const parentRegistrations = this.parentContext.capabilities.registrations?.() || [];
+      const parentDefinitions = parentRegistrations.length
+        ? parentRegistrations.map((record) => record.definition)
+        : (this.parentContext.capabilities.definitions?.() || []);
+      const scopedDefinitions = scopeAgentTools(parentDefinitions, entry.agent?.metadata || {});
+      const scopedNames = new Set(scopedDefinitions.map((definition) => definition.function?.name));
+      const registrations = parentRegistrations.length
+        ? parentRegistrations.filter((record) => scopedNames.has(record.name))
+        : scopedDefinitions.map((definition) => ({ definition }));
+      if (!entry.messages.length) entry.messages.push({ role: "system", content: `${entry.agent?.body || "Complete only the delegated work. Report evidence and do not claim actions you did not perform."}\n\nSecondary tool schemas are loaded on demand. Use capability_search with select:<tool_name> or task keywords before calling a deferred tool.\n\nYou may use context_observation_list and context_release to remove only your own older tool observations when they are no longer useful. Preserve recent results, active errors, denials, cancellations, unknown outcomes, and evidence still needed for this delegated task.` }, { role: "user", content: entry.prompt });
       const workerRequest = { ...this.request, workspaceRoot: entry.workspace.root, signal: entry.controller.signal };
       const workerEvents = { emit: (event) => this.events.emit({ ...event, workerId: entry.id }) };
+      const capabilities = new CapabilityCatalog({
+        policy: this.parentContext.policy,
+        fabric: this.fabric,
+        mcp: this.parentContext.mcp,
+        registrations,
+        knownToolNames: parentRegistrations.length ? parentRegistrations.map((record) => record.name) : parentDefinitions.map((definition) => definition.function?.name).filter(Boolean),
+        emit: workerEvents.emit
+      });
+      await capabilities.restore(entry.toolSchemaState);
       const observationLedger = new ObservationLedger(this.parentContext.artifactVault, workerEvents.emit);
       observationLedger.restore(entry.observationRelease?.ledger);
       observationLedger.refresh(entry.messages);
@@ -198,6 +216,7 @@ class WorkerHub {
       const context = {
         ...this.parentContext,
         request: workerRequest,
+        capabilities,
         workers: blockedWorkers(),
         loadedExtensions: new Set(),
         loadedExtensionBodies: new Map(),
@@ -210,6 +229,7 @@ class WorkerHub {
         pendingTools: [],
         saveSnapshot: async () => {
           entry.observationRelease = { ledger: observationLedger.snapshot(), reminder: contextReleaseReminder.snapshot() };
+          entry.toolSchemaState = capabilities.snapshot();
           this.persistChange();
         },
         buildRenewalAnchors: async (digest, activeFiles) => [
@@ -218,7 +238,7 @@ class WorkerHub {
           ...(activeFiles.length ? [{ role: "system", content: `Recently accessed file anchors:\n${JSON.stringify(activeFiles)}` }] : [])
         ]
       };
-      const result = await runAutonomousLoop({ provider, messages: entry.messages, tools: definitions, getTools: () => definitions, request: context.request, events: workerEvents, context });
+      const result = await runAutonomousLoop({ provider, messages: entry.messages, tools: capabilities.providerDefinitions(), getTools: () => capabilities.providerDefinitions(), request: context.request, events: workerEvents, context });
       entry.result = String(result || "").slice(0, MAX_RESULT_CHARS);
       entry.status = "completed";
       entry.workspace = await finishWorkerWorkspace(this.request, entry.workspace);
@@ -269,6 +289,7 @@ function privateEntry(entry) {
     inbox: JSON.parse(JSON.stringify(entry.inbox || [])),
     messages: JSON.parse(JSON.stringify(entry.messages || [])),
     observationRelease: JSON.parse(JSON.stringify(entry.observationRelease || {})),
+    toolSchemaState: JSON.parse(JSON.stringify(entry.toolSchemaState || {})),
     agentFingerprint: entry.agent ? JSON.stringify({ id: entry.agent.id, metadata: entry.agent.metadata, body: entry.agent.body }) : ""
   };
 }
@@ -284,6 +305,7 @@ function restoredEntry(snapshot, agent, status) {
     inbox: Array.isArray(snapshot.inbox) ? JSON.parse(JSON.stringify(snapshot.inbox)) : [],
     messages: Array.isArray(snapshot.messages) ? JSON.parse(JSON.stringify(snapshot.messages)) : [],
     observationRelease: snapshot.observationRelease ? JSON.parse(JSON.stringify(snapshot.observationRelease)) : {},
+    toolSchemaState: snapshot.toolSchemaState ? JSON.parse(JSON.stringify(snapshot.toolSchemaState)) : {},
     result: String(snapshot.result || ""),
     error: String(snapshot.error || ""),
     controller: new AbortController(),

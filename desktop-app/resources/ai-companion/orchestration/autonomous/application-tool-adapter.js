@@ -63,6 +63,32 @@ function getApplicationToolDefinitions(policy, settings = {}) {
     .map(definition);
 }
 
+/** Build deferred-capability registrations while preserving the existing definition API. */
+function getApplicationToolRegistrations(policy, settings = {}) {
+  return getApplicationToolDefinitions(policy, settings).map((toolDefinition) => {
+    const name = toolDefinition.function.name;
+    return {
+      definition: toolDefinition,
+      source: "application",
+      domain: applicationDomain(name),
+      description: toolDefinition.function.description,
+      searchHint: toolScopes.humanizeTool(name),
+      permissionScope: String(toolScopes.scopeForTool(name) || ""),
+      executionOwner: "application"
+    };
+  });
+}
+
+function applicationDomain(name) {
+  if (name.startsWith("git_")) return "git";
+  if (["api_asset_search", "api_asset_get", "request_create", "request_update", "request_send", "request_history_get", "response_analyze", "environment_get", "environment_update", "environment_resolve", "mock_create", "mock_update", "mock_call"].includes(name)) return "api-client";
+  if (name.startsWith("graph_") || name === "get_link_context") return "graph";
+  if (name.startsWith("preferences_")) return "preferences";
+  if (["compile_project", "run_tests", "manage_dependencies"].includes(name)) return "execution";
+  if (/conversion|export/.test(name)) return "conversion";
+  return "application";
+}
+
 async function authorizeIfRequired(name, args, context) {
   const approval = await authorizeTool(context.request, name, args, context.taskGrants);
   if (approval.approved) return null;
@@ -129,4 +155,4 @@ async function executeApplicationTool(name, args, context) {
   return undefined;
 }
 
-module.exports = { executeApplicationTool, getApplicationToolDefinitions };
+module.exports = { executeApplicationTool, getApplicationToolDefinitions, getApplicationToolRegistrations };

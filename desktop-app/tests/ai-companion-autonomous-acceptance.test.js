@@ -146,6 +146,9 @@ test("parallel calls all produce observations before continuation", async () => 
   const provider = { async completeMessage() {
     round += 1;
     if (round === 1) return { content: "", toolCalls: [
+      { id: "search", function: { name: "capability_search", arguments: JSON.stringify({ query: "select:work_create" }) } }
+    ] };
+    if (round === 2) return { content: "", toolCalls: [
       { id: "a", function: { name: "work_create", arguments: JSON.stringify({ subject: "A", description: "First item" }) } },
       { id: "b", function: { name: "work_create", arguments: JSON.stringify({ subject: "B", description: "Second item" }) } }
     ] };
@@ -153,7 +156,7 @@ test("parallel calls all produce observations before continuation", async () => 
   } };
   const events = [];
   await new AutonomousOrchestrator().run(createRequest(), { provider }, (event) => events.push(event));
-  assert.equal(events.filter((event) => event.type === "tool-completed").length, 2);
+  assert.equal(events.filter((event) => event.type === "tool-completed" && event.tool === "work_create").length, 2);
   assert.equal(events.filter((event) => event.type === "assistant-final").length, 1);
 });
 

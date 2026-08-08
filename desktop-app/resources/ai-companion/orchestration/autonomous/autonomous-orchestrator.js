@@ -9,7 +9,7 @@ const { EVENT_TYPES, createRunEmitter } = require("../shared/events");
 const { resolveCapabilityPolicy } = require("../shared/capability-policy");
 const { buildSystemMessage } = require("./context-builder");
 const { discoverExtensions, loadExtension } = require("./extension-registry");
-const { getToolDefinitions } = require("./tool-catalog");
+const { getKnownToolNames, getToolRegistrations } = require("./tool-catalog");
 const { runAutonomousLoop } = require("./autonomous-loop");
 const { WorkLedger } = require("./work/work-ledger");
 const { WorkerHub } = require("./workers/worker-hub");
@@ -52,7 +52,12 @@ class AutonomousOrchestrator {
       };
       mcp = new McpConnectionManager(request, events.emit);
       mcp.register(Array.from(fabric.entries.values()).filter((entry) => entry.kind === "mcp-server"));
-      const capabilities = new CapabilityCatalog({ policy, fabric, mcp, baseDefinitions: policy.allowTools ? getToolDefinitions(policy, request.settings) : [] });
+      const capabilities = new CapabilityCatalog({
+        policy, fabric, mcp, emit: events.emit,
+        registrations: policy.allowTools ? getToolRegistrations(policy, request.settings) : [],
+        knownToolNames: getKnownToolNames()
+      });
+      fingerprints.tools = capabilities.inventory.fingerprint();
       const hooks = new HookGateway(request, Array.from(fabric.entries.values()).filter((entry) => entry.kind === "hook"), events.emit);
       const chronicle = new RunChronicle(request, events.emit);
       const journaledEvents = createJournaledEvents(events, chronicle);
@@ -104,7 +109,7 @@ class AutonomousOrchestrator {
       };
       context.buildRenewalAnchors = async (digest, activeFiles) => buildRenewalAnchors(context, digest, activeFiles);
       await refreshLoadedExtensions(context, decision.notices);
-      const restoredCapabilities = await capabilities.restore(restored?.activeCapabilities);
+      const restoredCapabilities = await capabilities.restore(restored?.toolSchemaState || restored?.activeCapabilities);
       if (restoredCapabilities.missing.length) decision.notices.push(`Previously active capabilities are no longer available: ${restoredCapabilities.missing.join(", ")}`);
       let recoverySummary = "";
       if (decision.classification === "recoverable") {
@@ -143,7 +148,7 @@ class AutonomousOrchestrator {
           loadedExtensionBodies: Array.from(context.loadedExtensionBodies.entries()),
           instructionFingerprint: context.fingerprints.instructions,
           extensionFingerprint: context.fingerprints.extensions,
-          activeCapabilities: capabilities.definitions().map((entry) => entry.function?.name).filter(Boolean),
+          toolSchemaState: capabilities.snapshot(),
           pendingTools: context.pendingTools,
           ...extra
         });
@@ -166,7 +171,7 @@ class AutonomousOrchestrator {
 
       const modelContent = await runAutonomousLoop({
         provider, messages,
-        tools: capabilities.definitions(), getTools: () => capabilities.definitions(), request, events, context
+        tools: capabilities.providerDefinitions(), getTools: () => capabilities.providerDefinitions(), request, events, context
       });
       planRepository.assertRequiredPlanSaved();
       const savedPlan = planRepository.plan?.path ? { ...planRepository.plan } : null;
@@ -204,6 +209,7 @@ async function buildRenewalAnchors(context, digest, activeFiles) {
   const system = buildSystemMessage(context.request, context.policy, context.extensions, currentInstructions, context.recalledContinuity);
   const anchors = [
     { role: "system", content: system },
+    { role: "system", content: context.capabilities.consumeCatalogNotice({ force: true }) },
     { role: "system", content: `Earlier execution digest:\n${JSON.stringify(digest)}` },
     { role: "system", content: `Current work state:\n${JSON.stringify({ work: context.work.snapshot(), workers: context.workers.snapshot() })}` }
   ];
@@ -245,7 +251,7 @@ function createJournaledEvents(events, chronicle) {
 }
 
 function shouldJournalEvent(type) {
-  return ["artifact-stored", "context-thinned", "observation-released", "observation-release-reminder", "continuity-updated", "compaction", "recovery-warning", "plan-saved", "plan-updated"].includes(type)
+  return ["artifact-stored", "context-thinned", "observation-released", "observation-release-reminder", "tool-catalog-updated", "tool-schema-activated", "tool-schema-restored", "tool-schema-unavailable", "continuity-updated", "compaction", "recovery-warning", "plan-saved", "plan-updated"].includes(type)
     || /^(work|worker)-/.test(String(type || ""));
 }
 

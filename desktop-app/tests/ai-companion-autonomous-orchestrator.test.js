@@ -72,13 +72,14 @@ test("tool calls are observed and the model decides when to finish", async () =>
   const provider = {
     async completeMessage() {
       calls += 1;
-      if (calls === 1) return { role: "assistant", content: "", toolCalls: [{ id: "one", function: { name: "work_create", arguments: JSON.stringify({ subject: "Inspect", description: "Inspect the relevant files" }) } }] };
+      if (calls === 1) return { role: "assistant", content: "", toolCalls: [{ id: "search", function: { name: "capability_search", arguments: JSON.stringify({ query: "select:work_create" }) } }] };
+      if (calls === 2) return { role: "assistant", content: "", toolCalls: [{ id: "one", function: { name: "work_create", arguments: JSON.stringify({ subject: "Inspect", description: "Inspect the relevant files" }) } }] };
       return { role: "assistant", content: "Done.", toolCalls: [] };
     }
   };
   const events = [];
   await new AutonomousOrchestrator().run(request(), { provider }, (event) => events.push(event));
-  assert.equal(calls, 2);
+  assert.equal(calls, 3);
   assert.equal(events.some((event) => event.type === "tool-completed" && event.tool === "work_create"), true);
   assert.equal(events.filter((event) => event.type === "assistant-final").length, 1);
 });

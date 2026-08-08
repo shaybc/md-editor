@@ -86,12 +86,40 @@ class McpConnectionManager {
 
   /** Return namespaced model tool definitions for one connected server. */
   async getToolDefinitions(serverId) {
+    return (await this.getToolRegistrations(serverId)).map((entry) => entry.definition);
+  }
+
+  /** Index one server while retaining each remote schema outside the provider roster. */
+  async getToolRegistrations(serverId) {
     const connection = await this.connect(serverId);
     return Array.from(connection.tools.values(), (tool) => {
       const name = externalToolName(serverId, tool.name);
       this.externalTools.set(name, { serverId, toolName: tool.name });
-      return { type: "function", function: { name, description: String(tool.description || `External tool ${tool.name}`), parameters: tool.inputSchema || { type: "object", properties: {} } } };
+      const description = String(tool.description || "External tool " + tool.name);
+      return {
+        definition: { type: "function", function: { name, description, parameters: tool.inputSchema || { type: "object", properties: {} } } },
+        source: "external:" + serverId,
+        domain: "external:" + serverId,
+        description,
+        searchHint: String(tool.title || tool.annotations?.title || ""),
+        external: true,
+        serverId,
+        remoteName: tool.name,
+        permissionScope: "external-server",
+        executionOwner: "external",
+        alwaysLoad: tool._meta?.["md-editor/alwaysLoad"] === true
+      };
     });
+  }
+
+  /** Connect one server and retain its individual tool metadata outside provider requests. */
+  async indexToolMetadata(serverId) { return this.getToolRegistrations(serverId); }
+
+  /** Retrieve one exact namespaced definition without exposing sibling schemas. */
+  async getToolDefinition(serverId, toolName) {
+    const registrations = await this.getToolRegistrations(serverId);
+    const requested = String(toolName || "");
+    return registrations.find((entry) => entry.remoteName === requested || entry.definition.function.name === requested)?.definition || null;
   }
 
   /** Invoke a namespaced external tool through the approval gateway. */

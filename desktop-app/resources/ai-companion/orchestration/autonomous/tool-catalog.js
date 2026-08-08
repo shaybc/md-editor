@@ -2,7 +2,8 @@
 
 "use strict";
 
-const { getApplicationToolDefinitions } = require("./application-tool-adapter");
+const toolScopes = require("../../core/tool-scope-registry");
+const { getApplicationToolDefinitions, getApplicationToolRegistrations } = require("./application-tool-adapter");
 
 function text(description) { return { type: "string", description }; }
 function integer(description) { return { type: "integer", description }; }
@@ -19,7 +20,7 @@ const DEFINITIONS = Object.freeze([
   tool("write_file", "Create or replace a workspace file.", { path: text("Workspace-relative path"), content: text("Complete file content"), approvalReason: text("Why this change is needed") }, ["path", "content"]),
   tool("run_command", "Run a command in the workspace.", { command: text("Command to run"), timeoutMs: integer("Timeout in milliseconds"), approvalReason: text("Why execution is needed") }, ["command"]),
   tool("discover_extensions", "List available rules, skills, agents, plugins, hooks, MCP servers, and deferred tools.", { kind: text("Optional extension kind") }),
-  tool("capability_search", "Search deferred skills, agents, tools, and external servers; matching external tool schemas become available on the next step.", { query: text("Capability or task description"), maxResults: integer("Maximum metadata results") }, ["query"]),
+  tool("capability_search", "Search and activate secondary tool schemas. Use select:tool_name for exact selection, comma-separated names for multiple tools, or task keywords for ranked discovery.", { query: text("Exact selection or capability keywords"), maxResults: integer("Maximum metadata results") }, ["query"]),
   tool("load_extension", "Load one discovered rule, skill, or agent definition.", { id: text("Discovered extension id") }, ["id"]),
   tool("continuity_search", "Search bounded historical run summaries from this exact workspace.", { query: text("Relevant topic, path, or prior outcome"), maxResults: integer("Maximum summaries to return") }, ["query"]),
   tool("artifact_read", "Read a bounded range from a stored observation artifact.", { id: text("Artifact id"), offset: integer("Starting character offset"), length: integer("Maximum characters to return") }, ["id"]),
@@ -56,4 +57,40 @@ function getToolDefinitions(policy, settings = {}) {
   return [...core, ...getApplicationToolDefinitions(policy, settings)];
 }
 
-module.exports = { getToolDefinitions };
+/** Return tool schemas with independent runtime metadata for unified deferral. */
+function getToolRegistrations(policy, settings = {}) {
+  const definitions = getToolDefinitions(policy, settings);
+  const application = new Map(getApplicationToolRegistrations(policy, settings).map((entry) => [entry.definition.function.name, entry]));
+  return definitions.map((definition) => {
+    const name = definition.function.name;
+    if (application.has(name)) return application.get(name);
+    return {
+      definition,
+      source: "runtime",
+      domain: runtimeDomain(name),
+      description: definition.function.description,
+      searchHint: name.replace(/_/g, " "),
+      executionOwner: "runtime"
+    };
+  });
+}
+
+/** Return canonical names known to the runtime, including names prohibited for this request. */
+function getKnownToolNames() {
+  return Array.from(new Set([
+    ...DEFINITIONS.map((definition) => definition.function.name),
+    ...toolScopes.listAllScopedTools()
+  ]));
+}
+
+function runtimeDomain(name) {
+  if (name.startsWith("plan_")) return "plans";
+  if (name.startsWith("work_")) return "work";
+  if (name.startsWith("worker_")) return "workers";
+  if (name.startsWith("context_") || name === "artifact_read" || name === "continuity_search") return "context";
+  if (name.startsWith("mcp_")) return "external";
+  if (["discover_extensions", "load_extension", "capability_search"].includes(name)) return "extensions";
+  return "workspace";
+}
+
+module.exports = { getKnownToolNames, getToolDefinitions, getToolRegistrations };

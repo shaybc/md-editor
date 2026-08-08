@@ -18,6 +18,7 @@ function parseArguments(call) {
 async function executeTool(call, context) {
   const name = String(call?.function?.name || "");
   const args = parseArguments(call);
+  if (name !== "capability_search") context.capabilities?.assertCallable?.(name);
   const root = context.request.workspaceRoot;
   const options = { signal: context.request.signal };
   if (name === "list_files") return workspaceTools.listFiles(root, { ...options, maxFiles: args.maxFiles });
@@ -76,7 +77,7 @@ async function executeTool(call, context) {
     const entries = [...context.extensions, ...context.fabric.snapshot().entries];
     return args.kind ? entries.filter((entry) => entry.kind === args.kind) : entries;
   }
-  if (name === "capability_search") return context.capabilities.discover(args.query, { maxResults: args.maxResults });
+  if (name === "capability_search") return context.capabilities.search(args.query, { maxResults: args.maxResults });
   if (name === "load_extension") {
     const extension = context.fabric.entries.has(args.id)
       ? await context.fabric.activate(args.id)

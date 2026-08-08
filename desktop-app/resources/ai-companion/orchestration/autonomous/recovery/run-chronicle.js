@@ -7,7 +7,7 @@ const fs = require("node:fs/promises");
 const path = require("node:path");
 const { getRunIdentity } = require("../work/run-identity");
 
-const SCHEMA_VERSION = 4;
+const SCHEMA_VERSION = 5;
 
 class RunChronicle {
   constructor(request, emit = () => {}) {
@@ -72,11 +72,11 @@ class RunChronicle {
     });
   }
 
-  /** Load the newest valid recovery state, including version-2 and version-3 migration. */
+  /** Load the newest valid recovery state, including earlier autonomous formats. */
   async loadRecovery(options = {}) {
     if (!this.request.resumeRun && !options.applicationRestart) return null;
     if (this.directory) {
-      const current = migrateVersionThree(await readJsonOptional(path.join(this.directory, "current.json")), this.runId);
+      const current = migrateEarlierSnapshot(await readJsonOptional(path.join(this.directory, "current.json")), this.runId);
       if (validateSnapshot(current, this.runId)) {
         this.sequence = Math.max(this.sequence, Number(current.sequence) || 0);
         return current;
@@ -86,7 +86,7 @@ class RunChronicle {
         this.sequence = Math.max(this.sequence, Number(journalSnapshot.sequence) || 0);
         return journalSnapshot;
       }
-      const previous = migrateVersionThree(await readJsonOptional(path.join(this.directory, "previous.json")), this.runId);
+      const previous = migrateEarlierSnapshot(await readJsonOptional(path.join(this.directory, "previous.json")), this.runId);
       if (validateSnapshot(previous, this.runId)) {
         this.sequence = Math.max(this.sequence, Number(previous.sequence) || 0);
         return previous;
@@ -142,11 +142,11 @@ function validateSnapshot(snapshot, runId) {
   return snapshot.integrity === expected;
 }
 
-function migrateVersionThree(snapshot, runId) {
-  if (!snapshot || snapshot.schemaVersion !== 3 || snapshot.identity?.runId !== runId) return snapshot;
+function migrateEarlierSnapshot(snapshot, runId) {
+  if (!snapshot || ![3, 4].includes(snapshot.schemaVersion) || snapshot.identity?.runId !== runId) return snapshot;
   const expected = digest({ ...snapshot, integrity: undefined });
   if (snapshot.integrity !== expected) return null;
-  const migrated = { ...snapshot, schemaVersion: SCHEMA_VERSION, migratedFrom: snapshot.migratedFrom || 3 };
+  const migrated = { ...snapshot, schemaVersion: SCHEMA_VERSION, migratedFrom: snapshot.migratedFrom || snapshot.schemaVersion };
   migrated.integrity = digest({ ...migrated, integrity: undefined });
   return migrated;
 }
@@ -158,7 +158,7 @@ async function readLastJournalSnapshot(filePath, runId) {
       try {
         const record = JSON.parse(lines[index]);
         if (record.type === "recovery-snapshot") {
-          const snapshot = migrateVersionThree(record.payload, runId);
+          const snapshot = migrateEarlierSnapshot(record.payload, runId);
           if (validateSnapshot(snapshot, runId)) return snapshot;
         }
       } catch (_error) { /* Ignore torn or malformed journal tails. */ }

@@ -28,6 +28,11 @@ async function runAutonomousLoop(input) {
     if (workerNotifications.length) messages.push({ role: "system", content: `Worker updates:\n${JSON.stringify(workerNotifications)}` });
     if (request.signal?.aborted) throw Object.assign(new Error("AI Companion request cancelled."), { name: "AbortError" });
 
+    const catalogNotice = context.capabilities?.consumeCatalogNotice?.();
+    if (catalogNotice) {
+      messages.push({ role: "system", content: catalogNotice });
+      events.emit({ type: "tool-catalog-updated", ...context.capabilities.metrics(), summary: "Deferred tool catalog made available to the model." });
+    }
     const currentTools = typeof getTools === "function" ? getTools() : tools;
     context.currentToolDefinitions = currentTools;
     context.observationLedger?.refresh?.(messages, { currentRound: round });
