@@ -3093,6 +3093,9 @@ async function startMarkdownViewer() {
       }
     });
   }
+  if (typeof window.registerMarkdownViewerAiConnectionSettings === "function") {
+    window.registerMarkdownViewerAiConnectionSettings(app);
+  }
   if (neutralinoAiBridge && typeof window.registerMarkdownViewerAiCompanionPromptsSettings === "function") {
     window.registerMarkdownViewerAiCompanionPromptsSettings(app, {
       bridge: neutralinoAiBridge,
@@ -9388,6 +9391,7 @@ Markdown content is processed client-side in your browser and sanitized before p
     if (settingsAiGeminiApiKeyInput) settingsAiGeminiApiKeyInput.value = aiSettings.geminiConnectorApiKey;
     if (settingsAiConnectionProfilesInput) settingsAiConnectionProfilesInput.value = JSON.stringify(aiSettings.connectionProfiles || [], null, 2);
     if (settingsAiProviderRoutesInput) settingsAiProviderRoutesInput.value = JSON.stringify(aiSettings.providerRoutes || [], null, 2);
+    app.modules?.aiCompanionConnectionSettings?.refresh?.();
     if (settingsAiInternetSearchEndpointInput) settingsAiInternetSearchEndpointInput.value = aiSettings.internetSearchEndpoint || "";
     if (settingsAiWorkspaceStructureAutoInput) settingsAiWorkspaceStructureAutoInput.checked = aiSettings.workspaceStructureAutoInclude === true;
     if (settingsAiPermissionModeInput) settingsAiPermissionModeInput.value = aiSettings.permissionMode || "guided";
@@ -11316,7 +11320,8 @@ Markdown content is processed client-side in your browser and sanitized before p
     const languageServerAutocompleteEnabled = !!settingsLanguageServerAutocompleteInput?.checked;
     const snippetAutocompleteEnabled = !!settingsSnippetAutocompleteInput?.checked;
     const unclosedBracketHighlightEnabled = !!settingsUnclosedBracketHighlightInput?.checked;
-    const aiProviderRequestDelayMs = Number(settingsAiProviderRequestDelayInput?.value);
+    const aiPrimaryConnection = app.modules?.aiCompanionConnectionSettings?.getPrimaryConnectionForSave?.() || {};
+    const aiProviderRequestDelayMs = Number(aiPrimaryConnection.providerRequestDelayMs ?? settingsAiProviderRequestDelayInput?.value);
     if (!Number.isFinite(aiProviderRequestDelayMs) || aiProviderRequestDelayMs < 0 || aiProviderRequestDelayMs > 60000) {
       alert("Enter an AI provider request spacing between 0 and 60000 ms.");
       return;
@@ -11376,15 +11381,15 @@ Markdown content is processed client-side in your browser and sanitized before p
     // internal controller flags) are preserved instead of being reset to defaults.
     const aiCompanionSettingsValue = aiCompanionSettings?.normalize ? aiCompanionSettings.normalize(Object.assign({}, getAiCompanionSettings(), {
       enabled: !!settingsAiEnabledInput?.checked,
-      providerMode: settingsAiProviderModeInput?.value,
-      baseUrl: settingsAiBaseUrlInput?.value,
-      apiKey: settingsAiApiKeyInput?.value,
-      model: settingsAiModelInput?.value,
-      litellmModelAlias: settingsAiLiteLlmAliasInput?.value,
-      litellmRoutingConfig: settingsAiLiteLlmRoutingInput?.value,
-      geminiConnectorBaseUrl: settingsAiGeminiBaseUrlInput?.value,
-      geminiConnectorId: settingsAiGeminiConnectorIdInput?.value,
-      geminiConnectorApiKey: settingsAiGeminiApiKeyInput?.value,
+      providerMode: aiPrimaryConnection.providerMode ?? settingsAiProviderModeInput?.value,
+      baseUrl: aiPrimaryConnection.baseUrl ?? settingsAiBaseUrlInput?.value,
+      apiKey: aiPrimaryConnection.apiKey ?? settingsAiApiKeyInput?.value,
+      model: aiPrimaryConnection.model ?? settingsAiModelInput?.value,
+      litellmModelAlias: aiPrimaryConnection.litellmModelAlias ?? settingsAiLiteLlmAliasInput?.value,
+      litellmRoutingConfig: aiPrimaryConnection.litellmRoutingConfig ?? settingsAiLiteLlmRoutingInput?.value,
+      geminiConnectorBaseUrl: aiPrimaryConnection.geminiConnectorBaseUrl ?? settingsAiGeminiBaseUrlInput?.value,
+      geminiConnectorId: aiPrimaryConnection.geminiConnectorId ?? settingsAiGeminiConnectorIdInput?.value,
+      geminiConnectorApiKey: aiPrimaryConnection.geminiConnectorApiKey ?? settingsAiGeminiApiKeyInput?.value,
       trustedCertificates: getAiCompanionSettings().trustedCertificates,
       chatEnabled: settingsAiChatEnabledInput?.checked !== false,
       autocompleteEnabled: !!settingsAiAutocompleteEnabledInput?.checked,

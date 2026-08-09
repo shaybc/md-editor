@@ -45,7 +45,7 @@
         if (bundle.scope === "workspace" && !bundle.trusted) {
           const trust = document.createElement("button");
           trust.type = "button";
-          trust.className = "settings-secondary-button";
+          trust.className = "reset-modal-btn settings-secondary-action";
           trust.textContent = "Trust workspace bundle";
           trust.addEventListener("click", () => void configure(bundle, { trusted: true, enabled: true }));
           row.append(trust);

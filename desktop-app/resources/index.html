@@ -2515,7 +2515,7 @@
                 </div>
                 <div class="settings-subsection"><h4 class="settings-subsection-title">Limits</h4><div class="settings-field-grid settings-field-grid-two"><label class="settings-field" for="settings-ai-max-tokens-per-chat-minute"><span class="settings-field-label">Max tokens per chat minute (0 disables)</span><input type="number" id="settings-ai-max-tokens-per-chat-minute" class="rename-modal-input settings-number-input" min="0" max="1000000" step="1000" /></label><label class="settings-field" for="settings-ai-max-tasks-per-chat"><span class="settings-field-label">Max tasks per chat</span><input type="number" id="settings-ai-max-tasks-per-chat" class="rename-modal-input settings-number-input" min="1" max="200" step="1" /></label><label class="settings-field" for="settings-ai-agent-max-response-tokens"><span class="settings-field-label">Max tokens per response (0 disables)</span><input type="number" id="settings-ai-agent-max-response-tokens" class="rename-modal-input settings-number-input" min="0" max="128000" step="100" /></label></div></div>
                 <div class="settings-subsection"><h4 class="settings-subsection-title">Agent</h4><label class="settings-field" for="settings-ai-permission-mode"><span class="settings-field-label">Permission mode</span><select id="settings-ai-permission-mode" class="rename-modal-input settings-select-input"><option value="guided">Guided</option><option value="observe-only">Observe only</option><option value="edit-trusted">Trust workspace edits</option><option value="risk-routed">Risk-routed</option><option value="preauthorized-only">Preauthorized only</option><option value="sandbox-unattended">Sandbox unattended</option></select></label><div class="settings-switch-grid"><label class="settings-switch-row" for="settings-ai-agent-confirm-before-write"><span><span class="settings-switch-title">Ask before writing files</span><span class="settings-switch-description">Controlled by the selected permission mode and capability approvals.</span></span><input type="checkbox" id="settings-ai-agent-confirm-before-write" class="settings-switch-input" checked disabled /><span class="settings-switch" aria-hidden="true"></span></label></div></div>
-                <div class="settings-subsection"><div class="settings-ai-approval-heading-row"><h4 class="settings-subsection-title">Extensions</h4><button id="settings-ai-extension-refresh" class="settings-secondary-button" type="button">Refresh</button></div><p class="settings-panel-description">Discover bundled, profile, and workspace skills, agents, hooks, and external servers. Workspace bundles require explicit trust.</p><div id="settings-ai-extension-list" class="settings-switch-grid"></div><p id="settings-ai-extension-empty" class="settings-panel-description">No extension bundles were discovered.</p><p id="settings-ai-extension-status" class="settings-panel-description" aria-live="polite"></p></div>
+                <div class="settings-subsection"><div class="settings-ai-approval-heading-row"><h4 class="settings-subsection-title">Extensions</h4><button id="settings-ai-extension-refresh" class="reset-modal-btn settings-secondary-action" type="button">Refresh</button></div><p class="settings-panel-description">Discover bundled, profile, and workspace skills, agents, hooks, and external servers. Workspace bundles require explicit trust.</p><div id="settings-ai-extension-list" class="settings-switch-grid"></div><p id="settings-ai-extension-empty" class="settings-panel-description">No extension bundles were discovered.</p><p id="settings-ai-extension-status" class="settings-panel-description" aria-live="polite"></p></div>
               </section>
               <section class="settings-panel" data-settings-panel="ai-connection" aria-labelledby="settings-ai-connection-title" hidden>
                 <div class="settings-panel-heading">
@@ -2526,6 +2526,7 @@
                   </div>
                 </div>
                 <div class="settings-subsection">
+                  <label class="settings-field" for="settings-ai-connection-profile-name"><span class="settings-field-label">Profile name</span><input type="text" id="settings-ai-connection-profile-name" class="rename-modal-input" maxlength="80" placeholder="for example: primary-gemini" /></label>
                   <label class="settings-field" for="settings-ai-provider-mode"><span class="settings-field-label">Connection provider</span><select id="settings-ai-provider-mode" class="rename-modal-input settings-select-input"><optgroup label="Providers"><option value="openai">OpenAI</option><option value="google-gemini">Google Gemini</option><option value="google-gemini-native">Google Gemini (native)</option><option value="anthropic">Anthropic</option><option value="xai">xAI Grok</option><option value="ollama">Ollama</option></optgroup><optgroup label="Advanced / custom"><option value="openai-compatible">OpenAI-compatible endpoint</option><option value="litellm">LiteLLM proxy</option><option value="gemini-connector">Gemini Connector</option><option value="gemini-connector-raw">Gemini Connector Raw</option></optgroup></select></label>
                   <div class="settings-field-grid settings-field-grid-two">
                     <label class="settings-field settings-ai-http-provider-field" for="settings-ai-base-url"><span class="settings-field-label">Base URL</span><input type="url" id="settings-ai-base-url" class="rename-modal-input" placeholder="http://localhost:11434/v1" /></label>
@@ -2539,12 +2540,25 @@
                     <label class="settings-field settings-ai-litellm-field" for="settings-ai-litellm-alias"><span class="settings-field-label">LiteLLM model alias</span><input type="text" id="settings-ai-litellm-alias" class="rename-modal-input" /></label>
                   </div>
                   <label class="settings-field settings-ai-litellm-field" for="settings-ai-litellm-routing"><span class="settings-field-label">LiteLLM routing config</span><textarea id="settings-ai-litellm-routing" class="rename-modal-input settings-textarea-input" rows="3"></textarea></label>
-                  <label class="settings-field" for="settings-ai-connection-profiles"><span class="settings-field-label">Additional connection profiles (JSON)</span><textarea id="settings-ai-connection-profiles" class="rename-modal-input settings-textarea-input" rows="4" placeholder="[]"></textarea></label>
-                  <label class="settings-field" for="settings-ai-provider-routes"><span class="settings-field-label">Provider routes (JSON)</span><textarea id="settings-ai-provider-routes" class="rename-modal-input settings-textarea-input" rows="4" placeholder="[]"></textarea></label>
+                  <div class="settings-ai-connection-form-actions">
+                    <button type="button" id="settings-ai-test-connection" class="reset-modal-btn settings-secondary-action"><i class="bi bi-plug" aria-hidden="true"></i><span>Test connection</span></button>
+                    <button type="button" id="settings-ai-connection-profile-add" class="reset-modal-btn settings-primary-action"><i class="bi bi-plus-lg" aria-hidden="true"></i><span>Add profile</span></button>
+                    <button type="button" id="settings-ai-connection-profile-cancel" class="reset-modal-btn settings-secondary-action" hidden>Cancel edit</button>
+                  </div>
+                  <p id="settings-ai-connection-status" class="settings-panel-description" aria-live="polite"></p>
+                  <div class="settings-ai-connection-entry-section">
+                    <div class="settings-ai-connection-entry-heading"><h4 class="settings-subsection-title">Additional connection profiles</h4><div><button type="button" id="settings-ai-connection-profile-json" class="reset-modal-btn settings-secondary-action"><i class="bi bi-filetype-json" aria-hidden="true"></i><span>Edit JSON</span></button></div></div>
+                    <div class="settings-table settings-ai-connection-table" role="table" aria-label="Additional AI connection profiles"><div class="settings-table-header" role="row"><span role="columnheader">Profile</span><span role="columnheader">Provider</span><span role="columnheader">Model</span><span role="columnheader">Actions</span></div><div id="settings-ai-connection-profile-rows" class="settings-table-body" role="rowgroup"></div></div>
+                    <p id="settings-ai-connection-profile-empty" class="settings-panel-description">No additional connection profiles configured.</p>
+                  </div>
+                  <div class="settings-ai-connection-entry-section">
+                    <div class="settings-ai-connection-entry-heading"><h4 class="settings-subsection-title">Provider routes</h4><div><button type="button" id="settings-ai-provider-route-add" class="reset-modal-btn settings-secondary-action"><i class="bi bi-plus-lg" aria-hidden="true"></i><span>Add route</span></button><button type="button" id="settings-ai-provider-route-json" class="reset-modal-btn settings-secondary-action"><i class="bi bi-filetype-json" aria-hidden="true"></i><span>Edit JSON</span></button></div></div>
+                    <div class="settings-table settings-ai-connection-table" role="table" aria-label="AI provider routes"><div class="settings-table-header" role="row"><span role="columnheader">Route</span><span role="columnheader">Profile</span><span role="columnheader">Purposes</span><span role="columnheader">Actions</span></div><div id="settings-ai-provider-route-rows" class="settings-table-body" role="rowgroup"></div></div>
+                    <p id="settings-ai-provider-route-empty" class="settings-panel-description">No provider routes configured; the primary connection is used for every purpose.</p>
+                  </div>
+                  <p id="settings-ai-entries-status" class="settings-panel-description" aria-live="polite"></p>
                   <label class="settings-field" for="settings-ai-internet-search-endpoint"><span class="settings-field-label">Internet search endpoint (optional)</span><input id="settings-ai-internet-search-endpoint" class="rename-modal-input" type="url" placeholder="https://search.example/api" /></label>
                   <div class="settings-switch-grid"><label class="settings-switch-row" for="settings-ai-workspace-structure-auto"><span><span class="settings-switch-title">Include a small workspace structure</span><span class="settings-switch-description">Build a bounded structural orientation at the start of autonomous runs. Leave off to keep it fully lazy.</span></span><input type="checkbox" id="settings-ai-workspace-structure-auto" class="settings-switch-input" /><span class="settings-switch" aria-hidden="true"></span></label></div>
-                  <button type="button" id="settings-ai-test-connection" class="reset-modal-btn settings-secondary-action"><i class="bi bi-plug" aria-hidden="true"></i><span>Test connection</span></button>
-                  <p id="settings-ai-connection-status" class="settings-panel-description" aria-live="polite"></p>
                 </div>
               </section>
               <section class="settings-panel" data-settings-panel="ai-security" aria-labelledby="settings-ai-security-title" hidden>
@@ -2604,7 +2618,7 @@
                   </div>
                 </div>
                 <div class="settings-subsection settings-ai-approval-policy-section">
-                  <div class="settings-ai-approval-heading-row"><h4 class="settings-subsection-title">Active workspace grants</h4><button id="settings-ai-approval-refresh" class="settings-secondary-button" type="button">Refresh</button></div>
+                  <div class="settings-ai-approval-heading-row"><h4 class="settings-subsection-title">Active workspace grants</h4><button id="settings-ai-approval-refresh" class="reset-modal-btn settings-secondary-action" type="button">Refresh</button></div>
                   <p id="settings-ai-approval-effective-source" class="settings-field-help"></p>
                   <p id="settings-ai-approval-rule-empty" class="settings-panel-description">No persistent grants are active for this workspace.</p>
                   <div id="settings-ai-approval-rule-list" class="settings-ai-approval-rule-list"></div>
@@ -2612,7 +2626,7 @@
                 <div class="settings-subsection settings-ai-approval-policy-section">
                   <h4 class="settings-subsection-title">Legacy approval files</h4>
                   <p class="settings-panel-description">Legacy version-1 allowlists are not trusted automatically. Import their file-write patterns only after review.</p>
-                  <div class="settings-ai-approval-import-actions"><button id="settings-ai-approval-import-app" class="settings-secondary-button" type="button" disabled>Review and import app rules (0)</button><button id="settings-ai-approval-import-folder" class="settings-secondary-button" type="button" disabled>Review and import folder rules (0)</button></div>
+                  <div class="settings-ai-approval-import-actions"><button id="settings-ai-approval-import-app" class="reset-modal-btn settings-secondary-action" type="button" disabled>Review and import app rules (0)</button><button id="settings-ai-approval-import-folder" class="reset-modal-btn settings-secondary-action" type="button" disabled>Review and import folder rules (0)</button></div>
                   <details><summary>View legacy JSON</summary><label class="settings-field" for="settings-ai-approval-app-policy"><span class="settings-field-label">App policy</span><span id="settings-ai-approval-app-policy-path" class="settings-field-help"></span><textarea id="settings-ai-approval-app-policy" class="rename-modal-input settings-json-textarea" rows="7" spellcheck="false"></textarea></label><label class="settings-field" for="settings-ai-approval-folder-policy"><span class="settings-field-label">Folder policy</span><span id="settings-ai-approval-folder-policy-path" class="settings-field-help"></span><textarea id="settings-ai-approval-folder-policy" class="rename-modal-input settings-json-textarea" rows="7" spellcheck="false"></textarea></label></details>
                 </div>
                 <div class="settings-subsection settings-ai-approval-policy-section"><h4 class="settings-subsection-title">Advanced workspace grants</h4><label class="settings-field" for="settings-ai-approval-rules-json"><span class="settings-field-label">Validated version-2 JSON</span><textarea id="settings-ai-approval-rules-json" class="rename-modal-input settings-json-textarea" rows="12" spellcheck="false"></textarea><span class="settings-field-help">Stored in your profile for this canonical workspace. Repository files cannot grant permissions.</span></label></div>
@@ -3289,6 +3303,29 @@
               <button class="reset-modal-btn reset-modal-cancel" id="settings-ai-model-editor-cancel" type="button">Cancel</button>
               <button class="reset-modal-btn settings-primary-action" id="settings-ai-model-editor-save" type="button">Save model</button>
             </div>
+          </div>
+        </div>
+
+        <div id="settings-ai-entry-wizard-modal" class="reset-modal-overlay settings-ai-entry-wizard-modal" role="dialog" aria-modal="true" aria-labelledby="settings-ai-entry-wizard-title" aria-describedby="settings-ai-entry-wizard-status" aria-hidden="true" style="display:none;">
+          <div class="reset-modal-box settings-ai-entry-wizard-box">
+            <button class="settings-modal-close" id="settings-ai-entry-wizard-close" type="button" aria-label="Close connection entry editor"><span aria-hidden="true">&times;</span></button>
+            <p id="settings-ai-entry-wizard-title" class="reset-modal-message settings-ai-entry-wizard-title">Edit connection entry</p>
+            <p id="settings-ai-entry-wizard-step" class="settings-panel-description"></p>
+            <div id="settings-ai-entry-wizard-form" class="settings-ai-entry-wizard-form"></div>
+            <details class="settings-ai-entry-preview"><summary>Complete entry JSON</summary><pre id="settings-ai-entry-wizard-preview"></pre></details>
+            <p id="settings-ai-entry-wizard-status" class="settings-panel-description" aria-live="polite"></p>
+            <div class="reset-modal-actions"><button class="reset-modal-btn reset-modal-cancel" id="settings-ai-entry-wizard-cancel" type="button">Cancel</button><button class="reset-modal-btn settings-secondary-action" id="settings-ai-entry-wizard-back" type="button">Back</button><button class="reset-modal-btn settings-primary-action" id="settings-ai-entry-wizard-next" type="button">Next</button><button class="reset-modal-btn settings-primary-action" id="settings-ai-entry-wizard-save" type="button">Save changes</button></div>
+          </div>
+        </div>
+
+        <div id="settings-ai-entry-json-modal" class="reset-modal-overlay settings-ai-entry-json-modal" role="dialog" aria-modal="true" aria-labelledby="settings-ai-entry-json-title" aria-describedby="settings-ai-entry-json-status" aria-hidden="true" style="display:none;">
+          <div class="reset-modal-box settings-ai-entry-json-box">
+            <button class="settings-modal-close" id="settings-ai-entry-json-close" type="button" aria-label="Close JSON editor"><span aria-hidden="true">&times;</span></button>
+            <p id="settings-ai-entry-json-title" class="reset-modal-message settings-ai-entry-json-title">Edit connection JSON</p>
+            <label id="settings-ai-connection-profiles-json-field" class="settings-field" for="settings-ai-connection-profiles"><span class="settings-field-label">Additional connection profiles (JSON array)</span><textarea id="settings-ai-connection-profiles" class="rename-modal-input settings-ai-entry-raw-json" rows="18" spellcheck="false" placeholder="[]"></textarea></label>
+            <label id="settings-ai-provider-routes-json-field" class="settings-field" for="settings-ai-provider-routes" hidden><span class="settings-field-label">Provider routes (JSON array)</span><textarea id="settings-ai-provider-routes" class="rename-modal-input settings-ai-entry-raw-json" rows="18" spellcheck="false" placeholder="[]"></textarea></label>
+            <p id="settings-ai-entry-json-status" class="settings-panel-description" aria-live="polite"></p>
+            <div class="reset-modal-actions"><button class="reset-modal-btn reset-modal-cancel" id="settings-ai-entry-json-cancel" type="button">Cancel</button><button class="reset-modal-btn settings-primary-action" id="settings-ai-entry-json-save" type="button">Load JSON into table</button></div>
           </div>
         </div>
 
@@ -4988,6 +5025,10 @@
     <script src="js/ai-companion/structured-execution-actions.js"></script>
     <script src="js/ai-companion/model-registry.js"></script>
     <script src="js/ai-companion/context-indicator.js"></script>
+    <script src="js/ai-companion/connection-entry-schema.js"></script>
+    <script src="js/ai-companion/connection-profile-form.js"></script>
+    <script src="js/ai-companion/connection-entry-tooltip.js"></script>
+    <script src="js/ai-companion/connection-settings.js"></script>
     <script src="js/ai-companion/models-settings.js"></script>
     <script src="js/ai-companion/prompts-settings.js"></script>
     <script src="js/ai-companion/tool-access-settings.js"></script>

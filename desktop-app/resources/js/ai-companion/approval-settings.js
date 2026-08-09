@@ -70,7 +70,7 @@
         enabledLabel.append(enabled, document.createTextNode(" Enabled"));
         const revoke = document.createElement("button");
         revoke.type = "button";
-        revoke.className = "settings-secondary-button";
+        revoke.className = "reset-modal-btn settings-secondary-action";
         revoke.textContent = "Revoke";
         revoke.addEventListener("click", async () => {
           if (!window.confirm(`Revoke ${rule.capability} for ${rule.matcher?.value || "this resource"}?`)) return;
