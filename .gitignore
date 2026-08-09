@@ -18,6 +18,7 @@ target/
 # Neutralinojs runtime state
 desktop-app/.tmp/
 desktop-app/.storage
+desktop-app/bin/neutralino-win_x64.exe
 desktop-app/*.log
 *.log
 
