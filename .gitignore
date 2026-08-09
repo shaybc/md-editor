@@ -34,6 +34,5 @@ desktop-app/*.log
 # Offline diagram editor materialized from the pinned draw.io source archive
 /desktop-app/resources/vendor/diagram-editor/
 /desktop-app/vendor/.drawio-extract/
-/desktop-app/vendor/.downloads/
 /drawio-release-report.json
 
