@@ -16,6 +16,9 @@ const { AgentCatalog } = require("../resources/ai-companion/orchestration/autono
 const { WorkspaceAgentSource } = require("../resources/ai-companion/orchestration/autonomous/agents/workspace-agent-source");
 const { BundleAgentSource } = require("../resources/ai-companion/orchestration/autonomous/agents/bundle-agent-source");
 const { discoverExtensions } = require("../resources/ai-companion/orchestration/autonomous/extension-registry");
+const { RunExtensionCatalog } = require("../resources/ai-companion/orchestration/autonomous/extensions/run-extension-catalog");
+const { RunAgentSource } = require("../resources/ai-companion/orchestration/autonomous/agents/run-agent-source");
+const { executeTool } = require("../resources/ai-companion/orchestration/autonomous/tool-executor");
 
 async function temporaryRoots(t) {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "md-editor-extensions-"));
@@ -199,4 +202,49 @@ test("delegated external-server managers inherit metadata without parent task gr
   assert.deepEqual(child.listServers().map((entry) => entry.id), ["local"]);
   assert.deepEqual(child.taskGrants, []);
   assert.equal(child.connections.size, 0);
+});
+
+test("run-scoped plugins contribute executable tools, servers, hooks, skills, and agents", async () => {
+  const request = {
+    action: "agent",
+    plugins: [{ id: "programmatic-pack", contributions: {
+      hooks: [{ id: "opening-note", event: "run-start", action: { type: "context", content: "Injected context." } }],
+      mcpServers: [{ id: "local-search", transport: "stdio", command: "server.exe" }],
+      deferredTools: [{ name: "project_lookup", description: "Look up project data", execute: async (args) => ({ query: args.query }) }],
+      skills: [{ id: "lookup-flow", name: "Lookup flow", description: "Use project lookup", body: "Search carefully." }],
+      agents: [{ id: "lookup-agent", name: "Lookup agent", description: "Investigates project data", allowedModes: ["agent"], body: "Investigate only the requested data." }]
+    } }]
+  };
+  const catalog = new RunExtensionCatalog(request);
+  const runtimeRequest = catalog.extendRequest();
+  const registrations = catalog.toolRegistrations(runtimeRequest);
+  const capabilities = new CapabilityCatalog({
+    policy: { mode: "agent" },
+    fabric: { entries: new Map(), snapshot: () => ({ entries: [] }) },
+    mcp: { listServers: () => [] },
+    registrations
+  });
+  const agents = new AgentCatalog(runtimeRequest, [new RunAgentSource(runtimeRequest)]);
+  await agents.load();
+
+  assert.equal(runtimeRequest.hooks[0].id, "opening-note");
+  assert.equal(runtimeRequest.mcpServers[0].id, "local-search");
+  assert.equal(runtimeRequest.skills[0].id, "lookup-flow");
+  assert.equal(agents.list()[0].id, "lookup-agent");
+  assert.match((await agents.activate("lookup-agent")).body, /Investigate only/);
+  assert.equal(capabilities.classifyCall("project_lookup").status, "deferred");
+  await capabilities.search("select:project_lookup");
+  assert.deepEqual(await executeTool({ function: { name: "project_lookup", arguments: JSON.stringify({ query: "wiki" }) } }, {
+    request: { workspaceRoot: "" }, capabilities
+  }), { query: "wiki" });
+  const mcp = new McpConnectionManager({ workspaceRoot: process.cwd() });
+  mcp.register(runtimeRequest.mcpServers);
+  assert.deepEqual(mcp.listServers().map((entry) => entry.id), ["local-search"]);
+  assert.equal(agents.list()[0].metadata.body, undefined);
+});
+
+test("invalid injected deferred tools stay unavailable and produce an isolated diagnostic", () => {
+  const catalog = new RunExtensionCatalog({ deferredTools: [{ name: "missing_handler", description: "Cannot execute" }] });
+  assert.deepEqual(catalog.toolRegistrations(), []);
+  assert.match(catalog.errors[0].error, /executable handler/i);
 });

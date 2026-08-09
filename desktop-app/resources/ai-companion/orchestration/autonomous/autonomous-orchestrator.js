@@ -18,6 +18,8 @@ const { ExtensionFabric } = require("./extensions/extension-fabric");
 const { AgentCatalog } = require("./agents/agent-catalog");
 const { WorkspaceAgentSource } = require("./agents/workspace-agent-source");
 const { BundleAgentSource } = require("./agents/bundle-agent-source");
+const { RunAgentSource } = require("./agents/run-agent-source");
+const { RunExtensionCatalog } = require("./extensions/run-extension-catalog");
 const { McpConnectionManager } = require("./mcp/mcp-connection-manager");
 const { CapabilityCatalog } = require("./capabilities/capability-catalog");
 const { HookGateway } = require("./hooks/hook-gateway");
@@ -67,12 +69,14 @@ class AutonomousOrchestrator {
     let hooks = null;
     let lifecycleObserver = null;
     try {
+      const runExtensions = new RunExtensionCatalog(request);
+      request = runExtensions.extendRequest();
       const chronicle = new RunChronicle(request, events.emit);
       const journaledEvents = createJournaledEvents(events, chronicle);
       const discoveredExtensions = await discoverExtensions(request);
       const fabric = new ExtensionFabric(request);
       const fabricSnapshot = await fabric.load();
-      const agentCatalog = new AgentCatalog(request, [new WorkspaceAgentSource(request), new BundleAgentSource(fabric)]);
+      const agentCatalog = new AgentCatalog(request, [new WorkspaceAgentSource(request), new RunAgentSource(request), new BundleAgentSource(fabric)]);
       const agentSnapshot = await agentCatalog.load();
       const extensions = [...discoveredExtensions, ...agentCatalog.list()];
       const extensionSnapshot = { fabric: fabricSnapshot, agents: agentSnapshot };
@@ -87,10 +91,11 @@ class AutonomousOrchestrator {
         extensions: fingerprint({ extensions, extensionSnapshot })
       };
       mcp = new McpConnectionManager(request, events.emit);
-      mcp.register(Array.from(fabric.entries.values()).filter((entry) => entry.kind === "mcp-server"));
+      mcp.register([...Array.from(fabric.entries.values()).filter((entry) => entry.kind === "mcp-server"), ...request.mcpServers]);
+      const injectedToolRegistrations = runExtensions.toolRegistrations(request);
       const capabilities = new CapabilityCatalog({
         policy, fabric, mcp, emit: events.emit,
-        registrations: policy.allowTools ? getToolRegistrations(policy, request.settings) : [],
+        registrations: policy.allowTools ? [...getToolRegistrations(policy, request.settings), ...injectedToolRegistrations] : [],
         knownToolNames: getKnownToolNames(),
         metadataEntries: agentCatalog.list()
       });
@@ -103,6 +108,7 @@ class AutonomousOrchestrator {
       fingerprints.tools = capabilities.inventory.fingerprint();
       fingerprints.skills = fingerprint(skillCatalog.list());
       const hookSources = await new HookSourceCatalog(request, fabric).load();
+      for (const issue of runExtensions.errors) hookSources.errors.push(issue);
       hooks = new HookGateway(request, hookSources.definitions, journaledEvents.emit);
       for (const issue of hookSources.errors) {
         journaledEvents.emit({ type: EVENT_TYPES.RECOVERY_WARNING, reason: "lifecycle-source-invalid", source: issue.source, error: issue.error, summary: `A lifecycle automation source was not loaded: ${issue.error}` });

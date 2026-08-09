@@ -80,6 +80,7 @@
     let editingActionIndex = -1;
     let editorActions = [];
     let editorReadOnly = false;
+    const fieldHelp = window.MarkdownViewerAiLifecycleSettingsHelp?.attach(elements.modal) || { hide() {} };
 
     for (const event of EVENTS) {
       const option = document.createElement("option");
@@ -329,6 +330,7 @@
     }
 
     function closeEditor() {
+      fieldHelp.hide();
       hide(elements.modal);
       editingIndex = -1;
       editorActions = [];

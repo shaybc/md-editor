@@ -1321,10 +1321,6 @@
                       <i class="bi bi-stars" aria-hidden="true"></i>
                       <span>AI Companion</span>
                     </button>
-                    <button class="settings-tab-button settings-tab-child" type="button" data-settings-tab="ai-lifecycle" data-settings-parent-tab-group="ai" aria-selected="false" tabindex="-1">
-                      <i class="bi bi-diagram-3" aria-hidden="true"></i>
-                      <span>Hooks</span>
-                    </button>
                     <button class="settings-tab-button settings-tab-child" type="button" data-settings-tab="ai-connection" data-settings-parent-tab-group="ai" aria-selected="false" tabindex="-1">
                       <i class="bi bi-plug" aria-hidden="true"></i>
                       <span>Connection</span>
@@ -1340,6 +1336,10 @@
                     <button class="settings-tab-button settings-tab-child" type="button" data-settings-tab="ai-companion-autocomplete" data-settings-parent-tab-group="ai" aria-selected="false" tabindex="-1">
                       <i class="bi bi-magic" aria-hidden="true"></i>
                       <span>Autocomplete</span>
+                    </button>
+                    <button class="settings-tab-button settings-tab-child" type="button" data-settings-tab="ai-lifecycle" data-settings-parent-tab-group="ai" aria-selected="false" tabindex="-1">
+                      <i class="bi bi-diagram-3" aria-hidden="true"></i>
+                      <span>Hooks</span>
                     </button>
                     <button class="settings-tab-button settings-tab-child" type="button" data-settings-tab="ai-approvals" data-settings-parent-tab-group="ai" aria-selected="false" tabindex="-1">
                       <i class="bi bi-shield-lock" aria-hidden="true"></i>
@@ -3353,34 +3353,38 @@
 
         <div id="settings-ai-lifecycle-modal" class="reset-modal-overlay settings-ai-lifecycle-modal" role="dialog" aria-modal="true" aria-labelledby="settings-ai-lifecycle-title" aria-describedby="settings-ai-lifecycle-editor-status" aria-hidden="true" style="display:none;">
           <div class="reset-modal-box settings-ai-lifecycle-box">
-            <button class="settings-modal-close" id="settings-ai-lifecycle-close" type="button" aria-label="Close lifecycle automation editor"><span aria-hidden="true">&times;</span></button>
-            <p id="settings-ai-lifecycle-title" class="reset-modal-message">Edit lifecycle automation</p>
-            <div class="settings-ai-lifecycle-form">
-              <label class="settings-field" for="settings-ai-lifecycle-id"><span class="settings-field-label">Automation ID</span><input id="settings-ai-lifecycle-id" class="rename-modal-input" type="text" maxlength="160" /></label>
-              <label class="settings-field" for="settings-ai-lifecycle-event"><span class="settings-field-label">Event</span><select id="settings-ai-lifecycle-event" class="rename-modal-input settings-select-input"></select></label>
-              <label class="settings-switch-row" for="settings-ai-lifecycle-enabled"><span><span class="settings-switch-title">Enabled</span></span><input id="settings-ai-lifecycle-enabled" class="settings-switch-input" type="checkbox" /><span class="settings-switch" aria-hidden="true"></span></label>
-              <label class="settings-field" for="settings-ai-lifecycle-on-error"><span class="settings-field-label">On error</span><select id="settings-ai-lifecycle-on-error" class="rename-modal-input settings-select-input"><option value="continue">Continue</option><option value="block">Block current boundary</option><option value="stop-run">Stop run</option></select></label>
-              <label class="settings-field" for="settings-ai-lifecycle-matcher"><span class="settings-field-label">Matcher (JSON object)</span><textarea id="settings-ai-lifecycle-matcher" class="rename-modal-input settings-textarea-input" rows="5" spellcheck="false">{}</textarea><span id="settings-ai-lifecycle-matcher-help" class="settings-field-help">Optional tool, mode, path, status, error, or fields filters.</span></label>
-              <div class="settings-field"><span class="settings-field-label">Matcher preview</span><textarea id="settings-ai-lifecycle-preview-payload" class="rename-modal-input settings-textarea-input" rows="5" spellcheck="false">{}</textarea><button id="settings-ai-lifecycle-preview-match" class="reset-modal-btn settings-secondary-action" type="button">Validate match</button><span id="settings-ai-lifecycle-preview-result" class="settings-field-help"></span></div>
+            <div class="settings-ai-lifecycle-dialog-header">
+              <button class="settings-modal-close" id="settings-ai-lifecycle-close" type="button" aria-label="Close lifecycle automation editor"><span aria-hidden="true">&times;</span></button>
+              <p id="settings-ai-lifecycle-title" class="reset-modal-message">Edit lifecycle automation</p>
+            </div>
+            <div class="settings-ai-lifecycle-dialog-body">
+              <div class="settings-ai-lifecycle-form">
+              <label class="settings-field" for="settings-ai-lifecycle-id"><span class="settings-ai-entry-label-row"><span class="settings-field-label">Automation ID</span><button class="settings-ai-entry-help" type="button" data-lifecycle-help="id" data-lifecycle-label="Automation ID information">i</button></span><input id="settings-ai-lifecycle-id" class="rename-modal-input" type="text" maxlength="160" /></label>
+              <label class="settings-field" for="settings-ai-lifecycle-event"><span class="settings-ai-entry-label-row"><span class="settings-field-label">Event</span><button class="settings-ai-entry-help" type="button" data-lifecycle-help="event" data-lifecycle-label="Event information">i</button></span><select id="settings-ai-lifecycle-event" class="rename-modal-input settings-select-input"></select></label>
+              <label class="settings-switch-row" for="settings-ai-lifecycle-enabled"><span class="settings-ai-entry-label-row"><span class="settings-switch-title">Enabled</span><button class="settings-ai-entry-help" type="button" data-lifecycle-help="enabled" data-lifecycle-label="Enabled information">i</button></span><input id="settings-ai-lifecycle-enabled" class="settings-switch-input" type="checkbox" /><span class="settings-switch" aria-hidden="true"></span></label>
+              <label class="settings-field" for="settings-ai-lifecycle-on-error"><span class="settings-ai-entry-label-row"><span class="settings-field-label">On error</span><button class="settings-ai-entry-help" type="button" data-lifecycle-help="onError" data-lifecycle-label="On error information">i</button></span><select id="settings-ai-lifecycle-on-error" class="rename-modal-input settings-select-input"><option value="continue">Continue</option><option value="block">Block current boundary</option><option value="stop-run">Stop run</option></select></label>
+              <label class="settings-field" for="settings-ai-lifecycle-matcher"><span class="settings-ai-entry-label-row"><span class="settings-field-label">Matcher (JSON object)</span><button class="settings-ai-entry-help" type="button" data-lifecycle-help="matcher" data-lifecycle-label="Matcher information">i</button></span><textarea id="settings-ai-lifecycle-matcher" class="rename-modal-input settings-textarea-input" rows="5" spellcheck="false">{}</textarea><span id="settings-ai-lifecycle-matcher-help" class="settings-field-help">Optional tool, mode, path, status, error, or fields filters.</span></label>
+              <div class="settings-field"><span class="settings-ai-entry-label-row"><span class="settings-field-label">Matcher preview</span><button class="settings-ai-entry-help" type="button" data-lifecycle-help="preview" data-lifecycle-label="Matcher preview information">i</button></span><textarea id="settings-ai-lifecycle-preview-payload" class="rename-modal-input settings-textarea-input" rows="5" spellcheck="false">{}</textarea><span class="settings-ai-lifecycle-button-row"><button id="settings-ai-lifecycle-preview-match" class="reset-modal-btn settings-secondary-action" type="button">Validate match</button><button class="settings-ai-entry-help" type="button" data-lifecycle-help="validateMatch" data-lifecycle-label="Validate match information">i</button></span><span id="settings-ai-lifecycle-preview-result" class="settings-field-help"></span></div>
               <div class="settings-ai-lifecycle-action-editor">
-                <span class="settings-field-label">Ordered actions</span>
-                <div id="settings-ai-lifecycle-action-rows" class="settings-table-body"></div>
                 <div class="settings-field-grid settings-field-grid-two">
-                  <label class="settings-field" for="settings-ai-lifecycle-action-type"><span class="settings-field-label">Action type</span><select id="settings-ai-lifecycle-action-type" class="rename-modal-input settings-select-input"><option value="context">Context</option><option value="notify-user">Notify user</option><option value="command">Command</option><option value="model-check">Model check</option><option value="delegated-run">Delegated run</option><option value="web-request">Web request</option><option value="application-callback">Application callback</option></select></label>
-                  <label class="settings-field" for="settings-ai-lifecycle-action-properties"><span class="settings-field-label">Action properties (JSON object)</span><textarea id="settings-ai-lifecycle-action-properties" class="rename-modal-input settings-textarea-input" rows="5" spellcheck="false">{}</textarea></label>
+                  <label class="settings-field" for="settings-ai-lifecycle-action-type"><span class="settings-ai-entry-label-row"><span class="settings-field-label">Action type</span><button class="settings-ai-entry-help" type="button" data-lifecycle-help="actionType" data-lifecycle-label="Action type information">i</button></span><select id="settings-ai-lifecycle-action-type" class="rename-modal-input settings-select-input"><option value="context">Context</option><option value="notify-user">Notify user</option><option value="command">Command</option><option value="model-check">Model check</option><option value="delegated-run">Delegated run</option><option value="web-request">Web request</option><option value="application-callback">Application callback</option></select></label>
+                  <label class="settings-field" for="settings-ai-lifecycle-action-properties"><span class="settings-ai-entry-label-row"><span class="settings-field-label">Action properties (JSON object)</span><button class="settings-ai-entry-help" type="button" data-lifecycle-help="actionProperties" data-lifecycle-label="Action properties information">i</button></span><textarea id="settings-ai-lifecycle-action-properties" class="rename-modal-input settings-textarea-input" rows="5" spellcheck="false">{}</textarea></label>
                 </div>
-                <button id="settings-ai-lifecycle-action-add" class="reset-modal-btn settings-secondary-action" type="button">Add action</button>
-                <details><summary>Advanced action-chain JSON</summary><label class="settings-field" for="settings-ai-lifecycle-actions"><textarea id="settings-ai-lifecycle-actions" class="rename-modal-input settings-textarea-input" rows="9" spellcheck="false">[]</textarea></label><button id="settings-ai-lifecycle-actions-load" class="reset-modal-btn settings-secondary-action" type="button">Load JSON into action list</button></details>
+                <span class="settings-ai-lifecycle-button-row"><button id="settings-ai-lifecycle-action-add" class="reset-modal-btn settings-secondary-action" type="button">Add action</button><button class="settings-ai-entry-help" type="button" data-lifecycle-help="addAction" data-lifecycle-label="Add action information">i</button></span>
+                <span class="settings-ai-entry-label-row"><span class="settings-field-label">Ordered actions</span><button class="settings-ai-entry-help" type="button" data-lifecycle-help="orderedActions" data-lifecycle-label="Ordered actions information">i</button></span>
+                <div id="settings-ai-lifecycle-action-rows" class="settings-table-body"></div>
+                <details><summary><span class="settings-ai-entry-label-row"><span>Advanced action-chain JSON</span><button class="settings-ai-entry-help" type="button" data-lifecycle-help="actionChain" data-lifecycle-label="Advanced action-chain JSON information">i</button></span></summary><label class="settings-field" for="settings-ai-lifecycle-actions"><textarea id="settings-ai-lifecycle-actions" class="rename-modal-input settings-textarea-input" rows="9" spellcheck="false">[]</textarea></label><span class="settings-ai-lifecycle-button-row"><button id="settings-ai-lifecycle-actions-load" class="reset-modal-btn settings-secondary-action" type="button">Load JSON into action list</button><button class="settings-ai-entry-help" type="button" data-lifecycle-help="loadActionChain" data-lifecycle-label="Load action-chain JSON information">i</button></span></details>
               </div>
               <div class="settings-field-grid settings-field-grid-two">
-                <label class="settings-field" for="settings-ai-lifecycle-timeout"><span class="settings-field-label">Timeout (ms)</span><input id="settings-ai-lifecycle-timeout" class="rename-modal-input settings-number-input" type="number" min="100" max="300000" /></label>
-                <label class="settings-field" for="settings-ai-lifecycle-cooldown"><span class="settings-field-label">Cooldown (ms)</span><input id="settings-ai-lifecycle-cooldown" class="rename-modal-input settings-number-input" type="number" min="0" max="3600000" /></label>
-                <label class="settings-field" for="settings-ai-lifecycle-dedup"><span class="settings-field-label">Deduplication window (ms)</span><input id="settings-ai-lifecycle-dedup" class="rename-modal-input settings-number-input" type="number" min="0" max="3600000" /></label>
-                <label class="settings-switch-row" for="settings-ai-lifecycle-background"><span><span class="settings-switch-title">Run in background</span></span><input id="settings-ai-lifecycle-background" class="settings-switch-input" type="checkbox" /><span class="settings-switch" aria-hidden="true"></span></label>
+                <label class="settings-field" for="settings-ai-lifecycle-timeout"><span class="settings-ai-entry-label-row"><span class="settings-field-label">Timeout (ms)</span><button class="settings-ai-entry-help" type="button" data-lifecycle-help="timeout" data-lifecycle-label="Timeout information">i</button></span><input id="settings-ai-lifecycle-timeout" class="rename-modal-input settings-number-input" type="number" min="100" max="300000" /></label>
+                <label class="settings-field" for="settings-ai-lifecycle-cooldown"><span class="settings-ai-entry-label-row"><span class="settings-field-label">Cooldown (ms)</span><button class="settings-ai-entry-help" type="button" data-lifecycle-help="cooldown" data-lifecycle-label="Cooldown information">i</button></span><input id="settings-ai-lifecycle-cooldown" class="rename-modal-input settings-number-input" type="number" min="0" max="3600000" /></label>
+                <label class="settings-field" for="settings-ai-lifecycle-dedup"><span class="settings-ai-entry-label-row"><span class="settings-field-label">Deduplication window (ms)</span><button class="settings-ai-entry-help" type="button" data-lifecycle-help="deduplication" data-lifecycle-label="Deduplication window information">i</button></span><input id="settings-ai-lifecycle-dedup" class="rename-modal-input settings-number-input" type="number" min="0" max="3600000" /></label>
+                <label class="settings-switch-row" for="settings-ai-lifecycle-background"><span class="settings-ai-entry-label-row"><span class="settings-switch-title">Run in background</span><button class="settings-ai-entry-help" type="button" data-lifecycle-help="background" data-lifecycle-label="Run in background information">i</button></span><input id="settings-ai-lifecycle-background" class="settings-switch-input" type="checkbox" /><span class="settings-switch" aria-hidden="true"></span></label>
               </div>
+              </div>
+              <p id="settings-ai-lifecycle-editor-status" class="settings-panel-description" aria-live="polite"></p>
             </div>
-            <p id="settings-ai-lifecycle-editor-status" class="settings-panel-description" aria-live="polite"></p>
-            <div class="reset-modal-actions"><button class="reset-modal-btn reset-modal-cancel" id="settings-ai-lifecycle-cancel" type="button">Cancel</button><button class="reset-modal-btn settings-primary-action" id="settings-ai-lifecycle-save" type="button">Save automation</button></div>
+            <div class="reset-modal-actions settings-ai-lifecycle-dialog-footer"><button class="reset-modal-btn reset-modal-cancel" id="settings-ai-lifecycle-cancel" type="button">Cancel</button><button class="reset-modal-btn settings-primary-action" id="settings-ai-lifecycle-save" type="button">Save automation</button></div>
           </div>
         </div>
 
@@ -5094,6 +5098,7 @@
     <script src="js/ai-companion/connection-entry-schema.js"></script>
     <script src="js/ai-companion/connection-profile-form.js"></script>
     <script src="js/ai-companion/connection-entry-tooltip.js"></script>
+    <script src="js/ai-companion/lifecycle-settings-help.js"></script>
     <script src="js/ai-companion/connection-settings.js"></script>
     <script src="js/ai-companion/models-settings.js"></script>
     <script src="js/ai-companion/prompts-settings.js"></script>

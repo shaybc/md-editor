@@ -196,14 +196,15 @@ class CapabilityCatalog {
     };
   }
 
-  /** Invoke an active external capability. */
-  async invoke(name, args) {
+  /** Invoke an active external or run-scoped capability. */
+  async invoke(name, args, context) {
     const record = this.assertCallable(name);
     if (name.startsWith("mcp__")) {
       await this.indexExternalServer(record.serverId);
       this.assertCallable(name);
       return this.mcp.invoke(name, args);
     }
+    if (typeof record?.execute === "function") return record.execute(args || {}, context);
     throw new Error("Capability is not externally invokable: " + name);
   }
 

@@ -23,6 +23,7 @@ function createToolSchemaRecord(value = {}) {
     requiredCapability: String(value.requiredCapability || ""),
     permissionScope: String(value.permissionScope || ""),
     executionOwner: String(value.executionOwner || source),
+    execute: typeof value.execute === "function" ? value.execute : null,
     alwaysLoad: value.alwaysLoad === true,
     external: value.external === true,
     serverId: String(value.serverId || ""),

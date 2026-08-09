@@ -217,6 +217,7 @@ async function executeTool(call, context) {
   if (name === "worker_wait") return context.workers.wait(args.id, args);
   if (name === "worker_stop") return context.workers.stop(args.id);
   if (name.startsWith("mcp__")) return context.capabilities.invoke(name, args);
+  if (context.capabilities?.registration?.(name)?.executionOwner === "run-extension") return context.capabilities.invoke(name, args, context);
   const applicationResult = await executeApplicationTool(name, args, context);
   if (applicationResult !== undefined) return applicationResult;
   throw new Error(`Unknown or unavailable tool: ${name}`);
