@@ -14,6 +14,7 @@ const approvalCapabilities = require("../resources/ai-companion/core/approval-ca
 const { ApprovalGrantStore } = require("../resources/ai-companion/core/approval-grant-store");
 const { PRODUCT_DEFAULT_POLICY } = require("../resources/ai-companion/security/policy-schema");
 const { runAgentToolLoop } = require("./helpers/autonomous-tool-harness");
+const { CommandImpactInspector } = require("../resources/ai-companion/security/command-impact/command-impact-inspector");
 
 function toolCall(name, args) {
   return { id: `call-${name}`, type: "function", function: { name, arguments: JSON.stringify(args) } };
@@ -37,6 +38,22 @@ test("approval capability descriptors preserve protected resources and grant lim
   const protectedWrite = approvalCapabilities.describe("write_file", { path: ".env.production" }, { effectiveSecurityPolicy: PRODUCT_DEFAULT_POLICY });
   assert.equal(protectedWrite.capability, "workspace.file.write");
   assert.equal(protectedWrite.resource.value, ".env.production");
+});
+
+test("command approvals bind grants to analyzed command structure", async () => {
+  const commandAnalysis = await new CommandImpactInspector().inspect({ command: "git status", dialect: "cmd", workspaceRoot: process.cwd() });
+  const descriptor = approvalCapabilities.describe("run_command", { command: "git status" }, { effectiveSecurityPolicy: PRODUCT_DEFAULT_POLICY, commandAnalysis });
+  assert.equal(descriptor.resource.type, "command-digest");
+  assert.equal(descriptor.commandImpact, "read-only");
+  const exact = descriptor.grantOptions.find((option) => option.id === "task-command-exact");
+  assert.ok(exact);
+  const rule = { capability: descriptor.capability, matcher: exact.matcher, lifetime: "task", enabled: true };
+  assert.equal(require("../resources/ai-companion/core/agent-approval-policy").matchesGrantRule(rule, descriptor), true);
+  assert.equal(require("../resources/ai-companion/core/agent-approval-policy").matchesGrantRule(rule, { ...descriptor, commandDigest: "different" }), false);
+  const prefix = descriptor.grantOptions.find((option) => option.id === "workspace-command-prefix");
+  const prefixRule = { capability: descriptor.capability, matcher: prefix.matcher, lifetime: "workspace", enabled: true };
+  assert.equal(require("../resources/ai-companion/core/agent-approval-policy").matchesGrantRule(prefixRule, descriptor), true);
+  assert.equal(require("../resources/ai-companion/core/agent-approval-policy").matchesGrantRule(prefixRule, { ...descriptor, normalizedCommand: "git status && git reset --hard", commandImpact: "destructive", commandPrefix: "" }), false);
 });
 
 test("workspace approval grants persist under the profile and can be revoked", async () => {

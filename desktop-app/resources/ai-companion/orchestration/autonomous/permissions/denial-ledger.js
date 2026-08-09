@@ -59,7 +59,9 @@ class DenialLedger {
 
 function actionFingerprint(tool, args = {}, descriptor = {}, workspaceRoot = "") {
   const resource = descriptor?.resource || {};
-  const target = resource.type === "path-glob"
+  const target = descriptor.commandDigest
+    ? String(descriptor.commandDigest).toLowerCase()
+    : resource.type === "path-glob"
     ? normalizePath(resource.value)
     : normalizeTarget(tool, resource.value || args.path || args.command || args.url || tool || "");
   return crypto.createHash("sha256").update(JSON.stringify({

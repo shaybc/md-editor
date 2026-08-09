@@ -96,6 +96,15 @@ function createGenericGrantOptions(descriptor, maximum) {
   return options.map((option) => applyEligibility(option, maximum));
 }
 
+function createCommandGrantOptions(descriptor, maximum) {
+  if (!descriptor.commandDigest || !["read-only", "workspace-write"].includes(descriptor.commandImpact)) return [];
+  const exact = { type: "command-exact", value: descriptor.commandDigest };
+  const options = [createOption("task-command-exact", "Allow this exact command for this task", "task", exact, { actionLabel: "Only for this task", targetLabel: descriptor.commandPreview })];
+  options.push(createOption("workspace-command-exact", "Always allow this exact command in this workspace", "workspace", exact, { actionLabel: "Always allow", targetLabel: descriptor.commandPreview }));
+  if (descriptor.commandPrefix) options.push(createOption("workspace-command-prefix", `Always allow commands beginning with ${descriptor.commandPrefix}`, "workspace", { type: "command-prefix", value: descriptor.commandPrefix }, { actionLabel: "Always allow", targetLabel: `${descriptor.commandPrefix} …`, requiresBroadConfirmation: true }));
+  return options.map((option) => applyEligibility(option, maximum));
+}
+
 /**
  * Describe the approval capability and request-bound grant choices for a tool call.
  * @param {string} toolName Agent tool name.
@@ -108,24 +117,42 @@ function describe(rawToolName, args = {}, context = {}) {
   let definition = CAPABILITIES[toolName];
   if (FILE_WRITE_TOOLS.has(toolName)) definition = { id: "workspace.file.write", risk: "low", label: "Write workspace files", maxLifetime: "workspace" };
   if (!definition) return null;
+  const commandAnalysis = toolName === "run_command" ? context.commandAnalysis : null;
   const conversionResource = toolName === "start_code_conversion"
     ? [normalizePath(args.sourceRoot), normalizePath(args.destinationRoot)].filter(Boolean).join(" -> ")
     : "";
-  const resourceValue = PATH_RESOURCE_TOOLS.has(toolName)
+  const resourceValue = commandAnalysis?.commandDigest
+    ? `command:${commandAnalysis.commandDigest}`
+    : PATH_RESOURCE_TOOLS.has(toolName)
     ? normalizePath(args.path || args.sourcePath || args.expectedPath)
     : conversionResource || normalizePath(args.domain || args.serverId || args.hookId || args.branch || args.remoteBranch || toolName);
-  const resource = PATH_RESOURCE_TOOLS.has(toolName)
+  const resource = commandAnalysis?.commandDigest
+    ? { type: "command-digest", value: resourceValue }
+    : PATH_RESOURCE_TOOLS.has(toolName)
     ? { type: "path-glob", value: resourceValue }
     : { type: "exact", value: resourceValue || toolName };
   const policy = context.effectiveSecurityPolicy || {};
-  const maximum = isCapabilityAllowed(policy, definition.id) ? getConfiguredMaximum(policy, definition.id, definition.maxLifetime) : "action";
-  const descriptor = { tool: toolName, capability: definition.id, risk: definition.risk, label: definition.label, resource, maximumGrantLifetime: maximum };
-  descriptor.boundaryPaths = toolName === "start_code_conversion"
+  const commandMaximum = commandAnalysis && ["read-only", "workspace-write"].includes(commandAnalysis.impact) ? "workspace" : "action";
+  const maximum = isCapabilityAllowed(policy, definition.id) ? getConfiguredMaximum(policy, definition.id, commandAnalysis ? commandMaximum : definition.maxLifetime) : "action";
+  const commandRisk = { "read-only": "low", "workspace-write": "medium", unknown: "high", "sensitive-read": "high", "external-impact": "high", destructive: "high" }[commandAnalysis?.impact];
+  const descriptor = { tool: toolName, capability: definition.id, risk: commandRisk || definition.risk, label: definition.label, resource, maximumGrantLifetime: maximum };
+  if (commandAnalysis) {
+    descriptor.commandDigest = commandAnalysis.commandDigest;
+    descriptor.normalizedCommand = commandAnalysis.normalizedCommand;
+    descriptor.commandImpact = commandAnalysis.impact;
+    descriptor.commandPreview = commandAnalysis.preview;
+    descriptor.commandPrefix = commandAnalysis.grantBoundary?.prefix?.value || "";
+  }
+  descriptor.boundaryPaths = commandAnalysis
+    ? (commandAnalysis.affectedPaths || []).map((entry) => entry.path).filter(Boolean)
+    : toolName === "start_code_conversion"
     ? [args.sourceRoot, args.destinationRoot].map((value) => String(value || "").trim()).filter(Boolean)
     : (PATH_RESOURCE_TOOLS.has(toolName)
       ? [args.path || args.sourcePath || args.expectedPath, args.destinationPath].map((value) => String(value || "").trim()).filter(Boolean)
       : []);
-  descriptor.grantOptions = FILE_WRITE_TOOLS.has(toolName)
+  descriptor.grantOptions = commandAnalysis
+    ? createCommandGrantOptions(descriptor, maximum)
+    : FILE_WRITE_TOOLS.has(toolName)
     ? createFileGrantOptions(resource, maximum, policy)
     : createGenericGrantOptions(descriptor, maximum);
   return descriptor;

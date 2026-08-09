@@ -48,6 +48,12 @@ test("AI Companion approval cards explain the requested action", () => {
   assert.match(stylesSource, /\.ai-companion-approval\.blocked/);
 });
 
+test("AI Companion approval cards show structural command impact details", () => {
+  assert.match(panelSource, /Command impact/);
+  assert.match(panelSource, /Parsed operations/);
+  assert.match(panelSource, /Affected paths/);
+});
+
 test("AI Companion approval cards place messages above a shared button footer", () => {
   assert.match(panelSource, /function getApprovalFooter\(row\)/);
   assert.match(panelSource, /getApprovalFooter\(row\)\.appendChild\(responseElement\)/);

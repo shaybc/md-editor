@@ -5302,8 +5302,10 @@
         }
 
         var desktopLoaderNativeLogQueue = [];
-        var DESKTOP_LOADER_CONSOLE_ENDPOINT = "http://127.0.0.1:45291/desktop-loader-log";
-        var DESKTOP_AUTH_INFO_ENDPOINT = "http://127.0.0.1:45291/desktop-auth-info";
+        var desktopLoaderPort = Number(new URLSearchParams(window.location.search).get("desktopLoaderPort")) || 0;
+        var desktopLoaderBaseUrl = desktopLoaderPort ? "http://127.0.0.1:" + desktopLoaderPort : "";
+        var DESKTOP_LOADER_CONSOLE_ENDPOINT = desktopLoaderBaseUrl ? desktopLoaderBaseUrl + "/desktop-loader-log" : "";
+        var DESKTOP_AUTH_INFO_ENDPOINT = desktopLoaderBaseUrl ? desktopLoaderBaseUrl + "/desktop-auth-info" : "";
 
         function formatDesktopLoaderNativeLine(level, message, details) {
           var payload = details || getDesktopLoaderContext();
@@ -5337,6 +5339,7 @@
         }
 
         function postDesktopLoaderConsoleLine(line) {
+          if (!DESKTOP_LOADER_CONSOLE_ENDPOINT) return;
           try {
             fetch(DESKTOP_LOADER_CONSOLE_ENDPOINT, {
               method: "POST",
@@ -5444,6 +5447,10 @@
                 return;
               }
               if (attemptsRemaining <= 0) {
+                resolve(false);
+                return;
+              }
+              if (!DESKTOP_AUTH_INFO_ENDPOINT) {
                 resolve(false);
                 return;
               }

@@ -184,10 +184,9 @@ function globPatternToRegExp(pattern) {
 }
 
 function isProtectedResource(descriptor, effectiveSecurityPolicy = {}) {
-  if (descriptor?.resource?.type !== "path-glob") return false;
-  const candidate = normalizePolicyPath(descriptor.resource.value);
   const patterns = effectiveSecurityPolicy?.approvals?.protectedPathPatterns || [];
-  return patterns.some((pattern) => globPatternToRegExp(normalizePolicyPath(pattern)).test(candidate));
+  const candidates = [descriptor?.resource?.type === "path-glob" ? descriptor.resource.value : "", ...(descriptor?.boundaryPaths || [])].filter(Boolean).map(normalizePolicyPath);
+  return candidates.some((candidate) => patterns.some((pattern) => globPatternToRegExp(normalizePolicyPath(pattern)).test(candidate)));
 }
 
 function matchesGrantRule(rule, descriptor) {
@@ -195,9 +194,18 @@ function matchesGrantRule(rule, descriptor) {
   const matcher = rule.matcher || {};
   const candidate = String(descriptor?.resource?.value || "");
   if (!candidate || !matcher.value) return false;
-  return matcher.type === "path-glob"
-    ? globPatternToRegExp(normalizePath(matcher.value)).test(normalizePath(candidate))
-    : String(matcher.value).toLowerCase() === candidate.toLowerCase();
+  if (matcher.type === "path-glob") return globPatternToRegExp(normalizePath(matcher.value)).test(normalizePath(candidate));
+  if (matcher.type === "command-exact") {
+    return ["read-only", "workspace-write"].includes(descriptor.commandImpact)
+      && String(matcher.value).toLowerCase() === String(descriptor.commandDigest || "").toLowerCase();
+  }
+  if (matcher.type === "command-prefix") {
+    const command = String(descriptor.normalizedCommand || "").toLowerCase();
+    const prefix = String(matcher.value || "").trim().toLowerCase();
+    const provenPrefix = String(descriptor.commandPrefix || "").trim().toLowerCase();
+    return descriptor.commandImpact === "read-only" && Boolean(prefix) && provenPrefix === prefix && (command === prefix || command.startsWith(prefix + " "));
+  }
+  return String(matcher.value).toLowerCase() === candidate.toLowerCase();
 }
 
 /**

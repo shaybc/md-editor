@@ -14,9 +14,11 @@ class PermissionModePolicy {
   async resolve(descriptor, context = {}) {
     const capability = String(descriptor?.capability || "");
     const isFileEdit = capability === "workspace.file.write";
+    const isCommand = capability === "shell.freeform";
     if (this.mode === "observe-only") return deny("Permission mode allows observation only.");
     if (this.mode === "preauthorized-only") return deny("Permission mode permits only actions covered by an explicit grant.");
     if (this.mode === "edit-trusted" && isFileEdit) return allow("Non-destructive workspace edits are trusted in this mode.");
+    if (isCommand && context.autoRunCommands === true && context.commandAnalysis?.canAutoRun === true) return allow("The command was structurally proven read-only.");
     if (this.mode === "sandbox-unattended") {
       const enabled = this.effectiveSecurityPolicy?.approvals?.allowUnattended === true;
       return enabled ? allow("Managed policy permits unattended actions in this sandbox.") : deny("Managed policy has not enabled unattended actions.");

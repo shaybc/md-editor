@@ -15600,7 +15600,9 @@ async function* collectWorkspaceSearchFilesFromNeutralinoDirectory(parentPath, p
   const mavenBuildOptionsPanel = window.registerMarkdownViewerMavenBuildOptionsPanel?.(app, {
     get notify() { return app.services?.notify; }
   });
-  const mavenPluginInspector = window.registerMarkdownViewerMavenPluginInspector?.(app, { Neutralino });
+  const mavenPluginInspector = window.registerMarkdownViewerMavenPluginInspector?.(app, {
+    Neutralino: typeof Neutralino !== "undefined" ? Neutralino : undefined
+  });
   const mavenEffectivePomParser = window.registerMarkdownViewerMavenEffectivePomParser?.(app);
   const mavenCompilerWarningBuildOptionsProvider = window.registerMarkdownViewerMavenCompilerWarningBuildOptionsProvider?.(app);
   const mavenPluginAwareBuildOptionsProvider = window.registerMarkdownViewerMavenPluginAwareBuildOptionsProvider?.(app);

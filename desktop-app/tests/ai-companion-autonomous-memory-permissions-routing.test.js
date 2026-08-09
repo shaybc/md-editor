@@ -10,6 +10,7 @@ const { normalizeAiCompanionSettings } = require("../resources/ai-companion/conf
 const { CuratedMemoryRepository } = require("../resources/ai-companion/orchestration/autonomous/memory/curated-memory-repository");
 const { MemoryProposalSession } = require("../resources/ai-companion/orchestration/autonomous/memory/memory-proposal-session");
 const { PermissionModePolicy } = require("../resources/ai-companion/orchestration/autonomous/permissions/permission-mode-policy");
+const { ActionRiskAdvisor } = require("../resources/ai-companion/orchestration/autonomous/permissions/action-risk-advisor");
 const { DenialLedger } = require("../resources/ai-companion/orchestration/autonomous/permissions/denial-ledger");
 const { ProviderRouteCatalog } = require("../resources/ai-companion/orchestration/autonomous/routing/provider-route-catalog");
 const { ProviderRouteSession, isFallbackEligible } = require("../resources/ai-companion/orchestration/autonomous/routing/provider-route-session");
@@ -53,6 +54,22 @@ test("permission modes remain below explicit security boundaries", async () => {
   assert.equal((await new PermissionModePolicy("edit-trusted").resolve(descriptor)).decision, "allow");
   assert.equal((await new PermissionModePolicy("preauthorized-only").resolve(descriptor)).decision, "deny");
   assert.equal((await new PermissionModePolicy("sandbox-unattended", { approvals: { allowUnattended: false } }).resolve(descriptor)).decision, "deny");
+});
+
+test("command auto-run applies only to structurally proven read-only actions", async () => {
+  const policy = new PermissionModePolicy("guided");
+  const descriptor = { capability: "shell.freeform" };
+  assert.equal((await policy.resolve(descriptor, { autoRunCommands: true, commandAnalysis: { canAutoRun: true, impact: "read-only" } })).decision, "allow");
+  assert.equal((await policy.resolve(descriptor, { autoRunCommands: true, commandAnalysis: { canAutoRun: false, impact: "destructive" } })).decision, "prompt");
+  assert.equal((await policy.resolve(descriptor, { autoRunCommands: true, commandAnalysis: { canAutoRun: false, impact: "unknown" } })).decision, "prompt");
+});
+
+test("risk advice cannot override restricted command analysis", async () => {
+  let providerCalls = 0;
+  const advisor = new ActionRiskAdvisor({ completeMessage: async () => { providerCalls += 1; return { content: '{"decision":"allow"}' }; } }, {});
+  const result = await advisor.evaluate({ capability: "shell.freeform" }, { commandAnalysis: { parseable: true, impact: "destructive", canAutoRun: false } });
+  assert.equal(result.decision, "prompt");
+  assert.equal(providerCalls, 0);
 });
 
 test("denial ledger suppresses equivalent calls and trips after repeated denials", () => {

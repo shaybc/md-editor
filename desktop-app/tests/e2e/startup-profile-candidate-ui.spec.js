@@ -154,6 +154,44 @@ test("desktop startup hydrates last tabs from the tabs profile", async ({ page }
   await expect(page.locator("#markdown-editor")).toHaveValue("# Saved Two");
 });
 
+test("schedule polling cannot interrupt startup preference hydration", async ({ page }) => {
+  await page.addInitScript(() => {
+    window.__startupReachedReady = false;
+    window.addEventListener("markdownViewerStartupReady", () => {
+      window.__startupReachedReady = true;
+    });
+    localStorage.setItem("markdownViewerGlobalState", JSON.stringify({
+      startupBehavior: "empty",
+      sidebarVisible: false,
+      statusBarVisible: false,
+      viewMode: "preview"
+    }));
+  });
+
+  await page.goto("/");
+
+  await expect.poll(() => page.evaluate(() => window.__startupReachedReady)).toBe(true);
+  await expect(page.locator(".content-container")).toHaveClass(/sidebar-hidden/);
+  await expect(page.locator("#app-status-line")).toBeHidden();
+});
+
+test("startup falls back safely when launcher auth is unavailable", async ({ page }) => {
+  await page.addInitScript(() => {
+    delete window.NL_PORT;
+    delete window.NL_TOKEN;
+    delete window.Neutralino;
+    window.__startupReachedReady = false;
+    window.addEventListener("markdownViewerStartupReady", () => {
+      window.__startupReachedReady = true;
+    });
+  });
+
+  await page.goto("/");
+
+  await expect.poll(() => page.evaluate(() => window.__startupReachedReady)).toBe(true);
+  await expect(page.locator("#startup-crash-overlay")).toHaveCount(0);
+});
+
 test("desktop last-tabs startup does not prefill the welcome document", async ({ page }) => {
   await page.addInitScript(() => {
     window.NL_VERSION = "test";

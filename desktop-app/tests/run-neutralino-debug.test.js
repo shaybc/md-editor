@@ -6,6 +6,7 @@ const test = require("node:test");
 
 const repoRoot = path.resolve(__dirname, "..", "..");
 const {
+  appendDesktopLoaderEndpointArg,
   appendNativeStartupPerf,
   ensureCompiledDesktopResources,
   getBundledRootDocumentEntries,
@@ -38,6 +39,16 @@ test("cached runtime args omit Neutralino dev tools for production startup", () 
     "--path=.",
     "--export-auth-info"
   ]);
+});
+
+test("desktop runtime receives the dynamically selected loader endpoint", () => {
+  assert.deepEqual(appendDesktopLoaderEndpointArg(getNeutralinoRuntimeRunArgs(), 32191), [
+    "--load-dir-res",
+    "--path=.",
+    "--export-auth-info",
+    "--url=/?desktopLoaderPort=32191"
+  ]);
+  assert.deepEqual(appendDesktopLoaderEndpointArg(getNeutralinoRuntimeRunArgs(), 0), getNeutralinoRuntimeRunArgs());
 });
 
 test("desktop runtime preflight checks compiled resources", () => {

@@ -8,6 +8,7 @@ const fs = require("node:fs/promises");
 const path = require("node:path");
 const { execFile, exec } = require("node:child_process");
 const { promisify } = require("node:util");
+const { digestCommand, normalizeCommand } = require("../security/command-impact/command-impact-inspector");
 
 const apiClientTools = require("./api-client-agent-tools");
 const conversionExportTools = require("./conversion-export-tools");
@@ -293,6 +294,11 @@ async function writeFile(root, filePath, content, options = {}) {
 async function runCommand(root, command, options = {}) {
   throwIfAborted(options.signal);
   if (options.allowCommands !== true) throw new Error("Command execution is disabled in AI Companion settings.");
+  if (options.expectedCommandDigest && digestCommand(normalizeCommand(command)) !== options.expectedCommandDigest) {
+    const error = new Error("The command no longer matches its authorized analysis.");
+    error.code = "COMMAND_AUTHORIZATION_MISMATCH";
+    throw error;
+  }
   const { workspaceRoot } = resolveWorkspacePath(root);
   const result = await execAsync(String(command || ""), {
     cwd: workspaceRoot,

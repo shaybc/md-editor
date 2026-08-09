@@ -26,6 +26,14 @@ test("startup boot script loads before styles and application scripts", () => {
   assert.equal(bootScriptIndex < legacyScriptIndex, true);
 });
 
+test("desktop loader discovers its launcher endpoint from the runtime URL", () => {
+  const html = fs.readFileSync(path.join(webRoot, "index.html"), "utf8").replace(/^\uFEFF/, "");
+
+  assert.match(html, /URLSearchParams\(window\.location\.search\)\.get\("desktopLoaderPort"\)/);
+  assert.doesNotMatch(html, /127\.0\.0\.1:45291/);
+  assert.match(html, /if \(!DESKTOP_AUTH_INFO_ENDPOINT\) \{/);
+});
+
 test("startup splash is the first visible body child before the app shell", () => {
   const html = fs.readFileSync(path.join(webRoot, "index.html"), "utf8").replace(/^\uFEFF/, "");
   const bodyIndex = html.indexOf("<body>");

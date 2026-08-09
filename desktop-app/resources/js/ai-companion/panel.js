@@ -5000,6 +5000,15 @@
       if (input) lines.push("", "Input:", "", input);
       if (summary) lines.push("", "Summary:", "", summary);
       if (preview) lines.push("", "Details:", "", preview);
+      if (event.commandImpact) {
+        const commandImpact = event.commandImpact;
+        lines.push("", "Command impact:", "", [
+          commandImpact.impact,
+          commandImpact.dialect,
+          commandImpact.confidence ? `confidence: ${commandImpact.confidence}` : ""
+        ].filter(Boolean).join(" | "));
+        if (commandImpact.reasons?.length) lines.push("", "Analysis:", "", commandImpact.reasons.join(" "));
+      }
       if (event.response?.label) lines.push("", "Response:", "", event.response.label);
       return lines.join(" - ");
     }
@@ -5045,6 +5054,25 @@
       addSection("Resource", analysis.resourcePath || event.input || event.tool || "");
       addSection("Summary", event.summary || "");
       addSection("Details", event.preview || "");
+      if (event.commandImpact) {
+        const commandImpact = event.commandImpact;
+        addSection("Command impact", [
+          `Impact: ${commandImpact.impact || "unknown"}`,
+          `Shell: ${commandImpact.dialect || "unknown"}`,
+          `Confidence: ${commandImpact.confidence || "unknown"}`,
+          ...(commandImpact.reasons || []).map((reason) => `Reason: ${reason}`)
+        ].join("\n"));
+        addSection("Parsed operations", (commandImpact.subcommands || []).map((entry) => [
+          entry.executable,
+          ...(entry.arguments || [])
+        ].filter(Boolean).join(" ") + ` [${entry.impact || "unknown"}]`).join("\n"));
+        addSection("Affected paths", (commandImpact.affectedPaths || []).map((entry) => [
+          entry.relativePath || entry.path,
+          entry.access,
+          entry.outsideWorkspace ? "outside workspace" : "",
+          entry.protected ? "protected" : ""
+        ].filter(Boolean).join(" | ")).join("\n"));
+      }
       if (event.policyScope || event.policyPattern || event.policyRuleId || event.capability) addSection("Policy", [event.capability, event.policyScope, event.policyPattern, event.policyRuleId].filter(Boolean).join("\n"));
       dialog.append(header, body);
       overlay.appendChild(dialog);
@@ -7828,7 +7856,7 @@
     if (typeof deps.bridge?.schedulesClaimDue === "function") {
       const schedulePollTimer = setInterval(() => { void pollDueCompanionSchedules(); }, 30000);
       schedulePollTimer?.unref?.();
-      void pollDueCompanionSchedules();
+      window.setTimeout(() => { void pollDueCompanionSchedules(); }, 0);
     }
 
     toggleButtons.forEach((button) => button.addEventListener("click", () => setOpen(!document.body.classList.contains("ai-companion-open"))));

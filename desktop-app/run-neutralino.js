@@ -101,7 +101,7 @@ function getLocalNeuCommand() {
 }
 
 const DESKTOP_LOADER_CONSOLE_LOG = path.join(ROOT_DIR, "logs", "desktop-loader-console.log");
-const DESKTOP_LOADER_CONSOLE_PORT = 45291;
+const DESKTOP_LOADER_CONSOLE_PORT = 0;
 const DESKTOP_AUTH_INFO_ENDPOINT = "/desktop-auth-info";
 const DESKTOP_AUTH_INFO_FILE = path.join(ROOT_DIR, ".tmp", "auth_info.json");
 const DESKTOP_AUTH_SCRIPT_INTERVAL_MS = 50;
@@ -262,6 +262,10 @@ function resetDesktopLoaderConsoleLog() {
 
 function startDesktopLoaderConsoleServer() {
   resetDesktopLoaderConsoleLog();
+  let resolveReady;
+  const ready = new Promise((resolve) => {
+    resolveReady = resolve;
+  });
   const server = http.createServer((request, response) => {
     if (request.url === DESKTOP_AUTH_INFO_ENDPOINT) {
       const allowedOrigin = getAllowedDesktopAuthOrigin(request);
@@ -328,12 +332,19 @@ function startDesktopLoaderConsoleServer() {
   });
 
   server.on("error", (error) => {
-    console.warn(`[desktop-loader] Unable to start WebView diagnostics receiver on 127.0.0.1:${DESKTOP_LOADER_CONSOLE_PORT}: ${error?.message || error}`);
+    console.warn(`[desktop-loader] Unable to start WebView diagnostics receiver: ${error?.message || error}`);
+    resolveReady(0);
   });
   server.listen(DESKTOP_LOADER_CONSOLE_PORT, "127.0.0.1", () => {
-    console.log(`[desktop-loader] Listening for WebView loader diagnostics on http://127.0.0.1:${DESKTOP_LOADER_CONSOLE_PORT}/desktop-loader-log`);
+    const address = server.address();
+    const port = typeof address === "object" && address ? Number(address.port) || 0 : 0;
+    console.log(`[desktop-loader] Listening for WebView loader diagnostics on http://127.0.0.1:${port}/desktop-loader-log`);
+    resolveReady(port);
   });
-  return () => server.close();
+  return {
+    ready,
+    close() { server.close(); }
+  };
 }
 function getNeutralinoRuntimeBinary() {
   const platformMap = {
@@ -367,6 +378,12 @@ function getNeutralinoRuntimeRunArgs() {
   ];
 }
 
+function appendDesktopLoaderEndpointArg(args, port) {
+  const normalizedPort = Number(port) || 0;
+  if (!normalizedPort) return [...args];
+  return [...args, `--url=/?desktopLoaderPort=${normalizedPort}`];
+}
+
 function runNeutralinoRuntime() {
   if (!ensureCompiledDesktopResources()) {
     process.exit(1);
@@ -379,15 +396,19 @@ function runNeutralinoRuntime() {
   }
 
   console.log("Launching cached Neutralino runtime.");
-  run(runtimeBinary, getNeutralinoRuntimeRunArgs());
+  run(runtimeBinary, getNeutralinoRuntimeRunArgs(), { desktopRuntime: true });
 }
 
-function run(command, args, options = {}) {
-  appendNativeStartupPerf(command, args);
+async function run(command, args, options = {}) {
   const stopDesktopAuthInfoPublisher = startDesktopAuthInfoPublisher();
-  const stopDesktopLoaderConsoleServer = startDesktopLoaderConsoleServer();
+  const desktopLoaderConsoleServer = startDesktopLoaderConsoleServer();
+  const desktopLoaderPort = await desktopLoaderConsoleServer.ready;
+  const launchArgs = options.desktopRuntime
+    ? appendDesktopLoaderEndpointArg(args, desktopLoaderPort)
+    : args;
+  appendNativeStartupPerf(command, launchArgs);
   const cleanup = typeof options.cleanup === "function" ? options.cleanup : null;
-  const child = spawn(command, args, {
+  const child = spawn(command, launchArgs, {
     cwd: ROOT_DIR,
     stdio: "inherit",
     shell: process.platform === "win32",
@@ -400,7 +421,7 @@ function run(command, args, options = {}) {
       console.warn(`[desktop-loader] Unable to clean temporary bundled documents: ${error?.message || error}`);
     }
     stopDesktopAuthInfoPublisher?.();
-    stopDesktopLoaderConsoleServer();
+    desktopLoaderConsoleServer.close();
     // On Windows, Java-based language servers (JDT, LemMinX) spawned by Neutralino
     // survive the app exit and stay attached to the CMD console, keeping the window
     // open. This happens because Windows attaches child processes to the parent's
@@ -466,6 +487,7 @@ if (require.main === module) {
 }
 
 module.exports = {
+  appendDesktopLoaderEndpointArg,
   appendNativeStartupPerf,
   ensureCompiledDesktopResources,
   getBundledRootDocumentEntries,

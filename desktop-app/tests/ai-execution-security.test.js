@@ -19,6 +19,7 @@ const workspaceTools = require("../resources/ai-companion/tools/workspace-tools"
 const { normalizeAiCompanionSettings } = require("../resources/ai-companion/config/defaults");
 const { createPackageProviderRegistry } = require("../resources/ai-companion/tools/package-providers");
 const structuredTools = require("../resources/ai-companion/tools/structured-execution-tools");
+const { CommandImpactInspector } = require("../resources/ai-companion/security/command-impact/command-impact-inspector");
 
 function createToolCall(name, args) {
   return {
@@ -165,13 +166,13 @@ test("sandbox-shell preserves auto-run command behavior and audits request and o
   const originalRunCommand = workspaceTools.runCommand;
   workspaceTools.runCommand = async () => {
     executionCount += 1;
-    return { command: "safe-sandbox-command", stdout: "ok", stderr: "" };
+    return { command: "git status", stdout: "ok", stderr: "" };
   };
   const provider = {
     completeMessage: async () => {
       rounds += 1;
       return rounds === 1
-        ? { content: "", toolCalls: [createToolCall("run_command", { command: "safe-sandbox-command" })] }
+        ? { content: "", toolCalls: [createToolCall("run_command", { command: "git status" })] }
         : { content: "done", toolCalls: [] };
     },
     complete: async () => "done"
@@ -190,6 +191,33 @@ test("sandbox-shell preserves auto-run command behavior and audits request and o
   assert.equal(executionCount, 1);
   assert.equal(approvalRequested, false);
   assert.deepEqual(audits.map((record) => record.decision), ["requested", "executed-success"]);
+  assert.equal(audits[0].commandImpact.impact, "read-only");
+  assert.equal(audits[0].commandImpact.canAutoRun, true);
+});
+
+test("command impact analysis is structural, flag-aware, and fails closed", async () => {
+  const workspace = await fs.mkdtemp(path.join(os.tmpdir(), "md-editor-command-impact-"));
+  const inspector = new CommandImpactInspector();
+  const inspect = (command, dialect = "cmd") => inspector.inspect({ command, dialect, workspaceRoot: workspace, workingDirectory: workspace });
+  assert.equal((await inspect("git status")).canAutoRun, true);
+  assert.equal((await inspect("git status | findstr clean")).impact, "read-only");
+  assert.equal((await inspect('echo "a|b"')).canAutoRun, true);
+  assert.equal((await inspect("git status 2>&1")).canAutoRun, true);
+  assert.equal((await inspect("git reset --hard")).impact, "destructive");
+  assert.equal((await inspect("git branch -D old")).impact, "destructive");
+  assert.equal((await inspect("echo hi > output.txt")).impact, "workspace-write");
+  assert.equal((await inspect('powershell -Command "Remove-Item -Recurse ."')).impact, "destructive");
+  assert.equal((await inspect('echo "unterminated')).impact, "unknown");
+  assert.equal((await inspect("echo %DYNAMIC%")).impact, "unknown");
+  assert.equal((await inspect("cat $HOME/.ssh/id_rsa", "posix")).canAutoRun, false);
+  assert.equal((await inspect("Get-Content $env:USERPROFILE/.ssh/id_rsa", "powershell")).canAutoRun, false);
+  assert.equal((await inspect("cat .env", "posix")).impact, "sensitive-read");
+  assert.equal((await inspect("git diff --output=changes.txt")).impact, "workspace-write");
+  assert.equal((await inspect("git status &")).impact, "unknown");
+  assert.equal((await inspect("cat <(git status)", "posix")).impact, "unknown");
+  const outsideWrite = await inspect("cd .. && echo hi > outside.txt", "posix");
+  assert.equal(outsideWrite.affectedPaths.some((entry) => entry.outsideWorkspace), true);
+  assert.equal(outsideWrite.impact, "destructive");
 });
 
 test("command classifier suggests typed tools without executing", () => {
@@ -198,6 +226,14 @@ test("command classifier suggests typed tools without executing", () => {
   assert.equal(classifyCommand("node --test tests/example.test.js").suggestion.tool, "run_tests");
   assert.equal(classifyCommand("npx playwright test").suggestion.tool, "run_tests");
   assert.equal(classifyCommand("npm install lodash@4.17.21").suggestion.tool, "manage_dependencies");
+});
+
+test("command runner rejects a digest mismatch before launch", async () => {
+  const workspace = await fs.mkdtemp(path.join(os.tmpdir(), "md-editor-command-digest-"));
+  await assert.rejects(
+    () => workspaceTools.runCommand(workspace, "git status", { allowCommands: true, expectedCommandDigest: "different" }),
+    { code: "COMMAND_AUTHORIZATION_MISMATCH" }
+  );
 });
 
 test("package providers expose the constrained provider interface for every V1 ecosystem", () => {

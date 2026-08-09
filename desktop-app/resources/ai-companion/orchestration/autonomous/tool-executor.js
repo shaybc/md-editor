@@ -6,6 +6,8 @@ const workspaceTools = require("../../tools/workspace-tools");
 const { authorizeTool } = require("./approval-gateway");
 const { loadExtension } = require("./extension-registry");
 const { executeApplicationTool } = require("./application-tool-adapter");
+const { CommandImpactInspector, digestCommand, normalizeCommand, redactCommand } = require("../../security/command-impact/command-impact-inspector");
+const { publicCommandImpact } = require("../../security/command-impact/command-impact-view");
 
 function parseArguments(call) {
   const raw = call?.function?.arguments;
@@ -18,9 +20,21 @@ function parseArguments(call) {
 async function executeTool(call, context) {
   const name = String(call?.function?.name || "");
   const args = parseArguments(call);
+  const root = context.request.workspaceRoot;
+  if (name === "run_command" && context.request.securityContext?.policy?.shell?.mode !== "sandbox-shell") {
+    await context.request.securityContext?.auditLogger?.record({
+      timestamp: new Date().toISOString(), requestId: context.request.requestId, workspace: root,
+      tool: name, requestedCommand: redactCommand(args.command).slice(0, 4000), decision: "deny",
+      reason: "Free-form commands are disabled by the effective security policy."
+    });
+    const error = new Error("Free-form commands are disabled by the effective AI security policy.");
+    error.code = "FREE_FORM_COMMAND_NOT_PERMITTED";
+    error.retryable = false;
+    error.doNotRetry = true;
+    throw error;
+  }
   if (name !== "capability_search") context.capabilities?.assertCallable?.(name);
   if (name !== "skill_invoke") context.skillInvocation?.assertToolAllowed?.(name);
-  const root = context.request.workspaceRoot;
   const options = { signal: context.request.signal };
   if (name === "list_files") return workspaceTools.listFiles(root, { ...options, maxFiles: args.maxFiles });
   if (name === "glob_files") return workspaceTools.globFiles(root, args.pattern, { ...options, maxFiles: args.maxFiles });
@@ -30,29 +44,22 @@ async function executeTool(call, context) {
     return workspaceTools.readFile(root, args.path, { ...options, startLine: args.startLine, endLine: args.endLine });
   }
   if (["apply_edit", "write_file", "run_command"].includes(name)) {
-    if (name === "run_command" && context.request.securityContext?.policy?.shell?.mode !== "sandbox-shell") {
-      await context.request.securityContext?.auditLogger?.record({
-        timestamp: new Date().toISOString(), requestId: context.request.requestId, workspace: root,
-        tool: name, requestedCommand: String(args.command || ""), decision: "deny",
-        reason: "Free-form commands are disabled by the effective security policy."
-      });
-      const error = new Error("Free-form commands are disabled by the effective AI security policy.");
-      error.code = "FREE_FORM_COMMAND_NOT_PERMITTED";
-      error.retryable = false;
-      error.doNotRetry = true;
-      throw error;
-    }
-    const autoRunCommand = name === "run_command"
-      && context.request.settings?.agentAutoRunCommands === true
-      && context.permissionPolicy?.mode === "guided"
-      && context.denialLedger?.tripped !== true;
-    const approval = autoRunCommand
-      ? { approved: true, automatic: true }
-      : await authorizeTool(context.request, name, args, context.taskGrants, {
-        permissionPolicy: context.permissionPolicy,
-        denialLedger: context.denialLedger,
-        riskAdvisor: context.riskAdvisor
-      });
+    const commandAnalysis = name === "run_command"
+      ? await (context.commandImpactInspector || new CommandImpactInspector()).inspect({
+        command: args.command,
+        workspaceRoot: root,
+        workingDirectory: root,
+        platform: process.platform,
+        configuredShell: process.env.ComSpec
+      })
+      : null;
+    const approval = await authorizeTool(context.request, name, args, context.taskGrants, {
+      permissionPolicy: context.permissionPolicy,
+      denialLedger: context.denialLedger,
+      riskAdvisor: context.riskAdvisor,
+      commandAnalysis,
+      autoRunCommands: context.request.settings?.agentAutoRunCommands === true
+    });
     if (!approval.approved) return { denied: true, doNotRetry: approval.doNotRetry === true, denialFingerprint: approval.denialFingerprint, instructions: approval.instructions || "The user denied this action." };
     if (name === "apply_edit") {
       context.windowSteward?.recordFile?.(args.path);
@@ -62,21 +69,29 @@ async function executeTool(call, context) {
       context.windowSteward?.recordFile?.(args.path);
       return workspaceTools.writeFile(root, args.path, args.content, { ...options, allowWrites: true });
     }
+    if (digestCommand(normalizeCommand(args.command)) !== commandAnalysis.commandDigest) {
+      const error = new Error("The command changed after authorization and must be analyzed again.");
+      error.code = "COMMAND_AUTHORIZATION_MISMATCH";
+      error.retryable = false;
+      error.doNotRetry = true;
+      throw error;
+    }
+    const commandImpact = publicCommandImpact(commandAnalysis);
     await context.request.securityContext?.auditLogger?.record({
       timestamp: new Date().toISOString(), requestId: context.request.requestId, workspace: root,
-      tool: name, requestedCommand: String(args.command || ""), decision: "requested"
+      tool: name, requestedCommand: commandAnalysis.preview, commandImpact, approvalSource: approval.approvalSource || "unknown", automatic: approval.automatic === true, decision: "requested"
     });
     try {
-      const result = await workspaceTools.runCommand(root, args.command, { ...options, allowCommands: true, timeoutMs: args.timeoutMs });
+      const result = await workspaceTools.runCommand(root, args.command, { ...options, allowCommands: true, timeoutMs: args.timeoutMs, expectedCommandDigest: commandAnalysis.commandDigest });
       await context.request.securityContext?.auditLogger?.record({
         timestamp: new Date().toISOString(), requestId: context.request.requestId, workspace: root,
-        tool: name, requestedCommand: String(args.command || ""), decision: result.success === false ? "executed-failure" : "executed-success"
+        tool: name, requestedCommand: commandAnalysis.preview, commandImpact, approvalSource: approval.approvalSource || "unknown", automatic: approval.automatic === true, decision: result.success === false ? "executed-failure" : "executed-success"
       });
       return result;
     } catch (error) {
       await context.request.securityContext?.auditLogger?.record({
         timestamp: new Date().toISOString(), requestId: context.request.requestId, workspace: root,
-        tool: name, requestedCommand: String(args.command || ""), decision: "execution-error", error: error?.message || String(error)
+        tool: name, requestedCommand: commandAnalysis.preview, commandImpact, approvalSource: approval.approvalSource || "unknown", automatic: approval.automatic === true, decision: "execution-error", error: error?.message || String(error)
       });
       throw error;
     }
