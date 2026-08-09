@@ -6799,6 +6799,16 @@
         "route-selected": "Provider route selected",
         "route-fallback": "Provider fallback selected",
         "route-unavailable": "Provider route unavailable",
+        "hook-started": "Lifecycle automation started",
+        "hook-progress": "Lifecycle action running",
+        "hook-completed": "Lifecycle automation completed",
+        "hook-skipped": "Lifecycle automation skipped",
+        "hook-blocked": "Lifecycle automation blocked an operation",
+        "hook-failed": "Lifecycle automation failed",
+        "hook-notification": "Lifecycle notification",
+        "hook-queued": "Lifecycle automation queued",
+        "hook-waiting-approval": "Lifecycle action waiting for approval",
+        "hook-input-rewritten": "Lifecycle input rewritten",
         "run-restored": "Autonomous run restored",
         "recovery-warning": "Recovery warning",
         compaction: "Context renewed"
@@ -6807,7 +6817,7 @@
         ? `${event.estimatedTokensBefore} tokens before, ${event.estimatedTokensAfter || 0} after`
         : "Completed");
       const display = createSyntheticToolActivity({
-        type: ["recovery-warning", "rule-unavailable", "skill-unavailable", "skill-invocation-failed", "schedule-failed", "memory-rejected", "tool-denied", "denial-guard-tripped", "route-unavailable"].includes(event.type) ? "tool-error" : "tool",
+        type: ["recovery-warning", "rule-unavailable", "skill-unavailable", "skill-invocation-failed", "schedule-failed", "memory-rejected", "tool-denied", "denial-guard-tripped", "route-unavailable", "hook-failed", "hook-blocked"].includes(event.type) ? "tool-error" : "tool",
         tool: labels[event.type] || event.type,
         summary,
         callId: `${event.type}-${event.savedAt || event.updatedAt || Date.now()}`
@@ -7358,6 +7368,10 @@
       }
       if (["skills-discovered", "skill-invocation-started", "skill-invocation-completed", "skill-invocation-failed", "skill-unavailable", "slash-workflow-expanded", "skills-changed", "schedule-created", "schedule-cancelled", "schedule-fired", "schedule-completed", "schedule-failed"].includes(event.type)) {
         updateWorkflowSkillSuggestions(event.skills);
+        appendAutonomousRuntimeStatus(event);
+        return;
+      }
+      if (/^hook-/.test(event.type)) {
         appendAutonomousRuntimeStatus(event);
         return;
       }

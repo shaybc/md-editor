@@ -29,6 +29,11 @@ const CAPABILITIES = Object.freeze({
   mcp_server_connect: { id: "external.server.connect", risk: "high", label: "Connect external capability servers", maxLifetime: "workspace" },
   mcp_tool_invoke: { id: "external.tool.invoke", risk: "high", label: "Invoke external capabilities", maxLifetime: "task" },
   extension_hook_run: { id: "extension.hook.execute", risk: "high", label: "Run extension hooks", maxLifetime: "task" },
+  lifecycle_hook_command: { id: "lifecycle.command.execute", risk: "high", label: "Run lifecycle commands", maxLifetime: "action" },
+  lifecycle_hook_http: { id: "lifecycle.network.request", risk: "high", label: "Send lifecycle web requests", maxLifetime: "action" },
+  lifecycle_hook_worker: { id: "lifecycle.worker.launch", risk: "medium", label: "Launch lifecycle workers", maxLifetime: "task" },
+  lifecycle_hook_model: { id: "lifecycle.model.request", risk: "medium", label: "Run lifecycle model checks", maxLifetime: "task" },
+  lifecycle_hook_callback: { id: "lifecycle.callback.invoke", risk: "high", label: "Invoke lifecycle application callbacks", maxLifetime: "action" },
   worker_workspace_create: { id: "worker.workspace.create", risk: "high", label: "Create delegated Git worktrees", maxLifetime: "action" },
   page_retrieve: { id: "network.domain.access", risk: "medium", label: "Retrieve pages from external domains", maxLifetime: "workspace" },
   run_command: { id: "shell.freeform", risk: "high", label: "Run free-form shell commands", maxLifetime: "action" }

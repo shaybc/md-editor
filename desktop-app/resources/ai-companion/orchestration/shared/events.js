@@ -29,6 +29,9 @@ const EVENT_TYPES = Object.freeze({
   INTERNET_SEARCH_COMPLETED: "internet-search-completed", PAGE_RETRIEVED: "page-retrieved",
   NOTEBOOK_INSPECTED: "notebook-inspected", NOTEBOOK_UPDATED: "notebook-updated",
   WORKSPACE_STRUCTURE_BUILT: "workspace-structure-built", SCHEDULE_RESTORED: "schedule-restored", SCHEDULE_MISSED: "schedule-missed",
+  HOOK_STARTED: "hook-started", HOOK_PROGRESS: "hook-progress", HOOK_COMPLETED: "hook-completed",
+  HOOK_SKIPPED: "hook-skipped", HOOK_BLOCKED: "hook-blocked", HOOK_FAILED: "hook-failed", HOOK_NOTIFICATION: "hook-notification",
+  HOOK_QUEUED: "hook-queued", HOOK_WAITING_APPROVAL: "hook-waiting-approval", HOOK_INPUT_REWRITTEN: "hook-input-rewritten",
   RUN_RESTORED: "run-restored", RECOVERY_WARNING: "recovery-warning",
   COMPACTION: "compaction", RUN_COMPLETED: "run-completed", RUN_CANCELLED: "run-cancelled", RUN_FAILED: "run-failed"
 });

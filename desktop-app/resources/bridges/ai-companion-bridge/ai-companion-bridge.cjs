@@ -364,6 +364,8 @@ async function handleRequest(session, message) {
       };
     } else if (message.action === "extensionsList") {
       result = await extensionService.listExtensions(request);
+    } else if (message.action === "lifecycleList") {
+      result = await extensionService.listLifecycleAutomation(request);
     } else if (message.action === "extensionConfigure") {
       result = await extensionService.configureExtension(request, message);
     } else if (message.action === "approvalGrantsList") {

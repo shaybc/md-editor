@@ -55,7 +55,7 @@ class SkillInvocationSession {
     };
     try {
       if (active.definition.hooks && !options.context?.hooks?.register) throw new Error("The current execution boundary cannot register workflow hooks.");
-      if (active.definition.hooks) options.context.hooks.register(skillHooks(record.name, active.definition.hooks));
+      if (active.definition.hooks) options.context.hooks.register(skillHooks(record.name, active.definition.hooks), { scope: "skill", trusted: true });
       if (record.executionContext === "inline" && record.model && options.context?.selectSkillModel) options.context.selectSkillModel(record.model);
       if (record.executionContext === "inline" && record.route && options.context?.selectSkillRoute) options.context.selectSkillRoute(record.route);
       else if (record.executionContext === "inline" && record.routePurpose && options.context?.selectSkillPurpose) options.context.selectSkillPurpose(record.routePurpose);
@@ -114,7 +114,7 @@ class SkillInvocationSession {
       record.routePurpose = active.definition.routePurpose;
       record.agent = active.definition.agent;
       const prefix = `skill:${record.name}:`;
-      if (context.hooks?.replacePrefix) context.hooks.replacePrefix(prefix, active.definition.hooks ? skillHooks(record.name, active.definition.hooks) : []);
+      if (context.hooks?.replacePrefix) context.hooks.replacePrefix(prefix, active.definition.hooks ? skillHooks(record.name, active.definition.hooks) : [], { scope: "skill", trusted: true });
       retained.push(record);
     }
     this.records = retained;
@@ -133,7 +133,7 @@ class SkillInvocationSession {
         if (!active) await this.invoke(record.name, record.args, { trigger: "restart-recovery" });
         else {
           if (active.definition.hooks && !context.hooks?.register) throw new Error("The current recovery boundary cannot register workflow hooks.");
-          if (active.definition.hooks && context.hooks?.register) context.hooks.register(skillHooks(record.name, active.definition.hooks));
+          if (active.definition.hooks && context.hooks?.register) context.hooks.register(skillHooks(record.name, active.definition.hooks), { scope: "skill", trusted: true });
           this.records.push({ ...record, allowedTools: Array.isArray(record.allowedTools) ? record.allowedTools.slice() : active.definition.allowedTools.slice(), allowedCapabilities: Array.isArray(record.allowedCapabilities) ? record.allowedCapabilities.slice() : active.definition.allowedCapabilities.slice() });
           this.activeNames.add(record.name);
         }
@@ -148,7 +148,10 @@ class SkillInvocationSession {
 }
 
 function skillHooks(name, hooks) {
-  const values = Array.isArray(hooks) ? hooks : (hooks.event ? [hooks] : Object.entries(hooks).map(([event, action]) => ({ event, action })));
+  const values = Array.isArray(hooks) ? hooks : (hooks.event ? [hooks] : Object.entries(hooks).flatMap(([event, definitions]) => {
+    const entries = Array.isArray(definitions) ? definitions : [definitions];
+    return entries.map((definition) => definition?.event ? definition : { event, action: definition?.action || definition });
+  }));
   return values.map((hook, index) => ({ ...hook, id: `skill:${name}:${hook.id || index + 1}` }));
 }
 

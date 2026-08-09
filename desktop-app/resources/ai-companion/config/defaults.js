@@ -36,6 +36,9 @@ const DEFAULT_AI_COMPANION_SETTINGS = Object.freeze({
   providerRoutes: [],
   internetSearchEndpoint: "",
   workspaceStructureAutoInclude: false,
+  trustWorkspaceHooks: false,
+  allowHookManagedApprovals: false,
+  lifecycleHooks: [],
   toolScopes: toolScopeRegistry.defaultToolScopes(),
   aiSecurityPolicy: {
     version: 1,
@@ -134,6 +137,9 @@ function normalizeAiCompanionSettings(settings = {}) {
     providerRoutes: normalizeProviderRoutes(source.providerRoutes),
     internetSearchEndpoint: String(source.internetSearchEndpoint || "").trim(),
     workspaceStructureAutoInclude: source.workspaceStructureAutoInclude === true,
+    trustWorkspaceHooks: source.trustWorkspaceHooks === true,
+    allowHookManagedApprovals: source.allowHookManagedApprovals === true,
+    lifecycleHooks: Array.isArray(source.lifecycleHooks) ? source.lifecycleHooks.slice(0, 100).map((entry) => JSON.parse(JSON.stringify(entry))) : [],
     toolScopes: toolScopeRegistry.normalizeToolScopes(source.toolScopes),
     aiSecurityPolicy: source.aiSecurityPolicy && typeof source.aiSecurityPolicy === "object" && !Array.isArray(source.aiSecurityPolicy)
       ? JSON.parse(JSON.stringify(source.aiSecurityPolicy))

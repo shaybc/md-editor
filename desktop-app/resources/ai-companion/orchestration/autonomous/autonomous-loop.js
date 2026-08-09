@@ -6,6 +6,7 @@ const { EVENT_TYPES } = require("../shared/events");
 const { createProviderDebugEmitter } = require("../../core/provider-debug");
 const { buildRuleActivationMessage, buildSkillActivationMessage, buildSkillDiscoveryMessage, serializeToolResult } = require("./context-builder");
 const { executeTool } = require("./tool-executor");
+const { validateToolInput } = require("./capabilities/tool-input-validator");
 const { isContextOverflowError } = require("./context/window-steward");
 const { buildModelResponseCorrection, findModelResponseIssue } = require("./model-response-guard");
 
@@ -24,6 +25,7 @@ async function runAutonomousLoop(input) {
   for (let round = 1; round <= maxRounds; round++) {
     context.currentRound = round;
     context.messages = messages;
+    for (const additionalContext of context.hooks?.drainContext?.() || []) messages.push({ role: "system", content: `Deferred lifecycle context:\n${additionalContext}` });
     const activatedRules = context.ruleCatalog?.consumeActivated?.() || [];
     const ruleMessage = buildRuleActivationMessage(activatedRules);
     if (ruleMessage) messages.push({ role: "system", content: ruleMessage });
@@ -50,6 +52,7 @@ async function runAutonomousLoop(input) {
     await context.saveSnapshot?.("running", { round, boundary: "before-model" });
     const beforeModel = await context.hooks?.run("before-model", { round });
     for (const additionalContext of beforeModel?.additionalContext || []) messages.push({ role: "system", content: `Lifecycle context:\n${additionalContext}` });
+    if (beforeModel?.continue === false) throw lifecycleStop(beforeModel.stopReason || "Lifecycle automation stopped the model request.");
     const response = await completeWithOverflowRecovery(context.activeProvider || provider, messages, {
       tools: currentTools,
       toolChoice: currentTools.length ? "auto" : undefined,
@@ -63,7 +66,9 @@ async function runAutonomousLoop(input) {
         events.emit({ type: "usage", ...usage, reported: true });
       }
     }, context);
-    await context.hooks?.run("after-model", { round, finishReason: response.finishReason, toolCount: response.toolCalls?.length || 0 });
+    const afterModel = await context.hooks?.run("after-model", { round, finishReason: response.finishReason, toolCount: response.toolCalls?.length || 0 });
+    for (const additionalContext of afterModel?.additionalContext || []) messages.push({ role: "system", content: `Lifecycle context after model response:\n${additionalContext}` });
+    if (afterModel?.continue === false) throw lifecycleStop(afterModel.stopReason || "Lifecycle automation stopped the run after a model response.");
     const responseIssue = findModelResponseIssue(response);
     if (responseIssue) {
       consecutiveRejectedResponses += 1;
@@ -91,8 +96,22 @@ async function runAutonomousLoop(input) {
         await context.workers.waitForChange();
         continue;
       }
+      const finalDecision = await context.hooks?.run("before-final", { round, content: String(response.content || "") });
+      for (const additionalContext of finalDecision?.additionalContext || []) messages.push({ role: "system", content: `Lifecycle context before completion:\n${additionalContext}` });
+      if (finalDecision?.continue === false) throw lifecycleStop(finalDecision.stopReason || "Lifecycle automation stopped the run before final publication.");
+      if (finalDecision?.retry === true || finalDecision?.additionalContext?.length) {
+        context.lifecycleContinuationCount = Number(context.lifecycleContinuationCount || 0) + 1;
+        if (context.lifecycleContinuationCount > 3) {
+          events.emit({ type: EVENT_TYPES.RECOVERY_WARNING, reason: "lifecycle-continuation-limit", summary: "Lifecycle completion checks reached their bounded continuation limit." });
+        } else {
+          messages.push({ role: "system", content: finalDecision?.stopReason || "A lifecycle completion check requested another model decision before finishing." });
+          await context.saveSnapshot?.("running", { round, boundary: "lifecycle-continuation" });
+          continue;
+        }
+      }
       await context.saveSnapshot?.("running", { round, boundary: "natural-completion" });
-      return String(response.content || "").trim();
+      if (finalDecision?.suppressOutput === true) return "";
+      return String(finalDecision?.updatedOutput ?? response.content ?? "").trim();
     }
     if (response.content) events.emit({ type: "narration", content: response.content });
 
@@ -103,31 +122,57 @@ async function runAutonomousLoop(input) {
       events.emit({ type: EVENT_TYPES.TOOL_STARTED, tool: name, callId: call.id, round });
       await context.chronicle?.append?.("tool-started", { round, tool: name, callId: call.id });
       try {
-        const beforeTool = await context.hooks?.run("before-tool", { tool: name, call });
+        const originalInput = parseToolArguments(call);
+        const beforeTool = await context.hooks?.run("before-tool", { tool: name, call, input: originalInput });
         for (const additionalContext of beforeTool?.additionalContext || []) messages.push({ role: "system", content: `Tool lifecycle context:\n${additionalContext}` });
+        if (beforeTool?.continue === false || beforeTool?.permissionDecision === "deny") {
+          await context.hooks?.run("tool-denied", { tool: name, call, input: originalInput, source: "lifecycle", reason: beforeTool.stopReason || "Lifecycle automation denied the tool." });
+          const error = new Error(beforeTool.stopReason || `Lifecycle automation denied ${name}.`);
+          error.code = "HOOK_TOOL_DENIED";
+          error.retryable = false;
+          error.doNotRetry = true;
+          throw error;
+        }
+        const effectiveCall = withToolInput(call, beforeTool?.updatedInput);
         const registration = context.capabilities?.registration?.(name);
-        await context.rulePathObserver?.beforeTool?.(name, parseToolArguments(call), registration);
-        await context.skillPathObserver?.beforeTool?.(name, parseToolArguments(call), registration);
-        const result = await executeTool(call, context);
-        await context.rulePathObserver?.afterTool?.(name, parseToolArguments(call), result, registration);
+        if (effectiveCall !== call) {
+          validateToolInput(registration?.definition?.function?.parameters, parseToolArguments(effectiveCall));
+          await context.chronicle?.append?.("tool-input-rewritten", { round, tool: name, callId: call.id, originalInput, effectiveInput: parseToolArguments(effectiveCall) });
+          events.emit({ type: "hook-input-rewritten", boundary: "before-tool", tool: name, callId: call.id, summary: "Lifecycle automation narrowed or changed tool input before validation and approval." });
+        }
+        await context.rulePathObserver?.beforeTool?.(name, parseToolArguments(effectiveCall), registration);
+        await context.skillPathObserver?.beforeTool?.(name, parseToolArguments(effectiveCall), registration);
+        const result = await executeTool(effectiveCall, context);
+        await context.rulePathObserver?.afterTool?.(name, parseToolArguments(effectiveCall), result, registration);
         await context.skillPathObserver?.afterTool?.(name, result, registration);
         consecutiveFailures = 0;
         events.emit({ type: EVENT_TYPES.TOOL_COMPLETED, tool: name, callId: call.id, result });
-        await context.hooks?.run("after-tool", { tool: name, call, result });
+        const afterTool = await context.hooks?.run("after-tool", { tool: name, call: effectiveCall, input: parseToolArguments(effectiveCall), result });
+        let effectiveResult = afterTool?.updatedOutput === undefined ? result : afterTool.updatedOutput;
+        if (afterTool?.updatedOutput !== undefined || afterTool?.suppressOutput === true) {
+          const raw = typeof result === "string" ? result : JSON.stringify(result);
+          const artifact = await context.artifactVault?.store?.(raw || "", { tool: name, callId: call.id, purpose: "lifecycle-original-output" });
+          await context.chronicle?.append?.("tool-output-rewritten", { round, tool: name, callId: call.id, originalArtifact: artifact?.id || "", suppressed: afterTool?.suppressOutput === true });
+          if (afterTool?.suppressOutput === true) effectiveResult = { suppressed: true, originalArtifact: artifact ? context.artifactVault.reference(artifact) : undefined };
+        }
+        for (const additionalContext of afterTool?.additionalContext || []) messages.push({ role: "system", content: `Lifecycle context after tool execution:\n${additionalContext}` });
+        if (afterTool?.continue === false) throw lifecycleStop(afterTool.stopReason || "Lifecycle automation stopped the run after tool execution.");
         await context.chronicle?.append?.("tool-completed", { round, tool: name, callId: call.id });
-        const toolMessage = { role: "tool", tool_call_id: call.id, content: await serializeRuntimeToolResult(result, name, call.id, context) };
+        const toolMessage = { role: "tool", tool_call_id: call.id, content: await serializeRuntimeToolResult(effectiveResult, name, call.id, context) };
         context.observationLedger?.register?.(toolMessage, { tool: name, callId: call.id, round });
         return toolMessage;
       } catch (error) {
+        if (error?.code === "LIFECYCLE_RUN_STOPPED") throw error;
         consecutiveFailures += 1;
         const message = error?.message || String(error);
         events.emit({ type: EVENT_TYPES.TOOL_FAILED, tool: name, callId: call.id, error: message });
-        await context.hooks?.run("tool-failure", { tool: name, call, error: message });
+        const failureDecision = await context.hooks?.run("tool-failure", { tool: name, call, error: message });
+        for (const additionalContext of failureDecision?.additionalContext || []) messages.push({ role: "system", content: `Lifecycle context after tool failure:\n${additionalContext}` });
         await context.chronicle?.append?.("tool-failed", { round, tool: name, callId: call.id, error: message });
         const toolMessage = { role: "tool", tool_call_id: call.id, content: JSON.stringify({
           error: message,
           code: error?.code || undefined,
-          retryable: error?.retryable === false ? false : consecutiveFailures < 3,
+          retryable: failureDecision?.retry === true ? true : (error?.retryable === false ? false : consecutiveFailures < 3),
           doNotRetry: error?.doNotRetry === true
         }) };
         context.observationLedger?.register?.(toolMessage, { tool: name, callId: call.id, round });
@@ -149,6 +194,19 @@ function parseToolArguments(call) {
   if (!value) return {};
   if (typeof value === "object") return value;
   try { return JSON.parse(value); } catch (_error) { return {}; }
+}
+
+function withToolInput(call, updatedInput) {
+  if (!updatedInput || typeof updatedInput !== "object") return call;
+  return { ...call, function: { ...call.function, arguments: JSON.stringify({ ...parseToolArguments(call), ...updatedInput }) } };
+}
+
+function lifecycleStop(message) {
+  const error = new Error(message);
+  error.name = "AbortError";
+  error.code = "LIFECYCLE_RUN_STOPPED";
+  error.doNotRetry = true;
+  return error;
 }
 
 async function completeWithOverflowRecovery(provider, messages, options, context) {

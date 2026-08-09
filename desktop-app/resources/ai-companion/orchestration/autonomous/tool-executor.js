@@ -188,10 +188,29 @@ async function executeTool(call, context) {
   }
   if (name === "mcp_read_resource") return context.mcp.readResource(args.serverId, args.uri);
   if (name === "mcp_get_prompt") return context.mcp.getPrompt(args.serverId, args.name, args.arguments);
-  if (name === "work_create") return context.work.create(args);
+  if (name === "work_create") {
+    const item = await context.work.create(args);
+    await context.hooks?.run("work-created", { item });
+    return item;
+  }
   if (name === "work_get") return context.work.get(args.id);
   if (name === "work_list") return context.work.list();
-  if (name === "work_update") return context.work.update(args.id, args);
+  if (name === "work_update") {
+    if (args.status === "completed") {
+      const decision = await context.hooks?.run("work-completing", { item: context.work.get(args.id), input: args });
+      if (decision?.continue === false) {
+        const error = new Error(decision.stopReason || "Lifecycle automation stopped work-item completion.");
+        error.code = "WORK_COMPLETION_STOPPED";
+        error.retryable = false;
+        error.doNotRetry = true;
+        throw error;
+      }
+    }
+    const item = await context.work.update(args.id, args);
+    await context.hooks?.run("work-updated", { item });
+    if (item?.status === "completed") await context.hooks?.run("work-completed", { item });
+    return item;
+  }
   if (name === "worker_launch") return context.workers.launch(args);
   if (name === "worker_list") return context.workers.list();
   if (name === "worker_message") return context.workers.message(args.id, args.message, args.summary);

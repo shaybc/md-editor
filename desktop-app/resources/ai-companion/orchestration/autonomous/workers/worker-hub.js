@@ -49,12 +49,13 @@ class WorkerHub {
     const agent = args.agentId ? await this.agentCatalog?.activate(args.agentId) : null;
     if (args.agentId && agent?.kind !== "agent") throw new Error(`Unknown agent definition: ${args.agentId}`);
     const authority = this.resolveAuthority(agent, args.isolation);
-    const entry = { id, description: String(args.description || "Delegated work"), prompt: String(args.prompt || ""), model: String(args.model || ""), routeId: String(args.routeId || agent?.metadata?.route || ""), routePurpose: String(args.routePurpose || agent?.metadata?.routePurpose || "worker"), agentId: agent?.id || "", status: "queued", background: args.background === true, inbox: [], messages: [], result: "", error: "", controller: new AbortController(), agent, authority, isolation: authority.isolation };
+    const entry = { id, description: String(args.description || "Delegated work"), prompt: String(args.prompt || ""), model: String(args.model || ""), routeId: String(args.routeId || agent?.metadata?.route || ""), routePurpose: String(args.routePurpose || agent?.metadata?.routePurpose || "worker"), agentId: agent?.id || "", allowedTools: Array.isArray(args.allowedTools) ? args.allowedTools.map(String) : [], status: "queued", background: args.background === true, inbox: [], messages: [], result: "", error: "", controller: new AbortController(), agent, authority, isolation: authority.isolation };
     entry.completion = new Promise((resolve) => { entry.resolveCompletion = resolve; });
     if (!entry.prompt.trim()) throw new Error("Worker launch requires a prompt.");
     this.entries.set(id, entry);
     this.pending.push(entry);
     this.events.emit({ type: "worker-queued", worker: publicEntry(entry) });
+    await this.parentContext.hooks?.run("worker-queued", { worker: publicEntry(entry) });
     this.schedule();
     if (!entry.background) await this.wait(id, { block: true, timeoutMs: 0 });
     return publicEntry(entry);
@@ -106,6 +107,7 @@ class WorkerHub {
     entry.status = "stopped";
     entry.resolveCompletion?.(publicEntry(entry));
     this.events.emit({ type: "worker-stopped", worker: publicEntry(entry) });
+    await this.parentContext.hooks?.run("worker-stopped", { worker: publicEntry(entry) });
     this.notifyChange();
     this.persistChange();
     return publicEntry(entry);
@@ -213,6 +215,7 @@ class WorkerHub {
 
   async run(entry) {
     this.events.emit({ type: "worker-started", worker: publicEntry(entry) });
+    await this.parentContext.hooks?.run("worker-started", { worker: publicEntry(entry) });
     let workerMcp = null;
     let ownsWorkerMcp = false;
     try {
@@ -223,6 +226,14 @@ class WorkerHub {
         signal: entry.controller.signal
       };
       entry.workspace = await resolveWorkerWorkspace(restrictedRequest, entry, []);
+      if (entry.workspace.root !== this.request.workspaceRoot) {
+        await this.parentContext.hooks?.run("worker-workspace-changed", {
+          worker: publicEntry(entry),
+          previousRoot: this.request.workspaceRoot,
+          workspaceRoot: entry.workspace.root,
+          reason: "worker-isolation-created"
+        });
+      }
       if (entry.authority.requiresWorktree && entry.workspace.isolation !== "worktree") {
         throw new Error(`Agent '${entry.agentId || entry.id}' requires worktree isolation, but an isolated workspace could not be created: ${entry.workspace.fallbackReason || "unknown reason"}`);
       }
@@ -236,7 +247,11 @@ class WorkerHub {
       const parentDefinitions = parentRegistrations.length
         ? parentRegistrations.map((record) => record.definition)
         : (this.parentContext.capabilities.definitions?.() || []);
-      const scopedDefinitions = AgentAuthorityResolver.filterDefinitions(parentDefinitions, entry.authority);
+      const authorityDefinitions = AgentAuthorityResolver.filterDefinitions(parentDefinitions, entry.authority);
+      const allowedToolNames = new Set(entry.allowedTools || []);
+      const scopedDefinitions = allowedToolNames.size
+        ? authorityDefinitions.filter((definition) => allowedToolNames.has(definition.function?.name))
+        : authorityDefinitions;
       const scopedNames = new Set(scopedDefinitions.map((definition) => definition.function?.name));
       const registrations = parentRegistrations.length
         ? parentRegistrations.filter((record) => scopedNames.has(record.name))
@@ -348,23 +363,33 @@ class WorkerHub {
       const result = await runAutonomousLoop({ provider, messages: entry.messages, tools: capabilities.providerDefinitions(), getTools: () => capabilities.providerDefinitions(), request: context.request, events: workerEvents, context });
       entry.result = String(result || "").slice(0, MAX_RESULT_CHARS);
       entry.status = "completed";
+      const previousWorkspace = entry.workspace;
       entry.workspace = await finishWorkerWorkspace(this.request, entry.workspace);
+      if (previousWorkspace?.root !== entry.workspace?.root) {
+        await this.parentContext.hooks?.run("worker-workspace-changed", {
+          worker: publicEntry(entry),
+          previousRoot: previousWorkspace.root,
+          workspaceRoot: entry.workspace?.root || this.request.workspaceRoot,
+          reason: entry.workspace?.retained ? "worker-isolation-retained" : "worker-isolation-closed"
+        });
+      }
       if (ownsWorkerMcp) await workerMcp.closeAll();
-      this.complete(entry, "worker-completed");
+      await this.complete(entry, "worker-completed");
     } catch (error) {
       if (ownsWorkerMcp) await workerMcp.closeAll().catch(() => {});
       entry.error = error?.message || String(error);
       entry.status = entry.controller.signal.aborted ? "stopped" : "failed";
-      this.complete(entry, entry.status === "stopped" ? "worker-stopped" : "worker-failed");
+      await this.complete(entry, entry.status === "stopped" ? "worker-stopped" : "worker-failed");
     }
     return publicEntry(entry);
   }
 
-  complete(entry, type) {
+  async complete(entry, type) {
     const snapshot = publicEntry(entry);
     entry.resolveCompletion?.(snapshot);
     this.notifications.push(snapshot);
     this.events.emit({ type, worker: snapshot });
+    await this.parentContext.hooks?.run(type, { worker: snapshot });
     this.persistChange();
   }
 
@@ -406,6 +431,7 @@ function privateEntry(entry) {
     ...publicEntry(entry),
     prompt: entry.prompt,
     model: entry.model || "",
+    allowedTools: Array.isArray(entry.allowedTools) ? entry.allowedTools.slice() : [],
     inbox: JSON.parse(JSON.stringify(entry.inbox || [])),
     messages: JSON.parse(JSON.stringify(entry.messages || [])),
     observationRelease: JSON.parse(JSON.stringify(entry.observationRelease || {})),
@@ -425,6 +451,7 @@ function restoredEntry(snapshot, agent, authority, status) {
     description: String(snapshot.description || "Delegated work"),
     prompt: String(snapshot.prompt || ""),
     model: String(snapshot.model || ""),
+    allowedTools: Array.isArray(snapshot.allowedTools) ? snapshot.allowedTools.map(String) : [],
     routeId: String(snapshot.routeId || ""),
     routePurpose: String(snapshot.routePurpose || agent?.metadata?.routePurpose || "worker"),
     agentId: String(agent?.id || snapshot.agentLogicalId || snapshot.agentId || ""),

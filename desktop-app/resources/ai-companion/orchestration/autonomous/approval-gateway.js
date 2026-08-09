@@ -18,14 +18,23 @@ async function authorizeTool(request, name, args, taskGrants, controls) {
   if (!descriptor) return { approved: true };
   descriptor = enforceAgentAuthority(request.agentAuthority, descriptor);
   const priorDenial = controls.denialLedger?.check?.(name, args, descriptor);
-  if (priorDenial) return { approved: false, doNotRetry: true, denialFingerprint: priorDenial.fingerprint, instructions: priorDenial.instructions || priorDenial.reason };
+  if (priorDenial) {
+    await notifyPermissionDenied(request, name, args, "prior-denial", priorDenial.instructions || priorDenial.reason, controls);
+    return permissionResolved(request, name, args, {
+      approved: false,
+      doNotRetry: true,
+      denialFingerprint: priorDenial.fingerprint,
+      instructions: priorDenial.instructions || priorDenial.reason,
+      source: "prior-denial"
+    }, controls);
+  }
   const store = request.profileRoot ? new ApprovalGrantStore(request.profileRoot, request.workspaceRoot) : null;
   const workspaceGrants = store ? (await store.list()).rules : [];
   const existing = approvalPolicy.resolveCapabilityApprovalDecision({ descriptor, taskGrants, workspaceGrants, effectiveSecurityPolicy: request.securityContext?.policy });
   if (existing.allowed) {
     if (existing.scope === "workspace") await store?.touch?.(existing.ruleId);
     controls.denialLedger?.recordSuccess?.();
-    return { approved: true, automatic: true, approvalSource: existing.scope || "grant" };
+    return permissionResolved(request, name, args, { approved: true, automatic: true, approvalSource: existing.scope || "grant" }, controls);
   }
   const modeDecision = existing.protected ? { decision: "prompt", reason: "Protected resources require action-specific confirmation." }
     : await controls.permissionPolicy?.resolve?.(descriptor, {
@@ -37,11 +46,25 @@ async function authorizeTool(request, name, args, taskGrants, controls) {
     });
   if (modeDecision?.decision === "allow") {
     controls.denialLedger?.recordSuccess?.();
-    return { approved: true, automatic: true, permissionMode: true, approvalSource: "permission-mode" };
+    return permissionResolved(request, name, args, { approved: true, automatic: true, permissionMode: true, approvalSource: "permission-mode" }, controls);
   }
   if (modeDecision?.decision === "deny") {
     const denial = controls.denialLedger?.record?.(name, args, descriptor, { source: "mode", reason: modeDecision.reason });
-    return { approved: false, doNotRetry: true, denialFingerprint: denial?.fingerprint, instructions: modeDecision.reason };
+    await notifyPermissionDenied(request, name, args, "mode", modeDecision.reason, controls);
+    return permissionResolved(request, name, args, { approved: false, doNotRetry: true, denialFingerprint: denial?.fingerprint, instructions: modeDecision.reason, source: "mode" }, controls);
+  }
+  if (controls.skipLifecycleHooks !== true && request.lifecycleHooks?.run) {
+    const hookDecision = await request.lifecycleHooks.run("permission-request", { tool: name, input: args, capability: descriptor.capability, resource: descriptor.resource });
+    if (hookDecision?.permissionDecision === "deny" || hookDecision?.continue === false) {
+      const reason = hookDecision.stopReason || "Lifecycle automation denied this permission request.";
+      const denial = controls.denialLedger?.record?.(name, args, descriptor, { source: "hook", reason });
+      await notifyPermissionDenied(request, name, args, "hook", reason, controls);
+      return permissionResolved(request, name, args, { approved: false, doNotRetry: true, denialFingerprint: denial?.fingerprint, instructions: reason, source: "hook" }, controls);
+    }
+    if (hookDecision?.permissionDecision === "allow" && hookDecision.permissionTrusted === true && request.settings?.allowHookManagedApprovals === true) {
+      controls.denialLedger?.recordSuccess?.();
+      return permissionResolved(request, name, args, { approved: true, automatic: true, approvalSource: "trusted-lifecycle-hook" }, controls);
+    }
   }
   if (typeof request.requestApproval !== "function") throw new Error("This action requires approval, but no approval channel is available.");
   const commandImpact = controls.commandAnalysis ? publicCommandImpact(controls.commandAnalysis) : undefined;
@@ -54,12 +77,33 @@ async function authorizeTool(request, name, args, taskGrants, controls) {
   });
   if (!decision?.approved) {
     const denial = controls.denialLedger?.record?.(name, args, descriptor, { source: "user", reason: "The user denied this action.", instructions: String(decision?.instructions || "") });
-    return { approved: false, doNotRetry: true, denialFingerprint: denial?.fingerprint, instructions: String(decision?.instructions || "") };
+    await notifyPermissionDenied(request, name, args, "user", String(decision?.instructions || "The user denied this action."), controls);
+    return permissionResolved(request, name, args, { approved: false, doNotRetry: true, denialFingerprint: denial?.fingerprint, instructions: String(decision?.instructions || ""), source: "user" }, controls);
   }
   const option = decision.grantOptionId ? approvalPolicy.validateGrantOption(descriptor, decision.grantOptionId, request.securityContext?.policy) : null;
   if (option?.lifetime === "task") taskGrants.push(approvalPolicy.createGrantRule(descriptor, option));
   controls.denialLedger?.recordSuccess?.();
-  return { approved: true, approvalSource: "user" };
+  return permissionResolved(request, name, args, { approved: true, approvalSource: "user" }, controls);
+}
+
+async function permissionResolved(request, tool, input, result, controls) {
+  if (controls.skipLifecycleHooks !== true && request.lifecycleHooks?.run) {
+    await request.lifecycleHooks.run("permission-resolved", {
+      tool,
+      input,
+      approved: result.approved === true,
+      source: result.approvalSource || result.source || "policy",
+      reason: String(result.instructions || result.reason || "")
+    });
+  }
+  return result;
+}
+
+async function notifyPermissionDenied(request, tool, input, source, reason, controls) {
+  if (controls.skipLifecycleHooks === true || !request.lifecycleHooks?.run) return;
+  const payload = { tool, input, source, reason: String(reason || "") };
+  await request.lifecycleHooks.run("permission-denied", payload);
+  await request.lifecycleHooks.run("tool-denied", payload);
 }
 
 function enforceAgentAuthority(authority, descriptor) {

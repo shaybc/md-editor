@@ -16,11 +16,14 @@ class InteractionGate {
   async requestChoice(input = {}) {
     if (this.pending) throw interactionError("USER_INPUT_ALREADY_PENDING", "A user decision is already pending for this run.");
     if (typeof this.request.requestUserInput !== "function") throw interactionError("USER_INPUT_CHANNEL_UNAVAILABLE", "Interactive user input is unavailable.");
-    const questions = normalizeQuestions(input.questions);
+    const hookDecision = await this.request.lifecycleHooks?.run?.("user-input-request", { input });
+    if (hookDecision?.continue === false) throw interactionError("USER_INPUT_STOPPED", hookDecision.stopReason || "Lifecycle automation stopped the user question.");
+    const effectiveInput = hookDecision?.updatedInput ? { ...input, ...hookDecision.updatedInput } : input;
+    const questions = normalizeQuestions(effectiveInput.questions);
     const interaction = {
       id: crypto.randomUUID(),
       questions,
-      reason: String(input.reason || "").trim().slice(0, 500),
+      reason: String(effectiveInput.reason || "").trim().slice(0, 500),
       requestedAt: new Date().toISOString()
     };
     this.pending = interaction;
@@ -29,6 +32,7 @@ class InteractionGate {
     try {
       const response = await this.request.requestUserInput(publicInteraction(interaction));
       const result = normalizeResponse(interaction, response);
+      await this.request.lifecycleHooks?.run?.(result.declined ? "user-input-declined" : "user-input-resolved", { interaction: publicInteraction(interaction), result });
       this.emit({
         type: result.declined ? "user-input-declined" : "user-input-resolved",
         interactionId: interaction.id,

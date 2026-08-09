@@ -9498,6 +9498,38 @@ body.tab-style-legacy .tab-reset-btn:disabled:hover {
   grid-template-columns: minmax(130px, 0.8fr) minmax(130px, 0.8fr) minmax(180px, 1.2fr) auto;
 }
 
+.settings-ai-lifecycle-table .settings-table-header,
+.settings-ai-lifecycle-table .settings-table-row {
+  grid-template-columns: minmax(140px, 1fr) minmax(110px, .65fr) minmax(140px, .9fr) minmax(70px, .35fr) minmax(70px, .35fr) auto;
+}
+
+.settings-ai-lifecycle-box {
+  position: relative;
+  width: min(820px, calc(100vw - 48px));
+  max-height: calc(100vh - 64px);
+  overflow-y: auto;
+  box-sizing: border-box;
+  text-align: left;
+}
+
+.settings-ai-lifecycle-form {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.settings-ai-lifecycle-action-editor {
+  grid-column: 1 / -1;
+  display: grid;
+  gap: 10px;
+}
+
+.settings-ai-lifecycle-action-editor .settings-table-row {
+  grid-template-columns: minmax(130px, .5fr) minmax(220px, 1fr) auto;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+}
+
 .settings-ai-connection-row > span:not(.settings-table-actions) {
   min-width: 0;
   overflow: hidden;

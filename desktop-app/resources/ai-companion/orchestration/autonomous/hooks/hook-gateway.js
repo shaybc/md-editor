@@ -1,98 +1,176 @@
-/** Executes declarative lifecycle hooks through retained security boundaries. */
+/** Dispatches lifecycle automation through guarded action executors. */
 
 "use strict";
 
-const path = require("node:path");
-const { StructuredExecutionBroker } = require("../../../security/structured-execution-broker");
-const { authorizeTool } = require("../approval-gateway");
+const crypto = require("node:crypto");
+const { AutomationRepetitionGuard } = require("./automation-repetition-guard");
+const { BackgroundActionRegistry } = require("./background-action-registry");
+const { combineHookDecisions } = require("./hook-decision-aggregator");
+const { normalizeHookDefinition } = require("./hook-definition-policy");
+const { LifecycleActionRegistry } = require("./lifecycle-action-registry");
+const { lifecycleEventPolicy, normalizeLifecycleEvent, EVENT_POLICIES } = require("./lifecycle-event-catalog");
+const { matchesLifecycleHook } = require("./hook-matcher");
 
-const PRE_EVENTS = new Set(["run-start", "before-model", "before-tool", "before-compaction"]);
-const SUPPORTED_EVENTS = new Set([...PRE_EVENTS, "run-finish", "after-model", "after-tool", "tool-failure", "after-compaction"]);
+const PRE_EVENTS = new Set(Object.entries(EVENT_POLICIES).filter(([, policy]) => policy.phase === "before").map(([event]) => event));
+const SUPPORTED_EVENTS = new Set(Object.keys(EVENT_POLICIES));
+const DEFERRED_CONTEXT_EVENTS = new Set(["file-changed", "workspace-changed", "configuration-changed", "schedule-fired", "schedule-completed", "schedule-failed", "worker-workspace-changed", "worker-completed", "worker-failed"]);
 
 class HookGateway {
-  constructor(request, entries, emit = () => {}) {
+  constructor(request, entries = [], emit = () => {}, options = {}) {
     this.request = request;
     this.emit = emit;
-    this.taskGrants = [];
-    this.running = false;
-    this.hooks = (entries || []).map(normalizeHook);
+    this.runningDepth = 0;
+    this.hooks = entries.map((entry) => isNormalizedHook(entry) ? entry : normalizeHookDefinition(entry, { scope: entry.scope || "extension", id: entry.id, trusted: entry.trusted !== false }));
+    this.guard = new AutomationRepetitionGuard(options.guardState);
+    this.background = new BackgroundActionRegistry(emit);
+    this.actions = new LifecycleActionRegistry(request, emit);
+    this.deliveredNotifications = [];
+    this.deferredContext = [];
+    this.failureState = new Map();
+    this.catalogFingerprint = fingerprint(this.hooks);
   }
 
-  register(entries) {
-    const normalized = Array.from(entries || [], normalizeHook);
-    this.hooks.push(...normalized);
+  /** Attach the composed autonomous run context and callback services. */
+  setContext(context) { this.context = context; this.actions.setContext(context); }
+  registerCallback(id, callback) { this.actions.registerCallback(id, callback); }
+  register(entries, source = {}) {
+    let declarationOrder = this.hooks.reduce((maximum, hook) => Math.max(maximum, Number(hook.declarationOrder) || 0), -1) + 1;
+    this.hooks.push(...Array.from(entries || [], (entry) => {
+      const hook = isNormalizedHook(entry) ? entry : normalizeHookDefinition(entry, source);
+      return { ...hook, declarationOrder: Number.isFinite(Number(hook.declarationOrder)) ? Number(hook.declarationOrder) : declarationOrder++ };
+    }));
+    this.hooks.sort((left, right) => Number(right.priority || 0) - Number(left.priority || 0) || Number(left.declarationOrder || 0) - Number(right.declarationOrder || 0));
+    this.catalogFingerprint = fingerprint(this.hooks);
   }
+  replacePrefix(prefix, entries, source = {}) { this.hooks = this.hooks.filter((hook) => !hook.id.startsWith(prefix)); this.register(entries, source); }
 
-  replacePrefix(prefix, entries) {
-    const normalized = Array.from(entries || [], normalizeHook);
-    this.hooks = this.hooks.filter((hook) => !hook.id.startsWith(prefix));
-    this.hooks.push(...normalized);
-  }
-
-  /** Run matching hooks in declaration order and return bounded injected context. */
-  async run(event, payload = {}) {
-    if (!SUPPORTED_EVENTS.has(event) || this.running) return { additionalContext: [] };
-    const matched = this.hooks.filter((hook) => hook.event === event && matchesHook(hook, payload));
-    const additionalContext = [];
-    this.running = true;
-    try {
-      for (const hook of matched) {
-        this.emit({ type: "hook-started", hookId: hook.id, event });
-        try {
-          const result = hook.action.type === "context" ? { additionalContext: hook.action.content } : await this.runCommand(hook, payload);
-          if (result?.decision === "deny") throw Object.assign(new Error(result.message || `Hook '${hook.id}' denied the action.`), { code: "EXTENSION_HOOK_DENIED" });
-          if (result?.additionalContext) additionalContext.push(String(result.additionalContext).slice(0, 12000));
-          this.emit({ type: "hook-completed", hookId: hook.id, event });
-        } catch (error) {
-          this.emit({ type: "hook-failed", hookId: hook.id, event, error: error?.message || String(error), failClosed: PRE_EVENTS.has(event) });
-          if (PRE_EVENTS.has(event)) throw error;
-        }
+  /** Run matching hooks in stable order and return their normalized decision. */
+  async run(rawEvent, payload = {}) {
+    const event = normalizeLifecycleEvent(rawEvent);
+    if (!lifecycleEventPolicy(event)) return emptyDecision();
+    const matched = this.hooks.filter((hook) => hook.enabled && hook.event === event && matchesLifecycleHook(hook.matcher, payload));
+    const results = [];
+    for (const hook of matched) {
+      const failure = this.failureState.get(hook.id);
+      if (failure?.openUntil > Date.now()) {
+        this.emit({ type: "hook-skipped", hookId: hook.id, event, reason: "failure circuit is cooling down", retryAt: new Date(failure.openUntil).toISOString() });
+        continue;
       }
-    } finally {
-      this.running = false;
+      const guard = this.guard.allow(hook, event, payload, this.runningDepth);
+      if (!guard.allowed) { this.emit({ type: "hook-skipped", hookId: hook.id, event, reason: guard.reason }); continue; }
+      this.guard.record(hook, guard.key);
+      if (hook.background) { this.startBackground(hook, event, payload); continue; }
+      results.push(await this.executeHook(hook, event, payload));
     }
-    return { additionalContext };
+    const decision = combineHookDecisions(results);
+    if (DEFERRED_CONTEXT_EVENTS.has(event) && decision.additionalContext?.length) {
+      this.deferredContext.push(...decision.additionalContext);
+      this.deferredContext = this.deferredContext.slice(-20);
+    }
+    if (decision.watchPaths?.length) {
+      const existing = this.context?.lifecycleObserver?.snapshot?.().watchPaths || [];
+      this.context?.lifecycleObserver?.update?.([...existing, ...decision.watchPaths]);
+    }
+    return decision;
   }
 
-  async runCommand(hook, payload) {
-    const approval = await authorizeTool(this.request, "extension_hook_run", { hookId: hook.id }, this.taskGrants);
-    if (!approval.approved) throw new Error(`Execution of hook '${hook.id}' was denied.`);
-    const broker = new StructuredExecutionBroker();
-    const action = hook.action;
-    const result = await broker.execute({
-      workspaceRoot: this.request.workspaceRoot,
-      cwd: path.resolve(this.request.workspaceRoot, action.cwd || "."),
-      executable: action.executable,
-      args: action.args.map((value) => interpolate(value, payload)),
-      environment: action.environment
-    }, this.request.securityContext?.policy, { signal: this.request.signal });
-    await this.request.securityContext?.auditLogger?.record({ timestamp: new Date().toISOString(), requestId: this.request.requestId, workspace: this.request.workspaceRoot, tool: "extension_hook_run", hookId: hook.id, decision: result.success ? "executed-success" : "executed-failure" });
-    if (!result.success) throw new Error(result.stderr || `Hook '${hook.id}' exited with code ${result.exitCode}.`);
-    try { return JSON.parse(result.stdout || "{}"); } catch (_error) { return { additionalContext: result.stdout }; }
+  startBackground(hook, event, payload) {
+    const entry = this.background.start({ hookId: hook.id, event, actionTypes: hook.actions.map((action) => action.type) }, () => this.executeHook(hook, event, payload));
+    entry.promise.catch((error) => {
+      this.emit({ type: "hook-failed", hookId: hook.id, event, error: error?.message || String(error), background: true });
+      if (hook.wakeOnFailure) this.context?.messages?.push?.({ role: "system", content: `A background lifecycle action failed: ${error?.message || String(error)}` });
+    });
   }
+
+  async executeHook(hook, event, payload) {
+    this.emit({ type: "hook-started", hookId: hook.id, event, source: hook.source.scope });
+    const startedAt = Date.now();
+    this.runningDepth += 1;
+    try {
+      const actionResults = [];
+      let actionPayload = { ...payload };
+      for (const [index, action] of hook.actions.entries()) {
+        this.emit({ type: "hook-progress", hookId: hook.id, event, action: action.type, actionIndex: index });
+        const result = await withTimeout(
+          (signal) => this.actions.execute({ ...action, actionIndex: index }, event, { ...actionPayload, previousResults: actionResults }, hook, { signal }),
+          hook.timeoutMs,
+          this.request.signal
+        );
+        actionResults.push(result);
+        if (result?.updatedInput && typeof result.updatedInput === "object") actionPayload = { ...actionPayload, input: { ...(actionPayload.input || {}), ...result.updatedInput } };
+        if (result?.updatedPrompt != null) actionPayload = { ...actionPayload, prompt: String(result.updatedPrompt) };
+        if (result?.updatedOutput !== undefined) actionPayload = { ...actionPayload, output: result.updatedOutput };
+      }
+      const decision = combineHookDecisions(actionResults);
+      if (decision.permissionDecision) decision.permissionTrusted = hook.source.trusted === true;
+      if (decision.watchPaths?.length && hook.source.trusted !== true) {
+        delete decision.watchPaths;
+        decision.notifications = [...(decision.notifications || []), { level: "warning", message: "An untrusted lifecycle source cannot add watched paths." }];
+      }
+      for (const notification of decision.notifications || []) {
+        this.deliveredNotifications.push({ hookId: hook.id, event, ...notification, deliveredAt: new Date().toISOString() });
+        this.emit({ type: "hook-notification", hookId: hook.id, event, ...notification });
+      }
+      this.deliveredNotifications = this.deliveredNotifications.slice(-100);
+      this.failureState.delete(hook.id);
+      this.emit({ type: decision.continue === false ? "hook-blocked" : "hook-completed", hookId: hook.id, event, source: hook.source.scope, durationMs: Date.now() - startedAt, decision: publicDecision(decision) });
+      return decision;
+    } catch (error) {
+      const previous = this.failureState.get(hook.id) || { count: 0, openUntil: 0 };
+      const count = previous.count + 1;
+      const openUntil = count >= 3 ? Date.now() + 300000 : 0;
+      this.failureState.set(hook.id, { count, openUntil });
+      const blocks = hook.onError === "block" || hook.onError === "stop-run";
+      this.emit({ type: "hook-failed", hookId: hook.id, event, error: error?.message || String(error), failClosed: blocks, circuitOpened: Boolean(openUntil) });
+      if (hook.onError === "stop-run") {
+        error.name = "AbortError";
+        error.code = "LIFECYCLE_RUN_STOPPED";
+        error.doNotRetry = true;
+        throw error;
+      }
+      if (blocks) throw error;
+      return { notifications: [{ level: "warning", message: `Lifecycle hook '${hook.localId}' failed: ${error?.message || String(error)}` }] };
+    } finally { this.runningDepth -= 1; }
+  }
+
+  drainContext() { return this.deferredContext.splice(0); }
+  snapshot() { return { version: 2, catalogFingerprint: this.catalogFingerprint, guard: this.guard.snapshot(), failures: Array.from(this.failureState.entries()), activeSequenceDepth: this.runningDepth, background: this.background.snapshot(), deliveredNotifications: this.deliveredNotifications.slice(), deferredContext: this.deferredContext.slice() }; }
+  restore(snapshot = {}) {
+    this.guard.restore(snapshot.guard || {});
+    this.failureState = new Map(Array.isArray(snapshot.failures) ? snapshot.failures : []);
+    this.background.restore(snapshot.background || {});
+    this.deliveredNotifications = Array.isArray(snapshot.deliveredNotifications) ? snapshot.deliveredNotifications.slice(-100) : [];
+    this.deferredContext = Array.isArray(snapshot.deferredContext) ? snapshot.deferredContext.slice(-20) : [];
+    if (snapshot.catalogFingerprint && snapshot.catalogFingerprint !== this.catalogFingerprint) this.emit({ type: "recovery-warning", reason: "lifecycle-catalog-changed", summary: "Lifecycle automation definitions changed since the saved run and were revalidated." });
+    if (snapshot.activeSequenceDepth) this.emit({ type: "recovery-warning", reason: "lifecycle-sequence-interrupted", summary: "An active lifecycle sequence was interrupted and was not replayed." });
+  }
+  async close() { await this.background.drain(); }
 }
 
-function normalizeHook(entry) {
-  const source = entry?.metadata || entry || {};
-  const id = String(source.id || entry?.id || "").trim();
-  const event = String(source.event || "").trim();
-  if (!id || !SUPPORTED_EVENTS.has(event)) throw new Error("Hook definitions require an id and supported event.");
-  const action = source.action || {};
-  if (action.type === "context") return { id, event, matcher: source.matcher || {}, action: { type: "context", content: String(action.content || "") } };
-  if (action.type !== "command" || !String(action.executable || "").trim()) throw new Error(`Hook '${id}' requires a context or command action.`);
-  return { id, event, matcher: source.matcher || {}, action: { type: "command", executable: String(action.executable), args: Array.isArray(action.args) ? action.args.map(String) : [], cwd: String(action.cwd || ""), environment: action.environment || {} } };
+function emptyDecision() { return { additionalContext: [] }; }
+function isNormalizedHook(value) { return Boolean(value?.localId && value?.source && Array.isArray(value.actions)); }
+function publicDecision(value) { return { continue: value.continue !== false, permissionDecision: value.permissionDecision, contextCount: value.additionalContext?.length || 0, notificationCount: value.notifications?.length || 0, inputUpdated: Boolean(value.updatedInput), promptUpdated: value.updatedPrompt != null }; }
+function fingerprint(value) { return crypto.createHash("sha256").update(JSON.stringify(value || [])).digest("hex"); }
+function withTimeout(operation, timeoutMs, signal) {
+  if (signal?.aborted) return Promise.reject(Object.assign(new Error("Lifecycle action cancelled."), { name: "AbortError" }));
+  const controller = new AbortController();
+  const cancel = () => controller.abort(signal?.reason || Object.assign(new Error("Lifecycle action cancelled."), { name: "AbortError" }));
+  signal?.addEventListener?.("abort", cancel, { once: true });
+  let timer;
+  const timeout = new Promise((_resolve, reject) => {
+    timer = setTimeout(() => {
+      const error = new Error(`Lifecycle action timed out after ${timeoutMs} ms.`);
+      error.code = "LIFECYCLE_ACTION_TIMEOUT";
+      controller.abort(error);
+      reject(error);
+    }, timeoutMs);
+    timer.unref?.();
+  });
+  return Promise.race([Promise.resolve().then(() => operation(controller.signal)), timeout])
+    .finally(() => {
+      clearTimeout(timer);
+      signal?.removeEventListener?.("abort", cancel);
+    });
 }
 
-function matchesHook(hook, payload) {
-  const toolPattern = String(hook.matcher?.tool || "").trim();
-  if (!toolPattern) return true;
-  const expression = new RegExp(`^${toolPattern.split("*").map(escapeRegex).join(".*")}$`, "i");
-  return expression.test(String(payload.tool || payload.call?.function?.name || ""));
-}
-
-function escapeRegex(value) { return value.replace(/[|\\{}()[\]^$+?.]/g, "\\$&"); }
-function interpolate(value, payload) {
-  return String(value).replace(/\$\{tool\}/g, String(payload.tool || payload.call?.function?.name || ""));
-}
-
-module.exports = { HookGateway, PRE_EVENTS, SUPPORTED_EVENTS, matchesHook, normalizeHook };
+module.exports = { HookGateway, PRE_EVENTS, SUPPORTED_EVENTS, matchesHook: matchesLifecycleHook, normalizeHook: normalizeHookDefinition };

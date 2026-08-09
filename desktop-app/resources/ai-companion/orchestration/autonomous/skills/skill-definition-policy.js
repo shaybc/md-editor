@@ -3,11 +3,13 @@
 "use strict";
 
 const { ROUTE_PURPOSES } = require("../routing/provider-route-catalog");
+const { normalizeHookDefinition } = require("../hooks/hook-definition-policy");
+const { EVENT_POLICIES } = require("../hooks/lifecycle-event-catalog");
 
 const MODES = new Set(["chat", "plan", "agent"]);
 const EXECUTION_CONTEXTS = new Set(["inline", "worker"]);
 const COMMAND_PATTERN = /^[a-z0-9][a-z0-9:_-]{1,79}$/;
-const HOOK_EVENTS = new Set(["before-model", "before-tool", "before-compaction", "run-finish", "after-model", "after-tool", "tool-failure", "after-compaction"]);
+const HOOK_EVENTS = new Set(Object.keys(EVENT_POLICIES));
 
 class SkillDefinitionPolicy {
   /** Normalize one skill definition and report every invalid field. */
@@ -86,13 +88,17 @@ function pathIsUnsafe(value) {
 
 function validateHooks(hooks) {
   if (!hooks) return [];
-  const values = Array.isArray(hooks) ? hooks : (hooks.event ? [hooks] : Object.entries(hooks).map(([event, action]) => ({ event, action })));
+  const values = Array.isArray(hooks) ? hooks : (hooks.event ? [hooks] : Object.entries(hooks).flatMap(([event, definitions]) => {
+    const entries = Array.isArray(definitions) ? definitions : [definitions];
+    return entries.map((definition) => definition?.event ? definition : { event, action: definition?.action || definition });
+  }));
   const errors = [];
-  for (const hook of values) {
-    if (!HOOK_EVENTS.has(String(hook?.event || ""))) { errors.push(`Unsupported skill hook event: ${hook?.event || "missing"}.`); continue; }
-    const action = hook?.action || {};
-    if (!["context", "command"].includes(action.type)) errors.push("Skill hooks require a context or command action.");
-    if (action.type === "command" && !String(action.executable || "").trim()) errors.push("Skill command hooks require an executable.");
+  for (const [index, hook] of values.entries()) {
+    try {
+      normalizeHookDefinition({ ...hook, id: hook?.id || `skill-hook-${index + 1}` }, { scope: "skill", id: hook?.id || `skill-hook-${index + 1}`, trusted: true });
+    } catch (error) {
+      errors.push(error?.message || String(error));
+    }
   }
   return errors;
 }

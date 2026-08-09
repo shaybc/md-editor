@@ -24,7 +24,10 @@ class RunScheduler {
     this.filePath = companionProfilePath(request.profileRoot, "schedules.json");
     this.entries = [];
     this.queue = Promise.resolve();
+    this.lifecycle = null;
   }
+
+  setLifecycleGateway(gateway) { this.lifecycle = gateway; }
 
   async load() {
     if (this.filePath) {
@@ -124,6 +127,7 @@ class RunScheduler {
       if (timer) clearTimeout(timer);
       ACTIVE_TIMERS.delete(entry.id);
       this.emit({ type: "schedule-fired", id: entry.id, summary: "Scheduled autonomous task is ready." });
+      await this.lifecycle?.run?.("schedule-fired", { schedule: publicEntry(entry), source: "claim" });
     }
     if (due.length) await this.save();
     return due.map(publicEntry);
@@ -142,6 +146,7 @@ class RunScheduler {
     } else entry.status = entry.lastError ? "failed" : "completed";
     await this.save();
     this.emit({ type: entry.lastError ? "schedule-failed" : "schedule-completed", id: entry.id, error: entry.lastError || undefined, summary: entry.lastError ? "Scheduled autonomous task failed." : "Scheduled autonomous task completed." });
+    await this.lifecycle?.run?.(entry.lastError ? "schedule-failed" : "schedule-completed", { schedule: publicEntry(entry), error: entry.lastError || undefined });
     return publicEntry(entry);
   }
 
@@ -172,6 +177,7 @@ class RunScheduler {
       return;
     }
     this.emit({ type: "schedule-fired", id: entry.id, summary: "Scheduled autonomous task is starting." });
+    await this.lifecycle?.run?.("schedule-fired", { schedule: publicEntry(entry), source: "timer" });
     try {
       if (typeof this.services.scheduleRun !== "function") throw new Error("The application scheduling runner is unavailable.");
       await this.services.scheduleRun({ prompt: entry.prompt, action: entry.action, workspaceRoot: entry.workspaceRoot, scheduleId: entry.id, capabilityBoundary: entry.capabilityBoundary });
@@ -180,6 +186,7 @@ class RunScheduler {
     } catch (error) {
       entry.lastError = error?.message || String(error);
       this.emit({ type: "schedule-failed", id: entry.id, error: entry.lastError, summary: "Scheduled autonomous task failed." });
+      await this.lifecycle?.run?.("schedule-failed", { schedule: publicEntry(entry), error: entry.lastError });
       this.emit({ type: "recovery-warning", reason: "schedule-run-failed", scheduleId: entry.id, summary: entry.lastError });
     }
     const nextRun = nextRecurringRun(entry);
@@ -188,7 +195,10 @@ class RunScheduler {
       this.arm(entry);
     } else {
       entry.status = entry.lastError ? "failed" : "completed";
-      if (entry.status === "completed") this.emit({ type: "schedule-completed", id: entry.id, summary: "Scheduled autonomous task completed." });
+      if (entry.status === "completed") {
+        this.emit({ type: "schedule-completed", id: entry.id, summary: "Scheduled autonomous task completed." });
+        await this.lifecycle?.run?.("schedule-completed", { schedule: publicEntry(entry) });
+      }
     }
     await this.save();
   }

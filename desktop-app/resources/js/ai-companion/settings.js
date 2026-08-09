@@ -45,6 +45,9 @@
       providerRoutes: [],
       internetSearchEndpoint: "",
       workspaceStructureAutoInclude: false,
+      trustWorkspaceHooks: false,
+      allowHookManagedApprovals: false,
+      lifecycleHooks: [],
       toolScopes: toolScopeRegistry ? toolScopeRegistry.defaultToolScopes() : {},
       aiSecurityPolicy: {
         version: 1,
@@ -124,6 +127,9 @@
         providerRoutes: Array.isArray(source.providerRoutes) ? source.providerRoutes.map(function(entry) { return { id: String(entry && entry.id || "").trim(), profileId: String(entry && entry.profileId || "default").trim(), model: String(entry && entry.model || "").trim(), purposes: Array.isArray(entry && entry.purposes) ? entry.purposes.map(String).slice(0, 10) : ["primary"], fallbacks: Array.isArray(entry && entry.fallbacks) ? entry.fallbacks.map(String).filter(Boolean).slice(0, 8) : [], allowProviderChange: entry && entry.allowProviderChange === true, dataScopes: entry && entry.dataScopes && typeof entry.dataScopes === "object" ? Object.assign({}, entry.dataScopes) : {}, contextWindow: clampInteger(entry && entry.contextWindow, 0, 0, 10000000), maxOutputTokens: clampInteger(entry && entry.maxOutputTokens, 0, 0, 1000000), capabilities: entry && entry.capabilities && typeof entry.capabilities === "object" ? Object.assign({}, entry.capabilities) : {} }; }).filter(function(entry) { return entry.id; }).slice(0, 50) : [],
         internetSearchEndpoint: String(source.internetSearchEndpoint || "").trim(),
         workspaceStructureAutoInclude: source.workspaceStructureAutoInclude === true,
+        trustWorkspaceHooks: source.trustWorkspaceHooks === true,
+        allowHookManagedApprovals: source.allowHookManagedApprovals === true,
+        lifecycleHooks: Array.isArray(source.lifecycleHooks) ? source.lifecycleHooks.slice(0, 100).map(function(entry) { return JSON.parse(JSON.stringify(entry)); }) : [],
         toolScopes: toolScopeRegistry ? toolScopeRegistry.normalizeToolScopes(source.toolScopes) : (source.toolScopes || {}),
         aiSecurityPolicy: source.aiSecurityPolicy && typeof source.aiSecurityPolicy === "object" && !Array.isArray(source.aiSecurityPolicy)
           ? JSON.parse(JSON.stringify(source.aiSecurityPolicy))

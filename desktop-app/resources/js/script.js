@@ -3096,6 +3096,12 @@ async function startMarkdownViewer() {
   if (typeof window.registerMarkdownViewerAiConnectionSettings === "function") {
     window.registerMarkdownViewerAiConnectionSettings(app);
   }
+  if (typeof window.registerMarkdownViewerAiLifecycleSettings === "function") {
+    window.registerMarkdownViewerAiLifecycleSettings(app, {
+      bridge: neutralinoAiBridge,
+      getWorkspaceRoot: function() { return activeFolderPath || getDesktopAppRootPath(); }
+    });
+  }
   if (neutralinoAiBridge && typeof window.registerMarkdownViewerAiCompanionPromptsSettings === "function") {
     window.registerMarkdownViewerAiCompanionPromptsSettings(app, {
       bridge: neutralinoAiBridge,
@@ -4294,6 +4300,9 @@ async function startMarkdownViewer() {
   const settingsAiInternetSearchEndpointInput = document.getElementById("settings-ai-internet-search-endpoint");
   const settingsAiWorkspaceStructureAutoInput = document.getElementById("settings-ai-workspace-structure-auto");
   const settingsAiPermissionModeInput = document.getElementById("settings-ai-permission-mode");
+  const settingsAiTrustWorkspaceHooksInput = document.getElementById("settings-ai-trust-workspace-hooks");
+  const settingsAiHookManagedApprovalsInput = document.getElementById("settings-ai-hook-managed-approvals");
+  const settingsAiLifecycleHooksInput = document.getElementById("settings-ai-lifecycle-hooks");
   const settingsAiLiteLlmFields = Array.from(document.querySelectorAll(".settings-ai-litellm-field"));
   const settingsAiGeminiFields = Array.from(document.querySelectorAll(".settings-ai-gemini-field"));
   const settingsAiHttpProviderFields = Array.from(document.querySelectorAll(".settings-ai-http-provider-field"));
@@ -5113,6 +5122,9 @@ async function startMarkdownViewer() {
       agentAutoRunCommands: false,
       agentConfirmBeforeWrite: true,
       permissionMode: "guided",
+      trustWorkspaceHooks: false,
+      allowHookManagedApprovals: false,
+      lifecycleHooks: [],
       connectionProfiles: [],
       providerRoutes: []
     }
@@ -9395,6 +9407,10 @@ Markdown content is processed client-side in your browser and sanitized before p
     if (settingsAiInternetSearchEndpointInput) settingsAiInternetSearchEndpointInput.value = aiSettings.internetSearchEndpoint || "";
     if (settingsAiWorkspaceStructureAutoInput) settingsAiWorkspaceStructureAutoInput.checked = aiSettings.workspaceStructureAutoInclude === true;
     if (settingsAiPermissionModeInput) settingsAiPermissionModeInput.value = aiSettings.permissionMode || "guided";
+    if (settingsAiTrustWorkspaceHooksInput) settingsAiTrustWorkspaceHooksInput.checked = aiSettings.trustWorkspaceHooks === true;
+    if (settingsAiHookManagedApprovalsInput) settingsAiHookManagedApprovalsInput.checked = aiSettings.allowHookManagedApprovals === true;
+    if (settingsAiLifecycleHooksInput) settingsAiLifecycleHooksInput.value = JSON.stringify(aiSettings.lifecycleHooks || [], null, 2);
+    app.modules?.aiCompanionLifecycleSettings?.refresh?.();
     updateAiConnectionProviderFields();
     if (settingsAiChatEnabledInput) settingsAiChatEnabledInput.checked = aiSettings.chatEnabled;
     if (settingsAiAutocompleteEnabledInput) settingsAiAutocompleteEnabledInput.checked = aiSettings.autocompleteEnabled;
@@ -11417,6 +11433,9 @@ Markdown content is processed client-side in your browser and sanitized before p
       agentAutoRunCommands: !!settingsAiAgentAutoRunCommandsInput?.checked,
       agentConfirmBeforeWrite: settingsAiAgentConfirmBeforeWriteInput?.checked !== false,
       permissionMode: settingsAiPermissionModeInput?.value || "guided",
+      trustWorkspaceHooks: settingsAiTrustWorkspaceHooksInput?.checked === true,
+      allowHookManagedApprovals: settingsAiHookManagedApprovalsInput?.checked === true,
+      lifecycleHooks: app.modules?.aiCompanionLifecycleSettings?.collect?.() || [],
       internetSearchEndpoint: settingsAiInternetSearchEndpointInput?.value?.trim() || "",
       workspaceStructureAutoInclude: settingsAiWorkspaceStructureAutoInput?.checked === true,
       connectionProfiles: aiConnectionProfiles,

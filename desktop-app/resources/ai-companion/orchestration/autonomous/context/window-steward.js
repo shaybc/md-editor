@@ -85,7 +85,11 @@ class WindowSteward {
     if (boundary <= 1 && options.force !== true) return { renewed: false, afterTokens: beforeTokens };
     const older = sanitizeForDigest(messages.slice(1, boundary));
     try {
-      await context.hooks?.run("before-compaction", { trigger: options.trigger || "threshold", estimatedTokens: beforeTokens });
+      const beforeDecision = await context.hooks?.run("before-compaction", { trigger: options.trigger || "threshold", estimatedTokens: beforeTokens });
+      if (beforeDecision?.continue === false) {
+        return { renewed: false, warning: { reason: "renewal-stopped", summary: beforeDecision.stopReason || "Lifecycle automation postponed context renewal." }, afterTokens: beforeTokens };
+      }
+      for (const additionalContext of beforeDecision?.additionalContext || []) older.push({ role: "system", content: `Lifecycle context for renewal:\n${additionalContext}` });
       await context.continuity?.flush?.();
       const response = await this.provider.completeMessage([{
         role: "user",
@@ -114,7 +118,8 @@ class WindowSteward {
         digest
       };
       this.emit({ type: "compaction", ...result });
-      await context.hooks?.run("after-compaction", { summary: result });
+      const afterDecision = await context.hooks?.run("after-compaction", { summary: result });
+      for (const additionalContext of afterDecision?.additionalContext || []) messages.push({ role: "system", content: `Lifecycle context after renewal:\n${additionalContext}` });
       return { ...result, afterTokens };
     } catch (error) {
       this.consecutiveFailures += 1;

@@ -21,6 +21,8 @@ const { BundleAgentSource } = require("./agents/bundle-agent-source");
 const { McpConnectionManager } = require("./mcp/mcp-connection-manager");
 const { CapabilityCatalog } = require("./capabilities/capability-catalog");
 const { HookGateway } = require("./hooks/hook-gateway");
+const { HookSourceCatalog } = require("./hooks/hook-source-catalog");
+const { WorkspaceLifecycleObserver } = require("./hooks/workspace-lifecycle-observer");
 const { ArtifactVault } = require("./artifacts/artifact-vault");
 const { ContinuityRecord } = require("./continuity/continuity-record");
 const { WindowSteward } = require("./context/window-steward");
@@ -62,6 +64,8 @@ class AutonomousOrchestrator {
     let workers = null;
     let context = null;
     let messages = [];
+    let hooks = null;
+    let lifecycleObserver = null;
     try {
       const chronicle = new RunChronicle(request, events.emit);
       const journaledEvents = createJournaledEvents(events, chronicle);
@@ -98,7 +102,11 @@ class AutonomousOrchestrator {
       await scheduler.load();
       fingerprints.tools = capabilities.inventory.fingerprint();
       fingerprints.skills = fingerprint(skillCatalog.list());
-      const hooks = new HookGateway(request, Array.from(fabric.entries.values()).filter((entry) => entry.kind === "hook"), events.emit);
+      const hookSources = await new HookSourceCatalog(request, fabric).load();
+      hooks = new HookGateway(request, hookSources.definitions, journaledEvents.emit);
+      for (const issue of hookSources.errors) {
+        journaledEvents.emit({ type: EVENT_TYPES.RECOVERY_WARNING, reason: "lifecycle-source-invalid", source: issue.source, error: issue.error, summary: `A lifecycle automation source was not loaded: ${issue.error}` });
+      }
       const restored = await chronicle.loadRecovery({ applicationRestart: request.applicationRestart === true });
       ruleCatalog.setEmitter(journaledEvents.emit);
       await ruleCatalog.restore(restored?.ruleState);
@@ -197,6 +205,10 @@ class AutonomousOrchestrator {
         interactionGate, internetResearch, notebooks, workspaceAtlas, initialWorkspaceStructure, runtimeEnvironment,
         routeCatalog, routeSession, routeDataScopes, taskGrants: [], workers: null, pendingTools: []
       };
+      hooks.setContext(context);
+      hooks.restore(restored?.lifecycleAutomation);
+      request.lifecycleHooks = hooks;
+      scheduler.setLifecycleGateway(hooks);
       context.activeProvider = routeSession.active ? routeSession.providerFor(routeSession.active) : provider;
       internetResearch.providers.provider = context.activeProvider;
       internetResearch.taskGrants = context.taskGrants;
@@ -236,7 +248,20 @@ class AutonomousOrchestrator {
       });
       workers = context.workers;
       slashRouter.setContext(context);
-      await hooks.run("run-start", { mode: policy.mode, recovered: decision.classification === "recoverable" });
+      lifecycleObserver = new WorkspaceLifecycleObserver(request, (event, payload) => hooks.run(event, payload), journaledEvents.emit);
+      context.lifecycleObserver = lifecycleObserver;
+      lifecycleObserver.update([
+        ...(restored?.lifecycleAutomation?.observer?.watchPaths || []),
+        ...hooks.hooks.map((hook) => hook.matcher?.path).filter(Boolean)
+      ]);
+      const openingDecision = await hooks.run("run-start", { mode: policy.mode, recovered: decision.classification === "recoverable" });
+      const instructionDecision = await hooks.run("instructions-loaded", { fingerprint: fingerprints.instructions, count: Array.isArray(instructions) ? instructions.length : 1 });
+      context.openingLifecycleContext = [...(openingDecision.additionalContext || []), ...(instructionDecision.additionalContext || [])];
+      if (openingDecision.continue === false) {
+        const error = new Error(openingDecision.stopReason || "Lifecycle automation stopped the run during opening.");
+        error.name = "AbortError";
+        throw error;
+      }
       await workers.restoreExecutable(restored?.workers);
       context.buildRenewalAnchors = async (digest, activeFiles) => buildRenewalAnchors(context, digest, activeFiles);
       await refreshLoadedExtensions(context, decision.notices);
@@ -252,19 +277,36 @@ class AutonomousOrchestrator {
         context.taskGrants = rebuilt.taskGrants;
         recoverySummary = rebuilt.recoverySummary;
       } else {
+        const promptDecision = await hooks.run("user-prompt", { prompt: String(request.prompt || ""), mode: policy.mode });
+        const effectivePrompt = promptDecision.updatedPrompt == null ? String(request.prompt || "") : String(promptDecision.updatedPrompt);
+        if (effectivePrompt !== String(request.prompt || "")) {
+          await chronicle.append("prompt-rewritten", { originalPrompt: String(request.prompt || ""), modelPrompt: effectivePrompt });
+          journaledEvents.emit({ type: "hook-input-rewritten", boundary: "user-prompt", summary: "Lifecycle automation changed the model-facing prompt while preserving the original request." });
+        }
         const slash = request.slashInvocation?.name
           ? await slashRouter.expandTrusted(request.slashInvocation)
-          : await slashRouter.expand(request.prompt);
+          : await slashRouter.expand(effectivePrompt);
         messages = [
           { role: "system", content: buildSystemMessage(request, policy, extensions, instructions, recalledContinuity, skillCatalog.advertisement(), { recalledMemory, permissionMode, routes: routeSession.list(), workspaceStructure: initialWorkspaceStructure, runtimeEnvironment }) },
           ...(Array.isArray(request.conversationHistory) ? request.conversationHistory : []),
-          { role: "user", content: String(request.prompt || "") }
+          { role: "user", content: effectivePrompt }
         ];
+        for (const additionalContext of promptDecision.additionalContext || []) messages.push({ role: "system", content: `Lifecycle context:\n${additionalContext}` });
         const slashInstructions = slash ? buildSkillActivationMessage(skillCatalog.consumeActivated()) : "";
         if (slashInstructions) messages.push({ role: "system", content: slashInstructions });
         else if (slash?.invocation?.executionContext === "worker") messages.push({ role: "system", content: `Workflow marker: workflow:${slash.name}\nThe scoped worker returned: ${JSON.stringify(slash.invocation.worker)}` });
       }
       context.messages = messages;
+      for (const additionalContext of context.openingLifecycleContext || []) messages.push({ role: "system", content: `Lifecycle context during run opening:\n${additionalContext}` });
+      if (decision.classification === "recoverable") {
+        const restoredDecision = await hooks.run("run-restored", { mode: policy.mode, classification: decision.classification, notices: decision.notices.slice(0, 20) });
+        for (const additionalContext of restoredDecision.additionalContext || []) messages.push({ role: "system", content: `Lifecycle context after restart recovery:\n${additionalContext}` });
+        if (restoredDecision.continue === false) {
+          const error = new Error(restoredDecision.stopReason || "Lifecycle automation stopped the restored run.");
+          error.name = "AbortError";
+          throw error;
+        }
+      }
       internetResearch.taskGrants = context.taskGrants;
       observationLedger.refresh(messages, { currentRound: Number(restored?.round) || 0 });
       context.saveSnapshot = async (status, extra = {}) => {
@@ -291,6 +333,7 @@ class AutonomousOrchestrator {
           ruleState: ruleCatalog.snapshot(),
           skillState: { catalog: skillCatalog.snapshot(), invocation: skillInvocation.snapshot() },
           scheduleState: scheduler.snapshot(),
+          lifecycleAutomation: { ...hooks.snapshot(), observer: lifecycleObserver?.snapshot?.() || { version: 1, watchPaths: [] } },
           loadedExtensions: Array.from(context.loadedExtensions),
           loadedExtensionBodies: Array.from(context.loadedExtensionBodies.entries()),
           instructionFingerprint: context.fingerprints.instructions,
@@ -323,6 +366,8 @@ class AutonomousOrchestrator {
       return { content, architecture: "autonomous", ...(savedPlan ? { plan: savedPlan } : {}) };
     } catch (error) {
       const cancelled = request.signal?.aborted || error?.name === "AbortError";
+      try { await hooks?.run?.(cancelled ? "run-cancelled" : "run-failed", { error: error?.message || String(error) }); }
+      catch (_hookError) { /* Preserve the original runtime failure. */ }
       if (context?.chronicle) {
         try { await context.chronicle.append(cancelled ? "run-cancelled" : "run-failed", { error: error?.message || String(error) }); }
         catch (_journalError) { /* Preserve the original runtime failure. */ }
@@ -335,6 +380,8 @@ class AutonomousOrchestrator {
       else events.emit({ type: EVENT_TYPES.RUN_FAILED, error: error?.message || String(error) });
       throw error;
     } finally {
+      lifecycleObserver?.close?.();
+      await hooks?.close?.();
       await workers?.close?.();
       await mcp?.closeAll?.();
     }
