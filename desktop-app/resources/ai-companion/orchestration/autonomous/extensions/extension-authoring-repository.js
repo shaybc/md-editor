@@ -20,14 +20,14 @@ class ExtensionAuthoringRepository {
   async read(scope, id) {
     const rootInfo = this.root(scope, true);
     const bundle = await readBundle(path.join(rootInfo.root, String(id || "")), rootInfo);
-    const draft = { manifest: pickManifest(bundle), skills: [], agents: [], hooks: [], mcpServers: [] };
+    const draft = { manifest: pickManifest(bundle), skills: [], agents: [], hooks: [], mcpServers: [], tools: [], commands: [] };
     for (const item of bundle.contributions) {
       const relative = path.relative(bundle.root, item.filePath).replace(/\\/g, "/");
-      if (item.kind === "skill" || item.kind === "agent") {
+      if (item.kind === "skill" || item.kind === "agent" || item.kind === "command") {
         const parsed = parseMarkdownDefinition(await fs.readFile(item.filePath, "utf8"), { source: item.filePath });
-        draft[item.kind === "skill" ? "skills" : "agents"].push({ path: relative, metadata: parsed.metadata, body: parsed.body });
+        draft[item.kind === "skill" ? "skills" : (item.kind === "agent" ? "agents" : "commands")].push({ path: relative, metadata: parsed.metadata, body: parsed.body });
       } else {
-        draft[item.kind === "hook" ? "hooks" : "mcpServers"].push({ path: relative, definition: item.metadata });
+        draft[item.kind === "hook" ? "hooks" : (item.kind === "tool" ? "tools" : "mcpServers")].push({ path: relative, definition: item.metadata });
       }
     }
     return { scope, id: bundle.id, digest: bundle.digest, editable: scope !== "bundled", draft };
@@ -78,7 +78,7 @@ class ExtensionAuthoringRepository {
     const source = await this.read(input.scope, input.id);
     source.draft.manifest.id = String(input.newId || "");
     source.draft.manifest.name = String(input.newName || `${source.draft.manifest.name} Copy`);
-    for (const group of ["skills", "agents", "hooks", "mcpServers"]) for (const entry of source.draft[group]) delete entry.path;
+    for (const group of ["skills", "agents", "hooks", "mcpServers", "tools", "commands"]) for (const entry of source.draft[group]) delete entry.path;
     return this.save({ scope: normalizeWritableScope(input.targetScope || input.scope), draft: source.draft });
   }
 
@@ -143,7 +143,7 @@ class ExtensionAuthoringRepository {
 }
 
 async function writeDraft(directory, normalized) {
-  const contributions = { skills: [], agents: [], hooks: [], mcpServers: [] };
+  const contributions = { skills: [], agents: [], hooks: [], mcpServers: [], tools: [], commands: [] };
   await fs.mkdir(directory, { recursive: true });
   for (const group of Object.keys(contributions)) {
     for (const entry of normalized[group]) {
@@ -157,7 +157,7 @@ async function writeDraft(directory, normalized) {
   await fs.writeFile(path.join(directory, "extension.json"), `${JSON.stringify({ ...normalized.manifest, contributions }, null, 2)}\n`, "utf8");
 }
 
-function pickManifest(bundle) { return { schemaVersion: 1, id: bundle.id, name: bundle.name, version: bundle.version, description: bundle.description }; }
+function pickManifest(bundle) { return { schemaVersion: 2, id: bundle.id, name: bundle.name, version: bundle.version, description: bundle.description }; }
 function normalizeWritableScope(scope) { if (!new Set(["user", "workspace"]).has(scope)) throw new Error("Only profile and workspace extensions can be changed."); return scope; }
 function publicValidation(result) { return { valid: result.valid, errors: result.errors, warnings: result.warnings }; }
 async function exists(filePath) { try { await fs.access(filePath); return true; } catch (error) { if (error.code === "ENOENT") return false; throw error; } }

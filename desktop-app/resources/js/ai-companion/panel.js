@@ -7366,8 +7366,8 @@
         appendAutonomousRuntimeStatus(event);
         return;
       }
-      if (["skills-discovered", "skill-invocation-started", "skill-invocation-completed", "skill-invocation-failed", "skill-unavailable", "slash-workflow-expanded", "skills-changed", "schedule-created", "schedule-cancelled", "schedule-fired", "schedule-completed", "schedule-failed"].includes(event.type)) {
-        updateWorkflowSkillSuggestions(event.skills);
+      if (["skills-discovered", "skill-invocation-started", "skill-invocation-completed", "skill-invocation-failed", "skill-unavailable", "slash-workflow-expanded", "extension-commands-discovered", "extension-command-expanded", "skills-changed", "schedule-created", "schedule-cancelled", "schedule-fired", "schedule-completed", "schedule-failed"].includes(event.type)) {
+        updateWorkflowSkillSuggestions(event.skills || event.commands);
         appendAutonomousRuntimeStatus(event);
         return;
       }
@@ -7375,7 +7375,7 @@
         appendAutonomousRuntimeStatus(event);
         return;
       }
-      if (["run-started", "context-thinned", "observation-released", "observation-release-reminder", "tool-catalog-updated", "tool-schema-activated", "tool-schema-restored", "tool-schema-unavailable", "rules-discovered", "rule-activated", "rule-unavailable", "rules-refreshed", "continuity-updated", "chronicle-saved", "run-restored", "recovery-warning", "compaction", "run-completed", "run-cancelled", "run-failed"].includes(event.type) || /^(work|worker|memory|route)-/.test(event.type) || ["permission-mode-changed", "tool-denied", "denial-guard-tripped"].includes(event.type)) {
+      if (["run-started", "context-thinned", "observation-released", "observation-release-reminder", "tool-catalog-updated", "tool-schema-activated", "tool-schema-restored", "tool-schema-unavailable", "extension-tool-activated", "extension-tool-started", "extension-tool-completed", "extension-tool-failed", "extension-capability-unavailable", "rules-discovered", "rule-activated", "rule-unavailable", "rules-refreshed", "continuity-updated", "chronicle-saved", "run-restored", "recovery-warning", "compaction", "run-completed", "run-cancelled", "run-failed"].includes(event.type) || /^(work|worker|memory|route)-/.test(event.type) || ["permission-mode-changed", "tool-denied", "denial-guard-tripped"].includes(event.type)) {
         if (["context-thinned", "observation-released", "observation-release-reminder", "tool-catalog-updated", "tool-schema-activated", "tool-schema-restored", "tool-schema-unavailable", "rules-discovered", "rule-activated", "rule-unavailable", "rules-refreshed", "continuity-updated", "run-restored", "recovery-warning", "compaction", "memory-proposed", "memory-confirmed", "memory-rejected", "memory-forgotten", "permission-mode-changed", "tool-denied", "denial-guard-tripped", "route-selected", "route-fallback", "route-unavailable"].includes(event.type)) appendAutonomousRuntimeStatus(event);
         else recordAgentEvent(event);
         if (activeAgentEntry && ["run-restored", "recovery-warning"].includes(event.type)) {

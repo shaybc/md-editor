@@ -2,6 +2,7 @@
 
 "use strict";
 
+const path = require("node:path");
 const workspaceTools = require("../../tools/workspace-tools");
 const { authorizeTool } = require("./approval-gateway");
 const { loadExtension } = require("./extension-registry");
@@ -21,6 +22,9 @@ async function executeTool(call, context) {
   const name = String(call?.function?.name || "");
   const args = parseArguments(call);
   const root = context.request.workspaceRoot;
+  const commandRoot = name === "run_command" && args.cwd
+    ? workspaceTools.resolveWorkspacePath(root, path.relative(root, path.resolve(root, String(args.cwd)))).resolvedPath
+    : root;
   if (name === "run_command" && context.request.securityContext?.policy?.shell?.mode !== "sandbox-shell") {
     await context.request.securityContext?.auditLogger?.record({
       timestamp: new Date().toISOString(), requestId: context.request.requestId, workspace: root,
@@ -59,7 +63,7 @@ async function executeTool(call, context) {
       ? await (context.commandImpactInspector || new CommandImpactInspector()).inspect({
         command: args.command,
         workspaceRoot: root,
-        workingDirectory: root,
+        workingDirectory: commandRoot,
         platform: process.platform,
         configuredShell: process.env.ComSpec
       })
@@ -93,7 +97,7 @@ async function executeTool(call, context) {
       tool: name, requestedCommand: commandAnalysis.preview, commandImpact, approvalSource: approval.approvalSource || "unknown", automatic: approval.automatic === true, decision: "requested"
     });
     try {
-      const result = await workspaceTools.runCommand(root, args.command, { ...options, allowCommands: true, timeoutMs: args.timeoutMs, expectedCommandDigest: commandAnalysis.commandDigest });
+      const result = await workspaceTools.runCommand(commandRoot, args.command, { ...options, allowCommands: true, timeoutMs: args.timeoutMs, environment: args.environment, expectedCommandDigest: commandAnalysis.commandDigest });
       await context.request.securityContext?.auditLogger?.record({
         timestamp: new Date().toISOString(), requestId: context.request.requestId, workspace: root,
         tool: name, requestedCommand: commandAnalysis.preview, commandImpact, approvalSource: approval.approvalSource || "unknown", automatic: approval.automatic === true, decision: result.success === false ? "executed-failure" : "executed-success"
@@ -218,6 +222,7 @@ async function executeTool(call, context) {
   if (name === "worker_stop") return context.workers.stop(args.id);
   if (name.startsWith("mcp__")) return context.capabilities.invoke(name, args);
   if (context.capabilities?.registration?.(name)?.executionOwner === "run-extension") return context.capabilities.invoke(name, args, context);
+  if (context.capabilities?.registration?.(name)?.executionOwner === "persistent-extension") return context.extensionToolDispatcher.execute(context.capabilities.registration(name), args, context);
   const applicationResult = await executeApplicationTool(name, args, context);
   if (applicationResult !== undefined) return applicationResult;
   throw new Error(`Unknown or unavailable tool: ${name}`);

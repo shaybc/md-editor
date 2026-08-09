@@ -304,6 +304,7 @@ async function runCommand(root, command, options = {}) {
   const { workspaceRoot } = resolveWorkspacePath(root);
   const result = await execAsync(String(command || ""), {
     cwd: workspaceRoot,
+    env: options.environment && typeof options.environment === "object" ? { ...process.env, ...options.environment } : process.env,
     timeout: Math.max(1000, Number(options.timeoutMs || 120000)),
     maxBuffer: Math.max(1024, Number(options.outputLimitBytes || 1024 * 1024 * 4)),
     windowsHide: true,

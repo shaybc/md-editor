@@ -74,7 +74,7 @@
       const version = cell(bundle.version);
       const scope = cell(bundle.scope === "user" ? "profile" : bundle.scope);
       const counts = bundle.contributionCounts || {};
-      const contributions = cell([counts.skill && `${counts.skill} skills`, counts.agent && `${counts.agent} agents`, counts.hook && `${counts.hook} hooks`, counts["mcp-server"] && `${counts["mcp-server"]} servers`].filter(Boolean).join(", ") || "None");
+      const contributions = cell([counts.skill && `${counts.skill} skills`, counts.agent && `${counts.agent} agents`, counts.hook && `${counts.hook} hooks`, counts["mcp-server"] && `${counts["mcp-server"]} servers`, counts.tool && `${counts.tool} tools`, counts.command && `${counts.command} commands`].filter(Boolean).join(", ") || "None");
       const access = document.createElement("span"); access.className = "settings-ai-extension-access";
       const toggle = document.createElement("input"); toggle.type = "checkbox"; toggle.className = "settings-switch-input"; toggle.checked = bundle.enabled === true; toggle.setAttribute("aria-label", `Enable ${bundle.name}`); toggle.addEventListener("change", () => void configure(bundle, { enabled: toggle.checked })); access.append(toggle);
       if (bundle.scope === "workspace") { const trust = button(bundle.trusted ? "bi-shield-check" : "bi-shield-exclamation", bundle.trusted ? "Workspace trusted" : "Trust workspace extension", () => void configure(bundle, { trusted: !bundle.trusted, enabled: !bundle.trusted || bundle.enabled })); trust.classList.toggle("is-active", bundle.trusted); access.append(trust); }

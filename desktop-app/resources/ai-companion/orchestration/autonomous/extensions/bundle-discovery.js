@@ -42,8 +42,10 @@ async function readBundle(directory, rootInfo) {
   const contributions = [
     ...await indexMarkdown(directory, manifest.contributions.skills, "skill"),
     ...await indexMarkdown(directory, manifest.contributions.agents, "agent"),
+    ...await indexMarkdown(directory, manifest.contributions.commands, "command"),
     ...await indexJson(directory, manifest.contributions.hooks, "hook"),
-    ...await indexJson(directory, manifest.contributions.mcpServers, "mcp-server")
+    ...await indexJson(directory, manifest.contributions.mcpServers, "mcp-server"),
+    ...await indexJson(directory, manifest.contributions.tools, "tool")
   ];
   const fingerprint = crypto.createHash("sha256").update(manifestText);
   for (const filePath of Array.from(new Set(contributions.map((entry) => entry.filePath))).sort()) {

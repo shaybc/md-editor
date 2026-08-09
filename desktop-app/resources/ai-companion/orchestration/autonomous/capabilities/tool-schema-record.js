@@ -23,13 +23,19 @@ function createToolSchemaRecord(value = {}) {
     requiredCapability: String(value.requiredCapability || ""),
     permissionScope: String(value.permissionScope || ""),
     executionOwner: String(value.executionOwner || source),
+    allowedModes: Object.freeze((Array.isArray(value.allowedModes) ? value.allowedModes : []).map(String)),
+    adapter: value.adapter && typeof value.adapter === "object" ? Object.freeze({ ...value.adapter }) : null,
+    extensionId: String(value.extensionId || ""),
+    extensionDigest: String(value.extensionDigest || ""),
+    timeoutMs: Number(value.timeoutMs) || 30000,
+    maxOutputBytes: Number(value.maxOutputBytes) || 262144,
     execute: typeof value.execute === "function" ? value.execute : null,
     alwaysLoad: value.alwaysLoad === true,
     external: value.external === true,
     serverId: String(value.serverId || ""),
     remoteName: String(value.remoteName || ""),
     rulePaths,
-    fingerprint: fingerprint({ name, definition, source, description, searchHint, requiredMode: value.requiredMode, requiredCapability: value.requiredCapability, permissionScope: value.permissionScope, executionOwner: value.executionOwner, rulePaths })
+    fingerprint: fingerprint({ name, definition, source, description, searchHint, requiredMode: value.requiredMode, requiredCapability: value.requiredCapability, permissionScope: value.permissionScope, executionOwner: value.executionOwner, allowedModes: value.allowedModes, adapter: value.adapter, extensionId: value.extensionId, extensionDigest: value.extensionDigest, rulePaths })
   });
 }
 

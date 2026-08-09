@@ -23,6 +23,7 @@ const EVENT_TYPES = Object.freeze({
   SKILLS_DISCOVERED: "skills-discovered", SKILL_INVOCATION_STARTED: "skill-invocation-started",
   SKILL_INVOCATION_COMPLETED: "skill-invocation-completed", SKILL_UNAVAILABLE: "skill-unavailable", SKILLS_CHANGED: "skills-changed",
   SKILL_INVOCATION_FAILED: "skill-invocation-failed", SLASH_WORKFLOW_EXPANDED: "slash-workflow-expanded",
+  EXTENSION_TOOL_ACTIVATED: "extension-tool-activated", EXTENSION_TOOL_STARTED: "extension-tool-started", EXTENSION_TOOL_COMPLETED: "extension-tool-completed", EXTENSION_TOOL_FAILED: "extension-tool-failed", EXTENSION_COMMAND_EXPANDED: "extension-command-expanded", EXTENSION_CAPABILITY_UNAVAILABLE: "extension-capability-unavailable",
   SCHEDULE_CREATED: "schedule-created", SCHEDULE_CANCELLED: "schedule-cancelled", SCHEDULE_FIRED: "schedule-fired",
   SCHEDULE_COMPLETED: "schedule-completed", SCHEDULE_FAILED: "schedule-failed",
   USER_INPUT_REQUESTED: "user-input-requested", USER_INPUT_RESOLVED: "user-input-resolved", USER_INPUT_DECLINED: "user-input-declined",

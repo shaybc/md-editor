@@ -77,6 +77,8 @@ class CapabilityCatalog {
     const selectedDeferred = result.matches.filter((record) => !this.exposure.isImmediate(record));
     const selectedImmediate = result.matches.filter((record) => this.exposure.isImmediate(record)).map((record) => record.name);
     const activation = this.activation.activate(selectedDeferred, { source: "capability-search" });
+    const extensionTools = selectedDeferred.filter((record) => activation.activated.includes(record.name) && record.executionOwner === "persistent-extension");
+    for (const record of extensionTools) this.emit({ type: "extension-tool-activated", tool: record.name, extensionId: record.extensionId, summary: `Extension tool ${record.name} activated.` });
     this.activation.recordSearch({ queryType: result.queryType, matchCount: result.matches.length, activatedCount: activation.activated.length });
     const response = {
       query: String(query || ""),

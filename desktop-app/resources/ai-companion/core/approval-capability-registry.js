@@ -29,6 +29,7 @@ const CAPABILITIES = Object.freeze({
   mcp_server_connect: { id: "external.server.connect", risk: "high", label: "Connect external capability servers", maxLifetime: "workspace" },
   mcp_tool_invoke: { id: "external.tool.invoke", risk: "high", label: "Invoke external capabilities", maxLifetime: "task" },
   extension_hook_run: { id: "extension.hook.execute", risk: "high", label: "Run extension hooks", maxLifetime: "task" },
+  extension_tool_invoke: { id: "extension.tool.invoke", risk: "high", label: "Run a persistent extension tool", maxLifetime: "task" },
   lifecycle_hook_command: { id: "lifecycle.command.execute", risk: "high", label: "Run lifecycle commands", maxLifetime: "action" },
   lifecycle_hook_http: { id: "lifecycle.network.request", risk: "high", label: "Send lifecycle web requests", maxLifetime: "action" },
   lifecycle_hook_worker: { id: "lifecycle.worker.launch", risk: "medium", label: "Launch lifecycle workers", maxLifetime: "task" },

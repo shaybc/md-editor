@@ -20,6 +20,11 @@ const { WorkspaceAgentSource } = require("./agents/workspace-agent-source");
 const { BundleAgentSource } = require("./agents/bundle-agent-source");
 const { RunAgentSource } = require("./agents/run-agent-source");
 const { RunExtensionCatalog } = require("./extensions/run-extension-catalog");
+const { ExtensionToolRegistry } = require("./extensions/extension-tool-registry");
+const { ExtensionToolDispatcher } = require("./extensions/extension-tool-dispatcher");
+const { ExtensionCommandCatalog } = require("./extensions/extension-command-catalog");
+const { ApplicationActionRegistry } = require("./application-action-registry");
+const { executeTool } = require("./tool-executor");
 const { McpConnectionManager } = require("./mcp/mcp-connection-manager");
 const { CapabilityCatalog } = require("./capabilities/capability-catalog");
 const { HookGateway } = require("./hooks/hook-gateway");
@@ -93,16 +98,26 @@ class AutonomousOrchestrator {
       mcp = new McpConnectionManager(request, events.emit);
       mcp.register([...Array.from(fabric.entries.values()).filter((entry) => entry.kind === "mcp-server"), ...request.mcpServers]);
       const injectedToolRegistrations = runExtensions.toolRegistrations(request);
+      const applicationActions = new ApplicationActionRegistry(request.extensionApplicationActions);
+      const extensionToolRegistry = new ExtensionToolRegistry(fabric, {
+        mode: policy.mode,
+        prohibitedNames: [...getKnownToolNames(), ...injectedToolRegistrations.map((entry) => entry.definition?.function?.name).filter(Boolean)],
+        emit: journaledEvents.emit
+      });
+      const persistentToolRegistrations = extensionToolRegistry.registrations();
       const capabilities = new CapabilityCatalog({
         policy, fabric, mcp, emit: events.emit,
-        registrations: policy.allowTools ? [...getToolRegistrations(policy, request.settings), ...injectedToolRegistrations] : [],
+        registrations: policy.allowTools ? [...getToolRegistrations(policy, request.settings), ...injectedToolRegistrations, ...persistentToolRegistrations] : [],
         knownToolNames: getKnownToolNames(),
-        metadataEntries: agentCatalog.list()
+        metadataEntries: [...agentCatalog.list(), ...extensionToolRegistry.metadata()]
       });
       const skillCatalog = new SkillCatalog(request, { fabric, capabilities, agentCatalog, emit: events.emit });
       await skillCatalog.load(request.activeFile?.path);
       const skillInvocation = new SkillInvocationSession(skillCatalog, journaledEvents.emit);
-      const slashRouter = new SlashWorkflowRouter(skillCatalog, skillInvocation, journaledEvents.emit);
+      const extensionCommands = new ExtensionCommandCatalog(fabric, { mode: policy.mode, applicationActions, emit: journaledEvents.emit });
+      extensionCommands.load();
+      const slashRouter = new SlashWorkflowRouter(skillCatalog, skillInvocation, journaledEvents.emit, extensionCommands);
+      const extensionToolDispatcher = new ExtensionToolDispatcher({ fabric, applicationActions, emit: journaledEvents.emit });
       const scheduler = new RunScheduler(request, services, journaledEvents.emit);
       await scheduler.load();
       fingerprints.tools = capabilities.inventory.fingerprint();
@@ -202,6 +217,7 @@ class AutonomousOrchestrator {
 
       context = {
         request, services, policy, extensions, extensionSnapshot, fabric, agentCatalog, mcp, capabilities, hooks, ruleCatalog,
+        applicationActions, extensionCommands, extensionToolDispatcher, executeExtensionDelegate: executeTool,
         skillCatalog, skillInvocation, scheduler,
         instructions, recalledContinuity, recalledMemory, fingerprints, chronicle, artifactVault, continuity, windowSteward,
         observationLedger, contextReleaseReminder,
@@ -301,6 +317,8 @@ class AutonomousOrchestrator {
         const slashInstructions = slash ? buildSkillActivationMessage(skillCatalog.consumeActivated()) : "";
         if (slashInstructions) messages.push({ role: "system", content: slashInstructions });
         else if (slash?.invocation?.executionContext === "worker") messages.push({ role: "system", content: `Workflow marker: workflow:${slash.name}\nThe scoped worker returned: ${JSON.stringify(slash.invocation.worker)}` });
+        else if (slash?.promptExpansion) messages.push({ role: "system", content: `User-invoked extension command '${slash.name}':\n${slash.promptExpansion}` });
+        else if (slash && Object.hasOwn(slash, "result")) messages.push({ role: "system", content: `Extension command '${slash.name}' completed before the model call. Result: ${JSON.stringify(slash.result)}` });
       }
       context.messages = messages;
       for (const additionalContext of context.openingLifecycleContext || []) messages.push({ role: "system", content: `Lifecycle context during run opening:\n${additionalContext}` });
@@ -462,7 +480,7 @@ function createJournaledEvents(events, chronicle) {
 }
 
 function shouldJournalEvent(type) {
-  if (/^(skill|skills|slash|schedule)-/.test(String(type || ""))) return true;
+  if (/^(skill|skills|slash|schedule|extension)-/.test(String(type || ""))) return true;
   if (/^(memory|route)-/.test(String(type || ""))) return true;
   if (/^(user-input|internet|page|notebook|workspace-structure)-/.test(String(type || ""))) return true;
   if (["slash-workflow-expanded", "skill-invocation-failed"].includes(type)) return true;

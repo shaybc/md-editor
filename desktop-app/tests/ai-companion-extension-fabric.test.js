@@ -20,6 +20,9 @@ const { RunExtensionCatalog } = require("../resources/ai-companion/orchestration
 const { RunAgentSource } = require("../resources/ai-companion/orchestration/autonomous/agents/run-agent-source");
 const { executeTool } = require("../resources/ai-companion/orchestration/autonomous/tool-executor");
 const { ExtensionAuthoringRepository } = require("../resources/ai-companion/orchestration/autonomous/extensions/extension-authoring-repository");
+const { ExtensionToolRegistry } = require("../resources/ai-companion/orchestration/autonomous/extensions/extension-tool-registry");
+const { ExtensionToolDispatcher } = require("../resources/ai-companion/orchestration/autonomous/extensions/extension-tool-dispatcher");
+const { ExtensionCommandCatalog } = require("../resources/ai-companion/orchestration/autonomous/extensions/extension-command-catalog");
 
 test("settings help tooltips render above extension editor layers", async () => {
   const styles = await fs.readFile(path.join(__dirname, "../resources/styles.css"), "utf8");
@@ -158,6 +161,51 @@ test("workspace extension edits reject stale drafts and invalidate prior trust",
   const refreshed = await fabric.load();
   assert.equal(refreshed.bundles.find((entry) => entry.id === created.id).trusted, false);
   await assert.rejects(() => repository.save({ scope: "workspace", originalId: created.id, expectedDigest: created.digest, draft: stale }), /changed after it was opened/i);
+});
+
+test("trusted persistent tools stay deferred and execute only through runtime adapters", async (t) => {
+  const roots = await temporaryRoots(t);
+  await writeWorkspaceBundle(roots.workspaceRoot, "persistent-pack", {
+    schemaVersion: 2, id: "persistent-pack", name: "Persistent Pack", version: "1.0.0", description: "Persistent capability test",
+    contributions: { tools: ["tools/extension-echo.json"], commands: ["commands/note.md"] }
+  }, {
+    "tools/extension-echo.json": JSON.stringify({ id: "extension_echo", name: "extension_echo", description: "Echo through a trusted workflow adapter.", inputSchema: { type: "object", properties: { text: { type: "string" } }, required: ["text"], additionalProperties: false }, adapter: { type: "workflow", target: "echo-workflow" }, allowedModes: ["agent"] }),
+    "commands/note.md": "---\nid: note\nname: Note\ndescription: Expand a note request.\ntype: prompt\naliases: [remember-note]\nallowedModes: [agent]\nmodelInvocable: true\n---\nHandle this note carefully: {{arguments}}"
+  });
+  const fabric = new ExtensionFabric(roots);
+  await fabric.load();
+  await fabric.configure({ id: "persistent-pack", enabled: true, trusted: true });
+  const toolRegistry = new ExtensionToolRegistry(fabric, { mode: "agent", prohibitedNames: ["read_file"] });
+  const registrations = toolRegistry.registrations();
+  assert.deepEqual(registrations.map((entry) => entry.definition.function.name), ["extension_echo", "command_note"]);
+  const capabilities = new CapabilityCatalog({ policy: { mode: "agent" }, fabric, mcp: { listServers: () => [] }, registrations });
+  assert.equal(capabilities.providerDefinitions().some((entry) => entry.function.name === "extension_echo"), false);
+  assert.equal(capabilities.providerDefinitions().some((entry) => entry.function.name === "command_note"), false);
+  await capabilities.search("select:extension_echo");
+  assert.equal(capabilities.providerDefinitions().some((entry) => entry.function.name === "extension_echo"), true);
+  const dispatcher = new ExtensionToolDispatcher({ fabric });
+  const result = await dispatcher.execute(capabilities.registration("extension_echo"), { text: "hello" }, {
+    policy: { mode: "agent" }, request: { signal: new AbortController().signal },
+    skillInvocation: { invoke: async (name, args) => ({ name, args }) }, capabilities,
+    artifactVault: { store: async () => ({ id: "artifact" }), reference: () => ({ id: "artifact" }) }
+  });
+  assert.deepEqual(result, { name: "echo-workflow", args: JSON.stringify({ text: "hello" }) });
+});
+
+test("persistent commands resolve aliases and expand their Markdown lazily", async (t) => {
+  const roots = await temporaryRoots(t);
+  await writeWorkspaceBundle(roots.workspaceRoot, "command-pack", {
+    schemaVersion: 2, id: "command-pack", name: "Command Pack", version: "1.0.0", description: "Command test",
+    contributions: { commands: ["commands/note.md"] }
+  }, { "commands/note.md": "---\nid: note\nname: Note\ndescription: Expand a note request.\ntype: prompt\naliases: [remember-note]\nallowedModes: [agent]\n---\nHandle this note carefully: $ARGUMENTS" });
+  const fabric = new ExtensionFabric(roots);
+  await fabric.load();
+  await fabric.configure({ id: "command-pack", enabled: true, trusted: true });
+  const catalog = new ExtensionCommandCatalog(fabric, { mode: "agent" });
+  catalog.load();
+  const command = catalog.resolve("remember-note");
+  assert.equal(command.id, "note");
+  assert.deepEqual(await catalog.invoke(command, "release checklist", {}), { promptExpansion: "Handle this note carefully: release checklist" });
 });
 
 test("a traversal contribution invalidates only its bundle", async (t) => {

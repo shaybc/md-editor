@@ -8,6 +8,8 @@ const { isExtensionEnabled, isExtensionTrusted, loadExtensionState, updateExtens
 const { parseMarkdownDefinition } = require("./markdown-definition");
 const { AgentDefinitionPolicy } = require("../agents/agent-definition-policy");
 const { SkillDefinitionPolicy } = require("../skills/skill-definition-policy");
+const { normalizeExtensionTool } = require("./extension-tool-policy");
+const { normalizeExtensionCommand } = require("./extension-command-policy");
 
 class ExtensionFabric {
   constructor(request) { this.request = request; this.bundles = []; this.errors = []; this.entries = new Map(); }
@@ -40,6 +42,14 @@ class ExtensionFabric {
             continue;
           }
         }
+        if (entry.kind === "tool") {
+          try { entry.metadata = normalizeExtensionTool(entry.metadata); }
+          catch (error) { this.errors.push({ id, error: `Invalid extension tool: ${error.message}` }); continue; }
+        }
+        if (entry.kind === "command") {
+          try { entry.metadata = normalizeExtensionCommand(entry.metadata); }
+          catch (error) { this.errors.push({ id, error: `Invalid extension command: ${error.message}` }); continue; }
+        }
         if (this.entries.has(id)) this.errors.push({ id, error: `Duplicate contribution id: ${id}` });
         else this.entries.set(id, { ...entry, id, localId: entry.id, extensionId: bundle.id, scope: bundle.scope });
       }
@@ -64,7 +74,7 @@ class ExtensionFabric {
   async activate(id) {
     const entry = this.entries.get(id);
     if (!entry) throw new Error(`Unknown or unavailable extension contribution: ${id}`);
-    if (entry.kind !== "skill" && entry.kind !== "agent") return { ...entry, metadata: redactMetadata(entry.metadata) };
+    if (entry.kind !== "skill" && entry.kind !== "agent" && entry.kind !== "command") return { ...entry, metadata: redactMetadata(entry.metadata) };
     const parsed = parseMarkdownDefinition(await fs.readFile(entry.filePath, "utf8"), { source: entry.filePath });
     if (entry.kind === "agent") {
       const validation = AgentDefinitionPolicy.validate(parsed.metadata);
@@ -74,6 +84,7 @@ class ExtensionFabric {
       const validation = SkillDefinitionPolicy.validate(parsed.metadata);
       if (!validation.valid) throw new Error(`Invalid skill definition '${id}': ${validation.errors.join(" ")}`);
     }
+    if (entry.kind === "command") normalizeExtensionCommand(parsed.metadata);
     return { ...entry, metadata: parsed.metadata, body: parsed.body };
   }
 

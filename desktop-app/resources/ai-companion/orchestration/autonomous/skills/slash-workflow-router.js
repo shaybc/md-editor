@@ -5,7 +5,7 @@
 const SLASH_PATTERN = /^\/([a-zA-Z0-9:_-]+)(?:\s+([\s\S]*))?$/;
 
 class SlashWorkflowRouter {
-  constructor(catalog, invocation, emit = () => {}) { this.catalog = catalog; this.invocation = invocation; this.emit = emit; }
+  constructor(catalog, invocation, emit = () => {}, commandCatalog = null) { this.catalog = catalog; this.invocation = invocation; this.emit = emit; this.commandCatalog = commandCatalog; }
 
   /** Parse only a complete leading slash workflow expression. */
   parse(prompt) {
@@ -23,6 +23,12 @@ class SlashWorkflowRouter {
   async expandTrusted(value) {
     const parsed = { name: String(value?.name || "").trim().toLowerCase(), args: value?.arguments ?? value?.args ?? "" };
     if (!parsed.name) return null;
+    const command = this.commandCatalog?.resolve?.(parsed.name);
+    if (command) {
+      const outcome = await this.commandCatalog.invoke(command, parsed.args, this.context);
+      this.emit({ type: "extension-command-expanded", name: command.id, extensionId: command.extensionId, summary: `Extension command ${command.id} expanded.` });
+      return { ...parsed, command, ...outcome };
+    }
     const resolved = this.catalog.resolve(parsed.name, { user: true });
     if (!resolved) {
       const error = new Error(`Unknown workflow: ${parsed.name}`);
