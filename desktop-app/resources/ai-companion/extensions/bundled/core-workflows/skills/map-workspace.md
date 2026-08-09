@@ -7,6 +7,7 @@ aliases: [workspace-outline]
 triggers: [map workspace, show repository structure, find important files]
 argumentHint: "[paths or symbols to emphasize]"
 allowedModes: [chat, plan, agent]
+routePurpose: quick
 allowedTools: [skill_invoke, capability_search, workspace_structure, read_file, search_text, artifact_read]
 requiredTools: [workspace_structure]
 ---

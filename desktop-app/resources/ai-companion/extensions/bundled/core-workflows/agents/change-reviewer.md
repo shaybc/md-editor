@@ -4,6 +4,7 @@ name: Change Reviewer
 description: Reviews a change for correctness, regressions, security, and maintainability.
 triggers: [review change, inspect diff, find regression]
 allowedModes: [plan, agent]
+routePurpose: review
 capabilities: [read, execute, context]
 permissions:
   workspaceWrites: false

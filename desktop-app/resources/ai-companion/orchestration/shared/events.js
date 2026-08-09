@@ -9,7 +9,7 @@ const EVENT_TYPES = Object.freeze({
   MEMORY_PROPOSED: "memory-proposed", MEMORY_CONFIRMED: "memory-confirmed",
   MEMORY_REJECTED: "memory-rejected", MEMORY_FORGOTTEN: "memory-forgotten",
   PERMISSION_MODE_CHANGED: "permission-mode-changed", TOOL_DENIED: "tool-denied",
-  DENIAL_GUARD_TRIPPED: "denial-guard-tripped", ROUTE_SELECTED: "route-selected",
+  DENIAL_GUARD_TRIPPED: "denial-guard-tripped", ROUTE_SELECTED: "route-selected", ROUTE_PURPOSE_SELECTED: "route-purpose-selected",
   ROUTE_FALLBACK: "route-fallback", ROUTE_UNAVAILABLE: "route-unavailable",
   WORK_CREATED: "work-created", WORK_UPDATED: "work-updated", WORK_DELETED: "work-deleted",
   WORKER_QUEUED: "worker-queued", WORKER_STARTED: "worker-started", WORKER_MESSAGE: "worker-message",

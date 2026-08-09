@@ -131,7 +131,10 @@ class AutonomousOrchestrator {
       const artifactVault = new ArtifactVault(request, journaledEvents.emit);
       await artifactVault.load();
       routeSession.restore(restored?.routing);
-      const continuity = new ContinuityRecord(request, provider, journaledEvents.emit);
+      const memoryRoute = routeSession.accessForPurpose("memory", { requiredDataScopes: ["workspace"], reason: "continuity maintenance" });
+      const renewalRoute = routeSession.accessForPurpose("renewal", { requiredDataScopes: ["workspace"], reason: "context renewal" });
+      const workerRoute = routeSession.accessForPurpose("worker", { requiredDataScopes: ["workspace"], reason: "delegated work" });
+      const continuity = new ContinuityRecord(request, memoryRoute.provider, journaledEvents.emit);
       await continuity.load();
       continuity.restore(restored?.continuity);
       const recalledContinuity = await continuity.search(request.prompt, { maxResults: 3 });
@@ -149,7 +152,7 @@ class AutonomousOrchestrator {
       const requestedPermissionMode = denialLedger.tripped && request.settings.permissionMode === "risk-routed" ? "guided" : (request.permissionMode || request.settings.permissionMode);
       const permissionPolicy = new PermissionModePolicy(requestedPermissionMode, request.securityContext?.policy);
       const permissionMode = permissionPolicy.mode;
-      const riskAdvisor = new ActionRiskAdvisor(routeSession.providerForPurpose("risk"), request, journaledEvents.emit);
+      const riskAdvisor = new ActionRiskAdvisor(routeSession.providerForPurpose("risk", { requiredDataScopes: ["workspace"], reason: "action risk advice" }), request, journaledEvents.emit);
       request.authorizationControls = { permissionPolicy, denialLedger, riskAdvisor };
       journaledEvents.emit({ type: EVENT_TYPES.PERMISSION_MODE_CHANGED, mode: permissionPolicy.mode, reason: denialLedger.tripped ? "denial guard recovery" : "run configuration", summary: `Permission mode: ${permissionPolicy.mode}.` });
       const interactionGate = new InteractionGate(request, journaledEvents.emit, () => context?.saveSnapshot?.("running"));
@@ -180,7 +183,7 @@ class AutonomousOrchestrator {
       observationLedger.restore(restored?.observationRelease?.ledger);
       const contextReleaseReminder = new ContextReleaseReminder(journaledEvents.emit);
       contextReleaseReminder.restore(restored?.observationRelease?.reminder);
-      const windowSteward = new WindowSteward(request, provider, artifactVault, journaledEvents.emit, observationLedger);
+      const windowSteward = new WindowSteward(request, renewalRoute.provider, artifactVault, journaledEvents.emit, observationLedger, { providerLimits: renewalRoute.limits });
       windowSteward.restore(restored?.windowState);
 
       context = {
@@ -214,11 +217,20 @@ class AutonomousOrchestrator {
         internetResearch.providers.provider = context.activeProvider;
         if (context.windowSteward) context.windowSteward.limits = routeSession.limits();
       };
+      context.selectSkillPurpose = (purpose) => {
+        context.activeProvider = routeSession.selectPurpose(purpose, { reason: `activated workflow purpose ${purpose}`, requiredDataScopes: context.routeDataScopes });
+        internetResearch.providers.provider = context.activeProvider;
+        if (context.windowSteward) context.windowSteward.limits = routeSession.limits();
+      };
       const restoredSkillModel = skillInvocation.records.slice().reverse().find((record) => record.executionContext === "inline" && record.model)?.model;
+      const restoredSkillRoute = skillInvocation.records.slice().reverse().find((record) => record.executionContext === "inline" && record.route)?.route;
+      const restoredSkillPurpose = skillInvocation.records.slice().reverse().find((record) => record.executionContext === "inline" && record.routePurpose)?.routePurpose;
       if (restoredSkillModel) context.selectSkillModel(restoredSkillModel);
+      if (restoredSkillRoute) context.selectSkillRoute(restoredSkillRoute);
+      else if (restoredSkillPurpose) context.selectSkillPurpose(restoredSkillPurpose);
       context.rulePathObserver = new ToolPathObserver(ruleCatalog);
       context.skillPathObserver = new SkillPathObserver(skillCatalog);
-      context.workers = new WorkerHub(provider, request, {
+      context.workers = new WorkerHub(workerRoute.provider, request, {
         fabric, agentCatalog, parentContext: context, events: journaledEvents,
         onChange: () => context.saveSnapshot?.("running").catch(() => {})
       });
@@ -332,7 +344,7 @@ class AutonomousOrchestrator {
 async function buildRenewalAnchors(context, digest, activeFiles) {
   await context.ruleCatalog?.refresh?.();
   await context.skillCatalog?.refresh?.();
-  context.skillInvocation?.reconcile?.({ hooks: context.hooks, selectSkillModel: context.selectSkillModel, selectSkillRoute: context.selectSkillRoute });
+  context.skillInvocation?.reconcile?.({ hooks: context.hooks, selectSkillModel: context.selectSkillModel, selectSkillRoute: context.selectSkillRoute, selectSkillPurpose: context.selectSkillPurpose });
   const currentInstructions = await loadActiveInstructions(context.request, context.policy, context.ruleCatalog);
   context.instructions = currentInstructions;
   context.fingerprints.instructions = fingerprint(currentInstructions);

@@ -16,7 +16,7 @@ const RENEWAL_FAILURE_LIMIT = 3;
 const RENEWAL_COOLDOWN_MS = 5 * 60 * 1000;
 
 class WindowSteward {
-  constructor(request, provider, artifactVault, emit = () => {}, observationLedger = null) {
+  constructor(request, provider, artifactVault, emit = () => {}, observationLedger = null, options = {}) {
     this.request = request;
     this.provider = provider;
     this.artifactVault = artifactVault;
@@ -28,6 +28,7 @@ class WindowSteward {
     this.nextRetryAt = 0;
     this.lastDigest = null;
     this.limits = resolveContextLimits(request);
+    this.providerLimits = options.providerLimits || null;
   }
 
   /** Record provider-reported input usage for more accurate future budgeting. */
@@ -91,7 +92,7 @@ class WindowSteward {
         content: buildDigestPrompt(older, context)
       }], {
         temperature: 0.1,
-        maxTokens: Math.min(12000, this.limits.maxOutputTokens || 12000),
+        maxTokens: Math.min(12000, this.providerLimits?.maxOutputTokens || this.limits.maxOutputTokens || 12000),
         signal: this.request.signal
       });
       const digest = parseDigest(response?.content, context);

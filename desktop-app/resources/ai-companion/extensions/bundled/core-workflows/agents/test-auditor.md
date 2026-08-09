@@ -4,6 +4,7 @@ name: Test Auditor
 description: Selects and runs focused verification and explains remaining risk.
 triggers: [verify change, test implementation, audit tests]
 allowedModes: [agent]
+routePurpose: testing
 capabilities: [read, execute, context]
 permissions:
   workspaceWrites: false

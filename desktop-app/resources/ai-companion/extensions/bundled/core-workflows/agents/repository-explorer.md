@@ -4,6 +4,7 @@ name: Repository Explorer
 description: Locates relevant code, tests, configuration, and architectural boundaries.
 triggers: [explore repository, find implementation, trace behavior]
 allowedModes: [plan, agent]
+routePurpose: quick
 capabilities: [read, context]
 permissions:
   workspaceWrites: false

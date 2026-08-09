@@ -20,15 +20,24 @@ class ProviderRouteSession {
   /** Select an enabled route and return its provider. */
   select(id = "", options = {}) {
     const resolved = this.catalog.resolve(id || this.request.routeId, options.purpose || "primary");
+    return this.activate(resolved, options);
+  }
+
+  /** Select the configured route for one foreground workflow purpose. */
+  selectPurpose(purpose, options = {}) {
+    return this.activate(this.catalog.resolve("", purpose), { ...options, purpose });
+  }
+
+  activate(resolved, options = {}) {
     if (!allowsContext(resolved.route, options.requiredDataScopes)) throw routeDenied(resolved.route.id);
     const previous = this.active?.route?.id || "";
     this.active = resolved;
     this.applyLimits(resolved);
     const provider = this.providerFor(resolved);
-    const entry = { routeId: resolved.route.id, previousRouteId: previous, reason: String(options.reason || "configured route"), selectedAt: new Date().toISOString() };
+    const entry = { routeId: resolved.route.id, previousRouteId: previous, purpose: String(options.purpose || "primary"), reason: String(options.reason || "configured route"), selectedAt: new Date().toISOString() };
     this.history.push(entry);
     this.history = this.history.slice(-50);
-    this.emit({ type: "route-selected", ...entry, model: resolved.route.model || resolved.profile.model, summary: `Using provider route ${resolved.route.id}.` });
+    this.emit({ type: "route-selected", ...entry, model: resolved.route.model || resolved.profile.model, summary: `Using provider route ${resolved.route.id} for ${entry.purpose}.` });
     return provider;
   }
 
@@ -56,8 +65,19 @@ class ProviderRouteSession {
     return null;
   }
 
+  /** Resolve one isolated runtime-purpose provider without changing the foreground route. */
+  accessForPurpose(purpose, options = {}) {
+    const resolved = this.catalog.resolve(options.routeId || "", purpose);
+    if (!allowsContext(resolved.route, options.requiredDataScopes)) throw routeDenied(resolved.route.id);
+    const entry = { routeId: resolved.route.id, previousRouteId: this.active?.route?.id || "", purpose: String(purpose), reason: String(options.reason || "runtime purpose"), isolated: true, selectedAt: new Date().toISOString() };
+    this.history.push(entry);
+    this.history = this.history.slice(-50);
+    this.emit({ type: "route-purpose-selected", ...entry, model: resolved.route.model || resolved.profile.model, summary: `Using provider route ${resolved.route.id} for isolated ${purpose} work.` });
+    return { provider: this.providerFor(resolved), limits: resolveLimits(resolved, this.request.settings.model), route: resolved.route, profile: resolved.profile };
+  }
+
   /** Resolve a provider for a named runtime purpose without changing the main route. */
-  providerForPurpose(purpose) { return this.providerFor(this.catalog.resolve("", purpose)); }
+  providerForPurpose(purpose, options = {}) { return this.accessForPurpose(purpose, options).provider; }
 
   providerFor(resolved) {
     if (this.providerOverride && resolved.route.id === "primary") return this.providerOverride;

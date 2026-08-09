@@ -2,6 +2,8 @@
 
 "use strict";
 
+const { ROUTE_PURPOSES } = require("../routing/provider-route-catalog");
+
 const MODES = new Set(["chat", "plan", "agent"]);
 const EXECUTION_CONTEXTS = new Set(["inline", "worker"]);
 const COMMAND_PATTERN = /^[a-z0-9][a-z0-9:_-]{1,79}$/;
@@ -28,6 +30,7 @@ class SkillDefinitionPolicy {
       requiredTools: normalizeList(source.requiredTools),
       model: String(source.model || "").trim(),
       route: String(source.route || "").trim(),
+      routePurpose: String(source.routePurpose || "").trim(),
       agent: String(source.agent || "").trim(),
       executionContext,
       userInvocable: source.userInvocable !== false,
@@ -42,6 +45,7 @@ class SkillDefinitionPolicy {
     if (!value.description) errors.push("Skill description is required.");
     for (const mode of allowedModes) if (!MODES.has(mode)) errors.push(`Unsupported skill mode: ${mode}.`);
     if (!EXECUTION_CONTEXTS.has(executionContext)) errors.push(`Unsupported skill execution context: ${executionContext}.`);
+    if (source.routePurpose != null && !ROUTE_PURPOSES.includes(value.routePurpose)) errors.push(`Unsupported route purpose: ${value.routePurpose || "empty"}.`);
     if (value.aliases.includes(value.name)) errors.push("A skill alias cannot repeat its canonical name.");
     if (value.paths.some((pattern) => pathIsUnsafe(pattern)) || value.exclude.some((pattern) => pathIsUnsafe(pattern))) errors.push("Skill path patterns must remain workspace-relative.");
     for (const tool of [...value.allowedTools, ...value.requiredTools]) if (!/^[a-zA-Z0-9_:.-]+$/.test(tool)) errors.push(`Invalid skill tool name: ${tool}.`);

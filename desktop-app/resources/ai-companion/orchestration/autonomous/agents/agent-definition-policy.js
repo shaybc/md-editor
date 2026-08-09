@@ -2,6 +2,8 @@
 
 "use strict";
 
+const { ROUTE_PURPOSES } = require("../routing/provider-route-catalog");
+
 const MODES = new Set(["chat", "plan", "agent"]);
 const CAPABILITIES = new Set(["read", "context", "edit", "execute", "delegate"]);
 const ISOLATIONS = new Set(["shared", "worktree"]);
@@ -37,6 +39,7 @@ class AgentDefinitionPolicy {
     if (source.isolation != null) normalized.isolation = String(source.isolation).trim();
     if (source.model != null) normalized.model = String(source.model).trim();
     if (source.route != null) normalized.route = String(source.route).trim();
+    if (source.routePurpose != null) normalized.routePurpose = String(source.routePurpose).trim();
     return normalized;
   }
 
@@ -62,6 +65,7 @@ class AgentDefinitionPolicy {
     if (source.isolation != null && !ISOLATIONS.has(value.isolation)) errors.push("isolation must be shared or worktree.");
     if (source.model != null && !value.model) errors.push("model must be a non-empty string.");
     if (source.route != null && !value.route) errors.push("route must be a non-empty string.");
+    if (source.routePurpose != null && !ROUTE_PURPOSES.includes(value.routePurpose)) errors.push(`Unsupported route purpose: ${value.routePurpose || "empty"}.`);
     return { valid: errors.length === 0, errors, value };
   }
 }

@@ -49,7 +49,7 @@ class WorkerHub {
     const agent = args.agentId ? await this.agentCatalog?.activate(args.agentId) : null;
     if (args.agentId && agent?.kind !== "agent") throw new Error(`Unknown agent definition: ${args.agentId}`);
     const authority = this.resolveAuthority(agent, args.isolation);
-    const entry = { id, description: String(args.description || "Delegated work"), prompt: String(args.prompt || ""), model: String(args.model || ""), routeId: String(args.routeId || agent?.metadata?.route || ""), agentId: agent?.id || "", status: "queued", background: args.background === true, inbox: [], messages: [], result: "", error: "", controller: new AbortController(), agent, authority, isolation: authority.isolation };
+    const entry = { id, description: String(args.description || "Delegated work"), prompt: String(args.prompt || ""), model: String(args.model || ""), routeId: String(args.routeId || agent?.metadata?.route || ""), routePurpose: String(args.routePurpose || agent?.metadata?.routePurpose || "worker"), agentId: agent?.id || "", status: "queued", background: args.background === true, inbox: [], messages: [], result: "", error: "", controller: new AbortController(), agent, authority, isolation: authority.isolation };
     entry.completion = new Promise((resolve) => { entry.resolveCompletion = resolve; });
     if (!entry.prompt.trim()) throw new Error("Worker launch requires a prompt.");
     this.entries.set(id, entry);
@@ -227,10 +227,11 @@ class WorkerHub {
         throw new Error(`Agent '${entry.agentId || entry.id}' requires worktree isolation, but an isolated workspace could not be created: ${entry.workspace.fallbackReason || "unknown reason"}`);
       }
       const selectedModel = entry.model || entry.agent?.metadata?.model;
-      const selectedRoute = entry.routeId ? this.parentContext.routeCatalog.resolve(entry.routeId, "worker") : null;
-      const provider = selectedRoute
-        ? this.parentContext.routeSession.providerFor(selectedRoute)
-        : (selectedModel ? createProvider({ ...this.request.settings, model: selectedModel }) : this.provider);
+      const routePurpose = entry.routePurpose || "worker";
+      const purposeAccess = this.parentContext.routeSession && (entry.routeId || (!selectedModel && routePurpose !== "worker"))
+        ? this.parentContext.routeSession.accessForPurpose(routePurpose, { routeId: entry.routeId, requiredDataScopes: ["workspace"], reason: `worker ${entry.id}` })
+        : null;
+      const provider = purposeAccess?.provider || (selectedModel ? createProvider({ ...this.request.settings, model: selectedModel }) : this.provider);
       const parentRegistrations = this.parentContext.capabilities.registrations?.() || [];
       const parentDefinitions = parentRegistrations.length
         ? parentRegistrations.map((record) => record.definition)
@@ -240,7 +241,8 @@ class WorkerHub {
       const registrations = parentRegistrations.length
         ? parentRegistrations.filter((record) => scopedNames.has(record.name))
         : scopedDefinitions.map((definition) => ({ definition }));
-      const workerRequest = { ...restrictedRequest, workspaceRoot: entry.workspace.root, ...(selectedRoute ? { modelLimits: this.parentContext.routeSession.limitsFor(entry.routeId, "worker") } : {}) };
+      const workerLimits = purposeAccess?.limits || (!selectedModel ? this.parentContext.routeSession?.limitsFor("", "worker") : null);
+      const workerRequest = { ...restrictedRequest, workspaceRoot: entry.workspace.root, ...(workerLimits ? { modelLimits: workerLimits } : {}) };
       const workerEvents = { emit: (event) => this.events.emit({ ...event, workerId: entry.id }) };
       const ruleCatalog = new RuleCatalog(workerRequest, workerEvents.emit);
       await ruleCatalog.load();
@@ -283,7 +285,8 @@ class WorkerHub {
       observationLedger.refresh(entry.messages);
       const contextReleaseReminder = new ContextReleaseReminder(workerEvents.emit);
       contextReleaseReminder.restore(entry.observationRelease?.reminder);
-      const windowSteward = new WindowSteward(workerRequest, provider, this.parentContext.artifactVault, workerEvents.emit, observationLedger);
+      const renewalAccess = this.parentContext.routeSession?.accessForPurpose("renewal", { requiredDataScopes: ["workspace"], reason: `worker ${entry.id} context renewal` }) || null;
+      const windowSteward = new WindowSteward(workerRequest, renewalAccess?.provider || provider, this.parentContext.artifactVault, workerEvents.emit, observationLedger, { providerLimits: renewalAccess?.limits || null });
       const internetResearch = new InternetResearchService(workerRequest, {
         emit: workerEvents.emit,
         artifacts: this.parentContext.artifactVault,
@@ -396,7 +399,7 @@ function workerInteractionGate(entry, events) {
   };
 }
 function isTerminal(status) { return ["completed", "failed", "stopped", "interrupted"].includes(status); }
-function publicEntry(entry) { return { id: entry.id, description: entry.description, agentId: entry.agentId, routeId: entry.routeId || "", status: entry.status, background: entry.background, isolation: entry.workspace?.isolation || entry.isolation, workspace: entry.workspace ? { root: entry.workspace.root, branch: entry.workspace.branch, retained: entry.workspace.retained, fallbackReason: entry.workspace.fallbackReason } : undefined, result: entry.result, error: entry.error }; }
+function publicEntry(entry) { return { id: entry.id, description: entry.description, agentId: entry.agentId, routeId: entry.routeId || "", routePurpose: entry.routePurpose || "worker", status: entry.status, background: entry.background, isolation: entry.workspace?.isolation || entry.isolation, workspace: entry.workspace ? { root: entry.workspace.root, branch: entry.workspace.branch, retained: entry.workspace.retained, fallbackReason: entry.workspace.fallbackReason } : undefined, result: entry.result, error: entry.error }; }
 
 function privateEntry(entry) {
   return {
@@ -423,6 +426,7 @@ function restoredEntry(snapshot, agent, authority, status) {
     prompt: String(snapshot.prompt || ""),
     model: String(snapshot.model || ""),
     routeId: String(snapshot.routeId || ""),
+    routePurpose: String(snapshot.routePurpose || agent?.metadata?.routePurpose || "worker"),
     agentId: String(agent?.id || snapshot.agentLogicalId || snapshot.agentId || ""),
     status,
     background: snapshot.background === true,

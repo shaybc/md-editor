@@ -7,6 +7,7 @@ aliases: [review-pull-request]
 triggers: [review pull request, inspect proposed changes]
 argumentHint: "[pull request reference]"
 allowedModes: [agent]
+routePurpose: review
 allowedTools: [skill_invoke, capability_search, git_status, git_diff, read_file, search_text, run_command]
 requiredTools: [git_diff]
 ---
