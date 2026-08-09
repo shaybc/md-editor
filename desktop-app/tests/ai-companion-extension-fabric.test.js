@@ -19,6 +19,14 @@ const { discoverExtensions } = require("../resources/ai-companion/orchestration/
 const { RunExtensionCatalog } = require("../resources/ai-companion/orchestration/autonomous/extensions/run-extension-catalog");
 const { RunAgentSource } = require("../resources/ai-companion/orchestration/autonomous/agents/run-agent-source");
 const { executeTool } = require("../resources/ai-companion/orchestration/autonomous/tool-executor");
+const { ExtensionAuthoringRepository } = require("../resources/ai-companion/orchestration/autonomous/extensions/extension-authoring-repository");
+
+test("settings help tooltips render above extension editor layers", async () => {
+  const styles = await fs.readFile(path.join(__dirname, "../resources/styles.css"), "utf8");
+  const tooltipLayer = Number(styles.match(/\.settings-ai-entry-tooltip\s*\{[\s\S]*?z-index:\s*(\d+)/)?.[1] || 0);
+  const contributionLayer = Number(styles.match(/\.settings-ai-extension-contribution-editor\s*\{\s*z-index:\s*(\d+)/)?.[1] || 0);
+  assert.ok(tooltipLayer > contributionLayer, `Expected tooltip layer ${tooltipLayer} above contribution dialog layer ${contributionLayer}.`);
+});
 
 async function temporaryRoots(t) {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "md-editor-extensions-"));
@@ -46,7 +54,7 @@ test("bundled workflow metadata is available without loading instruction bodies"
   const bundle = snapshot.bundles.find((entry) => entry.id === "core-workflows");
   assert.equal(bundle.enabled, true);
   assert.equal(bundle.trusted, true);
-  assert.equal(bundle.contributionCount, 19);
+  assert.equal(bundle.contributionCount, 23);
   const skill = snapshot.entries.find((entry) => entry.id === "core-workflows:develop-change");
   assert.equal(skill.kind, "skill");
   assert.equal(Object.hasOwn(skill, "body"), false);
@@ -112,6 +120,44 @@ test("workspace bundles remain inactive until enabled and trusted for that works
   assert.equal(snapshot.entries.some((entry) => entry.extensionId === "local-pack"), false);
   snapshot = await fabric.configure({ id: "local-pack", enabled: true, trusted: true });
   assert.equal(snapshot.entries.some((entry) => entry.id === "local-pack:local-skill"), true);
+});
+
+test("authored extensions create, rename, delete, and restore without duplicate publication", async (t) => {
+  const roots = await temporaryRoots(t);
+  const repository = new ExtensionAuthoringRepository(roots);
+  const draft = {
+    manifest: { schemaVersion: 1, id: "authored-pack", name: "Authored Pack", version: "1.0.0", description: "Authoring transaction test" },
+    skills: [], agents: [], hooks: [], mcpServers: []
+  };
+  const created = await repository.save({ scope: "user", draft });
+  assert.equal(created.id, "authored-pack");
+  await assert.rejects(() => repository.save({ scope: "user", draft }), /already exists/i);
+  created.draft.manifest.id = "renamed-pack";
+  const renamed = await repository.save({ scope: "user", originalId: created.id, expectedDigest: created.digest, draft: created.draft });
+  assert.equal(renamed.id, "renamed-pack");
+  const recovery = await repository.trash({ scope: "user", id: renamed.id });
+  assert.equal((await repository.listTrash("user")).length, 1);
+  await repository.restore(recovery);
+  assert.equal((await repository.read("user", renamed.id)).id, "renamed-pack");
+});
+
+test("workspace extension edits reject stale drafts and invalidate prior trust", async (t) => {
+  const roots = await temporaryRoots(t);
+  const repository = new ExtensionAuthoringRepository(roots);
+  const draft = {
+    manifest: { schemaVersion: 1, id: "workspace-pack", name: "Workspace Pack", version: "1.0.0", description: "Workspace authoring test" },
+    skills: [], agents: [], hooks: [], mcpServers: []
+  };
+  const created = await repository.save({ scope: "workspace", draft });
+  const fabric = new ExtensionFabric(roots);
+  await fabric.load();
+  await fabric.configure({ id: created.id, enabled: true, trusted: true });
+  const stale = JSON.parse(JSON.stringify(created.draft));
+  created.draft.manifest.description = "Changed description";
+  await repository.save({ scope: "workspace", originalId: created.id, expectedDigest: created.digest, draft: created.draft });
+  const refreshed = await fabric.load();
+  assert.equal(refreshed.bundles.find((entry) => entry.id === created.id).trusted, false);
+  await assert.rejects(() => repository.save({ scope: "workspace", originalId: created.id, expectedDigest: created.digest, draft: stale }), /changed after it was opened/i);
 });
 
 test("a traversal contribution invalidates only its bundle", async (t) => {

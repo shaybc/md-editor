@@ -50,7 +50,11 @@ class ExtensionFabric {
   /** Return redacted extension metadata suitable for UI and model discovery. */
   snapshot() {
     return {
-      bundles: this.bundles.map(({ contributions, root, manifestPath, ...bundle }) => ({ ...bundle, contributionCount: contributions.length })),
+      bundles: this.bundles.map(({ contributions, root, manifestPath, ...bundle }) => ({
+        ...bundle,
+        contributionCount: contributions.length,
+        contributionCounts: contributions.reduce((counts, entry) => ({ ...counts, [entry.kind]: (counts[entry.kind] || 0) + 1 }), {})
+      })),
       entries: Array.from(this.entries.values(), ({ filePath, bundleRoot, metadata, ...entry }) => ({ ...entry, metadata: redactMetadata(metadata) })),
       errors: this.errors.slice()
     };

@@ -57,4 +57,15 @@ async function updateExtensionState(profileRoot, workspaceRoot, change) {
   return state;
 }
 
-module.exports = { isExtensionEnabled, isExtensionTrusted, loadExtensionState, saveExtensionState, updateExtensionState, workspaceId };
+/** Move or remove persisted state when an authored bundle changes identity. */
+async function migrateExtensionState(profileRoot, workspaceRoot, oldId, newId) {
+  const state = await loadExtensionState(profileRoot);
+  if (oldId && newId && oldId !== newId && Object.hasOwn(state.enabled || {}, oldId)) state.enabled[newId] = state.enabled[oldId];
+  if (oldId) delete state.enabled?.[oldId];
+  const workspace = state.trustedWorkspaces?.[workspaceId(workspaceRoot)];
+  if (workspace && oldId) delete workspace[oldId];
+  await saveExtensionState(profileRoot, state);
+  return state;
+}
+
+module.exports = { isExtensionEnabled, isExtensionTrusted, loadExtensionState, migrateExtensionState, saveExtensionState, updateExtensionState, workspaceId };

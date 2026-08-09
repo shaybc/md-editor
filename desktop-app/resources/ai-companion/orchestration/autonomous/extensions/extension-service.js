@@ -3,6 +3,7 @@
 "use strict";
 
 const { ExtensionFabric } = require("./extension-fabric");
+const { ExtensionAuthoringRepository } = require("./extension-authoring-repository");
 const { HookSourceCatalog } = require("../hooks/hook-source-catalog");
 const { normalizeHookDefinition } = require("../hooks/hook-definition-policy");
 const { SkillCatalog } = require("../skills/skill-catalog");
@@ -20,6 +21,17 @@ async function configureExtension(request, change) {
   await fabric.load();
   return fabric.configure({ id: String(change?.id || ""), enabled: change?.enabled, trusted: change?.trusted });
 }
+
+function authoring(request) { return new ExtensionAuthoringRepository(request); }
+async function readExtension(request, input) { return authoring(request).read(input.scope, input.id); }
+async function validateExtension(request, input) { return authoring(request).validate(input.draft); }
+async function saveExtension(request, input) { return authoring(request).save(input); }
+async function renameExtension(request, input) { return authoring(request).save(input); }
+async function duplicateExtension(request, input) { return authoring(request).duplicate(input); }
+async function exportExtension(request, input) { return authoring(request).export(input); }
+async function trashExtension(request, input) { return authoring(request).trash(input); }
+async function listTrashedExtensions(request, input) { return authoring(request).listTrash(input.scope); }
+async function restoreExtension(request, input) { return authoring(request).restore(input); }
 
 /** Return read-only lifecycle metadata discovered outside editable settings. */
 async function listLifecycleAutomation(request) {
@@ -58,4 +70,17 @@ async function listLifecycleAutomation(request) {
   };
 }
 
-module.exports = { configureExtension, listExtensions, listLifecycleAutomation };
+module.exports = {
+  configureExtension,
+  duplicateExtension,
+  exportExtension,
+  listExtensions,
+  listLifecycleAutomation,
+  listTrashedExtensions,
+  readExtension,
+  renameExtension,
+  restoreExtension,
+  saveExtension,
+  trashExtension,
+  validateExtension
+};

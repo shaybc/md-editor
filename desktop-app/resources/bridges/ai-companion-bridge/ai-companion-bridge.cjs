@@ -368,6 +368,24 @@ async function handleRequest(session, message) {
       result = await extensionService.listLifecycleAutomation(request);
     } else if (message.action === "extensionConfigure") {
       result = await extensionService.configureExtension(request, message);
+    } else if (message.action === "extensionRead") {
+      result = await extensionService.readExtension(request, message);
+    } else if (message.action === "extensionValidate") {
+      result = await extensionService.validateExtension(request, message);
+    } else if (message.action === "extensionSave") {
+      result = await extensionService.saveExtension(request, message);
+    } else if (message.action === "extensionRename") {
+      result = await extensionService.renameExtension(request, message);
+    } else if (message.action === "extensionDuplicate") {
+      result = await extensionService.duplicateExtension(request, message);
+    } else if (message.action === "extensionExport") {
+      result = await extensionService.exportExtension(request, message);
+    } else if (message.action === "extensionTrash") {
+      result = await extensionService.trashExtension(request, message);
+    } else if (message.action === "extensionTrashList") {
+      result = await extensionService.listTrashedExtensions(request, message);
+    } else if (message.action === "extensionRestore") {
+      result = await extensionService.restoreExtension(request, message);
     } else if (message.action === "approvalGrantsList") {
       const store = new ApprovalGrantStore(request.profileRoot, request.workspaceRoot);
       const grants = await store.list();

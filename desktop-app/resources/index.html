@@ -1341,6 +1341,10 @@
                       <i class="bi bi-diagram-3" aria-hidden="true"></i>
                       <span>Hooks</span>
                     </button>
+                    <button class="settings-tab-button settings-tab-child" type="button" data-settings-tab="ai-extensions" data-settings-parent-tab-group="ai" aria-selected="false" tabindex="-1">
+                      <i class="bi bi-boxes" aria-hidden="true"></i>
+                      <span>Extensions</span>
+                    </button>
                     <button class="settings-tab-button settings-tab-child" type="button" data-settings-tab="ai-approvals" data-settings-parent-tab-group="ai" aria-selected="false" tabindex="-1">
                       <i class="bi bi-shield-lock" aria-hidden="true"></i>
                       <span>Approvals</span>
@@ -2519,7 +2523,6 @@
                 </div>
                 <div class="settings-subsection"><h4 class="settings-subsection-title">Limits</h4><div class="settings-field-grid settings-field-grid-two"><label class="settings-field" for="settings-ai-max-tokens-per-chat-minute"><span class="settings-field-label">Max tokens per chat minute (0 disables)</span><input type="number" id="settings-ai-max-tokens-per-chat-minute" class="rename-modal-input settings-number-input" min="0" max="1000000" step="1000" /></label><label class="settings-field" for="settings-ai-max-tasks-per-chat"><span class="settings-field-label">Max tasks per chat</span><input type="number" id="settings-ai-max-tasks-per-chat" class="rename-modal-input settings-number-input" min="1" max="200" step="1" /></label><label class="settings-field" for="settings-ai-agent-max-response-tokens"><span class="settings-field-label">Max tokens per response (0 disables)</span><input type="number" id="settings-ai-agent-max-response-tokens" class="rename-modal-input settings-number-input" min="0" max="128000" step="100" /></label></div></div>
                 <div class="settings-subsection"><h4 class="settings-subsection-title">Agent</h4><label class="settings-field" for="settings-ai-permission-mode"><span class="settings-field-label">Permission mode</span><select id="settings-ai-permission-mode" class="rename-modal-input settings-select-input"><option value="guided">Guided</option><option value="observe-only">Observe only</option><option value="edit-trusted">Trust workspace edits</option><option value="risk-routed">Risk-routed</option><option value="preauthorized-only">Preauthorized only</option><option value="sandbox-unattended">Sandbox unattended</option></select></label><div class="settings-switch-grid"><label class="settings-switch-row" for="settings-ai-agent-confirm-before-write"><span><span class="settings-switch-title">Ask before writing files</span><span class="settings-switch-description">Controlled by the selected permission mode and capability approvals.</span></span><input type="checkbox" id="settings-ai-agent-confirm-before-write" class="settings-switch-input" checked disabled /><span class="settings-switch" aria-hidden="true"></span></label></div></div>
-                <div class="settings-subsection"><div class="settings-ai-approval-heading-row"><h4 class="settings-subsection-title">Extensions</h4><button id="settings-ai-extension-refresh" class="reset-modal-btn settings-secondary-action" type="button">Refresh</button></div><p class="settings-panel-description">Discover bundled, profile, and workspace skills, agents, hooks, and external servers. Workspace bundles require explicit trust.</p><div id="settings-ai-extension-list" class="settings-switch-grid"></div><p id="settings-ai-extension-empty" class="settings-panel-description">No extension bundles were discovered.</p><p id="settings-ai-extension-status" class="settings-panel-description" aria-live="polite"></p></div>
               </section>
               <section class="settings-panel" data-settings-panel="ai-lifecycle" aria-labelledby="settings-ai-lifecycle-panel-title" hidden>
                 <div class="settings-panel-heading">
@@ -2537,6 +2540,25 @@
                   <div class="settings-table settings-ai-lifecycle-table" role="table" aria-label="Lifecycle automation"><div class="settings-table-header" role="row"><span role="columnheader">Automation</span><span role="columnheader">Source</span><span role="columnheader">Event</span><span role="columnheader">Actions</span><span role="columnheader">Status</span><span role="columnheader">Controls</span></div><div id="settings-ai-lifecycle-rows" class="settings-table-body" role="rowgroup"></div></div>
                   <p id="settings-ai-lifecycle-empty" class="settings-panel-description">No profile lifecycle automation configured.</p>
                   <p id="settings-ai-lifecycle-status" class="settings-panel-description" aria-live="polite"></p>
+                </div>
+              </section>
+              <section class="settings-panel" data-settings-panel="ai-extensions" aria-labelledby="settings-ai-extensions-title" hidden>
+                <div class="settings-panel-heading">
+                  <span class="settings-panel-icon"><i class="bi bi-boxes" aria-hidden="true"></i></span>
+                  <div><h3 id="settings-ai-extensions-title" class="settings-panel-title">Extensions</h3><p class="settings-panel-description">Create and manage bundles of skills, agents, lifecycle automation, and external servers.</p></div>
+                </div>
+                <div class="settings-subsection">
+                  <div class="settings-ai-extension-toolbar">
+                    <button id="settings-ai-extension-refresh" class="reset-modal-btn settings-secondary-action" type="button"><i class="bi bi-arrow-clockwise" aria-hidden="true"></i><span>Refresh</span></button>
+                    <button id="settings-ai-extension-create" class="reset-modal-btn settings-primary-action" type="button"><i class="bi bi-plus-lg" aria-hidden="true"></i><span>Create extension</span></button>
+                    <button id="settings-ai-extension-restore" class="reset-modal-btn settings-secondary-action" type="button"><i class="bi bi-arrow-counterclockwise" aria-hidden="true"></i><span>Restore deleted extension</span></button>
+                  </div>
+                  <div class="settings-table settings-ai-extension-table" role="table" aria-label="Extension bundles">
+                    <div class="settings-table-header" role="row"><span role="columnheader">Extension</span><span role="columnheader">Version</span><span role="columnheader">Scope</span><span role="columnheader">Contributions</span><span role="columnheader">Access</span><span role="columnheader">Actions</span></div>
+                    <div id="settings-ai-extension-list" class="settings-table-body" role="rowgroup"></div>
+                  </div>
+                  <p id="settings-ai-extension-empty" class="settings-panel-description">No extension bundles were discovered.</p>
+                  <p id="settings-ai-extension-status" class="settings-panel-description" aria-live="polite"></p>
                 </div>
               </section>
               <section class="settings-panel" data-settings-panel="ai-connection" aria-labelledby="settings-ai-connection-title" hidden>
@@ -5090,6 +5112,7 @@
     <script src="js/ai-companion/settings-upgrade.js"></script>
     <script src="js/ai-companion/security-settings.js"></script>
     <script src="js/ai-companion/approval-settings.js"></script>
+    <script src="js/ai-companion/extension-editor.js"></script>
     <script src="js/ai-companion/extension-settings.js"></script>
     <script src="js/ai-companion/lifecycle-settings.js"></script>
     <script src="js/ai-companion/structured-execution-actions.js"></script>
