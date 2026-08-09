@@ -9387,6 +9387,7 @@ Markdown content is processed client-side in your browser and sanitized before p
     const aiSettings = getAiCompanionSettings();
     if (settingsAiEnabledInput) settingsAiEnabledInput.checked = aiSettings.enabled;
     app.modules?.aiCompanionToolAccessSettings?.refresh?.();
+    app.modules?.aiExtensionSettings?.refresh?.();
     if (settingsAiProviderModeInput) settingsAiProviderModeInput.value = aiSettings.providerMode;
     if (settingsAiBaseUrlInput) settingsAiBaseUrlInput.value = aiSettings.baseUrl;
     if (settingsAiApiKeyInput) settingsAiApiKeyInput.value = aiSettings.apiKey;
