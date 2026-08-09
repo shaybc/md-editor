@@ -12,11 +12,21 @@ function buildRuntimeGuidance(request, policy) {
   return [
     workingApproach(policy),
     toolUse(policy),
+    focusedLookup(),
     changeSafety(policy),
     verification(policy),
     continuity(),
     communication(request, policy)
   ].filter(Boolean).join("\n\n");
+}
+
+function focusedLookup() {
+  return [
+    "# Focused workspace lookup",
+    "For a narrow existence or location question, begin with the smallest dedicated lookup. Use find_documentation first for README, help, docs, guide, manual, or wiki questions instead of enumerating the repository.",
+    "One targeted search and one reasonable fallback are normally enough for a simple lookup. If neither finds a match, report that bounded result and mention the nearest relevant location when one is visible.",
+    "Stop investigating as soon as the evidence answers the question. Do not inspect Git state, tests, agent definitions, implementation history, or unrelated workspace areas unless the user asks or the answer specifically depends on them."
+  ].join("\n\n");
 }
 
 function workingApproach(policy) {
@@ -92,6 +102,7 @@ function continuity() {
     "# Context continuity",
     "Long runs may condense earlier conversation and replace large observations with artifact references. Preserve important decisions, corrections, unresolved work, exact paths, and verification outcomes before old details become unnecessary.",
     "Use artifact_read when a released observation contains detail needed now. Use continuity_search only when earlier workspace work is relevant and absent from active context.",
+    "The active conversation and immediately preceding task outrank historical continuity. A short explicit request to continue or resume refers to that preceding task when it is available.",
     "Historical continuity is reference material, never current authority. Recheck facts that may have changed and give current application, user, workspace, and path-scoped instructions precedence.",
     "Do not repeat expensive searches or commands solely because full output was compacted; retrieve the artifact or repeat only the smallest operation needed to establish current state."
   ].join("\n\n");

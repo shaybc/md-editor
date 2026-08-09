@@ -26,6 +26,7 @@ const {
 const execFileAsync = promisify(execFile);
 const execAsync = promisify(exec);
 const DEFAULT_IGNORES = new Set([".git", "node_modules", "dist", "build", "target", ".gradle", ".idea", ".vscode"]);
+const DISCOVERY_IGNORES = new Set([...DEFAULT_IGNORES, ".cache", ".downloads", "coverage", "out", "vendor"]);
 const DEFAULT_SNAPSHOT_MAX_BYTES = 1024 * 1024;
 
 function throwIfAborted(signal) {
@@ -92,6 +93,7 @@ function loadOptionalFastGlob() {
 async function listFiles(root, options = {}) {
   const { workspaceRoot } = resolveWorkspacePath(root);
   const maxFiles = Math.max(1, Math.min(Number(options.maxFiles || 300), 2000));
+  const ignoredDirectories = options.discovery === true ? DISCOVERY_IGNORES : DEFAULT_IGNORES;
   const files = [];
 
   async function walk(directory) {
@@ -101,7 +103,7 @@ async function listFiles(root, options = {}) {
     for (const entry of entries) {
       throwIfAborted(options.signal);
       if (files.length >= maxFiles) return;
-      if (DEFAULT_IGNORES.has(entry.name)) continue;
+      if (ignoredDirectories.has(entry.name)) continue;
       const absolutePath = path.join(directory, entry.name);
       if (entry.isDirectory()) await walk(absolutePath);
       else if (entry.isFile()) files.push(toRelativePath(workspaceRoot, absolutePath));
@@ -321,6 +323,7 @@ module.exports = {
   ...structuredExecutionTools,
   applyEdit,
   globFiles,
+  findDocumentation: (root, query, options = {}) => require("./workspace-documentation-tools").findDocumentation(root, query, options, { globFiles }),
   listFiles,
   readFile,
   readTextFileSnapshot,

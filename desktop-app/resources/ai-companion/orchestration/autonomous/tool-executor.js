@@ -36,8 +36,19 @@ async function executeTool(call, context) {
   if (name !== "capability_search") context.capabilities?.assertCallable?.(name);
   if (name !== "skill_invoke") context.skillInvocation?.assertToolAllowed?.(name);
   const options = { signal: context.request.signal };
-  if (name === "list_files") return workspaceTools.listFiles(root, { ...options, maxFiles: args.maxFiles });
+  if (name === "list_files") {
+    const limit = Math.max(1, Math.min(Number(args.maxFiles) || 80, 2000));
+    const files = await workspaceTools.listFiles(root, { ...options, discovery: true, maxFiles: limit + 1 });
+    return {
+      files: files.slice(0, limit),
+      returned: Math.min(files.length, limit),
+      limit,
+      truncated: files.length > limit,
+      omittedDirectories: [".cache", ".downloads", ".git", ".gradle", ".idea", ".vscode", "build", "coverage", "dist", "node_modules", "out", "target", "vendor"]
+    };
+  }
   if (name === "glob_files") return workspaceTools.globFiles(root, args.pattern, { ...options, maxFiles: args.maxFiles });
+  if (name === "find_documentation") return workspaceTools.findDocumentation(root, args.query, { ...options, maxResults: args.maxResults });
   if (name === "search_text") return workspaceTools.searchGrep(root, args.pattern, { ...options, maxMatches: args.maxMatches });
   if (name === "read_file") {
     context.windowSteward?.recordFile?.(args.path);

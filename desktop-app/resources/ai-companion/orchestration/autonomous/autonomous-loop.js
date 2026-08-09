@@ -55,6 +55,7 @@ async function runAutonomousLoop(input) {
       toolChoice: currentTools.length ? "auto" : undefined,
       temperature: 0.2,
       maxTokens: request.settings.agentMaxResponseTokens || undefined,
+      rateLimitMaxRetries: context.policy?.mode === "chat" ? 1 : undefined,
       signal: request.signal,
       onDebug: createProviderDebugEmitter(events.emit),
       onUsage: (usage) => {

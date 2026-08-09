@@ -26,6 +26,16 @@ test("natural text completes without a tool or verifier call", async () => {
   assert.deepEqual(events.filter((event) => event.type === "assistant-final").map((event) => event.content), ["Hello!"]);
 });
 
+test("Chat requests permit at most one transient provider retry", async () => {
+  let requestOptions;
+  const provider = { async completeMessage(_messages, options) {
+    requestOptions = options;
+    return { role: "assistant", content: "Hello!", toolCalls: [] };
+  } };
+  await new AutonomousOrchestrator().run(request({ action: "chat" }), { provider }, () => {});
+  assert.equal(requestOptions.rateLimitMaxRetries, 1);
+});
+
 test("exact user slash workflow expands before the first provider call", async () => {
   let calls = 0;
   const events = [];

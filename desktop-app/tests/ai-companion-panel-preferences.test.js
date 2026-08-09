@@ -2854,6 +2854,53 @@ test("AI Companion chat request errors show notification dialog and inline respo
   assert.equal(response.className, "ai-companion-chat-response error");
   assert.equal(response.textContent, "Provider exploded");
 });
+test("explicit continuation includes the immediately preceding cancelled task", async () => {
+  const payloads = [];
+  const chatId = "chat_20260809_120000_continue";
+  const taskId = "task_000001_20260809_120001_continue";
+  const harness = createPanelHarness({
+    bridge: {
+      chat: async (payload) => {
+        payloads.push(payload);
+        return { content: "Continued." };
+      }
+    }
+  });
+  harness.storage.set("ai-companion-chats", JSON.stringify({
+    id: chatId,
+    title: "Documentation lookup",
+    createdAt: 1786266000000,
+    updatedAt: 1786266001000,
+    tasks: [{ id: taskId, fileName: `${taskId}.json`, sequence: 1, title: "Find wiki files", createdAt: 1786266000000, updatedAt: 1786266001000, status: "cancelled" }]
+  }));
+  harness.storage.set(`ai-companion-agent-tasks:${taskId}`, JSON.stringify({
+    id: taskId,
+    fileName: `${taskId}.json`,
+    sequence: 1,
+    prompt: "Where are the wiki files located?",
+    title: "Find wiki files",
+    createdAt: 1786266000000,
+    updatedAt: 1786266001000,
+    status: "cancelled",
+    events: [
+      { type: "tool", tool: "glob_files", summary: "No matching wiki files" },
+      { type: "chat-response", isError: true, content: "Provider rate limit interrupted the lookup." }
+    ]
+  }));
+
+  await harness.api.refreshChatSelectOptions();
+  clickChatMenuItem(harness, 0);
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  harness.agentInput.value = "continue";
+  harness.agentInput.dispatchEvent("input");
+  harness.agentRunButton.click();
+  await new Promise((resolve) => setTimeout(resolve, 20));
+
+  assert.equal(payloads.length, 1);
+  assert.equal(payloads[0].conversationHistory[0].content, "Where are the wiki files located?");
+  assert.match(payloads[0].conversationHistory[1].content, /explicitly asked to continue this immediately preceding task/i);
+  assert.match(payloads[0].conversationHistory[1].content, /Provider rate limit interrupted the lookup/);
+});
 test("AI Companion prompt inline edit reruns from the edited prompt and truncates later history", async () => {
   const payloads = [];
   const harness = createPanelHarness({

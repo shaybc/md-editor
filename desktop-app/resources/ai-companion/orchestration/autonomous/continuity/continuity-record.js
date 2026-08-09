@@ -118,8 +118,10 @@ class ContinuityRecord {
   /** Search prior records within the exact current workspace. */
   async search(query, options = {}) {
     if (!this.workspaceDirectory) return [];
+    if (isContinuationOnlyQuery(query)) return [];
     const index = await this.readIndex();
     const terms = tokenize(`${query || ""} ${this.request.activeFile?.path || ""}`);
+    if (String(query || "").trim() && !terms.length) return [];
     const currentRun = getRunIdentity(this.request);
     const selected = index
       .filter((entry) => options.includeCurrent === true || entry.runId !== currentRun)
@@ -269,11 +271,17 @@ function sectionContent(content, heading) {
   return String(match?.[1] || "").trim();
 }
 
-function tokenize(value) { return Array.from(new Set(String(value || "").toLowerCase().match(/[a-z0-9_.\/-]{3,}/g) || [])); }
+const SEARCH_STOP_WORDS = new Set(["about", "are", "continue", "current", "docs", "documentation", "files", "find", "going", "keep", "located", "please", "resume", "show", "the", "there", "where", "wiki", "with"]);
+function tokenize(value) {
+  return Array.from(new Set(String(value || "").toLowerCase().match(/[a-z0-9_.\/-]{3,}/g) || []))
+    .filter((term) => !SEARCH_STOP_WORDS.has(term));
+}
 function scoreEntry(entry, terms) {
   const haystack = `${entry.prompt || ""} ${entry.activePath || ""} ${entry.summary || ""}`.toLowerCase();
-  return terms.reduce((score, term) => score + (haystack.includes(term) ? 5 : 0), entry.unresolved ? 2 : 0);
+  const matched = terms.reduce((count, term) => count + (haystack.includes(term) ? 1 : 0), 0);
+  return matched ? (matched * 5) + (entry.unresolved ? 2 : 0) : 0;
 }
+function isContinuationOnlyQuery(value) { return /^(?:please\s+)?(?:continue|resume|go\s+on|keep\s+going)(?:\s+please)?[.!?]*$/i.test(String(value || "").trim()); }
 function canonicalWorkspace(value) { return path.resolve(String(value || ".")).toLowerCase(); }
 function escapeRegex(value) { return value.replace(/[|\\{}()[\]^$+*?.-]/g, "\\$&"); }
 async function atomicWrite(target, content) {

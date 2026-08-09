@@ -41,6 +41,11 @@ function rateLimitStatus(error) {
   return Number(error?.providerStatus || error?.status || error?.statusCode || 0);
 }
 
+function normalizeRetryLimit(value, fallback) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? Math.max(0, Math.floor(parsed)) : fallback;
+}
+
 /**
  * Add bounded 429 retry behavior to every model-request operation exposed by a connector.
  * @param {object} provider Connector implementation to protect.
@@ -49,7 +54,7 @@ function rateLimitStatus(error) {
  */
 function withProviderRateLimitGuard(provider, options = {}) {
   if (!provider || typeof provider !== "object") return provider;
-  const maxRetries = Math.max(0, Math.floor(Number(options.maxRetries ?? DEFAULT_MAX_RATE_LIMIT_RETRIES)));
+  const maxRetries = normalizeRetryLimit(options.maxRetries, DEFAULT_MAX_RATE_LIMIT_RETRIES);
   const defaultOnDebug = typeof options.onDebug === "function" ? options.onDebug : null;
   const wait = typeof options.wait === "function" ? options.wait : waitForRetry;
   let adaptivePaceMs = 0;
@@ -76,25 +81,31 @@ function withProviderRateLimitGuard(provider, options = {}) {
       const requestOptions = optionsForOperation(operation, args);
       const signal = requestOptions.signal;
       const onDebug = typeof requestOptions.onDebug === "function" ? requestOptions.onDebug : defaultOnDebug;
+      const requestMaxRetries = normalizeRetryLimit(requestOptions.rateLimitMaxRetries, maxRetries);
       let retries = 0;
       while (true) {
         await reserveAdaptiveRequest(signal, onDebug, operation);
         try {
           return await invoke(...args);
         } catch (error) {
-          if (rateLimitStatus(error) !== 429 || retries >= maxRetries || signal?.aborted) throw error;
-          retries += 1;
+          if (rateLimitStatus(error) !== 429 || signal?.aborted) throw error;
           const retryPlan = createRateLimitRetryPlan({
             response: error.providerResponse,
             errorText: error.providerBody || error.message,
-            retryNumber: retries
+            retryNumber: retries + 1
           });
+          if (!retryPlan.retryable) {
+            onDebug?.({ kind: "rate-limit-stopped", operation, reason: retryPlan.retrySuppressedReason, quota: retryPlan.quota });
+            throw error;
+          }
+          if (retries >= requestMaxRetries) throw error;
+          retries += 1;
           if (retryPlan.adaptivePaceMs !== null) adaptivePaceMs = Math.max(adaptivePaceMs, retryPlan.adaptivePaceMs);
           onDebug?.({
             kind: "rate-limit-retry", operation,
             delayMs: retryPlan.delayMs, providerDelayMs: retryPlan.providerDelayMs,
             delaySource: retryPlan.delaySource, adaptivePaceMs: retryPlan.adaptivePaceMs,
-            quota: retryPlan.quota, retry: retries, maxRetries
+            quota: retryPlan.quota, retry: retries, maxRetries: requestMaxRetries
           });
           await wait(retryPlan.delayMs, signal);
         }

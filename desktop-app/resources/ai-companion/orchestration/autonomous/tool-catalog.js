@@ -12,8 +12,9 @@ function tool(name, description, properties, required = []) {
 }
 
 const DEFINITIONS = Object.freeze([
-  tool("list_files", "List files in the workspace.", { maxFiles: integer("Maximum files to return") }),
+  tool("list_files", "Return a bounded workspace file overview with truncation metadata. Generated and vendor directories are omitted; use glob_files for a specific path.", { maxFiles: integer("Maximum files to return") }),
   tool("glob_files", "Find workspace files matching a glob.", { pattern: text("Glob pattern") }, ["pattern"]),
+  tool("find_documentation", "Find likely workspace README, help, docs, guide, manual, or wiki files without broadly listing the repository.", { query: text("Documentation topic or location being sought"), maxResults: integer("Maximum results, up to 50") }, ["query"]),
   tool("search_text", "Search workspace text.", { pattern: text("Text to search") }, ["pattern"]),
   tool("read_file", "Read a workspace file with line numbers.", { path: text("Workspace-relative path"), startLine: integer("First line"), endLine: integer("Last line") }, ["path"]),
   tool("apply_edit", "Replace exact text in a workspace file.", { path: text("Workspace-relative path"), search: text("Exact existing text"), replacement: text("Replacement text"), approvalReason: text("Why this change is needed") }, ["path", "search", "replacement"]),
@@ -137,6 +138,7 @@ function getToolRegistrations(policy, settings = {}) {
 function runtimeRulePaths(name) {
   if (["read_file", "apply_edit", "write_file", "notebook_inspect", "notebook_cell_edit"].includes(name)) return { arguments: ["path"], results: ["path"] };
   if (name === "search_text") return { results: ["[].path"] };
+  if (name === "find_documentation") return { results: ["results[].path"] };
   return undefined;
 }
 

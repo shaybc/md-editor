@@ -4,7 +4,7 @@
 
 const ALWAYS_LOADED = new Set([
   "capability_search", "discover_extensions", "load_extension", "skill_invoke",
-  "list_files", "glob_files", "glob", "search_text", "read_file",
+  "list_files", "glob_files", "glob", "find_documentation", "search_text", "read_file",
   "apply_edit", "write_file", "run_command", "worker_launch"
 ]);
 

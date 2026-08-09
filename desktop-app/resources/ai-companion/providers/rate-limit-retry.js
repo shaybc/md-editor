@@ -95,6 +95,12 @@ function calculateAdaptiveRequestPaceMs(quota) {
   return Math.ceil(ONE_MINUTE_MS / quotaValue) + REQUEST_PACE_SAFETY_MARGIN_MS;
 }
 
+/** Daily or longer quota exhaustion cannot be repaired by a short in-run wait. */
+function isLongWindowQuota(quota, errorText = "") {
+  const quotaText = `${quota?.id || ""} ${quota?.metric || ""} ${errorText || ""}`;
+  return /requests?perday|per[-_ ]day|daily quota/i.test(quotaText);
+}
+
 /**
  * Resolve the provider-requested wait, fallback backoff, and quota-derived pacing for one 429.
  * @param {{response?: Response, errorText?: string, retryNumber?: number}} options Retry inputs.
@@ -112,16 +118,20 @@ function createRateLimitRetryPlan(options = {}) {
   const fallbackDelayMs = Math.min(FALLBACK_RETRY_BASE_MS * (2 ** (retryNumber - 1)), MAX_RATE_LIMIT_RETRY_MS);
   const requestedDelayMs = providerHint?.delayMs ?? fallbackDelayMs;
   const quota = findRequestQuota(errorEntries);
+  const retryable = !isLongWindowQuota(quota, options.errorText);
   return {
     delayMs: Math.min(requestedDelayMs + RETRY_SAFETY_BUFFER_MS, MAX_RATE_LIMIT_RETRY_MS),
     providerDelayMs: providerHint?.delayMs ?? null,
     delaySource: providerHint?.source || "exponential-fallback",
     quota,
-    adaptivePaceMs: calculateAdaptiveRequestPaceMs(quota)
+    adaptivePaceMs: calculateAdaptiveRequestPaceMs(quota),
+    retryable,
+    retrySuppressedReason: retryable ? null : "daily-quota"
   };
 }
 
 module.exports = {
   calculateAdaptiveRequestPaceMs,
-  createRateLimitRetryPlan
+  createRateLimitRetryPlan,
+  isLongWindowQuota
 };

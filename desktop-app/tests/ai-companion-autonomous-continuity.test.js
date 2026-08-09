@@ -83,6 +83,8 @@ test("system context includes detailed mode-aware operating guidance", () => {
   const agent = buildSystemMessage(request, { mode: "agent" }, [], { application: "", rules: [] }, []);
   assert.match(agent, /# Working approach/);
   assert.match(agent, /# Tool use/);
+  assert.match(agent, /# Focused workspace lookup/);
+  assert.match(agent, /Use find_documentation first/);
   assert.match(agent, /# Safe workspace changes/);
   assert.match(agent, /read the exact region being changed/i);
   assert.match(agent, /destructively reset or clean repository state/i);
@@ -198,6 +200,8 @@ test("continuity updates become searchable only inside the same workspace", asyn
   const matches = await sameWorkspace.search("parser recovery");
   assert.equal(matches.length, 1);
   assert.match(matches[0].summary, /parser recovery/i);
+  assert.deepEqual(await sameWorkspace.search("continue"), []);
+  assert.deepEqual(await sameWorkspace.search("where are the wiki files located"), []);
   const isolated = new ContinuityRecord(createRequest(otherWorkspace, { profileRoot: profile, taskId: "third-run" }), provider);
   assert.deepEqual(await isolated.search("parser recovery"), []);
 });

@@ -57,6 +57,13 @@ function formatProviderDebugEvent(event) {
       details: redactProviderDebugValue(event)
     };
   }
+  if (kind === "rate-limit-stopped") {
+    return {
+      level: "warning",
+      message: "[ai-companion] Rate-limit retry skipped because the exhausted quota cannot recover during this run",
+      details: redactProviderDebugValue(event)
+    };
+  }
   if (kind === "response") {
     const details = {
       provider: event.provider,

@@ -38,6 +38,23 @@ function createGeminiRateLimitBody() {
   }]);
 }
 
+function createGeminiDailyQuotaBody() {
+  return JSON.stringify([{
+    error: {
+      code: 429,
+      message: "Daily quota exhausted. Please retry in 3s.",
+      details: [{
+        "@type": "type.googleapis.com/google.rpc.QuotaFailure",
+        violations: [{
+          quotaMetric: "generativelanguage.googleapis.com/generate_content_free_tier_requests",
+          quotaId: "GenerateRequestsPerDayPerProjectPerModel-FreeTier",
+          quotaValue: "20"
+        }]
+      }]
+    }
+  }]);
+}
+
 function createHeaders(retryAfter = "") {
   return {
     get(name) {
@@ -105,6 +122,12 @@ test("provider retry events expose the selected delay source and quota details",
   assert.equal(formatted.details.quota.value, 15);
 });
 
+test("daily quota exhaustion is classified as non-retryable", () => {
+  const plan = createRateLimitRetryPlan({ errorText: createGeminiDailyQuotaBody(), retryNumber: 1 });
+  assert.equal(plan.retryable, false);
+  assert.equal(plan.retrySuppressedReason, "daily-quota");
+});
+
 test("shared provider guard waits and repeats the same connector operation", async () => {
   let attempts = 0;
   const waits = [];
@@ -127,6 +150,44 @@ test("shared provider guard waits and repeats the same connector operation", asy
   assert.equal(result.content, "recovered");
   assert.equal(attempts, 2);
   assert.deepEqual(waits, [3000]);
+});
+
+test("shared provider guard skips waits for daily quota exhaustion", async () => {
+  let attempts = 0;
+  const waits = [];
+  const events = [];
+  const provider = withProviderRateLimitGuard({
+    async completeMessage() {
+      attempts += 1;
+      const error = new Error("Daily quota exhausted");
+      error.providerStatus = 429;
+      error.providerBody = createGeminiDailyQuotaBody();
+      throw error;
+    }
+  }, { wait: async (delayMs) => waits.push(delayMs) });
+
+  await assert.rejects(provider.completeMessage([], { onDebug: (event) => events.push(event) }), /Daily quota/);
+  assert.equal(attempts, 1);
+  assert.deepEqual(waits, []);
+  assert.equal(events.some((event) => event.kind === "rate-limit-stopped" && event.reason === "daily-quota"), true);
+});
+
+test("request retry override limits a transient connector error to one retry", async () => {
+  let attempts = 0;
+  const waits = [];
+  const provider = withProviderRateLimitGuard({
+    async completeMessage() {
+      attempts += 1;
+      const error = new Error("Please retry in 1s.");
+      error.providerStatus = 429;
+      error.providerBody = error.message;
+      throw error;
+    }
+  }, { wait: async (delayMs) => waits.push(delayMs) });
+
+  await assert.rejects(provider.completeMessage([], { rateLimitMaxRetries: 1 }), /retry/i);
+  assert.equal(attempts, 2);
+  assert.equal(waits.length, 1);
 });
 
 test("shared provider guard applies the parsed retry plan to OpenAI-compatible connectors", async () => {

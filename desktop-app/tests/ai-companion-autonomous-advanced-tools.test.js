@@ -16,6 +16,8 @@ const { rankStructures } = require("../resources/ai-companion/orchestration/auto
 const { getToolRegistrations } = require("../resources/ai-companion/orchestration/autonomous/tool-catalog");
 const { ToolExposurePolicy } = require("../resources/ai-companion/orchestration/autonomous/capabilities/tool-exposure-policy");
 const { resolveCapabilityPolicy } = require("../resources/ai-companion/orchestration/shared/capability-policy");
+const { executeTool } = require("../resources/ai-companion/orchestration/autonomous/tool-executor");
+const { findDocumentation } = require("../resources/ai-companion/tools/workspace-documentation-tools");
 
 async function temporaryDirectory(t) {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "md-editor-advanced-tools-"));
@@ -168,4 +170,46 @@ test("new secondary tool schemas remain deferred and mode-scoped", () => {
   assert.equal(chatRegistrations.has("notebook_inspect"), true);
   assert.equal(chatRegistrations.has("notebook_cell_edit"), false);
   assert.equal(agentRegistrations.has("notebook_cell_edit"), true);
+});
+
+test("documentation discovery finds help entry points without broad workspace output", async (t) => {
+  const root = await temporaryDirectory(t);
+  await fs.mkdir(path.join(root, "desktop-app", "help", "user"), { recursive: true });
+  await fs.mkdir(path.join(root, "vendor", "package"), { recursive: true });
+  await fs.writeFile(path.join(root, "README.md"), "See the user help.", "utf8");
+  await fs.writeFile(path.join(root, "desktop-app", "help", "user", "index.md"), "# User help", "utf8");
+  await fs.writeFile(path.join(root, "vendor", "package", "README.md"), "Vendor", "utf8");
+  const workspaceTools = require("../resources/ai-companion/tools/workspace-tools");
+  const result = await findDocumentation(root, "where are the wiki docs", {}, { globFiles: workspaceTools.globFiles });
+  assert.equal(result.results.some((entry) => entry.path === "desktop-app/help/user/index.md"), true);
+  assert.equal(result.results.some((entry) => entry.path === "README.md"), true);
+  assert.equal(result.results.some((entry) => entry.path.includes("vendor")), false);
+  assert.equal(result.returned <= 20, true);
+});
+
+test("model-facing file overview is bounded, structured, and omits low-value directories", async (t) => {
+  const root = await temporaryDirectory(t);
+  await fs.mkdir(path.join(root, "src"), { recursive: true });
+  await fs.mkdir(path.join(root, "vendor"), { recursive: true });
+  await Promise.all([
+    fs.writeFile(path.join(root, "src", "one.js"), "1", "utf8"),
+    fs.writeFile(path.join(root, "src", "two.js"), "2", "utf8"),
+    fs.writeFile(path.join(root, "vendor", "ignored.js"), "3", "utf8")
+  ]);
+  const result = await executeTool({ function: { name: "list_files", arguments: JSON.stringify({ maxFiles: 1 }) } }, {
+    request: { workspaceRoot: root },
+    capabilities: { assertCallable() {} },
+    skillInvocation: { assertToolAllowed() {} }
+  });
+  assert.deepEqual(Object.keys(result).sort(), ["files", "limit", "omittedDirectories", "returned", "truncated"]);
+  assert.equal(result.files.length, 1);
+  assert.equal(result.truncated, true);
+  assert.equal(result.files.some((file) => file.includes("vendor")), false);
+});
+
+test("documentation lookup is immediately available to Chat", () => {
+  const policy = resolveCapabilityPolicy("chat");
+  const registrations = new Map(getToolRegistrations(policy).map((entry) => [entry.definition.function.name, entry]));
+  assert.equal(registrations.has("find_documentation"), true);
+  assert.equal(new ToolExposurePolicy(policy).classify({ name: "find_documentation" }), "immediate");
 });

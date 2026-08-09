@@ -6367,7 +6367,7 @@
      * what already happened. Built from the saved tool events, partial responses,
      * and the approval the task was blocked on when the app closed.
      */
-    function getRecordProgressSummary(record) {
+    function getRecordProgressSummary(record, options = {}) {
       const events = Array.isArray(record?.events) ? record.events : [];
       const lines = [];
       for (const event of events) {
@@ -6377,6 +6377,8 @@
           lines.push(`- ${label}${detail ? `: ${detail}` : ""}${event.type === "tool-error" ? " (failed)" : ""}`);
         } else if (event?.type === "chat-response" && event.isError !== true && event.content) {
           lines.push(`- Partial response: ${String(event.content).slice(0, 200)}`);
+        } else if (options.continueTask === true && event?.type === "chat-response" && event.isError === true && event.content) {
+          lines.push(`- Run error: ${String(event.content).slice(0, 300)}`);
         } else if (event?.type === "approval" && isUnansweredApprovalEvent(event)) {
           lines.push(`- Stopped while waiting for approval: ${event.summary || event.tool || "approval request"}`);
         }
@@ -6387,22 +6389,24 @@
       // reads to the model like an unfinished turn it should complete, which made
       // follow-up prompts get answered as continuations of the old task.
       return [
-        "[This task was interrupted by an app restart and is now closed. Do not resume or continue it unless the user explicitly asks.]",
+        options.continueTask === true
+          ? "[The user explicitly asked to continue this immediately preceding task. Continue this task from the recorded state; do not substitute an unrelated historical task or active-file topic.]"
+          : "[This task was interrupted by an app restart and is now closed. Do not resume or continue it unless the user explicitly asks.]",
         recentLines.length ? "Progress recorded before the interruption, for reference only:" : "It stopped before any progress was recorded.",
         ...recentLines,
         "[End of closed task record.]"
       ].join("\n");
     }
 
-    function createConversationHistoryMessages(record) {
+    function createConversationHistoryMessages(record, options = {}) {
       const prompt = truncateConversationHistoryContent(record?.prompt);
       if (!prompt) return [];
       // Interrupted tasks used to be dropped entirely, which left follow-up prompts
       // with no memory of the cut-off work; contribute their progress instead.
-      if (isInterruptedTaskRecord(record)) {
+      if (isInterruptedTaskRecord(record) || options.continueTask === true && ["cancelled", "error", "failed"].includes(String(record?.status || ""))) {
         return [
           { role: "user", content: prompt },
-          { role: "assistant", content: truncateConversationHistoryContent(getRecordProgressSummary(record)) }
+          { role: "assistant", content: truncateConversationHistoryContent(getRecordProgressSummary(record, options)) }
         ];
       }
       const status = String(record?.status || "");
@@ -6435,7 +6439,7 @@
       return kept;
     }
 
-    async function buildConversationHistory(excludedEntry = null) {
+    async function buildConversationHistory(excludedEntry = null, currentPrompt = "") {
       const excludedId = excludedEntry?.record?.id || "";
       const index = agentTaskIndex.length ? agentTaskIndex : await readAgentTaskIndex();
       const items = [...index].sort(compareAgentTaskIndexItems).slice(-CONVERSATION_HISTORY_TURN_LIMIT);
@@ -6444,9 +6448,10 @@
         if (excludedId && item.id === excludedId) continue;
         records.push(getVisibleAgentTaskRecord(item.id) || await readAgentTaskRecord(item));
       }
+      const continuationRecord = isExplicitContinuationPrompt(currentPrompt) ? [...records].reverse().find(Boolean) : null;
       const messages = [];
       for (const record of dedupeConversationHistoryRecords(records)) {
-        messages.push(...createConversationHistoryMessages(record));
+        messages.push(...createConversationHistoryMessages(record, { continueTask: record === continuationRecord }));
       }
       return messages.slice(-(CONVERSATION_HISTORY_TURN_LIMIT * 2));
     }
@@ -6745,6 +6750,10 @@
       refreshGitPanelAfterTool(savedEvent);
       renderWorkspaceInspectorPanels();
       renderWorkspaceChatHistory(workspaceChatIndexes);
+    }
+
+    function isExplicitContinuationPrompt(value) {
+      return /^(?:please\s+)?(?:continue|resume|go\s+on|keep\s+going)(?:\s+please)?[.!?]*$/i.test(String(value || "").trim());
     }
 
     function appendAutonomousRuntimeStatus(event) {
@@ -7655,7 +7664,7 @@
         }
         await saveAgentEntry(existingEntry);
       }
-      const conversationHistory = await buildConversationHistory(existingEntry);
+      const conversationHistory = await buildConversationHistory(existingEntry, prompt);
       const requestChatTitle = shouldRequestGeneratedChatTitle(existingEntry);
       const activeFilePayload = getActiveFilePayload();
       latestRequestContextFiles = createLatestRequestContextFiles(activeFilePayload, attachments);
