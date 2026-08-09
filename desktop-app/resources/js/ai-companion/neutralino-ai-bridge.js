@@ -263,6 +263,16 @@
       return result;
     }
 
+    async function respondUserInput(interactionId, answers = {}, declined = false) {
+      const result = await request("userInput", {
+        interactionId: String(interactionId || ""),
+        answers: answers && typeof answers === "object" ? answers : {},
+        declined: declined === true
+      });
+      if (result.accepted !== true) throw new Error(result.error || "This user question is no longer available.");
+      return result;
+    }
+
     async function respondAppAction(actionId, result, error = "") {
       const appActionId = String(actionId || "");
       await sendToSession({
@@ -335,6 +345,7 @@
       cancel,
       request,
       respondApproval,
+      respondUserInput,
       respondAppAction,
       testConnection: function(settings) { return request("testConnection", { settings, workspaceRoot: deps.getWorkspaceRoot?.() || "" }); },
       inspectCertificate: function(payload) { return request("inspectCertificate", payload || {}); },

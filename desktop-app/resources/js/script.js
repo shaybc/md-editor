@@ -3065,6 +3065,7 @@ async function startMarkdownViewer() {
       openMarkdownInNewTab: function(markdown) {
         return tabsModule?.newTab?.(String(markdown || ""), null, { viewMode: "preview" }) || null;
       },
+      openExternalUrl: openExternalWebLink,
       shouldConfirmEditedPromptAttachmentRemoval,
       confirm: confirmWithAppModal,
       openPathInExplorer: async function(path) {
@@ -4287,6 +4288,8 @@ async function startMarkdownViewer() {
   const settingsAiGeminiApiKeyInput = document.getElementById("settings-ai-gemini-api-key");
   const settingsAiConnectionProfilesInput = document.getElementById("settings-ai-connection-profiles");
   const settingsAiProviderRoutesInput = document.getElementById("settings-ai-provider-routes");
+  const settingsAiInternetSearchEndpointInput = document.getElementById("settings-ai-internet-search-endpoint");
+  const settingsAiWorkspaceStructureAutoInput = document.getElementById("settings-ai-workspace-structure-auto");
   const settingsAiPermissionModeInput = document.getElementById("settings-ai-permission-mode");
   const settingsAiLiteLlmFields = Array.from(document.querySelectorAll(".settings-ai-litellm-field"));
   const settingsAiGeminiFields = Array.from(document.querySelectorAll(".settings-ai-gemini-field"));
@@ -9385,6 +9388,8 @@ Markdown content is processed client-side in your browser and sanitized before p
     if (settingsAiGeminiApiKeyInput) settingsAiGeminiApiKeyInput.value = aiSettings.geminiConnectorApiKey;
     if (settingsAiConnectionProfilesInput) settingsAiConnectionProfilesInput.value = JSON.stringify(aiSettings.connectionProfiles || [], null, 2);
     if (settingsAiProviderRoutesInput) settingsAiProviderRoutesInput.value = JSON.stringify(aiSettings.providerRoutes || [], null, 2);
+    if (settingsAiInternetSearchEndpointInput) settingsAiInternetSearchEndpointInput.value = aiSettings.internetSearchEndpoint || "";
+    if (settingsAiWorkspaceStructureAutoInput) settingsAiWorkspaceStructureAutoInput.checked = aiSettings.workspaceStructureAutoInclude === true;
     if (settingsAiPermissionModeInput) settingsAiPermissionModeInput.value = aiSettings.permissionMode || "guided";
     updateAiConnectionProviderFields();
     if (settingsAiChatEnabledInput) settingsAiChatEnabledInput.checked = aiSettings.chatEnabled;
@@ -11407,6 +11412,8 @@ Markdown content is processed client-side in your browser and sanitized before p
       agentAutoRunCommands: !!settingsAiAgentAutoRunCommandsInput?.checked,
       agentConfirmBeforeWrite: settingsAiAgentConfirmBeforeWriteInput?.checked !== false,
       permissionMode: settingsAiPermissionModeInput?.value || "guided",
+      internetSearchEndpoint: settingsAiInternetSearchEndpointInput?.value?.trim() || "",
+      workspaceStructureAutoInclude: settingsAiWorkspaceStructureAutoInput?.checked === true,
       connectionProfiles: aiConnectionProfiles,
       providerRoutes: aiProviderRoutes,
       aiSecurityPolicy: aiSecuritySettings?.collect?.() || aiCompanionSettings?.defaults?.aiSecurityPolicy

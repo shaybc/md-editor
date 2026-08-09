@@ -25,6 +25,10 @@ const EVENT_TYPES = Object.freeze({
   SKILL_INVOCATION_FAILED: "skill-invocation-failed", SLASH_WORKFLOW_EXPANDED: "slash-workflow-expanded",
   SCHEDULE_CREATED: "schedule-created", SCHEDULE_CANCELLED: "schedule-cancelled", SCHEDULE_FIRED: "schedule-fired",
   SCHEDULE_COMPLETED: "schedule-completed", SCHEDULE_FAILED: "schedule-failed",
+  USER_INPUT_REQUESTED: "user-input-requested", USER_INPUT_RESOLVED: "user-input-resolved", USER_INPUT_DECLINED: "user-input-declined",
+  INTERNET_SEARCH_COMPLETED: "internet-search-completed", PAGE_RETRIEVED: "page-retrieved",
+  NOTEBOOK_INSPECTED: "notebook-inspected", NOTEBOOK_UPDATED: "notebook-updated",
+  WORKSPACE_STRUCTURE_BUILT: "workspace-structure-built", SCHEDULE_RESTORED: "schedule-restored", SCHEDULE_MISSED: "schedule-missed",
   RUN_RESTORED: "run-restored", RECOVERY_WARNING: "recovery-warning",
   COMPACTION: "compaction", RUN_COMPLETED: "run-completed", RUN_CANCELLED: "run-cancelled", RUN_FAILED: "run-failed"
 });

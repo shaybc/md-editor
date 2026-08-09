@@ -95,6 +95,11 @@
         lines.push("", "Links:");
         links.forEach((link) => lines.push(`- ${link.label || link.path}: ${link.path}${link.line ? `:${link.line}` : ""}`));
       }
+      const webLinks = (activity.webLinks || []).filter((link) => link?.url);
+      if (webLinks.length) {
+        lines.push("", "Sources:");
+        webLinks.forEach((link) => lines.push(`- [${link.label || link.url}](${link.url})`));
+      }
       return lines.join("\n");
     }
 
@@ -233,6 +238,22 @@
         openPathLink(link);
       });
       return button;
+    }
+
+    function createWebLink(link) {
+      const anchor = createElement("a", "ai-companion-activity-link");
+      anchor.href = link.url;
+      anchor.target = "_blank";
+      anchor.rel = "noopener noreferrer";
+      anchor.textContent = link.label || link.url;
+      anchor.title = link.url;
+      if (typeof deps.openExternalUrl === "function") {
+        anchor.addEventListener("click", (event) => {
+          event.preventDefault?.();
+          Promise.resolve(deps.openExternalUrl(link.url)).catch((error) => deps.onLinkOpenError?.({ link, error: getPathOpenErrorDetails(error) }));
+        });
+      }
+      return anchor;
     }
 
     function createCompareButton(compare) {
@@ -407,9 +428,11 @@
       if (activity.durationMs !== undefined) meta.append(createElement("span", "", formatDuration(activity.durationMs)));
 
       const extraLinks = (activity.links || []).slice(primary.childElementCount ? 1 : 0).filter((link) => link.path);
-      if (extraLinks.length) {
+      const webLinks = (activity.webLinks || []).filter((link) => link.url);
+      if (extraLinks.length || webLinks.length) {
         const links = createElement("div", "ai-companion-activity-links");
         extraLinks.forEach((link) => links.append(createPathButton(link)));
+        webLinks.forEach((link) => links.append(createWebLink(link)));
         body.append(header, primary, meta, links);
       } else {
         body.append(header, primary, meta);

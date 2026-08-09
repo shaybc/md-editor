@@ -5,10 +5,15 @@
 const crypto = require("node:crypto");
 const fs = require("node:fs/promises");
 const path = require("node:path");
+const { describeScheduleExpression, nextScheduleTime, parseScheduleExpression } = require("./schedule-expression");
+const { companionProfilePath } = require("../profile-storage");
 
 const MAX_DELAY_MINUTES = 60 * 24 * 30;
 const RUNNING_RECLAIM_MS = 5 * 60 * 1000;
 const ACTIVE_TIMERS = new Map();
+const SESSION_ENTRIES = new Map();
+const MAX_ACTIVE_SCHEDULES = 50;
+const MAX_DURABLE_PROMPT_CHARS = 10000;
 
 class RunScheduler {
   constructor(request, services = {}, emit = () => {}) {
@@ -16,7 +21,7 @@ class RunScheduler {
     this.services = services;
     this.emit = typeof emit === "function" ? emit : () => {};
     this.workspaceRoot = path.resolve(String(request.workspaceRoot || "."));
-    this.filePath = request.profileRoot ? path.join(request.profileRoot, ".md-editor", "companion", "schedules.json") : "";
+    this.filePath = companionProfilePath(request.profileRoot, "schedules.json");
     this.entries = [];
     this.queue = Promise.resolve();
   }
@@ -25,7 +30,7 @@ class RunScheduler {
     if (this.filePath) {
       try {
         const parsed = JSON.parse(await fs.readFile(this.filePath, "utf8"));
-        this.entries = Array.isArray(parsed.entries) ? parsed.entries.filter((entry) => entry.workspaceRoot === this.workspaceRoot) : [];
+        this.entries = Array.isArray(parsed.entries) ? parsed.entries.filter((entry) => entry.workspaceRoot === this.workspaceRoot).map((entry) => ({ ...entry, durable: entry.durable !== false })) : [];
         let recovered = false;
         for (const entry of this.entries) {
           if (entry.status !== "running" || Date.now() - Date.parse(entry.claimedAt || 0) < RUNNING_RECLAIM_MS) continue;
@@ -34,25 +39,52 @@ class RunScheduler {
           entry.lastError = "The prior scheduled run was interrupted before reporting completion.";
           recovered = true;
         }
+        for (const entry of this.entries) {
+          if (entry.status !== "scheduled") continue;
+          if (Date.parse(entry.expiresAt) <= Date.now()) {
+            entry.status = "expired";
+            recovered = true;
+            continue;
+          }
+          if (Date.parse(entry.nextRunAt) <= Date.now()) {
+            this.emit({ type: "schedule-missed", id: entry.id, nextRunAt: entry.nextRunAt, recurring: entry.recurring, summary: entry.recurring ? "A missed recurring schedule was advanced to its next future run." : "A missed one-time schedule will run once." });
+            if (entry.recurring) entry.nextRunAt = new Date(nextRecurringRun(entry, Date.now())).toISOString();
+            else entry.nextRunAt = new Date().toISOString();
+            recovered = true;
+          }
+          this.emit({ type: "schedule-restored", id: entry.id, nextRunAt: entry.nextRunAt, recurring: entry.recurring, summary: "A durable autonomous schedule was restored." });
+        }
         if (recovered) await this.save();
       } catch (error) {
         if (error?.code !== "ENOENT") this.emit({ type: "recovery-warning", reason: "schedule-store-invalid", summary: "The schedule store could not be read; valid schedules can be recreated." });
         this.entries = [];
       }
     }
+    const sessionEntries = SESSION_ENTRIES.get(this.workspaceRoot) || [];
+    this.entries = mergeEntries(this.entries, sessionEntries);
+    SESSION_ENTRIES.set(this.workspaceRoot, this.entries.filter((entry) => entry.durable === false));
     for (const entry of this.entries) this.arm(entry);
     return this.list();
   }
 
   async create(input = {}) {
     const prompt = String(input.prompt || "").trim();
-    const delayMinutes = boundedMinutes(input.delayMinutes, "delayMinutes");
+    const expression = String(input.expression || input.cron || "").trim();
+    if (expression) parseScheduleExpression(expression);
+    const delayMinutes = expression ? 0 : boundedMinutes(input.delayMinutes, "delayMinutes");
     const recurring = input.recurring === true;
-    const intervalMinutes = recurring ? boundedMinutes(input.intervalMinutes || delayMinutes, "intervalMinutes") : 0;
+    const intervalMinutes = recurring && !expression ? boundedMinutes(input.intervalMinutes || delayMinutes, "intervalMinutes") : 0;
     if (!prompt) throw new Error("A scheduled task requires a non-empty prompt.");
+    if (this.entries.filter((entry) => ["scheduled", "running"].includes(entry.status)).length >= MAX_ACTIVE_SCHEDULES) throw new Error(`No more than ${MAX_ACTIVE_SCHEDULES} active schedules are allowed.`);
+    const durable = input.durable === true;
+    if (durable && prompt.length > MAX_DURABLE_PROMPT_CHARS) throw new Error(`A durable schedule prompt cannot exceed ${MAX_DURABLE_PROMPT_CHARS} characters.`);
+    const nextRunAt = expression ? new Date(nextScheduleTime(expression)).toISOString() : new Date(Date.now() + delayMinutes * 60000).toISOString();
+    const id = crypto.randomUUID();
     const entry = {
-      id: crypto.randomUUID(), workspaceRoot: this.workspaceRoot, prompt, action: "agent", recurring, intervalMinutes,
-      createdAt: new Date().toISOString(), nextRunAt: new Date(Date.now() + delayMinutes * 60000).toISOString(),
+      id, workspaceRoot: this.workspaceRoot, prompt, action: "agent", recurring, intervalMinutes, expression, durable,
+      approximate: recurring && !expression && input.approximate === true,
+      jitterMs: recurring && !expression && input.approximate === true ? deterministicJitter(id, intervalMinutes) : 0,
+      createdAt: new Date().toISOString(), nextRunAt,
       expiresAt: new Date(Date.now() + Math.min(Math.max(Number(input.expiresInDays) || 30, 1), 30) * 86400000).toISOString(),
       status: "scheduled",
       capabilityBoundary: {
@@ -62,9 +94,10 @@ class RunScheduler {
       }
     };
     this.entries.push(entry);
+    if (!durable) SESSION_ENTRIES.set(this.workspaceRoot, this.entries.filter((candidate) => candidate.durable === false));
     await this.save();
     this.arm(entry);
-    this.emit({ type: "schedule-created", id: entry.id, nextRunAt: entry.nextRunAt, recurring, summary: "Autonomous task schedule created." });
+    this.emit({ type: "schedule-created", id: entry.id, nextRunAt: entry.nextRunAt, recurring, durable, expression: expression || undefined, summary: "Autonomous task schedule created." });
     return publicEntry(entry);
   }
 
@@ -101,9 +134,10 @@ class RunScheduler {
     if (!entry || entry.status !== "running") throw new Error("Running schedule not found.");
     entry.lastRunAt = new Date().toISOString();
     entry.lastError = String(error || "");
-    if (entry.recurring && Date.now() + entry.intervalMinutes * 60000 <= Date.parse(entry.expiresAt)) {
+    const nextRun = nextRecurringRun(entry);
+    if (entry.recurring && nextRun <= Date.parse(entry.expiresAt)) {
       entry.status = "scheduled";
-      entry.nextRunAt = new Date(Date.now() + entry.intervalMinutes * 60000).toISOString();
+      entry.nextRunAt = new Date(nextRun).toISOString();
       this.arm(entry);
     } else entry.status = entry.lastError ? "failed" : "completed";
     await this.save();
@@ -111,7 +145,15 @@ class RunScheduler {
     return publicEntry(entry);
   }
 
-  snapshot() { return { version: 1, ids: this.entries.filter((entry) => entry.status === "scheduled").map((entry) => entry.id) }; }
+  snapshot() {
+    const scheduled = this.entries.filter((entry) => entry.status === "scheduled");
+    return {
+      version: 2,
+      ids: scheduled.map((entry) => entry.id),
+      durableIds: scheduled.filter((entry) => entry.durable !== false).map((entry) => entry.id),
+      sessionIds: scheduled.filter((entry) => entry.durable === false).map((entry) => entry.id)
+    };
+  }
   restore() { for (const entry of this.entries) this.arm(entry); }
 
   arm(entry) {
@@ -140,8 +182,9 @@ class RunScheduler {
       this.emit({ type: "schedule-failed", id: entry.id, error: entry.lastError, summary: "Scheduled autonomous task failed." });
       this.emit({ type: "recovery-warning", reason: "schedule-run-failed", scheduleId: entry.id, summary: entry.lastError });
     }
-    if (entry.recurring && Date.now() + entry.intervalMinutes * 60000 <= Date.parse(entry.expiresAt)) {
-      entry.nextRunAt = new Date(Date.now() + entry.intervalMinutes * 60000).toISOString();
+    const nextRun = nextRecurringRun(entry);
+    if (entry.recurring && nextRun <= Date.parse(entry.expiresAt)) {
+      entry.nextRunAt = new Date(nextRun).toISOString();
       this.arm(entry);
     } else {
       entry.status = entry.lastError ? "failed" : "completed";
@@ -158,8 +201,9 @@ class RunScheduler {
       try { all = JSON.parse(await fs.readFile(this.filePath, "utf8")).entries || []; }
       catch (error) { if (error?.code !== "ENOENT" && error?.name !== "SyntaxError") throw error; }
       const retained = all.filter((entry) => entry.workspaceRoot !== this.workspaceRoot);
+      const durableEntries = this.entries.filter((entry) => entry.durable !== false);
       const temporary = this.filePath + "." + process.pid + ".tmp";
-      await fs.writeFile(temporary, JSON.stringify({ version: 1, entries: [...retained, ...this.entries] }, null, 2) + "\n", "utf8");
+      await fs.writeFile(temporary, JSON.stringify({ version: 2, entries: [...retained, ...durableEntries] }, null, 2) + "\n", "utf8");
       await fs.rename(temporary, this.filePath);
     };
     this.queue = this.queue.then(operation, operation);
@@ -174,7 +218,19 @@ function boundedMinutes(value, field) {
 }
 
 function publicEntry(entry) {
-  return { id: entry.id, prompt: entry.prompt, recurring: entry.recurring, intervalMinutes: entry.intervalMinutes, nextRunAt: entry.nextRunAt, expiresAt: entry.expiresAt, status: entry.status, lastRunAt: entry.lastRunAt, lastError: entry.lastError, capabilityBoundary: entry.capabilityBoundary };
+  return { id: entry.id, prompt: entry.prompt, recurring: entry.recurring, durable: entry.durable !== false, approximate: entry.approximate === true, intervalMinutes: entry.intervalMinutes, expression: entry.expression || "", scheduleDescription: entry.expression ? describeScheduleExpression(entry.expression) : (entry.recurring ? `every ${entry.intervalMinutes} minutes` : "one time"), nextRunAt: entry.nextRunAt, expiresAt: entry.expiresAt, status: entry.status, lastRunAt: entry.lastRunAt, lastError: entry.lastError, capabilityBoundary: entry.capabilityBoundary };
 }
 
-module.exports = { MAX_DELAY_MINUTES, RUNNING_RECLAIM_MS, RunScheduler, boundedMinutes, publicEntry };
+function nextRecurringRun(entry, after = Date.now()) {
+  return entry.expression
+    ? nextScheduleTime(entry.expression, after)
+    : after + entry.intervalMinutes * 60000 + Number(entry.jitterMs || 0);
+}
+function mergeEntries(durable, session) { const entries = new Map([...durable, ...session].map((entry) => [entry.id, entry])); return Array.from(entries.values()); }
+function deterministicJitter(id, intervalMinutes) {
+  const maximum = Math.min(5 * 60 * 1000, Math.max(1000, Math.floor(intervalMinutes * 60000 * 0.1)));
+  const value = parseInt(crypto.createHash("sha256").update(String(id)).digest("hex").slice(0, 8), 16);
+  return value % (maximum + 1);
+}
+
+module.exports = { MAX_ACTIVE_SCHEDULES, MAX_DELAY_MINUTES, RUNNING_RECLAIM_MS, RunScheduler, boundedMinutes, deterministicJitter, publicEntry };

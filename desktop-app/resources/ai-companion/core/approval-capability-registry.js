@@ -7,7 +7,7 @@
 const path = require("node:path");
 
 const LIFETIME_RANK = Object.freeze({ action: 0, task: 1, workspace: 2 });
-const FILE_WRITE_TOOLS = new Set(["apply_edit", "write_file", "create_document_tab", "insert_at_cursor", "replace_selection", "replace_document_range", "extract_selection_to_note"]);
+const FILE_WRITE_TOOLS = new Set(["apply_edit", "write_file", "notebook_cell_edit", "create_document_tab", "insert_at_cursor", "replace_selection", "replace_document_range", "extract_selection_to_note"]);
 const PATH_RESOURCE_TOOLS = new Set([...FILE_WRITE_TOOLS, "delete_file", "move_path"]);
 const CAPABILITIES = Object.freeze({
   delete_file: { id: "workspace.file.delete", risk: "high", label: "Delete workspace files", maxLifetime: "action" },
@@ -30,6 +30,7 @@ const CAPABILITIES = Object.freeze({
   mcp_tool_invoke: { id: "external.tool.invoke", risk: "high", label: "Invoke external capabilities", maxLifetime: "task" },
   extension_hook_run: { id: "extension.hook.execute", risk: "high", label: "Run extension hooks", maxLifetime: "task" },
   worker_workspace_create: { id: "worker.workspace.create", risk: "high", label: "Create delegated Git worktrees", maxLifetime: "action" },
+  page_retrieve: { id: "network.domain.access", risk: "medium", label: "Retrieve pages from external domains", maxLifetime: "workspace" },
   run_command: { id: "shell.freeform", risk: "high", label: "Run free-form shell commands", maxLifetime: "action" }
 });
 
@@ -112,7 +113,7 @@ function describe(rawToolName, args = {}, context = {}) {
     : "";
   const resourceValue = PATH_RESOURCE_TOOLS.has(toolName)
     ? normalizePath(args.path || args.sourcePath || args.expectedPath)
-    : conversionResource || normalizePath(args.serverId || args.hookId || args.branch || args.remoteBranch || toolName);
+    : conversionResource || normalizePath(args.domain || args.serverId || args.hookId || args.branch || args.remoteBranch || toolName);
   const resource = PATH_RESOURCE_TOOLS.has(toolName)
     ? { type: "path-glob", value: resourceValue }
     : { type: "exact", value: resourceValue || toolName };

@@ -5466,6 +5466,14 @@
         attachApprovalCopyAction(row, event);
         return;
       }
+      if (event.type === "user-input") {
+        entry.renderer?.appendExternalActivity?.(createUserInputCard(event, { interactive: false }));
+        return;
+      }
+      if (event.activity?.id) {
+        entry.renderer?.appendActivity?.(withSavedEventCompletedAt(entry, event));
+        return;
+      }
       if (event.type === "agent-summary") {
         const changes = getTaskChanges(entry.record);
         entry.renderer?.appendSummary?.({
@@ -5490,7 +5498,7 @@
       }
       resetSyntheticActivityState();
       const events = record.events || [];
-      const hasRestoredActivity = events.some((event) => event?.type === "tool" || event?.type === "tool-error" || event?.type === "approval" || event?.type === "agent-summary" || event?.type === "narration" || event?.type === "intent-contract" || event?.type === "steering" || event?.type === "clarification");
+      const hasRestoredActivity = events.some((event) => event?.activity?.id || event?.type === "tool" || event?.type === "tool-error" || event?.type === "approval" || event?.type === "user-input" || event?.type === "agent-summary" || event?.type === "narration" || event?.type === "intent-contract" || event?.type === "steering" || event?.type === "clarification");
       events.forEach((event, index) => renderSavedAgentEvent(entry, event, { canResumeApproval: canResumeSavedApproval(entry.record, events, index) }));
       // Keep the timeline expanded when an interrupted approval offers a Resume
       // action; collapsing would bury the only way to continue the task.
@@ -6736,6 +6744,13 @@
         "schedule-fired": "Scheduled task started",
         "schedule-completed": "Scheduled task completed",
         "schedule-failed": "Scheduled task failed",
+        "schedule-restored": "Schedule restored",
+        "schedule-missed": "Missed schedule reconciled",
+        "internet-search-completed": "Internet search completed",
+        "page-retrieved": "Page retrieved",
+        "notebook-inspected": "Notebook inspected",
+        "notebook-updated": "Notebook updated",
+        "workspace-structure-built": "Workspace structure built",
         "continuity-updated": "Continuity record updated",
         "memory-proposed": "Memory confirmation requested",
         "memory-confirmed": "Curated memory saved",
@@ -6760,6 +6775,16 @@
         summary,
         callId: `${event.type}-${event.savedAt || event.updatedAt || Date.now()}`
       });
+      if (event.type === "internet-search-completed") {
+        display.activity.webLinks = (event.results || []).slice(0, 10).map((result) => ({ url: result.url, label: result.title || result.url }));
+        display.activity.raw = { query: event.query, backend: event.backend, results: event.results || [] };
+      } else if (event.type === "page-retrieved" && event.url) {
+        display.activity.webLinks = [{ url: event.url, label: event.url }];
+      } else if (event.type === "notebook-updated") {
+        display.activity.raw = { path: event.path, mode: event.mode, before: event.before, after: event.after, artifactIds: event.artifactIds || [] };
+      } else if (event.type === "workspace-structure-built") {
+        display.activity.raw = { rendered: event.rendered || "", artifactId: event.artifactId || "", fileCount: event.fileCount, tokenCount: event.tokenCount };
+      }
       const savedEvent = recordAgentEvent({ ...event, activity: display.activity }) || { ...event, activity: display.activity };
       activeActivityRenderer?.appendActivity?.(savedEvent);
       scrollToolLogToEnd();
@@ -6774,6 +6799,111 @@
     function appendNarration(event) {
       const savedEvent = recordAgentEvent(event) || event;
       activeActivityRenderer?.appendNarration?.(savedEvent);
+      scrollToolLogToEnd();
+    }
+
+    function createUserInputCard(event = {}, options = {}) {
+      const row = document.createElement("div");
+      row.className = "ai-companion-user-input pending";
+      row.dataset.aiCompanionActivityId = String(event.interactionId || "");
+      const title = document.createElement("div");
+      title.className = "ai-companion-user-input-title";
+      title.textContent = options.interactive === false ? "User decision interrupted" : "Your input is needed";
+      const reason = document.createElement("div");
+      reason.className = "ai-companion-user-input-reason";
+      reason.textContent = event.reason || "Choose an option so the agent can continue.";
+      const form = document.createElement("form");
+      form.className = "ai-companion-user-input-form";
+      const answerReaders = [];
+      (Array.isArray(event.questions) ? event.questions : []).forEach((question, questionIndex) => {
+        const fieldset = document.createElement("fieldset");
+        const legend = document.createElement("legend");
+        legend.textContent = question.question || question.header || `Question ${questionIndex + 1}`;
+        fieldset.appendChild(legend);
+        const inputs = [];
+        (Array.isArray(question.options) ? question.options : []).forEach((option, optionIndex) => {
+          const label = document.createElement("label");
+          label.className = "ai-companion-user-input-option";
+          const input = document.createElement("input");
+          input.type = question.multiSelect ? "checkbox" : "radio";
+          input.name = `ai-user-input-${event.interactionId}-${questionIndex}`;
+          input.value = option.label || "";
+          input.disabled = options.interactive === false;
+          if (!question.multiSelect && optionIndex === 0) input.checked = true;
+          const copy = document.createElement("span");
+          const optionTitle = document.createElement("strong");
+          optionTitle.textContent = option.label || "";
+          const description = document.createElement("small");
+          description.textContent = option.description || "";
+          copy.append(optionTitle, description);
+          label.append(input, copy);
+          fieldset.appendChild(label);
+          inputs.push(input);
+        });
+        let freeText = null;
+        if (question.allowFreeText !== false) {
+          freeText = document.createElement("input");
+          freeText.type = "text";
+          freeText.className = "ai-companion-user-input-free-text";
+          freeText.placeholder = "Or enter another answer";
+          freeText.disabled = options.interactive === false;
+          fieldset.appendChild(freeText);
+        }
+        answerReaders.push(() => {
+          const custom = String(freeText?.value || "").trim();
+          if (custom) return custom;
+          const selected = inputs.filter((input) => input.checked).map((input) => input.value);
+          return question.multiSelect ? selected : (selected[0] || "");
+        });
+        form.appendChild(fieldset);
+      });
+      row.append(title, reason, form);
+      if (options.interactive === false) return row;
+      const actions = document.createElement("div");
+      actions.className = "ai-companion-user-input-actions";
+      const submit = document.createElement("button");
+      submit.type = "submit";
+      submit.textContent = "Continue";
+      const cancel = document.createElement("button");
+      cancel.type = "button";
+      cancel.textContent = "Decline";
+      const error = document.createElement("div");
+      error.className = "ai-companion-user-input-error";
+      const respond = async (declined) => {
+        submit.disabled = true;
+        cancel.disabled = true;
+        const answers = {};
+        (event.questions || []).forEach((question, index) => { answers[question.question] = answerReaders[index](); });
+        try {
+          await deps.bridge?.respondUserInput?.(event.interactionId, answers, declined);
+          row.classList.remove("pending");
+          row.classList.add(declined ? "declined" : "resolved");
+          title.textContent = declined ? "Question declined" : "Answer submitted";
+          event.response = { answers, declined, respondedAt: new Date().toISOString() };
+          if (activeAgentEntry) {
+            activeAgentEntry.record.updatedAt = event.response.respondedAt;
+            activeAgentEntry.isDirty = true;
+            await saveAgentEntryImmediately(activeAgentEntry);
+          }
+        } catch (responseError) {
+          error.textContent = responseError?.message || "The answer could not be submitted.";
+          submit.disabled = false;
+          cancel.disabled = false;
+        }
+      };
+      form.addEventListener("submit", (submitEvent) => { submitEvent.preventDefault(); void respond(false); });
+      cancel.addEventListener("click", () => { void respond(true); });
+      actions.append(submit, cancel);
+      row.append(actions, error);
+      return row;
+    }
+
+    function appendUserInput(event) {
+      const row = createUserInputCard(event, { interactive: true });
+      if (activeActivityRenderer?.appendExternalActivity) activeActivityRenderer.appendExternalActivity(row);
+      else toolLog.appendChild(row);
+      recordAgentEvent(event);
+      if (activeAgentEntry) void saveAgentEntryImmediately(activeAgentEntry);
       scrollToolLogToEnd();
     }
 
@@ -7131,6 +7261,11 @@
         void handleAppActionEvent(event);
         return;
       }
+      if (event.type === "user-input") {
+        hideThinkingIndicator();
+        appendUserInput(event);
+        return;
+      }
       if (event.type === "rate-limit-wait") {
         showRateLimitWaitIndicator(event.delayMs);
         return;
@@ -7170,6 +7305,18 @@
         recordAgentEvent(event);
         if (event.plan?.path && activeAgentEntry) activeAgentEntry.pendingPlanMetadata = event.plan;
         void loadRepositoryPlans({ force: true });
+        return;
+      }
+      if (["user-input-requested", "user-input-resolved", "user-input-declined"].includes(event.type)) {
+        recordAgentEvent(event);
+        return;
+      }
+      if (["internet-search-completed", "page-retrieved", "notebook-inspected", "notebook-updated", "workspace-structure-built", "schedule-restored", "schedule-missed"].includes(event.type)) {
+        if (event.type === "notebook-updated" && event.path && typeof deps.reloadOpenTabsFromDisk === "function") {
+          const fullPath = deps.joinPath?.(deps.getWorkspaceRoot?.() || "", event.path) || "";
+          if (fullPath) void deps.reloadOpenTabsFromDisk(fullPath);
+        }
+        appendAutonomousRuntimeStatus(event);
         return;
       }
       if (["skills-discovered", "skill-invocation-started", "skill-invocation-completed", "skill-invocation-failed", "skill-unavailable", "slash-workflow-expanded", "skills-changed", "schedule-created", "schedule-cancelled", "schedule-fired", "schedule-completed", "schedule-failed"].includes(event.type)) {

@@ -5,10 +5,11 @@
 const crypto = require("node:crypto");
 const fs = require("node:fs/promises");
 const path = require("node:path");
+const { companionProfilePath } = require("../profile-storage");
 
 const STATE_VERSION = 1;
 
-function statePath(profileRoot) { return profileRoot ? path.join(profileRoot, "companion", "extensions-state.json") : ""; }
+function statePath(profileRoot) { return companionProfilePath(profileRoot, "extensions-state.json"); }
 function workspaceId(workspaceRoot) { return crypto.createHash("sha256").update(path.resolve(String(workspaceRoot || ""))).digest("hex").slice(0, 24); }
 
 async function loadExtensionState(profileRoot) {

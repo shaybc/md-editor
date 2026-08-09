@@ -5,9 +5,9 @@
 const approvalCapabilities = require("../../../core/approval-capability-registry");
 
 const CAPABILITY_PREFIXES = Object.freeze({
-  read: ["list_", "glob_", "search_", "read_", "discover_", "capability_", "mcp_search_", "mcp_read_", "mcp_get_"],
+  read: ["list_", "glob_", "search_", "read_", "discover_", "capability_", "mcp_search_", "mcp_read_", "mcp_get_", "internet_search", "page_retrieve", "notebook_inspect", "workspace_structure"],
   context: ["context_", "artifact_read"],
-  edit: ["apply_edit", "write_file"],
+  edit: ["apply_edit", "write_file", "notebook_cell_edit"],
   execute: ["run_command", "run_tests", "compile_", "restore_", "manage_"],
   delegate: ["worker_"]
 });
@@ -32,9 +32,9 @@ function scopeAgentTools(definitions, metadata = {}) {
   return definitions.filter((definition) => {
     const name = definition?.function?.name || "";
     if (name.startsWith("worker_")) return false;
-    if (permissions.workspaceWrites === false && ["apply_edit", "write_file"].includes(name)) return false;
+    if (permissions.workspaceWrites === false && ["apply_edit", "write_file", "notebook_cell_edit"].includes(name)) return false;
     if (permissions.commands === false && name === "run_command") return false;
-    if (permissions.networkAccess === false && (name.startsWith("mcp_") || name.startsWith("mcp__"))) return false;
+    if (permissions.networkAccess === false && (name.startsWith("mcp_") || name.startsWith("mcp__") || ["internet_search", "page_retrieve"].includes(name))) return false;
     const descriptor = approvalCapabilities.describe(name, {});
     if (descriptor && permittedApprovals && !permittedApprovals.has("*") && !permittedApprovals.has(descriptor.capability)) return false;
     if (capabilities.length && !capabilities.some((capability) => matchesCapability(name, capability))) return false;

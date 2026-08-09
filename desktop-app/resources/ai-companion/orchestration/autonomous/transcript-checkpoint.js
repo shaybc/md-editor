@@ -2,14 +2,14 @@
 
 "use strict";
 
-const path = require("node:path");
 const { getRunIdentity } = require("./work/run-identity");
 const { RunChronicle, SCHEMA_VERSION } = require("./recovery/run-chronicle");
+const { companionProfilePath } = require("./profile-storage");
 
 function checkpointPath(request) {
   if (!request.profileRoot) return "";
   const name = getRunIdentity(request);
-  return path.join(request.profileRoot, ".md-editor", "companion", "autonomous-runs", name, "current.json");
+  return companionProfilePath(request.profileRoot, "autonomous-runs", name, "current.json");
 }
 
 async function saveCheckpoint(request, state) {

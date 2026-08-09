@@ -4,6 +4,7 @@
 
 const fs = require("node:fs/promises");
 const path = require("node:path");
+const { companionProfilePath } = require("../profile-storage");
 const { parseMarkdownDefinition } = require("../extensions/markdown-definition");
 
 const SKILL_DIRECTORIES = Object.freeze([
@@ -24,7 +25,7 @@ class SkillSourceLoader {
   /** Discover profile and workspace definitions without retaining their bodies. */
   async discoverInitial() {
     const roots = [];
-    if (this.request.profileRoot) roots.push({ scope: "user", rank: 200, root: path.join(this.request.profileRoot, "companion", "skills") });
+    if (this.request.profileRoot) roots.push({ scope: "user", rank: 200, root: companionProfilePath(this.request.profileRoot, "skills") });
     for (const segments of SKILL_DIRECTORIES) roots.push({ scope: "workspace", rank: 300, root: path.join(this.workspaceRoot, ...segments) });
     return (await Promise.all(roots.map((entry) => discoverRoot(entry)))).flat();
   }

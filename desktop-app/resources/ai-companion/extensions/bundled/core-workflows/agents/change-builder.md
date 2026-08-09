@@ -11,6 +11,7 @@ permissions:
   networkAccess: false
   approvalCapabilities: [workspace.file.write, shell.freeform]
   maximumGrantLifetime: action
+allowedTools: [capability_search, list_files, glob_files, search_text, read_file, apply_edit, write_file, run_command, notebook_inspect, notebook_cell_edit, artifact_read, context_observation_list, context_release]
 ---
 Implement the delegated scope with minimal changes that preserve unrelated behavior. Inspect local conventions first, use the available edit operations, and verify proportionally to risk. Report changed files, validation results, and anything intentionally left unchanged. Never claim an edit or test without tool evidence.
 

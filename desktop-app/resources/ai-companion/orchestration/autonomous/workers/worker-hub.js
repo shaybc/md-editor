@@ -18,6 +18,10 @@ const { ToolPathObserver } = require("../rules/tool-path-observer");
 const { SkillCatalog } = require("../skills/skill-catalog");
 const { SkillInvocationSession } = require("../skills/skill-invocation-session");
 const { SkillPathObserver } = require("../skills/skill-path-observer");
+const { InternetResearchService } = require("../internet/internet-research-service");
+const { NotebookDocumentService } = require("../notebooks/notebook-document-service");
+const { WorkspaceAtlas } = require("../structure/workspace-atlas");
+const { companionProfilePath } = require("../profile-storage");
 
 const MAX_ACTIVE_WORKERS = 10;
 const MAX_RESULT_CHARS = 16000;
@@ -280,6 +284,15 @@ class WorkerHub {
       const contextReleaseReminder = new ContextReleaseReminder(workerEvents.emit);
       contextReleaseReminder.restore(entry.observationRelease?.reminder);
       const windowSteward = new WindowSteward(workerRequest, provider, this.parentContext.artifactVault, workerEvents.emit, observationLedger);
+      const internetResearch = new InternetResearchService(workerRequest, {
+        emit: workerEvents.emit,
+        artifacts: this.parentContext.artifactVault,
+        taskGrants: [],
+        authorizationControls: workerRequest.authorizationControls,
+        provider
+      });
+      const notebooks = new NotebookDocumentService(workerRequest, workerEvents.emit, { artifacts: this.parentContext.artifactVault });
+      const workspaceAtlas = new WorkspaceAtlas(workerRequest, { emit: workerEvents.emit, artifacts: this.parentContext.artifactVault });
       const context = {
         ...this.parentContext,
         request: workerRequest,
@@ -296,6 +309,10 @@ class WorkerHub {
         skillInvocation,
         skillPathObserver: new SkillPathObserver(skillCatalog),
         scheduler: blockedScheduler(),
+        interactionGate: workerInteractionGate(entry, workerEvents),
+        internetResearch,
+        notebooks,
+        workspaceAtlas,
         continuity: null,
         windowSteward,
         observationLedger,
@@ -369,6 +386,15 @@ function createWorkerHooks(entry) {
 
 function blockedWorkers() { return { launch() { throw new Error("Delegated workers cannot launch other workers."); }, list() { return []; }, hasActive() { return false; }, drainNotifications() { return []; } }; }
 function blockedScheduler() { return { create() { throw new Error("Delegated workers cannot create schedules."); }, list() { return []; }, cancel() { throw new Error("Delegated workers cannot cancel schedules."); } }; }
+function workerInteractionGate(entry, events) {
+  return {
+    async requestChoice(input = {}) {
+      events.emit({ type: "worker-input-needed", workerId: entry.id, questions: input.questions || [], summary: "The delegated worker needs a user decision. The foreground agent may ask the user if it remains necessary." });
+      return { deferredToForeground: true, workerId: entry.id, questions: input.questions || [] };
+    },
+    snapshot() { return { version: 1, pending: null }; }
+  };
+}
 function isTerminal(status) { return ["completed", "failed", "stopped", "interrupted"].includes(status); }
 function publicEntry(entry) { return { id: entry.id, description: entry.description, agentId: entry.agentId, routeId: entry.routeId || "", status: entry.status, background: entry.background, isolation: entry.workspace?.isolation || entry.isolation, workspace: entry.workspace ? { root: entry.workspace.root, branch: entry.workspace.branch, retained: entry.workspace.retained, fallbackReason: entry.workspace.fallbackReason } : undefined, result: entry.result, error: entry.error }; }
 
@@ -438,8 +464,9 @@ async function resolveWorkerWorkspace(request, entry, taskGrants) {
 }
 
 function isExpectedWorkerRoot(request, entry) {
-  const base = path.resolve(request.profileRoot || request.workspaceRoot);
-  const expected = path.join(base, ".md-editor", "companion", "worker-workspaces", getRunIdentity(request), entry.id);
+  const expected = request.profileRoot
+    ? companionProfilePath(request.profileRoot, "worker-workspaces", getRunIdentity(request), entry.id)
+    : path.join(path.resolve(request.workspaceRoot), ".md-editor", "companion", "worker-workspaces", getRunIdentity(request), entry.id);
   return path.resolve(String(entry.workspace?.root || "")) === expected;
 }
 

@@ -87,9 +87,27 @@ async function executeTool(call, context) {
   }
   if (name === "capability_search") return context.capabilities.search(args.query, { maxResults: args.maxResults });
   if (name === "skill_invoke") return context.skillInvocation.invoke(args.name, args.arguments, { trigger: "model", context });
+  if (name === "request_user_choice") return context.interactionGate.requestChoice(args);
+  if (name === "internet_search") return context.internetResearch.search(args);
+  if (name === "page_retrieve") return context.internetResearch.retrieve(args);
   if (name === "schedule_create") return context.scheduler.create(args);
   if (name === "schedule_list") return context.scheduler.list();
   if (name === "schedule_cancel") return context.scheduler.cancel(args.id);
+  if (name === "notebook_inspect") {
+    context.windowSteward?.recordFile?.(args.path);
+    return context.notebooks.inspect(args);
+  }
+  if (name === "notebook_cell_edit") {
+    const approval = await authorizeTool(context.request, name, args, context.taskGrants, {
+      permissionPolicy: context.permissionPolicy,
+      denialLedger: context.denialLedger,
+      riskAdvisor: context.riskAdvisor
+    });
+    if (!approval.approved) return { denied: true, doNotRetry: approval.doNotRetry === true, denialFingerprint: approval.denialFingerprint, instructions: approval.instructions || "The notebook edit was denied." };
+    context.windowSteward?.recordFile?.(args.path);
+    return context.notebooks.edit(args);
+  }
+  if (name === "workspace_structure") return context.workspaceAtlas.build(args);
   if (name === "load_extension") {
     const extensionMetadata = context.fabric.entries.get(args.id) || context.extensions.find((entry) => entry.id === args.id);
     if (extensionMetadata?.kind === "skill") {

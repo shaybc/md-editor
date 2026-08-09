@@ -5,6 +5,7 @@
 const crypto = require("node:crypto");
 const fs = require("node:fs/promises");
 const path = require("node:path");
+const { companionProfilePath } = require("../profile-storage");
 const { parseRuleDefinition } = require("./rule-definition-parser");
 const { HierarchicalRuleSource } = require("./hierarchical-rule-source");
 const { MarkdownRuleSource } = require("./markdown-rule-source");
@@ -28,7 +29,7 @@ class RuleCatalog {
     this.hierarchical = new HierarchicalRuleSource(request.workspaceRoot);
     this.sources = [
       ...(request.profileRoot ? [new MarkdownRuleSource({
-        scope: "user", root: path.join(request.profileRoot, "companion", "rules"),
+        scope: "user", root: companionProfilePath(request.profileRoot, "rules"),
         workspaceRoot: request.workspaceRoot, rank: 100
       })] : []),
       new MarkdownRuleSource({

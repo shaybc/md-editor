@@ -121,7 +121,8 @@ function createHarness(renderMarkdownContent, options = {}) {
     renderMarkdownContent,
     scrollToEnd: () => scrollEvents.push("scroll"),
     openMarkdownInNewTab: options.openMarkdownInNewTab,
-    openCompare: options.openCompare
+    openCompare: options.openCompare,
+    openExternalUrl: options.openExternalUrl
   });
   return { container, renderer, scrollEvents };
 }
@@ -245,6 +246,28 @@ test("AI Companion summary changed files show line counts and open compare", () 
   assert.equal(compareButton.textContent, "Compare");
   compareButton.dispatch("click");
   assert.deepEqual(opened, [compare]);
+});
+
+test("AI Companion activities render source links through the external opener", async () => {
+  const opened = [];
+  const harness = createHarness(null, { openExternalUrl: async (url) => opened.push(url) });
+  harness.renderer.appendActivity({
+    activity: {
+      id: "internet-sources",
+      status: "completed",
+      title: "Internet search completed",
+      primaryText: "2 sources",
+      webLinks: [{ url: "https://docs.example.test/source", label: "Primary source" }]
+    }
+  });
+  const link = findByClass(harness.container, "ai-companion-activity-link");
+  assert.equal(link.tagName, "A");
+  assert.equal(link.href, "https://docs.example.test/source");
+  assert.equal(link.target, "_blank");
+  assert.equal(link.rel, "noopener noreferrer");
+  link.dispatch("click");
+  await Promise.resolve();
+  assert.deepEqual(opened, ["https://docs.example.test/source"]);
 });
 
 test("AI Companion activity copy timestamp uses latest completed activity and ignores external rows", () => {

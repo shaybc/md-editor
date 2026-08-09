@@ -19,6 +19,7 @@ const { getRunIdentity } = require("../resources/ai-companion/orchestration/auto
 const { CapabilityCatalog } = require("../resources/ai-companion/orchestration/autonomous/capabilities/capability-catalog");
 const { AutonomousOrchestrator } = require("../resources/ai-companion/orchestration/autonomous/autonomous-orchestrator");
 const { loadActiveInstructions } = require("../resources/ai-companion/orchestration/autonomous/instruction-loader");
+const { collectRuntimeEnvironment } = require("../resources/ai-companion/orchestration/autonomous/runtime-identity");
 
 function createRequest(root, overrides = {}) {
   return {
@@ -49,10 +50,32 @@ test("system context reports only the configured runtime connection identity", (
   });
   const system = buildSystemMessage(request, { mode: "agent" }, [], { application: "", rules: [] }, [{
     summary: "Assistant identity was Vendor Z Model Q.\nContinue parser recovery."
-  }]);
+  }], "", {
+    runtimeEnvironment: {
+      currentDate: "2026-08-09",
+      platform: "win32 10.0.26100 (x64)",
+      workingDirectory: "C:\\GitHub\\shaybc\\md-editor",
+      branch: "main",
+      repositoryStatus: "M desktop-app/resources/example.js"
+    }
+  });
   assert.match(system, /Connection mode: google-gemini-native/);
   assert.match(system, /Selected model identifier: gemini-3\.6-flash/);
+  assert.match(system, /Current date: 2026-08-09/);
+  assert.match(system, /Platform: win32 10\.0\.26100 \(x64\)/);
+  assert.match(system, /Working directory: C:\\GitHub\\shaybc\\md-editor/);
+  assert.match(system, /Git branch: main/);
+  assert.match(system, /Repository status:\nM desktop-app\/resources\/example\.js/);
   assert.doesNotMatch(system, /Vendor Z Model Q/);
+});
+
+test("runtime environment collects bounded current workspace metadata", async () => {
+  const environment = await collectRuntimeEnvironment(createRequest(process.cwd()));
+  assert.match(environment.currentDate, /^\d{4}-\d{2}-\d{2}$/);
+  assert.match(environment.platform, /\(.+\)$/);
+  assert.equal(environment.workingDirectory, path.resolve(process.cwd()));
+  assert.notEqual(environment.branch, "not a Git repository");
+  assert.ok(environment.repositoryStatus.length <= 4000);
 });
 
 test("system context includes detailed mode-aware operating guidance", () => {
@@ -214,11 +237,11 @@ test("version-two autonomous checkpoints migrate into the new recovery envelope"
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "md-editor-checkpoint-migration-"));
   t.after(() => fs.rm(root, { recursive: true, force: true }));
   const request = createRequest(root, { resumeRun: true });
-  const directory = path.join(root, ".md-editor", "companion", "autonomous-checkpoints");
+  const directory = path.join(root, "companion", "autonomous-checkpoints");
   await fs.mkdir(directory, { recursive: true });
   await fs.writeFile(path.join(directory, `${getRunIdentity(request)}.json`), JSON.stringify({ schemaVersion: 2, status: "running", messages: [{ role: "user", content: "resume" }] }), "utf8");
   const recovered = await new RunChronicle(request).loadRecovery();
-  assert.equal(recovered.schemaVersion, 6);
+  assert.equal(recovered.schemaVersion, 7);
   assert.equal(recovered.migratedFrom, 2);
   assert.equal(recovered.messages[0].content, "resume");
 });

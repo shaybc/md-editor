@@ -7,6 +7,7 @@ const path = require("node:path");
 const simpleGit = require("simple-git");
 const { authorizeTool } = require("../approval-gateway");
 const { getRunIdentity } = require("../work/run-identity");
+const { companionProfilePath } = require("../profile-storage");
 
 /** Create an approved worker worktree or return a documented shared-workspace fallback. */
 async function prepareWorkerWorkspace(request, workerId, isolation, taskGrants) {
@@ -15,8 +16,9 @@ async function prepareWorkerWorkspace(request, workerId, isolation, taskGrants) 
   if (!approval.approved) return { root: request.workspaceRoot, isolation: "shared", fallbackReason: "Worktree creation was denied." };
   const git = simpleGit(request.workspaceRoot);
   if (!await git.checkIsRepo()) return { root: request.workspaceRoot, isolation: "shared", fallbackReason: "The workspace is not a Git repository." };
-  const base = request.profileRoot || request.workspaceRoot;
-  const root = path.join(base, ".md-editor", "companion", "worker-workspaces", getRunIdentity(request), workerId);
+  const root = request.profileRoot
+    ? companionProfilePath(request.profileRoot, "worker-workspaces", getRunIdentity(request), workerId)
+    : path.join(request.workspaceRoot, ".md-editor", "companion", "worker-workspaces", getRunIdentity(request), workerId);
   const branch = `md-editor-worker-${workerId}`.replace(/[^a-zA-Z0-9_-]/g, "-");
   try {
     await fs.mkdir(path.dirname(root), { recursive: true });

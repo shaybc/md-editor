@@ -6,15 +6,14 @@ const crypto = require("node:crypto");
 const fs = require("node:fs/promises");
 const path = require("node:path");
 const { getRunIdentity } = require("../work/run-identity");
+const { companionProfilePath } = require("../profile-storage");
 
 class ArtifactVault {
   constructor(request, emit = () => {}) {
     this.emit = emit;
     this.sequence = 0;
     this.entries = new Map();
-    this.directory = request.profileRoot
-      ? path.join(request.profileRoot, ".md-editor", "companion", "autonomous-runs", getRunIdentity(request), "artifacts")
-      : "";
+    this.directory = companionProfilePath(request.profileRoot, "autonomous-runs", getRunIdentity(request), "artifacts");
   }
 
   /** Load persisted artifact metadata without loading artifact bodies. */

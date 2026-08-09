@@ -6,6 +6,7 @@ const crypto = require("node:crypto");
 const fs = require("node:fs/promises");
 const path = require("node:path");
 const { getRunIdentity } = require("../work/run-identity");
+const { companionProfilePath } = require("../profile-storage");
 const { estimateMessageTokens } = require("../context/token-budget");
 const { sanitizeContinuityText } = require("./continuity-reference-policy");
 
@@ -55,9 +56,7 @@ class ContinuityRecord {
     this.lastToolCount = 0;
     this.content = TEMPLATE;
     const workspaceKey = crypto.createHash("sha256").update(canonicalWorkspace(request.workspaceRoot)).digest("hex").slice(0, 20);
-    this.workspaceDirectory = request.profileRoot
-      ? path.join(request.profileRoot, ".md-editor", "companion", "autonomous-continuity", workspaceKey)
-      : "";
+    this.workspaceDirectory = companionProfilePath(request.profileRoot, "autonomous-continuity", workspaceKey);
     this.runDirectory = this.workspaceDirectory ? path.join(this.workspaceDirectory, getRunIdentity(request)) : "";
   }
 

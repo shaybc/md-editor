@@ -21585,3 +21585,41 @@ html[data-desktop-menu-layout="full"] .header-action-menu {
   color: var(--muted-text-color, var(--text-secondary));
 }
 .settings-ai-tool-access-core-section .settings-ai-tool-access-tool-row { cursor: default; }
+
+/* AI Companion foreground decision card */
+.ai-companion-user-input {
+  margin: 10px 0;
+  padding: 12px;
+  border: 1px solid var(--border-color);
+  border-left: 3px solid var(--accent-color);
+  border-radius: 8px;
+  background: var(--panel-background, var(--background-secondary));
+  color: var(--text-color);
+}
+.ai-companion-user-input.resolved { border-left-color: var(--success-color, #39a86b); }
+.ai-companion-user-input.declined { border-left-color: var(--danger-color, #d15a64); }
+.ai-companion-user-input-title { font-weight: 650; margin-bottom: 4px; }
+.ai-companion-user-input-reason { color: var(--muted-text-color, var(--text-secondary)); margin-bottom: 10px; }
+.ai-companion-user-input-form fieldset { margin: 0 0 10px; padding: 0; border: 0; }
+.ai-companion-user-input-form legend { margin-bottom: 6px; font-weight: 600; }
+.ai-companion-user-input-option {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 5px 0;
+  cursor: pointer;
+}
+.ai-companion-user-input-option span { display: flex; flex-direction: column; gap: 1px; }
+.ai-companion-user-input-option small { color: var(--muted-text-color, var(--text-secondary)); }
+.ai-companion-user-input-free-text {
+  width: 100%;
+  margin-top: 6px;
+  padding: 7px 8px;
+  color: inherit;
+  background: var(--input-background, var(--background-primary));
+  border: 1px solid var(--border-color);
+  border-radius: 5px;
+}
+.ai-companion-user-input-actions { display: flex; gap: 8px; margin-top: 8px; }
+.ai-companion-user-input-actions button { padding: 6px 11px; border-radius: 5px; }
+.ai-companion-user-input-error { margin-top: 6px; color: var(--danger-color, #d15a64); }

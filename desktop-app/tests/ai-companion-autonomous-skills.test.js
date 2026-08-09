@@ -104,7 +104,7 @@ test("scheduling is agent-only and persists workspace-scoped entries", async () 
   const profileRoot = path.join(root, "profile");
   const scheduler = new RunScheduler({ ...request(root), profileRoot });
   await scheduler.load();
-  const created = await scheduler.create({ prompt: "Run focused checks", delayMinutes: 60 });
+  const created = await scheduler.create({ prompt: "Run focused checks", delayMinutes: 60, durable: true });
   assert.equal(scheduler.list().length, 1);
   const restored = new RunScheduler({ ...request(root), profileRoot });
   await restored.load();

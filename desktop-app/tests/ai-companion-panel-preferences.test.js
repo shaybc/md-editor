@@ -1934,6 +1934,70 @@ test("AI Companion updates an agent chat title before the agent summary complete
   continueAgent();
   await new Promise((resolve) => setTimeout(resolve, 20));
 });
+
+test("AI Companion user questions render outside approvals and submit structured answers", async () => {
+  const responses = [];
+  let finishQuestion;
+  const answered = new Promise((resolve) => { finishQuestion = resolve; });
+  const harness = createPanelHarness({
+    createActivityRenderer: ({ container }) => ({
+      appendActivity() {},
+      appendExternalActivity(row) { container.appendChild(row); return true; },
+      appendNarration() {},
+      appendSummary() {},
+      collapseTimeline() {}
+    }),
+    bridge: {
+      agent: async (_payload, handleEvent) => {
+        handleEvent({
+          type: "user-input",
+          interactionId: "decision-card",
+          reason: "Choose the output format.",
+          questions: [{
+            question: "Which format?",
+            options: [
+              { label: "Markdown", description: "Save as Markdown." },
+              { label: "HTML", description: "Save as HTML." }
+            ],
+            multiSelect: false,
+            allowFreeText: true
+          }]
+        });
+        await answered;
+        return { content: "Decision received." };
+      },
+      respondUserInput: async (interactionId, answers, declined) => {
+        responses.push({ interactionId, answers, declined });
+        finishQuestion();
+        return { accepted: true };
+      }
+    }
+  });
+
+  harness.api.selectTab("agent", { persist: false });
+  harness.agentInput.value = "Ask before choosing the format";
+  harness.agentRunButton.click();
+  await new Promise((resolve) => setTimeout(resolve, 20));
+
+  const card = harness.toolLog.querySelector(".ai-companion-user-input");
+  assert.ok(card);
+  assert.equal(harness.toolLog.querySelector(".ai-companion-approval"), null);
+  const choices = card.querySelectorAll("input");
+  const html = choices.find((input) => input.value === "HTML");
+  choices.filter((input) => input.type === "radio").forEach((input) => { input.checked = false; });
+  html.checked = true;
+  card.querySelector("form").dispatchEvent({ type: "submit", preventDefault() {} });
+  await new Promise((resolve) => setTimeout(resolve, 20));
+
+  assert.deepEqual(plain(responses), [{
+    interactionId: "decision-card",
+    answers: { "Which format?": "HTML" },
+    declined: false
+  }]);
+  assert.equal(card.classList.contains("resolved"), true);
+  assert.match(card.textContent, /Answer submitted/);
+});
+
 test("AI Companion approval events render highlighted action cards", async () => {
   const responses = [];
   let resolveApproval;

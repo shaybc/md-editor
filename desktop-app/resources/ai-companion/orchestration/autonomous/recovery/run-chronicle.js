@@ -6,8 +6,9 @@ const crypto = require("node:crypto");
 const fs = require("node:fs/promises");
 const path = require("node:path");
 const { getRunIdentity } = require("../work/run-identity");
+const { companionProfilePath } = require("../profile-storage");
 
-const SCHEMA_VERSION = 6;
+const SCHEMA_VERSION = 7;
 
 class RunChronicle {
   constructor(request, emit = () => {}) {
@@ -16,9 +17,7 @@ class RunChronicle {
     this.sequence = 0;
     this.queue = Promise.resolve();
     this.runId = getRunIdentity(request);
-    this.directory = request.profileRoot
-      ? path.join(request.profileRoot, ".md-editor", "companion", "autonomous-runs", this.runId)
-      : "";
+    this.directory = companionProfilePath(request.profileRoot, "autonomous-runs", this.runId);
   }
 
   /** Append one integrity-tagged lifecycle entry in sequence order. */
@@ -124,8 +123,9 @@ class RunChronicle {
 
   async loadVersionTwo() {
     if (!this.request.profileRoot) return null;
-    const legacyPath = path.join(this.request.profileRoot, ".md-editor", "companion", "autonomous-checkpoints", `${this.runId}.json`);
-    const value = await readJsonOptional(legacyPath);
+    const checkpointPath = companionProfilePath(this.request.profileRoot, "autonomous-checkpoints", `${this.runId}.json`);
+    const duplicatedLegacyPath = path.join(this.request.profileRoot, ".md-editor", "companion", "autonomous-checkpoints", `${this.runId}.json`);
+    const value = await readJsonOptional(checkpointPath) || await readJsonOptional(duplicatedLegacyPath);
     if (value?.schemaVersion !== 2) return null;
     return this.envelope({
       ...value,
@@ -143,7 +143,7 @@ function validateSnapshot(snapshot, runId) {
 }
 
 function migrateEarlierSnapshot(snapshot, runId) {
-  if (!snapshot || ![3, 4, 5].includes(snapshot.schemaVersion) || snapshot.identity?.runId !== runId) return snapshot;
+  if (!snapshot || ![3, 4, 5, 6].includes(snapshot.schemaVersion) || snapshot.identity?.runId !== runId) return snapshot;
   const expected = digest({ ...snapshot, integrity: undefined });
   if (snapshot.integrity !== expected) return null;
   const migrated = { ...snapshot, schemaVersion: SCHEMA_VERSION, migratedFrom: snapshot.migratedFrom || snapshot.schemaVersion };

@@ -43,6 +43,8 @@
       permissionMode: "guided",
       connectionProfiles: [],
       providerRoutes: [],
+      internetSearchEndpoint: "",
+      workspaceStructureAutoInclude: false,
       toolScopes: toolScopeRegistry ? toolScopeRegistry.defaultToolScopes() : {},
       aiSecurityPolicy: {
         version: 1,
@@ -120,6 +122,8 @@
         permissionMode: ["guided", "observe-only", "edit-trusted", "risk-routed", "preauthorized-only", "sandbox-unattended"].includes(source.permissionMode) ? source.permissionMode : "guided",
         connectionProfiles: Array.isArray(source.connectionProfiles) ? source.connectionProfiles.map(function(entry) { return Object.assign({}, entry, { id: String(entry && entry.id || "").trim(), providerMode: String(entry && entry.providerMode || "openai-compatible"), model: String(entry && entry.model || "").trim() }); }).filter(function(entry) { return entry.id; }).slice(0, 30) : [],
         providerRoutes: Array.isArray(source.providerRoutes) ? source.providerRoutes.map(function(entry) { return { id: String(entry && entry.id || "").trim(), profileId: String(entry && entry.profileId || "default").trim(), model: String(entry && entry.model || "").trim(), purposes: Array.isArray(entry && entry.purposes) ? entry.purposes.map(String).slice(0, 10) : ["primary"], fallbacks: Array.isArray(entry && entry.fallbacks) ? entry.fallbacks.map(String).filter(Boolean).slice(0, 8) : [], allowProviderChange: entry && entry.allowProviderChange === true, dataScopes: entry && entry.dataScopes && typeof entry.dataScopes === "object" ? Object.assign({}, entry.dataScopes) : {}, contextWindow: clampInteger(entry && entry.contextWindow, 0, 0, 10000000), maxOutputTokens: clampInteger(entry && entry.maxOutputTokens, 0, 0, 1000000), capabilities: entry && entry.capabilities && typeof entry.capabilities === "object" ? Object.assign({}, entry.capabilities) : {} }; }).filter(function(entry) { return entry.id; }).slice(0, 50) : [],
+        internetSearchEndpoint: String(source.internetSearchEndpoint || "").trim(),
+        workspaceStructureAutoInclude: source.workspaceStructureAutoInclude === true,
         toolScopes: toolScopeRegistry ? toolScopeRegistry.normalizeToolScopes(source.toolScopes) : (source.toolScopes || {}),
         aiSecurityPolicy: source.aiSecurityPolicy && typeof source.aiSecurityPolicy === "object" && !Array.isArray(source.aiSecurityPolicy)
           ? JSON.parse(JSON.stringify(source.aiSecurityPolicy))

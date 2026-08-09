@@ -5,6 +5,7 @@
 const fs = require("node:fs/promises");
 const path = require("node:path");
 const { getRunIdentity } = require("./run-identity");
+const { companionProfilePath } = require("../profile-storage");
 
 const STATUSES = new Set(["pending", "in_progress", "completed"]);
 
@@ -15,7 +16,7 @@ class WorkLedger {
     this.items = new Map();
     this.highWaterMark = 0;
     this.queue = Promise.resolve();
-    this.directory = request.profileRoot ? path.join(request.profileRoot, ".md-editor", "companion", "autonomous-work", getRunIdentity(request), "items") : "";
+    this.directory = companionProfilePath(request.profileRoot, "autonomous-work", getRunIdentity(request), "items");
   }
 
   /** Load validated work records and mark ownership state available to the run. */

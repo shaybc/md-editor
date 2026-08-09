@@ -32,6 +32,9 @@ class RestartReconciler {
       notices.push("The permitted tool inventory changed since the saved run. Current definitions and permissions are authoritative.");
     }
     const pendingTools = Array.isArray(snapshot.pendingTools) ? snapshot.pendingTools : (snapshot.pendingTool ? [snapshot.pendingTool] : []);
+    if (snapshot.pendingInteraction?.pending) {
+      notices.push("A user decision request was interrupted. Ask again only if the missing decision still materially affects the task.");
+    }
     for (const pendingTool of pendingTools) {
       notices.push(`A tool call was interrupted with unknown outcome: ${pendingTool.name || "tool"}. Inspect current state before deciding whether to try anything again.`);
     }

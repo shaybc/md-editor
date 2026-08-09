@@ -23,9 +23,47 @@ const DEFINITIONS = Object.freeze([
   tool("capability_search", "Search and activate secondary tool schemas. Use select:tool_name for exact selection, comma-separated names for multiple tools, or task keywords for ranked discovery.", { query: text("Exact selection or capability keywords"), maxResults: integer("Maximum metadata results") }, ["query"]),
   tool("load_extension", "Load one discovered non-skill extension. Workflow skills must be activated through skill_invoke.", { id: text("Discovered extension id") }, ["id"]),
   tool("skill_invoke", "Activate one advertised workflow skill by its exact name. The runtime loads its instructions only after this call.", { name: text("Exact advertised workflow name"), arguments: { description: "Optional workflow arguments", oneOf: [{ type: "string" }, { type: "object", additionalProperties: { type: ["string", "number", "boolean"] } }] } }, ["name"]),
-  tool("schedule_create", "Create a durable future or recurring autonomous task for this workspace.", { prompt: text("Task to run"), delayMinutes: integer("Minutes before the first run"), intervalMinutes: integer("Minutes between recurring runs"), recurring: { type: "boolean" }, expiresInDays: integer("Expiration in days, capped at 30") }, ["prompt", "delayMinutes"]),
-  tool("schedule_list", "List durable autonomous task schedules for this workspace.", {}),
-  tool("schedule_cancel", "Cancel one durable autonomous task schedule.", { id: text("Schedule id") }, ["id"]),
+  tool("request_user_choice", "Pause the foreground run and ask the user for a decision that cannot be resolved from available context.", {
+    reason: text("Why this decision is required"),
+    questions: {
+      type: "array",
+      minItems: 1,
+      maxItems: 3,
+      items: {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          header: text("Short decision label"),
+          question: text("Complete question"),
+          multiSelect: { type: "boolean" },
+          allowFreeText: { type: "boolean" },
+          options: {
+            type: "array",
+            minItems: 2,
+            maxItems: 4,
+            items: {
+              type: "object",
+              additionalProperties: false,
+              properties: {
+                label: text("Short option label"),
+                description: text("Effect or tradeoff")
+              },
+              required: ["label", "description"]
+            }
+          }
+        },
+        required: ["question", "options"]
+      }
+    }
+  }, ["questions"]),
+  tool("internet_search", "Search current public internet sources and return titles, snippets, and URLs.", { query: text("Search query"), allowedDomains: { type: "array", items: text("Allowed domain") }, blockedDomains: { type: "array", items: text("Blocked domain") }, maxResults: integer("Maximum results, up to 20") }, ["query"]),
+  tool("page_retrieve", "Retrieve one public page as bounded Markdown after domain approval and network safety checks.", { url: text("Public HTTP or HTTPS URL"), objective: text("Optional extraction objective"), reason: text("Why this source is needed"), maxBytes: integer("Maximum response bytes"), timeoutMs: integer("Timeout in milliseconds") }, ["url"]),
+  tool("schedule_create", "Create a future or recurring autonomous task for this workspace.", { prompt: text("Task to run"), delayMinutes: integer("Minutes before the first run"), intervalMinutes: integer("Minutes between recurring runs"), expression: text("Optional five-field local-time calendar expression"), recurring: { type: "boolean" }, approximate: { type: "boolean", description: "Allow deterministic bounded timing jitter for an interval recurrence" }, durable: { type: "boolean" }, expiresInDays: integer("Expiration in days, capped at 30") }, ["prompt"]),
+  tool("schedule_list", "List autonomous task schedules for this workspace.", {}),
+  tool("schedule_cancel", "Cancel one autonomous task schedule.", { id: text("Schedule id") }, ["id"]),
+  tool("notebook_inspect", "Inspect bounded cells and metadata from a workspace notebook before editing it.", { path: text("Workspace-relative .ipynb path"), startCell: integer("First cell index"), maxCells: integer("Maximum cells") }, ["path"]),
+  tool("notebook_cell_edit", "Insert, replace, or delete one inspected notebook cell.", { path: text("Workspace-relative .ipynb path"), mode: { type: "string", enum: ["insert", "replace", "delete"] }, cellId: text("Stable cell id"), cellIndex: integer("Cell index when no id is available"), cellType: { type: "string", enum: ["code", "markdown"] }, source: text("Complete new cell source"), approvalReason: text("Why this notebook edit is needed") }, ["path", "mode"]),
+  tool("workspace_structure", "Build a ranked structural view of workspace files and declarations.", { maxTokens: integer("Token budget from 256 to 16384"), focusPaths: { type: "array", items: text("Path to boost") }, focusSymbols: { type: "array", items: text("Symbol to boost") } }),
   tool("continuity_search", "Search bounded historical run summaries from this exact workspace.", { query: text("Relevant topic, path, or prior outcome"), maxResults: integer("Maximum summaries to return") }, ["query"]),
   tool("memory_search", "Search confirmed memory metadata.", { query: text("Topic"), scope: text("personal or team"), maxResults: integer("Maximum topics") }, ["query"]),
   tool("memory_read", "Read one confirmed curated memory topic.", { id: text("Memory topic id"), scope: text("personal or team") }, ["id"]),
@@ -66,6 +104,12 @@ function getToolDefinitions(policy, settings = {}) {
     if (!policy.allowPlanWrites && ["plan_create", "plan_update"].includes(name)) return false;
     if (!policy.allowSkillInvocation && name === "skill_invoke") return false;
     if (!policy.allowScheduling && name.startsWith("schedule_")) return false;
+    if (!policy.allowUserInteraction && name === "request_user_choice") return false;
+    if (!policy.allowInternetSearch && name === "internet_search") return false;
+    if (!policy.allowPageRetrieval && name === "page_retrieve") return false;
+    if (!policy.allowNotebookReads && name === "notebook_inspect") return false;
+    if (!policy.allowNotebookWrites && name === "notebook_cell_edit") return false;
+    if (!policy.allowWorkspaceStructure && name === "workspace_structure") return false;
     return true;
   });
   return [...core, ...getApplicationToolDefinitions(policy, settings)];
@@ -91,7 +135,7 @@ function getToolRegistrations(policy, settings = {}) {
 }
 
 function runtimeRulePaths(name) {
-  if (["read_file", "apply_edit", "write_file"].includes(name)) return { arguments: ["path"], results: ["path"] };
+  if (["read_file", "apply_edit", "write_file", "notebook_inspect", "notebook_cell_edit"].includes(name)) return { arguments: ["path"], results: ["path"] };
   if (name === "search_text") return { results: ["[].path"] };
   return undefined;
 }
@@ -112,6 +156,10 @@ function runtimeDomain(name) {
   if (name.startsWith("worker_")) return "workers";
   if (name === "skill_invoke") return "skills";
   if (name.startsWith("schedule_")) return "scheduling";
+  if (name === "request_user_choice") return "interaction";
+  if (["internet_search", "page_retrieve"].includes(name)) return "internet";
+  if (name.startsWith("notebook_")) return "notebooks";
+  if (name === "workspace_structure") return "structure";
   if (name.startsWith("context_") || name === "artifact_read" || name === "continuity_search") return "context";
   if (name.startsWith("mcp_")) return "external";
   if (["discover_extensions", "load_extension", "capability_search"].includes(name)) return "extensions";

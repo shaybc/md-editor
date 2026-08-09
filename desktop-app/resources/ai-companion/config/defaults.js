@@ -34,6 +34,8 @@ const DEFAULT_AI_COMPANION_SETTINGS = Object.freeze({
   permissionMode: "guided",
   connectionProfiles: [],
   providerRoutes: [],
+  internetSearchEndpoint: "",
+  workspaceStructureAutoInclude: false,
   toolScopes: toolScopeRegistry.defaultToolScopes(),
   aiSecurityPolicy: {
     version: 1,
@@ -130,6 +132,8 @@ function normalizeAiCompanionSettings(settings = {}) {
     permissionMode: ["guided", "observe-only", "edit-trusted", "risk-routed", "preauthorized-only", "sandbox-unattended"].includes(source.permissionMode) ? source.permissionMode : "guided",
     connectionProfiles: normalizeConnectionProfiles(source.connectionProfiles),
     providerRoutes: normalizeProviderRoutes(source.providerRoutes),
+    internetSearchEndpoint: String(source.internetSearchEndpoint || "").trim(),
+    workspaceStructureAutoInclude: source.workspaceStructureAutoInclude === true,
     toolScopes: toolScopeRegistry.normalizeToolScopes(source.toolScopes),
     aiSecurityPolicy: source.aiSecurityPolicy && typeof source.aiSecurityPolicy === "object" && !Array.isArray(source.aiSecurityPolicy)
       ? JSON.parse(JSON.stringify(source.aiSecurityPolicy))

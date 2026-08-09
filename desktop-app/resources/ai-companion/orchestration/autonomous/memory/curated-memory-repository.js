@@ -4,6 +4,7 @@
 
 const fs = require("node:fs/promises");
 const path = require("node:path");
+const { companionProfilePath } = require("../profile-storage");
 const { assertMemoryContentSafe, normalizeMemoryTopic } = require("./memory-topic-policy");
 
 const MAX_INDEX_TOPICS = 200;
@@ -93,7 +94,7 @@ class CuratedMemoryRepository {
   }
 
   scopeRoot(scope) {
-    if (scope === "personal") return this.request.profileRoot ? path.join(this.request.profileRoot, "companion", "memory", "personal") : "";
+    if (scope === "personal") return companionProfilePath(this.request.profileRoot, "memory", "personal");
     if (scope === "team") return this.request.workspaceRoot ? path.join(this.request.workspaceRoot, ".md-editor", "companion", "memory", "team") : "";
     return "";
   }

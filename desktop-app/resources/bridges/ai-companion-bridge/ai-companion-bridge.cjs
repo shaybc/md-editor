@@ -36,8 +36,10 @@ const { RunScheduler } = requireAiCompanionModule("orchestration/autonomous/sche
 const activeRequests = new Map();
 const pendingApprovals = new Map();
 const pendingAppActions = new Map();
+const pendingUserInputs = new Map();
 let nextApprovalId = 1;
 let nextAppActionId = 1;
+let nextUserInputId = 1;
 
 function validatePersistentGrantCapabilities(rules, effectivePolicy) {
   const knownCapabilities = new Set(["workspace.file.write", ...Object.values(approvalCapabilities.CAPABILITIES).map((entry) => entry.id)]);
@@ -104,6 +106,14 @@ function rejectAppActionsForRequest(requestId) {
   }
 }
 
+function rejectUserInputsForRequest(requestId) {
+  for (const [interactionId, interaction] of pendingUserInputs) {
+    if (interaction.requestId !== requestId) continue;
+    pendingUserInputs.delete(interactionId);
+    interaction.reject(new Error("AI Companion request cancelled."));
+  }
+}
+
 function requestAppAction(requestId, signal, details = {}) {
   if (signal?.aborted) return Promise.reject(new Error("AI Companion request cancelled."));
   const appActionId = `app-action-${requestId}-${nextAppActionId++}`;
@@ -116,6 +126,33 @@ function requestAppAction(requestId, signal, details = {}) {
     pendingAppActions.set(appActionId, { requestId, resolve, reject, abort });
     signal?.addEventListener?.("abort", abort, { once: true });
   });
+}
+
+function requestUserInput(requestId, signal, details = {}) {
+  if (signal?.aborted) return Promise.reject(new Error("AI Companion request cancelled."));
+  const interactionId = String(details.id || `user-input-${requestId}-${nextUserInputId++}`);
+  return new Promise((resolve, reject) => {
+    const abort = () => {
+      pendingUserInputs.delete(interactionId);
+      reject(new Error("AI Companion request cancelled."));
+    };
+    pendingUserInputs.set(interactionId, { requestId, resolve, reject, abort, signal });
+    signal?.addEventListener?.("abort", abort, { once: true });
+    send({ ...details, id: requestId, type: "user-input", interactionId });
+  });
+}
+
+function handleUserInput(message) {
+  const interactionId = String(message.interactionId || "");
+  const interaction = pendingUserInputs.get(interactionId);
+  if (!interaction) {
+    if (message.id) send({ id: String(message.id), type: "done", action: "userInput", result: { accepted: false, interactionId } });
+    return;
+  }
+  pendingUserInputs.delete(interactionId);
+  interaction.signal?.removeEventListener?.("abort", interaction.abort);
+  interaction.resolve({ answers: message.answers && typeof message.answers === "object" ? message.answers : {}, declined: message.declined === true });
+  if (message.id) send({ id: String(message.id), type: "done", action: "userInput", result: { accepted: true, interactionId } });
 }
 
 function handleAppActionResult(message) {
@@ -211,6 +248,7 @@ function handleCancel(message) {
   if (controller) controller.abort();
   rejectApprovalsForRequest(targetId);
   rejectAppActionsForRequest(targetId);
+  rejectUserInputsForRequest(targetId);
   if (message.id) send({ id: String(message.id), type: "done", action: "cancel", result: { cancelled: Boolean(controller), targetId } });
 }
 
@@ -221,6 +259,10 @@ async function handleRequest(session, message) {
   }
   if (message.action === "appActionResult") {
     handleAppActionResult(message);
+    return;
+  }
+  if (message.action === "userInput") {
+    handleUserInput(message);
     return;
   }
   if (message.action === "cancel") {
@@ -254,6 +296,7 @@ async function handleRequest(session, message) {
       securityContext,
       signal: controller.signal,
       requestApproval: (details) => requestApproval(id, controller.signal, details, { profileRoot: requestProfileRoot, workspaceRoot: requestWorkspaceRoot, effectiveSecurityPolicy: securityContext.policy, auditLogger: securityContext.auditLogger }),
+      requestUserInput: (details) => requestUserInput(id, controller.signal, details),
       requestAppAction: (details) => requestAppAction(id, controller.signal, details)
     };
     if (message.action === "testConnection") {
@@ -364,6 +407,7 @@ async function handleRequest(session, message) {
     activeRequests.delete(id);
     rejectApprovalsForRequest(id);
     rejectAppActionsForRequest(id);
+    rejectUserInputsForRequest(id);
   }
 }
 
