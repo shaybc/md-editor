@@ -392,7 +392,7 @@
         ? configuration
         : await buildPath.saveConfiguration(projectPath, Object.assign({}, configuration, { maven: nextMavenConfiguration }));
       const command = Array.isArray(selection.optionArguments)
-        ? deps.mavenCommand.buildCommand({ runner: mavenProject.runner, optionArguments: selection.optionArguments })
+        ? deps.mavenCommand.buildCommand({ runner: mavenProject.runner, optionArguments: selection.optionArguments, offlineOverride: selection.offlineOverride })
         : deps.mavenCommand.buildCommand(Object.assign(
             { runner: mavenProject.runner },
             savedConfiguration.maven,
@@ -978,6 +978,9 @@
           runner: rootMavenProject.runner,
           settings: savedSettings,
           goal: wizardResult.scope === "project" ? "javadoc:aggregate" : "javadoc:javadoc",
+          offlineOverride: typeof wizardResult.mavenOptions?.invocationValues?.["execution.offline"] === "boolean"
+            ? wizardResult.mavenOptions.invocationValues["execution.offline"]
+            : undefined,
           optionArguments
         });
         return runJavadocWithStatus({ command: applyJavaEnvironment(command, runtime), cwd: rootMavenProject.projectRoot || projectPath, settings: savedSettings });

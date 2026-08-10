@@ -63,8 +63,17 @@ final class ProjectScanner {
 
   static ProjectModel scan(Path root, boolean resolveMavenDependencies, boolean includeExternalDependencies,
       GradleDiscoveryOptions gradleOptions) throws IOException {
+    return scan(root, resolveMavenDependencies, includeExternalDependencies, gradleOptions,
+        MavenDiscoveryOptions.defaults(!resolveMavenDependencies));
+  }
+
+  static ProjectModel scan(Path root, boolean resolveMavenDependencies, boolean includeExternalDependencies,
+      GradleDiscoveryOptions gradleOptions, MavenDiscoveryOptions mavenOptions) throws IOException {
     if (gradleOptions == null) {
       gradleOptions = GradleDiscoveryOptions.defaults();
+    }
+    if (mavenOptions == null) {
+      mavenOptions = MavenDiscoveryOptions.defaults(!resolveMavenDependencies);
     }
     List<String> warnings = new ArrayList<>();
     ConversionClock.log("Scanning project structure: " + root.toAbsolutePath().normalize());
@@ -94,7 +103,7 @@ final class ProjectScanner {
         if (includeExternalDependencies) {
           ConversionProgress.stage("metadata", "Resolving Maven classpath");
           ConversionClock.log("Resolving Maven classpath for " + relative(root, pom));
-          mavenClasspath = runMavenClasspath(pom, warnings, resolveMavenDependencies);
+          mavenClasspath = runMavenClasspath(pom, warnings, resolveMavenDependencies, mavenOptions);
           ConversionClock.log("Maven classpath resolved for " + relative(root, pom) + ": "
               + mavenClasspath.size() + " entries");
         }
@@ -547,12 +556,13 @@ final class ProjectScanner {
     return Optional.ofNullable(nodes.item(0).getTextContent()).map(String::trim).filter(value -> !value.isEmpty());
   }
 
-  private static List<Path> runMavenClasspath(Path pom, List<String> warnings, boolean resolveMavenDependencies) {
+  private static List<Path> runMavenClasspath(Path pom, List<String> warnings, boolean resolveMavenDependencies,
+      MavenDiscoveryOptions mavenOptions) {
     Path output = null;
     List<String> attemptedLaunchers = new ArrayList<>();
     try {
       output = Files.createTempFile("java-converter-classpath", ".txt");
-      for (List<String> command : mavenClasspathCommands(pom, output, resolveMavenDependencies)) {
+      for (List<String> command : mavenClasspathCommands(pom, output, mavenOptions)) {
         attemptedLaunchers.add(command.get(0));
         MavenRunResult result = runMavenCommand(command);
         if (!result.started()) {
@@ -620,43 +630,54 @@ final class ProjectScanner {
     return List.of();
   }
 
-  private static List<List<String>> mavenClasspathCommands(Path pom, Path output, boolean resolveMavenDependencies) {
+  private static List<List<String>> mavenClasspathCommands(Path pom, Path output, MavenDiscoveryOptions options) {
     List<List<String>> commands = new ArrayList<>();
+    if (options.executable() != null) {
+      commands.add(mavenClasspathCommand(options.executable().toString(), pom, output, options));
+      return commands;
+    }
     Path moduleRoot = pom.getParent();
     if (moduleRoot != null) {
       Path wrapper = moduleRoot.resolve(isWindows() ? "mvnw.cmd" : "mvnw");
       if (Files.isRegularFile(wrapper)) {
-        commands.add(mavenClasspathCommand(wrapper.toString(), pom, output, resolveMavenDependencies));
+        commands.add(mavenClasspathCommand(wrapper.toString(), pom, output, options));
       }
     }
-    addMavenHomeCommand(commands, "MAVEN_HOME", pom, output, resolveMavenDependencies);
-    addMavenHomeCommand(commands, "M2_HOME", pom, output, resolveMavenDependencies);
+    addMavenHomeCommand(commands, "MAVEN_HOME", pom, output, options);
+    addMavenHomeCommand(commands, "M2_HOME", pom, output, options);
     if (isWindows()) {
-      commands.add(mavenClasspathCommand("mvn.cmd", pom, output, resolveMavenDependencies));
+      commands.add(mavenClasspathCommand("mvn.cmd", pom, output, options));
     }
-    commands.add(mavenClasspathCommand("mvn", pom, output, resolveMavenDependencies));
+    commands.add(mavenClasspathCommand("mvn", pom, output, options));
     return commands;
   }
 
   private static void addMavenHomeCommand(List<List<String>> commands, String envName, Path pom, Path output,
-      boolean resolveMavenDependencies) {
+      MavenDiscoveryOptions options) {
     String home = System.getenv(envName);
     if (home == null || home.isBlank()) {
       return;
     }
     Path launcher = Path.of(home, "bin", isWindows() ? "mvn.cmd" : "mvn");
     if (Files.isRegularFile(launcher)) {
-      commands.add(mavenClasspathCommand(launcher.toString(), pom, output, resolveMavenDependencies));
+      commands.add(mavenClasspathCommand(launcher.toString(), pom, output, options));
     }
   }
 
   private static List<String> mavenClasspathCommand(String launcher, Path pom, Path output,
-      boolean resolveMavenDependencies) {
+      MavenDiscoveryOptions options) {
     List<String> command = new ArrayList<>();
     command.add(launcher);
     command.add("-q");
-    if (!resolveMavenDependencies) {
+    if (options.settingsFile() != null) {
+      command.add("--settings");
+      command.add(options.settingsFile().toString());
+    }
+    if (options.offline()) {
       command.add("-o");
+    }
+    if (options.localRepository() != null) {
+      command.add("-Dmaven.repo.local=" + options.localRepository());
     }
     command.add("-f");
     command.add(pom.toString());
@@ -850,6 +871,8 @@ final class ProjectScanner {
 
   private static List<Path> mavenLocalRepositories() {
     LinkedHashSet<Path> repositories = new LinkedHashSet<>();
+    String configuredRepository = System.getProperty("maven.repo.local", "");
+    if (!configuredRepository.isBlank()) repositories.add(Path.of(configuredRepository).toAbsolutePath().normalize());
     addMavenRepositoryCandidates(repositories, System.getProperty("user.home", ""));
     addMavenRepositoryCandidates(repositories, System.getenv("USERPROFILE"));
     addMavenRepositoryCandidates(repositories, System.getenv("MAVEN_USER_HOME"));

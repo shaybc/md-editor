@@ -54,6 +54,18 @@ public final class Main implements Callable<Integer> {
       description = "Allow Maven to download missing dependencies and index resolved dependency jars.")
   boolean resolveMavenDependencies;
 
+  @Option(names = "--maven-executable",
+      description = "Resolved Maven executable to use for Maven classpath extraction.")
+  Path mavenExecutable;
+
+  @Option(names = "--maven-settings",
+      description = "Maven user settings.xml to use for Maven classpath extraction.")
+  Path mavenSettings;
+
+  @Option(names = "--maven-local-repository",
+      description = "Maven local repository to use for dependency resolution.")
+  Path mavenLocalRepository;
+
   @Option(names = "--include-external-dependencies",
       description = "Inspect external jars and include used external dependencies in generated Markdown.")
   boolean includeExternalDependencies;
@@ -155,6 +167,15 @@ public final class Main implements Callable<Integer> {
         gradleUserHome == null ? null : gradleUserHome.toAbsolutePath().normalize(),
         gradleFailureMode
     );
+    MavenDiscoveryOptions mavenOptions = new MavenDiscoveryOptions(
+        mavenExecutable == null ? null : mavenExecutable.toAbsolutePath().normalize(),
+        mavenSettings == null ? null : mavenSettings.toAbsolutePath().normalize(),
+        !resolveMavenDependencies,
+        mavenLocalRepository == null ? null : mavenLocalRepository.toAbsolutePath().normalize()
+    );
+    if (mavenOptions.localRepository() != null) {
+      System.setProperty("maven.repo.local", mavenOptions.localRepository().toString());
+    }
 
     ConverterOptions options = new ConverterOptions(
         includeMethods,
@@ -172,7 +193,8 @@ public final class Main implements Callable<Integer> {
           root,
           resolveMavenDependencies,
           includeExternalDependencies,
-          gradleOptions
+          gradleOptions,
+          mavenOptions
       );
       Instant scanFinishedAt = Instant.now();
       ConversionProgress.progress("scan", "Scanning source files", 0, project.sourceFiles().size());

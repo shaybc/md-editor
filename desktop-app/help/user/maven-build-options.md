@@ -6,6 +6,10 @@ tags:
 ---
 # Maven Build Options
 
+Global Maven execution is configured under **Settings > Maven**. The selected wrapper/system/custom executable, optional settings.xml, offline default, and local repository are applied to Maven discovery, builds, conversion, Javadoc, RAT, run configurations, and dependency recovery.
+
+The **Work offline** build option is initialized from the global Maven setting and can be changed for the current invocation. Advanced Maven Arguments cannot override offline mode, the settings file, or the local repository; configure those values in Settings so every Maven workflow uses the same source.
+
 MD-Editor shows Maven Build Options when a Java project uses Maven and you choose **Project > Rebuild Project**. These controls change the rebuild command shown in the dialog; they do not edit `pom.xml`.
 
 ## Tests

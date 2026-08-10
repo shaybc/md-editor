@@ -98,8 +98,11 @@
     function buildMavenCommand(options = {}) {
       const settings = options.settings || {};
       const runner = String(options.runner || "mvn");
+      if (Object.prototype.hasOwnProperty.call(options, "runner") && !String(options.runner || "").trim()) {
+        throw new Error(options.runnerError || "No Maven runner is available for Javadoc generation.");
+      }
       const goal = options.goal === "javadoc:aggregate" ? "javadoc:aggregate" : "javadoc:javadoc";
-      const parts = [runner, goal];
+      const parts = [runner, ...(deps.mavenRuntimeSettings?.getInvocationArguments?.({ offlineOverride: options.offlineOverride }) || []), goal];
       addMavenDestinationOptions(parts, settings.destination);
       if (settings.documentTitleEnabled && settings.documentTitle) parts.push(`-Ddoctitle=${quote(settings.documentTitle)}`);
       if (settings.author) parts.push("-Dauthor=true");

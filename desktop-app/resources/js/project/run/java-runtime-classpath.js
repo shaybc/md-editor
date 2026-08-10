@@ -86,7 +86,10 @@
       await createMetadataDirectory(detected.projectRoot);
       const outputPath = joinPath(detected.projectRoot, `.md-editor/run-maven-classpath-${Date.now()}.txt`);
       const relativeOutput = `.md-editor/${normalizePath(outputPath).split("/").pop()}`;
-      const command = `${detected.runner} -q dependency:build-classpath -Dmdep.outputAbsoluteArtifactFilename=true -Dmdep.outputFile="${relativeOutput}"`;
+      const command = deps.mavenCommand.buildGoalsCommand({
+        runner: detected.runner,
+        commandLine: `-q dependency:build-classpath -Dmdep.outputAbsoluteArtifactFilename=true -Dmdep.outputFile="${relativeOutput}"`
+      });
       try {
         await runInspection(command, detected.projectRoot, runtime);
         const dependencyText = await getFilesystem()?.readFile?.(outputPath) || "";

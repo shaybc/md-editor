@@ -4,11 +4,11 @@ const path = require("node:path");
 const test = require("node:test");
 const vm = require("node:vm");
 
-function loadCommandBuilder() {
+function loadCommandBuilder(deps = {}) {
   const source = fs.readFileSync(path.resolve(__dirname, "../resources/js/project/maven-build-command.js"), "utf8");
   const context = { window: {}, globalThis: {} };
   vm.runInNewContext(source, context);
-  return context.window.registerMarkdownViewerMavenBuildCommand({ registerModule() {} });
+  return context.window.registerMarkdownViewerMavenBuildCommand({ registerModule() {} }, deps);
 }
 
 test("Maven command runs tests when both test choices are enabled", () => {
@@ -96,5 +96,27 @@ test("Maven effective POM command uses the detected runner and POM", () => {
   assert.equal(
     builder.buildEffectivePomCommand({ runner: "mvn", cwd: "C:/Project", pomPath: "C:/Project/module/pom.xml" }),
     "mvn -f module/pom.xml help:effective-pom"
+  );
+});
+
+test("Maven commands include global settings repository and overridable offline mode", () => {
+  const runtimeModule = require("../resources/js/project/maven-runtime-settings.js");
+  const runtime = runtimeModule.registerMarkdownViewerMavenRuntimeSettings({ registerModule() {} }, {
+    getSettings() {
+      return {
+        mavenSettingsFilePath: "C:/Maven Config/settings.xml",
+        mavenOffline: true,
+        mavenLocalRepositoryPath: "D:/Maven Cache"
+      };
+    }
+  });
+  const builder = loadCommandBuilder({ mavenRuntimeSettings: runtime });
+  assert.equal(
+    builder.buildCleanCommand({ runner: "mvn.cmd" }),
+    'mvn.cmd --settings "C:/Maven Config/settings.xml" --offline "-Dmaven.repo.local=D:/Maven Cache" clean'
+  );
+  assert.equal(
+    builder.buildCleanCommand({ runner: "mvn.cmd", offlineOverride: false }),
+    'mvn.cmd --settings "C:/Maven Config/settings.xml" "-Dmaven.repo.local=D:/Maven Cache" clean'
   );
 });

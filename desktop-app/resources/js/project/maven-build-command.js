@@ -2,7 +2,20 @@
   "use strict";
 
   /** Build Maven rebuild commands from the selected test policy. */
-  function registerMarkdownViewerMavenBuildCommand(app) {
+  function registerMarkdownViewerMavenBuildCommand(app, deps = {}) {
+    const mavenRuntimeSettings = deps.mavenRuntimeSettings;
+
+    function invocationParts(options = {}) {
+      return mavenRuntimeSettings?.getInvocationArguments?.({ offlineOverride: options.offlineOverride }) || [];
+    }
+
+    function runner(options = {}) {
+      const value = String(options.runner || "").trim();
+      if (Object.prototype.hasOwnProperty.call(options, "runner") && !value) {
+        throw new Error(options.runnerError || "No Maven runner is available for this project.");
+      }
+      return value || "mvn";
+    }
     /** Normalize Maven test choices so running tests always compiles them. */
     function normalizeTestOptions(options = {}) {
       const runTests = options.runTests === true;
@@ -14,7 +27,7 @@
 
     /** Produce the Maven clean-package command for a detected runner. */
     function buildCommand(options = {}) {
-      const parts = [String(options.runner || "mvn"), "clean", "package"];
+      const parts = [runner(options), ...invocationParts(options), "clean", "package"];
       if (Array.isArray(options.optionArguments)) {
         options.optionArguments.map((argument) => String(argument || "").trim()).filter(Boolean).forEach((argument) => parts.push(argument));
       } else {
@@ -43,10 +56,10 @@
 
     /** Produce the Maven effective-POM inspection command for a detected project. */
     function buildEffectivePomCommand(options = {}) {
-      const runner = String(options.runner || "mvn");
+      const selectedRunner = runner(options);
       const cwd = normalizePath(options.cwd || options.projectRoot || "");
       const pomPath = normalizePath(options.pomPath || "");
-      const parts = [runner];
+      const parts = [selectedRunner, ...invocationParts(options)];
       if (cwd && pomPath && pomPath.toLowerCase() !== `${cwd.toLowerCase()}/pom.xml`) {
         parts.push("-f", quote(relativePath(cwd, pomPath)));
       }
@@ -56,15 +69,15 @@
 
     /** Produce the Maven clean-only command for a detected runner. */
     function buildCleanCommand(options = {}) {
-      return String(options.runner || "mvn") + " clean";
+      return [runner(options), ...invocationParts(options), "clean"].join(" ");
     }
 
     /** Produce the Maven Spotless apply command for a detected module. */
     function buildSpotlessApplyCommand(options = {}) {
-      const runner = String(options.runner || "mvn");
+      const selectedRunner = runner(options);
       const cwd = normalizePath(options.cwd || options.projectRoot || "");
       const pomPath = normalizePath(options.pomPath || "");
-      const parts = [runner];
+      const parts = [selectedRunner, ...invocationParts(options)];
       if (cwd && pomPath && pomPath.toLowerCase() !== `${cwd.toLowerCase()}/pom.xml`) {
         parts.push("-f", quote(relativePath(cwd, pomPath)));
       }
@@ -76,15 +89,15 @@
     function buildGoalsCommand(options = {}) {
       const profiles = String(options.profiles || "").trim().split(/\s+/).filter(Boolean)
         .map((profile) => profile.startsWith("-") ? profile : `-P${profile}`);
-      return [String(options.runner || "mvn"), ...profiles, String(options.commandLine || "").trim()].filter(Boolean).join(" ");
+      return [runner(options), ...invocationParts(options), ...profiles, String(options.commandLine || "").trim()].filter(Boolean).join(" ");
     }
 
     const api = { buildCleanCommand, buildCommand, buildCompileCommand, buildEffectivePomCommand, buildGoalsCommand, buildSpotlessApplyCommand, normalizeTestOptions };
     /** Produce a module compile command without packaging project JARs. */
     function buildCompileCommand(options = {}) {
-      return String(options.runner || "mvn") + " "
-        + (options.includeTests === true ? "test-compile" : "compile")
-        + " -Dmaven.compiler.useIncrementalCompilation=false";
+      return [runner(options), ...invocationParts(options),
+        options.includeTests === true ? "test-compile" : "compile",
+        "-Dmaven.compiler.useIncrementalCompilation=false"].join(" ");
     }
 
     app.registerModule?.("mavenBuildCommand", api);

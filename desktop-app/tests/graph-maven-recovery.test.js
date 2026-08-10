@@ -191,6 +191,15 @@ test("maven recovery generated batch copies runtime dependency jars into lib ext
   assert.match(batch, /Missing dependency jars were copied to %TARGET_LIB%/);
 });
 
+test("maven recovery snapshots the configured executable and Maven arguments", () => {
+  const api = loadGraphMavenRecoveryApi();
+  const batch = api.formatFetchBatch("C:/source/project/lib/external", {
+    runner: '"C:/Tools/Apache Maven/mvn.cmd"',
+    arguments: ["--settings", '"C:/Maven Config/settings.xml"', "--offline", '"-Dmaven.repo.local=D:/Maven Cache"']
+  });
+  assert.match(batch, /call "C:\/Tools\/Apache Maven\/mvn\.cmd" --settings "C:\/Maven Config\/settings\.xml" --offline "-Dmaven\.repo\.local=D:\/Maven Cache" -f pom\.xml/);
+});
+
 test("maven recovery rejects file generation outside desktop runtime", async () => {
   const api = loadGraphMavenRecoveryApi();
 

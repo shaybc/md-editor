@@ -1011,6 +1011,14 @@
         const toolingJdk = workspaceRuntime?.launcherJdk?.path || joinPath(await getDesktopAppRootPath(), "bin", "tooling-jdk");
         const projectJdk = workspaceRuntime?.projectJdk?.path || toolingJdk;
         const analysisRoots = getEncodedKotlinAnalysisRoots();
+        const mavenConfiguration = deps.mavenRuntimeSettings?.getConfiguration?.() || {};
+        const resolvedMaven = await deps.mavenRuntimeSettings?.resolveRunner?.({
+          projectRoot: options.workspaceRoot || "",
+          workspaceRoot: options.workspaceRoot || "",
+          osName: global.NL_OS || "Windows",
+          configuration: mavenConfiguration
+        });
+        if (resolvedMaven?.error) throw new Error(resolvedMaven.error);
         await ensureDirectory(workspaceDir);
         return {
           command: [
@@ -1024,7 +1032,10 @@
             "--projectJdk", quoteCommandArg(projectJdk),
             "--maximumProblems", String(Math.max(1, Number(deps.getMaximumProblems?.()) || 5000)),
             ...(analysisRoots ? ["--analysisRoots", quoteCommandArg(analysisRoots)] : []),
-            "--gradle", quoteCommandArg(getProjectGradleExecutable())
+            "--gradle", quoteCommandArg(getProjectGradleExecutable()),
+            "--maven", quoteCommandArg(resolvedMaven?.runnerPath || resolvedMaven?.runner || "mvn"),
+            "--mavenSettings", quoteCommandArg(mavenConfiguration.settingsFilePath || ""),
+            "--mavenOffline", String(mavenConfiguration.offline === true)
           ].join(" "),
           cwd: status.installDir
         };

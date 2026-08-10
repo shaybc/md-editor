@@ -2154,6 +2154,7 @@ async function startMarkdownViewer() {
   let javaAnalysisRefresh = null;
   let eclipseAnalysisScopePolicy = null;
   let mavenProjectDetection = null;
+  let mavenRuntimeSettings = null;
   let javaProjectDetectionBridgeClient = null;
   let javaAnalysisInventory = null;
   let javaWorkspaceModel = null;
@@ -2556,9 +2557,16 @@ async function startMarkdownViewer() {
       get Neutralino() { return typeof Neutralino !== "undefined" ? Neutralino : undefined; }
     });
   }
+  if (typeof window.registerMarkdownViewerMavenRuntimeSettings === "function") {
+    mavenRuntimeSettings = window.registerMarkdownViewerMavenRuntimeSettings(app, {
+      get Neutralino() { return typeof Neutralino !== "undefined" ? Neutralino : undefined; },
+      getSettings: function() { return loadGlobalState(); }
+    });
+  }
   if (typeof window.registerMarkdownViewerMavenProjectDetection === "function") {
     mavenProjectDetection = window.registerMarkdownViewerMavenProjectDetection(app, {
-      get Neutralino() { return typeof Neutralino !== "undefined" ? Neutralino : undefined; }
+      get Neutralino() { return typeof Neutralino !== "undefined" ? Neutralino : undefined; },
+      mavenRuntimeSettings
     });
   }
   if (typeof window.registerMarkdownViewerJavaAnalysisInventory === "function") {
@@ -2566,6 +2574,7 @@ async function startMarkdownViewer() {
     const mavenModuleInventory = window.registerMarkdownViewerMavenModuleInventory?.(app, {
       bridge: javaProjectDetectionBridgeClient,
       mavenDetection: mavenProjectDetection,
+      mavenRuntimeSettings,
       get Neutralino() { return typeof Neutralino !== "undefined" ? Neutralino : undefined; }
     });
     const gradleModuleInventory = window.registerMarkdownViewerGradleModuleInventory?.(app, {
@@ -2656,6 +2665,7 @@ async function startMarkdownViewer() {
       getValidatedJdtProjectRoots: function() { return analysisGenerationCoordinator?.getValidatedProjectRoots?.() || []; },
       getConfiguredJdks: function() { return jdkRegistry?.list?.() || []; },
       getConfiguredGradles: getJavaConverterGradleInstallations,
+      mavenRuntimeSettings,
       getProfileDataDirPath: recentItems.getProfileDataDirPath,
       getMaximumProblems: getJdtMaximumProblems,
       isNeutralinoRuntime,
@@ -4431,6 +4441,18 @@ async function startMarkdownViewer() {
   const settingsDetectJdksButton = document.getElementById("settings-detect-jdks");
   const settingsAddJdkButton = document.getElementById("settings-add-jdk");
   if (settingsDetectJdksButton) settingsDetectJdksButton.hidden = !windowsJdkDetector?.isSupported?.();
+  const settingsMavenExecutionModeInput = document.getElementById("settings-maven-execution-mode");
+  const settingsMavenCustomExecutableRow = document.getElementById("settings-maven-custom-executable-row");
+  const settingsMavenCustomExecutableInput = document.getElementById("settings-maven-custom-executable");
+  const settingsMavenCustomExecutableBrowseButton = document.getElementById("settings-maven-custom-executable-browse");
+  const settingsMavenSettingsFileInput = document.getElementById("settings-maven-settings-file");
+  const settingsMavenSettingsFileBrowseButton = document.getElementById("settings-maven-settings-file-browse");
+  const settingsMavenOfflineInput = document.getElementById("settings-maven-offline");
+  const settingsMavenLocalRepositoryInput = document.getElementById("settings-maven-local-repository");
+  const settingsMavenLocalRepositoryBrowseButton = document.getElementById("settings-maven-local-repository-browse");
+  function updateSettingsMavenExecutionFields() {
+    if (settingsMavenCustomExecutableRow) settingsMavenCustomExecutableRow.hidden = settingsMavenExecutionModeInput?.value !== "custom";
+  }
   const settingsGradleModeInputs = document.querySelectorAll('input[name="settings-gradle-mode"]');
   const settingsGradleOfflineInput = document.getElementById("settings-gradle-offline");
   const settingsGradleMetadataFailureInput = document.getElementById("settings-gradle-metadata-failure");
@@ -4575,6 +4597,14 @@ async function startMarkdownViewer() {
     "settings-lsp-windows-scripting-autostart": "Toggle automatic Windows scripting language server startup for matching open files.",
     "settings-detect-jdks": "Find and add installed Windows JDKs.",
     "settings-add-jdk": "Add a JDK home folder for the Java converter.",
+    "settings-maven-execution-mode": "Choose the Maven wrapper, system Maven, or a custom executable for app-launched Maven commands.",
+    "settings-maven-custom-executable": "Set the Maven executable used in custom mode.",
+    "settings-maven-custom-executable-browse": "Choose a custom Maven executable.",
+    "settings-maven-settings-file": "Optional Maven settings.xml containing mirrors, proxies, profiles, and repository credentials.",
+    "settings-maven-settings-file-browse": "Choose a Maven settings.xml file.",
+    "settings-maven-offline": "Use Maven's offline mode by default.",
+    "settings-maven-local-repository": "Override Maven's local dependency and plugin repository.",
+    "settings-maven-local-repository-browse": "Choose a Maven local repository folder.",
     "settings-gradle-mode-auto": "Try the project Gradle wrapper first, with local Gradle available for configured offline runs.",
     "settings-gradle-mode-wrapper": "Use the project Gradle wrapper and the converter's existing PATH fallback.",
     "settings-gradle-mode-local": "Run the selected local Gradle distribution directly.",
@@ -5018,6 +5048,11 @@ async function startMarkdownViewer() {
     codeConverterJavaJdks: [],
     codeConverterSelectedGradleInstallationId: "",
     codeConverterSourceRoot: "",
+    mavenExecutionMode: "auto",
+    mavenExecutablePath: "",
+    mavenSettingsFilePath: "",
+    mavenOffline: false,
+    mavenLocalRepositoryPath: "",
     debugEnabled: false,
     debugLevel: DEFAULT_DEBUG_LEVEL,
     debugLogPath: "",
@@ -9466,6 +9501,13 @@ Markdown content is processed client-side in your browser and sanitized before p
     void renderSettingsLanguageServers();
     settingsJavaConverterJdksDraft = getJavaConverterJdks();
     renderSettingsJdkTable();
+    const mavenConfiguration = mavenRuntimeSettings?.getConfiguration?.() || {};
+    if (settingsMavenExecutionModeInput) settingsMavenExecutionModeInput.value = mavenConfiguration.executionMode || "auto";
+    if (settingsMavenCustomExecutableInput) settingsMavenCustomExecutableInput.value = mavenConfiguration.executablePath || "";
+    if (settingsMavenSettingsFileInput) settingsMavenSettingsFileInput.value = mavenConfiguration.settingsFilePath || "";
+    if (settingsMavenOfflineInput) settingsMavenOfflineInput.checked = mavenConfiguration.offline === true;
+    if (settingsMavenLocalRepositoryInput) settingsMavenLocalRepositoryInput.value = mavenConfiguration.localRepositoryPath || "";
+    updateSettingsMavenExecutionFields();
     settingsGradleInstallationsDraft = getJavaConverterGradleInstallations();
     const gradleMode = getJavaConverterGradleMode();
     settingsGradleModeInputs.forEach((input) => {
@@ -11106,6 +11148,54 @@ Markdown content is processed client-side in your browser and sanitized before p
     }
   }
 
+  async function chooseSettingsMavenFile(title, input, extensions) {
+    if (typeof Neutralino === "undefined" || !Neutralino.os?.showOpenDialog) {
+      alert("Maven file selection requires the desktop app.");
+      return;
+    }
+    try {
+      const selected = await Neutralino.os.showOpenDialog(title, {
+        multiSelections: false,
+        filters: extensions?.length ? [{ name: "Supported files", extensions }] : undefined
+      });
+      const selectedPath = Array.isArray(selected) ? selected[0] : selected;
+      if (selectedPath && input) input.value = normalizeLocalPath(selectedPath);
+    } catch (error) {
+      console.warn("Failed to choose Maven file:", error);
+      alert("Unable to choose that Maven file.");
+    }
+  }
+
+  async function chooseSettingsMavenLocalRepository() {
+    if (typeof Neutralino === "undefined" || !Neutralino.os?.showFolderDialog) {
+      alert("Maven repository selection requires the desktop app.");
+      return;
+    }
+    try {
+      const selectedPath = await Neutralino.os.showFolderDialog(
+        "Choose Maven local repository",
+        settingsMavenLocalRepositoryInput?.value ? { defaultPath: settingsMavenLocalRepositoryInput.value } : undefined
+      );
+      if (selectedPath && settingsMavenLocalRepositoryInput) settingsMavenLocalRepositoryInput.value = normalizeLocalPath(selectedPath);
+    } catch (error) {
+      console.warn("Failed to choose Maven local repository:", error);
+      alert("Unable to choose that Maven local repository folder.");
+    }
+  }
+
+  async function validateSettingsMavenPath(path, kind, label) {
+    if (!path || typeof Neutralino === "undefined" || !Neutralino.filesystem?.getStats) return true;
+    try {
+      const stats = await Neutralino.filesystem.getStats(path);
+      const valid = kind === "file" ? stats?.isFile === true : stats?.isDirectory === true;
+      if (valid) return true;
+    } catch (_error) {
+      // The shared message below is more useful than a platform-specific filesystem error.
+    }
+    alert(label + " is unavailable. Choose an existing " + kind + " or clear the setting.");
+    return false;
+  }
+
   async function refreshPreferencesAfterSettingsChange(options = {}) {
     const state = loadGlobalState();
     applyGlobalPreferences(state);
@@ -11479,6 +11569,20 @@ Markdown content is processed client-side in your browser and sanitized before p
       editorSnippetPreferences = snippetRegistry.normalizeSnippetPreferences(settingsSnippetPreferencesDraft);
     }
     const codeConverterJavaJdks = collectSettingsJdkRows();
+    const mavenExecutionMode = ["auto", "wrapper", "system", "custom"].includes(settingsMavenExecutionModeInput?.value)
+      ? settingsMavenExecutionModeInput.value
+      : "auto";
+    const mavenExecutablePath = normalizeLocalPath(settingsMavenCustomExecutableInput?.value || "");
+    const mavenSettingsFilePath = normalizeLocalPath(settingsMavenSettingsFileInput?.value || "");
+    const mavenOffline = settingsMavenOfflineInput?.checked === true;
+    const mavenLocalRepositoryPath = normalizeLocalPath(settingsMavenLocalRepositoryInput?.value || "");
+    if (mavenExecutionMode === "custom" && !mavenExecutablePath) {
+      alert("Choose a custom Maven executable or select another Maven execution mode.");
+      return;
+    }
+    if (mavenExecutionMode === "custom" && !await validateSettingsMavenPath(mavenExecutablePath, "file", "The custom Maven executable")) return;
+    if (!await validateSettingsMavenPath(mavenSettingsFilePath, "file", "The Maven user settings file")) return;
+    if (!await validateSettingsMavenPath(mavenLocalRepositoryPath, "folder", "The Maven local repository")) return;
     const codeConverterGradleInstallations = collectSettingsGradleRows();
     const selectedGradleModeInput = Array.from(settingsGradleModeInputs).find((input) => input.checked);
     const codeConverterGradleMode = normalizeGradleMode(selectedGradleModeInput?.value);
@@ -11587,6 +11691,11 @@ Markdown content is processed client-side in your browser and sanitized before p
         codeConverterGradleUserHome,
         codeConverterJavaJdks,
         codeConverterSelectedGradleInstallationId: selectedGradleInstallationId,
+        mavenExecutionMode,
+        mavenExecutablePath,
+        mavenSettingsFilePath,
+        mavenOffline,
+        mavenLocalRepositoryPath,
         maxOpenTabs,
         maxRecentFiles: Math.min(100, Math.floor(maxRecentFiles)),
         maxRecentFolders: Math.min(100, Math.floor(maxRecentFolders)),
@@ -13213,8 +13322,24 @@ Markdown content is processed client-side in your browser and sanitized before p
   function resetCodeConverterExternalDependencyDefault() {
     if (getSelectedCodeConverterType() === "java" && codeConverterIncludeExternalDependenciesInput && !codeConverterIsRunning) {
       codeConverterIncludeExternalDependenciesInput.checked = true;
-      if (codeConverterResolveMavenInput) codeConverterResolveMavenInput.checked = true;
+      if (codeConverterResolveMavenInput) codeConverterResolveMavenInput.checked = mavenRuntimeSettings?.getConfiguration?.().offline !== true;
     }
+  }
+
+  async function getMavenConverterSwitches(sourceRoot) {
+    const configuration = mavenRuntimeSettings?.getConfiguration?.() || {};
+    const resolved = await mavenRuntimeSettings?.resolveRunner?.({
+      projectRoot: sourceRoot,
+      workspaceRoot: sourceRoot,
+      osName: typeof NL_OS !== "undefined" ? NL_OS : "Windows",
+      configuration
+    });
+    if (resolved?.error) throw new Error(resolved.error);
+    const switches = [];
+    if (resolved?.runnerPath) switches.push("--maven-executable", quoteCommandArg(resolved.runnerPath));
+    if (configuration.settingsFilePath) switches.push("--maven-settings", quoteCommandArg(configuration.settingsFilePath));
+    if (configuration.localRepositoryPath) switches.push("--maven-local-repository", quoteCommandArg(configuration.localRepositoryPath));
+    return switches;
   }
 
   function updateCodeConverterLanguageSupport() {
@@ -13549,7 +13674,7 @@ Markdown content is processed client-side in your browser and sanitized before p
       if (converterType === "java") {
         const gradleSettings = getGradleLauncherSettings();
         appendGradleLauncherConsole(gradleSettings);
-        switches = [...switches, ...getGradleLauncherSwitches(gradleSettings)];
+        switches = [...switches, ...await getMavenConverterSwitches(sourceRoot), ...getGradleLauncherSwitches(gradleSettings)];
       }
       const command = (await converterConfig.buildCommandParts(sourceRoot, destinationRoot, switches))
         .join(" ");
@@ -15650,9 +15775,10 @@ async function* collectWorkspaceSearchFilesFromNeutralinoDirectory(parentPath, p
     pluginInspector: mavenPluginInspector,
     effectivePomParser: mavenEffectivePomParser,
     compilerWarningProvider: mavenCompilerWarningBuildOptionsProvider,
-    pluginAwareProvider: mavenPluginAwareBuildOptionsProvider
+    pluginAwareProvider: mavenPluginAwareBuildOptionsProvider,
+    getMavenOffline: () => mavenRuntimeSettings?.getConfiguration?.().offline === true
   });
-  const mavenBuildCommand = window.registerMarkdownViewerMavenBuildCommand?.(app);
+  const mavenBuildCommand = window.registerMarkdownViewerMavenBuildCommand?.(app, { mavenRuntimeSettings });
   const gradleBuildCommand = window.registerMarkdownViewerGradleBuildCommand?.(app);
   const spotlessMavenDiagnosticsParser = window.registerMarkdownViewerSpotlessMavenDiagnosticsParser?.(app);
   const mavenCompilerDiagnosticsParser = window.registerMarkdownViewerMavenCompilerDiagnosticsParser?.(app);
@@ -15710,7 +15836,7 @@ async function* collectWorkspaceSearchFilesFromNeutralinoDirectory(parentPath, p
     confirmDelete: function(message) { return window.confirm(message); },
     get Neutralino() { return typeof Neutralino !== "undefined" ? Neutralino : undefined; }
   });
-  const ratCommandBuilder = window.registerMarkdownViewerRatCommandBuilder?.(app);
+  const ratCommandBuilder = window.registerMarkdownViewerRatCommandBuilder?.(app, { mavenRuntimeSettings });
   const ratRunner = window.registerMarkdownViewerRatRunner?.(app, {
     findingParser: ratFindingParser,
     commandBuilder: ratCommandBuilder,
@@ -15906,6 +16032,7 @@ async function* collectWorkspaceSearchFilesFromNeutralinoDirectory(parentPath, p
   const javadocSourceSelection = window.registerMarkdownViewerJavadocSourceSelection?.(app);
   const javadocCommand = window.registerMarkdownViewerJavadocCommand?.(app, {
     compiler: javaCompiler,
+    mavenRuntimeSettings,
     get osName() { return typeof NL_OS !== "undefined" ? NL_OS : "Windows"; }
   });
   const javadocRunner = window.registerMarkdownViewerJavadocRunner?.(app, {
@@ -16018,6 +16145,7 @@ async function* collectWorkspaceSearchFilesFromNeutralinoDirectory(parentPath, p
     buildPath: javaBuildPath,
     compiler: javaCompiler,
     mavenDetection: mavenProjectDetection,
+    mavenCommand: mavenBuildCommand,
     gradleDetection: gradleProjectDetection,
     projectRuntime: javaProjectRuntime,
     getGradleLauncherSettings: getGradleProjectLauncherSettings,
@@ -17611,6 +17739,11 @@ async function* collectWorkspaceSearchFilesFromNeutralinoDirectory(parentPath, p
     settingsAddGradleButton.addEventListener("click", () => chooseSettingsGradleFolder());
   }
 
+  settingsMavenExecutionModeInput?.addEventListener("change", updateSettingsMavenExecutionFields);
+  settingsMavenCustomExecutableBrowseButton?.addEventListener("click", () => chooseSettingsMavenFile("Choose Maven executable", settingsMavenCustomExecutableInput));
+  settingsMavenSettingsFileBrowseButton?.addEventListener("click", () => chooseSettingsMavenFile("Choose Maven settings.xml", settingsMavenSettingsFileInput, ["xml"]));
+  settingsMavenLocalRepositoryBrowseButton?.addEventListener("click", chooseSettingsMavenLocalRepository);
+
   if (settingsGradleUserHomeBrowseButton) {
     settingsGradleUserHomeBrowseButton.addEventListener("click", chooseSettingsGradleUserHomeFolder);
   }
@@ -18138,7 +18271,8 @@ async function* collectWorkspaceSearchFilesFromNeutralinoDirectory(parentPath, p
         joinPath,
         loadSourceRootMetadata,
         getOriginalSourceRootPath,
-        appDebugLog
+        appDebugLog,
+        mavenRuntimeSettings
       });
     } catch (error) {
       console.error("Failed to initialize graph Maven recovery:", error);

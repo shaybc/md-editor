@@ -35,6 +35,11 @@
     debugEnabled: { category: "debug", label: "Debug logging" },
     codeConverterGradleMode: { category: "gradle", label: "Gradle mode" },
     codeConverterGradleOffline: { category: "gradle", label: "Gradle offline mode" },
+    mavenExecutionMode: { category: "maven", label: "Maven execution mode" },
+    mavenExecutablePath: { category: "maven", label: "Custom Maven executable" },
+    mavenSettingsFilePath: { category: "maven", label: "Maven user settings file" },
+    mavenOffline: { category: "maven", label: "Maven offline mode" },
+    mavenLocalRepositoryPath: { category: "maven", label: "Maven local repository" },
     codeConverterJavaJdks: { category: "jdks", label: "Configured JDKs" }
   });
 

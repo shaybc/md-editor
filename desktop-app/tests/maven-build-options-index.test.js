@@ -68,7 +68,7 @@ test("index keeps core options available when Maven plugin inspection fails", as
   });
 
   const session = await api.createSession({ context: { projectRoot: "C:/Project", pomPath: "C:/Project/pom.xml" } });
-  assert.deepEqual(Array.from(session.definitions, (definition) => definition.id), ["tests.compile", "tests.run", "reactor.fail-at-end", "dependency.force-updates"]);
+  assert.deepEqual(Array.from(session.definitions, (definition) => definition.id), ["execution.offline", "tests.compile", "tests.run", "reactor.fail-at-end", "dependency.force-updates"]);
 });
 
 

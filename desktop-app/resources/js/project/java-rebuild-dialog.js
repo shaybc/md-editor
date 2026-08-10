@@ -160,6 +160,7 @@
           compileTests: resolved.values["tests.compile"] === true,
           runTests: resolved.values["tests.run"] === true,
           skipRat: resolved.values["plugin.apache-rat.skip"] === true,
+          offlineOverride: resolved.values["execution.offline"] === true,
           optionArguments: resolved.arguments,
           persistedMaven: resolved.persistedConfiguration
         };
@@ -185,7 +186,19 @@
 
     function updateMavenPreview() {
       const resolved = mavenBuildOptionsController.resolve();
-      commandPreview.value = deps.mavenCommand.buildCommand({ runner: model.mavenProject.runner, optionArguments: resolved.arguments });
+      const runnerError = model.mavenProject.runnerError || "";
+      if (runnerError) {
+        commandPreview.value = "";
+        buildButton.disabled = true;
+        errorElement.hidden = false;
+        errorElement.textContent = runnerError;
+        return;
+      }
+      commandPreview.value = deps.mavenCommand.buildCommand({
+        runner: model.mavenProject.runner,
+        optionArguments: resolved.arguments,
+        offlineOverride: resolved.values["execution.offline"] === true
+      });
       buildButton.disabled = !model.mavenProject.hasPom || !resolved.valid || rebuildTaskState === "inspecting-effective-pom";
       if (cancelButton) cancelButton.disabled = rebuildTaskState === "inspecting-effective-pom";
       errorElement.hidden = model.mavenProject.hasPom;

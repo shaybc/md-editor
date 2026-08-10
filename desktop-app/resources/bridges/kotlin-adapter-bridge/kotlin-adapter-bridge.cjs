@@ -106,6 +106,10 @@ function startKotlinAdapter(argv = process.argv.slice(2), io = process) {
           gradleInitScript: path.join(__dirname, "gradle", "export-kotlin-jvm-models.gradle"),
           gradleExecutable: args.gradle,
           mavenExecutable: args.maven,
+          mavenArguments: [
+            ...(args.mavenSettings ? ["--settings", args.mavenSettings] : []),
+            ...(args.mavenOffline === "true" ? ["--offline"] : [])
+          ],
           analysisRoots: parseAnalysisRoots(args.analysisRoots),
           environment: createJavaEnvironment(args.projectJdk),
           stallTimeoutMs: Number(args.stallTimeoutMs) || 300000,

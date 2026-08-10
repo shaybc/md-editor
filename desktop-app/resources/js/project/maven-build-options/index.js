@@ -16,6 +16,18 @@
       getOptions() {
         return [
           {
+            id: "execution.offline",
+            group: { id: "execution", label: "Execution", order: 5 },
+            label: "Work offline",
+            description: "Use only dependencies and plugins already available in the configured local repository.",
+            help: "Overrides the global Maven offline default for this rebuild only.",
+            order: 10,
+            defaultValue: deps.getMavenOffline?.() === true,
+            persistence: "invocation",
+            reservedArguments: ["o", "offline", "s", "settings", "maven.repo.local"],
+            getArguments() { return []; }
+          },
+          {
             id: "tests.compile",
             group: { id: "tests", label: "Tests", order: 10 },
             label: "Compile tests",

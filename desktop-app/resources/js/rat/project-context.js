@@ -76,6 +76,7 @@
       const targetPath = normalizePath(request.targetPath || finding.filePath || projectPath);
       const detected = await deps.mavenDetection.detectProjectForTarget(projectPath, targetPath, deps.osName || "Windows");
       if (!detected?.hasPom) throw new Error("No Maven pom.xml was found for this RAT finding.");
+      if (detected.runnerError) throw new Error(detected.runnerError);
       const modulePom = await deps.configurationReader.readPom(detected.pomPath);
       const pomChain = await readParentChain(modulePom, projectPath);
       const declarations = pomChain.flatMap((pom, pomIndex) => pom.ratPlugins.map((plugin) => ({
@@ -86,7 +87,12 @@
         active: !plugin.inPluginManagement
       })));
       const governing = declarations.find((entry) => entry.active) || declarations[0] || null;
-      const wrapper = await findWrapper(detected.projectRoot, projectPath, deps.osName || "Windows");
+      const wrapper = detected.runner ? {
+        runner: detected.runner,
+        runnerPath: detected.runnerPath,
+        cwd: detected.usesWrapper && detected.runnerPath ? parentPath(detected.runnerPath) : detected.projectRoot,
+        usesWrapper: detected.usesWrapper
+      } : await findWrapper(detected.projectRoot, projectPath, deps.osName || "Windows");
       const reportCandidates = pomChain.map((pom) => joinPath(parentPath(pom.path), "target/rat.txt"));
       let reportPath = finding.reportPath || "";
       if (!reportPath) {

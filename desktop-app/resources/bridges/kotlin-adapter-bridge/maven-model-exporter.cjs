@@ -7,8 +7,9 @@ const { spawnCommand } = require("../lsp-proxy-common/process-launcher.cjs");
 async function exportMavenModel(options) {
   const effectivePom = path.join(options.cacheRoot, "maven-effective-pom.xml");
   const classpath = path.join(options.cacheRoot, "maven-classpath.txt");
-  await runWithRetry(options.mavenExecutable, ["-q", "-f", options.pom, `-Dmaven.repo.local=${options.repository}`, "help:effective-pom", `-Doutput=${effectivePom}`], options);
-  await runWithRetry(options.mavenExecutable, ["-q", "-f", options.pom, `-Dmaven.repo.local=${options.repository}`, "dependency:build-classpath", `-Dmdep.outputFile=${classpath}`], options);
+  const commonArguments = Array.isArray(options.mavenArguments) ? options.mavenArguments : [];
+  await runWithRetry(options.mavenExecutable, [...commonArguments, "-q", "-f", options.pom, `-Dmaven.repo.local=${options.repository}`, "help:effective-pom", `-Doutput=${effectivePom}`], options);
+  await runWithRetry(options.mavenExecutable, [...commonArguments, "-q", "-f", options.pom, `-Dmaven.repo.local=${options.repository}`, "dependency:build-classpath", `-Dmdep.outputFile=${classpath}`], options);
   return { effectivePom, classpath };
 }
 

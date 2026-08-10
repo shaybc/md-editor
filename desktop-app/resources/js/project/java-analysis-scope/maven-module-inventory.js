@@ -178,6 +178,9 @@
           code: "maven-reactor-model-failed"
         });
       }
+      if (mavenProject.runnerError) {
+        throw Object.assign(new Error(mavenProject.runnerError), { code: "maven-reactor-model-failed" });
+      }
       const mavenRoot = normalizePath(mavenProject.projectRoot);
       const pomPath = normalizePath(mavenProject.pomPath);
       if (!deps.bridge?.isAvailable?.()) {
@@ -188,7 +191,9 @@
       const result = await deps.bridge.run({
         mode: "resolve-maven-reactor",
         workspaceRoot: mavenRoot,
-        pomPath
+        pomPath,
+        mavenExecutable: mavenProject.runnerPath || mavenProject.runner,
+        mavenConfiguration: deps.mavenRuntimeSettings?.getConfiguration?.() || {}
       }, { signal: context.signal });
       if (Number(result.exitCode) !== 0) {
         throw Object.assign(new Error(String(result.stderr || result.stdout || "Maven effective-model discovery failed.").trim()), {

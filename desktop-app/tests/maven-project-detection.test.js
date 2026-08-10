@@ -69,3 +69,21 @@ test("source folders from different nested Maven projects are ambiguous", async 
   assert.equal(project.hasPom, false);
   assert.equal(project.ambiguous, true);
 });
+
+test("Maven runtime settings resolve wrapper-only custom and system modes", async () => {
+  const runtimeModule = require("../resources/js/project/maven-runtime-settings.js");
+  const files = new Set(["C:/Project/mvnw.cmd", "C:/Tools/Maven/bin/mvn.cmd"]);
+  let state = { mavenExecutionMode: "wrapper" };
+  const runtime = runtimeModule.registerMarkdownViewerMavenRuntimeSettings({ registerModule() {} }, {
+    getSettings() { return state; },
+    Neutralino: { filesystem: { async getStats(filePath) {
+      if (!files.has(filePath)) throw new Error("not found");
+      return { isFile: true };
+    } } }
+  });
+  assert.equal((await runtime.resolveRunner({ projectRoot: "C:/Project/module", workspaceRoot: "C:/Project", osName: "Windows" })).runnerPath, "C:/Project/mvnw.cmd");
+  state = { mavenExecutionMode: "custom", mavenExecutablePath: "C:/Tools/Maven/bin/mvn.cmd" };
+  assert.equal((await runtime.resolveRunner({ projectRoot: "C:/Project", osName: "Windows" })).runnerPath, "C:/Tools/Maven/bin/mvn.cmd");
+  state = { mavenExecutionMode: "system" };
+  assert.equal((await runtime.resolveRunner({ projectRoot: "C:/Project", osName: "Windows" })).runner, "mvn.cmd");
+});

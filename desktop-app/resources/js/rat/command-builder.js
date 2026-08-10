@@ -19,7 +19,7 @@
       const runner = context.wrapper?.runner || context.module?.runner || "mvn";
       const cwd = context.wrapper?.cwd || context.module?.projectRoot || context.projectPath;
       const pomPath = options.pomPath || context.module?.pomPath;
-      const args = [];
+      const args = deps.mavenRuntimeSettings?.getInvocationArguments?.({ offlineOverride: options.offlineOverride }) || [];
       if (pomPath && String(pomPath).replace(/\\/g, "/").toLowerCase() !== `${String(cwd).replace(/\\/g, "/").toLowerCase()}/pom.xml`) {
         args.push("-f", quote(relativePath(cwd, pomPath)));
       }

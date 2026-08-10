@@ -4,6 +4,7 @@
   /** Detect the Maven descriptor and preferred Maven runner associated with an opened project. */
   function registerMarkdownViewerMavenProjectDetection(app, deps = {}) {
     const Neutralino = deps.Neutralino || global.Neutralino;
+    const mavenRuntimeSettings = deps.mavenRuntimeSettings;
 
     function normalizePath(value) {
       return String(value || "").trim().replace(/\\/g, "/").replace(/\/+$/, "");
@@ -59,12 +60,12 @@
     async function detectProjectForTarget(projectPath, targetPath, osName = "Windows") {
       const match = await findNearestPom(projectPath, targetPath);
       if (!match) return detectProject(projectPath, osName, []);
-      return detectProject(match.projectRoot, osName, []);
+      return detectProject(match.projectRoot, osName, [], projectPath);
     }
 
 
     /** Resolve one Maven project from the root or the ancestors of configured source folders. */
-    async function detectProject(projectPath, osName = "Windows", sourceFolders = []) {
+    async function detectProject(projectPath, osName = "Windows", sourceFolders = [], workspacePath = projectPath) {
       const openedRoot = normalizePath(projectPath);
       const rootPomPath = joinPath(openedRoot, "pom.xml");
       let detected = await isFile(rootPomPath) ? { projectRoot: openedRoot, pomPath: rootPomPath } : null;
@@ -83,20 +84,29 @@
 
       const mavenRoot = detected?.projectRoot || openedRoot;
       const pomPath = detected?.pomPath || rootPomPath;
+      const hasPom = Boolean(detected);
       const isWindows = String(osName || "").toLowerCase() === "windows";
       const wrapperName = isWindows ? "mvnw.cmd" : "mvnw";
       const wrapperPath = joinPath(mavenRoot, wrapperName);
-      const hasPom = Boolean(detected);
       const hasWrapper = hasPom && await isFile(wrapperPath);
+      const resolvedRunner = mavenRuntimeSettings?.resolveRunner
+        ? await mavenRuntimeSettings.resolveRunner({ projectRoot: mavenRoot, workspaceRoot: workspacePath, osName })
+        : {
+            runner: hasWrapper ? (isWindows ? ".\\mvnw.cmd" : "./mvnw") : "mvn",
+            runnerPath: hasWrapper ? wrapperPath : "",
+            usesWrapper: hasWrapper,
+            error: ""
+          };
       return {
         ambiguous,
         hasPom,
         projectRoot: mavenRoot,
         pomPath,
         pomLabel: hasPom ? toProjectRelativePath(openedRoot, pomPath) : "pom.xml",
-        runner: hasWrapper ? (isWindows ? ".\\mvnw.cmd" : "./mvnw") : "mvn",
-        runnerPath: hasWrapper ? wrapperPath : "",
-        usesWrapper: hasWrapper
+        runner: resolvedRunner.runner,
+        runnerPath: resolvedRunner.runnerPath,
+        runnerError: resolvedRunner.error,
+        usesWrapper: resolvedRunner.usesWrapper
       };
     }
 

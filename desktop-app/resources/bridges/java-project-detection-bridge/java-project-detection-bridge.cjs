@@ -172,16 +172,20 @@ function spawnPortable(executable, argumentsList, options) {
   return spawn(executable, argumentsList, options);
 }
 
-function createMavenArguments(pomPath) {
-  return ["--no-transfer-progress", "-f", pomPath, "help:effective-pom"];
+function createMavenArguments(pomPath, configuration = {}) {
+  const commonArguments = [];
+  if (configuration.settingsFilePath) commonArguments.push("--settings", String(configuration.settingsFilePath));
+  if (configuration.offline === true) commonArguments.push("--offline");
+  if (configuration.localRepositoryPath) commonArguments.push("-Dmaven.repo.local=" + String(configuration.localRepositoryPath));
+  return [...commonArguments, "--no-transfer-progress", "-f", pomPath, "help:effective-pom"];
 }
 
 /** Run Maven's aggregator effective-POM goal once for the complete reactor. */
 function resolveMavenReactor(request) {
   return new Promise((resolve, reject) => {
-    const executable = resolveMavenExecutable(request.workspaceRoot);
+    const executable = String(request.mavenExecutable || "").trim() || resolveMavenExecutable(request.workspaceRoot);
     const pomPath = path.resolve(String(request.pomPath || path.join(request.workspaceRoot, "pom.xml")));
-    const child = spawnPortable(executable, createMavenArguments(pomPath), {
+    const child = spawnPortable(executable, createMavenArguments(pomPath, request.mavenConfiguration), {
       cwd: request.workspaceRoot,
       windowsHide: true
     });

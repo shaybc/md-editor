@@ -226,8 +226,11 @@
       return lines.join("\n") + "\n";
     }
 
-    function formatFetchBatch(targetJarFolder = "..\\lib\\external") {
+    function formatFetchBatch(targetJarFolder = "..\\lib\\external", mavenInvocation = {}) {
       const targetPath = toWindowsBatchPath(targetJarFolder || "..\\lib\\external");
+      const runner = String(mavenInvocation.runner || "mvn");
+      const commonArguments = Array.isArray(mavenInvocation.arguments) ? mavenInvocation.arguments.join(" ") : "";
+      const mavenPrefix = ["call", runner, commonArguments].filter(Boolean).join(" ");
       return [
         "@echo off",
         "setlocal",
@@ -249,7 +252,7 @@
         "echo.",
         "echo Missing dependency jars were copied to %TARGET_LIB%",
         "endlocal"
-      ].join("\r\n") + "\r\n";
+      ].join("\r\n").replace(/^call mvn /gm, mavenPrefix + " ") + "\r\n";
     }
 
     function formatUnmappedPackages(model) {
@@ -326,7 +329,7 @@
       return {
         model,
         pomXml: formatPomXml(model),
-        batch: formatFetchBatch(options.targetJarFolder),
+        batch: formatFetchBatch(options.targetJarFolder, options.mavenInvocation),
         unmappedPackages: formatUnmappedPackages(model)
       };
     }
@@ -454,7 +457,17 @@
       const outputFolderPath = normalizePath(options.outputFolderPath);
       const targetJarFolder = joinLocalPath(sourceRootPath, LIB_EXTERNAL_FOLDER);
       await ensureMavenCoordinateMapLoaded();
-      const files = createMavenRecoveryFiles(packageSummary, { targetJarFolder });
+      const resolvedRunner = deps.mavenRuntimeSettings?.resolveRunner
+        ? await deps.mavenRuntimeSettings.resolveRunner({ projectRoot: sourceRootPath, workspaceRoot: sourceRootPath, osName: "Windows" })
+        : { runner: "mvn.cmd", error: "" };
+      if (resolvedRunner.error) throw new Error(resolvedRunner.error);
+      const files = createMavenRecoveryFiles(packageSummary, {
+        targetJarFolder,
+        mavenInvocation: {
+          runner: resolvedRunner.runner,
+          arguments: deps.mavenRuntimeSettings?.getInvocationArguments?.() || []
+        }
+      });
       const paths = await writeMavenRecoveryFiles(sourceRootPath, files, {
         outputFolderPath,
         generatedProjectRootPath: options.generatedProjectRootPath,

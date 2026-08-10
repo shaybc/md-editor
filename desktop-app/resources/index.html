@@ -1365,6 +1365,10 @@
                     <i class="bi bi-cup-hot" aria-hidden="true"></i>
                     <span>Java</span>
                   </button>
+                  <button class="settings-tab-button" type="button" data-settings-tab="maven" aria-selected="false" tabindex="-1">
+                    <i class="bi bi-stack" aria-hidden="true"></i>
+                    <span>Maven</span>
+                  </button>
                   <button class="settings-tab-button" type="button" data-settings-tab="gradle" aria-selected="false" tabindex="-1">
                     <i class="bi bi-box-seam" aria-hidden="true"></i>
                     <span>Gradle</span>
@@ -2810,6 +2814,40 @@
                     <input type="number" id="settings-jdt-interactive-request-timeout-ms" class="rename-modal-input settings-number-input" min="500" max="60000" step="500" value="3000" />
                     <span class="settings-field-help">Limits completion, hover, navigation, symbols, references, and refactoring requests. JDT initialization keeps its longer allowance.</span>
                   </label>
+                </div>
+              </section>
+
+              <section class="settings-panel" data-settings-panel="maven" aria-labelledby="settings-maven-title" hidden>
+                <div class="settings-panel-heading">
+                  <span class="settings-panel-icon"><i class="bi bi-stack" aria-hidden="true"></i></span>
+                  <div><h3 id="settings-maven-title" class="settings-panel-title">Maven</h3><p class="settings-panel-description">Choose how MD-Editor launches Maven for project discovery, conversion, builds, and recovery.</p></div>
+                </div>
+                <div class="settings-subsection">
+                  <h4 class="settings-subsection-title">Execution</h4>
+                  <label class="settings-field" for="settings-maven-execution-mode">
+                    <span class="settings-field-label">Maven execution</span>
+                    <select id="settings-maven-execution-mode" class="rename-modal-input settings-select-input">
+                      <option value="auto">Automatic (wrapper, then system Maven)</option>
+                      <option value="wrapper">Maven wrapper only</option>
+                      <option value="system">System Maven</option>
+                      <option value="custom">Custom executable</option>
+                    </select>
+                  </label>
+                  <div id="settings-maven-custom-executable-row" class="settings-path-field" hidden>
+                    <label class="settings-field" for="settings-maven-custom-executable"><span class="settings-field-label">Custom executable</span><input id="settings-maven-custom-executable" class="rename-modal-input" type="text" /></label>
+                    <button id="settings-maven-custom-executable-browse" class="reset-modal-btn settings-secondary-action" type="button"><i class="bi bi-folder2-open" aria-hidden="true"></i><span>Browse</span></button>
+                  </div>
+                  <div class="settings-path-field">
+                    <label class="settings-field" for="settings-maven-settings-file"><span class="settings-field-label">User settings file</span><input id="settings-maven-settings-file" class="rename-modal-input" type="text" placeholder="Default Maven settings.xml" /></label>
+                    <button id="settings-maven-settings-file-browse" class="reset-modal-btn settings-secondary-action" type="button"><i class="bi bi-file-earmark-code" aria-hidden="true"></i><span>Browse</span></button>
+                  </div>
+                  <div class="settings-switch-grid">
+                    <label class="settings-switch-row" for="settings-maven-offline"><span><span class="settings-switch-title">Offline work</span><span class="settings-switch-description">Use cached dependencies and plugins unless an operation explicitly enables online resolution.</span></span><input type="checkbox" id="settings-maven-offline" class="settings-switch-input" /><span class="settings-switch" aria-hidden="true"></span></label>
+                  </div>
+                  <div class="settings-path-field">
+                    <label class="settings-field" for="settings-maven-local-repository"><span class="settings-field-label">Local repository</span><input id="settings-maven-local-repository" class="rename-modal-input" type="text" placeholder="Default ~/.m2/repository" /></label>
+                    <button id="settings-maven-local-repository-browse" class="reset-modal-btn settings-secondary-action" type="button"><i class="bi bi-folder2-open" aria-hidden="true"></i><span>Browse</span></button>
+                  </div>
                 </div>
               </section>
 
@@ -5280,6 +5318,7 @@
     <script src="js/project/new-project/project-scaffolder.js"></script>
     <script src="js/project/new-project/dialog.js"></script>
     <script src="js/project/new-project/index.js"></script>
+    <script src="js/project/maven-runtime-settings.js"></script>
     <script src="js/project/maven-project-detection.js"></script>
     <script src="js/project/gradle-project-detection.js"></script>
     <script src="js/project/maven-build-options/catalog.js"></script>
