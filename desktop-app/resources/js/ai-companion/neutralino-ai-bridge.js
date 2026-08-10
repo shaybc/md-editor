@@ -223,7 +223,7 @@
       }
     }
     function request(action, payload, onEvent) {
-      const workspaceRoot = payload.workspaceRoot || deps.getWorkspaceRoot?.() || "";
+      const workspaceRoot = Object.hasOwn(payload, "workspaceRoot") ? String(payload.workspaceRoot || "") : deps.getWorkspaceRoot?.() || "";
       const settings = payload.settings || deps.getSettings?.() || {};
       const id = String(nextRequestId++);
       const message = { id, action, ...payload, workspaceRoot, settings, profileRoot: payload.profileRoot || session?.profileRoot || "" };

@@ -302,6 +302,7 @@ async function handleRequest(session, message) {
       requestUserInput: (details) => requestUserInput(id, controller.signal, details),
       requestAppAction: (details) => requestAppAction(id, controller.signal, details)
     };
+    const planRepositoryOptions = { signal: controller.signal, profileRoot: requestProfileRoot };
     if (message.action === "testConnection") {
       result = await testConnection(requestSettings, { signal: controller.signal, onDebug: createProviderDebugEmitter(emit) });
     } else if (message.action === "inspectCertificate") {
@@ -325,17 +326,17 @@ async function handleRequest(session, message) {
       await scheduler.load();
       result = { schedule: await scheduler.complete(message.scheduleId, message.error) };
     } else if (message.action === "plansList") {
-      result = await planRepositoryTools.planList(request.workspaceRoot, message, { signal: controller.signal });
+      result = await planRepositoryTools.planList(request.workspaceRoot, message, planRepositoryOptions);
     } else if (message.action === "planRead") {
-      result = await planRepositoryTools.planRead(request.workspaceRoot, message, { signal: controller.signal });
+      result = await planRepositoryTools.planRead(request.workspaceRoot, message, planRepositoryOptions);
     } else if (message.action === "planUpdate") {
-      result = await planRepositoryTools.planUpdate(request.workspaceRoot, message, { signal: controller.signal });
+      result = await planRepositoryTools.planUpdate(request.workspaceRoot, message, planRepositoryOptions);
     } else if (message.action === "planDelete") {
-      result = await planRepositoryTools.planDelete(request.workspaceRoot, message, { signal: controller.signal });
+      result = await planRepositoryTools.planDelete(request.workspaceRoot, message, planRepositoryOptions);
     } else if (message.action === "planUpdateStatus") {
-      result = await planRepositoryTools.planUpdateStatus(request.workspaceRoot, message, { signal: controller.signal });
+      result = await planRepositoryTools.planUpdateStatus(request.workspaceRoot, message, planRepositoryOptions);
     } else if (message.action === "planRebuildIndex") {
-      result = await planRepositoryTools.planRebuildIndex(request.workspaceRoot, message, { signal: controller.signal });
+      result = await planRepositoryTools.planRebuildIndex(request.workspaceRoot, message, planRepositoryOptions);
     } else if (message.action === "gitSummary") {
       result = await runGitSummaryMode(request, emit);
     } else if (message.action === "promptsGet") {

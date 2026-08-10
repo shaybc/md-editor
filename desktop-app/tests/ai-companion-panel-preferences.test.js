@@ -1573,6 +1573,55 @@ test("AI Companion bridge ignores unrelated spawned process events without loggi
   assert.equal(appDebugLogs.some((entry) => entry.message.includes("spawned process event")), true);
 });
 
+test("AI Companion bridge preserves an empty workspace root for repository-wide plan lists", async () => {
+  let spawnedProcessHandler = null;
+  let sentRequest = null;
+  const Neutralino = {
+    events: {
+      on: async (name, handler) => {
+        if (name === "spawnedProcess") spawnedProcessHandler = handler;
+      }
+    },
+    os: {
+      spawnProcess: async () => ({ id: 9, pid: 900 }),
+      updateSpawnedProcess: async (_id, action, data) => {
+        if (action === "stdIn") sentRequest = JSON.parse(data);
+      }
+    }
+  };
+  const context = {
+    window: {},
+    Neutralino,
+    addEventListener: () => {},
+    btoa: (value) => Buffer.from(value, "binary").toString("base64"),
+    encodeURIComponent,
+    setTimeout,
+    clearTimeout,
+    unescape
+  };
+  context.window = context;
+  vm.createContext(context);
+  vm.runInContext(fs.readFileSync(path.join(webRoot, "js", "ai-companion", "neutralino-ai-bridge.js"), "utf8"), context);
+  const bridge = context.registerMarkdownViewerNeutralinoAiBridge({ registerModule() {} }, {
+    Neutralino,
+    getWorkspaceRoot: () => "C:/workspace/current"
+  });
+
+  const pendingRequest = bridge.plansList({ workspaceRoot: "" });
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.equal(sentRequest.workspaceRoot, "");
+
+  spawnedProcessHandler({
+    detail: {
+      id: 9,
+      pid: 900,
+      action: "stdOut",
+      data: JSON.stringify({ id: sentRequest.id, type: "done", result: { plans: [] } }) + "\n"
+    }
+  });
+  assert.deepEqual(plain(await pendingRequest), { plans: [] });
+});
+
 test("AI Companion bridge forwards rate-limit retry waits without completing the request", async () => {
   const appDebugLogs = [];
   const requestEvents = [];
@@ -5467,8 +5516,12 @@ test("agent terminal lifecycle is summary-owned and stale runs become aborted", 
 test("AI operational requests preserve an explicitly empty workspace root", () => {
   const script = fs.readFileSync(path.join(webRoot, "js", "script.js"), "utf8");
   const bridge = fs.readFileSync(path.join(webRoot, "bridges", "ai-companion-bridge", "ai-companion-bridge.cjs"), "utf8");
+  const neutralinoBridge = fs.readFileSync(path.join(webRoot, "js", "ai-companion", "neutralino-ai-bridge.js"), "utf8");
   const aiRegistration = script.slice(script.indexOf("registerMarkdownViewerNeutralinoAiBridge"), script.indexOf("registerMarkdownViewerAiCompanionToolAccessSettings"));
   assert.doesNotMatch(aiRegistration, /activeFolderPath \|\| getDesktopAppRootPath\(\)/);
   assert.match(aiRegistration, /getWorkspaceRoot: function\(\) \{ return activeFolderPath \|\| ""; \}/);
+  assert.match(neutralinoBridge, /Object\.hasOwn\(payload, "workspaceRoot"\) \? String\(payload\.workspaceRoot \|\| ""\) : deps\.getWorkspaceRoot/);
   assert.match(bridge, /Object\.hasOwn\(message, "workspaceRoot"\) \? String\(message\.workspaceRoot \|\| ""\) : session\.workspaceRoot/);
+  assert.match(bridge, /const planRepositoryOptions = \{ signal: controller\.signal, profileRoot: requestProfileRoot \};/);
+  assert.match(bridge, /planRepositoryTools\.planList\(request\.workspaceRoot, message, planRepositoryOptions\)/);
 });
