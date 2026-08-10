@@ -18,7 +18,7 @@ The main <kbd>AI Companion</kbd> settings page controls the connection and the f
 | Enable AI Companion | Turns chat, agent, autocomplete, and Git summary features on or off. | Keeps all AI features disabled until you intentionally enable them. |
 | Provider mode | Selects a first-party preset or an advanced connection adapter. | Lets the same UI work with popular hosted providers, local Ollama, custom OpenAI-compatible servers, LiteLLM routing, or Gemini Connector flows. |
 | Base URL / endpoint | Points the app at your model server or provider gateway. | Supports local model servers, internal gateways, or hosted compatible APIs. |
-| API token | Supplies the provider credential when required. | Keeps model access explicit instead of assuming a global account. |
+| API token | Saves the provider credential in Windows Credential Manager for the signed-in Windows user. | Keeps the secret out of MD-Editor settings, profiles, and portable exports. |
 | Model | Names the model or model alias used for Chat, Agent, Plan, Git summary, and default completions. Provider presets offer a bundled dropdown, and you can still type a custom model id. | Makes behavior repeatable across sessions and easier to debug. |
 | Request delay | Adds spacing between provider requests. | Helps slower local models and rate-limited providers stay reliable. |
 | Chat mode | Enables project Q&A in the panel. | Lets you keep read-oriented help available without enabling agent work. |
@@ -29,6 +29,10 @@ The main <kbd>AI Companion</kbd> settings page controls the connection and the f
 | Token and task limits | Caps response size and task continuation behavior. | Prevents a single request from running too long or filling the context window unexpectedly. |
 
 > Tip: Start with Chat mode only. Once answers work and the model is fast enough, enable Autocomplete or Agent mode one at a time so you can tune each workflow deliberately.
+
+Saved credential fields stay blank when settings are reopened and show <kbd>Credential saved securely</kbd>. Leave a blank field unchanged, enter a new value to replace the saved credential, or use <kbd>Remove</kbd> to delete it from Windows Credential Manager. Testing an unsaved credential does not save it. Renaming a connection profile retains its credential, while <kbd>Save As</kbd> creates a profile without copied credentials.
+
+AI credential references are deliberately excluded from settings exports and ignored during imports. Deleting a profile or resetting AI settings also removes its referenced credentials.
 
 ## Provider Modes
 
@@ -46,7 +50,7 @@ AI Companion separates the panel from the provider adapter. The visible workflow
 | Gemini Connector | Use this when requests should go through the app's Gemini connector flow. |
 | Gemini Connector Raw | Use this when you need the raw Gemini connector path for debugging or provider-specific testing. |
 
-Selecting a bundled provider fills its base URL and default model, refreshes the editable model dropdown, and clears the general API-key field so a credential is not accidentally reused with another company. Opening settings does not replace previously saved custom values.
+Selecting a bundled provider fills its base URL and default model, refreshes the editable model dropdown, and marks the previous provider credential for removal when the settings are saved. Cancelling the dialog leaves that credential intact. Opening settings does not replace previously saved custom values.
 
 Business benefit: provider modes let a team standardize on one desktop UI while each developer can connect to a local model, an internal gateway, or a managed provider that matches their environment.
 

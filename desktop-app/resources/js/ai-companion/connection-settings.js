@@ -2,7 +2,7 @@
 (function(window, document) {
   "use strict";
 
-  function registerMarkdownViewerAiConnectionSettings(app) {
+  function registerMarkdownViewerAiConnectionSettings(app, deps = {}) {
     const schema = window.MarkdownViewerAiConnectionEntries;
     const profileFormFactory = window.MarkdownViewerAiConnectionProfileForm;
     const tooltipFactory = window.MarkdownViewerAiConnectionEntryTooltip;
@@ -36,9 +36,71 @@
 
     let profiles = [];
     let routes = [];
+    const credentialDrafts = new Map();
+    const queuedCredentialDeletes = new Set();
     let wizardState = null;
     let jsonState = null;
     const fieldTooltip = tooltipFactory.create();
+    const credentialFields = [
+      { draftKey: "apiKey", referenceKey: "apiKeyCredentialId" },
+      { draftKey: "geminiConnectorApiKey", referenceKey: "geminiConnectorApiKeyCredentialId" }
+    ];
+
+    function captureCredentialDraft(profileId, previous, snapshots, options = {}) {
+      const draft = {};
+      const references = {};
+      for (const field of credentialFields) {
+        const snapshot = snapshots?.[field.draftKey] || {};
+        const existingId = options.saveAs === true ? "" : String(snapshot.credentialId || previous?.[field.referenceKey] || "");
+        if (snapshot.secret) draft[field.draftKey] = { secret: snapshot.secret, credentialId: existingId };
+        else if (snapshot.remove === true) draft[field.draftKey] = { remove: true, credentialId: existingId };
+        if (existingId && snapshot.remove !== true) references[field.referenceKey] = existingId;
+      }
+      credentialDrafts.delete(String(previous?.id || ""));
+      if (Object.keys(draft).length) credentialDrafts.set(profileId, draft);
+      return references;
+    }
+
+    function queueCredentialDeletion(profile) {
+      for (const field of credentialFields) {
+        const credentialId = String(profile?.[field.referenceKey] || "");
+        if (credentialId) queuedCredentialDeletes.add(credentialId);
+      }
+      credentialDrafts.delete(String(profile?.id || ""));
+    }
+
+    async function commitCredentials() {
+      const nextProfiles = [];
+      const newlyCreatedCredentialIds = [];
+      try {
+        for (const profile of profiles) {
+          const next = { ...profile };
+          const draft = credentialDrafts.get(profile.id) || {};
+          for (const field of credentialFields) {
+            const change = draft[field.draftKey];
+            if (change?.secret) {
+              const result = await deps.bridge.credentialStore({ credentialId: change.credentialId, secret: change.secret });
+              const credentialId = String(result?.credentialId || "");
+              next[field.referenceKey] = credentialId;
+              if (!change.credentialId && credentialId) newlyCreatedCredentialIds.push(credentialId);
+            } else if (change?.remove && change.credentialId) {
+              await deps.bridge.credentialDelete({ credentialId: change.credentialId });
+              delete next[field.referenceKey];
+            }
+          }
+          nextProfiles.push(schema.normalizeProfile(next));
+        }
+        for (const credentialId of queuedCredentialDeletes) await deps.bridge.credentialDelete({ credentialId });
+      } catch (error) {
+        for (const credentialId of newlyCreatedCredentialIds) await deps.bridge.credentialDelete({ credentialId }).catch(() => {});
+        throw error;
+      }
+      profiles = nextProfiles;
+      credentialDrafts.clear();
+      queuedCredentialDeletes.clear();
+      syncInputs();
+      return profiles.map((profile) => ({ ...profile }));
+    }
     const profileForm = profileFormFactory.create({
       elements,
       schema,
@@ -49,7 +111,10 @@
         routes = routes.map((route) => route.profileId === previousId ? { ...route, profileId: nextId } : route);
       },
       syncAndRender: () => { syncInputs(); renderAll(); },
-      setStatus: (message, isError = false) => setStatus(elements.status, message, isError)
+      setStatus: (message, isError = false) => setStatus(elements.status, message, isError),
+      credentialSettings: deps.credentialSettings,
+      captureCredentialDraft,
+      queueCredentialDeletion
     });
 
     function setStatus(target, message, isError = false) {
@@ -126,6 +191,8 @@
     /** Reload both structured tables from the canonical JSON form fields. */
     function refresh() {
       try {
+        credentialDrafts.clear();
+        queuedCredentialDeletes.clear();
         profiles = parseArray(elements.profileInput, "Connection profiles").map(schema.normalizeProfile);
         routes = parseArray(elements.routeInput, "Provider routes").map(schema.normalizeRoute);
         profileForm.ensureDefaultProfile();
@@ -151,8 +218,8 @@
     function profileSteps() {
       return [
         { title: "Identity", fields: [{ key: "id", label: "Profile ID", required: true }, { key: "providerMode", label: "Provider", type: "select", options: schema.PROVIDER_MODES }, { key: "model", label: "Default model", type: "model" }] },
-        { title: "Connection", fields: [{ key: "baseUrl", label: "Base URL", type: "url" }, { key: "apiKey", label: "API key or token", type: "password" }, { key: "litellmModelAlias", label: "LiteLLM model alias", providerMode: "litellm" }, { key: "litellmRoutingConfig", label: "LiteLLM routing config", type: "textarea", providerMode: "litellm" }] },
-        { title: "Connector details", fallbackTitle: "Advanced", providerModes: connectorProviderModes, fields: [{ key: "geminiConnectorBaseUrl", label: "Connector URL", type: "url", providerModes: connectorProviderModes }, { key: "geminiConnectorId", label: "Connector ID", providerModes: connectorProviderModes }, { key: "geminiConnectorApiKey", label: "Connector token", type: "password", providerModes: connectorProviderModes }, { key: "_additionalProperties", label: "Additional properties (JSON object)", type: "textarea", monospace: true }] }
+        { title: "Connection", fields: [{ key: "baseUrl", label: "Base URL", type: "url" }, { key: "litellmModelAlias", label: "LiteLLM model alias", providerMode: "litellm" }, { key: "litellmRoutingConfig", label: "LiteLLM routing config", type: "textarea", providerMode: "litellm" }] },
+        { title: "Connector details", fallbackTitle: "Advanced", providerModes: connectorProviderModes, fields: [{ key: "geminiConnectorBaseUrl", label: "Connector URL", type: "url", providerModes: connectorProviderModes }, { key: "geminiConnectorId", label: "Connector ID", providerModes: connectorProviderModes }, { key: "_additionalProperties", label: "Additional properties (JSON object)", type: "textarea", monospace: true }] }
       ];
     }
     function routeSteps() {
@@ -311,7 +378,6 @@
       const fields = { modelInput, modelOptionsList: modelOptions, registryModels: app.modules?.aiCompanionModelRegistry?.getCachedModels?.() || [] };
       if (applyPreset) {
         const preset = window.markdownViewerAiProviderPresets?.applyProviderPresetSelection(providerMode, fields);
-        setPath(wizardState.draft, "apiKey", "");
         if (preset?.baseUrl) setPath(wizardState.draft, "baseUrl", preset.baseUrl);
       } else window.markdownViewerAiProviderPresets?.populateProviderModelSuggestions(providerMode, modelOptions, fields.registryModels);
       setPath(wizardState.draft, "model", modelInput.value);
@@ -479,6 +545,8 @@
     refresh();
     const api = {
       refresh,
+      commitCredentials,
+      discardCredentialDrafts() { credentialDrafts.clear(); queuedCredentialDeletes.clear(); },
       getPrimaryConnectionForSave() {
         return profileForm.getPrimaryConnectionForSave();
       }

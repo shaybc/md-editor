@@ -37,6 +37,9 @@ const activeRequests = new Map();
 const pendingApprovals = new Map();
 const pendingAppActions = new Map();
 const pendingUserInputs = new Map();
+const { WindowsCredentialClient } = requireAiCompanionModule("security/windows-credential-client");
+const { resolveProviderCredentials } = requireAiCompanionModule("security/provider-credential-resolver");
+const PROVIDER_ACTIONS = new Set(["testConnection", "chat", "autocomplete", "agent", "plan", "gitSummary"]);
 let nextApprovalId = 1;
 let nextAppActionId = 1;
 let nextUserInputId = 1;
@@ -255,7 +258,28 @@ function handleCancel(message) {
   if (message.id) send({ id: String(message.id), type: "done", action: "cancel", result: { cancelled: Boolean(controller), targetId } });
 }
 
+async function handleCredentialRequest(session, message) {
+  const id = String(message.id || "");
+  try {
+    let result;
+    if (message.action === "credentialStore") {
+      result = { credentialId: await session.credentialClient.storeCredential(message.credentialId, message.secret) };
+    } else if (message.action === "credentialExists") {
+      result = { exists: await session.credentialClient.credentialExists(message.credentialId) };
+    } else {
+      result = { deleted: await session.credentialClient.deleteCredential(message.credentialId) };
+    }
+    send({ id, type: "done", action: message.action, result });
+  } catch (error) {
+    send({ id, type: "error", action: message.action, error: error?.message || "Secure AI provider credential storage is unavailable." });
+  }
+}
+
 async function handleRequest(session, message) {
+  if (["credentialStore", "credentialExists", "credentialDelete"].includes(message.action)) {
+    await handleCredentialRequest(session, message);
+    return;
+  }
   if (message.action === "approval") {
     await handleApproval(message);
     return;
@@ -281,7 +305,10 @@ async function handleRequest(session, message) {
   try {
     emit({ type: "start", action: message.action, startedAt });
     let result;
-    const requestSettings = message.settings ? normalizeAiCompanionSettings(message.settings) : session.settings;
+    const normalizedSettings = message.settings ? normalizeAiCompanionSettings(message.settings) : session.settings;
+    const requestSettings = PROVIDER_ACTIONS.has(message.action)
+      ? await resolveProviderCredentials(normalizedSettings, session.credentialClient, message.ephemeralCredentials)
+      : normalizedSettings;
     const requestWorkspaceRoot = Object.hasOwn(message, "workspaceRoot") ? String(message.workspaceRoot || "") : session.workspaceRoot;
     const requestProfileRoot = message.profileRoot || session.profileRoot || "";
     const securityContext = await createSecurityContext({
@@ -289,8 +316,9 @@ async function handleRequest(session, message) {
       profileRoot: requestProfileRoot,
       userPolicy: requestSettings.aiSecurityPolicy
     });
+    const { ephemeralCredentials: _ephemeralCredentials, ...safeMessage } = message;
     const request = {
-      ...message,
+      ...safeMessage,
       requestId: id,
       appVersion: String(message.appVersion || process.env.NL_APPVERSION || ""),
       workspaceRoot: requestWorkspaceRoot,
@@ -447,11 +475,15 @@ function bindInput(session) {
     }
     void handleRequest(session, message);
   });
-  reader.on("close", () => process.exit(0));
+  reader.on("close", () => {
+    session.credentialClient.close();
+    process.exit(0);
+  });
 }
 
 try {
   const session = loadLaunchRequest(process.argv);
+  session.credentialClient = new WindowsCredentialClient();
   send({ type: "ready", title: "AI Companion", workspaceRoot: session.workspaceRoot });
   bindInput(session);
 } catch (error) {

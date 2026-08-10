@@ -2169,6 +2169,7 @@ async function startMarkdownViewer() {
   let javaGradleRuntimeGuidance = null;
   let javaAnalysisFailureWorkspaceId = "";
   let neutralinoAiBridge = null;
+  let aiCompanionCredentialSettings = null;
   let aiCompanionPanel = null;
   let aiSecuritySettings = null;
   let aiApprovalSettings = null;
@@ -3003,6 +3004,9 @@ async function startMarkdownViewer() {
       get Neutralino() { return typeof Neutralino !== "undefined" ? Neutralino : undefined; }
     });
   }
+  if (typeof window.registerMarkdownViewerAiCredentialSettings === "function") {
+    aiCompanionCredentialSettings = window.registerMarkdownViewerAiCredentialSettings(app, { bridge: neutralinoAiBridge });
+  }
   if (typeof window.registerMarkdownViewerAiSecuritySettings === "function") {
     aiSecuritySettings = window.registerMarkdownViewerAiSecuritySettings(app, {
       bridge: neutralinoAiBridge,
@@ -3104,7 +3108,7 @@ async function startMarkdownViewer() {
     });
   }
   if (typeof window.registerMarkdownViewerAiConnectionSettings === "function") {
-    window.registerMarkdownViewerAiConnectionSettings(app);
+    window.registerMarkdownViewerAiConnectionSettings(app, { credentialSettings: aiCompanionCredentialSettings, bridge: neutralinoAiBridge });
   }
   if (typeof window.registerMarkdownViewerAiLifecycleSettings === "function") {
     window.registerMarkdownViewerAiLifecycleSettings(app, {
@@ -4298,6 +4302,8 @@ async function startMarkdownViewer() {
   const settingsAiProviderModeInput = document.getElementById("settings-ai-provider-mode");
   const settingsAiBaseUrlInput = document.getElementById("settings-ai-base-url");
   const settingsAiApiKeyInput = document.getElementById("settings-ai-api-key");
+  const settingsAiApiKeyStatus = document.getElementById("settings-ai-api-key-status");
+  const settingsAiApiKeyRemove = document.getElementById("settings-ai-api-key-remove");
   const settingsAiModelInput = document.getElementById("settings-ai-model");
   const settingsAiModelOptionsList = document.getElementById("settings-ai-model-options");
   const settingsAiProviderRequestDelayInput = document.getElementById("settings-ai-provider-request-delay-ms");
@@ -4310,8 +4316,12 @@ async function startMarkdownViewer() {
   const settingsAiGeminiBaseUrlInput = document.getElementById("settings-ai-gemini-base-url");
   const settingsAiGeminiConnectorIdInput = document.getElementById("settings-ai-gemini-connector-id");
   const settingsAiGeminiApiKeyInput = document.getElementById("settings-ai-gemini-api-key");
+  const settingsAiGeminiApiKeyStatus = document.getElementById("settings-ai-gemini-api-key-status");
+  const settingsAiGeminiApiKeyRemove = document.getElementById("settings-ai-gemini-api-key-remove");
   const settingsAiConnectionProfilesInput = document.getElementById("settings-ai-connection-profiles");
   const settingsAiProviderRoutesInput = document.getElementById("settings-ai-provider-routes");
+  aiCompanionCredentialSettings?.attach(settingsAiApiKeyInput, settingsAiApiKeyStatus, settingsAiApiKeyRemove);
+  aiCompanionCredentialSettings?.attach(settingsAiGeminiApiKeyInput, settingsAiGeminiApiKeyStatus, settingsAiGeminiApiKeyRemove);
   const settingsAiInternetSearchEndpointInput = document.getElementById("settings-ai-internet-search-endpoint");
   const settingsAiWorkspaceStructureAutoInput = document.getElementById("settings-ai-workspace-structure-auto");
   const settingsAiPermissionModeInput = document.getElementById("settings-ai-permission-mode");
@@ -5140,13 +5150,13 @@ async function startMarkdownViewer() {
       enabled: false,
       providerMode: "openai-compatible",
       baseUrl: "http://localhost:11434/v1",
-      apiKey: "",
+      apiKeyCredentialId: "",
       model: "llama3.1",
       litellmModelAlias: "",
       litellmRoutingConfig: "",
       geminiConnectorBaseUrl: "",
       geminiConnectorId: "",
-      geminiConnectorApiKey: "",
+      geminiConnectorApiKeyCredentialId: "",
       trustedCertificates: [],
       chatEnabled: true,
       autocompleteEnabled: false,
@@ -9201,6 +9211,7 @@ Markdown content is processed client-side in your browser and sanitized before p
       requestDelayInput: settingsAiProviderRequestDelayInput,
       registryModels: aiCompanionModelRegistry?.getCachedModels?.() || []
     });
+    aiCompanionCredentialSettings?.markForRemoval(settingsAiApiKeyInput);
     updateAiConnectionProviderFields();
   }
 
@@ -9435,7 +9446,7 @@ Markdown content is processed client-side in your browser and sanitized before p
     app.modules?.aiExtensionSettings?.refresh?.();
     if (settingsAiProviderModeInput) settingsAiProviderModeInput.value = aiSettings.providerMode;
     if (settingsAiBaseUrlInput) settingsAiBaseUrlInput.value = aiSettings.baseUrl;
-    if (settingsAiApiKeyInput) settingsAiApiKeyInput.value = aiSettings.apiKey;
+    void aiCompanionCredentialSettings?.hydrate(settingsAiApiKeyInput, aiSettings.apiKeyCredentialId);
     if (settingsAiModelInput) settingsAiModelInput.value = aiSettings.model;
     if (settingsAiProviderRequestDelayInput) settingsAiProviderRequestDelayInput.value = String(aiSettings.providerRequestDelayMs);
     if (settingsAiMaxTokensPerChatMinuteInput) settingsAiMaxTokensPerChatMinuteInput.value = String(aiSettings.maxTokensPerChatMinute);
@@ -9446,7 +9457,7 @@ Markdown content is processed client-side in your browser and sanitized before p
     if (settingsAiLiteLlmRoutingInput) settingsAiLiteLlmRoutingInput.value = aiSettings.litellmRoutingConfig;
     if (settingsAiGeminiBaseUrlInput) settingsAiGeminiBaseUrlInput.value = aiSettings.geminiConnectorBaseUrl;
     if (settingsAiGeminiConnectorIdInput) settingsAiGeminiConnectorIdInput.value = aiSettings.geminiConnectorId;
-    if (settingsAiGeminiApiKeyInput) settingsAiGeminiApiKeyInput.value = aiSettings.geminiConnectorApiKey;
+    void aiCompanionCredentialSettings?.hydrate(settingsAiGeminiApiKeyInput, aiSettings.geminiConnectorApiKeyCredentialId);
     if (settingsAiConnectionProfilesInput) settingsAiConnectionProfilesInput.value = JSON.stringify(aiSettings.connectionProfiles || [], null, 2);
     if (settingsAiProviderRoutesInput) settingsAiProviderRoutesInput.value = JSON.stringify(aiSettings.providerRoutes || [], null, 2);
     app.modules?.aiCompanionConnectionSettings?.refresh?.();
@@ -9570,6 +9581,9 @@ Markdown content is processed client-side in your browser and sanitized before p
     syntaxHighlightColorDraft = null;
     appThemeDraft = null;
     settingsSnippetPreferencesDraft = null;
+    app.modules?.aiCompanionConnectionSettings?.discardCredentialDrafts?.();
+    aiCompanionCredentialSettings?.discard(settingsAiApiKeyInput);
+    aiCompanionCredentialSettings?.discard(settingsAiGeminiApiKeyInput);
     keyboardShortcutsSettings?.discard?.();
     fileOpeningModeSettings.discard();
     restoreSavedAppTheme();
@@ -11438,7 +11452,7 @@ Markdown content is processed client-side in your browser and sanitized before p
     const languageServerAutocompleteEnabled = !!settingsLanguageServerAutocompleteInput?.checked;
     const snippetAutocompleteEnabled = !!settingsSnippetAutocompleteInput?.checked;
     const unclosedBracketHighlightEnabled = !!settingsUnclosedBracketHighlightInput?.checked;
-    const aiPrimaryConnection = app.modules?.aiCompanionConnectionSettings?.getPrimaryConnectionForSave?.() || {};
+    let aiPrimaryConnection = app.modules?.aiCompanionConnectionSettings?.getPrimaryConnectionForSave?.() || {};
     const aiProviderRequestDelayMs = Number(aiPrimaryConnection.providerRequestDelayMs ?? settingsAiProviderRequestDelayInput?.value);
     if (!Number.isFinite(aiProviderRequestDelayMs) || aiProviderRequestDelayMs < 0 || aiProviderRequestDelayMs > 60000) {
       alert("Enter an AI provider request spacing between 0 and 60000 ms.");
@@ -11484,6 +11498,13 @@ Markdown content is processed client-side in your browser and sanitized before p
       alert("Enter AI autocomplete delay after reject of 0 ms or higher.");
       return;
     }
+    try {
+      await app.modules?.aiCompanionConnectionSettings?.commitCredentials?.();
+      aiPrimaryConnection = app.modules?.aiCompanionConnectionSettings?.getPrimaryConnectionForSave?.() || aiPrimaryConnection;
+    } catch (error) {
+      alert(error?.message || "Windows Credential Manager could not save the AI provider credential.");
+      return;
+    }
     let aiConnectionProfiles = [];
     let aiProviderRoutes = [];
     try {
@@ -11501,13 +11522,13 @@ Markdown content is processed client-side in your browser and sanitized before p
       enabled: !!settingsAiEnabledInput?.checked,
       providerMode: aiPrimaryConnection.providerMode ?? settingsAiProviderModeInput?.value,
       baseUrl: aiPrimaryConnection.baseUrl ?? settingsAiBaseUrlInput?.value,
-      apiKey: aiPrimaryConnection.apiKey ?? settingsAiApiKeyInput?.value,
+      apiKeyCredentialId: aiPrimaryConnection.apiKeyCredentialId ?? getAiCompanionSettings().apiKeyCredentialId,
       model: aiPrimaryConnection.model ?? settingsAiModelInput?.value,
       litellmModelAlias: aiPrimaryConnection.litellmModelAlias ?? settingsAiLiteLlmAliasInput?.value,
       litellmRoutingConfig: aiPrimaryConnection.litellmRoutingConfig ?? settingsAiLiteLlmRoutingInput?.value,
       geminiConnectorBaseUrl: aiPrimaryConnection.geminiConnectorBaseUrl ?? settingsAiGeminiBaseUrlInput?.value,
       geminiConnectorId: aiPrimaryConnection.geminiConnectorId ?? settingsAiGeminiConnectorIdInput?.value,
-      geminiConnectorApiKey: aiPrimaryConnection.geminiConnectorApiKey ?? settingsAiGeminiApiKeyInput?.value,
+      geminiConnectorApiKeyCredentialId: aiPrimaryConnection.geminiConnectorApiKeyCredentialId ?? getAiCompanionSettings().geminiConnectorApiKeyCredentialId,
       trustedCertificates: getAiCompanionSettings().trustedCertificates,
       chatEnabled: settingsAiChatEnabledInput?.checked !== false,
       autocompleteEnabled: !!settingsAiAutocompleteEnabledInput?.checked,
@@ -11826,9 +11847,32 @@ Markdown content is processed client-side in your browser and sanitized before p
     return true;
   }
 
+  function collectAiCredentialIds(value, ids = new Set()) {
+    if (Array.isArray(value)) value.forEach((item) => collectAiCredentialIds(item, ids));
+    else if (value && typeof value === "object") Object.entries(value).forEach(([key, item]) => {
+      if ((key === "apiKeyCredentialId" || key === "geminiConnectorApiKeyCredentialId") && item) ids.add(String(item));
+      else collectAiCredentialIds(item, ids);
+    });
+    return ids;
+  }
+
+  async function deleteAllAiCredentials() {
+    for (const credentialId of collectAiCredentialIds(getAiCompanionSettings())) {
+      await neutralinoAiBridge.credentialDelete({ credentialId });
+    }
+  }
+
   async function clearPreferencesFromSettings(options = {}) {
+    if (options.confirm !== false && shouldConfirmResetState()
+      && !await confirmWithAppModal("Clear preferences and restore defaults? Open documents and recent history are not removed.", { confirmLabel: "Reset", confirmVariant: "danger" })) return false;
+    try {
+      await deleteAllAiCredentials();
+    } catch (error) {
+      window.alert(error?.message || "Windows Credential Manager could not remove the saved AI provider credentials.");
+      return false;
+    }
     const restored = await restoreDefaultPreferences({
-      confirm: options.confirm !== false,
+      confirm: false,
       notify: options.notify !== false,
       message: "Clear preferences and restore defaults? Open documents and recent history are not removed."
     });
@@ -11908,7 +11952,7 @@ Markdown content is processed client-side in your browser and sanitized before p
     if (shouldConfirmResetState() && !await confirmWithAppModal("Reset all settings data? This clears cache, preferences, recent file/folder history, and saved tab drafts. Open documents are not removed.", { confirmLabel: "Reset", confirmVariant: "danger" })) return;
     await clearAllCachesFromSettings({ confirm: false, notify: false, trigger: "settings-reset-all", reason: "settings-reset-all" });
     await clearRecentHistoryFromSettings({ confirm: false, notify: false });
-    await clearPreferencesFromSettings({ confirm: false, notify: false });
+    if (!await clearPreferencesFromSettings({ confirm: false, notify: false })) return;
     if (tabSessionPersistence?.cleanupAllDrafts) {
       await tabSessionPersistence.cleanupAllDrafts();
     }
@@ -17496,7 +17540,7 @@ async function* collectWorkspaceSearchFilesFromNeutralinoDirectory(parentPath, p
       enabled: true,
       providerMode: settingsAiProviderModeInput?.value,
       baseUrl: settingsAiBaseUrlInput?.value,
-      apiKey: settingsAiApiKeyInput?.value,
+      apiKeyCredentialId: getAiCompanionSettings().apiKeyCredentialId,
       model: settingsAiModelInput?.value,
       providerRequestDelayMs: Number(settingsAiProviderRequestDelayInput?.value),
       debugLogFullAiPayloads: settingsDebugAiFullPayloadsInput?.checked === true,
@@ -17504,12 +17548,16 @@ async function* collectWorkspaceSearchFilesFromNeutralinoDirectory(parentPath, p
       litellmRoutingConfig: settingsAiLiteLlmRoutingInput?.value,
       geminiConnectorBaseUrl: settingsAiGeminiBaseUrlInput?.value,
       geminiConnectorId: settingsAiGeminiConnectorIdInput?.value,
-      geminiConnectorApiKey: settingsAiGeminiApiKeyInput?.value,
+      geminiConnectorApiKeyCredentialId: getAiCompanionSettings().geminiConnectorApiKeyCredentialId,
       trustedCertificates: getAiCompanionSettings().trustedCertificates
     }) : getAiCompanionSettings();
+    const ephemeralCredentials = {
+      apiKey: aiCompanionCredentialSettings?.getEphemeralValue(settingsAiApiKeyInput),
+      geminiConnectorApiKey: aiCompanionCredentialSettings?.getEphemeralValue(settingsAiGeminiApiKeyInput)
+    };
     settingsAiConnectionStatus.textContent = "Testing connection...";
     try {
-      await neutralinoAiBridge.testConnection(settings);
+      await neutralinoAiBridge.testConnection(settings, ephemeralCredentials);
       settingsAiConnectionStatus.textContent = "Connection succeeded.";
     } catch (error) {
       let finalError = error;
@@ -17518,7 +17566,7 @@ async function* collectWorkspaceSearchFilesFromNeutralinoDirectory(parentPath, p
         settings = trustedSettings;
         settingsAiConnectionStatus.textContent = "Certificate trusted. Retesting connection...";
         try {
-          await neutralinoAiBridge.testConnection(settings);
+          await neutralinoAiBridge.testConnection(settings, ephemeralCredentials);
           settingsAiConnectionStatus.textContent = "Connection succeeded.";
           return;
         } catch (retryError) {

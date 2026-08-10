@@ -32,10 +32,18 @@
       const imported = source && typeof source === "object" && !Array.isArray(source) ? source : {};
       Object.keys(defaults).forEach((key) => {
         if (Object.prototype.hasOwnProperty.call(imported, key)) {
-          settings[key] = imported[key];
+          settings[key] = key === "aiCompanionSettings" ? stripAiCredentialReferences(imported[key]) : imported[key];
         }
       });
       return settings;
+    }
+
+    function stripAiCredentialReferences(value) {
+      if (Array.isArray(value)) return value.map(stripAiCredentialReferences);
+      if (!value || typeof value !== "object") return value;
+      return Object.fromEntries(Object.entries(value)
+        .filter(([key]) => key !== "apiKeyCredentialId" && key !== "geminiConnectorApiKeyCredentialId" && key !== "apiKey" && key !== "geminiConnectorApiKey")
+        .map(([key, item]) => [key, stripAiCredentialReferences(item)]));
     }
 
     /**

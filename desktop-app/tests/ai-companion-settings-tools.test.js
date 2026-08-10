@@ -23,7 +23,7 @@ function loadSettingsTools(overrides = {}) {
     theme: "light",
     editorFontSize: 14,
     wordWrapEnabled: false,
-    aiCompanionSettings: { model: "llama3.1", apiKey: "", agentEnabled: false },
+    aiCompanionSettings: { model: "llama3.1", apiKeyCredentialId: "", agentEnabled: false },
     apiClientRequestSettings: { timeoutMs: 60000 }
   };
   let savedState = overrides.savedState || {};
@@ -127,6 +127,18 @@ test("updates boolean string number and nested preferences", async () => {
   assert.equal(harness.refreshes.length, 1);
 });
 
+test("rejects AI attempts to mutate secure credential settings", async () => {
+  const harness = loadSettingsTools();
+  await assert.rejects(
+    () => harness.api.execute("preferences_update", { changes: [{ key: "aiCompanionSettings.apiKeyCredentialId", value: "11111111-1111-4111-8111-111111111111" }] }),
+    { code: "credential-preference-read-only" }
+  );
+  await assert.rejects(
+    () => harness.api.execute("preferences_reset", { keys: ["aiCompanionSettings"] }),
+    { code: "credential-preference-read-only" }
+  );
+});
+
 test("coerces string values to the preference's declared type (Gemini round-trip)", async () => {
   const harness = loadSettingsTools();
 
@@ -216,13 +228,13 @@ test("previews import without applying and applies when requested", async () => 
 });
 
 test("redacts secret-like values in reads and exports", async () => {
-  const harness = loadSettingsTools({ savedState: { aiCompanionSettings: { apiKey: "secret-key", model: "local" } } });
+  const harness = loadSettingsTools({ savedState: { aiCompanionSettings: { apiKeyCredentialId: "11111111-1111-4111-8111-111111111111", model: "local" } } });
 
-  const read = await harness.api.execute("preferences_get", { keys: ["aiCompanionSettings.apiKey"], redactSecrets: false });
+  const read = await harness.api.execute("preferences_get", { keys: ["aiCompanionSettings.apiKeyCredentialId"], redactSecrets: false });
   const exported = await harness.api.execute("preferences_export", {});
 
   assert.equal(read.preferences[0].value, "[redacted]");
-  assert.equal(exported.entries.find((entry) => entry.key === "aiCompanionSettings.apiKey").value, "[redacted]");
+  assert.equal(exported.entries.find((entry) => entry.key === "aiCompanionSettings.apiKeyCredentialId").value, "[redacted]");
   assert.equal(exported.manifest.documentType, "md-editor-settings");
 });
 
@@ -237,7 +249,7 @@ test("full-state get search and export bound cyclic and deeply nested values", a
   }
   const defaultState = {
     theme: "light",
-    aiCompanionSettings: { model: "llama3.1", apiKey: "secret" },
+    aiCompanionSettings: { model: "llama3.1", apiKeyCredentialId: "11111111-1111-4111-8111-111111111111" },
     cyclicPreference: cyclic,
     deeplyNestedPreference: deeplyNested
   };
@@ -254,7 +266,7 @@ test("full-state get search and export bound cyclic and deeply nested values", a
   assert.equal(deepRead.hasChildren, true);
   assert.equal(search.results[0].key, "cyclicPreference.label");
   assert.equal(search.results[0].value, "runtime preference");
-  assert.equal(exported.entries.find((entry) => entry.key === "aiCompanionSettings.apiKey").value, "[redacted]");
+  assert.equal(exported.entries.find((entry) => entry.key === "aiCompanionSettings.apiKeyCredentialId").value, "[redacted]");
   assert.ok(exported.entries.length <= 25);
 });
 

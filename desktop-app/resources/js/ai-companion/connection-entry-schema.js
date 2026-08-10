@@ -4,7 +4,7 @@
 
   const PROVIDER_MODES = Object.freeze(["openai", "google-gemini", "google-gemini-native", "anthropic", "xai", "ollama", "openai-compatible", "litellm", "gemini-connector", "gemini-connector-raw"]);
   const ROUTE_PURPOSES = Object.freeze(["primary", "quick", "renewal", "memory", "worker", "review", "testing", "risk"]);
-  const PROFILE_KEYS = new Set(["id", "providerMode", "model", "baseUrl", "apiKey", "providerRequestDelayMs", "litellmModelAlias", "litellmRoutingConfig", "geminiConnectorBaseUrl", "geminiConnectorId", "geminiConnectorApiKey", "isPrimary"]);
+  const PROFILE_KEYS = new Set(["id", "providerMode", "model", "baseUrl", "apiKeyCredentialId", "providerRequestDelayMs", "litellmModelAlias", "litellmRoutingConfig", "geminiConnectorBaseUrl", "geminiConnectorId", "geminiConnectorApiKeyCredentialId", "isPrimary"]);
   const ROUTE_KEYS = new Set(["id", "profileId", "model", "purposes", "fallbacks", "allowProviderChange", "dataScopes", "contextWindow", "maxOutputTokens", "capabilities"]);
 
   function clone(value) { return value == null ? value : JSON.parse(JSON.stringify(value)); }
@@ -17,8 +17,13 @@
 
   function normalizeProfile(source = {}) {
     const entry = { ...clone(source), id: text(source.id), providerMode: text(source.providerMode) || "openai-compatible", model: text(source.model) };
-    for (const key of ["baseUrl", "apiKey", "litellmModelAlias", "litellmRoutingConfig", "geminiConnectorBaseUrl", "geminiConnectorId", "geminiConnectorApiKey"]) {
+    delete entry.apiKey;
+    delete entry.geminiConnectorApiKey;
+    for (const key of ["baseUrl", "apiKeyCredentialId", "litellmModelAlias", "litellmRoutingConfig", "geminiConnectorBaseUrl", "geminiConnectorId", "geminiConnectorApiKeyCredentialId"]) {
       if (source[key] != null) entry[key] = String(source[key]);
+    }
+    for (const key of ["apiKeyCredentialId", "geminiConnectorApiKeyCredentialId"]) {
+      if (!text(entry[key])) delete entry[key];
     }
     if (source.providerRequestDelayMs != null) entry.providerRequestDelayMs = positiveInteger(source.providerRequestDelayMs);
     if (source.isPrimary === true) entry.isPrimary = true;
@@ -37,7 +42,7 @@
     };
   }
 
-  function additionalProperties(source, knownKeys) { return Object.fromEntries(Object.entries(source || {}).filter(([key]) => !knownKeys.has(key))); }
+  function additionalProperties(source, knownKeys) { return Object.fromEntries(Object.entries(source || {}).filter(([key]) => !knownKeys.has(key) && key !== "apiKey" && key !== "geminiConnectorApiKey")); }
 
   /** Create an editable draft while keeping properties not represented by wizard fields. */
   function createDraft(kind, source = {}) {
@@ -52,12 +57,13 @@
     try { extras = JSON.parse(String(draft?._additionalProperties || "{}").trim() || "{}"); }
     catch (error) { throw new Error(`Additional properties must be a JSON object: ${error?.message || String(error)}`); }
     if (!extras || typeof extras !== "object" || Array.isArray(extras)) throw new Error("Additional properties must be a JSON object.");
+    if (kind === "profile" && (Object.hasOwn(extras, "apiKey") || Object.hasOwn(extras, "geminiConnectorApiKey"))) throw new Error("Plaintext credential properties are not supported.");
     const source = { ...clone(draft) };
     delete source._additionalProperties;
     const normalized = kind === "profile" ? normalizeProfile(source) : normalizeRoute(source);
     const entry = { ...extras, ...normalized };
     if (kind === "profile") {
-      for (const key of ["baseUrl", "apiKey", "litellmModelAlias", "litellmRoutingConfig", "geminiConnectorBaseUrl", "geminiConnectorId", "geminiConnectorApiKey"]) if (!String(entry[key] || "").trim()) delete entry[key];
+      for (const key of ["baseUrl", "apiKeyCredentialId", "litellmModelAlias", "litellmRoutingConfig", "geminiConnectorBaseUrl", "geminiConnectorId", "geminiConnectorApiKeyCredentialId"]) if (!String(entry[key] || "").trim()) delete entry[key];
     }
     return entry;
   }

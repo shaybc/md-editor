@@ -7,6 +7,7 @@
     const pending = new Map();
     let lastBridgeError = "";
     let exitTimer = null;
+    let sessionStartPromise = null;
 
     function encodeRequest(value) {
       return btoa(unescape(encodeURIComponent(JSON.stringify(value || {}))));
@@ -135,36 +136,44 @@
     async function ensureSession(workspaceRoot, settings) {
       const Neutralino = getNeutralino();
       if (!Neutralino?.os?.spawnProcess) throw new Error("AI Companion requires the desktop app runtime.");
-      if (session && session.workspaceRoot === workspaceRoot) {
+      if (hasProcessId(session?.processId)) {
         logBridgeDebug("session reused", { processId: String(session.processId ?? ""), processPid: String(session.processPid ?? ""), workspaceRoot });
         return session;
       }
-      if (hasProcessId(session?.processId)) {
-        try {
-          await Neutralino.os.updateSpawnedProcess(session.processId, "exit");
-        } catch (_error) {
-          // Best-effort replacement when the workspace changes.
+      if (sessionStartPromise) return sessionStartPromise;
+      sessionStartPromise = (async function() {
+        if (hasProcessId(session?.processId)) {
+          try {
+            await Neutralino.os.updateSpawnedProcess(session.processId, "exit");
+          } catch (_error) {
+            // Best-effort replacement when the workspace changes.
+          }
         }
+        lastBridgeError = "";
+        const profileRoot = await getProfileRootPath();
+        const command = await getBridgeCommand(workspaceRoot, settings, profileRoot);
+        const cwd = getDesktopRootPath() || workspaceRoot || "";
+        logBridgeDebug("session start requested", { workspaceRoot, cwd, commandLength: command.length });
+        const handle = await Neutralino.os.spawnProcess(command, { cwd });
+        session = {
+          processId: handle?.id ?? handle,
+          processPid: handle?.pid ?? "",
+          workspaceRoot,
+          profileRoot
+        };
+        session.unregisterProcessOwner = deps.processRouter?.registerProcess?.(handle, {
+          onStdout(data, detail) { handleSpawnedProcessEvent({ detail: Object.assign({}, detail, { action: "stdOut", data }) }); },
+          onStderr(data, detail) { handleSpawnedProcessEvent({ detail: Object.assign({}, detail, { action: "stdErr", data }) }); },
+          onExit(detail) { handleSpawnedProcessEvent({ detail: Object.assign({}, detail, { action: "exit" }) }); }
+        });
+        logBridgeDebug("session started", { processId: String(session.processId ?? ""), processPid: String(session.processPid ?? ""), workspaceRoot });
+        return session;
+      })();
+      try {
+        return await sessionStartPromise;
+      } finally {
+        sessionStartPromise = null;
       }
-      lastBridgeError = "";
-      const profileRoot = await getProfileRootPath();
-      const command = await getBridgeCommand(workspaceRoot, settings, profileRoot);
-      const cwd = getDesktopRootPath() || workspaceRoot || "";
-      logBridgeDebug("session start requested", { workspaceRoot, cwd, commandLength: command.length });
-      const handle = await Neutralino.os.spawnProcess(command, { cwd });
-      session = {
-        processId: handle?.id ?? handle,
-        processPid: handle?.pid ?? "",
-        workspaceRoot,
-        profileRoot
-      };
-      session.unregisterProcessOwner = deps.processRouter?.registerProcess?.(handle, {
-        onStdout(data, detail) { handleSpawnedProcessEvent({ detail: Object.assign({}, detail, { action: "stdOut", data }) }); },
-        onStderr(data, detail) { handleSpawnedProcessEvent({ detail: Object.assign({}, detail, { action: "stdErr", data }) }); },
-        onExit(detail) { handleSpawnedProcessEvent({ detail: Object.assign({}, detail, { action: "exit" }) }); }
-      });
-      logBridgeDebug("session started", { processId: String(session.processId ?? ""), processPid: String(session.processPid ?? ""), workspaceRoot });
-      return session;
     }
 
     async function sendToSession(message) {
@@ -347,7 +356,10 @@
       respondApproval,
       respondUserInput,
       respondAppAction,
-      testConnection: function(settings) { return request("testConnection", { settings, workspaceRoot: deps.getWorkspaceRoot?.() || "" }); },
+      testConnection: function(settings, ephemeralCredentials) { return request("testConnection", { settings, ephemeralCredentials, workspaceRoot: deps.getWorkspaceRoot?.() || "" }); },
+      credentialStore: function(payload) { return request("credentialStore", Object.assign({ settings: {} }, payload || {})); },
+      credentialExists: function(payload) { return request("credentialExists", Object.assign({ settings: {} }, payload || {})); },
+      credentialDelete: function(payload) { return request("credentialDelete", Object.assign({ settings: {} }, payload || {})); },
       inspectCertificate: function(payload) { return request("inspectCertificate", payload || {}); },
       chat: function(payload, onEvent) { return request("chat", payload, onEvent); },
       autocomplete: function(payload, onEvent) { return request("autocomplete", payload, onEvent); },

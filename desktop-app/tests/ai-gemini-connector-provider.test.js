@@ -19,14 +19,14 @@ test("AI Companion settings preserve Gemini connector providers and fields", () 
     providerMode: "gemini-connector-raw",
     geminiConnectorBaseUrl: " https://connector.example.com ",
     geminiConnectorId: " docs ",
-    geminiConnectorApiKey: "secret",
+    geminiConnectorApiKeyCredentialId: "11111111-1111-4111-8111-111111111111",
     trustedCertificates: [{ host: "CONNECTOR.EXAMPLE.COM", port: "443", fingerprint256: "AA:BB", pem: "-----BEGIN CERTIFICATE-----\\nabc\\n-----END CERTIFICATE-----" }]
   });
 
   assert.equal(settings.providerMode, "gemini-connector-raw");
   assert.equal(settings.geminiConnectorBaseUrl, "https://connector.example.com");
   assert.equal(settings.geminiConnectorId, "docs");
-  assert.equal(settings.geminiConnectorApiKey, "secret");
+  assert.equal(settings.geminiConnectorApiKeyCredentialId, "11111111-1111-4111-8111-111111111111");
   assert.equal(settings.trustedCertificates[0].host, "connector.example.com");
   assert.equal(settings.trustedCertificates[0].fingerprint256, "AA:BB");
   assert.equal(normalizeAiCompanionSettings({ providerMode: "unknown" }).providerMode, "openai-compatible");

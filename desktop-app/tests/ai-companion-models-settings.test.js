@@ -30,17 +30,25 @@ function createConnectionFormElements(values = {}) {
     profileName: input(values.id),
     providerMode: input(values.providerMode),
     baseUrl: input(values.baseUrl),
-    apiKey: input(values.apiKey),
+    apiKey: Object.assign(input(values.apiKey), { credentialId: values.apiKeyCredentialId || "" }),
     model: input(values.model),
     requestDelay: input(values.providerRequestDelayMs),
     litellmAlias: input(values.litellmModelAlias),
     litellmRouting: input(values.litellmRoutingConfig),
     geminiBaseUrl: input(values.geminiConnectorBaseUrl),
     geminiConnectorId: input(values.geminiConnectorId),
-    geminiApiKey: input(values.geminiConnectorApiKey),
+    geminiApiKey: Object.assign(input(values.geminiConnectorApiKey), { credentialId: values.geminiConnectorApiKeyCredentialId || "" }),
     profileAdd: { querySelector() { return null; } },
     profileSaveAs: { hidden: true },
     profileCancel: { hidden: true }
+  };
+}
+
+function credentialSettingsStub() {
+  return {
+    getCredentialId(input) { return String(input?.credentialId || ""); },
+    hydrate(input, credentialId) { if (input) { input.value = ""; input.credentialId = String(credentialId || ""); } },
+    snapshot(input) { return { credentialId: String(input?.credentialId || ""), secret: String(input?.value || ""), remove: false }; }
   };
 }
 
@@ -51,13 +59,13 @@ test("AI connection profiles accept human-readable names while route IDs remain 
   assert.equal(schema.validateEntry("route", schema.normalizeRoute({ id: "Fallback route", purposes: ["primary"] }), [], -1, []), "ID may contain letters, numbers, dots, underscores, and hyphens.");
 });
 
-test("saved primary AI connection migrates into the table and leaves the idle form empty", () => {
+test("saved primary AI connection reference enters the table and leaves the idle form empty", () => {
   const schema = loadConnectionEntrySchema();
   let profiles = [];
   const elements = createConnectionFormElements({
     providerMode: "google-gemini-native",
     baseUrl: "https://generativelanguage.googleapis.com",
-    apiKey: "secret",
+    apiKeyCredentialId: "11111111-1111-4111-8111-111111111111",
     model: "gemini-3.5-flash",
     providerRequestDelayMs: "4500"
   });
@@ -68,13 +76,14 @@ test("saved primary AI connection migrates into the table and leaves the idle fo
     setProfiles: (value) => { profiles = value; },
     getProfileReferences: () => [],
     syncAndRender() {},
-    setStatus() {}
+    setStatus() {},
+    credentialSettings: credentialSettingsStub()
   });
   controller.ensureDefaultProfile();
   assert.equal(profiles.length, 1);
   assert.equal(profiles[0].id, "default");
   assert.equal(profiles[0].isPrimary, true);
-  assert.equal(controller.getPrimaryConnectionForSave().apiKey, "secret");
+  assert.equal(controller.getPrimaryConnectionForSave().apiKeyCredentialId, "11111111-1111-4111-8111-111111111111");
   controller.refresh();
   assert.equal(elements.profileName.value, "");
   assert.equal(elements.providerMode.value, "");
@@ -87,7 +96,7 @@ test("saved primary AI connection migrates into the table and leaves the idle fo
 
 test("renamed AI connection edits can be saved as a new non-default profile", () => {
   const schema = loadConnectionEntrySchema();
-  const original = schema.normalizeProfile({ id: "default", providerMode: "google-gemini-native", baseUrl: "https://generativelanguage.googleapis.com", apiKey: "secret", model: "gemini-original", isPrimary: true });
+  const original = schema.normalizeProfile({ id: "default", providerMode: "google-gemini-native", baseUrl: "https://generativelanguage.googleapis.com", apiKeyCredentialId: "11111111-1111-4111-8111-111111111111", model: "gemini-original", isPrimary: true });
   let profiles = [original];
   let rendered = 0;
   let renamedReferences = 0;
@@ -101,7 +110,8 @@ test("renamed AI connection edits can be saved as a new non-default profile", ()
     getProfileReferences: () => [],
     renameProfileReferences: () => { renamedReferences += 1; },
     syncAndRender: () => { rendered += 1; },
-    setStatus: (message, isError = false) => { status = { message, isError }; }
+    setStatus: (message, isError = false) => { status = { message, isError }; },
+    credentialSettings: credentialSettingsStub()
   });
   controller.edit(0);
   assert.equal(elements.profileSaveAs.hidden, true);
@@ -117,7 +127,7 @@ test("renamed AI connection edits can be saved as a new non-default profile", ()
   assert.equal(profiles[1].id, "Gemini Copy");
   assert.equal(profiles[1].model, "gemini-copy");
   assert.equal(profiles[1].isPrimary, undefined);
-  assert.equal(profiles[1].apiKey, "secret");
+  assert.equal(profiles[1].apiKeyCredentialId, undefined);
   assert.equal(renamedReferences, 0);
   assert.equal(rendered, 1);
   assert.equal(elements.profileName.value, "");

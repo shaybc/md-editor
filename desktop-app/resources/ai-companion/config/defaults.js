@@ -8,13 +8,13 @@ const DEFAULT_AI_COMPANION_SETTINGS = Object.freeze({
   enabled: false,
   providerMode: "openai-compatible",
   baseUrl: "http://localhost:11434/v1",
-  apiKey: "",
+  apiKeyCredentialId: "",
   model: "llama3.1",
   litellmModelAlias: "",
   litellmRoutingConfig: "",
   geminiConnectorBaseUrl: "",
   geminiConnectorId: "",
-  geminiConnectorApiKey: "",
+  geminiConnectorApiKeyCredentialId: "",
   trustedCertificates: [],
   chatEnabled: true,
   autocompleteEnabled: false,
@@ -82,7 +82,10 @@ function normalizeConnectionProfiles(value) {
   if (!Array.isArray(value)) return [];
   return value.map((entry) => {
     const source = entry && typeof entry === "object" && !Array.isArray(entry) ? entry : {};
-    return { ...source, id: String(source.id || "").trim(), providerMode: normalizeProviderMode(source.providerMode), model: String(source.model || "").trim() };
+    const normalized = { ...source, id: String(source.id || "").trim(), providerMode: normalizeProviderMode(source.providerMode), model: String(source.model || "").trim() };
+    delete normalized.apiKey;
+    delete normalized.geminiConnectorApiKey;
+    return normalized;
   }).filter((entry) => entry.id).slice(0, 30);
 }
 
@@ -109,13 +112,13 @@ function normalizeAiCompanionSettings(settings = {}) {
     enabled: source.enabled === true,
     providerMode: normalizeProviderMode(source.providerMode),
     baseUrl: String(source.baseUrl || DEFAULT_AI_COMPANION_SETTINGS.baseUrl).trim(),
-    apiKey: String(source.apiKey || ""),
+    apiKeyCredentialId: String(source.apiKeyCredentialId || ""),
     model: String(source.model || DEFAULT_AI_COMPANION_SETTINGS.model).trim(),
     litellmModelAlias: String(source.litellmModelAlias || "").trim(),
     litellmRoutingConfig: String(source.litellmRoutingConfig || ""),
     geminiConnectorBaseUrl: String(source.geminiConnectorBaseUrl || "").trim(),
     geminiConnectorId: String(source.geminiConnectorId || "").trim(),
-    geminiConnectorApiKey: String(source.geminiConnectorApiKey || ""),
+    geminiConnectorApiKeyCredentialId: String(source.geminiConnectorApiKeyCredentialId || ""),
     trustedCertificates: normalizeTrustedCertificates(source.trustedCertificates),
     chatEnabled: source.chatEnabled !== false,
     autocompleteEnabled: source.autocompleteEnabled === true,

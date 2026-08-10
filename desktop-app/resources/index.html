@@ -2599,11 +2599,11 @@
                     <label class="settings-field settings-ai-http-provider-field" for="settings-ai-base-url"><span class="settings-field-label">Base URL</span><input type="url" id="settings-ai-base-url" class="rename-modal-input" placeholder="http://localhost:11434/v1" /></label>
                     <label class="settings-field" for="settings-ai-model"><span class="settings-field-label">Model</span><input type="text" id="settings-ai-model" class="rename-modal-input" placeholder="model name" list="settings-ai-model-options" /></label>
                     <datalist id="settings-ai-model-options"></datalist>
-                    <label class="settings-field settings-ai-http-provider-field" for="settings-ai-api-key"><span class="settings-field-label">API key/token</span><input type="password" id="settings-ai-api-key" class="rename-modal-input" autocomplete="off" /></label>
+                    <label class="settings-field settings-ai-http-provider-field" for="settings-ai-api-key"><span class="settings-field-label">API key/token</span><input type="password" id="settings-ai-api-key" class="rename-modal-input" autocomplete="new-password" /><span class="settings-field-help" id="settings-ai-api-key-status">No credential saved</span><button class="reset-modal-btn settings-secondary-action" id="settings-ai-api-key-remove" type="button" hidden>Remove saved credential</button></label>
                     <label class="settings-field" for="settings-ai-provider-request-delay-ms"><span class="settings-field-label">Request spacing (ms)</span><input type="number" id="settings-ai-provider-request-delay-ms" class="rename-modal-input settings-number-input" min="0" max="60000" step="100" /></label>
                     <label class="settings-field settings-ai-gemini-field" for="settings-ai-gemini-base-url"><span class="settings-field-label">Gemini connector URL</span><input type="url" id="settings-ai-gemini-base-url" class="rename-modal-input" placeholder="https://connector.example.com" /></label>
                     <label class="settings-field settings-ai-gemini-field" for="settings-ai-gemini-connector-id"><span class="settings-field-label">Gemini connector ID</span><input type="text" id="settings-ai-gemini-connector-id" class="rename-modal-input" /></label>
-                    <label class="settings-field settings-ai-gemini-field" for="settings-ai-gemini-api-key"><span class="settings-field-label">Gemini connector token</span><input type="password" id="settings-ai-gemini-api-key" class="rename-modal-input" autocomplete="off" /></label>
+                    <label class="settings-field settings-ai-gemini-field" for="settings-ai-gemini-api-key"><span class="settings-field-label">Gemini connector token</span><input type="password" id="settings-ai-gemini-api-key" class="rename-modal-input" autocomplete="new-password" /><span class="settings-field-help" id="settings-ai-gemini-api-key-status">No credential saved</span><button class="reset-modal-btn settings-secondary-action" id="settings-ai-gemini-api-key-remove" type="button" hidden>Remove saved credential</button></label>
                     <label class="settings-field settings-ai-litellm-field" for="settings-ai-litellm-alias"><span class="settings-field-label">LiteLLM model alias</span><input type="text" id="settings-ai-litellm-alias" class="rename-modal-input" /></label>
                   </div>
                   <label class="settings-field settings-ai-litellm-field" for="settings-ai-litellm-routing"><span class="settings-field-label">LiteLLM routing config</span><textarea id="settings-ai-litellm-routing" class="rename-modal-input settings-textarea-input" rows="3"></textarea></label>
@@ -5180,6 +5180,7 @@
     <script src="js/ai-companion/provider-presets.js"></script>
     <script src="ai-companion/core/tool-scope-registry.js"></script>
     <script src="js/ai-companion/settings.js"></script>
+    <script src="js/ai-companion/credential-settings.js"></script>
     <script src="js/ai-companion/settings-upgrade.js"></script>
     <script src="js/ai-companion/security-settings.js"></script>
     <script src="js/ai-companion/approval-settings.js"></script>

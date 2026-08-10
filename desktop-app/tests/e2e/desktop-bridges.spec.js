@@ -1,4 +1,5 @@
 const { test, expect } = require("./desktop-fixture");
+const crypto = require("node:crypto");
 
 async function openApp(page) {
   await page.addInitScript(() => {
@@ -10,8 +11,45 @@ async function openApp(page) {
     window.markdownViewerApp?.modules?.desktopTerminal
       && window.markdownViewerApp?.modules?.neutralinoLspBridge
       && window.markdownViewerApp?.modules?.lspServerRegistry
+      && window.markdownViewerApp?.modules?.neutralinoAiBridge
   ));
 }
+
+test("desktop AI bridge retains a Windows credential across an app reload without exposing reads", async ({ page }) => {
+  await openApp(page);
+  const secret = `md-editor-e2e-${crypto.randomUUID()}`;
+  let credentialId = "";
+  try {
+    const stored = await page.evaluate(async (value) => {
+      const bridge = window.markdownViewerApp.modules.neutralinoAiBridge;
+      const result = await bridge.credentialStore({ secret: value });
+      return {
+        credentialId: result.credentialId,
+        exists: (await bridge.credentialExists({ credentialId: result.credentialId })).exists,
+        exposesRead: typeof bridge.readCredential === "function" || typeof bridge.credentialRead === "function",
+        persistedSecret: Object.values(localStorage).some((item) => String(item).includes(value))
+      };
+    }, secret);
+    credentialId = stored.credentialId;
+    expect(stored.exists).toBe(true);
+    expect(stored.exposesRead).toBe(false);
+    expect(stored.persistedSecret).toBe(false);
+
+    await page.reload();
+    await page.waitForFunction(() => Boolean(window.markdownViewerApp?.modules?.neutralinoAiBridge));
+    const afterReload = await page.evaluate(async (id) => {
+      const bridge = window.markdownViewerApp.modules.neutralinoAiBridge;
+      return (await bridge.credentialExists({ credentialId: id })).exists;
+    }, credentialId);
+    expect(afterReload).toBe(true);
+  } finally {
+    if (credentialId) {
+      await page.evaluate(async (id) => {
+        await window.markdownViewerApp.modules.neutralinoAiBridge.credentialDelete({ credentialId: id });
+      }, credentialId).catch(() => {});
+    }
+  }
+});
 
 test("desktop terminal bridge starts and stops through Neutralino process APIs", async ({ page }) => {
   await openApp(page);

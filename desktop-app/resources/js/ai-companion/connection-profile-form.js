@@ -8,21 +8,22 @@
    * @returns {object} Operations used by the connection settings orchestrator.
    */
   function createConnectionProfileForm(options) {
-    const { elements, schema, getProfiles, setProfiles, getProfileReferences, renameProfileReferences, syncAndRender, setStatus } = options;
+    const profileOptions = options;
+    const { elements, schema, getProfiles, setProfiles, getProfileReferences, renameProfileReferences, syncAndRender, setStatus, credentialSettings } = options;
     let editingProfileIndex = -1;
 
     function profileConnectionValues(source = {}) {
       return {
         providerMode: source.providerMode == null ? "openai-compatible" : String(source.providerMode),
         baseUrl: String(source.baseUrl || ""),
-        apiKey: String(source.apiKey || ""),
+        apiKeyCredentialId: String(source.apiKeyCredentialId || ""),
         model: String(source.model || ""),
         providerRequestDelayMs: source.providerRequestDelayMs == null || source.providerRequestDelayMs === "" ? "" : Math.max(0, Math.floor(Number(source.providerRequestDelayMs) || 0)),
         litellmModelAlias: String(source.litellmModelAlias || ""),
         litellmRoutingConfig: String(source.litellmRoutingConfig || ""),
         geminiConnectorBaseUrl: String(source.geminiConnectorBaseUrl || ""),
         geminiConnectorId: String(source.geminiConnectorId || ""),
-        geminiConnectorApiKey: String(source.geminiConnectorApiKey || "")
+        geminiConnectorApiKeyCredentialId: String(source.geminiConnectorApiKeyCredentialId || "")
       };
     }
 
@@ -32,14 +33,14 @@
         ...profileConnectionValues({
         providerMode: elements.providerMode?.value,
         baseUrl: elements.baseUrl?.value,
-        apiKey: elements.apiKey?.value,
+        apiKeyCredentialId: credentialSettings?.getCredentialId(elements.apiKey),
         model: elements.model?.value,
         providerRequestDelayMs: elements.requestDelay?.value,
         litellmModelAlias: elements.litellmAlias?.value,
         litellmRoutingConfig: elements.litellmRouting?.value,
         geminiConnectorBaseUrl: elements.geminiBaseUrl?.value,
         geminiConnectorId: elements.geminiConnectorId?.value,
-          geminiConnectorApiKey: elements.geminiApiKey?.value
+          geminiConnectorApiKeyCredentialId: credentialSettings?.getCredentialId(elements.geminiApiKey)
         })
       };
     }
@@ -52,14 +53,14 @@
         elements.providerMode.dispatchEvent(new Event("change", { bubbles: true }));
       }
       if (elements.baseUrl) elements.baseUrl.value = profile.baseUrl;
-      if (elements.apiKey) elements.apiKey.value = profile.apiKey;
+      void credentialSettings?.hydrate(elements.apiKey, profile.apiKeyCredentialId);
       if (elements.model) elements.model.value = profile.model;
       if (elements.requestDelay) elements.requestDelay.value = String(profile.providerRequestDelayMs);
       if (elements.litellmAlias) elements.litellmAlias.value = profile.litellmModelAlias;
       if (elements.litellmRouting) elements.litellmRouting.value = profile.litellmRoutingConfig;
       if (elements.geminiBaseUrl) elements.geminiBaseUrl.value = profile.geminiConnectorBaseUrl;
       if (elements.geminiConnectorId) elements.geminiConnectorId.value = profile.geminiConnectorId;
-      if (elements.geminiApiKey) elements.geminiApiKey.value = profile.geminiConnectorApiKey;
+      void credentialSettings?.hydrate(elements.geminiApiKey, profile.geminiConnectorApiKeyCredentialId);
     }
 
     /** Refresh form actions for the current editing state and entered profile name. */
@@ -86,16 +87,25 @@
       const previous = sourceIndex >= 0 ? profiles[sourceIndex] : null;
       const form = readForm();
       const connection = profileConnectionValues(form);
+      if (options.saveAs === true) {
+        connection.apiKeyCredentialId = "";
+        connection.geminiConnectorApiKeyCredentialId = "";
+      }
       const requestDelay = Number(connection.providerRequestDelayMs);
       if (!Number.isFinite(requestDelay) || requestDelay < 0 || requestDelay > 60000) throw new Error("Request spacing must be between 0 and 60000 ms.");
-      const entry = schema.normalizeProfile({
+      const preliminaryEntry = schema.normalizeProfile({
         ...(previous || {}),
         ...connection,
         id: form.id,
         isPrimary: options.isPrimary === true
       });
-      const error = schema.validateEntry("profile", entry, profiles, validationIndex, profiles);
+      const error = schema.validateEntry("profile", preliminaryEntry, profiles, validationIndex, profiles);
       if (error) throw new Error(error);
+      const credentialReferences = profileOptions.captureCredentialDraft?.(form.id, previous, {
+        apiKey: credentialSettings?.snapshot(elements.apiKey),
+        geminiConnectorApiKey: credentialSettings?.snapshot(elements.geminiApiKey)
+      }, { saveAs: options.saveAs === true }) || {};
+      const entry = schema.normalizeProfile({ ...preliminaryEntry, ...credentialReferences });
       return { entry, previous };
     }
 
@@ -125,7 +135,7 @@
         if (!original) throw new Error("Choose a profile to edit before using Save as.");
         const newName = String(elements.profileName?.value || "").trim();
         if (!newName || newName === original.id) throw new Error("Enter a different profile name before using Save as.");
-        const { entry } = readValidatedEntry(profiles, { sourceIndex: editingProfileIndex, validationIndex: -1, isPrimary: false });
+        const { entry } = readValidatedEntry(profiles, { sourceIndex: editingProfileIndex, validationIndex: -1, isPrimary: false, saveAs: true });
         setProfiles([...profiles, entry]);
         syncAndRender();
         clear();
@@ -156,6 +166,7 @@
         return;
       }
       const remaining = profiles.filter((_entry, profileIndex) => profileIndex !== index);
+      profileOptions.queueCredentialDeletion?.(profile);
       setProfiles(profile.isPrimary === true && remaining.length
         ? remaining.map((entry, profileIndex) => schema.normalizeProfile({ ...entry, isPrimary: profileIndex === 0 }))
         : remaining);
@@ -185,7 +196,7 @@
       const profiles = getProfiles();
       if (profiles.some((profile) => profile.isPrimary === true)) return;
       const currentConnection = readForm();
-      const hasCurrentConnection = ["baseUrl", "apiKey", "model", "litellmModelAlias", "geminiConnectorBaseUrl", "geminiConnectorId", "geminiConnectorApiKey"]
+      const hasCurrentConnection = ["baseUrl", "apiKeyCredentialId", "model", "litellmModelAlias", "geminiConnectorBaseUrl", "geminiConnectorId", "geminiConnectorApiKeyCredentialId"]
         .some((key) => String(currentConnection[key] || "").trim());
       if (hasCurrentConnection) {
         const defaultIndex = profiles.findIndex((profile) => profile.id === "default");

@@ -267,6 +267,15 @@
       return SECRET_KEY_PATTERN.test(String(key || ""));
     }
 
+    function assertCredentialMutationAllowed(key) {
+      const path = Array.isArray(key) ? key.join(".") : String(key || "");
+      if (path === "aiCompanionSettings" || path === "aiCompanionSettings.connectionProfiles" || /(?:apiKey|geminiConnectorApiKey)(?:CredentialId)?$/i.test(path)) {
+        const error = new Error("AI provider credentials can only be changed from the secure connection settings UI.");
+        error.code = "credential-preference-read-only";
+        throw error;
+      }
+    }
+
     function redactValueForPath(key, value) {
       return copyToolValue(key, value, true);
     }
@@ -681,6 +690,7 @@
           }
           throw error;
         }
+        assertCredentialMutationAllowed(key);
         changes.push(createChange(key, coercePreferenceValue(key, change?.value), "update"));
       }
       const changed = changes.some((change) => change.changed);
@@ -692,7 +702,7 @@
     }
 
     async function resetPreferences(args = {}) {
-      const changes = normalizeKeys(args.keys).map((key) => createChange(key, getPreferencePathValue(getDefaultTopValue, key), "reset"));
+      const changes = normalizeKeys(args.keys).map((key) => { assertCredentialMutationAllowed(key); return createChange(key, getPreferencePathValue(getDefaultTopValue, key), "reset"); });
       const changed = changes.some((change) => change.changed);
       if (changed && args.previewOnly !== true) {
         deps.saveGlobalState?.(buildPatchFromChanges(changes.filter((change) => change.changed)));

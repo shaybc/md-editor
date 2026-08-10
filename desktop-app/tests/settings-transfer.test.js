@@ -189,3 +189,28 @@ test("settings transfer preserves API Client request settings", async () => {
   assert.deepEqual(plain(replacements[0].apiClientRequestSettings), importedSettings.apiClientRequestSettings);
   assert.deepEqual(plain(refreshed[0].apiClientRequestSettings), importedSettings.apiClientRequestSettings);
 });
+
+test("settings transfer strips AI credential values and references recursively", () => {
+  const defaults = { aiCompanionSettings: { connectionProfiles: [] } };
+  const api = loadSettingsTransfer({
+    deps: {
+      getDefaultGlobalState: () => defaults,
+      loadGlobalState: () => ({ aiCompanionSettings: {
+        apiKey: "plaintext",
+        apiKeyCredentialId: "11111111-1111-4111-8111-111111111111",
+        connectionProfiles: [{ id: "secondary", geminiConnectorApiKey: "plaintext", geminiConnectorApiKeyCredentialId: "22222222-2222-4222-8222-222222222222" }]
+      } })
+    }
+  });
+
+  const exported = api.buildSettingsExportPayload();
+  const serialized = JSON.stringify(exported);
+  assert.equal(serialized.includes("plaintext"), false);
+  assert.equal(serialized.includes("CredentialId"), false);
+
+  const imported = api.parseSettingsImportText(JSON.stringify({
+    documentType: "md-editor-settings", schemaVersion: 1,
+    settings: { aiCompanionSettings: { apiKeyCredentialId: "33333333-3333-4333-8333-333333333333", connectionProfiles: [] } }
+  }));
+  assert.equal(imported.aiCompanionSettings.apiKeyCredentialId, undefined);
+});
