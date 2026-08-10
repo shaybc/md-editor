@@ -1485,10 +1485,14 @@
         });
         return button;
       };
+      const separator = document.createElement("div");
+      separator.className = "ai-companion-chat-action-menu-separator";
+      separator.setAttribute("role", "separator");
       actionMenu.append(
         createActionItem("Rename Chat", renameSavedChat),
-        createActionItem("Delete Chat", deleteSavedChat, "danger"),
-        createActionItem("Open Chat Folder", showSavedChatFolder)
+        createActionItem("Open Chat Folder", showSavedChatFolder),
+        separator,
+        createActionItem("Delete Chat", deleteSavedChat, "danger")
       );
       return actionMenu;
     }

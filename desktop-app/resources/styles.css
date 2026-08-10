@@ -14700,6 +14700,11 @@ body.ai-companion-workspace-open .ai-companion-chat-action-menu {
   color: var(--danger-color, #cf222e);
 }
 
+.ai-companion-chat-action-menu-separator {
+  border-top: 1px solid var(--menu-separator-color, var(--border-color));
+  margin: 4px;
+}
+
 .ai-companion-chat-rename-box {
   width: min(360px, calc(100vw - 24px));
 }

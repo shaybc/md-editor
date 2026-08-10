@@ -4597,9 +4597,8 @@ test("workspace chat rows expose chat action menu from button and right click", 
   actionToggle.click();
   let openMenus = harness.document.body.querySelectorAll(".ai-companion-chat-action-menu").filter((menu) => menu.hidden === false);
   assert.equal(openMenus.length, 1);
-  assert.match(openMenus[0].textContent, /Rename Chat/);
-  assert.match(openMenus[0].textContent, /Delete Chat/);
-  assert.match(openMenus[0].textContent, /Open Chat Folder/);
+  assert.match(openMenus[0].textContent, /Rename ChatOpen Chat FolderDelete Chat/);
+  assert.equal(openMenus[0].children[2].getAttribute("role"), "separator");
 
   actionToggle.click();
   assert.equal(openMenus[0].hidden, true);
@@ -4610,7 +4609,7 @@ test("workspace chat rows expose chat action menu from button and right click", 
   assert.equal(openMenus.length, 1);
   assert.equal(contextEvent.defaultPrevented, true);
   assert.equal(openMenus[0].style.top, "140px");
-  assert.match(openMenus[0].textContent, /Rename ChatDelete ChatOpen Chat Folder/);
+  assert.match(openMenus[0].textContent, /Rename ChatOpen Chat FolderDelete Chat/);
 });
 test("workspace chat filter uses existing saved chat task mode", async () => {
   const harness = createPanelHarness({ isNeutralinoRuntime: false });
