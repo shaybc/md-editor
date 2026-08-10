@@ -4697,8 +4697,8 @@ test("workspace chat history limits rows and loads more saved chats", async () =
   const neutralinoFiles = new Map();
   const chatEntries = [];
   const baseTime = 1783089000000;
-  for (let index = 0; index < 25; index += 1) {
-    const number = String(index + 1).padStart(2, "0");
+  for (let index = 0; index < 205; index += 1) {
+    const number = String(index + 1).padStart(3, "0");
     const chatId = `chat_20260703_1430${number}_load_more`;
     const taskId = `task_000001_20260703_1430${number}_load_more`;
     const updatedAt = baseTime + index;
@@ -4741,15 +4741,56 @@ test("workspace chat history limits rows and loads more saved chats", async () =
   harness.api.setWorkspaceOpen(true, { previousSidebarView: "files" });
   await new Promise((resolve) => setTimeout(resolve, 20));
 
-  assert.equal(harness.workspaceChatList.querySelectorAll(".ai-companion-workspace-chat-item").length, 20);
-  const loadMore = harness.workspaceChatList.querySelector(".ai-companion-workspace-load-more");
+  assert.equal(harness.chatMenu.children.length, 25);
+  assert.equal(harness.workspaceChatList.querySelectorAll(".ai-companion-workspace-chat-item").length, 25);
+  let loadMore = harness.workspaceChatList.querySelector(".ai-companion-workspace-load-more");
   assert.ok(loadMore);
-  assert.equal(loadMore.textContent, "Load more chats (5)");
+  assert.equal(loadMore.textContent, "Load more chats (15)");
 
   loadMore.click();
 
-  assert.equal(harness.workspaceChatList.querySelectorAll(".ai-companion-workspace-chat-item").length, 25);
+  assert.equal(harness.workspaceChatList.querySelectorAll(".ai-companion-workspace-chat-item").length, 40);
+  loadMore = harness.workspaceChatList.querySelector(".ai-companion-workspace-load-more");
+  assert.equal(loadMore.textContent, "Load more chats (15)");
+  loadMore.click();
+  assert.equal(harness.workspaceChatList.querySelectorAll(".ai-companion-workspace-chat-item").length, 55);
+
+  while (harness.workspaceChatList.querySelectorAll(".ai-companion-workspace-chat-item").length < 190) {
+    loadMore = harness.workspaceChatList.querySelector(".ai-companion-workspace-load-more");
+    assert.equal(loadMore.textContent, "Load more chats (15)");
+    loadMore.click();
+  }
+
+  assert.equal(harness.workspaceChatList.querySelectorAll(".ai-companion-workspace-chat-item").length, 190);
+  loadMore = harness.workspaceChatList.querySelector(".ai-companion-workspace-load-more");
+  assert.equal(loadMore.textContent, "Load more chats (10)");
+  loadMore.click();
+  assert.equal(harness.workspaceChatList.querySelectorAll(".ai-companion-workspace-chat-item").length, 200);
   assert.equal(harness.workspaceChatList.querySelector(".ai-companion-workspace-load-more"), null);
+
+  harness.workspaceChatSearch.value = "Answer 160";
+  harness.workspaceChatSearch.dispatchEvent("input");
+  assert.equal(harness.workspaceChatList.querySelectorAll(".ai-companion-workspace-chat-item").length, 1);
+  assert.match(harness.workspaceChatList.textContent, /Saved chat 160/);
+
+  harness.workspaceChatFilterAgent.click();
+  assert.match(harness.workspaceChatList.textContent, /No matching chats/);
+  harness.workspaceChatFilterChat.click();
+  const folderSearchResult = harness.workspaceChatList.querySelector(".ai-companion-workspace-chat-item");
+  assert.ok(folderSearchResult);
+  folderSearchResult.click();
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.equal(harness.workspaceChatTitle.textContent, "Saved chat 160");
+
+  harness.workspaceChatFilterMenu.children[0].click();
+  harness.workspaceChatSearch.value = "";
+  harness.workspaceChatSearch.dispatchEvent("input");
+  assert.equal(harness.workspaceChatList.querySelectorAll(".ai-companion-workspace-chat-item").length, 25);
+  assert.doesNotMatch(harness.workspaceChatList.textContent, /Saved chat 160/);
+
+  harness.workspaceChatSearch.value = "Answer 001";
+  harness.workspaceChatSearch.dispatchEvent("input");
+  assert.match(harness.workspaceChatList.textContent, /No matching chats/);
 });
 test("workspace task details activity counts only tool activity events", async () => {
   const harness = createPanelHarness({ isNeutralinoRuntime: false });

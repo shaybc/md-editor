@@ -91,6 +91,7 @@
     const AGENT_CHATS_STORAGE_KEY = "ai-companion-chats";
     const CHAT_TASK_INDEX_FILE_NAME = "index.json";
     const CHAT_HISTORY_SELECT_LIMIT = 25;
+    const WORKSPACE_CHAT_HISTORY_LIMIT = 200;
     const WORKSPACE_TOOLS_PREVIEW_LIMIT = 6;
     const WORKSPACE_ID_COPY_FEEDBACK_MS = 1200;
     const resumingRunTaskIds = new Set();
@@ -118,7 +119,8 @@
     const DEFAULT_WORKSPACE_INSPECTOR_WIDTH = 320;
     const MIN_WORKSPACE_SIDE_WIDTH = 240;
     const MAX_WORKSPACE_SIDE_WIDTH = 520;
-    const WORKSPACE_CHAT_PAGE_SIZE = 20;
+    const WORKSPACE_CHAT_INITIAL_LIMIT = 25;
+    const WORKSPACE_CHAT_LOAD_MORE_SIZE = 15;
     const WORKSPACE_STATUS_CLASS_NAMES = ["status-completed", "status-incomplete", "status-error", "status-cancelled", "status-aborted", "status-planned", "status-running", "status-ready"];
     const BUNDLED_WORKFLOW_SUGGESTIONS = [
       { name: "investigate-defect", description: "Investigate a defect from evidence to root cause.", allowedModes: ["plan", "agent"] },
@@ -207,7 +209,7 @@
     let workspaceRestoreState = null;
     let workspaceChatIndexes = [];
     let workspaceChatFilter = "all";
-    let workspaceChatVisibleLimit = WORKSPACE_CHAT_PAGE_SIZE;
+    let workspaceChatVisibleLimit = WORKSPACE_CHAT_INITIAL_LIMIT;
     let workspacePlanFilter = "all";
     let workspaceHistoryWidth = DEFAULT_WORKSPACE_HISTORY_WIDTH;
     let workspaceInspectorWidth = DEFAULT_WORKSPACE_INSPECTOR_WIDTH;
@@ -1678,12 +1680,13 @@
         workspaceChatList.appendChild(createWorkspaceChatRow(chat));
       });
       if (visibleChats.length > displayedChats.length) {
+        const nextBatchSize = Math.min(WORKSPACE_CHAT_LOAD_MORE_SIZE, visibleChats.length - displayedChats.length);
         const loadMore = document.createElement("button");
         loadMore.type = "button";
         loadMore.className = "ai-companion-workspace-load-more";
-        loadMore.textContent = `Load more chats (${visibleChats.length - displayedChats.length})`;
+        loadMore.textContent = `Load more chats (${nextBatchSize})`;
         loadMore.addEventListener("click", () => {
-          workspaceChatVisibleLimit += WORKSPACE_CHAT_PAGE_SIZE;
+          workspaceChatVisibleLimit += WORKSPACE_CHAT_LOAD_MORE_SIZE;
           renderWorkspaceChatHistory(workspaceChatIndexes);
         });
         workspaceChatList.appendChild(loadMore);
@@ -2225,7 +2228,7 @@
         setWorkspaceVisible(true);
         setPlansViewOpen(false, { load: false });
         setWorkspaceHistoryTab("chats");
-        workspaceChatVisibleLimit = WORKSPACE_CHAT_PAGE_SIZE;
+        workspaceChatVisibleLimit = WORKSPACE_CHAT_INITIAL_LIMIT;
         renderWorkspaceChatHistory();
         renderWorkspaceInspectorPanels();
         const refreshSequence = ++workspaceOpenRefreshSequence;
@@ -6749,7 +6752,7 @@
       const activeId = activeAgentChat?.id || "";
       const activeChat = (chats || []).find((chat) => chat.id === activeId);
       if (chatSelectLabel) chatSelectLabel.textContent = activeChat ? getChatDisplayName(activeChat) : "Recent chats";
-      (chats || []).forEach((chat) => {
+      (chats || []).slice(0, CHAT_HISTORY_SELECT_LIMIT).forEach((chat) => {
         const item = document.createElement("div");
         item.className = "ai-companion-chat-menu-item";
         item.dataset.chatId = chat.id;
@@ -6821,7 +6824,7 @@
         logChatHistoryDebug("refresh skipped missing control");
         return;
       }
-      renderChatSelectOptions(await addWorkspaceChatSearchContent(await readSavedChatIndexes()));
+      renderChatSelectOptions(await addWorkspaceChatSearchContent(await readSavedChatIndexes(WORKSPACE_CHAT_HISTORY_LIMIT)));
     }
 
     async function loadChatIntoPanel(chatIndex) {
@@ -8124,7 +8127,7 @@
     plansSearchInput?.addEventListener("input", () => { selectedRepositoryPlan = null; void loadRepositoryPlans(); });
     chatSelect?.addEventListener("click", handleChatSelectClick);
     workspaceChatSearch?.addEventListener("input", () => {
-      workspaceChatVisibleLimit = WORKSPACE_CHAT_PAGE_SIZE;
+      workspaceChatVisibleLimit = WORKSPACE_CHAT_INITIAL_LIMIT;
       renderWorkspaceChatHistory(workspaceChatIndexes);
     });
     workspaceChatFilterButton?.addEventListener("click", () => {
@@ -8136,7 +8139,7 @@
       button.addEventListener("click", () => {
         workspaceChatFilter = button.dataset.aiCompanionWorkspaceChatFilter || button.dataset.aiCompanionChatFilter || "all";
         updateWorkspaceFilterSelections();
-        workspaceChatVisibleLimit = WORKSPACE_CHAT_PAGE_SIZE;
+        workspaceChatVisibleLimit = WORKSPACE_CHAT_INITIAL_LIMIT;
         workspaceChatFilterMenu.hidden = true;
         workspaceChatFilterButton?.setAttribute("aria-expanded", "false");
         renderWorkspaceChatHistory(workspaceChatIndexes);
