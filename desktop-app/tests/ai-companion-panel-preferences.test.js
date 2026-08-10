@@ -730,6 +730,7 @@ function createPanelHarness(options = {}) {
       openedDocuments.push({ source, openOptions });
       return source;
     }),
+    openFileCompareInTab: options.openFileCompareInTab,
     openPathInExplorer: async (path) => {
       openedFolders.push(path);
       return path;
@@ -959,6 +960,32 @@ test("AI Companion resets auto-scroll when starting a new chat", async () => {
   await new Promise((resolve) => setTimeout(resolve, 20));
 
   assert.equal(harness.toolLog.scrollTop, 1200);
+});
+test("AI Companion creates the active chat card when a request starts", async () => {
+  const harness = createPanelHarness({
+    setInterval: () => 1,
+    clearInterval: () => {},
+    bridge: {
+      chat: async (_payload, handleEvent) => {
+        handleEvent({ type: "start" });
+        return new Promise(() => {});
+      }
+    }
+  });
+  harness.api.setWorkspaceOpen(true, { previousSidebarView: "files" });
+  harness.agentInput.value = "Keep this new chat reachable";
+  harness.agentInput.dispatchEvent("input");
+
+  harness.agentRunButton.click();
+  await new Promise((resolve) => setTimeout(resolve, 0));
+
+  const savedChat = JSON.parse(harness.storage.get("ai-companion-chats"));
+  const chatRow = harness.workspaceChatList.querySelector(".ai-companion-workspace-chat-item");
+  assert.equal(savedChat.tasks.length, 1);
+  assert.equal(chatRow.dataset.chatId, savedChat.id);
+  assert.match(chatRow.textContent, /Keep this new chat reachable/);
+  assert.equal(chatRow.classList.contains("active"), true);
+  assert.equal(chatRow.classList.contains("running"), true);
 });
 test("AI Companion mode selection persists user-driven mode changes", () => {
   const harness = createPanelHarness();
@@ -2020,9 +2047,14 @@ test("AI Companion shows pending questions above the composer and collapses answ
 
 test("AI Companion approval events render highlighted action cards", async () => {
   const responses = [];
+  const openedComparisons = [];
   let resolveApproval;
   const approvalResponded = new Promise((resolve) => { resolveApproval = resolve; });
   const harness = createPanelHarness({
+    openFileCompareInTab: (comparison) => {
+      openedComparisons.push(comparison);
+      return { id: "approval-diff" };
+    },
     createActivityRenderer: ({ container }) => ({
       appendActivity() {},
       appendExternalActivity(row) {
@@ -2043,6 +2075,13 @@ test("AI Companion approval events render highlighted action cards", async () =>
           approvalReason: "Update the project markup requested by the user.",
           summary: "Apply file edits",
           preview: "diff --git a/index.html b/index.html",
+          compare: {
+            path: "index.html",
+            beforeContent: "<main>Before</main>",
+            afterContent: "<main>After</main>",
+            changed: true,
+            readOnly: true
+          },
           actionAnalysis: {
             operation: "modify",
             operationLabel: "Modify file",
@@ -2087,7 +2126,13 @@ test("AI Companion approval events render highlighted action cards", async () =>
   assert.equal(approval.querySelector(".ai-companion-approval-approve").textContent, "Approve");
 
   approval.querySelector(".ai-companion-approval-review").click();
-  assert.ok(harness.document.body.querySelector(".ai-companion-approval-modal"));
+  const approvalModal = harness.document.body.querySelector(".ai-companion-approval-modal");
+  assert.ok(approvalModal);
+  approvalModal.querySelector(".ai-companion-approval-modal-diff").click();
+  assert.equal(openedComparisons.length, 1);
+  assert.equal(openedComparisons[0].left.content, "<main>Before</main>");
+  assert.equal(openedComparisons[0].right.content, "<main>After</main>");
+  assert.equal(openedComparisons[0].right.path, null);
 
   approval.querySelector(".ai-companion-approval-approve").click();
   await new Promise((resolve) => setTimeout(resolve, 20));
@@ -3961,8 +4006,20 @@ test("AI Companion workspace can view another chat while current chat is running
   assert.match(harness.workspaceChatTitle.textContent, /Other chat/);
   assert.match(harness.toolLog.textContent, /Other answer/);
   const runningRow = getWorkspaceChatRow(runningChatId);
+  const selectedOtherRow = getWorkspaceChatRow(otherChatId);
   assert.equal(runningRow.classList.contains("running"), true);
+  assert.equal(runningRow.classList.contains("active"), false);
+  assert.equal(selectedOtherRow.classList.contains("active"), true);
   assert.ok(runningRow.querySelector(".ai-companion-workspace-chat-running-indicator"));
+  assert.equal(harness.agentRunButton.classList.contains("running"), true);
+
+  runningRow.click();
+  await new Promise((resolve) => setTimeout(resolve, 0));
+
+  assert.equal(getWorkspaceChatRow(runningChatId).classList.contains("active"), true);
+  assert.equal(getWorkspaceChatRow(otherChatId).classList.contains("active"), false);
+  assert.match(harness.toolLog.textContent, /Keep running/);
+  assert.doesNotMatch(harness.toolLog.textContent, /Task Aborted/);
   assert.equal(harness.agentRunButton.classList.contains("running"), true);
 
   finishChat();
@@ -4756,7 +4813,7 @@ test("workspace Changes keeps two file entries inline", async () => {
       type: "agent-summary",
       finalResponse: "Done",
       changedFiles: [
-        { path: "src/one.js", action: "created", description: "Created one.", additions: 2, deletions: 1 },
+        { path: "src/main/feature/components/one.js", action: "created", description: "Created one.", additions: 2, deletions: 0 },
         { path: "src/two.js", action: "renamed", oldPath: "src/old-two.js", description: "Renamed two.", additions: 3, deletions: 2 }
       ],
       attemptedChanges: [],
@@ -4778,15 +4835,16 @@ test("workspace Changes keeps two file entries inline", async () => {
   assert.match(harness.taskChangesSummary.textContent, /2 files/);
   assert.doesNotMatch(harness.taskChangesSummary.textContent, /Changed files/);
   assert.match(harness.taskChangesSummary.textContent, /\+5/);
-  assert.match(harness.taskChangesSummary.textContent, /-3/);
+  assert.match(harness.taskChangesSummary.textContent, /-2/);
   assert.equal(harness.taskChangesList.children[0].tagName, "BUTTON");
-  assert.match(harness.taskChangesList.children[0].textContent, /^Asrc\/one\.js\+2-1$/);
+  assert.match(harness.taskChangesList.children[0].textContent, /^Asrc\/main\/feature\/components\/one\.js\+2-0$/);
+  assert.match(harness.taskChangesList.children[0].title, /src[\\/]main[\\/]feature[\\/]components[\\/]one\.js/);
   assert.match(harness.taskChangesList.children[1].textContent, /^Rsrc\/two\.js\+3-2$/);
 
   harness.taskChangesList.children[0].click();
   await new Promise((resolve) => setTimeout(resolve, 0));
 
-  assert.equal(harness.openedDocuments.at(-1).source.path, "src/one.js");
+  assert.equal(harness.openedDocuments.at(-1).source.path, "src/main/feature/components/one.js");
   assert.equal(harness.document.body.classList.contains("ai-companion-workspace-open"), false);
 });
 
@@ -4801,7 +4859,7 @@ test("workspace Changes expands larger summaries as a scrollable overlay", async
       changedFiles: [
         { path: "src/one.js", description: "Updated one.", additions: 2, deletions: 1 },
         { path: "src/two.js", description: "Updated two.", additions: 3, deletions: 2 },
-        { path: "src/three.js", action: "deleted", description: "Deleted three.", additions: 4, deletions: 0 }
+        { path: "src/three.js", action: "deleted", description: "Deleted three.", additions: 0, deletions: 4 }
       ],
       attemptedChanges: [{ path: "src/four.js", description: "Write failed." }],
       blockedChanges: [{
@@ -4830,8 +4888,9 @@ test("workspace Changes expands larger summaries as a scrollable overlay", async
   assert.match(harness.taskChangesSummary.textContent, /Blocked 2/);
   assert.equal(harness.taskChangesList.children.length, 6);
   assert.equal(harness.taskChangesList.children[2].tagName, "DIV");
-  assert.match(harness.taskChangesList.children[2].textContent, /^Dsrc\/three\.js\+4$/);
+  assert.match(harness.taskChangesList.children[2].textContent, /^Dsrc\/three\.js\+0-4$/);
   assert.equal(harness.taskChangesList.children[3].classList.contains("is-collapsed-overflow"), true);
+  assert.doesNotMatch(harness.taskChangesList.children[3].textContent, /\+0-0/);
   assert.equal(harness.taskChangesList.children[4].classList.contains("is-collapsed-overflow"), true);
   assert.equal(harness.taskChangesList.children[5].textContent, "+2 more");
 

@@ -3,6 +3,7 @@
 "use strict";
 
 const workspaceTools = require("../../tools/workspace-tools");
+const { prepareFileMutationPreview } = require("../../tools/file-mutation-preview");
 const { authorizeTool } = require("./approval-gateway");
 const { loadExtension } = require("./extension-registry");
 const { executeApplicationTool } = require("./application-tool-adapter");
@@ -69,25 +70,33 @@ async function executeTool(call, context) {
         configuredShell: process.env.ComSpec
       })
       : null;
+    const mutationPreview = name === "run_command" ? null : await prepareFileMutationPreview({
+      tool: name,
+      resolvedPath: target.resolvedPath,
+      mutationPath: target.relativePath,
+      comparePath: approvalArgs.path,
+      args
+    });
     const approval = await authorizeTool(context.request, name, approvalArgs, context.taskGrants, {
       permissionPolicy: context.permissionPolicy,
       denialLedger: context.denialLedger,
       riskAdvisor: context.riskAdvisor,
       commandAnalysis,
+      compare: mutationPreview?.compare,
       autoRunCommands: context.request.settings?.agentAutoRunCommands === true
     });
     if (!approval.approved) return { denied: true, resolvedPath: target.resolvedPath, doNotRetry: approval.doNotRetry === true, denialFingerprint: approval.denialFingerprint, instructions: approval.instructions || "The user denied this action." };
     if (name === "apply_edit") {
       context.windowSteward?.recordFile?.(target.resolvedPath);
       let result;
-      try { result = await workspaceTools.applyEdit(target.root, target.relativePath, args.search, args.replacement, { ...options, allowWrites: true }); }
+      try { result = await workspaceTools.applyEdit(target.root, target.relativePath, args.search, args.replacement, { ...options, allowWrites: true, preparedEdit: mutationPreview.preparedEdit }); }
       catch (error) { error.resolvedPath = target.resolvedPath; throw error; }
       return { ...result, path: target.external ? target.resolvedPath : result.path, resolvedPath: target.resolvedPath };
     }
     if (name === "write_file") {
       context.windowSteward?.recordFile?.(target.resolvedPath);
       let result;
-      try { result = await workspaceTools.writeFile(target.root, target.relativePath, args.content, { ...options, allowWrites: true }); }
+      try { result = await workspaceTools.writeFile(target.root, target.relativePath, args.content, { ...options, allowWrites: true, preparedWrite: mutationPreview.preparedWrite }); }
       catch (error) { error.resolvedPath = target.resolvedPath; throw error; }
       return { ...result, path: target.external ? target.resolvedPath : result.path, resolvedPath: target.resolvedPath };
     }

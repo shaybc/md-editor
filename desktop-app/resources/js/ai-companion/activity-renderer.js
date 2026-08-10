@@ -300,7 +300,7 @@
     }
 
     function ensureTimeline() {
-      if (timelineDetails?.isConnected && timelineBody) return timelineBody;
+      if (timelineDetails?.parentNode === deps.container && timelineBody) return timelineBody;
       timelineDetails = createElement("details", "ai-companion-activity-timeline");
       timelineDetails.open = true;
       const summary = createElement("summary", "ai-companion-activity-timeline-summary");

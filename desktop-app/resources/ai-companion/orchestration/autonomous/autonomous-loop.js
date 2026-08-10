@@ -4,7 +4,7 @@
 
 const { EVENT_TYPES } = require("../shared/events");
 const { createProviderDebugEmitter } = require("../../core/provider-debug");
-const { buildRuleActivationMessage, buildSkillActivationMessage, buildSkillDiscoveryMessage, serializeToolResult } = require("./context-builder");
+const { buildRuleActivationMessage, buildSkillActivationMessage, buildSkillDiscoveryMessage, buildWorkerUpdateMessage, serializeToolResult } = require("./context-builder");
 const { executeTool } = require("./tool-executor");
 const { validateToolInput } = require("./capabilities/tool-input-validator");
 const { isContextOverflowError } = require("./context/window-steward");
@@ -34,7 +34,7 @@ async function runAutonomousLoop(input) {
     const skillDiscoveryMessage = buildSkillDiscoveryMessage(context.skillCatalog?.consumeDiscoveries?.() || []);
     if (skillDiscoveryMessage) messages.push({ role: "system", content: skillDiscoveryMessage });
     const workerNotifications = context.workers?.drainNotifications?.() || [];
-    if (workerNotifications.length) messages.push({ role: "system", content: `Worker updates:\n${JSON.stringify(workerNotifications)}` });
+    if (workerNotifications.length) messages.push({ role: "system", content: buildWorkerUpdateMessage(workerNotifications) });
     if (request.signal?.aborted) throw Object.assign(new Error("AI Companion request cancelled."), { name: "AbortError" });
 
     const catalogNotice = context.capabilities?.consumeCatalogNotice?.();
@@ -45,6 +45,13 @@ async function runAutonomousLoop(input) {
     const routeAllowsTools = context.routeSession?.active?.route?.capabilities?.tools !== false;
     const currentTools = routeAllowsTools ? (typeof getTools === "function" ? getTools() : tools) : [];
     context.currentToolDefinitions = currentTools;
+    const workflowReminder = context.workflowModeReminder?.consider?.(messages, context.policy?.mode);
+    if (workflowReminder) messages.push({ role: "system", content: workflowReminder });
+    const activeToolNames = new Set(currentTools.map((definition) => String(definition?.function?.name || "")));
+    const workReminder = context.workTrackingReminder?.consider?.(context.work?.list?.() || [], {
+      round, available: Boolean(context.capabilities?.registration?.("work_update")), active: activeToolNames.has("work_update")
+    });
+    if (workReminder) messages.push({ role: "system", content: workReminder });
     context.observationLedger?.refresh?.(messages, { currentRound: round });
     const prepared = await context.windowSteward.prepare(messages, context);
     const releaseReminder = context.contextReleaseReminder?.consider?.(context.observationLedger.summary(), { round, renewed: prepared.renewed });
@@ -85,6 +92,7 @@ async function runAutonomousLoop(input) {
     const assistant = assistantMessage(response);
     messages.push(assistant);
     await context.chronicle?.append?.("assistant-message", { round, message: assistant });
+    context.workTrackingReminder?.recordAssistantTurn?.();
     context.continuity?.scheduleUpdate?.(messages, {
       reportedTokens: context.windowSteward.reportedTokens,
       naturalStop: !response.toolCalls?.length
@@ -149,6 +157,7 @@ async function runAutonomousLoop(input) {
         const result = await executeTool(effectiveCall, context);
         context.runSummary?.recordToolCompleted(name, effectiveInput, result);
         await context.rulePathObserver?.afterTool?.(name, effectiveInput, result, registration);
+        if (name === "work_create" || name === "work_update") context.workTrackingReminder?.recordWorkMutation?.(context.work?.list?.() || []);
         await context.skillPathObserver?.afterTool?.(name, result, registration);
         consecutiveFailures = 0;
         events.emit({ type: EVENT_TYPES.TOOL_COMPLETED, tool: name, callId: call.id, result });

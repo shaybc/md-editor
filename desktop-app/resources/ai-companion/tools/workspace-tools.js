@@ -16,6 +16,7 @@ const editorActionTools = require("./editor-action-tools");
 const editorReadTools = require("./editor-read-tools");
 const graphTools = require("./graph-tools");
 const gitPanelTools = require("./git-panel-tools");
+const { countChangedLines } = require("./line-change-counts");
 const planRepositoryTools = require("./plan-repository-tools");
 const structuredExecutionTools = require("./structured-execution-tools");
 const {
@@ -274,12 +275,14 @@ async function applyEdit(root, filePath, search, replacement, options = {}) {
   if (preparedEdit.path !== String(filePath || "") || preparedEdit.sourceHash !== hashWorkspaceContent(current)) {
     throw createStalePreviewError(filePath);
   }
+  const lineChanges = countChangedLines(current, preparedEdit.proposedContent);
   await fs.writeFile(resolvedPath, preparedEdit.proposedContent, "utf8");
   return {
     path: filePath,
     resolvedPath,
     changed: current !== preparedEdit.proposedContent,
     action: current !== preparedEdit.proposedContent ? "modified" : "unchanged",
+    ...lineChanges,
     matchMode: preparedEdit.matchMode,
     matchCount: preparedEdit.matchCount,
     occurrence: preparedEdit.occurrence
@@ -294,12 +297,20 @@ async function writeFile(root, filePath, content, options = {}) {
   let previousContent = null;
   try { previousContent = await fs.readFile(resolvedPath, "utf8"); }
   catch (error) { if (error?.code !== "ENOENT") throw error; }
+  const preparedWrite = options.preparedWrite;
+  if (preparedWrite && (
+    preparedWrite.resolvedPath !== resolvedPath
+    || preparedWrite.sourceExists !== (previousContent !== null)
+    || preparedWrite.sourceHash !== hashWorkspaceContent(previousContent || "")
+    || preparedWrite.proposedContent !== nextContent
+  )) throw createStalePreviewError(filePath);
   const action = previousContent === null ? "created" : (previousContent === nextContent ? "unchanged" : "modified");
   if (action === "unchanged") return { path: filePath, resolvedPath, changed: false, action };
+  const lineChanges = countChangedLines(previousContent, nextContent);
   await fs.mkdir(path.dirname(resolvedPath), { recursive: true });
   throwIfAborted(options.signal);
   await fs.writeFile(resolvedPath, nextContent, "utf8");
-  return { path: filePath, resolvedPath, changed: true, action };
+  return { path: filePath, resolvedPath, changed: true, action, ...lineChanges };
 }
 
 async function runCommand(root, command, options = {}) {

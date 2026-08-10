@@ -74,6 +74,7 @@ async function authorizeTool(request, name, args, taskGrants, controls) {
     capability: descriptor.capability, resource: descriptor.resource, maximumGrantLifetime: descriptor.maximumGrantLifetime,
     grantOptions: descriptor.grantOptions, summary: descriptor.label, preview: controls.commandAnalysis?.preview || args.path || args.command || name,
     commandImpact,
+    compare: controls.compare,
     actionAnalysis: controls.commandAnalysis ? commandApprovalAnalysis(controls.commandAnalysis, args.approvalReason) : undefined
   });
   if (!decision?.approved) {

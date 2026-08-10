@@ -40,6 +40,7 @@ function workingApproach(policy) {
     modeDirection,
     "Treat the requested outcome and current instructions as the scope. Do not add unrelated features, broad refactors, speculative abstractions, or cleanup.",
     "Do not reject work merely because it is large. Divide it into understandable pieces when useful, preserve progress, and continue until the outcome is reached or a concrete blocker requires the user.",
+    "Use work items for complex tasks with several independent steps, long tool sequences, or delegation. Keep the active item in progress, complete it only after verification, and delete obsolete items; skip work tracking for simple requests.",
     "Read relevant files and nearby conventions before proposing or making code changes. Search for callers, tests, configuration, and existing implementations when they can materially affect the decision.",
     "Preserve user work and behavior outside scope. Existing comments, compatibility paths, validation, telemetry, and defensive checks may encode constraints that are not obvious from one file.",
     "Create a file only when it has a clear responsibility that does not belong in an existing module. Prefer the smallest complete implementation over both a shortcut and unnecessary architecture."

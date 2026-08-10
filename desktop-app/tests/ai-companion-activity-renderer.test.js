@@ -297,6 +297,23 @@ test("AI Companion activities render source links through the external opener", 
   assert.deepEqual(opened, ["https://docs.example.test/source"]);
 });
 
+test("AI Companion keeps one activity timeline while its task is detached", () => {
+  const harness = createHarness();
+  harness.renderer.appendActivity({
+    activity: { id: "first-step", status: "completed", title: "First step" }
+  });
+  const timeline = harness.container.children[0];
+  harness.container.isConnected = false;
+  timeline.isConnected = false;
+
+  harness.renderer.appendActivity({
+    activity: { id: "second-step", status: "running", title: "Second step" }
+  });
+
+  assert.equal(findAllByClass(harness.container, "ai-companion-activity-timeline").length, 1);
+  assert.equal(findByClass(timeline, "ai-companion-activity-timeline-summary").children[0].textContent, "Activity (2 steps)");
+});
+
 test("AI Companion activity copy timestamp uses latest completed activity and ignores external rows", () => {
   const harness = createHarness();
   const firstCompletedAt = Date.UTC(2026, 0, 1, 9, 5);

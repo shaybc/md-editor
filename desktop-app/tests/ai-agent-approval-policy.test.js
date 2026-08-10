@@ -70,15 +70,20 @@ test("autonomous writes execute only after approval", async () => {
   const workspace = await fs.mkdtemp(path.join(os.tmpdir(), "md-editor-approved-write-"));
   let round = 0;
   let approvals = 0;
+  let approvalDetails = null;
   const provider = {
     completeMessage: async () => (++round === 1
       ? { content: "", toolCalls: [toolCall("write_file", { path: "approved.txt", content: "saved", approvalReason: "Create the requested file." })] }
       : { content: "Done.", toolCalls: [] })
   };
   await runAgentToolLoop(provider, {}, workspace, "create the file", "agent", () => {}, null, {
-    requestApproval: async () => { approvals += 1; return { approved: true }; }
+    requestApproval: async (details) => { approvals += 1; approvalDetails = details; return { approved: true }; }
   });
   assert.equal(approvals, 1);
+  assert.equal(approvalDetails.compare.path, "approved.txt");
+  assert.equal(approvalDetails.compare.beforeContent, "");
+  assert.equal(approvalDetails.compare.afterContent, "saved");
+  assert.equal(approvalDetails.compare.readOnly, true);
   assert.equal(await fs.readFile(path.join(workspace, "approved.txt"), "utf8"), "saved");
 });
 

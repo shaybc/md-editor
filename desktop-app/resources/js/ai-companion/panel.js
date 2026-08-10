@@ -148,6 +148,8 @@
     let agentEntries = [];
     let agentTaskIndex = [];
     let activeAgentChat = null;
+    let workspaceInputAttentionChatId = "";
+    let workspaceDisplayedChatId = "";
     let hasDisplayedAgentChat = false;
     let nextAgentTaskSequence = 1;
     let nextSyntheticActivitySequence = 1;
@@ -182,6 +184,7 @@
       host: userInputHost,
       respond: async (event, answers, declined) => {
         await deps.bridge?.respondUserInput?.(event.interactionId, answers, declined);
+        clearWorkspaceChatInputAttention();
         event.response = { answers, declined, respondedAt: new Date().toISOString() };
         if (activeAgentEntry) {
           activeAgentEntry.record.updatedAt = event.response.respondedAt;
@@ -771,9 +774,16 @@
     }
 
     function reviewApprovalChanges(event = {}, actionLabel = "Agent action") {
-      const analysis = getApprovalActionAnalysis(event);
-      if (event.compare && analysis.operation !== "no-op" && event.compare.changed !== false && openActivityCompare(event.compare)) return;
       showApprovalDetailsModal(event, actionLabel);
+    }
+
+    /** Return whether an approval contains a meaningful text comparison the diff editor can open. */
+    function canOpenApprovalCompare(event = {}) {
+      const analysis = getApprovalActionAnalysis(event);
+      return !!event.compare
+        && analysis.operation !== "no-op"
+        && event.compare.changed !== false
+        && typeof deps.openFileCompareInTab === "function";
     }
 
     function normalizeTaskChangeText(value) {
@@ -922,8 +932,17 @@
           continue;
         }
         if (["created", "modified"].includes(action) && filePath) {
-          const normalized = normalizeTaskChangedFile({ path: filePath, action });
-          if (normalized && !files.some((file) => file.path === normalized.path)) files.push(normalized);
+          const normalized = normalizeTaskChangedFile({
+            path: filePath,
+            action,
+            additions: result.additions,
+            deletions: result.deletions
+          });
+          const existing = normalized ? files.find((file) => file.path === normalized.path) : null;
+          if (existing) {
+            existing.additions += normalized.additions;
+            existing.deletions += normalized.deletions;
+          } else if (normalized) files.push(normalized);
         } else if (["tool-error", "tool-failed"].includes(event?.type) && filePath) {
           const normalized = normalizeTaskAttemptedFile({ path: filePath, tool, reason: event.error || event.summary || "Mutation failed." });
           if (normalized) attempted.push(normalized);
@@ -975,21 +994,16 @@
     function appendTaskChangeDelta(parent, file = {}) {
       const additions = Number(file.additions) || 0;
       const deletions = Number(file.deletions) || 0;
-      if (!additions && !deletions) return;
+      if (file.action === "attempted" && !additions && !deletions) return;
       const delta = document.createElement("span");
       delta.className = "ai-companion-workspace-change-delta";
-      if (additions) {
-        const added = document.createElement("span");
-        added.className = "ai-companion-workspace-change-added";
-        added.textContent = `+${additions}`;
-        delta.appendChild(added);
-      }
-      if (deletions) {
-        const removed = document.createElement("span");
-        removed.className = "ai-companion-workspace-change-removed";
-        removed.textContent = `-${deletions}`;
-        delta.appendChild(removed);
-      }
+      const added = document.createElement("span");
+      added.className = "ai-companion-workspace-change-added";
+      added.textContent = `+${additions}`;
+      const removed = document.createElement("span");
+      removed.className = "ai-companion-workspace-change-removed";
+      removed.textContent = `-${deletions}`;
+      delta.append(added, removed);
       parent.appendChild(delta);
     }
 
@@ -997,18 +1011,13 @@
       const rawPath = String(path || "").trim();
       if (!rawPath) return "file";
       const normalizedRawPath = rawPath.replace(/\\/g, "/");
-      const compactPath = (value) => {
-        const parts = String(value || "").split("/").filter(Boolean);
-        return parts.length > 4 ? `\u2026/${parts.slice(-3).join("/")}` : value;
-      };
-      if (!isAbsoluteLocalPath(rawPath)) return compactPath(normalizedRawPath.replace(/^\.\//, ""));
+      if (!isAbsoluteLocalPath(rawPath)) return normalizedRawPath.replace(/^\.\//, "");
       const fullPath = normalizeLocalPathForComparison(rawPath);
       const workspaceRoot = normalizeLocalPathForComparison(deps.getWorkspaceRoot?.() || "");
       if (workspaceRoot && fullPath.toLowerCase().startsWith(`${workspaceRoot.toLowerCase()}/`)) {
-        return compactPath(fullPath.slice(workspaceRoot.length + 1));
+        return fullPath.slice(workspaceRoot.length + 1);
       }
-      const parts = normalizedRawPath.split("/").filter(Boolean);
-      return parts.length > 3 ? `\u2026/${parts.slice(-3).join("/")}` : normalizedRawPath;
+      return normalizedRawPath;
     }
 
     function getTaskChangeStatus(action) {
@@ -1152,7 +1161,7 @@
       label.className = "ai-companion-workspace-change-count";
       label.textContent = `• ${changes.totalFiles} ${changes.totalFiles === 1 ? "file" : "files"}`;
       taskChangesSummary.appendChild(label);
-      appendTaskChangeDelta(taskChangesSummary, changes);
+      if (changes.totalFiles) appendTaskChangeDelta(taskChangesSummary, changes);
       if (changes.attemptedFiles) {
         const attempted = document.createElement("span");
         attempted.className = "ai-companion-workspace-change-attempted";
@@ -1492,6 +1501,32 @@
       parent.append(indicator);
     }
 
+    /** Mark the active running chat as needing a user response. */
+    function showWorkspaceChatInputAttention() {
+      const chatId = isAgentRunning() ? String(activeAgentChat?.id || "") : "";
+      if (!chatId) return;
+      workspaceInputAttentionChatId = chatId;
+      renderWorkspaceChatHistory(workspaceChatIndexes);
+    }
+
+    /** Clear the input-attention marker after the user opens or answers the chat. */
+    function clearWorkspaceChatInputAttention(chatId = activeAgentChat?.id) {
+      if (!chatId || String(chatId) !== workspaceInputAttentionChatId) return;
+      workspaceInputAttentionChatId = "";
+      renderWorkspaceChatHistory(workspaceChatIndexes);
+    }
+
+    function appendWorkspaceChatInputAttention(parent) {
+      const attention = document.createElement("span");
+      attention.className = "ai-companion-workspace-chat-input-attention";
+      attention.setAttribute("role", "status");
+      attention.setAttribute("aria-label", "Need input");
+      const label = document.createElement("span");
+      label.textContent = "need input";
+      attention.append(label);
+      parent.append(attention);
+    }
+
     function createWorkspaceChatRow(chat = {}) {
       const row = document.createElement("div");
       row.className = "ai-companion-workspace-chat-item";
@@ -1500,7 +1535,8 @@
       row.setAttribute("role", "button");
       row.tabIndex = 0;
       const isRunningChat = isAgentRunning() && !!chat.id && chat.id === activeAgentChat?.id;
-      row.classList.toggle("active", !!chat.id && chat.id === activeAgentChat?.id);
+      const selectedChatId = workspaceDisplayedChatId || activeAgentChat?.id || "";
+      row.classList.toggle("active", !!chat.id && chat.id === selectedChatId);
       row.classList.toggle("running", isRunningChat);
       row.title = formatChatUpdatedTooltip(chat);
       const chatMode = getChatMode(chat);
@@ -1534,6 +1570,9 @@
       mode.classList?.add?.("ai-companion-workspace-chat-mode", `mode-${chatMode}`);
       mode.textContent = getCompactModeLabel(chatMode);
       meta.append(mode, separator, time);
+      if (isRunningChat && chat.id !== selectedChatId && workspaceInputAttentionChatId === String(chat.id || "")) {
+        appendWorkspaceChatInputAttention(meta);
+      }
       body.append(title, meta);
       const chatStatus = getWorkspaceChatStatus(chat, isRunningChat);
       const status = document.createElement("span");
@@ -1572,6 +1611,7 @@
           return;
         }
         if (event.target?.closest?.(".ai-companion-chat-actions")) return;
+        clearWorkspaceChatInputAttention(chat.id);
         if (isAgentRunning()) {
           if (workspaceOpen) {
             void viewSavedChatInWorkspaceDuringRun(chat);
@@ -5198,7 +5238,18 @@
       closeButton.className = "ai-companion-approval-modal-close";
       closeButton.textContent = "Close";
       closeButton.setAttribute("aria-label", "Close approval details");
-      header.append(title, closeButton);
+      const headerActions = document.createElement("div");
+      headerActions.className = "ai-companion-approval-modal-actions";
+      const diffButton = canOpenApprovalCompare(event) ? document.createElement("button") : null;
+      if (diffButton) {
+        diffButton.type = "button";
+        diffButton.className = "ai-companion-approval-modal-diff";
+        diffButton.textContent = "Open diff";
+        diffButton.setAttribute("aria-label", "Open proposed file changes in the diff editor");
+        headerActions.appendChild(diffButton);
+      }
+      headerActions.appendChild(closeButton);
+      header.append(title, headerActions);
       const body = document.createElement("div");
       body.className = "ai-companion-approval-modal-body";
       const addSection = (label, value) => {
@@ -5250,6 +5301,9 @@
         if (keyboardEvent.key === "Escape") close();
       };
       closeButton.addEventListener("click", close);
+      diffButton?.addEventListener("click", () => {
+        if (openActivityCompare(event.compare)) close();
+      });
       overlay.addEventListener("click", (clickEvent) => {
         if (clickEvent.target === overlay) close();
       });
@@ -6206,6 +6260,7 @@
       agentEntries = [];
       agentTaskIndex = [];
       activeAgentChat = null;
+      workspaceDisplayedChatId = "";
       nextAgentTaskSequence = 1;
       resetSyntheticActivityState();
       activeAgentEntry = null;
@@ -6762,6 +6817,7 @@
 
     async function loadChatIntoPanel(chatIndex) {
       if (!chatIndex?.id) return;
+      workspaceDisplayedChatId = chatIndex.id;
       agentEntries = [];
       agentTaskIndex = [...(chatIndex.tasks || [])].sort(compareAgentTaskIndexItems);
       activeAgentChat = { ...chatIndex };
@@ -6791,8 +6847,27 @@
       renderWorkspaceInspectorPanels();
     }
 
+    /** Restore the detached live task elements when returning to the running chat. */
+    function showActiveRunningChatInWorkspace(chatIndex) {
+      workspaceDisplayedChatId = chatIndex.id;
+      clearToolLog();
+      agentEntries.forEach((entry) => {
+        if (entry?.element) toolLog.appendChild(entry.element);
+      });
+      scrollToolLogToEnd();
+      renderWorkspaceInspectorPanels();
+      if (workspaceChatTitle) workspaceChatTitle.textContent = getChatDisplayName(chatIndex);
+      renderWorkspaceChatHistory(workspaceChatIndexes);
+      updateAgentRunButton();
+    }
+
     async function viewSavedChatInWorkspaceDuringRun(chatIndex) {
       if (!chatIndex?.id) return;
+      if (chatIndex.id === activeAgentChat?.id) {
+        showActiveRunningChatInWorkspace(chatIndex);
+        return;
+      }
+      workspaceDisplayedChatId = chatIndex.id;
       const runningState = {
         activeAgentChat,
         agentTaskIndex,
@@ -7009,6 +7084,7 @@
     function appendUserInput(event) {
       const savedEvent = recordAgentEvent(event) || event;
       userInputInteraction?.show?.(savedEvent);
+      showWorkspaceChatInputAttention();
       if (activeAgentEntry) void saveAgentEntryImmediately(activeAgentEntry);
     }
 
@@ -7025,6 +7101,7 @@
         },
         onRespond: async (decision, instructions, response, grantOptionId) => {
           await deps.bridge.respondApproval?.(event.approvalId, decision, instructions, grantOptionId);
+          clearWorkspaceChatInputAttention();
           if (savedEvent) savedEvent.response = response;
           event.response = response;
           attachApprovalCopyAction(row, savedEvent || event);
@@ -7038,6 +7115,7 @@
       if (activeActivityRenderer?.appendExternalActivity) activeActivityRenderer.appendExternalActivity(row);
       else toolLog.appendChild(row);
       savedEvent = recordAgentEvent(event);
+      if (!event.autoApproved) showWorkspaceChatInputAttention();
       if (activeAgentEntry) void saveAgentEntryImmediately(activeAgentEntry);
       attachApprovalCopyAction(row, savedEvent || event);
       scrollToolLogToEnd();
@@ -7792,6 +7870,8 @@
       }
       activeActivityRenderer = activeAgentEntry.renderer;
       activeAgentEntry.record.mode = mode;
+      await saveAgentEntry(activeAgentEntry);
+      await refreshChatSelectOptions();
       resetSyntheticActivityState();
       streamingChatResponse = null;
       chatResponseRecorded = false;
@@ -7846,6 +7926,7 @@
       activeRequest = request;
       let runOutcome = { status: "running", entryId: activeAgentEntry?.record?.id || "" };
       updateAgentRunButton();
+      renderWorkspaceChatHistory(workspaceChatIndexes);
       try {
         const result = await request;
         if (mode === "plan" && result?.plan?.path && activeAgentEntry) {
@@ -7889,6 +7970,7 @@
       } finally {
         hideThinkingIndicator();
         userInputInteraction?.clear?.();
+        workspaceInputAttentionChatId = "";
         if (activeAgentEntry) await saveAgentEntry(activeAgentEntry);
         void refreshChatSelectOptions();
         if (activeRequest === request) activeRequest = null;
@@ -7941,6 +8023,7 @@
       agentEntries = [];
       agentTaskIndex = [];
       activeAgentChat = null;
+      workspaceDisplayedChatId = "";
       nextAgentTaskSequence = 1;
       resetSyntheticActivityState();
       activeAgentEntry = null;

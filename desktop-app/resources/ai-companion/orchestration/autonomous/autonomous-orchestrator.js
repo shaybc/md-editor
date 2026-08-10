@@ -35,6 +35,8 @@ const { ContinuityRecord } = require("./continuity/continuity-record");
 const { WindowSteward } = require("./context/window-steward");
 const { ObservationLedger } = require("./context/observation-ledger");
 const { ContextReleaseReminder } = require("./context/context-release-reminder");
+const { WorkflowModeReminder } = require("./context/workflow-mode-reminder");
+const { WorkTrackingReminder } = require("./work/work-tracking-reminder");
 const { RunChronicle } = require("./recovery/run-chronicle");
 const { RestartReconciler } = require("./recovery/restart-reconciler");
 const { PlanRepositorySession } = require("./plan-repository-session");
@@ -225,6 +227,10 @@ class AutonomousOrchestrator {
       observationLedger.restore(restored?.observationRelease?.ledger);
       const contextReleaseReminder = new ContextReleaseReminder(journaledEvents.emit);
       contextReleaseReminder.restore(restored?.observationRelease?.reminder);
+      const workTrackingReminder = new WorkTrackingReminder(journaledEvents.emit);
+      workTrackingReminder.restore(restored?.reminderState?.workTracking);
+      const workflowModeReminder = new WorkflowModeReminder(journaledEvents.emit);
+      workflowModeReminder.restore(restored?.reminderState?.workflowMode);
       const windowSteward = new WindowSteward(request, renewalRoute.provider, artifactVault, journaledEvents.emit, observationLedger, { providerLimits: renewalRoute.limits });
       windowSteward.restore(restored?.windowState);
 
@@ -233,7 +239,7 @@ class AutonomousOrchestrator {
         applicationActions, extensionCommands, extensionToolDispatcher, executeExtensionDelegate: executeTool,
         skillCatalog, skillInvocation, scheduler,
         instructions, recalledContinuity, recalledMemory, fingerprints, chronicle, artifactVault, continuity, windowSteward,
-        observationLedger, contextReleaseReminder,
+        observationLedger, contextReleaseReminder, workTrackingReminder, workflowModeReminder,
         loadedExtensions: new Set(restored?.loadedExtensions || []),
         loadedExtensionBodies: new Map(Array.isArray(restored?.loadedExtensionBodies) ? restored.loadedExtensionBodies : []),
         work, planRepository, memoryRepository, memoryProposals, permissionPolicy, denialLedger, riskAdvisor, pathAuthority, runSummary,
@@ -372,6 +378,10 @@ class AutonomousOrchestrator {
             reminder: contextReleaseReminder.snapshot()
           },
           ruleState: ruleCatalog.snapshot(),
+          reminderState: {
+            workTracking: workTrackingReminder.snapshot(),
+            workflowMode: workflowModeReminder.snapshot()
+          },
           skillState: { catalog: skillCatalog.snapshot(), invocation: skillInvocation.snapshot() },
           scheduleState: scheduler.snapshot(),
           lifecycleAutomation: { ...hooks.snapshot(), observer: lifecycleObserver?.snapshot?.() || { version: 1, watchPaths: [] } },
@@ -520,7 +530,7 @@ function shouldJournalEvent(type) {
   if (/^(user-input|internet|page|notebook|workspace-structure)-/.test(String(type || ""))) return true;
   if (["slash-workflow-expanded", "skill-invocation-failed"].includes(type)) return true;
   return ["artifact-stored", "context-thinned", "observation-released", "observation-release-reminder", "tool-catalog-updated", "tool-schema-activated", "tool-schema-restored", "tool-schema-unavailable", "rules-discovered", "rule-activated", "rule-unavailable", "rules-refreshed", "skills-discovered", "skill-invocation-started", "skill-invocation-completed", "skill-unavailable", "skills-changed", "schedule-created", "schedule-cancelled", "schedule-fired", "continuity-updated", "compaction", "recovery-warning", "plan-saved", "plan-updated", "permission-mode-changed", "tool-denied", "denial-guard-tripped"].includes(type)
-    || /^(work|worker)-/.test(String(type || ""));
+    || /^(work|worker|workflow)-/.test(String(type || ""));
 }
 
 module.exports = { AutonomousOrchestrator, buildRenewalAnchors, createJournaledEvents, fingerprint, refreshLoadedExtensions, shouldJournalEvent };

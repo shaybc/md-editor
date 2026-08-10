@@ -16477,13 +16477,25 @@ button.ai-companion-context-file-row.openable:focus-visible {
   line-height: 1.35;
 }
 
-.ai-companion-approval-modal-close {
+.ai-companion-approval-modal-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ai-companion-approval-modal-close,
+.ai-companion-approval-modal-diff {
   border: 1px solid var(--border-color);
   border-radius: 5px;
   background: var(--button-bg);
   color: inherit;
   font-size: 12px;
   padding: 4px 10px;
+}
+
+.ai-companion-approval-modal-diff {
+  border-color: color-mix(in srgb, var(--accent-color) 68%, var(--border-color));
+  background: color-mix(in srgb, var(--accent-color) 18%, var(--button-bg));
 }
 
 .ai-companion-approval-modal-body {
@@ -19216,6 +19228,47 @@ body.ai-companion-workspace-resizing .ai-companion-workspace-resizer::after {
   font-size: 12px;
 }
 
+.ai-companion-workspace-chat-input-attention {
+  position: relative;
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  min-height: 18px;
+  margin-left: auto;
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, #38bdf8 72%, transparent);
+  border-radius: 999px;
+  padding: 0 7px;
+  background: color-mix(in srgb, #38bdf8 10%, transparent);
+  color: #7dd3fc;
+  font-size: 11px;
+  line-height: 1;
+}
+
+.ai-companion-workspace-chat-input-attention::before {
+  position: absolute;
+  inset: 0;
+  background: color-mix(in srgb, #38bdf8 34%, transparent);
+  clip-path: inset(0 100% 0 0);
+  content: "";
+  animation: ai-companion-input-attention-fill 2.4s ease-in-out infinite;
+}
+
+.ai-companion-workspace-chat-input-attention > span {
+  position: relative;
+  z-index: 1;
+}
+
+[data-theme="light"] .ai-companion-workspace-chat-input-attention {
+  color: #0369a1;
+}
+
+@keyframes ai-companion-input-attention-fill {
+  0% { clip-path: inset(0 100% 0 0); }
+  45%, 55% { clip-path: inset(0 0 0 0); }
+  100% { clip-path: inset(0 0 0 100%); }
+}
+
 .ai-companion-workspace-chat-time,
 .ai-companion-workspace-chat-meta-separator,
 .ai-companion-workspace-summary-value,
@@ -19280,6 +19333,26 @@ body.ai-companion-workspace-resizing .ai-companion-workspace-resizer::after {
 .ai-companion-workspace-chat-status-dot.status-planned { background: #a855f7; }
 .ai-companion-workspace-chat-status-dot.status-running,
 .ai-companion-workspace-chat-status-dot.status-ready { background: #38bdf8; }
+
+.ai-companion-workspace-chat-item.running .ai-companion-workspace-chat-running-indicator {
+  width: 12px;
+  height: 12px;
+  border: 2px solid color-mix(in srgb, var(--accent-color) 22%, transparent);
+  border-top-color: var(--accent-color);
+  background: transparent;
+  animation: workspace-search-spin 0.75s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ai-companion-workspace-chat-item.running .ai-companion-workspace-chat-running-indicator,
+  .ai-companion-workspace-chat-input-attention::before {
+    animation: none;
+  }
+
+  .ai-companion-workspace-chat-input-attention::before {
+    clip-path: inset(0 50% 0 0);
+  }
+}
 
 .ai-companion-workspace-load-more {
   width: calc(100% - 8px);

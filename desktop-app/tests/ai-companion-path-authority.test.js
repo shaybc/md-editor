@@ -69,11 +69,13 @@ test("Desktop and Documents suffixes resolve through platform-aware known folder
 
 test("write_file reports created, unchanged, and modified from disk state", async () => {
   const workspace = await fs.mkdtemp(path.join(os.tmpdir(), "md-editor-write-action-"));
-  const created = await workspaceTools.writeFile(workspace, "result.txt", "one", { allowWrites: true });
-  const unchanged = await workspaceTools.writeFile(workspace, "result.txt", "one", { allowWrites: true });
-  const modified = await workspaceTools.writeFile(workspace, "result.txt", "two", { allowWrites: true });
+  const created = await workspaceTools.writeFile(workspace, "result.txt", "one\ntwo\n", { allowWrites: true });
+  const unchanged = await workspaceTools.writeFile(workspace, "result.txt", "one\ntwo\n", { allowWrites: true });
+  const modified = await workspaceTools.writeFile(workspace, "result.txt", "one\nthree\nfour\n", { allowWrites: true });
   assert.deepEqual([created.action, unchanged.action, modified.action], ["created", "unchanged", "modified"]);
   assert.deepEqual([created.changed, unchanged.changed, modified.changed], [true, false, true]);
+  assert.deepEqual([created.additions, created.deletions], [2, 0]);
+  assert.deepEqual([modified.additions, modified.deletions], [2, 1]);
 });
 
 test("run summaries restore mutation evidence and publish exactly once", () => {
@@ -86,6 +88,18 @@ test("run summaries restore mutation evidence and publish exactly once", () => {
   assert.equal(events[0].status, "failure");
   assert.equal(events[0].changedFiles[0].path, "saved.txt");
   assert.equal(events[0].blockedChanges[0].items[0].path, "denied.txt");
+});
+
+test("run summaries aggregate line changes for each changed file", () => {
+  const ledger = new RunSummary("agent");
+  ledger.recordToolCompleted("apply_edit", { path: "src/app.js" }, { action: "modified", additions: 2, deletions: 1 });
+  ledger.recordToolCompleted("apply_edit", { path: "src/app.js" }, { action: "modified", additions: 3, deletions: 4 });
+  const events = [];
+  ledger.publish((event) => events.push(event), { status: "success", outcome: "Done." });
+  assert.deepEqual(
+    [events[0].changedFiles[0].additions, events[0].changedFiles[0].deletions],
+    [5, 5]
+  );
 });
 
   const internalFailure = new RunSummary("agent");

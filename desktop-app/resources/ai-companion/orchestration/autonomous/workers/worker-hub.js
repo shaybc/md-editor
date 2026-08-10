@@ -10,6 +10,8 @@ const { CapabilityCatalog } = require("../capabilities/capability-catalog");
 const { WindowSteward } = require("../context/window-steward");
 const { ObservationLedger } = require("../context/observation-ledger");
 const { ContextReleaseReminder } = require("../context/context-release-reminder");
+const { WorkflowModeReminder } = require("../context/workflow-mode-reminder");
+const { WorkTrackingReminder } = require("../work/work-tracking-reminder");
 const { finishWorkerWorkspace, prepareWorkerWorkspace } = require("./worker-workspace");
 const { getRunIdentity } = require("../work/run-identity");
 const { buildRuleActivationMessage, buildSkillActivationMessage } = require("../context-builder");
@@ -300,6 +302,10 @@ class WorkerHub {
       observationLedger.refresh(entry.messages);
       const contextReleaseReminder = new ContextReleaseReminder(workerEvents.emit);
       contextReleaseReminder.restore(entry.observationRelease?.reminder);
+      const workTrackingReminder = new WorkTrackingReminder(workerEvents.emit);
+      workTrackingReminder.restore(entry.reminderState?.workTracking);
+      const workflowModeReminder = new WorkflowModeReminder(workerEvents.emit);
+      workflowModeReminder.restore(entry.reminderState?.workflowMode);
       const renewalAccess = this.parentContext.routeSession?.accessForPurpose("renewal", { requiredDataScopes: ["workspace"], reason: `worker ${entry.id} context renewal` }) || null;
       const windowSteward = new WindowSteward(workerRequest, renewalAccess?.provider || provider, this.parentContext.artifactVault, workerEvents.emit, observationLedger, { providerLimits: renewalAccess?.limits || null });
       const internetResearch = new InternetResearchService(workerRequest, {
@@ -334,12 +340,13 @@ class WorkerHub {
         continuity: null,
         windowSteward,
         observationLedger,
-        contextReleaseReminder,
+        contextReleaseReminder, workTrackingReminder, workflowModeReminder,
         messages: entry.messages,
         pendingTools: [],
         saveSnapshot: async () => {
           entry.observationRelease = { ledger: observationLedger.snapshot(), reminder: contextReleaseReminder.snapshot() };
           entry.toolSchemaState = capabilities.snapshot();
+          entry.reminderState = { workTracking: workTrackingReminder.snapshot(), workflowMode: workflowModeReminder.snapshot() };
           entry.ruleState = ruleCatalog.snapshot();
           entry.skillState = { catalog: skillCatalog.snapshot(), invocation: skillInvocation.snapshot() };
           this.persistChange();
@@ -436,6 +443,7 @@ function privateEntry(entry) {
     messages: JSON.parse(JSON.stringify(entry.messages || [])),
     observationRelease: JSON.parse(JSON.stringify(entry.observationRelease || {})),
     toolSchemaState: JSON.parse(JSON.stringify(entry.toolSchemaState || {})),
+    reminderState: JSON.parse(JSON.stringify(entry.reminderState || {})),
     ruleState: JSON.parse(JSON.stringify(entry.ruleState || {})),
     skillState: JSON.parse(JSON.stringify(entry.skillState || {})),
     agentFingerprint: entry.agent ? JSON.stringify({ id: entry.agent.id, metadata: entry.agent.metadata, body: entry.agent.body }) : "",
@@ -461,6 +469,7 @@ function restoredEntry(snapshot, agent, authority, status) {
     messages: Array.isArray(snapshot.messages) ? JSON.parse(JSON.stringify(snapshot.messages)) : [],
     observationRelease: snapshot.observationRelease ? JSON.parse(JSON.stringify(snapshot.observationRelease)) : {},
     toolSchemaState: snapshot.toolSchemaState ? JSON.parse(JSON.stringify(snapshot.toolSchemaState)) : {},
+    reminderState: snapshot.reminderState ? JSON.parse(JSON.stringify(snapshot.reminderState)) : {},
     ruleState: snapshot.ruleState ? JSON.parse(JSON.stringify(snapshot.ruleState)) : {},
     skillState: snapshot.skillState ? JSON.parse(JSON.stringify(snapshot.skillState)) : {},
     result: String(snapshot.result || ""),

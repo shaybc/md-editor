@@ -23,7 +23,13 @@ class RunSummary {
     }
     const action = String(result.action || (result.changed === true ? "modified" : "unchanged"));
     if (!["created", "modified"].includes(action)) return;
-    upsertFile(this.changedFiles, { path: target, action, description: action === "created" ? "Created file." : "Modified file." });
+    upsertFile(this.changedFiles, {
+      path: target,
+      action,
+      description: action === "created" ? "Created file." : "Modified file.",
+      additions: Number(result.additions) || 0,
+      deletions: Number(result.deletions) || 0
+    });
   }
 
   /** Record an unsuccessful mutation tool without claiming that a file changed. */
@@ -77,7 +83,11 @@ function getTerminalResponse(details, changedFiles) {
 }
 function upsertFile(files, entry) {
   const existing = files.find((candidate) => candidate.path === entry.path);
-  if (existing) Object.assign(existing, entry);
+  if (existing) {
+    const additions = (Number(existing.additions) || 0) + (Number(entry.additions) || 0);
+    const deletions = (Number(existing.deletions) || 0) + (Number(entry.deletions) || 0);
+    Object.assign(existing, entry, { additions, deletions });
+  }
   else files.push(entry);
 }
 
