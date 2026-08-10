@@ -68,6 +68,7 @@
         ? registry.normalizeThemeSelections(source.themeSelections, customThemes)
         : Object.assign({}, registry?.DEFAULT_SELECTIONS || { light: "default-light", dark: "default-dark" }, source.themeSelections || {});
       return Object.assign({}, source, {
+        theme: normalizeThemePreference(source.theme) || getDefaultThemePreference(),
         customThemes: customThemes,
         themeSelections: themeSelections,
       });

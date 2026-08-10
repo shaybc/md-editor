@@ -121,8 +121,11 @@ async function runAutonomousLoop(input) {
       const name = String(call?.function?.name || "tool");
       events.emit({ type: EVENT_TYPES.TOOL_STARTED, tool: name, callId: call.id, round });
       await context.chronicle?.append?.("tool-started", { round, tool: name, callId: call.id });
+      let effectiveCall = call;
+      let effectiveInput = {};
       try {
         const originalInput = parseToolArguments(call);
+        effectiveInput = originalInput;
         const beforeTool = await context.hooks?.run("before-tool", { tool: name, call, input: originalInput });
         for (const additionalContext of beforeTool?.additionalContext || []) messages.push({ role: "system", content: `Tool lifecycle context:\n${additionalContext}` });
         if (beforeTool?.continue === false || beforeTool?.permissionDecision === "deny") {
@@ -133,21 +136,23 @@ async function runAutonomousLoop(input) {
           error.doNotRetry = true;
           throw error;
         }
-        const effectiveCall = withToolInput(call, beforeTool?.updatedInput);
+        effectiveCall = withToolInput(call, beforeTool?.updatedInput);
+        effectiveInput = parseToolArguments(effectiveCall);
         const registration = context.capabilities?.registration?.(name);
         if (effectiveCall !== call) {
-          validateToolInput(registration?.definition?.function?.parameters, parseToolArguments(effectiveCall));
-          await context.chronicle?.append?.("tool-input-rewritten", { round, tool: name, callId: call.id, originalInput, effectiveInput: parseToolArguments(effectiveCall) });
+          validateToolInput(registration?.definition?.function?.parameters, effectiveInput);
+          await context.chronicle?.append?.("tool-input-rewritten", { round, tool: name, callId: call.id, originalInput, effectiveInput });
           events.emit({ type: "hook-input-rewritten", boundary: "before-tool", tool: name, callId: call.id, summary: "Lifecycle automation narrowed or changed tool input before validation and approval." });
         }
-        await context.rulePathObserver?.beforeTool?.(name, parseToolArguments(effectiveCall), registration);
-        await context.skillPathObserver?.beforeTool?.(name, parseToolArguments(effectiveCall), registration);
+        await context.rulePathObserver?.beforeTool?.(name, effectiveInput, registration);
+        await context.skillPathObserver?.beforeTool?.(name, effectiveInput, registration);
         const result = await executeTool(effectiveCall, context);
-        await context.rulePathObserver?.afterTool?.(name, parseToolArguments(effectiveCall), result, registration);
+        context.runSummary?.recordToolCompleted(name, effectiveInput, result);
+        await context.rulePathObserver?.afterTool?.(name, effectiveInput, result, registration);
         await context.skillPathObserver?.afterTool?.(name, result, registration);
         consecutiveFailures = 0;
         events.emit({ type: EVENT_TYPES.TOOL_COMPLETED, tool: name, callId: call.id, result });
-        const afterTool = await context.hooks?.run("after-tool", { tool: name, call: effectiveCall, input: parseToolArguments(effectiveCall), result });
+        const afterTool = await context.hooks?.run("after-tool", { tool: name, call: effectiveCall, input: effectiveInput, result });
         let effectiveResult = afterTool?.updatedOutput === undefined ? result : afterTool.updatedOutput;
         if (afterTool?.updatedOutput !== undefined || afterTool?.suppressOutput === true) {
           const raw = typeof result === "string" ? result : JSON.stringify(result);
@@ -162,6 +167,7 @@ async function runAutonomousLoop(input) {
         context.observationLedger?.register?.(toolMessage, { tool: name, callId: call.id, round });
         return toolMessage;
       } catch (error) {
+        context.runSummary?.recordToolFailed(name, effectiveInput, error);
         if (error?.code === "LIFECYCLE_RUN_STOPPED") throw error;
         consecutiveFailures += 1;
         const message = error?.message || String(error);
@@ -182,6 +188,7 @@ async function runAutonomousLoop(input) {
     messages.push(...results);
     context.observationLedger?.refresh?.(messages, { currentRound: round });
     context.pendingTools = [];
+    await context.interactionGate?.acknowledgeToolResults?.(results);
     context.continuity?.scheduleUpdate?.(messages, { reportedTokens: context.windowSteward.reportedTokens });
     await context.saveSnapshot?.("running", { round, boundary: "after-tools" });
     if (consecutiveFailures >= 3) messages.push({ role: "system", content: "Tool attempts failed repeatedly. Change strategy or explain the blocker; do not repeat an unchanged call." });

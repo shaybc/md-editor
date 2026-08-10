@@ -709,6 +709,7 @@ function createPanelHarness(options = {}) {
   vm.createContext(context);
   vm.runInContext(fs.readFileSync(path.join(webRoot, "js", "ai-companion", "copy-actions.js"), "utf8"), context);
   vm.runInContext(fs.readFileSync(path.join(webRoot, "js", "ai-companion", "rate-limit-wait-countdown.js"), "utf8"), context);
+  vm.runInContext(fs.readFileSync(path.join(webRoot, "js", "ai-companion", "user-input-interaction.js"), "utf8"), context);
   vm.runInContext(fs.readFileSync(path.join(webRoot, "js", "ai-companion", "panel.js"), "utf8"), context);
 
   const api = context.registerMarkdownViewerAiCompanionPanel(app, {
@@ -1935,7 +1936,7 @@ test("AI Companion updates an agent chat title before the agent summary complete
   await new Promise((resolve) => setTimeout(resolve, 20));
 });
 
-test("AI Companion user questions render outside approvals and submit structured answers", async () => {
+test("AI Companion shows pending questions above the composer and collapses answered free text into history", async () => {
   const responses = [];
   let finishQuestion;
   const answered = new Promise((resolve) => { finishQuestion = resolve; });
@@ -1949,20 +1950,22 @@ test("AI Companion user questions render outside approvals and submit structured
     }),
     bridge: {
       agent: async (_payload, handleEvent) => {
-        handleEvent({
+        const questionEvent = {
           type: "user-input",
           interactionId: "decision-card",
-          reason: "Choose the output format.",
+          reason: "test-folders.txt will be created in this directory.",
           questions: [{
-            question: "Which format?",
+            question: "Which project root should be used?",
             options: [
-              { label: "Markdown", description: "Save as Markdown." },
-              { label: "HTML", description: "Save as HTML." }
+              { label: "C:\\GitHub\\shaybc\\md-editor\\desktop-app", description: "Use the desktop app directory." },
+              { label: "C:\\GitHub\\shaybc\\md-editor", description: "Use the repository root." }
             ],
             multiSelect: false,
             allowFreeText: true
           }]
-        });
+        };
+        handleEvent(questionEvent);
+        handleEvent({ ...questionEvent, restored: true });
         await answered;
         return { content: "Decision received." };
       },
@@ -1979,23 +1982,40 @@ test("AI Companion user questions render outside approvals and submit structured
   harness.agentRunButton.click();
   await new Promise((resolve) => setTimeout(resolve, 20));
 
-  const card = harness.toolLog.querySelector(".ai-companion-user-input");
+  const interactionHost = harness.agentView.querySelector(".ai-companion-user-input-host");
+  const card = interactionHost.querySelector(".ai-companion-user-input");
   assert.ok(card);
+  assert.equal(interactionHost.nextElementSibling, harness.agentComposer);
+  assert.equal(interactionHost.hidden, false);
+  assert.match(card.textContent, /Input required/);
+  assert.equal(harness.toolLog.querySelector(".ai-companion-user-input"), null);
   assert.equal(harness.toolLog.querySelector(".ai-companion-approval"), null);
-  const choices = card.querySelectorAll("input");
-  const html = choices.find((input) => input.value === "HTML");
-  choices.filter((input) => input.type === "radio").forEach((input) => { input.checked = false; });
-  html.checked = true;
-  card.querySelector("form").dispatchEvent({ type: "submit", preventDefault() {} });
+  const choices = card.querySelectorAll("input").filter((input) => input.type === "radio");
+  assert.equal(choices[0].focused, true);
+  const customChoice = choices.find((input) => input.value === "Enter another path...");
+  const freeText = card.querySelector(".ai-companion-user-input-free-text");
+  const continueButton = card.querySelector(".ai-companion-user-input-primary");
+  assert.equal(freeText.hidden, true);
+  choices.forEach((input) => { input.checked = false; });
+  customChoice.checked = true;
+  customChoice.dispatchEvent("change");
+  assert.equal(freeText.hidden, false);
+  assert.equal(freeText.focused, true);
+  assert.equal(continueButton.disabled, true);
+  freeText.value = "C:\\Users\\shayg\\Downloads";
+  freeText.dispatchEvent("input");
+  assert.equal(continueButton.disabled, false);
+  continueButton.click();
   await new Promise((resolve) => setTimeout(resolve, 20));
 
   assert.deepEqual(plain(responses), [{
     interactionId: "decision-card",
-    answers: { "Which format?": "HTML" },
+    answers: { "Which project root should be used?": "C:\\Users\\shayg\\Downloads" },
     declined: false
   }]);
-  assert.equal(card.classList.contains("resolved"), true);
-  assert.match(card.textContent, /Answer submitted/);
+  assert.equal(interactionHost.hidden, true);
+  assert.match(harness.toolLog.textContent, /Asked Which project root should be used\?.*C:\\Users\\shayg\\Downloads/);
+  assert.equal(harness.toolLog.querySelectorAll(".ai-companion-user-input-history").length, 1);
 });
 
 test("AI Companion approval events render highlighted action cards", async () => {
@@ -2784,6 +2804,65 @@ test("AI Companion response open tab exits workspace to Files view", async () =>
   output.querySelector(".ai-companion-box-open-tab").click();
 
   assert.equal(openedTabs.length, 1);
+  assert.equal(workspaceSearch.activeView, "files");
+  assert.deepEqual(workspaceSearch.calls, ["files"]);
+  assert.equal(harness.document.body.classList.contains("ai-companion-workspace-open"), false);
+});
+test("AI Companion summary file links exit workspace and reveal the opened editor tab", async () => {
+  const openedDocuments = [];
+  let api = null;
+  const workspaceSearch = {
+    activeView: "ai-companion",
+    calls: [],
+    getActiveSidebarView() { return this.activeView; },
+    setSidebarView(view) {
+      this.activeView = view;
+      this.calls.push(view);
+      api?.closeWorkspaceForExternalNavigation?.();
+    }
+  };
+  const harness = createPanelHarness({
+    modules: { workspaceSearch },
+    workspaceRoot: "C:\\GitHub\\shaybc\\md-editor",
+    openDocumentSourceFile: async (source, options) => {
+      openedDocuments.push({ source, options });
+      return { source, options };
+    },
+    createActivityRenderer: ({ container, openFile }) => ({
+      appendActivity() {},
+      appendExternalActivity(row) { container.appendChild(row); return true; },
+      appendNarration() {},
+      appendSummary(event) {
+        const link = new FakeElement("", "button");
+        link.classList.add("ai-companion-summary-file-link");
+        link.addEventListener("click", () => { void openFile(event.changedFiles[0].path); });
+        container.appendChild(link);
+      },
+      collapseTimeline() {}
+    })
+  });
+  api = harness.api;
+  seedSavedChatResponse(harness, "Done", {
+    mode: "agent",
+    events: [{
+      type: "agent-summary",
+      status: "success",
+      finalResponse: "Done",
+      changedFiles: [{ path: "test-folders.txt", description: "Created file." }],
+      attemptedChanges: [],
+      blockedChanges: []
+    }]
+  });
+
+  await harness.api.refreshChatSelectOptions();
+  clickChatMenuItem(harness, 0);
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  harness.api.setWorkspaceOpen(true, { previousSidebarView: "ai-companion" });
+  harness.toolLog.querySelector(".ai-companion-summary-file-link").click();
+  await new Promise((resolve) => setTimeout(resolve, 0));
+
+  assert.equal(openedDocuments.length, 1);
+  assert.equal(openedDocuments[0].source.path, "C:\\GitHub\\shaybc\\md-editor/test-folders.txt");
   assert.equal(workspaceSearch.activeView, "files");
   assert.deepEqual(workspaceSearch.calls, ["files"]);
   assert.equal(harness.document.body.classList.contains("ai-companion-workspace-open"), false);
@@ -4677,8 +4756,8 @@ test("workspace Changes keeps two file entries inline", async () => {
       type: "agent-summary",
       finalResponse: "Done",
       changedFiles: [
-        { path: "src/one.js", description: "Updated one.", additions: 2, deletions: 1 },
-        { path: "src/two.js", description: "Updated two.", additions: 3, deletions: 2 }
+        { path: "src/one.js", action: "created", description: "Created one.", additions: 2, deletions: 1 },
+        { path: "src/two.js", action: "renamed", oldPath: "src/old-two.js", description: "Renamed two.", additions: 3, deletions: 2 }
       ],
       attemptedChanges: [],
       blockedChanges: []
@@ -4692,12 +4771,23 @@ test("workspace Changes keeps two file entries inline", async () => {
   await new Promise((resolve) => setTimeout(resolve, 0));
 
   assert.equal(harness.taskChangesSection.hidden, false);
-  assert.equal(harness.taskChangesToggle.hidden, true);
+  assert.equal(harness.taskChangesToggle.hidden, false);
+  assert.equal(harness.taskChangesToggle.getAttribute("aria-label"), "Expand changes");
   assert.equal(harness.taskChangesList.hidden, false);
   assert.equal(harness.taskChangesList.children.length, 2);
-  assert.match(harness.taskChangesSummary.textContent, /Changed files 2/);
+  assert.match(harness.taskChangesSummary.textContent, /2 files/);
+  assert.doesNotMatch(harness.taskChangesSummary.textContent, /Changed files/);
   assert.match(harness.taskChangesSummary.textContent, /\+5/);
   assert.match(harness.taskChangesSummary.textContent, /-3/);
+  assert.equal(harness.taskChangesList.children[0].tagName, "BUTTON");
+  assert.match(harness.taskChangesList.children[0].textContent, /^Asrc\/one\.js\+2-1$/);
+  assert.match(harness.taskChangesList.children[1].textContent, /^Rsrc\/two\.js\+3-2$/);
+
+  harness.taskChangesList.children[0].click();
+  await new Promise((resolve) => setTimeout(resolve, 0));
+
+  assert.equal(harness.openedDocuments.at(-1).source.path, "src/one.js");
+  assert.equal(harness.document.body.classList.contains("ai-companion-workspace-open"), false);
 });
 
 test("workspace Changes expands larger summaries as a scrollable overlay", async () => {
@@ -4711,7 +4801,7 @@ test("workspace Changes expands larger summaries as a scrollable overlay", async
       changedFiles: [
         { path: "src/one.js", description: "Updated one.", additions: 2, deletions: 1 },
         { path: "src/two.js", description: "Updated two.", additions: 3, deletions: 2 },
-        { path: "src/three.js", description: "Updated three.", additions: 4, deletions: 0 }
+        { path: "src/three.js", action: "deleted", description: "Deleted three.", additions: 4, deletions: 0 }
       ],
       attemptedChanges: [{ path: "src/four.js", description: "Write failed." }],
       blockedChanges: [{
@@ -4733,18 +4823,25 @@ test("workspace Changes expands larger summaries as a scrollable overlay", async
 
   assert.equal(harness.taskChangesToggle.hidden, false);
   assert.equal(harness.taskChangesToggle.getAttribute("aria-expanded"), "false");
-  assert.equal(harness.taskChangesList.hidden, true);
-  assert.match(harness.taskChangesSummary.textContent, /Changed files 3/);
+  assert.equal(harness.taskChangesToggle.getAttribute("aria-label"), "Expand changes");
+  assert.equal(harness.taskChangesList.hidden, false);
+  assert.match(harness.taskChangesSummary.textContent, /3 files/);
   assert.match(harness.taskChangesSummary.textContent, /Attempted 1/);
   assert.match(harness.taskChangesSummary.textContent, /Blocked 2/);
+  assert.equal(harness.taskChangesList.children.length, 6);
+  assert.equal(harness.taskChangesList.children[2].tagName, "DIV");
+  assert.match(harness.taskChangesList.children[2].textContent, /^Dsrc\/three\.js\+4$/);
+  assert.equal(harness.taskChangesList.children[3].classList.contains("is-collapsed-overflow"), true);
+  assert.equal(harness.taskChangesList.children[4].classList.contains("is-collapsed-overflow"), true);
+  assert.equal(harness.taskChangesList.children[5].textContent, "+2 more");
 
-  harness.taskChangesToggle.click();
+  harness.taskChangesList.children[5].click();
 
   assert.equal(harness.taskChangesToggle.getAttribute("aria-expanded"), "true");
-  assert.equal(harness.taskChangesToggle.getAttribute("aria-label"), "Hide changed files");
+  assert.equal(harness.taskChangesToggle.getAttribute("aria-label"), "Collapse changes");
   assert.equal(harness.taskChangesSection.classList.contains("is-expanded"), true);
   assert.equal(harness.taskChangesList.hidden, false);
-  assert.equal(harness.taskChangesList.children.length, 5);
+  assert.equal(harness.taskChangesList.children.length, 6);
   assert.equal(harness.taskChangesList.children[4].tagName, "DETAILS");
   assert.match(harness.taskChangesList.children[4].textContent, /Blocked proposals \(2\)/);
   assert.equal(harness.taskChangesSection.style.getPropertyValue("--ai-companion-changes-overlay-bottom"), "108px");
@@ -4753,8 +4850,9 @@ test("workspace Changes expands larger summaries as a scrollable overlay", async
   harness.taskChangesToggle.click();
 
   assert.equal(harness.taskChangesToggle.getAttribute("aria-expanded"), "false");
+  assert.equal(harness.taskChangesToggle.getAttribute("aria-label"), "Expand changes");
   assert.equal(harness.taskChangesSection.classList.contains("is-expanded"), false);
-  assert.equal(harness.taskChangesList.hidden, true);
+  assert.equal(harness.taskChangesList.hidden, false);
 });
 
 test("workspace task details ID copies the full value and shows temporary feedback", async () => {
@@ -5254,4 +5352,23 @@ test("workspace plans tab filters saved plans by search and status", async () =>
   assert.doesNotMatch(harness.workspaceSidebarPlans.textContent, /Beta shipped/);
   assert.equal(harness.workspacePlanFilterImplemented.getAttribute("aria-checked"), "false");
   assert.equal(harness.workspacePlanFilterPlanned.getAttribute("aria-checked"), "true");
+});
+
+test("agent terminal lifecycle is summary-owned and stale runs become aborted", () => {
+  const source = fs.readFileSync(path.join(webRoot, "js", "ai-companion", "panel.js"), "utf8");
+  assert.match(source, /if \(activeRunMode === "agent"\) \{\s*recordAgentEvent\(event\);\s*return;/);
+  assert.match(source, /\["running", "interrupted"\]\.includes\(entry\.record\.status\)/);
+  assert.match(source, /ensureAbortedTaskSummary\(entry\.record\)/);
+  assert.match(source, /event\.type === "run-aborted"/);
+  assert.match(source, /status === "aborted" \? "aborted"/);
+  assert.doesNotMatch(source, /record\.recoveryInspection\?\.classification === "recoverable"\) record\.status = "interrupted"/);
+});
+
+test("AI operational requests preserve an explicitly empty workspace root", () => {
+  const script = fs.readFileSync(path.join(webRoot, "js", "script.js"), "utf8");
+  const bridge = fs.readFileSync(path.join(webRoot, "bridges", "ai-companion-bridge", "ai-companion-bridge.cjs"), "utf8");
+  const aiRegistration = script.slice(script.indexOf("registerMarkdownViewerNeutralinoAiBridge"), script.indexOf("registerMarkdownViewerAiCompanionToolAccessSettings"));
+  assert.doesNotMatch(aiRegistration, /activeFolderPath \|\| getDesktopAppRootPath\(\)/);
+  assert.match(aiRegistration, /getWorkspaceRoot: function\(\) \{ return activeFolderPath \|\| ""; \}/);
+  assert.match(bridge, /Object\.hasOwn\(message, "workspaceRoot"\) \? String\(message\.workspaceRoot \|\| ""\) : session\.workspaceRoot/);
 });

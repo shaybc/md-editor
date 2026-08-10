@@ -111,6 +111,14 @@ function createCommandGrantOptions(descriptor, maximum) {
   return options.map((option) => applyEligibility(option, maximum));
 }
 
+function createExternalFileGrantOptions(resource, maximum) {
+  return [createOption("task-external-file", `Allow edits to ${resource.value} for this task`, "task", { type: "path-glob", value: resource.value }, {
+    actionLabel: "Only for this task",
+    targetLabel: resource.value,
+    tooltipResource: resource.value
+  })].map((option) => applyEligibility(option, maximum));
+}
+
 /**
  * Describe the approval capability and request-bound grant choices for a tool call.
  * @param {string} toolName Agent tool name.
@@ -124,6 +132,9 @@ function describe(rawToolName, args = {}, context = {}) {
   if (FILE_WRITE_TOOLS.has(toolName)) definition = { id: "workspace.file.write", risk: "low", label: "Write workspace files", maxLifetime: "workspace" };
   if (!definition) return null;
   const commandAnalysis = toolName === "run_command" ? context.commandAnalysis : null;
+  const requestedPath = String(args.path || args.sourcePath || args.expectedPath || "").trim();
+  const requestedCwd = String(args.cwd || "").trim();
+  const externalTarget = isExternalTarget(toolName === "run_command" ? requestedCwd : requestedPath, context.workspaceRoot);
   const conversionResource = toolName === "start_code_conversion"
     ? [normalizePath(args.sourceRoot), normalizePath(args.destinationRoot)].filter(Boolean).join(" -> ")
     : "";
@@ -139,7 +150,10 @@ function describe(rawToolName, args = {}, context = {}) {
     : { type: "exact", value: resourceValue || toolName };
   const policy = context.effectiveSecurityPolicy || {};
   const commandMaximum = commandAnalysis && ["read-only", "workspace-write"].includes(commandAnalysis.impact) ? "workspace" : "action";
-  const maximum = isCapabilityAllowed(policy, definition.id) ? getConfiguredMaximum(policy, definition.id, commandAnalysis ? commandMaximum : definition.maxLifetime) : "action";
+  const defaultMaximum = externalTarget ? "task" : (commandAnalysis ? commandMaximum : definition.maxLifetime);
+  const configuredMaximum = isCapabilityAllowed(policy, definition.id) ? getConfiguredMaximum(policy, definition.id, defaultMaximum) : "action";
+  const maximum = externalTarget && LIFETIME_RANK[configuredMaximum] > LIFETIME_RANK.task
+    ? "task" : configuredMaximum;
   const commandRisk = { "read-only": "low", "workspace-write": "medium", unknown: "high", "sensitive-read": "high", "external-impact": "high", destructive: "high" }[commandAnalysis?.impact];
   const descriptor = { tool: toolName, capability: definition.id, risk: commandRisk || definition.risk, label: definition.label, resource, maximumGrantLifetime: maximum };
   if (commandAnalysis) {
@@ -159,9 +173,18 @@ function describe(rawToolName, args = {}, context = {}) {
   descriptor.grantOptions = commandAnalysis
     ? createCommandGrantOptions(descriptor, maximum)
     : FILE_WRITE_TOOLS.has(toolName)
-    ? createFileGrantOptions(resource, maximum, policy)
+    ? (externalTarget ? createExternalFileGrantOptions(resource, maximum) : createFileGrantOptions(resource, maximum, policy))
     : createGenericGrantOptions(descriptor, maximum);
   return descriptor;
+}
+
+function isExternalTarget(value, workspaceRoot) {
+  const target = String(value || "").trim();
+  const root = String(workspaceRoot || "").trim();
+  if (!target || !path.isAbsolute(target)) return false;
+  if (!root) return true;
+  const relative = path.relative(path.resolve(root), path.resolve(target));
+  return relative === ".." || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative);
 }
 
 module.exports = {

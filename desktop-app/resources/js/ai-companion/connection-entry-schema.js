@@ -65,7 +65,8 @@
   /** Validate one entry against its sibling collection and the available profiles. */
   function validateEntry(kind, entry, entries, index, profiles = []) {
     if (!entry.id) return "ID is required.";
-    if (!/^[A-Za-z0-9][A-Za-z0-9._-]{0,79}$/.test(entry.id)) return "ID may contain letters, numbers, dots, underscores, and hyphens.";
+    if (kind === "profile" && !/^[^\u0000-\u001F\u007F]{1,80}$/.test(entry.id)) return "Profile name must be 80 characters or fewer and cannot contain control characters.";
+    if (kind !== "profile" && !/^[A-Za-z0-9][A-Za-z0-9._-]{0,79}$/.test(entry.id)) return "ID may contain letters, numbers, dots, underscores, and hyphens.";
     if (entries.some((candidate, candidateIndex) => candidateIndex !== index && text(candidate.id) === entry.id)) return `ID '${entry.id}' is already in use.`;
     if (kind === "profile" && !PROVIDER_MODES.includes(entry.providerMode)) return "Choose a supported provider mode.";
     if (kind === "route") {

@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-desktop-menu-layout="full">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -86,7 +86,7 @@
       window.markdownViewerStartupPerf?.mark?.("head vendor scripts loaded");
     </script>
 </head>
-<body>
+<body class="sidebar-rail-thin app-header-thin tab-style-modern">
     <div id="startup-splash" class="startup-splash" role="status" aria-live="polite" aria-label="Loading MD-Editor">
         <div class="startup-splash-panel">
             <div class="startup-splash-mark" aria-hidden="true">MD</div>
@@ -517,7 +517,7 @@
                             </button>
                         </div>
                     </div>
-                    <nav id="desktop-application-menu" class="desktop-application-menu" aria-label="Application menu" hidden></nav>
+                    <nav id="desktop-application-menu" class="desktop-application-menu" aria-label="Application menu"></nav>
                     <!-- Hamburger menu for mobile -->
                     <div class="mobile-menu d-md-none">
                         <button id="mobile-menu-toggle" class="tool-button" title="Menu">
@@ -784,19 +784,24 @@
 
                 </div>
 
-                <!-- Center section: View Mode Buttons -->
-                <div class="view-mode-group d-none d-md-flex" role="group" aria-label="View mode">
-                    <button class="view-mode-btn" data-mode="editor" aria-pressed="false" title="Editor only">
-                        <i class="bi bi-file-text"></i>
-                        <span>Editor</span>
-                    </button>
-                    <button class="view-mode-btn active" data-mode="split" aria-pressed="true" title="Split view">
-                        <i class="bi bi-layout-split"></i>
-                        <span>Split</span>
-                    </button>
-                    <button class="view-mode-btn" data-mode="preview" aria-pressed="false" title="Preview only">
-                        <i class="bi bi-eye"></i>
-                        <span>Preview</span>
+                <!-- Center section: View Mode and Sync Controls -->
+                <div class="header-panel-controls">
+                    <div class="view-mode-group d-none d-md-flex" role="group" aria-label="View mode">
+                        <button class="view-mode-btn" data-mode="editor" aria-pressed="false" title="Editor only">
+                            <i class="bi bi-file-text"></i>
+                            <span>Editor</span>
+                        </button>
+                        <button class="view-mode-btn active" data-mode="split" aria-pressed="true" title="Split view">
+                            <i class="bi bi-layout-split"></i>
+                            <span>Split</span>
+                        </button>
+                        <button class="view-mode-btn" data-mode="preview" aria-pressed="false" title="Preview only">
+                            <i class="bi bi-eye"></i>
+                            <span>Preview</span>
+                        </button>
+                    </div>
+                    <button id="toggle-sync" class="tool-button header-sync-toggle sync-toggle-button sync-enabled border-primary" type="button" title="Toggle Sync Scrolling" aria-label="Toggle sync scrolling" aria-pressed="true">
+                        <i class="bi bi-link"></i> <span>Sync On</span>
                     </button>
                 </div>
 
@@ -804,7 +809,7 @@
                 <input type="file" id="hex-file-input" class="file-input">
                 <input type="file" id="folder-input" class="file-input" webkitdirectory directory multiple>
 
-                <!-- Right section: Sync toggle -->
+                <!-- Right section: Brand -->
                 <div class="header-right d-flex align-items-center gap-2">
                     <div id="header-brand-right" class="header-brand header-brand-right">
                         <h1 class="h4 mb-0 me-2">MD-Editor</h1>
@@ -812,12 +817,6 @@
                             <i class="bi bi-github"></i>
                         </a>
                     </div>
-                    <div class="header-panel-controls">
-                        <button id="toggle-sync" class="tool-button header-sync-toggle sync-toggle-button sync-enabled border-primary" type="button" title="Toggle Sync Scrolling" aria-label="Toggle sync scrolling">
-                            <i class="bi bi-link"></i> <span>Sync Off</span>
-                        </button>
-                    </div>
-
                 </div>
             </div>
         </header>
@@ -1257,15 +1256,19 @@
                 </label>
                 <nav class="settings-tabs" aria-label="Settings categories">
                   <p class="settings-tab-group">Preferences</p>
-                  <button class="settings-tab-group-toggle" type="button" data-settings-tab-group-toggle="interface" aria-expanded="true" aria-controls="settings-interface-tab-group">
+                  <button class="settings-tab-button active" type="button" data-settings-tab="general" aria-selected="true">
+                    <i class="bi bi-sliders" aria-hidden="true"></i>
+                    <span>General</span>
+                  </button>
+                  <button class="settings-tab-group-toggle" type="button" data-settings-tab-group-toggle="interface" aria-expanded="false" aria-controls="settings-interface-tab-group">
                     <i class="bi bi-window-sidebar" aria-hidden="true"></i>
                     <span>Interface</span>
                     <i class="bi bi-chevron-down settings-tab-toggle-icon" aria-hidden="true"></i>
                   </button>
-                  <div id="settings-interface-tab-group" class="settings-tab-subtree" data-settings-tab-group="interface">
-                    <button class="settings-tab-button settings-tab-child active" type="button" data-settings-tab="interface" data-settings-parent-tab-group="interface" aria-selected="true">
-                      <i class="bi bi-sliders" aria-hidden="true"></i>
-                      <span>General</span>
+                  <div id="settings-interface-tab-group" class="settings-tab-subtree" data-settings-tab-group="interface" hidden>
+                    <button class="settings-tab-button settings-tab-child" type="button" data-settings-tab="interface" data-settings-parent-tab-group="interface" aria-selected="false" tabindex="-1">
+                      <i class="bi bi-window" aria-hidden="true"></i>
+                      <span>Interface</span>
                     </button>
                     <button class="settings-tab-button settings-tab-child" type="button" data-settings-tab="file-opening-modes" data-settings-parent-tab-group="interface" aria-selected="false" tabindex="-1">
                       <i class="bi bi-layout-split" aria-hidden="true"></i>
@@ -1360,7 +1363,7 @@
                   </div>
                   <button class="settings-tab-button" type="button" data-settings-tab="jdks" aria-selected="false" tabindex="-1">
                     <i class="bi bi-cup-hot" aria-hidden="true"></i>
-                    <span>JDKs</span>
+                    <span>Java</span>
                   </button>
                   <button class="settings-tab-button" type="button" data-settings-tab="gradle" aria-selected="false" tabindex="-1">
                     <i class="bi bi-box-seam" aria-hidden="true"></i>
@@ -1559,7 +1562,73 @@
                 </div>
               </section>
 
-              <section class="settings-panel active" data-settings-panel="interface" aria-labelledby="settings-interface-title">
+              <section class="settings-panel active" data-settings-panel="general" aria-labelledby="settings-general-title">
+                <div class="settings-panel-heading">
+                  <span class="settings-panel-icon"><i class="bi bi-sliders" aria-hidden="true"></i></span>
+                  <div>
+                    <h3 id="settings-general-title" class="settings-panel-title">General</h3>
+                    <p class="settings-panel-description">Configure startup behavior, application limits, recent items, and project problem storage.</p>
+                  </div>
+                </div>
+
+                <div class="settings-subsection">
+                  <label class="settings-field" for="settings-startup-behavior">
+                    <span class="settings-field-label">Startup behavior</span>
+                    <select id="settings-startup-behavior" class="rename-modal-input settings-select-input">
+                      <option value="last-tabs">Open last tabs</option>
+                      <option value="welcome">Open welcome page</option>
+                      <option value="untitled">Open new untitled tab</option>
+                      <option value="empty">Open with no tabs</option>
+                    </select>
+                  </label>
+                  <label class="settings-field" for="settings-max-open-tabs">
+                    <span class="settings-field-label">Maximum open tabs</span>
+                    <input type="number" id="settings-max-open-tabs" class="rename-modal-input settings-number-input" min="1" max="60" step="1" value="40" />
+                  </label>
+                  <label class="settings-field" for="settings-closed-tab-history-limit">
+                    <span class="settings-field-label">Closed tab history</span>
+                    <input type="number" id="settings-closed-tab-history-limit" class="rename-modal-input settings-number-input" min="0" max="100" step="1" value="20" />
+                  </label>
+                  <label class="settings-field" for="settings-workspace-search-result-limit">
+                    <span class="settings-field-label">Workspace search result limit</span>
+                    <input type="number" id="settings-workspace-search-result-limit" class="rename-modal-input settings-number-input" min="1" max="100000" step="50" value="300" />
+                  </label>
+                </div>
+
+                <div class="settings-subsection">
+                  <div class="settings-panel-heading">
+                    <span class="settings-panel-icon"><i class="bi bi-clock-history" aria-hidden="true"></i></span>
+                    <div>
+                      <h3 id="settings-recent-title" class="settings-panel-title">Recent Items</h3>
+                      <p class="settings-panel-description">Set how many files and folders stay in the menu.</p>
+                    </div>
+                  </div>
+
+                  <div class="settings-field-grid">
+                    <label class="settings-field" for="settings-max-recent-files">
+                      <span class="settings-field-label">Maximum recent files</span>
+                      <input type="number" id="settings-max-recent-files" class="rename-modal-input settings-number-input" min="0" max="100" step="1" value="10" />
+                    </label>
+                    <label class="settings-field" for="settings-max-recent-folders">
+                      <span class="settings-field-label">Maximum recent folders</span>
+                      <input type="number" id="settings-max-recent-folders" class="rename-modal-input settings-number-input" min="0" max="100" step="1" value="10" />
+                    </label>
+                  </div>
+                </div>
+
+                <div class="settings-subsection">
+                  <label class="settings-field" for="settings-jdt-maximum-problems">
+                    <span class="settings-field-label">Maximum stored project problems</span>
+                    <input type="number" id="settings-jdt-maximum-problems" class="rename-modal-input settings-number-input" min="1" max="100000" step="100" value="5000" />
+                  </label>
+                  <label class="settings-field" for="settings-jdt-initial-problem-limit">
+                    <span class="settings-field-label">Project problems initially displayed</span>
+                    <input type="number" id="settings-jdt-initial-problem-limit" class="rename-modal-input settings-number-input" min="1" max="100000" step="10" value="100" />
+                  </label>
+                </div>
+              </section>
+
+              <section class="settings-panel" data-settings-panel="interface" aria-labelledby="settings-interface-title" hidden>
                 <div class="settings-subsection">
                   <div class="settings-panel-heading">
                     <span class="settings-panel-icon"><i class="bi bi-window-sidebar" aria-hidden="true"></i></span>
@@ -1594,6 +1663,11 @@
                       <option value="legacy">Legacy tabs</option>
                     </select>
                   </label>
+                  <label class="settings-switch-row" for="settings-split-view-separator-per-tab">
+                    <span><span class="settings-switch-title">Save split separator per tab</span><span class="settings-switch-description">Keep each editor tab's split-view separator position independent.</span></span>
+                    <input type="checkbox" id="settings-split-view-separator-per-tab" class="settings-switch-input" checked />
+                    <span class="settings-switch" aria-hidden="true"></span>
+                  </label>
                   <label class="settings-field" for="settings-sidebar-rail-style">
                     <span class="settings-field-label">Side rail bar</span>
                     <select id="settings-sidebar-rail-style" class="rename-modal-input settings-select-input">
@@ -1601,6 +1675,13 @@
                       <option value="spacious">Spacious</option>
                     </select>
                   </label>
+                  <div class="settings-panel-heading">
+                    <span class="settings-panel-icon"><i class="bi bi-window-sidebar" aria-hidden="true"></i></span>
+                    <div>
+                      <h3 id="settings-railbar-title" class="settings-panel-title">Railbar settings</h3>
+                      <p class="settings-panel-description">Choose which icons appear on the side rail bar.</p>
+                    </div>
+                  </div>
                   <label class="settings-switch-row" for="settings-sidebar-rail-show-git">
                     <span><span class="settings-switch-title">Show Git</span><span class="settings-switch-description">Show the Git icon on the side rail bar.</span></span>
                     <input type="checkbox" id="settings-sidebar-rail-show-git" class="settings-switch-input" checked />
@@ -1626,65 +1707,9 @@
                     <input type="checkbox" id="settings-sidebar-rail-show-settings" class="settings-switch-input" checked />
                     <span class="settings-switch" aria-hidden="true"></span>
                   </label>
-                  <label class="settings-field" for="settings-workspace-search-result-limit">
-                    <span class="settings-field-label">Workspace search result limit</span>
-                    <input type="number" id="settings-workspace-search-result-limit" class="rename-modal-input settings-number-input" min="1" max="100000" step="50" value="300" />
-                  </label>
-                  <label class="settings-field" for="settings-jdt-maximum-problems">
-                    <span class="settings-field-label">Maximum stored project problems</span>
-                    <input type="number" id="settings-jdt-maximum-problems" class="rename-modal-input settings-number-input" min="1" max="100000" step="100" value="5000" />
-                  </label>
-                  <label class="settings-field" for="settings-jdt-initial-problem-limit">
-                    <span class="settings-field-label">Project problems initially displayed</span>
-                    <input type="number" id="settings-jdt-initial-problem-limit" class="rename-modal-input settings-number-input" min="1" max="100000" step="10" value="100" />
-                  </label>
-                  <label class="settings-switch-row" for="settings-ajdt-diagnostics-enabled">
-                    <span><span class="settings-switch-title">Experimental AJDT diagnostics</span><span class="settings-switch-description">Use the bundled AJDT diagnostics worker as the Problems authority for detected Gradle AspectJ modules. JDT remains active for Java editor features.</span></span>
-                    <input type="checkbox" id="settings-ajdt-diagnostics-enabled" class="settings-switch-input" />
-                    <span class="settings-switch" aria-hidden="true"></span>
-                  </label>
-                  <label class="settings-field" for="settings-max-open-tabs">
-                    <span class="settings-field-label">Maximum open tabs</span>
-                    <input type="number" id="settings-max-open-tabs" class="rename-modal-input settings-number-input" min="1" max="60" step="1" value="40" />
-                  </label>
-                  <label class="settings-field" for="settings-closed-tab-history-limit">
-                    <span class="settings-field-label">Closed tab history</span>
-                    <input type="number" id="settings-closed-tab-history-limit" class="rename-modal-input settings-number-input" min="0" max="100" step="1" value="20" />
-                  </label>
                   <button type="button" id="settings-theme-toggle" class="reset-modal-btn settings-secondary-action" title="Toggle Dark Mode">
                     <i class="bi bi-moon me-2" aria-hidden="true"></i> Dark Mode
                   </button>
-                  <label class="settings-field" for="settings-startup-behavior">
-                    <span class="settings-field-label">Startup behavior</span>
-                    <select id="settings-startup-behavior" class="rename-modal-input settings-select-input">
-                      <option value="last-tabs">Open last tabs</option>
-                      <option value="welcome">Open welcome page</option>
-                      <option value="untitled">Open new untitled tab</option>
-                      <option value="empty">Open with no tabs</option>
-                    </select>
-                  </label>
-
-                </div>
-
-                <div class="settings-subsection">
-                  <div class="settings-panel-heading">
-                    <span class="settings-panel-icon"><i class="bi bi-clock-history" aria-hidden="true"></i></span>
-                    <div>
-                      <h3 id="settings-recent-title" class="settings-panel-title">Recent Items</h3>
-                      <p class="settings-panel-description">Set how many files and folders stay in the menu.</p>
-                    </div>
-                  </div>
-
-                  <div class="settings-field-grid">
-                    <label class="settings-field" for="settings-max-recent-files">
-                      <span class="settings-field-label">Maximum recent files</span>
-                      <input type="number" id="settings-max-recent-files" class="rename-modal-input settings-number-input" min="0" max="100" step="1" value="10" />
-                    </label>
-                    <label class="settings-field" for="settings-max-recent-folders">
-                      <span class="settings-field-label">Maximum recent folders</span>
-                      <input type="number" id="settings-max-recent-folders" class="rename-modal-input settings-number-input" min="0" max="100" step="1" value="10" />
-                    </label>
-                  </div>
                 </div>
               </section>
 
@@ -1962,12 +1987,6 @@
                       <input type="number" id="settings-editor-font-size" class="rename-modal-input settings-number-input" min="10" max="28" step="1" value="14" />
                     </label>
                   </div>
-
-                  <label class="settings-field" for="settings-jdt-interactive-request-timeout-ms">
-                    <span class="settings-field-label">JDT interactive request timeout (ms)</span>
-                    <input type="number" id="settings-jdt-interactive-request-timeout-ms" class="rename-modal-input settings-number-input" min="500" max="60000" step="500" value="3000" />
-                    <span class="settings-field-help">Limits completion, hover, navigation, symbols, references, and refactoring requests. JDT initialization keeps its longer allowance.</span>
-                  </label>
 
                   <div class="settings-field-grid">
                     <label class="settings-field" for="settings-spaces-per-indent-level">
@@ -2587,13 +2606,14 @@
                   <div class="settings-ai-connection-form-actions">
                     <button type="button" id="settings-ai-test-connection" class="reset-modal-btn settings-secondary-action"><i class="bi bi-plug" aria-hidden="true"></i><span>Test connection</span></button>
                     <button type="button" id="settings-ai-connection-profile-add" class="reset-modal-btn settings-primary-action"><i class="bi bi-plus-lg" aria-hidden="true"></i><span>Add profile</span></button>
+                    <button type="button" id="settings-ai-connection-profile-save-as" class="reset-modal-btn settings-secondary-action" hidden><i class="bi bi-files" aria-hidden="true"></i><span>Save as</span></button>
                     <button type="button" id="settings-ai-connection-profile-cancel" class="reset-modal-btn settings-secondary-action" hidden>Cancel edit</button>
                   </div>
                   <p id="settings-ai-connection-status" class="settings-panel-description" aria-live="polite"></p>
                   <div class="settings-ai-connection-entry-section">
-                    <div class="settings-ai-connection-entry-heading"><h4 class="settings-subsection-title">Additional connection profiles</h4><div><button type="button" id="settings-ai-connection-profile-json" class="reset-modal-btn settings-secondary-action"><i class="bi bi-filetype-json" aria-hidden="true"></i><span>Edit JSON</span></button></div></div>
-                    <div class="settings-table settings-ai-connection-table" role="table" aria-label="Additional AI connection profiles"><div class="settings-table-header" role="row"><span role="columnheader">Profile</span><span role="columnheader">Provider</span><span role="columnheader">Model</span><span role="columnheader">Actions</span></div><div id="settings-ai-connection-profile-rows" class="settings-table-body" role="rowgroup"></div></div>
-                    <p id="settings-ai-connection-profile-empty" class="settings-panel-description">No additional connection profiles configured.</p>
+                    <div class="settings-ai-connection-entry-heading"><h4 class="settings-subsection-title">Connection profiles</h4><div><button type="button" id="settings-ai-connection-profile-json" class="reset-modal-btn settings-secondary-action"><i class="bi bi-filetype-json" aria-hidden="true"></i><span>Edit JSON</span></button></div></div>
+                    <div class="settings-table settings-ai-connection-table" role="table" aria-label="AI connection profiles"><div class="settings-table-header" role="row"><span role="columnheader">Profile</span><span role="columnheader">Provider</span><span role="columnheader">Model</span><span role="columnheader">Actions</span></div><div id="settings-ai-connection-profile-rows" class="settings-table-body" role="rowgroup"></div></div>
+                    <p id="settings-ai-connection-profile-empty" class="settings-panel-description">No connection profiles configured.</p>
                   </div>
                   <div class="settings-ai-connection-entry-section">
                     <div class="settings-ai-connection-entry-heading"><h4 class="settings-subsection-title">Provider routes</h4><div><button type="button" id="settings-ai-provider-route-add" class="reset-modal-btn settings-secondary-action"><i class="bi bi-plus-lg" aria-hidden="true"></i><span>Add route</span></button><button type="button" id="settings-ai-provider-route-json" class="reset-modal-btn settings-secondary-action"><i class="bi bi-filetype-json" aria-hidden="true"></i><span>Edit JSON</span></button></div></div>
@@ -2777,6 +2797,19 @@
                     <div id="settings-jdk-list" class="settings-table-body"></div>
                   </div>
                   <p id="settings-jdk-empty" class="settings-empty-state">No JDKs configured. Add a JDK home folder before enabling Java project analysis or compilation.</p>
+                </div>
+
+                <div class="settings-subsection">
+                  <label class="settings-switch-row" for="settings-ajdt-diagnostics-enabled">
+                    <span><span class="settings-switch-title">Enable AJDT diagnostics</span><span class="settings-switch-description">Use the bundled AJDT diagnostics worker as the Problems authority for detected Gradle AspectJ modules. JDT remains active for Java editor features.</span></span>
+                    <input type="checkbox" id="settings-ajdt-diagnostics-enabled" class="settings-switch-input" />
+                    <span class="settings-switch" aria-hidden="true"></span>
+                  </label>
+                  <label class="settings-field" for="settings-jdt-interactive-request-timeout-ms">
+                    <span class="settings-field-label">JDT interactive request timeout (ms)</span>
+                    <input type="number" id="settings-jdt-interactive-request-timeout-ms" class="rename-modal-input settings-number-input" min="500" max="60000" step="500" value="3000" />
+                    <span class="settings-field-help">Limits completion, hover, navigation, symbols, references, and refactoring requests. JDT initialization keeps its longer allowance.</span>
+                  </label>
                 </div>
               </section>
 
@@ -4103,10 +4136,10 @@
           </div>
         </div>
 
-        <div class="content-container">
+        <div class="content-container view-split">
             <aside class="folder-tree-pane" id="folder-tree-pane">
                 <div class="sidebar-width-resizer" id="sidebar-width-resizer" role="separator" aria-orientation="vertical" aria-label="Resize sidebar" tabindex="0"></div>
-                <nav class="sidebar-view-rail" aria-label="Sidebar views">
+                <nav class="sidebar-view-rail sidebar-rail-ai-bottom" aria-label="Sidebar views">
                     <button class="sidebar-view-rail-button sidebar-view-option active" type="button" data-sidebar-rail-icon="files" data-sidebar-view="files" title="Files" aria-label="Files" aria-pressed="true">
                         <i class="bi bi-files" aria-hidden="true"></i>
                         <span class="sidebar-view-rail-label">Files</span>
@@ -4507,17 +4540,17 @@
                 <div class="sidebar-dropzone-panel sidebar-lower-panel">
                     <div id="sidebar-lower-tabs" class="sidebar-lower-tabs">
                         <div class="sidebar-lower-tab-list" role="tablist" aria-label="Lower sidebar views">
-                            <button id="sidebar-lower-tab-dropzone" class="sidebar-lower-tab" type="button" role="tab" aria-controls="sidebar-lower-dropzone-view">Dropzone</button>
-                            <button id="sidebar-lower-tab-outline" class="sidebar-lower-tab" type="button" role="tab" aria-controls="sidebar-outline-panel">Outline</button>
+                            <button id="sidebar-lower-tab-dropzone" class="sidebar-lower-tab" type="button" role="tab" aria-controls="sidebar-lower-dropzone-view" aria-selected="false" tabindex="-1">Dropzone</button>
+                            <button id="sidebar-lower-tab-outline" class="sidebar-lower-tab active" type="button" role="tab" aria-controls="sidebar-outline-panel" aria-selected="true">Outline</button>
                         </div>
                         <button id="close-sidebar-lower-panel" class="sidebar-lower-close" type="button" title="Close lower sidebar panel" aria-label="Close lower sidebar panel"><i class="bi bi-x-lg" aria-hidden="true"></i></button>
                     </div>
-                    <div id="sidebar-lower-dropzone-view" class="sidebar-lower-view sidebar-lower-dropzone-view" role="tabpanel" aria-labelledby="sidebar-lower-tab-dropzone">
+                    <div id="sidebar-lower-dropzone-view" class="sidebar-lower-view sidebar-lower-dropzone-view" role="tabpanel" aria-labelledby="sidebar-lower-tab-dropzone" hidden>
                         <div id="dropzone" class="dropzone">
                             <p class="mb-0"><i class="bi bi-cloud-arrow-up me-2"></i>Drop a Markdown file, graph file, or folder here, or click to browse</p>
                         </div>
                     </div>
-                    <section id="sidebar-outline-panel" class="sidebar-lower-view outline-panel" role="tabpanel" aria-labelledby="sidebar-lower-tab-outline" hidden>
+                    <section id="sidebar-outline-panel" class="sidebar-lower-view outline-panel" role="tabpanel" aria-labelledby="sidebar-lower-tab-outline">
                         <div id="outline-body" class="outline-body" aria-live="polite"></div>
                     </section>
                 </div>
@@ -5143,6 +5176,7 @@
     <script src="js/ai-companion/autocomplete.js"></script>
     <script src="js/ai-companion/copy-actions.js"></script>
     <script src="js/ai-companion/activity-renderer.js"></script>
+    <script src="js/ai-companion/user-input-interaction.js"></script>
     <script src="js/ai-companion/editor-action-tools.js"></script>
     <script src="js/ai-companion/settings-tools.js"></script>
     <script src="js/ai-companion/conversion-export-tools.js"></script>

@@ -2,7 +2,6 @@
 
 "use strict";
 
-const path = require("node:path");
 const workspaceTools = require("../../tools/workspace-tools");
 const { authorizeTool } = require("./approval-gateway");
 const { loadExtension } = require("./extension-registry");
@@ -22,9 +21,6 @@ async function executeTool(call, context) {
   const name = String(call?.function?.name || "");
   const args = parseArguments(call);
   const root = context.request.workspaceRoot;
-  const commandRoot = name === "run_command" && args.cwd
-    ? workspaceTools.resolveWorkspacePath(root, path.relative(root, path.resolve(root, String(args.cwd)))).resolvedPath
-    : root;
   if (name === "run_command" && context.request.securityContext?.policy?.shell?.mode !== "sandbox-shell") {
     await context.request.securityContext?.auditLogger?.record({
       timestamp: new Date().toISOString(), requestId: context.request.requestId, workspace: root,
@@ -55,10 +51,15 @@ async function executeTool(call, context) {
   if (name === "find_documentation") return workspaceTools.findDocumentation(root, args.query, { ...options, maxResults: args.maxResults });
   if (name === "search_text") return workspaceTools.searchGrep(root, args.pattern, { ...options, maxMatches: args.maxMatches });
   if (name === "read_file") {
-    context.windowSteward?.recordFile?.(args.path);
-    return workspaceTools.readFile(root, args.path, { ...options, startLine: args.startLine, endLine: args.endLine });
+    const target = context.pathAuthority.resolveFilePath(args.path);
+    context.windowSteward?.recordFile?.(target.resolvedPath);
+    const result = await workspaceTools.readFile(target.root, target.relativePath, { ...options, startLine: args.startLine, endLine: args.endLine });
+    return { ...result, path: target.external ? target.resolvedPath : result.path, resolvedPath: target.resolvedPath };
   }
   if (["apply_edit", "write_file", "run_command"].includes(name)) {
+    const target = name === "run_command" ? context.pathAuthority.resolveCommandDirectory(args.cwd) : context.pathAuthority.resolveFilePath(args.path);
+    const commandRoot = name === "run_command" ? target.resolvedPath : root;
+    const approvalArgs = target.external ? { ...args, ...(name === "run_command" ? { cwd: target.resolvedPath } : { path: target.resolvedPath }) } : args;
     const commandAnalysis = name === "run_command"
       ? await (context.commandImpactInspector || new CommandImpactInspector()).inspect({
         command: args.command,
@@ -68,21 +69,27 @@ async function executeTool(call, context) {
         configuredShell: process.env.ComSpec
       })
       : null;
-    const approval = await authorizeTool(context.request, name, args, context.taskGrants, {
+    const approval = await authorizeTool(context.request, name, approvalArgs, context.taskGrants, {
       permissionPolicy: context.permissionPolicy,
       denialLedger: context.denialLedger,
       riskAdvisor: context.riskAdvisor,
       commandAnalysis,
       autoRunCommands: context.request.settings?.agentAutoRunCommands === true
     });
-    if (!approval.approved) return { denied: true, doNotRetry: approval.doNotRetry === true, denialFingerprint: approval.denialFingerprint, instructions: approval.instructions || "The user denied this action." };
+    if (!approval.approved) return { denied: true, resolvedPath: target.resolvedPath, doNotRetry: approval.doNotRetry === true, denialFingerprint: approval.denialFingerprint, instructions: approval.instructions || "The user denied this action." };
     if (name === "apply_edit") {
-      context.windowSteward?.recordFile?.(args.path);
-      return workspaceTools.applyEdit(root, args.path, args.search, args.replacement, { ...options, allowWrites: true });
+      context.windowSteward?.recordFile?.(target.resolvedPath);
+      let result;
+      try { result = await workspaceTools.applyEdit(target.root, target.relativePath, args.search, args.replacement, { ...options, allowWrites: true }); }
+      catch (error) { error.resolvedPath = target.resolvedPath; throw error; }
+      return { ...result, path: target.external ? target.resolvedPath : result.path, resolvedPath: target.resolvedPath };
     }
     if (name === "write_file") {
-      context.windowSteward?.recordFile?.(args.path);
-      return workspaceTools.writeFile(root, args.path, args.content, { ...options, allowWrites: true });
+      context.windowSteward?.recordFile?.(target.resolvedPath);
+      let result;
+      try { result = await workspaceTools.writeFile(target.root, target.relativePath, args.content, { ...options, allowWrites: true }); }
+      catch (error) { error.resolvedPath = target.resolvedPath; throw error; }
+      return { ...result, path: target.external ? target.resolvedPath : result.path, resolvedPath: target.resolvedPath };
     }
     if (digestCommand(normalizeCommand(args.command)) !== commandAnalysis.commandDigest) {
       const error = new Error("The command changed after authorization and must be analyzed again.");
@@ -117,7 +124,11 @@ async function executeTool(call, context) {
   }
   if (name === "capability_search") return context.capabilities.search(args.query, { maxResults: args.maxResults });
   if (name === "skill_invoke") return context.skillInvocation.invoke(args.name, args.arguments, { trigger: "model", context });
-  if (name === "request_user_choice") return context.interactionGate.requestChoice(args);
+  if (name === "request_user_choice") {
+    const result = await context.interactionGate.requestChoice(args, { toolCallId: call.id });
+    if (!result?.declined) context.pathAuthority?.addUserText(result?.answers);
+    return result;
+  }
   if (name === "internet_search") return context.internetResearch.search(args);
   if (name === "page_retrieve") return context.internetResearch.retrieve(args);
   if (name === "schedule_create") return context.scheduler.create(args);

@@ -34,7 +34,7 @@ const EVENT_TYPES = Object.freeze({
   HOOK_SKIPPED: "hook-skipped", HOOK_BLOCKED: "hook-blocked", HOOK_FAILED: "hook-failed", HOOK_NOTIFICATION: "hook-notification",
   HOOK_QUEUED: "hook-queued", HOOK_WAITING_APPROVAL: "hook-waiting-approval", HOOK_INPUT_REWRITTEN: "hook-input-rewritten",
   RUN_RESTORED: "run-restored", RECOVERY_WARNING: "recovery-warning",
-  COMPACTION: "compaction", RUN_COMPLETED: "run-completed", RUN_CANCELLED: "run-cancelled", RUN_FAILED: "run-failed"
+  COMPACTION: "compaction", RUN_COMPLETED: "run-completed", RUN_CANCELLED: "run-cancelled", RUN_ABORTED: "run-aborted", RUN_FAILED: "run-failed"
 });
 
 /** Ensure the authoritative final response is published at most once. */

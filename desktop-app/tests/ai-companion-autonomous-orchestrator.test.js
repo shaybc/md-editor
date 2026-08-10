@@ -6,6 +6,7 @@ const path = require("node:path");
 const test = require("node:test");
 
 const { AutonomousOrchestrator } = require("../resources/ai-companion/orchestration/autonomous/autonomous-orchestrator");
+const { runAutonomousLoop } = require("../resources/ai-companion/orchestration/autonomous/autonomous-loop");
 const { CompanionOrchestrator } = require("../resources/ai-companion/orchestration");
 
 function request(overrides = {}) {
@@ -24,6 +25,9 @@ test("natural text completes without a tool or verifier call", async () => {
   assert.equal(result.content, "Hello!");
   assert.equal(calls, 1);
   assert.deepEqual(events.filter((event) => event.type === "assistant-final").map((event) => event.content), ["Hello!"]);
+  const summaries = events.filter((event) => event.type === "agent-summary");
+  assert.equal(summaries.length, 1);
+  assert.equal(summaries[0].status, "success");
 });
 
 test("Chat requests permit at most one transient provider retry", async () => {
@@ -85,6 +89,9 @@ test("two consecutive unusable responses fail instead of publishing a blank comp
   assert.equal(events.some((event) => event.type === "run-failed"), true);
   assert.equal(events.some((event) => event.type === "run-completed"), false);
   assert.equal(events.some((event) => event.type === "assistant-final"), false);
+  const summaries = events.filter((event) => event.type === "agent-summary");
+  assert.equal(summaries.length, 1);
+  assert.equal(summaries[0].status, "failure");
 });
 
 test("malformed tool-call finish receives one provider-neutral correction", async () => {
@@ -127,4 +134,51 @@ test("autonomous modules do not import legacy orchestration or M0-M11 controller
   const root = path.join(__dirname, "../resources/ai-companion/orchestration/autonomous");
   const source = fs.readdirSync(root).filter((name) => name.endsWith(".js")).map((name) => fs.readFileSync(path.join(root, name), "utf8")).join("\n");
   assert.doesNotMatch(source, /legacy-orchestrator|agent-tool-loop|agent-state|intent-contract|decision-controller|completion-assessment/);
+});
+
+test("tool failure handling preserves the original exception and effective input", async () => {
+  let providerCalls = 0;
+  const observedFailures = [];
+  const emitted = [];
+  const provider = {
+    async completeMessage() {
+      providerCalls += 1;
+      if (providerCalls === 1) return {
+        content: "",
+        toolCalls: [{ id: "search-call", function: { name: "capability_search", arguments: JSON.stringify({ query: "workspace" }) } }]
+      };
+      return { content: "The original failure was reported.", toolCalls: [] };
+    }
+  };
+  const context = {
+    capabilities: {
+      assertCallable() {}, consumeCatalogNotice: () => "", registration: () => null,
+      search: () => [{ name: "read_file" }]
+    },
+    hooks: {
+      drainContext: () => [],
+      async run(event) {
+        if (event === "after-tool") throw new Error("original post-tool failure");
+        return { additionalContext: [] };
+      }
+    },
+    runSummary: {
+      recordToolCompleted() {},
+      recordToolFailed(_tool, input, error) { observedFailures.push({ input, error: error.message }); }
+    },
+    windowSteward: { prepare: async () => ({ renewed: false }), recordUsage() {}, reportedTokens: 0 },
+    observationLedger: { refresh() {}, register() {}, summary: () => ({}) },
+    interactionGate: { acknowledgeToolResults: async () => {} },
+    request: { workspaceRoot: "", settings: {} },
+    saveSnapshot: async () => {},
+    pendingTools: []
+  };
+  const result = await runAutonomousLoop({
+    provider, messages: [], tools: [], request: { settings: {}, autonomousMaxRounds: 3 },
+    events: { emit: (event) => emitted.push(event) }, context
+  });
+  assert.equal(result, "The original failure was reported.");
+  assert.deepEqual(observedFailures, [{ input: { query: "workspace" }, error: "original post-tool failure" }]);
+  assert.equal(emitted.some((event) => event.type === "tool-failed" && event.error === "original post-tool failure"), true);
+  assert.equal(emitted.some((event) => /effectiveCall is not defined/.test(event.error || "")), false);
 });

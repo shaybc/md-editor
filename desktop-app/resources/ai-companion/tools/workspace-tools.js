@@ -38,8 +38,9 @@ function isAbortError(error) {
 }
 
 function resolveWorkspacePath(root, relativePath = "") {
-  const workspaceRoot = path.resolve(String(root || ""));
-  if (!workspaceRoot) throw new Error("Workspace root is required.");
+  const rootText = String(root || "").trim();
+  if (!rootText) throw new Error("Workspace root is required.");
+  const workspaceRoot = path.resolve(rootText);
   const resolvedPath = path.resolve(workspaceRoot, String(relativePath || ""));
   if (resolvedPath !== workspaceRoot && !resolvedPath.startsWith(workspaceRoot + path.sep)) {
     throw new Error("Path is outside the workspace.");
@@ -276,7 +277,9 @@ async function applyEdit(root, filePath, search, replacement, options = {}) {
   await fs.writeFile(resolvedPath, preparedEdit.proposedContent, "utf8");
   return {
     path: filePath,
+    resolvedPath,
     changed: current !== preparedEdit.proposedContent,
+    action: current !== preparedEdit.proposedContent ? "modified" : "unchanged",
     matchMode: preparedEdit.matchMode,
     matchCount: preparedEdit.matchCount,
     occurrence: preparedEdit.occurrence
@@ -287,10 +290,16 @@ async function writeFile(root, filePath, content, options = {}) {
   throwIfAborted(options.signal);
   if (options.allowWrites !== true) throw new Error("File writes require user approval in AI Companion settings.");
   const { resolvedPath } = resolveWorkspacePath(root, filePath);
+  const nextContent = String(content || "");
+  let previousContent = null;
+  try { previousContent = await fs.readFile(resolvedPath, "utf8"); }
+  catch (error) { if (error?.code !== "ENOENT") throw error; }
+  const action = previousContent === null ? "created" : (previousContent === nextContent ? "unchanged" : "modified");
+  if (action === "unchanged") return { path: filePath, resolvedPath, changed: false, action };
   await fs.mkdir(path.dirname(resolvedPath), { recursive: true });
   throwIfAborted(options.signal);
-  await fs.writeFile(resolvedPath, String(content || ""), "utf8");
-  return { path: filePath, changed: true };
+  await fs.writeFile(resolvedPath, nextContent, "utf8");
+  return { path: filePath, resolvedPath, changed: true, action };
 }
 
 async function runCommand(root, command, options = {}) {

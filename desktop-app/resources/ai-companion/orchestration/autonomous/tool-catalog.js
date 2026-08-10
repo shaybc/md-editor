@@ -16,16 +16,16 @@ const DEFINITIONS = Object.freeze([
   tool("glob_files", "Find workspace files matching a glob.", { pattern: text("Glob pattern") }, ["pattern"]),
   tool("find_documentation", "Find likely workspace README, help, docs, guide, manual, or wiki files without broadly listing the repository.", { query: text("Documentation topic or location being sought"), maxResults: integer("Maximum results, up to 50") }, ["query"]),
   tool("search_text", "Search workspace text.", { pattern: text("Text to search") }, ["pattern"]),
-  tool("read_file", "Read a workspace file with line numbers.", { path: text("Workspace-relative path"), startLine: integer("First line"), endLine: integer("Last line") }, ["path"]),
-  tool("apply_edit", "Replace exact text in a workspace file.", { path: text("Workspace-relative path"), search: text("Exact existing text"), replacement: text("Replacement text"), approvalReason: text("Why this change is needed") }, ["path", "search", "replacement"]),
-  tool("write_file", "Create or replace a workspace file.", { path: text("Workspace-relative path"), content: text("Complete file content"), approvalReason: text("Why this change is needed") }, ["path", "content"]),
-  tool("run_command", "Run a command in the workspace.", { command: text("Command to run"), timeoutMs: integer("Timeout in milliseconds"), approvalReason: text("Why execution is needed") }, ["command"]),
+  tool("read_file", "Read a file from the opened folder or an external location explicitly supplied by the user.", { path: text("Opened-folder-relative, user-supplied absolute, or known-folder path"), startLine: integer("First line"), endLine: integer("Last line") }, ["path"]),
+  tool("apply_edit", "Replace exact text in a file from the opened folder or an external location explicitly supplied by the user.", { path: text("Opened-folder-relative, user-supplied absolute, or known-folder path"), search: text("Exact existing text"), replacement: text("Replacement text"), approvalReason: text("Why this change is needed") }, ["path", "search", "replacement"]),
+  tool("write_file", "Create or replace a file in the opened folder or an external location explicitly supplied by the user.", { path: text("Opened-folder-relative, user-supplied absolute, or known-folder path"), content: text("Complete file content"), approvalReason: text("Why this change is needed") }, ["path", "content"]),
+  tool("run_command", "Run a command in an opened folder or a working directory explicitly supplied by the user.", { command: text("Command to run"), cwd: text("Opened-folder-relative, user-supplied absolute, or known-folder working directory"), timeoutMs: integer("Timeout in milliseconds"), approvalReason: text("Why execution is needed") }, ["command"]),
   tool("discover_extensions", "List available rules, skills, agents, plugins, hooks, MCP servers, and deferred tools.", { kind: text("Optional extension kind") }),
   tool("capability_search", "Search and activate secondary tool schemas. Use select:tool_name for exact selection, comma-separated names for multiple tools, or task keywords for ranked discovery.", { query: text("Exact selection or capability keywords"), maxResults: integer("Maximum metadata results") }, ["query"]),
   tool("load_extension", "Load one discovered non-skill extension. Workflow skills must be activated through skill_invoke.", { id: text("Discovered extension id") }, ["id"]),
   tool("skill_invoke", "Activate one advertised workflow skill by its exact name. The runtime loads its instructions only after this call.", { name: text("Exact advertised workflow name"), arguments: { description: "Optional workflow arguments", oneOf: [{ type: "string" }, { type: "object", additionalProperties: { type: ["string", "number", "boolean"] } }] } }, ["name"]),
   tool("request_user_choice", "Pause the foreground run and ask the user for a decision that cannot be resolved from available context.", {
-    reason: text("Why this decision is required"),
+    reason: text("One short sentence explaining why this decision is required"),
     questions: {
       type: "array",
       minItems: 1,
@@ -34,8 +34,8 @@ const DEFINITIONS = Object.freeze([
         type: "object",
         additionalProperties: false,
         properties: {
-          header: text("Short decision label"),
-          question: text("Complete question"),
+          header: text("Short imperative decision title, ideally 2-5 words"),
+          question: text("Brief direct question, one line when possible"),
           multiSelect: { type: "boolean" },
           allowFreeText: { type: "boolean" },
           options: {
@@ -47,7 +47,7 @@ const DEFINITIONS = Object.freeze([
               additionalProperties: false,
               properties: {
                 label: text("Short option label"),
-                description: text("Effect or tradeoff")
+                description: text("Brief effect or tradeoff, one short sentence")
               },
               required: ["label", "description"]
             }

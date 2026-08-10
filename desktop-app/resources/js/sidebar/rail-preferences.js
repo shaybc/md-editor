@@ -17,6 +17,8 @@
     const boundRails = new WeakSet();
     let pressState = null;
     let suppressNextClick = false;
+    let contextMenu = null;
+    let contextButton = null;
 
     /**
      * Return one complete, duplicate-free rail order.
@@ -61,6 +63,89 @@
 
     function getRailButtons(rail) {
       return Array.from(rail?.querySelectorAll?.(".sidebar-view-rail-button[data-sidebar-rail-icon]") || []);
+    }
+
+    function getVisibilityInput(iconId) {
+      return document.getElementById(`settings-sidebar-rail-show-${iconId}`);
+    }
+
+    /**
+     * Persist one configurable icon's visibility and keep its Railbar settings switch synchronized.
+     * @param {string} iconId - Rail icon identifier.
+     * @param {boolean} isVisible - Whether the icon should remain visible.
+     * @returns {boolean} Whether the icon supports visibility changes.
+     */
+    function setIconVisibility(iconId, isVisible) {
+      if (!configurableIconIds.has(iconId)) return false;
+      const state = deps.loadGlobalState();
+      const visibility = normalizeVisibility(state?.sidebarRailIconVisibility);
+      visibility[iconId] = isVisible !== false;
+      const input = getVisibilityInput(iconId);
+      if (input) input.checked = visibility[iconId];
+      deps.saveGlobalState({ sidebarRailIconVisibility: visibility });
+      deps.scheduleGlobalProfileWrite();
+      applyPreferences({ ...state, sidebarRailIconVisibility: visibility });
+      return true;
+    }
+
+    function hideContextMenu() {
+      contextMenu?.classList.add("hidden");
+      contextButton = null;
+    }
+
+    function ensureContextMenu() {
+      if (contextMenu) return contextMenu;
+      contextMenu = document.createElement("div");
+      contextMenu.className = "graph-context-menu sidebar-rail-context-menu hidden";
+      contextMenu.setAttribute("role", "menu");
+      contextMenu.tabIndex = -1;
+      contextMenu.innerHTML =
+        '<button class="graph-context-menu-item" type="button" role="menuitem" data-sidebar-rail-action="hide"><i class="bi bi-eye-slash" aria-hidden="true"></i><span class="graph-context-menu-item-label">Hide</span></button>' +
+        '<div class="graph-context-menu-separator" aria-hidden="true"></div>' +
+        '<button class="graph-context-menu-item" type="button" role="menuitem" disabled aria-disabled="true"><i class="bi bi-arrows-move" aria-hidden="true"></i><span class="graph-context-menu-item-label">Long press to move</span></button>';
+      contextMenu.addEventListener("click", (event) => {
+        const action = event.target.closest?.("[data-sidebar-rail-action]")?.dataset?.sidebarRailAction;
+        const iconId = contextButton?.dataset?.sidebarRailIcon;
+        if (action !== "hide" || !iconId) return;
+        hideContextMenu();
+        setIconVisibility(iconId, false);
+      });
+      contextMenu.addEventListener("keydown", (event) => {
+        if (event.key !== "Escape") return;
+        event.preventDefault();
+        hideContextMenu();
+      });
+      document.body.appendChild(contextMenu);
+      document.addEventListener("pointerdown", (event) => {
+        if (!contextMenu.contains(event.target)) hideContextMenu();
+      });
+      global.addEventListener("blur", hideContextMenu);
+      global.addEventListener("resize", hideContextMenu);
+      return contextMenu;
+    }
+
+    function showContextMenu(event, button) {
+      const menu = ensureContextMenu();
+      const iconId = button.dataset.sidebarRailIcon;
+      const label = button.querySelector(".sidebar-view-rail-label")?.textContent?.trim()
+        || button.getAttribute("aria-label")
+        || button.title
+        || "icon";
+      const hideButton = menu.querySelector('[data-sidebar-rail-action="hide"]');
+      hideButton.disabled = !configurableIconIds.has(iconId);
+      hideButton.setAttribute("aria-disabled", String(hideButton.disabled));
+      hideButton.querySelector(".graph-context-menu-item-label").textContent = `Hide ${label}`;
+      contextButton = button;
+      menu.classList.remove("hidden");
+      menu.style.left = "0px";
+      menu.style.top = "0px";
+      const appZoomFactor = Math.max(0.01, Number(document.documentElement?.dataset?.appZoomPercent || 100) / 100);
+      const bounds = menu.getBoundingClientRect();
+      const viewportLeft = Math.max(4, Math.min(event.clientX, global.innerWidth - bounds.width - 4));
+      const viewportTop = Math.max(4, Math.min(event.clientY, global.innerHeight - bounds.height - 4));
+      menu.style.left = `${viewportLeft / appZoomFactor}px`;
+      menu.style.top = `${viewportTop / appZoomFactor}px`;
+      (hideButton.disabled ? menu : hideButton).focus();
     }
 
     function updateBottomArea(rail) {
@@ -194,8 +279,15 @@
     }
 
     function handleContextMenu(event) {
-      if (!pressState?.isDragging) return;
+      if (pressState?.isDragging) {
+        event.preventDefault();
+        return;
+      }
+      const button = event.target.closest?.(".sidebar-view-rail-button[data-sidebar-rail-icon]");
+      if (!button?.closest?.(".sidebar-view-rail") || button.hidden) return;
       event.preventDefault();
+      cancelPendingPress();
+      showContextMenu(event, button);
     }
 
     function bindRail(rail) {
@@ -243,6 +335,7 @@
     const api = {
       normalizeOrder,
       normalizeVisibility,
+      setIconVisibility,
       applyPreferences
     };
     app.modules = app.modules || {};

@@ -1,0 +1,3 @@
+desktop-app/tests
+desktop-app/tests/e2e
+desktop-app/tests/helpers

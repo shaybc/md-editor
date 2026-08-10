@@ -13,7 +13,8 @@ async function authorizeTool(request, name, args, taskGrants, controls) {
   controls = controls || request.authorizationControls || {};
   let descriptor = approvalCapabilities.describe(name, args, {
     effectiveSecurityPolicy: request.securityContext?.policy,
-    commandAnalysis: controls.commandAnalysis
+    commandAnalysis: controls.commandAnalysis,
+    workspaceRoot: request.workspaceRoot
   });
   if (!descriptor) return { approved: true };
   descriptor = enforceAgentAuthority(request.agentAuthority, descriptor);

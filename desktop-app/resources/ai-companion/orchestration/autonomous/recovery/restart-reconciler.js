@@ -3,6 +3,7 @@
 "use strict";
 
 const { getRunIdentity } = require("../work/run-identity");
+const { resolveInteractionToolCallId } = require("../interaction/pending-interaction-recovery");
 const { canonicalWorkspace } = require("./run-chronicle");
 
 class RestartReconciler {
@@ -17,6 +18,7 @@ class RestartReconciler {
     if (identity.workspaceRoot !== canonicalWorkspace(request.workspaceRoot)) incompatible.push("workspace");
     if (incompatible.length) return { classification: "incompatible", reasons: incompatible, notices: [] };
     if (snapshot.status === "completed" && typeof snapshot.finalResponse === "string") return { classification: "completed", notices: [] };
+    if (["running", "interrupted", "aborted"].includes(snapshot.status)) return { classification: "aborted", notices: [] };
     if (snapshot.status === "cancelled") return { classification: "cancelled", notices: [] };
     const notices = [];
     if (snapshot.provider !== String(request.settings?.provider || "") || snapshot.model !== String(request.settings?.model || "")) {
@@ -32,10 +34,12 @@ class RestartReconciler {
       notices.push("The permitted tool inventory changed since the saved run. Current definitions and permissions are authoritative.");
     }
     const pendingTools = Array.isArray(snapshot.pendingTools) ? snapshot.pendingTools : (snapshot.pendingTool ? [snapshot.pendingTool] : []);
+    const interactionCallId = resolveInteractionToolCallId(snapshot.pendingInteraction, snapshot.messages, pendingTools);
     if (snapshot.pendingInteraction?.pending) {
-      notices.push("A user decision request was interrupted. Ask again only if the missing decision still materially affects the task.");
+      notices.push(interactionCallId ? "A saved user decision request will be restored before model execution continues." : "A user decision request was interrupted and could not be matched safely to its original tool call.");
     }
     for (const pendingTool of pendingTools) {
+      if (interactionCallId && String(pendingTool?.id || "") === interactionCallId) continue;
       notices.push(`A tool call was interrupted with unknown outcome: ${pendingTool.name || "tool"}. Inspect current state before deciding whether to try anything again.`);
     }
     return { classification: "recoverable", notices };
@@ -44,7 +48,9 @@ class RestartReconciler {
   /** Rebuild messages with recovery notices while restoring no approval authority. */
   rebuild(snapshot, decision) {
     const messages = Array.isArray(snapshot.messages) ? JSON.parse(JSON.stringify(snapshot.messages)) : [];
-    repairUnknownToolOutcomes(messages);
+    const pendingTools = Array.isArray(snapshot.pendingTools) ? snapshot.pendingTools : (snapshot.pendingTool ? [snapshot.pendingTool] : []);
+    const interactionCallId = resolveInteractionToolCallId(snapshot.pendingInteraction, messages, pendingTools);
+    repairUnknownToolOutcomes(messages, { skipCallIds: interactionCallId ? [interactionCallId] : [] });
     if (decision.notices?.length) {
       messages.push({ role: "system", content: `Restart reconciliation:\n${decision.notices.map((notice) => `- ${notice}`).join("\n")}` });
     }
@@ -56,11 +62,12 @@ class RestartReconciler {
   }
 }
 
-function repairUnknownToolOutcomes(messages) {
+function repairUnknownToolOutcomes(messages, options = {}) {
+  const skipped = new Set((options.skipCallIds || []).map(String));
   const recordedResults = new Set(messages.filter((message) => message.role === "tool").map((message) => message.tool_call_id));
   for (const message of messages) {
     for (const call of message?.tool_calls || []) {
-      if (recordedResults.has(call.id)) continue;
+      if (recordedResults.has(call.id) || skipped.has(String(call.id))) continue;
       messages.push({
         role: "tool",
         tool_call_id: call.id,

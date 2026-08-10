@@ -102,7 +102,7 @@
     const GIT_PANEL_REFRESH_TOOLS = new Set(["git_stage", "git_unstage", "git_commit", "git_fetch", "git_pull", "git_push", "git_branch_create", "git_branch_switch"]);
     const PANEL_VISIBILITY_ANIMATION_MS = 240;
     const TOOL_LOG_END_TOLERANCE_PX = 1;
-    const TASK_CHANGES_INLINE_ENTRY_LIMIT = 2;
+    const TASK_CHANGES_COLLAPSED_FILE_LIMIT = 3;
     const TASK_CHANGES_ANIMATION_MS = 180;
     const TEXT_ATTACHMENT_EXTENSIONS = new Set([
       "bat", "c", "cc", "cfg", "conf", "cpp", "cs", "css", "csv", "go", "gradle", "h", "hpp", "htm", "html", "ini", "java", "js", "json", "jsx", "kt", "log", "md", "mjs", "ps1", "py", "rb", "rs", "sh", "sql", "toml", "ts", "tsx", "txt", "xml", "yaml", "yml"
@@ -119,7 +119,7 @@
     const MIN_WORKSPACE_SIDE_WIDTH = 240;
     const MAX_WORKSPACE_SIDE_WIDTH = 520;
     const WORKSPACE_CHAT_PAGE_SIZE = 20;
-    const WORKSPACE_STATUS_CLASS_NAMES = ["status-completed", "status-incomplete", "status-error", "status-cancelled", "status-planned", "status-running", "status-ready"];
+    const WORKSPACE_STATUS_CLASS_NAMES = ["status-completed", "status-incomplete", "status-error", "status-cancelled", "status-aborted", "status-planned", "status-running", "status-ready"];
     const BUNDLED_WORKFLOW_SUGGESTIONS = [
       { name: "investigate-defect", description: "Investigate a defect from evidence to root cause.", allowedModes: ["plan", "agent"] },
       { name: "develop-change", description: "Implement a scoped repository change.", allowedModes: ["agent"] },
@@ -148,6 +148,7 @@
     let agentEntries = [];
     let agentTaskIndex = [];
     let activeAgentChat = null;
+    let hasDisplayedAgentChat = false;
     let nextAgentTaskSequence = 1;
     let nextSyntheticActivitySequence = 1;
     let syntheticActivityIds = new Map();
@@ -166,6 +167,34 @@
     let nativeDropListenerAttached = false;
     let nextDraftAttachmentId = 1;
     let latestRequestContextFiles = [];
+    const userInputHost = (() => {
+      const existing = panel.querySelector("#ai-companion-user-input-host");
+      if (existing) return existing;
+      const created = document.createElement("div");
+      created.id = "ai-companion-user-input-host";
+      created.className = "ai-companion-user-input-host";
+      created.hidden = true;
+      created.setAttribute("aria-live", "assertive");
+      if (agentView && agentComposer) agentView.insertBefore(created, agentComposer);
+      return created;
+    })();
+    const userInputInteraction = window.createMarkdownViewerAiCompanionUserInputInteraction?.({
+      host: userInputHost,
+      respond: async (event, answers, declined) => {
+        await deps.bridge?.respondUserInput?.(event.interactionId, answers, declined);
+        event.response = { answers, declined, respondedAt: new Date().toISOString() };
+        if (activeAgentEntry) {
+          activeAgentEntry.record.updatedAt = event.response.respondedAt;
+          activeAgentEntry.isDirty = true;
+          await saveAgentEntryImmediately(activeAgentEntry);
+        }
+      },
+      onResolved: (event, historyEntry) => {
+        const owner = agentEntries.find((entry) => entry.record?.events?.includes(event)) || activeAgentEntry;
+        owner?.renderer?.appendExternalActivity?.(historyEntry);
+        scrollToolLogToEnd();
+      }
+    });
     let plansViewOpen = false;
     let plansLoading = false;
     let selectedRepositoryPlan = null;
@@ -290,8 +319,8 @@
       taskChangesToggle.type = "button";
       taskChangesToggle.className = "folder-tree-tool-button ai-companion-workspace-changes-toggle";
       taskChangesToggle.hidden = true;
-      taskChangesToggle.setAttribute("title", "Show changed files");
-      taskChangesToggle.setAttribute("aria-label", "Show changed files");
+      taskChangesToggle.setAttribute("title", "Expand changes");
+      taskChangesToggle.setAttribute("aria-label", "Expand changes");
       taskChangesToggle.setAttribute("aria-controls", "ai-companion-workspace-change-list");
       taskChangesToggle.setAttribute("aria-expanded", "false");
       const icon = document.createElement("i");
@@ -301,9 +330,11 @@
       taskChangesHeader.appendChild(taskChangesToggle);
 
       taskChangesSummary.id = "ai-companion-workspace-change-summary";
+      taskChangesSummary.className = "ai-companion-workspace-change-summary";
       taskChangesList.id = "ai-companion-workspace-change-list";
       taskChangesList.className = "ai-companion-workspace-change-list";
-      taskChangesPanel.replaceChildren(taskChangesSummary, taskChangesList);
+      taskChangesHeader.insertBefore(taskChangesSummary, taskChangesToggle);
+      taskChangesPanel.replaceChildren(taskChangesList);
     }
 
     // Context usage indicator: donut ring next to the run/stop button fed by provider-reported
@@ -344,6 +375,15 @@
       return app?.services?.tabs?.newTab?.(content, null, { viewMode: "preview" }) || null;
     }
 
+    /** Return from the full AI workspace so an editor tab opened from it is immediately visible. */
+    function revealOpenedFileTab(tab) {
+      if (workspaceOpen) {
+        closeWorkspaceForExternalNavigation();
+        setWorkspaceSidebarView("files");
+      }
+      return tab;
+    }
+
     function createActivityRenderer(container) {
       return window.createMarkdownViewerAiCompanionActivityRenderer?.({
         container,
@@ -356,7 +396,8 @@
         onCopied: () => {},
         onCopyError: () => notifyAiCompanionError("Copy failed"),
         onOpenTabError: () => notifyAiCompanionError("Open failed"),
-        openMarkdownInNewTab
+        openMarkdownInNewTab,
+        onContinueTask: () => continueTaskFromSummary(container)
       }) || null;
     }
 
@@ -690,6 +731,7 @@
       if (!fullPath || typeof deps.openDocumentSourceFile !== "function") return null;
       try {
         const tab = await deps.openDocumentSourceFile({ name: getActivityFileName(fullPath), path: fullPath }, { temporary: false, title: getActivityFileName(fullPath) });
+        revealOpenedFileTab(tab);
         if (line) deps.focusEditorLine?.(line);
         return tab;
       } catch (error) {
@@ -712,7 +754,7 @@
     function openActivityCompare(compare) {
       if (!compare || typeof deps.openFileCompareInTab !== "function") return null;
       const fullPath = joinWorkspacePath(compare.path);
-      return deps.openFileCompareInTab({
+      const tab = deps.openFileCompareInTab({
         title: compare.title || `Agent edit: ${compare.path || compare.name || "file"}`,
         left: {
           name: compare.beforeName || "Before agent edit",
@@ -725,6 +767,7 @@
         },
         viewMode: "side-by-side"
       });
+      return revealOpenedFileTab(tab);
     }
 
     function reviewApprovalChanges(event = {}, actionLabel = "Agent action") {
@@ -781,7 +824,9 @@
 
     function classifyTaskChangedFile(file = {}) {
       const action = String(file.action || "").trim().toLowerCase();
-      if (action === "created" || action === "modified" || action === "deleted") return action;
+      if (action === "created" || action === "added") return "created";
+      if (action === "renamed" || action === "rename") return "renamed";
+      if (action === "modified" || action === "deleted") return action;
       const compare = file.compare || {};
       const beforeExists = splitTaskChangeLines(compare.beforeContent).length > 0;
       const afterExists = splitTaskChangeLines(compare.afterContent).length > 0;
@@ -797,6 +842,7 @@
       const counts = compare ? countChangedLinesFromCompare(compare) : { additions: Number(file.additions) || 0, deletions: Number(file.deletions) || 0 };
       return {
         path,
+        oldPath: String(file.oldPath || file.previousPath || "").trim(),
         name: String(file.name || getActivityFileName(path) || path).trim(),
         action: classifyTaskChangedFile(file),
         description: String(file.description || "Updated file.").trim(),
@@ -859,13 +905,71 @@
       );
     }
 
-    function getTaskChanges(record = {}) {
-      if (record?.changes && typeof record.changes === "object") {
-        return summarizeTaskChanges(record.changes.files || [], record.changes.attempted || [], record.changes.blocked || []);
+    function buildTaskChangesFromToolEvents(events = []) {
+      const files = [];
+      const attempted = [];
+      const blocked = [];
+      const mutationTools = new Set(["write_file", "apply_edit"]);
+      for (const event of events) {
+        const tool = String(event?.tool || event?.activity?.tool || "");
+        if (!mutationTools.has(tool)) continue;
+        const result = event?.result && typeof event.result === "object" ? event.result : {};
+        const input = parseToolInput(event?.input || event?.arguments || event?.activity?.input);
+        const filePath = String(result.resolvedPath || result.path || input.path || "").trim();
+        const action = String(result.action || "").toLowerCase();
+        if (result.denied === true) {
+          blocked.push(normalizeTaskBlockedGroup({ code: "mutation-denied", count: 1, items: [{ tool, path: filePath, reason: result.instructions || "Mutation was denied." }] }));
+          continue;
+        }
+        if (["created", "modified"].includes(action) && filePath) {
+          const normalized = normalizeTaskChangedFile({ path: filePath, action });
+          if (normalized && !files.some((file) => file.path === normalized.path)) files.push(normalized);
+        } else if (["tool-error", "tool-failed"].includes(event?.type) && filePath) {
+          const normalized = normalizeTaskAttemptedFile({ path: filePath, tool, reason: event.error || event.summary || "Mutation failed." });
+          if (normalized) attempted.push(normalized);
+        }
       }
+      for (const event of events) {
+        if (event?.type !== "tool-denied" || !mutationTools.has(String(event.tool || ""))) continue;
+        const filePath = String(event.path || event.resource?.value || "").trim();
+        blocked.push(normalizeTaskBlockedGroup({
+          code: event.code || "mutation-denied",
+          count: 1,
+          items: [{ tool: event.tool, path: filePath, reason: event.reason || event.summary || "Mutation was denied." }]
+        }));
+      }
+      return summarizeTaskChanges(files, attempted, blocked);
+    }
+
+    function getTaskChanges(record = {}) {
       const events = Array.isArray(record?.events) ? record.events : [];
+      if (record?.changes && typeof record.changes === "object") {
+        const changes = summarizeTaskChanges(record.changes.files || [], record.changes.attempted || [], record.changes.blocked || []);
+        if (changes.totalFiles || changes.attemptedFiles || changes.blockedProposals) return changes;
+      }
       const summary = [...events].reverse().find((event) => event?.type === "agent-summary");
-      return summary ? buildTaskChangesFromSummary(summary) : summarizeTaskChanges();
+      return summary ? buildTaskChangesFromSummary(summary) : buildTaskChangesFromToolEvents(events);
+    }
+
+    function ensureAbortedTaskSummary(record = {}) {
+      const events = Array.isArray(record.events) ? record.events : (record.events = []);
+      if (events.some((event) => event?.type === "agent-summary")) return;
+      const changes = getTaskChanges(record);
+      const completedAt = Date.now();
+      const outcome = "The task was aborted because the application closed before it completed.";
+      events.push({
+        type: "agent-summary", status: "aborted", finalResponse: outcome, outcome,
+        changedFiles: changes.files, attemptedChanges: changes.attempted, blockedChanges: changes.blocked,
+        validation: [], elapsedMs: Math.max(0, completedAt - (Number(record.createdAt) || completedAt)), completedAt
+      });
+      record.changes = changes;
+      record.status = "aborted";
+      record.updatedAt = completedAt;
+    }
+
+    /** Return whether a completed task created or modified at least one file. */
+    function taskRecordHasCreatedOrEditedFiles(record = {}) {
+      return getTaskChanges(record).files.some((file) => file.action === "created" || file.action === "modified");
     }
 
     function appendTaskChangeDelta(parent, file = {}) {
@@ -889,26 +993,54 @@
       parent.appendChild(delta);
     }
 
-    function renderTaskChangeRow(file = {}) {
-      const row = document.createElement(file.compare ? "button" : "div");
-      row.className = `ai-companion-workspace-change-file${file.compare ? " openable" : ""}`;
-      if (file.compare) {
-        row.type = "button";
-        row.addEventListener("click", () => openActivityCompare(file.compare));
+    function getTaskChangeDisplayPath(path) {
+      const rawPath = String(path || "").trim();
+      if (!rawPath) return "file";
+      const normalizedRawPath = rawPath.replace(/\\/g, "/");
+      const compactPath = (value) => {
+        const parts = String(value || "").split("/").filter(Boolean);
+        return parts.length > 4 ? `\u2026/${parts.slice(-3).join("/")}` : value;
+      };
+      if (!isAbsoluteLocalPath(rawPath)) return compactPath(normalizedRawPath.replace(/^\.\//, ""));
+      const fullPath = normalizeLocalPathForComparison(rawPath);
+      const workspaceRoot = normalizeLocalPathForComparison(deps.getWorkspaceRoot?.() || "");
+      if (workspaceRoot && fullPath.toLowerCase().startsWith(`${workspaceRoot.toLowerCase()}/`)) {
+        return compactPath(fullPath.slice(workspaceRoot.length + 1));
       }
-      const icon = document.createElement("i");
-      icon.className = "bi bi-file-earmark-code";
-      icon.setAttribute("aria-hidden", "true");
-      const body = document.createElement("span");
-      body.className = "ai-companion-workspace-change-file-body";
+      const parts = normalizedRawPath.split("/").filter(Boolean);
+      return parts.length > 3 ? `\u2026/${parts.slice(-3).join("/")}` : normalizedRawPath;
+    }
+
+    function getTaskChangeStatus(action) {
+      return { created: "A", modified: "M", deleted: "D", renamed: "R" }[action] || "!";
+    }
+
+    function renderTaskChangeRow(file = {}) {
+      const action = String(file.action || "modified").toLowerCase();
+      const canOpenCurrentFile = ["created", "modified", "renamed"].includes(action);
+      const canOpenDeletedDiff = action === "deleted" && !!file.compare;
+      const isOpenable = canOpenCurrentFile || canOpenDeletedDiff;
+      const row = document.createElement(isOpenable ? "button" : "div");
+      row.className = `ai-companion-workspace-change-file status-${action}${isOpenable ? " openable" : ""}`;
+      const fullPath = joinWorkspacePath(file.path) || file.path || file.name || "file";
+      const displayPath = getTaskChangeDisplayPath(file.path || file.name);
+      row.title = [fullPath, file.description].filter(Boolean).join("\n");
+      if (isOpenable) {
+        row.type = "button";
+        row.setAttribute("aria-label", `${action} ${fullPath}`);
+        row.addEventListener("click", () => {
+          if (canOpenDeletedDiff) openActivityCompare(file.compare);
+          else void openActivityFile(file.path);
+        });
+      }
+      const status = document.createElement("span");
+      status.className = "ai-companion-workspace-change-status";
+      status.textContent = getTaskChangeStatus(action);
+      status.title = action;
       const title = document.createElement("span");
       title.className = "ai-companion-workspace-change-file-title";
-      title.textContent = file.path || file.name || "file";
-      const meta = document.createElement("span");
-      meta.className = "ai-companion-workspace-change-file-meta";
-      meta.textContent = [file.action, file.description].filter(Boolean).join(" - ");
-      body.append(title, meta);
-      row.append(icon, body);
+      title.textContent = displayPath;
+      row.append(status, title);
       appendTaskChangeDelta(row, file);
       return row;
     }
@@ -935,11 +1067,6 @@
       return details;
     }
 
-    /** Count the rows that consume space before nested blocked proposals are expanded. */
-    function getTaskChangesVisibleEntryCount(changes = {}) {
-      return changes.files.length + changes.attempted.length + (changes.blockedProposals ? 1 : 0);
-    }
-
     /** Keep the expanded changes overlay above the current composer bounds. */
     function syncTaskChangesOverlayLayout() {
       if (!taskChangesExpanded || !taskChangesSection || !agentView || !agentComposer) return;
@@ -957,8 +1084,8 @@
       const isCompact = taskChangesSection.classList.contains("is-compact");
       taskChangesToggle.hidden = !isCompact;
       taskChangesToggle.setAttribute("aria-expanded", taskChangesExpanded ? "true" : "false");
-      taskChangesToggle.setAttribute("title", taskChangesExpanded ? "Hide changed files" : "Show changed files");
-      taskChangesToggle.setAttribute("aria-label", taskChangesExpanded ? "Hide changed files" : "Show changed files");
+      taskChangesToggle.setAttribute("title", taskChangesExpanded ? "Collapse changes" : "Expand changes");
+      taskChangesToggle.setAttribute("aria-label", taskChangesExpanded ? "Collapse changes" : "Expand changes");
       const icon = taskChangesToggle.querySelector("i");
       if (icon) icon.className = `bi bi-chevron-${taskChangesExpanded ? "down" : "up"}`;
     }
@@ -972,7 +1099,7 @@
       taskChangesSection?.classList?.remove("is-expanded", "is-closing");
       taskChangesSection?.style?.removeProperty("--ai-companion-changes-overlay-bottom");
       taskChangesSection?.style?.removeProperty("--ai-companion-changes-overlay-height");
-      if (taskChangesList) taskChangesList.hidden = taskChangesSection?.classList?.contains("is-compact") === true;
+      if (taskChangesList) taskChangesList.hidden = false;
     }
 
     /** Expand or explicitly minimize a compact Changes section. */
@@ -1021,32 +1148,43 @@
         updateTaskChangesToggle();
         return;
       }
-      const summary = document.createElement("div");
-      summary.className = "ai-companion-workspace-change-summary";
       const label = document.createElement("span");
-      label.textContent = `Changed files ${changes.totalFiles}`;
-      summary.appendChild(label);
-      appendTaskChangeDelta(summary, changes);
+      label.className = "ai-companion-workspace-change-count";
+      label.textContent = `• ${changes.totalFiles} ${changes.totalFiles === 1 ? "file" : "files"}`;
+      taskChangesSummary.appendChild(label);
+      appendTaskChangeDelta(taskChangesSummary, changes);
       if (changes.attemptedFiles) {
         const attempted = document.createElement("span");
         attempted.className = "ai-companion-workspace-change-attempted";
         attempted.textContent = `Attempted ${changes.attemptedFiles}`;
-        summary.appendChild(attempted);
+        taskChangesSummary.appendChild(attempted);
       }
       if (changes.blockedProposals) {
         const blocked = document.createElement("span");
         blocked.className = "ai-companion-workspace-change-blocked";
         blocked.textContent = `Blocked ${changes.blockedProposals}`;
-        summary.appendChild(blocked);
+        taskChangesSummary.appendChild(blocked);
       }
-      taskChangesSummary.appendChild(summary);
-      changes.files.forEach((file) => taskChangesList.appendChild(renderTaskChangeRow(file)));
-      changes.attempted.forEach((file) => taskChangesList.appendChild(renderTaskChangeRow(file)));
+      const renderedEntries = [];
+      changes.files.forEach((file) => renderedEntries.push(renderTaskChangeRow(file)));
+      changes.attempted.forEach((file) => renderedEntries.push(renderTaskChangeRow(file)));
       const blockedGroup = renderBlockedChangesGroup(changes);
-      if (blockedGroup) taskChangesList.appendChild(blockedGroup);
-      const isCompact = getTaskChangesVisibleEntryCount(changes) > TASK_CHANGES_INLINE_ENTRY_LIMIT;
-      taskChangesSection?.classList?.toggle("is-compact", isCompact);
-      taskChangesList.hidden = isCompact;
+      if (blockedGroup) renderedEntries.push(blockedGroup);
+      renderedEntries.forEach((entry, index) => {
+        if (index >= TASK_CHANGES_COLLAPSED_FILE_LIMIT) entry.classList.add("is-collapsed-overflow");
+        taskChangesList.appendChild(entry);
+      });
+      const hiddenEntryCount = Math.max(0, renderedEntries.length - TASK_CHANGES_COLLAPSED_FILE_LIMIT);
+      if (hiddenEntryCount) {
+        const more = document.createElement("button");
+        more.type = "button";
+        more.className = "ai-companion-workspace-change-more";
+        more.textContent = `+${hiddenEntryCount} more`;
+        more.addEventListener("click", () => setTaskChangesExpanded(true));
+        taskChangesList.appendChild(more);
+      }
+      taskChangesSection?.classList?.add("is-compact");
+      taskChangesList.hidden = false;
       updateTaskChangesToggle();
     }
 
@@ -1204,7 +1342,8 @@
       if (["completed", "complete", "implemented", "success", "succeeded"].includes(normalized)) return "completed";
       if (normalized === "incomplete") return "incomplete";
       if (["error", "failed", "failure"].includes(normalized)) return "error";
-      if (["cancelled", "canceled", "interrupted"].includes(normalized)) return "cancelled";
+      if (["cancelled", "canceled"].includes(normalized)) return "cancelled";
+      if (["aborted", "interrupted"].includes(normalized)) return "aborted";
       if (["planned", "pending"].includes(normalized)) return "planned";
       if (["running", "working"].includes(normalized)) return "running";
       return "ready";
@@ -1217,13 +1356,14 @@
       if (key === "error") return "Error";
       if (key === "cancelled") return "Cancelled";
       if (key === "planned") return "Planned";
+      if (key === "aborted") return "Aborted";
       if (key === "running") return "Running";
       return "Ready";
     }
 
     function isWorkspaceRecordTerminal(record = null) {
       const status = getWorkspaceStatusKey(record?.status, "");
-      return status === "completed" || status === "incomplete" || status === "error" || status === "cancelled" || status === "planned";
+      return status === "completed" || status === "incomplete" || status === "error" || status === "cancelled" || status === "aborted" || status === "planned";
     }
 
     function getWorkspaceChatStatus(chat = {}, isRunningChat = false) {
@@ -1297,6 +1437,7 @@
         const savedRecords = records.filter(Boolean);
         chat.searchContent = savedRecords.map(getTaskRecordSearchContent).join("\n").toLowerCase();
         chat.hasAttachments = savedRecords.some((record) => Array.isArray(record.attachments) && record.attachments.length > 0);
+        chat.hasCreatedOrEditedFiles = savedRecords.some(taskRecordHasCreatedOrEditedFiles);
       }));
       return chats;
     }
@@ -1338,6 +1479,19 @@
       return actionMenu;
     }
 
+    /** Append one accessible metadata icon to a workspace chat card. */
+    function appendWorkspaceChatIndicator(parent, className, label, iconClass) {
+      const indicator = document.createElement("span");
+      indicator.className = className;
+      indicator.setAttribute("aria-label", label);
+      indicator.title = label;
+      const indicatorIcon = document.createElement("i");
+      indicatorIcon.className = `bi ${iconClass}`;
+      indicatorIcon.setAttribute("aria-hidden", "true");
+      indicator.append(indicatorIcon);
+      parent.append(indicator);
+    }
+
     function createWorkspaceChatRow(chat = {}) {
       const row = document.createElement("div");
       row.className = "ai-companion-workspace-chat-item";
@@ -1357,15 +1511,10 @@
       iconColumn.className = "ai-companion-workspace-chat-icon-column";
       iconColumn.append(icon);
       if (chat.hasAttachments === true) {
-        const attachmentIndicator = document.createElement("span");
-        attachmentIndicator.className = "ai-companion-workspace-chat-attachment-indicator";
-        attachmentIndicator.setAttribute("aria-label", "Contains attachments");
-        attachmentIndicator.title = "Contains attachments";
-        const attachmentIcon = document.createElement("i");
-        attachmentIcon.className = "bi bi-paperclip";
-        attachmentIcon.setAttribute("aria-hidden", "true");
-        attachmentIndicator.append(attachmentIcon);
-        iconColumn.append(attachmentIndicator);
+        appendWorkspaceChatIndicator(iconColumn, "ai-companion-workspace-chat-attachment-indicator", "Contains attachments", "bi-paperclip");
+      }
+      if (chat.hasCreatedOrEditedFiles === true) {
+        appendWorkspaceChatIndicator(iconColumn, "ai-companion-workspace-chat-file-change-indicator", "Files were changed in this chat", "bi-pencil");
       }
       const body = document.createElement("span");
       body.className = "ai-companion-workspace-chat-body";
@@ -1457,6 +1606,7 @@
       if (activeSearchChat && agentEntries.length) {
         activeSearchChat.searchContent = agentEntries.map((entry) => getTaskRecordSearchContent(entry.record)).join("\n").toLowerCase();
         activeSearchChat.hasAttachments = agentEntries.some((entry) => Array.isArray(entry.record?.attachments) && entry.record.attachments.length > 0);
+        activeSearchChat.hasCreatedOrEditedFiles = agentEntries.some((entry) => taskRecordHasCreatedOrEditedFiles(entry.record));
       }
       closeChatActionMenu();
       workspaceChatList.replaceChildren?.();
@@ -2009,9 +2159,6 @@
 
     async function refreshWorkspaceOnOpen(sequence) {
       await refreshChatSelectOptions();
-      if (sequence !== workspaceOpenRefreshSequence) return;
-      const activeSavedChat = workspaceChatIndexes.some((chat) => chat.id && chat.id === activeAgentChat?.id);
-      if (!activeSavedChat && workspaceChatIndexes[0]?.id) await switchToSavedChat(workspaceChatIndexes[0].id, workspaceChatIndexes[0]);
       if (sequence !== workspaceOpenRefreshSequence) return;
       await loadRepositoryPlans({ silent: true });
       if (sequence !== workspaceOpenRefreshSequence) return;
@@ -4004,11 +4151,7 @@
       try {
         if (deps.Neutralino?.filesystem?.getStats) await deps.Neutralino.filesystem.getStats(path);
         const tab = await deps.openDocumentSourceFile?.({ name: getActivityFileName(path), path }, { temporary: false, title: getActivityFileName(path) });
-        if (workspaceOpen) {
-          closeWorkspaceForExternalNavigation();
-          setWorkspaceSidebarView("files");
-        }
-        return tab;
+        return revealOpenedFileTab(tab);
       } catch (_error) {
         notifyAiCompanionError("Attached file not found");
         return null;
@@ -4550,6 +4693,22 @@
       }
       await saveAgentEntry(entry);
     }
+
+    async function continueTaskFromSummary(container) {
+      const entry = agentEntries.find((candidate) => candidate.output === container);
+      const status = String(entry?.record?.status || "").toLowerCase();
+      if (!entry || !["aborted", "cancelled", "canceled"].includes(status)) return;
+      if (isAgentRunning()) {
+        notifyAiCompanionBlocked("Stop the current task before continuing this task");
+        return;
+      }
+      await runCompanionPrompt({
+        prompt: "continue",
+        mode: normalizeCompanionMode(entry.record.mode),
+        continuationRecordId: entry.record.id
+      });
+    }
+
     function migrateTaskRecord(savedRecord = {}, legacyStorage = false) {
       const retained = { ...savedRecord };
       [
@@ -4671,12 +4830,19 @@
         savedEvent.blockedChanges = changes.blocked;
         activeAgentEntry.record.changes = changes;
       }
-      activeAgentEntry.record.events.push(savedEvent);
+      const existingInputIndex = savedEvent.type === "user-input" && savedEvent.interactionId
+        ? activeAgentEntry.record.events.findLastIndex((entry) => entry?.type === "user-input" && entry?.interactionId === savedEvent.interactionId)
+        : -1;
+      const existingSummaryIndex = savedEvent.type === "agent-summary"
+        ? activeAgentEntry.record.events.findLastIndex((entry) => entry?.type === "agent-summary")
+        : -1;
+      if (existingSummaryIndex >= 0) activeAgentEntry.record.events[existingSummaryIndex] = savedEvent;
+      else if (existingInputIndex >= 0) activeAgentEntry.record.events[existingInputIndex] = savedEvent; else activeAgentEntry.record.events.push(savedEvent);
       activeAgentEntry.record.updatedAt = completedAt;
       if (event.type === "agent-summary") {
-        activeAgentEntry.record.status = event.isError === true
-          ? "error"
-          : "completed";
+        const status = String(event.status || "").toLowerCase();
+        activeAgentEntry.record.status = status === "cancelled" ? "cancelled"
+          : (status === "aborted" ? "aborted" : (status === "failure" || event.isError === true ? "error" : "completed"));
         renderTaskChangesPanel(activeAgentEntry.record);
       }
       activeAgentEntry.isDirty = true;
@@ -5495,7 +5661,8 @@
         return;
       }
       if (event.type === "user-input") {
-        entry.renderer?.appendExternalActivity?.(createUserInputCard(event, { interactive: false }));
+        const historyEntry = userInputInteraction?.createHistoryEntry?.(event);
+        if (historyEntry) entry.renderer?.appendExternalActivity?.(historyEntry);
         return;
       }
       if (event.activity?.id) {
@@ -5519,8 +5686,8 @@
       const entry = createAgentTaskEntry(record.prompt || "", record);
       // A restored record still marked "running" was cut off by an app restart —
       // the task cannot actually be running anymore, so record the interruption.
-      if (entry.record.status === "running") {
-        entry.record.status = "interrupted";
+      if (["running", "interrupted"].includes(entry.record.status)) {
+        ensureAbortedTaskSummary(entry.record);
         entry.isDirty = true;
         attachPromptActions(entry);
       }
@@ -6309,23 +6476,8 @@
       const originalVersion = Number(record.version) || 1;
       record = migrateTaskRecord(record, itemOrId?.storage === "legacy");
       if (originalVersion < 6 || !["running", "interrupted"].includes(record.status)) return record;
-      try {
-        const mode = normalizeCompanionMode(record.mode);
-        record.recoveryInspection = await deps.bridge.runRecoveryInspect?.({
-          settings: getCurrentSettings(),
-          workspaceRoot: record.workspaceRoot || deps.getWorkspaceRoot?.() || "",
-          action: mode,
-          chatId: record.chatId || "",
-          taskId: record.id || "",
-          runId: record.runId || record.id || ""
-        });
-        if (record.recoveryInspection?.classification === "recoverable") record.status = "interrupted";
-        else if (record.recoveryInspection?.classification === "completed") record.status = "completed";
-        else record.status = "historical";
-      } catch (error) {
-        record.status = "historical";
-        record.recoveryInspection = { classification: "unavailable", canResume: false, notices: [error?.message || String(error)] };
-      }
+      ensureAbortedTaskSummary(record);
+      record.recoveryInspection = { classification: "aborted", canResume: false, notices: ["The application closed before this task completed."] };
       return record;
     }
 
@@ -6439,16 +6591,20 @@
       return kept;
     }
 
-    async function buildConversationHistory(excludedEntry = null, currentPrompt = "") {
+    async function buildConversationHistory(excludedEntry = null, currentPrompt = "", continuationRecordId = "") {
       const excludedId = excludedEntry?.record?.id || "";
       const index = agentTaskIndex.length ? agentTaskIndex : await readAgentTaskIndex();
-      const items = [...index].sort(compareAgentTaskIndexItems).slice(-CONVERSATION_HISTORY_TURN_LIMIT);
+      const sortedItems = [...index].sort(compareAgentTaskIndexItems);
+      const continuationIndex = continuationRecordId ? sortedItems.findIndex((item) => item.id === continuationRecordId) : -1;
+      const items = (continuationIndex >= 0 ? sortedItems.slice(0, continuationIndex + 1) : sortedItems).slice(-CONVERSATION_HISTORY_TURN_LIMIT);
       const records = [];
       for (const item of items) {
         if (excludedId && item.id === excludedId) continue;
         records.push(getVisibleAgentTaskRecord(item.id) || await readAgentTaskRecord(item));
       }
-      const continuationRecord = isExplicitContinuationPrompt(currentPrompt) ? [...records].reverse().find(Boolean) : null;
+      const continuationRecord = isExplicitContinuationPrompt(currentPrompt)
+        ? (continuationRecordId ? records.find((record) => record?.id === continuationRecordId) : [...records].reverse().find(Boolean))
+        : null;
       const messages = [];
       for (const record of dedupeConversationHistoryRecords(records)) {
         messages.push(...createConversationHistoryMessages(record, { continueTask: record === continuationRecord }));
@@ -6491,11 +6647,11 @@
       }
     }
 
-    async function loadInitialAgentHistory() {
+    async function loadInitialAgentHistory(options = {}) {
       if (agentHistoryLoaded) return;
       agentHistoryLoaded = true;
-      agentTaskIndex = await readAgentTaskIndex();
-      await loadAgentTasksPage(0, agentTaskIndex.length || AGENT_TASK_HISTORY_LIMIT);
+      agentTaskIndex = options.restoreLatestChat === false ? [] : await readAgentTaskIndex();
+      if (options.restoreLatestChat !== false) await loadAgentTasksPage(0, agentTaskIndex.length || AGENT_TASK_HISTORY_LIMIT);
       contextIndicator?.restoreTotals(getChatContextRestoreTotals(activeAgentChat, agentTaskIndex));
       await refreshChatSelectOptions();
       scrollToolLogToEnd();
@@ -6503,6 +6659,7 @@
 
     function clearToolLog() {
       shouldAutoScrollToolLog = true;
+      userInputInteraction?.clear?.();
       if (typeof toolLog.replaceChildren === "function") toolLog.replaceChildren();
       else toolLog.innerHTML = "";
       renderTaskChangesPanel(null);
@@ -6849,109 +7006,10 @@
       scrollToolLogToEnd();
     }
 
-    function createUserInputCard(event = {}, options = {}) {
-      const row = document.createElement("div");
-      row.className = "ai-companion-user-input pending";
-      row.dataset.aiCompanionActivityId = String(event.interactionId || "");
-      const title = document.createElement("div");
-      title.className = "ai-companion-user-input-title";
-      title.textContent = options.interactive === false ? "User decision interrupted" : "Your input is needed";
-      const reason = document.createElement("div");
-      reason.className = "ai-companion-user-input-reason";
-      reason.textContent = event.reason || "Choose an option so the agent can continue.";
-      const form = document.createElement("form");
-      form.className = "ai-companion-user-input-form";
-      const answerReaders = [];
-      (Array.isArray(event.questions) ? event.questions : []).forEach((question, questionIndex) => {
-        const fieldset = document.createElement("fieldset");
-        const legend = document.createElement("legend");
-        legend.textContent = question.question || question.header || `Question ${questionIndex + 1}`;
-        fieldset.appendChild(legend);
-        const inputs = [];
-        (Array.isArray(question.options) ? question.options : []).forEach((option, optionIndex) => {
-          const label = document.createElement("label");
-          label.className = "ai-companion-user-input-option";
-          const input = document.createElement("input");
-          input.type = question.multiSelect ? "checkbox" : "radio";
-          input.name = `ai-user-input-${event.interactionId}-${questionIndex}`;
-          input.value = option.label || "";
-          input.disabled = options.interactive === false;
-          if (!question.multiSelect && optionIndex === 0) input.checked = true;
-          const copy = document.createElement("span");
-          const optionTitle = document.createElement("strong");
-          optionTitle.textContent = option.label || "";
-          const description = document.createElement("small");
-          description.textContent = option.description || "";
-          copy.append(optionTitle, description);
-          label.append(input, copy);
-          fieldset.appendChild(label);
-          inputs.push(input);
-        });
-        let freeText = null;
-        if (question.allowFreeText !== false) {
-          freeText = document.createElement("input");
-          freeText.type = "text";
-          freeText.className = "ai-companion-user-input-free-text";
-          freeText.placeholder = "Or enter another answer";
-          freeText.disabled = options.interactive === false;
-          fieldset.appendChild(freeText);
-        }
-        answerReaders.push(() => {
-          const custom = String(freeText?.value || "").trim();
-          if (custom) return custom;
-          const selected = inputs.filter((input) => input.checked).map((input) => input.value);
-          return question.multiSelect ? selected : (selected[0] || "");
-        });
-        form.appendChild(fieldset);
-      });
-      row.append(title, reason, form);
-      if (options.interactive === false) return row;
-      const actions = document.createElement("div");
-      actions.className = "ai-companion-user-input-actions";
-      const submit = document.createElement("button");
-      submit.type = "submit";
-      submit.textContent = "Continue";
-      const cancel = document.createElement("button");
-      cancel.type = "button";
-      cancel.textContent = "Decline";
-      const error = document.createElement("div");
-      error.className = "ai-companion-user-input-error";
-      const respond = async (declined) => {
-        submit.disabled = true;
-        cancel.disabled = true;
-        const answers = {};
-        (event.questions || []).forEach((question, index) => { answers[question.question] = answerReaders[index](); });
-        try {
-          await deps.bridge?.respondUserInput?.(event.interactionId, answers, declined);
-          row.classList.remove("pending");
-          row.classList.add(declined ? "declined" : "resolved");
-          title.textContent = declined ? "Question declined" : "Answer submitted";
-          event.response = { answers, declined, respondedAt: new Date().toISOString() };
-          if (activeAgentEntry) {
-            activeAgentEntry.record.updatedAt = event.response.respondedAt;
-            activeAgentEntry.isDirty = true;
-            await saveAgentEntryImmediately(activeAgentEntry);
-          }
-        } catch (responseError) {
-          error.textContent = responseError?.message || "The answer could not be submitted.";
-          submit.disabled = false;
-          cancel.disabled = false;
-        }
-      };
-      form.addEventListener("submit", (submitEvent) => { submitEvent.preventDefault(); void respond(false); });
-      cancel.addEventListener("click", () => { void respond(true); });
-      actions.append(submit, cancel);
-      row.append(actions, error);
-      return row;
-    }
-
     function appendUserInput(event) {
-      const row = createUserInputCard(event, { interactive: true });
-      if (activeActivityRenderer?.appendExternalActivity) activeActivityRenderer.appendExternalActivity(row);
-      else toolLog.appendChild(row);
-      recordAgentEvent(event);
+      const savedEvent = recordAgentEvent(event) || event;
+      userInputInteraction?.show?.(savedEvent);
       if (activeAgentEntry) void saveAgentEntryImmediately(activeAgentEntry);
-      scrollToolLogToEnd();
     }
 
     function appendApproval(event) {
@@ -7010,6 +7068,11 @@
       }
       const shouldAnimate = !prefersReducedPanelMotion();
       if (open) {
+        const isFirstDisplay = !hasDisplayedAgentChat;
+        if (isFirstDisplay) {
+          hasDisplayedAgentChat = true;
+          ensureActiveAgentChat();
+        }
         panel.hidden = false;
         if (shouldAnimate) {
           window.requestAnimationFrame(() => document.body.classList.add("ai-companion-open"));
@@ -7021,7 +7084,7 @@
           document.body.classList.add("ai-companion-open");
           resizeAgentInput();
         }
-        void loadInitialAgentHistory();
+        void loadInitialAgentHistory({ restoreLatestChat: !isFirstDisplay });
       } else {
         document.body.classList.remove("ai-companion-open");
         if (!shouldAnimate || panel.hidden) {
@@ -7081,11 +7144,22 @@
     }
 
     function cancelAgentTask() {
-      if (activeRequest) void deps.bridge.cancel?.(activeRequest);
-      if (activeAgentEntry) {
+      if (activeAgentEntry && activeRunMode === "agent") {
+        const changes = getTaskChanges(activeAgentEntry.record);
+        const completedAt = Date.now();
+        const event = {
+          type: "agent-summary", status: "cancelled", finalResponse: "The task was cancelled by the user.",
+          outcome: "The task was cancelled by the user.", changedFiles: changes.files,
+          attemptedChanges: changes.attempted, blockedChanges: changes.blocked, validation: [],
+          elapsedMs: Math.max(0, completedAt - startedAt), workedLabel: getWorkedLabelFromCounter(), completedAt
+        };
+        const savedEvent = recordAgentEvent(event) || event;
+        activeActivityRenderer?.appendSummary?.(savedEvent);
+      } else if (activeAgentEntry) {
         activeAgentEntry.record.status = "cancelled";
         activeAgentEntry.isDirty = true;
       }
+      if (activeRequest) void deps.bridge.cancel?.(activeRequest);
       stopTimer();
       updateAgentRunButton();
     }
@@ -7105,7 +7179,7 @@
 
     function getDisabledNoticeState(settings, mode = activeTab) {
       if (!settings.enabled) {
-        return { title: "AI is disabled", detail: "Open Settings > AI and enable AI." };
+        return { title: "AI is disabled", detail: "Open Settings > AI and enable AI.", canEnableAi: true };
       }
       if (mode === "agent" && !settings.agentEnabled) {
         return { title: "Agent mode is disabled", detail: "Open Settings > AI and enable Agent mode." };
@@ -7114,6 +7188,13 @@
         return { title: "Chat mode is disabled", detail: "Open Settings > AI and enable Chat mode." };
       }
       return null;
+    }
+
+    /** Persist AI enablement from the disabled notice and refresh the panel immediately. */
+    function enableAiCompanionFromNotice() {
+      const settings = { ...getCurrentSettings(), enabled: true };
+      deps.saveGlobalState?.({ aiCompanionSettings: settings });
+      refreshModeMessages(settings);
     }
 
     function updateDisabledNotice(settings, mode = activeTab) {
@@ -7127,6 +7208,14 @@
       title.textContent = notice.title;
       detail.textContent = notice.detail;
       disabledNotice.append(title, detail);
+      if (notice.canEnableAi) {
+        const enableLink = document.createElement("button");
+        enableLink.type = "button";
+        enableLink.className = "ai-companion-enable-link";
+        enableLink.textContent = "or click here to enable it.";
+        enableLink.addEventListener("click", enableAiCompanionFromNotice);
+        disabledNotice.append(enableLink);
+      }
     }
 
     function updateElapsedVisibility(settings, mode = activeTab) {
@@ -7134,8 +7223,7 @@
       elapsedElement.hidden = !!getDisabledNoticeState(settings, mode) || timerId === null;
     }
 
-    function refreshModeMessages() {
-      const settings = getCurrentSettings();
+    function refreshModeMessages(settings = getCurrentSettings()) {
       updateDisabledNotice(settings);
       updateElapsedVisibility(settings);
       updateAgentRunButton();
@@ -7340,6 +7428,10 @@
       if (event.type === "assistant-final") {
         if (event.plan?.path && activeAgentEntry) activeAgentEntry.pendingPlanMetadata = event.plan;
         const finalContent = String(event.content || "").trim();
+        if (activeRunMode === "agent") {
+          recordAgentEvent(event);
+          return;
+        }
         if (!finalContent) {
           recordAgentEvent({ ...event, invalid: true, error: "The autonomous runtime returned an empty final response." });
           if (activeAgentEntry) activeAgentEntry.record.status = "error";
@@ -7375,7 +7467,7 @@
         appendAutonomousRuntimeStatus(event);
         return;
       }
-      if (["run-started", "context-thinned", "observation-released", "observation-release-reminder", "tool-catalog-updated", "tool-schema-activated", "tool-schema-restored", "tool-schema-unavailable", "extension-tool-activated", "extension-tool-started", "extension-tool-completed", "extension-tool-failed", "extension-capability-unavailable", "rules-discovered", "rule-activated", "rule-unavailable", "rules-refreshed", "continuity-updated", "chronicle-saved", "run-restored", "recovery-warning", "compaction", "run-completed", "run-cancelled", "run-failed"].includes(event.type) || /^(work|worker|memory|route)-/.test(event.type) || ["permission-mode-changed", "tool-denied", "denial-guard-tripped"].includes(event.type)) {
+      if (["run-started", "context-thinned", "observation-released", "observation-release-reminder", "tool-catalog-updated", "tool-schema-activated", "tool-schema-restored", "tool-schema-unavailable", "extension-tool-activated", "extension-tool-started", "extension-tool-completed", "extension-tool-failed", "extension-capability-unavailable", "rules-discovered", "rule-activated", "rule-unavailable", "rules-refreshed", "continuity-updated", "chronicle-saved", "run-restored", "recovery-warning", "compaction", "run-completed", "run-cancelled", "run-aborted", "run-failed"].includes(event.type) || /^(work|worker|memory|route)-/.test(event.type) || ["permission-mode-changed", "tool-denied", "denial-guard-tripped"].includes(event.type)) {
         if (["context-thinned", "observation-released", "observation-release-reminder", "tool-catalog-updated", "tool-schema-activated", "tool-schema-restored", "tool-schema-unavailable", "rules-discovered", "rule-activated", "rule-unavailable", "rules-refreshed", "continuity-updated", "run-restored", "recovery-warning", "compaction", "memory-proposed", "memory-confirmed", "memory-rejected", "memory-forgotten", "permission-mode-changed", "tool-denied", "denial-guard-tripped", "route-selected", "route-fallback", "route-unavailable"].includes(event.type)) appendAutonomousRuntimeStatus(event);
         else recordAgentEvent(event);
         if (activeAgentEntry && ["run-restored", "recovery-warning"].includes(event.type)) {
@@ -7390,6 +7482,7 @@
           ? (event.plan?.path || activeAgentEntry.record.plan?.path || activeAgentEntry.pendingPlanMetadata?.path ? "planned" : "error")
           : (String(getRecordFinalResponse(activeAgentEntry.record) || "").trim() ? "completed" : "error");
         if (activeAgentEntry && event.type === "run-cancelled") activeAgentEntry.record.status = "cancelled";
+        if (activeAgentEntry && event.type === "run-aborted") activeAgentEntry.record.status = "aborted";
         if (activeAgentEntry && event.type === "run-failed") activeAgentEntry.record.status = "error";
         return;
       }
@@ -7413,9 +7506,10 @@
       if (event.type === "tool-failed") appendTool({ ...event, type: "tool-error" });
       if (event.type === "agent-summary") {
         hideThinkingIndicator();
+        const alreadyRendered = activeAgentEntry?.record?.events?.some((saved) => saved?.type === "agent-summary") === true;
         const summaryEvent = { ...event, workedLabel: event.workedLabel || getWorkedLabelFromCounter() };
         const savedEvent = recordAgentEvent(summaryEvent) || summaryEvent;
-        activeActivityRenderer?.appendSummary?.(savedEvent);
+        if (!alreadyRendered) activeActivityRenderer?.appendSummary?.(savedEvent);
       }
       if (event.type === "approval") {
         hideThinkingIndicator();
@@ -7678,7 +7772,7 @@
         }
         await saveAgentEntry(existingEntry);
       }
-      const conversationHistory = await buildConversationHistory(existingEntry, prompt);
+      const conversationHistory = await buildConversationHistory(existingEntry, prompt, overrides.continuationRecordId);
       const requestChatTitle = shouldRequestGeneratedChatTitle(existingEntry);
       const activeFilePayload = getActiveFilePayload();
       latestRequestContextFiles = createLatestRequestContextFiles(activeFilePayload, attachments);
@@ -7785,14 +7879,16 @@
         if (!cancelled && (mode === "chat" || mode === "plan")) {
           finishChatResponse(error?.message || String(error), true, getWorkedLabelFromCounter());
           notifyAiCompanionError(error?.message || String(error));
-        } else if (!cancelled) {
-          const event = { type: "agent-summary", isError: true, elapsedMs: Date.now() - startedAt, workedLabel: getWorkedLabelFromCounter(), outcome: error?.message || String(error), finalResponse: error?.message || String(error), changedFiles: [], attemptedChanges: [], blockedChanges: [] };
+        } else if (!cancelled && !activeAgentEntry?.record?.events?.some((event) => event?.type === "agent-summary")) {
+          const changes = getTaskChanges(activeAgentEntry?.record || {});
+          const event = { type: "agent-summary", status: "failure", isError: true, elapsedMs: Date.now() - startedAt, workedLabel: getWorkedLabelFromCounter(), outcome: error?.message || String(error), finalResponse: error?.message || String(error), changedFiles: changes.files, attemptedChanges: changes.attempted, blockedChanges: changes.blocked, validation: [], completedAt: Date.now() };
           const savedEvent = recordAgentEvent(event) || event;
           activeActivityRenderer?.appendSummary?.(savedEvent);
           notifyAiCompanionError(error?.message || String(error));
         }
       } finally {
         hideThinkingIndicator();
+        userInputInteraction?.clear?.();
         if (activeAgentEntry) await saveAgentEntry(activeAgentEntry);
         void refreshChatSelectOptions();
         if (activeRequest === request) activeRequest = null;
@@ -8022,4 +8118,3 @@
 
   window.registerMarkdownViewerAiCompanionPanel = registerMarkdownViewerAiCompanionPanel;
 })(window, document);
-

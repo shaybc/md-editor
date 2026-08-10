@@ -289,6 +289,27 @@ test("restart reconciliation never restores grants and reports uncertain tools",
   assert.match(rebuilt.messages.at(-1).content, /unknown outcome/i);
 });
 
+test("restart reconciliation preserves a recoverable user-decision tool call", () => {
+  const request = createRequest(process.cwd());
+  const chronicle = new RunChronicle(request);
+  const snapshot = chronicle.envelope({
+    status: "running",
+    messages: [{ role: "system", content: "old" }, { role: "assistant", content: "", tool_calls: [{ id: "pending-choice", function: { name: "request_user_choice", arguments: "{}" } }] }],
+    pendingTools: [{ id: "pending-choice", name: "request_user_choice" }],
+    pendingInteraction: {
+      version: 2,
+      pending: { id: "question-1", toolCallId: "pending-choice", status: "waiting", questions: [{ question: "Continue?", options: [{ label: "Yes", description: "Continue" }, { label: "No", description: "Stop" }] }] }
+    }
+  });
+  const reconciler = new RestartReconciler();
+  const decision = reconciler.evaluate(request, snapshot, {});
+  const rebuilt = reconciler.rebuild(snapshot, decision);
+  assert.equal(decision.classification, "recoverable");
+  assert.match(decision.notices.join(" "), /will be restored/i);
+  assert.equal(rebuilt.messages.some((message) => message.role === "tool" && message.tool_call_id === "pending-choice"), false);
+  assert.equal(rebuilt.messages.some((message) => message.role === "system" && /unknown outcome.*request_user_choice/i.test(message.content || "")), false);
+});
+
 test("provider overflow receives exactly one renewal retry", async () => {
   let calls = 0;
   let renewals = 0;
@@ -355,4 +376,48 @@ test("recoverable runs continue from a safe transcript and publish one final res
   assert.equal(calls, 1);
   assert.equal(events.some((event) => event.type === "run-restored"), true);
   assert.equal(events.filter((event) => event.type === "assistant-final").length, 1);
+});
+
+test("recoverable runs wait for and consume the original user decision", async (t) => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "md-editor-recovered-question-"));
+  t.after(() => fs.rm(root, { recursive: true, force: true }));
+  const base = createRequest(root, {
+    taskId: "recoverable-question",
+    settings: { enabled: true, agentEnabled: true, provider: "test", model: "custom-stage-six", agentMaxResponseTokens: 0 },
+    securityContext: { policy: { shell: { mode: "deny-and-audit" } } }
+  });
+  const question = { question: "Continue?", header: "Decision", options: [{ label: "Yes", description: "Continue" }, { label: "No", description: "Stop" }], multiSelect: false, allowFreeText: true };
+  await new RunChronicle(base).saveSnapshot({
+    status: "running",
+    messages: [{ role: "system", content: "saved rules" }, { role: "assistant", content: "", tool_calls: [{ id: "choice-call", function: { name: "request_user_choice", arguments: "{}" } }] }],
+    pendingTools: [{ id: "choice-call", name: "request_user_choice" }],
+    pendingInteraction: { version: 2, pending: { id: "question-1", toolCallId: "choice-call", status: "waiting", reason: "Confirm continuation", requestedAt: "2026-08-09T00:00:00.000Z", questions: [question] } },
+    work: [], workers: [], loadedExtensions: [], loadedExtensionBodies: []
+  });
+  let resolveInput;
+  let markQuestionPresented;
+  const questionPresented = new Promise((resolve) => { markQuestionPresented = resolve; });
+  let providerCalls = 0;
+  let restoredDetails;
+  const runPromise = new AutonomousOrchestrator().run({ ...base, resumeRun: true, requestUserInput: (details) => {
+    restoredDetails = details;
+    markQuestionPresented();
+    return new Promise((resolve) => { resolveInput = resolve; });
+  } }, {
+    provider: { async completeMessage(messages) {
+      providerCalls += 1;
+      const assistantIndex = messages.findIndex((message) => message?.tool_calls?.some((call) => call.id === "choice-call"));
+      assert.equal(messages[assistantIndex + 1].tool_call_id, "choice-call");
+      assert.deepEqual(JSON.parse(messages[assistantIndex + 1].content).answers, { "Continue?": "Yes" });
+      return { content: "Continued after the restored answer.", toolCalls: [] };
+    } }
+  }, () => {});
+  await questionPresented;
+  assert.equal(providerCalls, 0);
+  assert.equal(restoredDetails.id, "question-1");
+  assert.equal(restoredDetails.restored, true);
+  resolveInput({ answers: { "Continue?": "Yes" } });
+  const result = await runPromise;
+  assert.equal(result.content, "Continued after the restored answer.");
+  assert.equal(providerCalls, 1);
 });

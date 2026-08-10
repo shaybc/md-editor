@@ -100,3 +100,14 @@ test("autonomous write denial is returned to the model and does not mutate the w
   assert.equal(observedDenial, true);
   await assert.rejects(() => fs.access(path.join(workspace, "denied.txt")));
 });
+
+test("external write approvals expose the absolute target and remain task scoped", async () => {
+  const workspace = await fs.mkdtemp(path.join(os.tmpdir(), "md-editor-approval-opened-"));
+  const external = path.join(await fs.mkdtemp(path.join(os.tmpdir(), "md-editor-approval-external-")), "result.txt");
+  const descriptor = approvalCapabilities.describe("write_file", { path: external }, { workspaceRoot: workspace, effectiveSecurityPolicy: PRODUCT_DEFAULT_POLICY });
+  assert.equal(descriptor.maximumGrantLifetime, "task");
+  assert.equal(descriptor.grantOptions.length, 1);
+  assert.equal(descriptor.grantOptions[0].lifetime, "task");
+  assert.match(descriptor.grantOptions[0].targetLabel, /result\.txt$/);
+  assert.equal(descriptor.grantOptions.some((option) => option.lifetime === "workspace"), false);
+});

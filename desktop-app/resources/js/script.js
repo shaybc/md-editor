@@ -2209,7 +2209,7 @@ async function startMarkdownViewer() {
       getActiveEditorPath: getActiveEditorPathForLanguage,
       getOpenDocuments: getOpenDocumentsForAiCompanionAutocomplete,
       getSettings: function() { return getAiCompanionSettings(); },
-      getWorkspaceRoot: function() { return activeFolderPath || getDesktopAppRootPath(); }
+      getWorkspaceRoot: function() { return activeFolderPath || ""; }
     })
     : null;
   const licenseReferenceCatalog = window.registerMarkdownViewerLicenseReferenceCatalog
@@ -2985,7 +2985,7 @@ async function startMarkdownViewer() {
       appDebugLog,
       getDesktopAppRootPath,
       getSettings: function() { return getAiCompanionSettings(); },
-      getWorkspaceRoot: function() { return activeFolderPath || getDesktopAppRootPath(); },
+      getWorkspaceRoot: function() { return activeFolderPath || ""; },
       getProfileDataDirPath: recentItems.getProfileDataDirPath,
       getMaximumProblems: getJdtMaximumProblems,
       joinPath,
@@ -2997,19 +2997,19 @@ async function startMarkdownViewer() {
     aiSecuritySettings = window.registerMarkdownViewerAiSecuritySettings(app, {
       bridge: neutralinoAiBridge,
       getSettings: function() { return getAiCompanionSettings(); },
-      getWorkspaceRoot: function() { return activeFolderPath || getDesktopAppRootPath(); }
+      getWorkspaceRoot: function() { return activeFolderPath || ""; }
     });
   }
   if (typeof window.registerMarkdownViewerAiApprovalSettings === "function") {
     aiApprovalSettings = window.registerMarkdownViewerAiApprovalSettings(app, {
       bridge: neutralinoAiBridge,
-      getWorkspaceRoot: function() { return activeFolderPath || getDesktopAppRootPath(); }
+      getWorkspaceRoot: function() { return activeFolderPath || ""; }
     });
   }
   if (typeof window.registerMarkdownViewerAiExtensionSettings === "function") {
     window.registerMarkdownViewerAiExtensionSettings(app, {
       bridge: neutralinoAiBridge,
-      getWorkspaceRoot: function() { return activeFolderPath || getDesktopAppRootPath(); }
+      getWorkspaceRoot: function() { return activeFolderPath || ""; }
     });
   }
   // Model registry must register before the panel: the panel's context indicator resolves the
@@ -3031,7 +3031,7 @@ async function startMarkdownViewer() {
       get structuredExecutionActions() { return structuredExecutionActions; },
       get graphCompanionControl() { return graphCompanionControl; },
       getSettings: function() { return getAiCompanionSettings(); },
-      getWorkspaceRoot: function() { return activeFolderPath || getDesktopAppRootPath(); },
+      getWorkspaceRoot: function() { return activeFolderPath || ""; },
       getActiveFolderName: function() { return activeFolderName || ""; },
       getActiveFolderPath: function() { return activeFolderPath || ""; },
       getTabs: function() { return tabs; },
@@ -3099,7 +3099,7 @@ async function startMarkdownViewer() {
   if (typeof window.registerMarkdownViewerAiLifecycleSettings === "function") {
     window.registerMarkdownViewerAiLifecycleSettings(app, {
       bridge: neutralinoAiBridge,
-      getWorkspaceRoot: function() { return activeFolderPath || getDesktopAppRootPath(); }
+      getWorkspaceRoot: function() { return activeFolderPath || ""; }
     });
   }
   if (neutralinoAiBridge && typeof window.registerMarkdownViewerAiCompanionPromptsSettings === "function") {
@@ -3881,6 +3881,7 @@ async function startMarkdownViewer() {
   const sidebarWidthResizer = document.getElementById("sidebar-width-resizer");
   const aiCompanionWidthResizer = document.getElementById("ai-companion-width-resizer");
   const aiCompanionPanelElement = document.getElementById("ai-companion-panel");
+  const editorWorkspaceElement = document.querySelector(".editor-workspace");
   const toggleDropzonePanelButtons = document.querySelectorAll(".toggle-dropzone-panel");
   const toggleOutlinePanelButtons = document.querySelectorAll(".toggle-outline-panel");
   let sidebarLowerPanelTabs = null;
@@ -4073,7 +4074,7 @@ async function startMarkdownViewer() {
   let aiCompanionPanelWidth = 380;
   const MIN_PANE_PERCENT = 20; // Minimum 20% width
   const MIN_SIDEBAR_PANEL_HEIGHT = 120;
-  const DEFAULT_SIDEBAR_WIDTH = 280;
+  const DEFAULT_SIDEBAR_WIDTH = 300;
   const MIN_SIDEBAR_WIDTH = 160;
   const MIN_EDITOR_WORKSPACE_WIDTH = 320;
   const DEFAULT_AI_COMPANION_PANEL_WIDTH = 380;
@@ -4100,6 +4101,7 @@ async function startMarkdownViewer() {
     get isSidebarDropzoneResizing() { return isSidebarDropzoneResizing; },
     set isSidebarDropzoneResizing(value) { isSidebarDropzoneResizing = value; },
     contentContainer,
+    editorWorkspaceElement,
     viewModeButtons,
     mobileViewModeButtons,
     syncToggleButtons,
@@ -4130,7 +4132,9 @@ async function startMarkdownViewer() {
     getActiveEditorPane: function() { return editorViewManager.getActiveEditorPane(); },
     getActivePreviewPane: function() { return editorViewManager.getActivePreviewPane(); },
     getActiveResizeDivider: function() { return editorViewManager.getActiveResizeDivider(); },
+    get loadGlobalState() { return loadGlobalState; },
     get saveGlobalState() { return saveGlobalState; },
+    onSplitViewSeparatorChanged: function(editorWidthPercent) { tabsModule?.setActiveTabSplitViewWidthPercent?.(editorWidthPercent); },
     onViewModeChanged: function(mode) { setActiveMarkdownTabViewMode(mode); },
     renderMarkdown: function(options) { return renderMarkdown(options); },
     scheduleEditorLineNumbersUpdate,
@@ -4260,6 +4264,7 @@ async function startMarkdownViewer() {
   const settingsMenuLayoutInput = document.getElementById("settings-menu-layout");
   const settingsAppHeaderSpacingInput = document.getElementById("settings-app-header-spacing");
   const settingsTabStyleInput = document.getElementById("settings-tab-style");
+  const settingsSplitViewSeparatorPerTabInput = document.getElementById("settings-split-view-separator-per-tab");
   const settingsThemeToggle = document.getElementById("settings-theme-toggle");
   const settingsStartupBehaviorInput = document.getElementById("settings-startup-behavior");
   const settingsRestoreLastFolderOnStartupInput = document.getElementById("settings-restore-last-folder-on-startup");
@@ -4474,7 +4479,7 @@ async function startMarkdownViewer() {
   const settingsSyntaxOpenEditorButton = document.getElementById("settings-syntax-open-editor");
   const settingsSyntaxResetLanguageButton = document.getElementById("settings-syntax-reset-language");
   const settingsScreen = window.createMarkdownViewerSettingsScreen
-    ? window.createMarkdownViewerSettingsScreen({ modal: settingsModal, defaultTab: "interface" })
+    ? window.createMarkdownViewerSettingsScreen({ modal: settingsModal, defaultTab: "general" })
     : null;
   const snippetRegistry = typeof window.registerMarkdownViewerSnippetRegistry === "function"
     ? window.registerMarkdownViewerSnippetRegistry(app)
@@ -4514,6 +4519,7 @@ async function startMarkdownViewer() {
     "settings-closed-tab-history-limit": "Set how many source-backed tabs remain available to reopen after they are closed.",
     "settings-sidebar-rail-style": "Choose whether the side rail bar is thin or spacious with labeled buttons.",
     "settings-tab-style": "Choose the visual style used by outer document, sidebar, and bottom-panel tabs.",
+    "settings-split-view-separator-per-tab": "Choose whether each editor tab keeps its own split-view separator position.",
     "settings-supported-text-extensions": "Edit the file extensions treated as supported text files.",
     "settings-startup-behavior": "Choose what MD-Editor opens when it starts.",
     "settings-folder-tree-expand-limit-threshold": "Set the folder count where Expand All limits itself to a shallow tree expansion.",
@@ -4984,6 +4990,7 @@ async function startMarkdownViewer() {
   const DEFAULT_GLOBAL_STATE = Object.freeze({
     autoSelectFileEnabled: true,
     editorWidthPercent: 50,
+    splitViewSeparatorPerTab: true,
     aiCompanionPanelWidth: 380,
     aiCompanionWorkspaceHistoryWidth: 320,
     aiCompanionWorkspaceInspectorWidth: 320,
@@ -9329,6 +9336,9 @@ Markdown content is processed client-side in your browser and sanitized before p
     if (settingsTabStyleInput) {
       settingsTabStyleInput.value = getTabStyle();
     }
+    if (settingsSplitViewSeparatorPerTabInput) {
+      settingsSplitViewSeparatorPerTabInput.checked = loadGlobalState().splitViewSeparatorPerTab !== false;
+    }
     if (settingsStartupBehaviorInput) {
       settingsStartupBehaviorInput.value = getStartupBehavior();
     }
@@ -11295,6 +11305,7 @@ Markdown content is processed client-side in your browser and sanitized before p
     const menuLayout = applicationMenu?.normalizeLayout?.(settingsMenuLayoutInput?.value) || "full";
     const appHeaderSpacing = normalizeAppHeaderSpacing(settingsAppHeaderSpacingInput?.value);
     const tabStyle = normalizeTabStyle(settingsTabStyleInput?.value);
+    const splitViewSeparatorPerTab = settingsSplitViewSeparatorPerTabInput?.checked !== false;
     const sidebarRailStyle = normalizeSidebarRailStyle(settingsSidebarRailStyleInput?.value);
     const sidebarRailIconVisibility = sidebarRailPreferences.normalizeVisibility({
       git: settingsSidebarRailShowGitInput?.checked !== false,
@@ -11550,6 +11561,7 @@ Markdown content is processed client-side in your browser and sanitized before p
         menuLayout,
         appHeaderSpacing,
         tabStyle,
+        splitViewSeparatorPerTab,
         startupBehavior,
         fileOpeningModes,
         folderTreeExpandLimitThreshold: normalizeFolderTreeExpandLimitThreshold(folderTreeExpandLimitThreshold),

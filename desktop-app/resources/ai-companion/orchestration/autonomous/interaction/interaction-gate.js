@@ -3,6 +3,7 @@
 "use strict";
 
 const crypto = require("node:crypto");
+const { resolveInteractionToolCallId } = require("./pending-interaction-recovery");
 
 class InteractionGate {
   constructor(request, emit = () => {}, onChange = () => {}) {
@@ -13,52 +14,103 @@ class InteractionGate {
   }
 
   /** Ask the foreground user for bounded task information and return it as a tool result. */
-  async requestChoice(input = {}) {
+  async requestChoice(input = {}, options = {}) {
     if (this.pending) throw interactionError("USER_INPUT_ALREADY_PENDING", "A user decision is already pending for this run.");
     if (typeof this.request.requestUserInput !== "function") throw interactionError("USER_INPUT_CHANNEL_UNAVAILABLE", "Interactive user input is unavailable.");
     const hookDecision = await this.request.lifecycleHooks?.run?.("user-input-request", { input });
     if (hookDecision?.continue === false) throw interactionError("USER_INPUT_STOPPED", hookDecision.stopReason || "Lifecycle automation stopped the user question.");
     const effectiveInput = hookDecision?.updatedInput ? { ...input, ...hookDecision.updatedInput } : input;
-    const questions = normalizeQuestions(effectiveInput.questions);
     const interaction = {
       id: crypto.randomUUID(),
-      questions,
+      toolCallId: String(options.toolCallId || ""),
+      questions: normalizeQuestions(effectiveInput.questions),
       reason: String(effectiveInput.reason || "").trim().slice(0, 500),
-      requestedAt: new Date().toISOString()
+      requestedAt: new Date().toISOString(),
+      status: "waiting",
+      response: null,
+      responseRecordedAt: ""
     };
     this.pending = interaction;
-    this.emit({ type: "user-input-requested", interaction: publicInteraction(interaction), summary: "The agent is waiting for your decision." });
+    this.emitRequested(interaction, false);
     await this.persistPendingState();
     try {
       const response = await this.request.requestUserInput(publicInteraction(interaction));
-      const result = normalizeResponse(interaction, response);
-      await this.request.lifecycleHooks?.run?.(result.declined ? "user-input-declined" : "user-input-resolved", { interaction: publicInteraction(interaction), result });
-      this.emit({
-        type: result.declined ? "user-input-declined" : "user-input-resolved",
-        interactionId: interaction.id,
-        answers: result.answers,
-        summary: result.declined ? "The user declined to answer." : "The user answered the agent's questions."
-      });
-      return result;
-    } finally {
-      this.pending = null;
-      await this.persistPendingState();
+      return await this.recordResponse(interaction, response, false);
+    } catch (error) {
+      if (this.pending === interaction && interaction.status === "waiting") {
+        this.pending = null;
+        await this.persistPendingState();
+      }
+      throw error;
     }
   }
 
   /** Return restart-safe metadata without attempting to serialize a live Promise. */
-  snapshot() { return this.pending ? { version: 1, pending: publicInteraction(this.pending) } : { version: 1, pending: null }; }
+  snapshot() { return this.pending ? { version: 2, pending: privateInteraction(this.pending) } : { version: 2, pending: null }; }
 
-  /** Surface an interrupted interaction after restart without silently reissuing it. */
-  restore(snapshot) {
+  /** Restore a durable interaction without opening its live UI channel yet. */
+  restore(snapshot, context = {}) {
     if (!snapshot?.pending) return null;
+    const toolCallId = resolveInteractionToolCallId(snapshot, context.messages, context.pendingTools);
+    if (!toolCallId) {
+      this.emit({ type: "recovery-warning", reason: "user-input-call-ambiguous", summary: "The interrupted user question could not be matched safely to its original tool call." });
+      this.emit({ type: "user-input-declined", interactionId: snapshot.pending.id, interrupted: true, summary: "A previous user question was interrupted and could not be restored safely." });
+      return null;
+    }
+    const status = snapshot.pending.response && ["answered", "declined"].includes(snapshot.pending.status) ? snapshot.pending.status : "waiting";
+    this.pending = {
+      ...publicInteraction(snapshot.pending),
+      toolCallId,
+      status,
+      response: status === "waiting" ? null : normalizeResponse(snapshot.pending, snapshot.pending.response),
+      responseRecordedAt: String(snapshot.pending.responseRecordedAt || "")
+    };
+    return privateInteraction(this.pending);
+  }
+
+  /** Rebind a restored waiting question or return its persisted response. */
+  async resumePending() {
+    const interaction = this.pending;
+    if (!interaction) return null;
+    if (interaction.status !== "waiting") return { toolCallId: interaction.toolCallId, result: interaction.response };
+    if (typeof this.request.requestUserInput !== "function") throw interactionError("USER_INPUT_CHANNEL_UNAVAILABLE", "Interactive user input is unavailable.");
+    this.emitRequested(interaction, true);
+    const response = await this.request.requestUserInput({ ...publicInteraction(interaction), restored: true });
+    const result = await this.recordResponse(interaction, response, true);
+    return { toolCallId: interaction.toolCallId, result };
+  }
+
+  /** Clear a resolved interaction only after its matching tool result is in context. */
+  async acknowledgeToolResults(toolMessages = []) {
+    if (!this.pending || this.pending.status === "waiting") return false;
+    const matched = (Array.isArray(toolMessages) ? toolMessages : []).some((message) => message?.role === "tool" && String(message.tool_call_id || "") === this.pending.toolCallId);
+    if (!matched) return false;
+    this.pending = null;
+    await this.persistPendingState();
+    return true;
+  }
+
+  emitRequested(interaction, restored) {
+    this.emit({ type: "user-input-requested", interaction: publicInteraction(interaction), restored: restored === true, toolCallId: interaction.toolCallId, summary: restored ? "The restored agent run is waiting for your decision." : "The agent is waiting for your decision." });
+  }
+
+  async recordResponse(interaction, response, restored) {
+    const result = normalizeResponse(interaction, response);
+    interaction.status = result.declined ? "declined" : "answered";
+    interaction.response = result;
+    interaction.responseRecordedAt = new Date().toISOString();
+    await this.persistPendingState();
+    await this.request.lifecycleHooks?.run?.(result.declined ? "user-input-declined" : "user-input-resolved", { interaction: publicInteraction(interaction), result, restored: restored === true });
     this.emit({
-      type: "user-input-declined",
-      interactionId: snapshot.pending.id,
-      interrupted: true,
-      summary: "A previous user question was interrupted. Ask again only if the decision is still required."
+      type: result.declined ? "user-input-declined" : "user-input-resolved",
+      interactionId: interaction.id,
+      toolCallId: interaction.toolCallId,
+      answers: result.answers,
+      restored: restored === true,
+      responseRecordedAt: interaction.responseRecordedAt,
+      summary: result.declined ? "The user declined to answer." : "The user answered the agent's questions."
     });
-    return snapshot.pending;
+    return result;
   }
 
   async persistPendingState() {
@@ -102,7 +154,8 @@ function normalizeResponse(interaction, value = {}) {
   return { interactionId: interaction.id, declined: false, answers };
 }
 
-function publicInteraction(value) { return { id: value.id, questions: value.questions, reason: value.reason, requestedAt: value.requestedAt }; }
+function publicInteraction(value) { return { id: value.id, toolCallId: value.toolCallId, questions: value.questions, reason: value.reason, requestedAt: value.requestedAt }; }
+function privateInteraction(value) { return { ...publicInteraction(value), status: value.status, response: value.response, responseRecordedAt: value.responseRecordedAt }; }
 function interactionError(code, message) { const error = new Error(message); error.code = code; error.retryable = false; error.doNotRetry = true; return error; }
 
 module.exports = { InteractionGate, normalizeQuestions };

@@ -52,7 +52,10 @@ const { DenialLedger } = require("./permissions/denial-ledger");
 const { ActionRiskAdvisor } = require("./permissions/action-risk-advisor");
 const { ProviderRouteCatalog } = require("./routing/provider-route-catalog");
 const { ProviderRouteSession } = require("./routing/provider-route-session");
+const { PathAuthority } = require("./path-authority");
+const { RunSummary } = require("./run-summary");
 const { InteractionGate } = require("./interaction/interaction-gate");
+const { hasInteractionToolResult, insertInteractionToolResult } = require("./interaction/pending-interaction-recovery");
 const { InternetResearchService } = require("./internet/internet-research-service");
 const { NotebookDocumentService } = require("./notebooks/notebook-document-service");
 const { WorkspaceAtlas } = require("./structure/workspace-atlas");
@@ -129,6 +132,8 @@ class AutonomousOrchestrator {
         journaledEvents.emit({ type: EVENT_TYPES.RECOVERY_WARNING, reason: "lifecycle-source-invalid", source: issue.source, error: issue.error, summary: `A lifecycle automation source was not loaded: ${issue.error}` });
       }
       const restored = await chronicle.loadRecovery({ applicationRestart: request.applicationRestart === true });
+      const pathAuthority = new PathAuthority(request);
+      const runSummary = new RunSummary(policy.mode, Date.now(), restored?.runSummary);
       ruleCatalog.setEmitter(journaledEvents.emit);
       await ruleCatalog.restore(restored?.ruleState);
       await skillCatalog.restore(restored?.skillState?.catalog);
@@ -147,13 +152,22 @@ class AutonomousOrchestrator {
         const restoredPlan = restored.planPersistence?.plan || null;
         events.emit({ type: EVENT_TYPES.RUN_RESTORED, classification: "completed", summary: restored.recoverySummary || "Restored completed run." });
         events.final(restored.finalResponse, { mode: policy.mode, recovered: true, ...(restoredPlan ? { plan: restoredPlan } : {}) });
+        runSummary.publish(events.emit, { status: "success", finalResponse: restored.finalResponse, outcome: restored.recoverySummary || restored.finalResponse });
         events.emit({ type: EVENT_TYPES.RUN_COMPLETED, mode: policy.mode, recovered: true, ...(restoredPlan ? { plan: restoredPlan } : {}) });
         return { content: restored.finalResponse, architecture: "autonomous", recovered: true, ...(restoredPlan ? { plan: restoredPlan } : {}) };
       }
       if (decision.classification === "cancelled") {
         events.emit({ type: EVENT_TYPES.RUN_RESTORED, classification: "cancelled", summary: "The saved run was cancelled and was not resumed." });
+        runSummary.publish(events.emit, { status: "cancelled", outcome: "The task was cancelled." });
         events.emit({ type: EVENT_TYPES.RUN_CANCELLED, message: "Saved run was already cancelled.", recovered: true });
         return { content: "", architecture: "autonomous", recovered: true, cancelled: true };
+      }
+      if (decision.classification === "aborted") {
+        const outcome = "The saved run was aborted because the application closed before it completed.";
+        events.emit({ type: EVENT_TYPES.RUN_RESTORED, classification: "aborted", summary: outcome });
+        runSummary.publish(events.emit, { status: "aborted", outcome, finalResponse: outcome });
+        events.emit({ type: EVENT_TYPES.RUN_ABORTED, message: outcome, recovered: true });
+        return { content: "", architecture: "autonomous", recovered: true, aborted: true };
       }
       skillCatalog.setEmitter(journaledEvents.emit);
 
@@ -185,7 +199,6 @@ class AutonomousOrchestrator {
       request.authorizationControls = { permissionPolicy, denialLedger, riskAdvisor };
       journaledEvents.emit({ type: EVENT_TYPES.PERMISSION_MODE_CHANGED, mode: permissionPolicy.mode, reason: denialLedger.tripped ? "denial guard recovery" : "run configuration", summary: `Permission mode: ${permissionPolicy.mode}.` });
       const interactionGate = new InteractionGate(request, journaledEvents.emit, () => context?.saveSnapshot?.("running"));
-      interactionGate.restore(restored?.pendingInteraction);
       const notebooks = new NotebookDocumentService(request, journaledEvents.emit, { artifacts: artifactVault });
       notebooks.restore(restored?.notebookState);
       const workspaceAtlas = new WorkspaceAtlas(request, { emit: journaledEvents.emit, artifacts: artifactVault });
@@ -223,7 +236,7 @@ class AutonomousOrchestrator {
         observationLedger, contextReleaseReminder,
         loadedExtensions: new Set(restored?.loadedExtensions || []),
         loadedExtensionBodies: new Map(Array.isArray(restored?.loadedExtensionBodies) ? restored.loadedExtensionBodies : []),
-        work, planRepository, memoryRepository, memoryProposals, permissionPolicy, denialLedger, riskAdvisor,
+        work, planRepository, memoryRepository, memoryProposals, permissionPolicy, denialLedger, riskAdvisor, pathAuthority, runSummary,
         interactionGate, internetResearch, notebooks, workspaceAtlas, initialWorkspaceStructure, runtimeEnvironment,
         routeCatalog, routeSession, routeDataScopes, taskGrants: [], workers: null, pendingTools: []
       };
@@ -320,6 +333,9 @@ class AutonomousOrchestrator {
         else if (slash?.promptExpansion) messages.push({ role: "system", content: `User-invoked extension command '${slash.name}':\n${slash.promptExpansion}` });
         else if (slash && Object.hasOwn(slash, "result")) messages.push({ role: "system", content: `Extension command '${slash.name}' completed before the model call. Result: ${JSON.stringify(slash.result)}` });
       }
+      if (decision.classification === "recoverable") {
+        interactionGate.restore(restored?.pendingInteraction, { messages, pendingTools: restored?.pendingTools });
+      }
       context.messages = messages;
       for (const additionalContext of context.openingLifecycleContext || []) messages.push({ role: "system", content: `Lifecycle context during run opening:\n${additionalContext}` });
       if (decision.classification === "recoverable") {
@@ -347,6 +363,7 @@ class AutonomousOrchestrator {
           notebookState: notebooks.snapshot(),
           denials: denialLedger.snapshot(),
           permissionMode,
+          runSummary: runSummary.snapshot(),
           routing: routeSession.snapshot(),
           artifacts: artifactVault.snapshot(),
           windowState: windowSteward.snapshot(),
@@ -370,6 +387,19 @@ class AutonomousOrchestrator {
 
       if (decision.classification === "recoverable") {
         events.emit({ type: EVENT_TYPES.RUN_RESTORED, classification: "recoverable", summary: recoverySummary });
+        const resumedInteraction = await interactionGate.resumePending();
+        if (resumedInteraction) {
+          if (!resumedInteraction.result?.declined) pathAuthority.addUserText(resumedInteraction.result?.answers);
+          let toolMessage = messages.find((message) => message?.role === "tool" && String(message.tool_call_id || "") === resumedInteraction.toolCallId);
+          if (!hasInteractionToolResult(messages, resumedInteraction.toolCallId)) {
+            toolMessage = { role: "tool", tool_call_id: resumedInteraction.toolCallId, content: JSON.stringify(resumedInteraction.result) };
+            if (!insertInteractionToolResult(messages, toolMessage)) throw new Error("The restored user decision could not be attached to its original tool call.");
+            await chronicle.append("user-input-result-restored", { interactionId: resumedInteraction.result?.interactionId, toolCallId: resumedInteraction.toolCallId, declined: resumedInteraction.result?.declined === true });
+          }
+          context.pendingTools = context.pendingTools.filter((entry) => String(entry?.id || "") !== resumedInteraction.toolCallId);
+          await context.saveSnapshot("running", { boundary: "restored-user-input-result" });
+          await interactionGate.acknowledgeToolResults(toolMessage ? [toolMessage] : []);
+        }
       } else {
         await chronicle.append("run-created", { mode: policy.mode, prompt: String(request.prompt || "") });
         await chronicle.append("transcript-initialized", { messages });
@@ -386,21 +416,26 @@ class AutonomousOrchestrator {
       await context.saveSnapshot("completed", { finalResponse: content, authoritativeFinal: true });
       await chronicle.append("run-completed", { finalResponse: content, ...(savedPlan ? { plan: savedPlan } : {}) });
       events.final(content, { mode: policy.mode, ...(savedPlan ? { plan: savedPlan } : {}) });
+      runSummary.publish(events.emit, { status: "success", finalResponse: content, outcome: content });
       events.emit({ type: EVENT_TYPES.RUN_COMPLETED, mode: policy.mode, ...(savedPlan ? { plan: savedPlan } : {}) });
       return { content, architecture: "autonomous", ...(savedPlan ? { plan: savedPlan } : {}) };
     } catch (error) {
-      const cancelled = request.signal?.aborted || error?.name === "AbortError";
-      try { await hooks?.run?.(cancelled ? "run-cancelled" : "run-failed", { error: error?.message || String(error) }); }
+      const stopped = request.signal?.aborted || error?.name === "AbortError";
+      const userCancelled = request.signal?.aborted === true && request.signal?.reason?.code === "USER_CANCELLED";
+      const status = userCancelled ? "cancelled" : (stopped ? "aborted" : "failure");
+      try { await hooks?.run?.(stopped ? "run-cancelled" : "run-failed", { error: error?.message || String(error), status }); }
       catch (_hookError) { /* Preserve the original runtime failure. */ }
       if (context?.chronicle) {
-        try { await context.chronicle.append(cancelled ? "run-cancelled" : "run-failed", { error: error?.message || String(error) }); }
+        try { await context.chronicle.append(status === "failure" ? "run-failed" : `run-${status}`, { error: error?.message || String(error) }); }
         catch (_journalError) { /* Preserve the original runtime failure. */ }
       }
       if (context?.saveSnapshot) {
-        try { await context.saveSnapshot(cancelled ? "cancelled" : "failed", { error: error?.message || String(error) }); }
+        try { await context.saveSnapshot(status === "failure" ? "failed" : status, { error: error?.message || String(error) }); }
         catch (_snapshotError) { /* Preserve the original runtime failure. */ }
       }
-      if (cancelled) events.emit({ type: EVENT_TYPES.RUN_CANCELLED, message: error?.message || "Cancelled" });
+      context?.runSummary?.publish(events.emit, { status, error, outcome: error?.message || String(error), finalResponse: error?.message || String(error) });
+      if (status === "cancelled") events.emit({ type: EVENT_TYPES.RUN_CANCELLED, message: error?.message || "Cancelled" });
+      else if (status === "aborted") events.emit({ type: EVENT_TYPES.RUN_ABORTED, message: error?.message || "Aborted" });
       else events.emit({ type: EVENT_TYPES.RUN_FAILED, error: error?.message || String(error) });
       throw error;
     } finally {

@@ -1,0 +1,10 @@
+test-results
+tests
+tests/e2e
+tests/eval
+tests/eval/results
+tests/eval/results/m0-baseline
+tests/eval/results/m11-live
+tests/fixtures
+tests/fixtures/git-status
+tests/helpers

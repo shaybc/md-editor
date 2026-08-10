@@ -86,6 +86,7 @@
         createdAt: Number(tab?.createdAt || Date.now()),
         isTemporary: tab?.isTemporary === true,
         viewMode: tab?.viewMode || (type === "graph" || type === "health-report" || type === "large-file" || type === "file-preview" || type === "diagram-editor" || type === "hex-editor" ? "preview" : "split"),
+        splitViewEditorWidthPercent: Number.isFinite(tab?.splitViewEditorWidthPercent) ? tab.splitViewEditorWidthPercent : null,
         scrollPos: Number(tab?.scrollPos || 0) || 0,
         selectionStart: Number(tab?.selectionStart || 0) || 0,
         selectionEnd: Number(tab?.selectionEnd || tab?.selectionStart || 0) || 0
@@ -826,6 +827,9 @@
 
     function restoreCommonViewState(tab, descriptor) {
       tab.viewMode = descriptor.viewMode || tab.viewMode;
+      if (Number.isFinite(descriptor.splitViewEditorWidthPercent)) {
+        tab.splitViewEditorWidthPercent = descriptor.splitViewEditorWidthPercent;
+      }
       tab.scrollPos = Number(descriptor.scrollPos || 0) || 0;
       tab.selectionStart = Number(descriptor.selectionStart || 0) || 0;
       tab.selectionEnd = Number(descriptor.selectionEnd || descriptor.selectionStart || 0) || 0;

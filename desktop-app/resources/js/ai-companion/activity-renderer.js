@@ -62,7 +62,27 @@
     }
 
     function attachCopyAction(element, getMarkdown, label, options = {}) {
-      copyActions?.attachCopyAction?.(element, getMarkdown, { ...options, label });
+      return copyActions?.attachCopyAction?.(element, getMarkdown, { ...options, label }) || null;
+    }
+
+    function appendContinueTaskButton(actions, event) {
+      const status = String(event?.status || "").toLowerCase();
+      if (!actions || !["aborted", "cancelled", "canceled"].includes(status) || typeof deps.onContinueTask !== "function") return;
+      const button = createElement("button", "ai-companion-box-copy ai-companion-box-continue-task");
+      button.type = "button";
+      button.title = "Continue task from this point";
+      button.setAttribute("aria-label", button.title);
+      const icon = createElement("i", "bi bi-play-fill");
+      icon.setAttribute("aria-hidden", "true");
+      button.append(icon);
+      button.addEventListener("click", (clickEvent) => {
+        clickEvent.preventDefault?.();
+        clickEvent.stopPropagation?.();
+        void deps.onContinueTask(event);
+      });
+      const timestamp = Array.from(actions.children || []).find((child) => child.classList?.contains?.("ai-companion-box-timestamp"));
+      if (timestamp) actions.insertBefore(button, timestamp);
+      else actions.append(button);
     }
 
     function appendWorkspaceResponseBadge(target) {
@@ -545,6 +565,11 @@
     }
 
     function getSummaryStatus(event) {
+      const explicitStatus = String(event.status || "").toLowerCase();
+      if (explicitStatus === "success") return { key: "succeeded", label: "Task Succeeded", icon: "bi-check-lg" };
+      if (explicitStatus === "failure") return { key: "failed", label: "Task Failed", icon: "bi-x-lg" };
+      if (explicitStatus === "cancelled") return { key: "cancelled", label: "Task Cancelled", icon: "bi-stop-fill" };
+      if (explicitStatus === "aborted") return { key: "aborted", label: "Task Aborted", icon: "bi-slash-circle" };
       // Explicit flag from the panel's error path (provider failures like quota/rate limits)
       // wins over the text heuristics below, which only catch edit-related failures.
       if (event.isError === true) return { key: "failed", label: "Task Failed", icon: "bi-x-lg" };
@@ -598,7 +623,8 @@
       appendFinalResponse(row, event);
       appendWorkedFooter(row, event);
       ensureResultArea().appendChild(row);
-      attachCopyAction(row, () => formatSummaryMarkdown(event), "Copy task summary as Markdown", { timestamp: getEventTimestamp(event), isModelResponse: true });
+      const actions = attachCopyAction(row, () => formatSummaryMarkdown(event), "Copy task summary as Markdown", { timestamp: getEventTimestamp(event), isModelResponse: true });
+      appendContinueTaskButton(actions, event);
       deps.scrollToEnd?.();
     }
 

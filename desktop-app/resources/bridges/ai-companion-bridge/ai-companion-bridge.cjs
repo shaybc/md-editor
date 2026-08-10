@@ -245,7 +245,10 @@ async function handleApproval(message) {
 function handleCancel(message) {
   const targetId = String(message.targetId || "");
   const controller = activeRequests.get(targetId);
-  if (controller) controller.abort();
+  if (controller) {
+    const reason = Object.assign(new Error("AI Companion request cancelled by the user."), { name: "AbortError", code: "USER_CANCELLED" });
+    controller.abort(reason);
+  }
   rejectApprovalsForRequest(targetId);
   rejectAppActionsForRequest(targetId);
   rejectUserInputsForRequest(targetId);
@@ -279,7 +282,7 @@ async function handleRequest(session, message) {
     emit({ type: "start", action: message.action, startedAt });
     let result;
     const requestSettings = message.settings ? normalizeAiCompanionSettings(message.settings) : session.settings;
-    const requestWorkspaceRoot = message.workspaceRoot || session.workspaceRoot;
+    const requestWorkspaceRoot = Object.hasOwn(message, "workspaceRoot") ? String(message.workspaceRoot || "") : session.workspaceRoot;
     const requestProfileRoot = message.profileRoot || session.profileRoot || "";
     const securityContext = await createSecurityContext({
       workspaceRoot: requestWorkspaceRoot,

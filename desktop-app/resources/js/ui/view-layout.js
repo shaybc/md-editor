@@ -118,6 +118,7 @@
   // Story 1.3: Resize Divider Functions
   let activeResizeDividerElement = null;
   let resizerInitialized = false;
+  let editorWorkspaceResizeObserver = null;
 
   function getActiveLayoutTargets() {
     const activeEditorPane = typeof getActiveEditorPane === "function" ? getActiveEditorPane() : null;
@@ -148,10 +149,21 @@
     return activeResizeDividerElement;
   }
 
+  /** Reapply the saved split percentage whenever the available editor width changes. */
+  function observeEditorWorkspaceWidth() {
+    const workspace = typeof editorWorkspaceElement !== "undefined" ? editorWorkspaceElement : null;
+    if (editorWorkspaceResizeObserver || typeof ResizeObserver !== "function" || !workspace) return;
+    editorWorkspaceResizeObserver = new ResizeObserver(function() {
+      if (currentViewMode === "split") applyPaneWidths();
+    });
+    editorWorkspaceResizeObserver.observe(workspace);
+  }
+
   function initResizer() {
     refreshActiveResizeTarget();
     if (resizerInitialized) return;
     resizerInitialized = true;
+    observeEditorWorkspaceWidth();
 
     document.addEventListener('mousemove', handleResize);
     document.addEventListener('mouseup', stopResize);
@@ -450,11 +462,14 @@
     }
     const editorRect = targets.editorPaneElement.getBoundingClientRect();
     const containerRect = contentContainer.getBoundingClientRect();
+    const splitRow = targets.editorPaneElement.closest?.(".editor-content-row");
+    const splitRowRect = splitRow?.getBoundingClientRect?.();
     const dividerWidth = targets.resizeDivider.getBoundingClientRect().width;
+    const splitRight = Number.isFinite(splitRowRect?.right) ? splitRowRect.right : containerRect.right;
 
     return {
       left: editorRect.left,
-      width: containerRect.right - editorRect.left,
+      width: splitRight - editorRect.left,
       dividerWidth,
       dividerMidpoint: dividerWidth / 2,
     };
@@ -466,6 +481,20 @@
     return Math.max(MIN_PANE_PERCENT, Math.min(100 - MIN_PANE_PERCENT, fallbackPercent));
   }
 
+  /** Return whether editor tabs keep independent split-view separator positions. */
+  function isSplitViewSeparatorPerTabEnabled() {
+    const state = typeof loadGlobalState === "function" ? loadGlobalState() : {};
+    return state.splitViewSeparatorPerTab !== false;
+  }
+
+  /** Resolve the split-view separator position for the active editor tab. */
+  function getActiveEditorWidthPercent() {
+    if (!isSplitViewSeparatorPerTabEnabled()) return getClampedEditorWidthPercent(editorWidthPercent);
+    const activeTab = getActiveTab();
+    const state = typeof loadGlobalState === "function" ? loadGlobalState() : {};
+    return getClampedEditorWidthPercent(activeTab?.splitViewEditorWidthPercent ?? state.editorWidthPercent ?? editorWidthPercent);
+  }
+
   function updateResizePosition(clientX) {
     const resizeMetrics = getSplitResizeMetrics();
     if (resizeMetrics.width <= 0) return;
@@ -474,7 +503,7 @@
     const newEditorPercent = ((dividerLeft + resizeMetrics.dividerMidpoint) / resizeMetrics.width) * 100;
 
     editorWidthPercent = getClampedEditorWidthPercent(newEditorPercent);
-    applyPaneWidths();
+    applyPaneWidths(editorWidthPercent);
     scheduleEditorLineNumbersUpdate();
   }
 
@@ -494,10 +523,14 @@
     const activeResizeDivider = getActiveLayoutTargets().resizeDivider || activeResizeDividerElement;
     if (activeResizeDivider) activeResizeDivider.classList.remove('dragging');
     document.body.classList.remove('resizing');
-    saveGlobalState({ editorWidthPercent });
+    if (isSplitViewSeparatorPerTabEnabled()) {
+      if (typeof onSplitViewSeparatorChanged === "function") onSplitViewSeparatorChanged(editorWidthPercent);
+    } else {
+      saveGlobalState({ editorWidthPercent });
+    }
   }
 
-  function applyPaneWidths() {
+  function applyPaneWidths(widthPercent = getActiveEditorWidthPercent()) {
     if (currentViewMode !== 'split') return;
     const targets = getActiveLayoutTargets();
     if (!targets.editorPaneElement || !targets.previewPaneElement) return;
@@ -505,7 +538,7 @@
     const resizeMetrics = getSplitResizeMetrics();
     if (resizeMetrics.width <= resizeMetrics.dividerWidth) return;
 
-    const editorBasis = (resizeMetrics.width * editorWidthPercent / 100) - resizeMetrics.dividerMidpoint;
+    const editorBasis = (resizeMetrics.width * getClampedEditorWidthPercent(widthPercent) / 100) - resizeMetrics.dividerMidpoint;
     const previewBasis = resizeMetrics.width - resizeMetrics.dividerWidth - editorBasis;
 
     targets.editorPaneElement.style.flex = `0 0 ${editorBasis}px`;

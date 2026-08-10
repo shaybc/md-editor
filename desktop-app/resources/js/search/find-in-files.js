@@ -4,6 +4,8 @@
   const HISTORY_LIMIT = 20;
   const DEFAULT_FILE_TYPES = "*.md;*.markdown;*.txt;*.js;*.ts;*.java;*.cs;*.json;*.css;*.html;*.xml;*.yml;*.yaml";
   const DEFAULT_PANEL_HEIGHT = 220;
+  const DEFAULT_PANEL_HEIGHT_RATIO = 0.25;
+  const DEFAULT_PANEL_SEPARATOR_HEIGHT = 8;
   const MIN_PANEL_HEIGHT = 120;
 
   function escapeHtml(value) {
@@ -482,11 +484,18 @@
       contextMenu?.classList.add("hidden");
     }
 
+    function getDefaultPanelHeight() {
+      const workspaceHeight = panel?.parentElement?.getBoundingClientRect?.().height;
+      if (!Number.isFinite(workspaceHeight) || workspaceHeight <= 0) return DEFAULT_PANEL_HEIGHT;
+      const separatorHeight = panelResizer?.offsetHeight || DEFAULT_PANEL_SEPARATOR_HEIGHT;
+      return Math.max(MIN_PANEL_HEIGHT, Math.round((workspaceHeight * DEFAULT_PANEL_HEIGHT_RATIO) + separatorHeight));
+    }
+
     function getPanelHeight() {
       const sharedHeight = Number(deps.bottomPanel?.getPanelHeight?.());
       if (Number.isFinite(sharedHeight) && sharedHeight >= MIN_PANEL_HEIGHT) return sharedHeight;
       const saved = Number(getFeatureState().panelHeight);
-      return Number.isFinite(saved) && saved >= MIN_PANEL_HEIGHT ? saved : DEFAULT_PANEL_HEIGHT;
+      return Number.isFinite(saved) && saved >= MIN_PANEL_HEIGHT ? saved : getDefaultPanelHeight();
     }
 
     function applyPanelHeight() {

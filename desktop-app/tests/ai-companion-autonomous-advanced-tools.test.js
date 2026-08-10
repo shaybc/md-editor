@@ -25,7 +25,7 @@ async function temporaryDirectory(t) {
   return root;
 }
 
-test("foreground user decisions snapshot before waiting and clear after resolution", async () => {
+test("foreground user decisions remain durable until their tool result is acknowledged", async () => {
   let resolveInput;
   let snapshots = 0;
   const events = [];
@@ -49,16 +49,64 @@ test("foreground user decisions snapshot before waiting and clear after resoluti
         { label: "Tests", description: "Run focused tests" }
       ]
     }]
-  });
+  }, { toolCallId: "choice-1" });
   await new Promise((resolve) => setImmediate(resolve));
   assert.equal(gate.snapshot().pending.questions[0].question, "Which format?");
+  assert.equal(gate.snapshot().pending.toolCallId, "choice-1");
+  assert.equal(gate.snapshot().pending.status, "waiting");
   assert.equal(snapshots, 1);
   resolveInput({ answers: { "Which format?": "Markdown", "Which checks?": ["Syntax", "Tests"] } });
   const result = await waiting;
   assert.deepEqual(result.answers, { "Which format?": "Markdown", "Which checks?": ["Syntax", "Tests"] });
-  assert.equal(gate.snapshot().pending, null);
+  assert.equal(gate.snapshot().pending.status, "answered");
   assert.equal(snapshots, 2);
+  await gate.acknowledgeToolResults([{ role: "tool", tool_call_id: "choice-1", content: JSON.stringify(result) }]);
+  assert.equal(gate.snapshot().pending, null);
+  assert.equal(snapshots, 3);
   assert.deepEqual(events.map((event) => event.type), ["user-input-requested", "user-input-resolved"]);
+});
+
+test("restored user decisions rebind the same interaction and tool call", async () => {
+  let resolveInput;
+  const events = [];
+  const gate = new InteractionGate({
+    requestUserInput: (details) => new Promise((resolve) => {
+      assert.equal(details.id, "saved-question");
+      assert.equal(details.restored, true);
+      resolveInput = resolve;
+    })
+  }, (event) => events.push(event));
+  const messages = [{ role: "assistant", content: "", tool_calls: [{ id: "saved-choice-call", function: { name: "request_user_choice", arguments: "{}" } }] }];
+  gate.restore({
+    version: 1,
+    pending: {
+      id: "saved-question",
+      reason: "Choose again",
+      requestedAt: "2026-08-09T00:00:00.000Z",
+      questions: [{ question: "Continue?", header: "Decision", options: [{ label: "Yes", description: "Continue" }, { label: "No", description: "Stop" }], multiSelect: false, allowFreeText: true }]
+    }
+  }, { messages, pendingTools: [{ id: "saved-choice-call", name: "request_user_choice" }] });
+  const waiting = gate.resumePending();
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(events.at(-1).restored, true);
+  resolveInput({ answers: { "Continue?": "Yes" } });
+  const restored = await waiting;
+  assert.equal(restored.toolCallId, "saved-choice-call");
+  assert.deepEqual(restored.result.answers, { "Continue?": "Yes" });
+  assert.equal(gate.snapshot().pending.status, "answered");
+});
+
+test("a restored answered decision does not ask the user again", async () => {
+  const gate = new InteractionGate({ requestUserInput: async () => { throw new Error("The saved answer should be reused."); } });
+  const messages = [{ role: "assistant", content: "", tool_calls: [{ id: "answered-call", function: { name: "request_user_choice", arguments: "{}" } }] }];
+  gate.restore({ version: 2, pending: {
+    id: "answered-question", toolCallId: "answered-call", status: "answered", requestedAt: "2026-08-09T00:00:00.000Z",
+    questions: [{ question: "Continue?", options: [{ label: "Yes", description: "Continue" }, { label: "No", description: "Stop" }] }],
+    response: { interactionId: "answered-question", declined: false, answers: { "Continue?": "Yes" } }, responseRecordedAt: "2026-08-09T00:01:00.000Z"
+  } }, { messages, pendingTools: [{ id: "answered-call", name: "request_user_choice" }] });
+  const restored = await gate.resumePending();
+  assert.equal(restored.toolCallId, "answered-call");
+  assert.deepEqual(restored.result.answers, { "Continue?": "Yes" });
 });
 
 test("network target checks reject local and mapped-private addresses", async () => {

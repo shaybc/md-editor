@@ -3,7 +3,7 @@
 
   function createMarkdownViewerSettingsScreen(options = {}) {
     const modal = options.modal || document.getElementById("settings-modal");
-    const defaultTab = options.defaultTab || "interface";
+    const defaultTab = options.defaultTab || "general";
     const searchInput = modal?.querySelector("#settings-search-input") || null;
     const tabButtons = Array.from(modal?.querySelectorAll(".settings-tab-button[data-settings-tab]") || []);
     const tabGroupToggles = Array.from(modal?.querySelectorAll("[data-settings-tab-group-toggle]") || []);
@@ -15,6 +15,14 @@
     }
 
     function setTabGroupExpanded(groupName, isExpanded) {
+      if (isExpanded) {
+        tabGroupToggles.forEach((button) => {
+          const otherGroupName = button.dataset.settingsTabGroupToggle || "";
+          if (otherGroupName && otherGroupName !== groupName) {
+            setTabGroupExpanded(otherGroupName, false);
+          }
+        });
+      }
       const group = modal?.querySelector(`[data-settings-tab-group="${groupName}"]`) || null;
       const toggle = tabGroupToggles.find((button) => button.dataset.settingsTabGroupToggle === groupName) || null;
       if (group) group.hidden = !isExpanded;

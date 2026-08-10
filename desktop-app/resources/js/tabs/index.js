@@ -48,6 +48,9 @@
       content: content,
       scrollPos: 0,
       viewMode: viewMode,
+      splitViewEditorWidthPercent: Number.isFinite(options.splitViewEditorWidthPercent)
+        ? options.splitViewEditorWidthPercent
+        : Number(loadGlobalState().editorWidthPercent) || 50,
       createdAt: Date.now(),
       isTemporary: false,
       sourceFileName: null,
@@ -1476,6 +1479,16 @@
     saveTabsToStorage(tabs);
   }
 
+  /** Save the split-view separator position for the active editor tab. */
+  function setActiveTabSplitViewWidthPercent(editorWidthPercent) {
+    const tab = getActiveMarkdownTab();
+    const nextWidth = Number(editorWidthPercent);
+    if (!tab || !Number.isFinite(nextWidth)) return;
+    tab.splitViewEditorWidthPercent = nextWidth;
+    persistCurrentSessionOnLifecycle = true;
+    saveTabsToStorage(tabs);
+  }
+
   function markCurrentTabSessionDirty() {
     persistCurrentSessionOnLifecycle = true;
     if (typeof appDebugLog === "function") {
@@ -2111,6 +2124,11 @@
     return typeof resolveFileOpeningMode === "function"
       ? resolveFileOpeningMode(sourceFile)
       : (isMarkdownPath(sourceFile?.path || sourceFile?.name || "") ? 'split' : 'editor');
+  }
+
+  /** Resolve the configured Markdown opening mode for a newly created document. */
+  function getDefaultViewModeForNewMarkdownDocument() {
+    return getDefaultViewModeForOpenedFile({ name: "Untitled.md" });
   }
 
   function createLargeFileTab(source, title, options = {}) {
@@ -3039,7 +3057,7 @@
       return;
     }
     if (!title) title = nextUntitledTitle();
-    const tab = createTab(content, title, options.viewMode || getDefaultViewModeForOpenedFile(null), options);
+    const tab = createTab(content, title, options.viewMode || getDefaultViewModeForNewMarkdownDocument(), options);
     tabs.push(tab);
     const wasEmptyWorkspace = !activeTabId;
     if (wasEmptyWorkspace) {
@@ -3313,7 +3331,8 @@
     const copySourceFileName = addCopySuffixToFileName(getTabSourceFileName(tab));
     const dupTitle = getDuplicateTabTitle(tab, copySourceFileName);
     const dup = createTab(tab.content, dupTitle, isPreviewableDocumentTab(tab) ? tab.viewMode : 'editor', {
-      linkBasePath: tab.linkBasePath
+      linkBasePath: tab.linkBasePath,
+      splitViewEditorWidthPercent: tab.splitViewEditorWidthPercent
     });
     dup.savedContent = `${tab.content || ""}\n`;
     dup.sourceFileName = copySourceFileName || null;
@@ -3622,6 +3641,7 @@
       saveAllChangedTabs,
       saveCurrentFileIfChanged,
       setActiveMarkdownTabViewMode,
+      setActiveTabSplitViewWidthPercent,
       restoreViewMode,
       setNoOpenTabsMode,
       switchTab,

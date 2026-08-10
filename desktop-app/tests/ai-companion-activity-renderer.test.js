@@ -52,6 +52,15 @@ class FakeElement {
     return child;
   }
 
+  insertBefore(child, reference) {
+    const index = this.children.indexOf(reference);
+    if (index < 0) return this.appendChild(child);
+    child.parentNode = this;
+    child.isConnected = true;
+    this.children.splice(index, 0, child);
+    return child;
+  }
+
   after(...nodes) {
     if (!this.parentNode) return;
     const index = this.parentNode.children.indexOf(this);
@@ -122,7 +131,8 @@ function createHarness(renderMarkdownContent, options = {}) {
     scrollToEnd: () => scrollEvents.push("scroll"),
     openMarkdownInNewTab: options.openMarkdownInNewTab,
     openCompare: options.openCompare,
-    openExternalUrl: options.openExternalUrl
+    openExternalUrl: options.openExternalUrl,
+    onContinueTask: options.onContinueTask
   });
   return { container, renderer, scrollEvents };
 }
@@ -202,6 +212,23 @@ test("AI Companion model response actions show copy, open in new tab, then times
   assert.match(actions.children[1].className, /ai-companion-box-open-tab/);
   assert.equal(actions.children[1].attributes.get("aria-label"), "Open in a new tab");
   assert.match(actions.children[2].className, /ai-companion-box-timestamp/);
+});
+
+test("AI Companion cancelled and aborted summaries offer continuation from that point", async () => {
+  for (const status of ["cancelled", "aborted"]) {
+    const continued = [];
+    const harness = createHarness(null, { onContinueTask: (event) => continued.push(event.status) });
+    harness.renderer.appendSummary({ status, finalResponse: `Task ${status}`, changedFiles: [], attemptedChanges: [] });
+
+    const summary = harness.container.children[0].children[0];
+    const button = findByClass(summary.nextElementSibling, "ai-companion-box-continue-task");
+    assert.ok(button);
+    assert.equal(button.title, "Continue task from this point");
+    assert.equal(button.attributes.get("aria-label"), "Continue task from this point");
+    assert.match(button.children[0].className, /bi-play-fill/);
+    button.dispatch("click");
+    assert.deepEqual(continued, [status]);
+  }
 });
 
 test("AI Companion summary renders the model final response without synthetic outcome text", () => {
@@ -340,4 +367,21 @@ test("AI Companion focuses registered external activity rows", () => {
 
   harness.renderer.reset();
   assert.equal(harness.renderer.focusActivity("approval-1"), false);
+});
+
+test("AI Companion summary uses explicit terminal status labels", () => {
+  const cases = [
+    { status: "success", label: "Task Succeeded", className: "succeeded" },
+    { status: "failure", label: "Task Failed", className: "failed" },
+    { status: "cancelled", label: "Task Cancelled", className: "cancelled" },
+    { status: "aborted", label: "Task Aborted", className: "aborted" }
+  ];
+  for (const terminal of cases) {
+    const harness = createHarness(null);
+    harness.renderer.appendSummary({ ...terminal, finalResponse: terminal.label, changedFiles: [], attemptedChanges: [], blockedChanges: [] });
+    const summary = harness.container.children[0].children[0];
+    const status = findByClass(summary, "ai-companion-task-status");
+    assert.equal(status.children[1].textContent, terminal.label);
+    assert.match(status.className, new RegExp(terminal.className));
+  }
 });

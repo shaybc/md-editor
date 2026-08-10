@@ -12,7 +12,7 @@
       profileRows: document.getElementById("settings-ai-connection-profile-rows"), routeRows: document.getElementById("settings-ai-provider-route-rows"),
       profileEmpty: document.getElementById("settings-ai-connection-profile-empty"), routeEmpty: document.getElementById("settings-ai-provider-route-empty"),
       profileAdd: document.getElementById("settings-ai-connection-profile-add"), routeAdd: document.getElementById("settings-ai-provider-route-add"),
-      profileCancel: document.getElementById("settings-ai-connection-profile-cancel"),
+      profileSaveAs: document.getElementById("settings-ai-connection-profile-save-as"), profileCancel: document.getElementById("settings-ai-connection-profile-cancel"),
       profileJson: document.getElementById("settings-ai-connection-profile-json"), routeJson: document.getElementById("settings-ai-provider-route-json"),
       profileName: document.getElementById("settings-ai-connection-profile-name"),
       providerMode: document.getElementById("settings-ai-provider-mode"), baseUrl: document.getElementById("settings-ai-base-url"),
@@ -44,6 +44,7 @@
       schema,
       getProfiles: () => profiles,
       setProfiles: (value) => { profiles = value; },
+      getProfileReferences: (profileId) => routes.filter((route) => route.profileId === profileId).map((route) => route.id),
       renameProfileReferences: (previousId, nextId) => {
         routes = routes.map((route) => route.profileId === previousId ? { ...route, profileId: nextId } : route);
       },
@@ -94,13 +95,13 @@
             if (profileForm.isPrimary(entry.id)) {
               const primary = document.createElement("span");
               primary.className = "settings-ai-profile-primary-indicator";
-              primary.title = "Active primary connection";
-              primary.setAttribute("aria-label", "Active primary connection");
+              primary.title = "Default connection";
+              primary.setAttribute("aria-label", "Default connection");
               primary.innerHTML = '<i class="bi bi-check-circle-fill" aria-hidden="true"></i>';
               cell.appendChild(primary);
             }
           } else cell.textContent = value;
-          cell.title = profileForm.isPrimary(entry.id) && cellIndex === 0 ? `${value} (Primary)` : value;
+          cell.title = profileForm.isPrimary(entry.id) && cellIndex === 0 ? `${value} (Default)` : value;
           row.appendChild(cell);
         });
         const actions = document.createElement("span");
@@ -109,10 +110,11 @@
         if (kind === "profile") {
           actions.appendChild(button("bi-pencil-square", `Edit ${summary.primary} in the connection form`, () => profileForm.edit(index)));
           const isPrimary = profileForm.isPrimary(entry.id);
-          const makePrimary = button("bi-check2-circle", isPrimary ? `${summary.primary} is the primary connection` : `Set ${summary.primary} as primary`, () => profileForm.selectPrimary(index));
+          const makePrimary = button("bi-check2-circle", isPrimary ? `${summary.primary} is the default connection` : `Set ${summary.primary} as default`, () => profileForm.selectDefault(index));
           makePrimary.disabled = isPrimary;
           makePrimary.classList.toggle("is-primary-profile", isPrimary);
           actions.appendChild(makePrimary);
+          actions.appendChild(button("bi-trash", `Delete ${summary.primary}`, () => profileForm.remove(index)));
         } else actions.appendChild(button("bi-card-list", `View or edit ${summary.primary}`, () => openWizard(kind, index)));
         row.appendChild(actions);
         container.appendChild(row);
@@ -126,6 +128,7 @@
       try {
         profiles = parseArray(elements.profileInput, "Connection profiles").map(schema.normalizeProfile);
         routes = parseArray(elements.routeInput, "Provider routes").map(schema.normalizeRoute);
+        profileForm.ensureDefaultProfile();
         profileForm.refresh();
         syncInputs();
         renderAll();
@@ -425,6 +428,7 @@
         const values = parseArray(input, jsonState.kind === "profile" ? "Connection profiles" : "Provider routes");
         if (jsonState.kind === "profile") {
           profiles = values.map(schema.normalizeProfile);
+          profileForm.ensureDefaultProfile();
           profileForm.refresh();
         }
         else routes = values.map(schema.normalizeRoute);
@@ -436,7 +440,9 @@
     }
 
     elements.profileAdd?.addEventListener("click", profileForm.save);
+    elements.profileSaveAs?.addEventListener("click", profileForm.saveAs);
     elements.profileCancel?.addEventListener("click", profileForm.clear);
+    elements.profileName?.addEventListener("input", profileForm.updateActions);
     elements.routeAdd?.addEventListener("click", () => openWizard("route"));
     elements.profileJson?.addEventListener("click", () => openJsonEditor("profile"));
     elements.routeJson?.addEventListener("click", () => openJsonEditor("route"));
