@@ -4,7 +4,6 @@ const os = require("node:os");
 const path = require("node:path");
 const test = require("node:test");
 const vm = require("node:vm");
-const { spawnSync } = require("node:child_process");
 
 const { getAgentToolDefinitions, runAgentToolLoop } = require("./helpers/autonomous-tool-harness");
 const { toCanonicalName } = require("../resources/ai-companion/core/tool-scope-registry");
@@ -35,13 +34,17 @@ function createRuntime() {
 }
 
 test("agent exposes typed execution tools and no string-based run_test", () => {
-  const names = getAgentToolDefinitions("agent").map((definition) => toCanonicalName(definition.function.name));
+  const definitions = getAgentToolDefinitions("agent");
+  const names = definitions.map((definition) => toCanonicalName(definition.function.name));
   assert.equal(names.includes("run_command"), true);
   assert.equal(names.includes("run_test"), false);
   assert.equal(names.includes("compile_project"), true);
   assert.equal(names.includes("run_tests"), true);
   assert.equal(names.includes("restore_dependencies"), false);
   assert.equal(names.includes("manage_dependencies"), true);
+  const compileDefinition = definitions.find((definition) => toCanonicalName(definition.function.name) === "compile_project");
+  assert.deepEqual(compileDefinition.function.parameters, { type: "object", properties: {}, additionalProperties: false });
+  assert.match(compileDefinition.function.description, /Rebuild Project with Last Options/);
 });
 
 test("fresh policy defaults to deny-and-audit with wildcard package rules and disabled launchers", () => {
@@ -222,6 +225,7 @@ test("command impact analysis is structural, flag-aware, and fails closed", asyn
 
 test("command classifier suggests typed tools without executing", () => {
   assert.equal(classifyCommand("mvn compile").suggestion.tool, "compile_project");
+  assert.deepEqual(classifyCommand("mvn compile").suggestion.arguments, {});
   assert.equal(classifyCommand("mvn test").suggestion.tool, "run_tests");
   assert.equal(classifyCommand("node --test tests/example.test.js").suggestion.tool, "run_tests");
   assert.equal(classifyCommand("npx playwright test").suggestion.tool, "run_tests");
@@ -341,28 +345,69 @@ test("typed Node test operation returns normalized counts through the broker", a
   assert.deepEqual(audits.map((record) => record.decision), ["allow", "executed-success"]);
 });
 
-test("typed Javac compile operation builds plain Java sources without a shell", async (context) => {
-  const javac = process.env.JAVA_HOME
-    ? path.join(process.env.JAVA_HOME, "bin", process.platform === "win32" ? "javac.exe" : "javac")
-    : process.platform === "win32" ? "javac.exe" : "javac";
-  if (spawnSync(javac, ["-version"], { windowsHide: true }).status !== 0) {
-    context.skip("javac is not available");
-    return;
-  }
-  const workspace = await fs.mkdtemp(path.join(os.tmpdir(), "md-editor-javac-"));
-  await fs.writeFile(path.join(workspace, "Main.java"), "public class Main { public static void main(String[] args) {} }", "utf8");
+test("compile project delegates to the IDE rebuild action and retains audit results", async () => {
+  const audits = [];
+  const appActions = [];
   const policy = effectivePolicy.resolve({ user: { version: 1, execution: { networkAccess: false } } });
-  const result = await structuredTools.compileProject(workspace, {
-    targetPath: ".",
-    buildMode: "clean",
-    includeTestSources: false
-  }, {
+  const result = await structuredTools.compileProject("C:/Project", {}, {
     policy,
-    auditLogger: { record: async () => {} },
-    requestId: "javac"
+    auditLogger: { record: async (record) => audits.push(record) },
+    requestAppAction: async (details) => {
+      appActions.push(details);
+      return { success: true };
+    },
+    requestId: "ide-rebuild"
   });
   assert.equal(result.success, true);
-  await fs.access(path.join(workspace, ".md-editor", "ai-build", "classes", "Main.class"));
+  assert.equal(result.summary.action, "ide-rebuild");
+  assert.deepEqual(appActions, [{
+    tool: "structured_compile_project",
+    args: {},
+    targetPath: "C:/Project",
+    preview: { target: "C:/Project", action: "Rebuild Project with Last Options" }
+  }]);
+  assert.deepEqual(audits.map((record) => record.decision), ["allow", "executed-success"]);
+});
+
+test("agent compile tool dispatches through the renderer app-action bridge", async () => {
+  const workspace = await fs.mkdtemp(path.join(os.tmpdir(), "md-editor-ide-rebuild-"));
+  const appActions = [];
+  let rounds = 0;
+  const provider = {
+    completeMessage: async () => {
+      rounds += 1;
+      if (rounds === 1) return { content: "", toolCalls: [createToolCall("capability_search", { query: "select:compile_project" })] };
+      if (rounds === 2) return { content: "", toolCalls: [createToolCall("compile_project", {})] };
+      return { content: "done", toolCalls: [] };
+    },
+    complete: async () => "done"
+  };
+
+  await runAgentToolLoop(provider, {}, workspace, "compile the project", "agent", () => {}, createRuntime(), {
+    requestAppAction: async (details) => {
+      appActions.push(details);
+      return { success: true };
+    }
+  });
+
+  assert.equal(appActions.length, 1);
+  assert.equal(appActions[0].tool, "structured_compile_project");
+  assert.deepEqual(appActions[0].args, {});
+});
+
+test("compile project records IDE bridge failures without using the compiler broker", async () => {
+  const audits = [];
+  const policy = effectivePolicy.resolve({ user: { version: 1 } });
+  await assert.rejects(
+    () => structuredTools.compileProject("C:/Project", {}, {
+      policy,
+      auditLogger: { record: async (record) => audits.push(record) },
+      requestAppAction: async () => { throw new Error("bridge unavailable"); },
+      requestId: "ide-rebuild-error"
+    }),
+    /bridge unavailable/
+  );
+  assert.deepEqual(audits.map((record) => record.decision), ["allow", "execution-error"]);
 });
 
 test("audit logger serializes concurrent writes and rotates within retention", async () => {

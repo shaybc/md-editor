@@ -3635,7 +3635,8 @@ test("AI Companion thinking indicator appears while awaiting model replies", asy
 
   continueBridge();
   await new Promise((resolve) => setTimeout(resolve, 0));
-  assert.equal(output.children.some((child) => child.className === "ai-companion-thinking-indicator"), false);
+  assert.equal(output.children[output.children.length - 1].className, "ai-companion-thinking-indicator");
+  assert.equal(output.children[output.children.length - 1].children[1].textContent, "Listing workspace files ...");
 
   continueBridge();
   await new Promise((resolve) => setTimeout(resolve, 0));

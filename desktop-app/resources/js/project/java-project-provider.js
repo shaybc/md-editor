@@ -221,12 +221,14 @@
     async function rebuildJavacProject(context, initialConfiguration, options = {}) {
       const projectPath = compiler.normalizePath(context.folderPath);
       let configuration = initialConfiguration || await buildPath.loadConfiguration(projectPath);
+      let useLastOptions = options.useLastOptions === true;
       if (!configuration.sourceFolders.length) {
-        if (options.useLastOptions === true) {
+        if (useLastOptions && options.configureIfMissing !== true) {
           throw new Error("Run Build Project once to select Java source folders before using Rebuild Project.");
         }
         configuration = await configureBuildPath(context, { initialTab: "source" });
         if (!configuration || !configuration.sourceFolders.length) return false;
+        useLastOptions = false;
       }
       const runtime = await requireProjectRuntime(projectPath, configuration);
 
@@ -237,7 +239,10 @@
       let buildStatusId = "";
       try {
         const libraryEntries = await resolveLibraryEntries(projectPath, buildPath.getOrderedLibraryEntries(configuration));
-        const selection = options.useLastOptions === true
+        if (useLastOptions && !configuration.javacProfile && options.configureIfMissing === true) {
+          useLastOptions = false;
+        }
+        const selection = useLastOptions
           ? getSavedJavacSelection(configuration, dialogSources, libraryEntries)
           : await deps.rebuildDialog.openDialog({
               sourceEntries: dialogSources,
@@ -254,7 +259,7 @@
           if (collisions.length) throw new Error(`Source export paths collide: ${collisions.join(", ")}`);
         }
         const profile = createJavacProfile(selection);
-        if (options.useLastOptions !== true) {
+        if (!useLastOptions) {
           configuration = await buildPath.saveConfiguration(projectPath, Object.assign({}, configuration, { javacProfile: profile }));
         }
         buildStatusId = beginProjectBuildStatus();
@@ -1009,21 +1014,32 @@
     async function rebuildProject(context, options = {}) {
       const projectPath = compiler.normalizePath(context.folderPath);
       let configuration = await buildPath.loadConfiguration(projectPath);
+      let rebuildOptions = options;
       if (!configuration.buildSystem) {
-        if (options.useLastOptions === true) {
+        if (options.useLastOptions === true && options.configureIfMissing !== true) {
           throw new Error("Configure Java Build Path and run Build Project once before using Rebuild Project.");
         }
         configuration = await configureBuildPath(context, { initialTab: "source" });
         if (!configuration) return false;
+        if (options.useLastOptions === true) {
+          rebuildOptions = Object.assign({}, options, { useLastOptions: false });
+        }
       }
       const buildSystem = configuration.buildSystem;
       let succeeded = false;
-      if (buildSystem === "maven") succeeded = await rebuildMavenProject(projectPath, configuration, options);
-      else if (buildSystem === "gradle") succeeded = await rebuildGradleProject(projectPath, configuration, options);
-      else if (buildSystem === "javac") succeeded = await rebuildJavacProject(context, configuration, options);
+      if (buildSystem === "maven") succeeded = await rebuildMavenProject(projectPath, configuration, rebuildOptions);
+      else if (buildSystem === "gradle") succeeded = await rebuildGradleProject(projectPath, configuration, rebuildOptions);
+      else if (buildSystem === "javac") succeeded = await rebuildJavacProject(context, configuration, rebuildOptions);
       else return false;
       if (succeeded && options.runAnalyzers !== false) {
-        await deps.onSuccessfulRebuild?.({ projectPath, buildSystem, succeeded: true });
+        const analysis = deps.onSuccessfulRebuild?.({ projectPath, buildSystem, succeeded: true });
+        if (options.waitForAnalysis === false) {
+          Promise.resolve(analysis).catch((error) => {
+            console.warn("Unable to refresh Java analysis after the successful rebuild:", error);
+          });
+        } else {
+          await analysis;
+        }
       }
       return succeeded;
     }

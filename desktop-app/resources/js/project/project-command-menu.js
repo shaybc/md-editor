@@ -157,8 +157,14 @@
         if (commandName === "compile-file") await provider.compileFile(context);
         if (commandName === "compile-folder") await provider.compileTarget(context);
         if (commandName === "clean-project") await provider.cleanProject(context);
-        if (commandName === "rebuild-project") await provider.rebuildProject(context);
-        if (commandName === "rebuild-project-last-options") await provider.rebuildProject(context, { useLastOptions: true });
+        if (commandName === "rebuild-project") return await provider.rebuildProject(context);
+        if (commandName === "rebuild-project-last-options") {
+          return await provider.rebuildProject(context, {
+            useLastOptions: true,
+            configureIfMissing: overrides.configureIfMissing === true,
+            waitForAnalysis: overrides.waitForAnalysis !== false
+          });
+        }
         if (commandName === "generate-documentation") {
           await provider.generateDocumentation(Object.assign({}, context, overrides.scope ? { scope: overrides.scope } : {}));
         }

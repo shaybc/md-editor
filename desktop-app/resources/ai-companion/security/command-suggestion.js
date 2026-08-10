@@ -12,10 +12,10 @@ function classifyCommand(command) {
   const text = String(command || "").trim();
   const lower = text.toLowerCase();
   if (/^(mvn|mvnw(?:\.cmd)?)\s+(?:-q\s+)?(?:clean\s+)?(?:compile|package|verify)\b/.test(lower)) {
-    return suggestion("compile_project", { targetPath: ".", buildMode: /\bclean\b/.test(lower) ? "clean" : "incremental", includeTestSources: /\btest-compile\b|\bverify\b/.test(lower) }, "java-compile");
+    return suggestion("compile_project", {}, "java-compile");
   }
   if (/^(gradle|gradlew(?:\.bat)?)\s+.*\b(?:build|classes|compilejava)\b/.test(lower)) {
-    return suggestion("compile_project", { targetPath: ".", buildMode: /\bclean\b/.test(lower) ? "clean" : "incremental", includeTestSources: /\btest\b/.test(lower) }, "java-compile");
+    return suggestion("compile_project", {}, "java-compile");
   }
   if (/^(mvn|mvnw(?:\.cmd)?|gradle|gradlew(?:\.bat)?)\s+.*\btest\b/.test(lower)) {
     return suggestion("run_tests", { targetPath: ".", runner: "junit", scope: "project", selector: "" }, "java-test");

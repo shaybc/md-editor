@@ -319,6 +319,48 @@ test("Maven Rebuild Project reuses the last Build Project options without openin
   assert.equal(harness.savedConfigurations.length, 0);
 });
 
+test("AI rebuild configuration fallback opens Build Path and the Maven rebuild dialog", async () => {
+  const harness = loadProvider({
+    configuration: { buildSystem: "", sourceFolders: [], classpathFolders: [], jarFiles: [], maven: {} },
+    configuredConfiguration: {
+      buildSystem: "maven",
+      sourceFolders: [],
+      classpathFolders: [],
+      jarFiles: [],
+      maven: { compileTests: true, runTests: false }
+    },
+    mavenProject: { hasPom: true, pomLabel: "pom.xml", runner: "mvn", projectRoot: "C:/Project" }
+  });
+
+  assert.equal(await harness.provider.rebuildProject(
+    { folderPath: "C:/Project" },
+    { useLastOptions: true, configureIfMissing: true }
+  ), true);
+  assert.equal(harness.rebuildDialogOpenCount, 1);
+  assert.equal(harness.commands[0].command, "mvn clean package -DskipTests");
+});
+
+test("AI rebuild configuration fallback returns false when the rebuild dialog is cancelled", async () => {
+  const harness = loadProvider({
+    configuration: { buildSystem: "", sourceFolders: [], classpathFolders: [], jarFiles: [], maven: {} },
+    configuredConfiguration: {
+      buildSystem: "maven",
+      sourceFolders: [],
+      classpathFolders: [],
+      jarFiles: [],
+      maven: { compileTests: true, runTests: false }
+    },
+    openDialog() { return null; }
+  });
+
+  assert.equal(await harness.provider.rebuildProject(
+    { folderPath: "C:/Project" },
+    { useLastOptions: true, configureIfMissing: true }
+  ), false);
+  assert.equal(harness.rebuildDialogOpenCount, 1);
+  assert.equal(harness.commands.length, 0);
+});
+
 
 test("Maven rebuild accepts one-invocation Build Options defaults from deep links", async () => {
   let dialogModel;
@@ -361,6 +403,29 @@ test("successful Maven rebuild reports completion after build status cleanup", a
     result: { projectPath: "C:/Project", buildSystem: "maven", succeeded: true },
     statusEvents: [["set", "project-build-1", "Building project...", true], ["unset", "project-build-1"]]
   }]);
+});
+
+test("AI Maven rebuild completes before background Java analysis finishes", async () => {
+  let finishAnalysis;
+  const analysis = new Promise((resolve) => { finishAnalysis = resolve; });
+  const callbackEvents = [];
+  const harness = loadProvider({
+    configuration: { buildSystem: "maven", sourceFolders: [], classpathFolders: [], jarFiles: [], maven: {} },
+    onSuccessfulRebuild(result) {
+      callbackEvents.push(result);
+      return analysis;
+    }
+  });
+
+  assert.equal(await harness.provider.rebuildProject(
+    { folderPath: "C:/Project" },
+    { useLastOptions: true, waitForAnalysis: false }
+  ), true);
+  assert.deepEqual(JSON.parse(JSON.stringify(callbackEvents)), [
+    { projectPath: "C:/Project", buildSystem: "maven", succeeded: true }
+  ]);
+  finishAnalysis();
+  await analysis;
 });
 
 test("failed and javac rebuilds do not request an automatic analysis retry", async () => {
@@ -568,6 +633,34 @@ test("javac Rebuild Project reuses the saved profile without opening the dialog"
   assert.equal(harness.rebuildDialogOpenCount, 0);
   assert.equal(harness.commands[0].command, "javac @sources.txt");
   assert.equal(harness.savedConfigurations.length, 0);
+});
+
+test("AI rebuild opens the javac dialog when no saved rebuild profile exists", async () => {
+  const harness = loadProvider({
+    configuration: {
+      buildSystem: "javac",
+      sourceFolders: ["src"],
+      classpathFolders: [],
+      jarFiles: []
+    },
+    openDialog(model) {
+      return {
+        sourceRoots: model.sourceEntries,
+        classpathEntries: [],
+        outputMode: "classes",
+        outputPath: "C:/Project/classes",
+        exportSources: false
+      };
+    }
+  });
+
+  assert.equal(await harness.provider.rebuildProject(
+    { folderPath: "C:/Project" },
+    { useLastOptions: true, configureIfMissing: true }
+  ), true);
+  assert.equal(harness.rebuildDialogOpenCount, 1);
+  assert.equal(harness.commands[0].command, "javac @sources.txt");
+  assert.equal(harness.savedConfigurations.length, 1);
 });
 
 test("standard javac rebuild parses captured console warnings and focuses Problems", async () => {

@@ -11,7 +11,6 @@ const { isPackageOperationAllowed } = require("../security/effective-policy");
 const { createPackageProviderRegistry } = require("./package-providers");
 
 const broker = new StructuredExecutionBroker();
-const BUILD_MODES = new Set(["incremental", "clean"]);
 const TEST_RUNNERS = new Set(["auto", "junit", "node", "playwright"]);
 const TEST_SCOPES = new Set(["project", "module", "file", "class", "method"]);
 const PACKAGE_ACTIONS = new Set(["install", "update", "remove", "download"]);
@@ -85,61 +84,6 @@ function baseDescriptor(workspaceRoot, projectRoot, executable, args, environmen
 }
 
 const packageProviders = createPackageProviderRegistry({ baseDescriptor, findExecutable });
-
-async function listJavaSources(targetPath, includeTestSources, files = []) {
-  const stat = await fs.stat(targetPath);
-  if (stat.isFile()) {
-    if (targetPath.endsWith(".java")) files.push(targetPath);
-    return files;
-  }
-  for (const entry of await fs.readdir(targetPath, { withFileTypes: true })) {
-    if ([".git", ".gradle", "build", "target"].includes(entry.name)) continue;
-    const child = path.join(targetPath, entry.name);
-    if (!includeTestSources && /[\\/]src[\\/]test(?:[\\/]|$)/i.test(child)) continue;
-    if (entry.isDirectory()) await listJavaSources(child, includeTestSources, files);
-    else if (entry.isFile() && entry.name.endsWith(".java")) files.push(child);
-  }
-  return files;
-}
-
-async function createCompileDescriptor(workspaceRoot, args, policy) {
-  validateEnum("buildMode", args.buildMode, BUILD_MODES);
-  const resolved = await resolveTarget(workspaceRoot, args.targetPath);
-  let project;
-  try {
-    project = await findProjectRoot(resolved.root, resolved.directory);
-  } catch (error) {
-    if (!/No supported project manifest/.test(error?.message || "")) throw error;
-    const sources = await listJavaSources(resolved.target, args.includeTestSources === true);
-    if (!sources.length) throw new Error("No Java source files were found for compile_project.");
-    const outputDirectory = path.join(resolved.root, ".md-editor", "ai-build", "classes");
-    const executable = process.env.JAVA_HOME
-      ? path.join(process.env.JAVA_HOME, "bin", process.platform === "win32" ? "javac.exe" : "javac")
-      : process.platform === "win32" ? "javac.exe" : "javac";
-    return {
-      ...baseDescriptor(resolved.root, resolved.root, executable, ["-d", outputDirectory, ...sources]),
-      prepareDirectories: [outputDirectory],
-      cleanDirectories: args.buildMode === "clean" ? [outputDirectory] : []
-    };
-  }
-  if (project.manifest === "pom.xml") {
-    const executable = await findExecutable(project.projectRoot, [process.platform === "win32" ? "mvnw.cmd" : "mvnw", process.platform === "win32" ? "mvn.cmd" : "mvn"]);
-    const commandArgs = [];
-    if (args.buildMode === "clean") commandArgs.push("clean");
-    commandArgs.push(args.includeTestSources ? "test-compile" : "compile");
-    if (policy.execution.networkAccess === false) commandArgs.unshift("--offline");
-    return baseDescriptor(resolved.root, project.projectRoot, executable, commandArgs, { CI: "true" });
-  }
-  if (project.manifest.startsWith("build.gradle")) {
-    const executable = await findExecutable(project.projectRoot, [process.platform === "win32" ? "gradlew.bat" : "gradlew", process.platform === "win32" ? "gradle.bat" : "gradle"]);
-    const commandArgs = [];
-    if (args.buildMode === "clean") commandArgs.push("clean");
-    commandArgs.push(args.includeTestSources ? "testClasses" : "classes", "--no-daemon");
-    if (policy.execution.networkAccess === false) commandArgs.push("--offline");
-    return baseDescriptor(resolved.root, project.projectRoot, executable, commandArgs, { CI: "true" });
-  }
-  throw new Error("compile_project supports Maven and Gradle Java projects in this version.");
-}
 
 async function detectTestRunner(project, requested) {
   if (requested !== "auto") return requested;
@@ -347,11 +291,58 @@ async function executeAudited(tool, requestedOperation, descriptor, options, met
   return normalized;
 }
 
+/** Invoke the IDE rebuild action while retaining the structured-execution audit trail. */
+async function executeIdeRebuildAudited(requestedOperation, options) {
+  if (options.policyError) {
+    const error = new Error("Structured execution is denied because the effective security policy could not be loaded: " + options.policyError);
+    await recordDenied("compile_project", requestedOperation, options, error);
+    error.auditRecorded = true;
+    throw error;
+  }
+  await options.auditLogger?.record(auditBase(options, "compile_project", requestedOperation, "allow"));
+  const startedAt = Date.now();
+  let result;
+  try {
+    if (typeof options.requestAppAction !== "function") {
+      throw new Error("compile_project requires the MD-Editor IDE action bridge.");
+    }
+    result = await options.requestAppAction({
+      tool: "structured_compile_project",
+      args: {},
+      targetPath: options.workspaceRoot,
+      preview: { target: options.workspaceRoot, action: "Rebuild Project with Last Options" }
+    });
+  } catch (error) {
+    await options.auditLogger?.record({ ...auditBase(options, "compile_project", requestedOperation, "execution-error"), error: error?.message || String(error) });
+    error.auditRecorded = true;
+    throw error;
+  }
+  const success = result?.success === true;
+  const normalized = {
+    success,
+    diagnostics: [],
+    testCases: [],
+    summary: {
+      action: "ide-rebuild",
+      status: success ? "succeeded" : "not-completed",
+      message: success ? "The IDE rebuild succeeded." : "The IDE rebuild was cancelled or failed. See Problems and Java Rebuild output for details."
+    },
+    artifacts: [],
+    durationMs: Date.now() - startedAt
+  };
+  await options.auditLogger?.record({
+    ...auditBase(options, "compile_project", requestedOperation, success ? "executed-success" : "executed-failure"),
+    executionResult: normalized
+  });
+  return normalized;
+}
+
 async function compileProject(workspaceRoot, args, options) {
   const executionOptions = { ...options, workspaceRoot };
   try {
-    const descriptor = await createCompileDescriptor(workspaceRoot, args, options.policy);
-    return executeAudited("compile_project", args, descriptor, executionOptions);
+    const requestedOperation = args && typeof args === "object" ? args : {};
+    if (Object.keys(requestedOperation).length) throw new Error("compile_project does not accept arguments.");
+    return executeIdeRebuildAudited(requestedOperation, executionOptions);
   } catch (error) {
     if (!error.auditRecorded) await recordDenied("compile_project", args, executionOptions, error);
     throw error;

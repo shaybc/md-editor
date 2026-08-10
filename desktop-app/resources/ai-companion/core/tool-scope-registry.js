@@ -215,7 +215,7 @@
     start_code_conversion: "Starts the code-to-Markdown converter. Lets the agent run a conversion (requires approval).",
     run_command: "Requests a free-form shell command (normally policy-gated). Lets the agent run commands (requires approval).",
     run_tests: "Runs the project's tests. Lets the agent verify behavior.",
-    compile_project: "Compiles or builds the project. Lets the agent check that it builds.",
+    compile_project: "Invokes MD-Editor's Rebuild Project with Last Options action. Uses saved IDE build settings and opens the normal configuration dialogs when required.",
     manage_dependencies: "Installs, updates, removes, downloads, or restores packages. Lets the agent manage dependencies (requires approval)."
   });
 

@@ -42,12 +42,15 @@ function definition(name) {
   const properties = name === "git_status"
     ? { maxFiles: { type: "integer", minimum: 1, maximum: 1000, description: "Maximum file details; aggregate counts remain complete." } }
     : {};
+  const parameters = name === "compile_project"
+    ? { type: "object", properties: {}, additionalProperties: false }
+    : { type: "object", properties, additionalProperties: true };
   return {
     type: "function",
     function: {
       name,
       description: toolScopes.describeTool(name) || `Use MD-Editor's ${toolScopes.humanizeTool(name)} capability.`,
-      parameters: { type: "object", properties, additionalProperties: true }
+      parameters
     }
   };
 }
@@ -162,6 +165,7 @@ async function executeApplicationTool(name, args, context) {
     const security = request.securityContext || {};
     return EXECUTION_HANDLERS[name](root, args, {
       ...options,
+      requestAppAction: request.requestAppAction,
       policy: security.policy,
       policyError: security.policyError,
       auditLogger: security.auditLogger,

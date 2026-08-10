@@ -14127,8 +14127,6 @@ Markdown content is processed client-side in your browser and sanitized before p
   function getLazyNeutralinoFolderStats() {
     if (!isFolderOpen || !isNeutralinoRuntime() || !activeFolderPath) return null;
     if (folderTreeFilterText || selectedFolderTreeTags.size > 0) return null;
-    if (typeof getNeutralinoFolderScanDetails !== "function") return null;
-    if (!isLazyNeutralinoFolderScan(getNeutralinoFolderScanDetails())) return null;
     if (
       lazyFolderCountResult
       && lazyFolderCountResult.token === lazyFolderCountGeneration
@@ -14136,6 +14134,10 @@ Markdown content is processed client-side in your browser and sanitized before p
     ) {
       return lazyFolderCountResult.stats;
     }
+    // Expanding a lazy child replaces the latest scan details, but it must not invalidate
+    // the completed recursive count that belongs to the still-active root folder.
+    if (typeof getNeutralinoFolderScanDetails !== "function") return null;
+    if (!isLazyNeutralinoFolderScan(getNeutralinoFolderScanDetails())) return null;
     return { files: 0, folders: 0 };
   }
 

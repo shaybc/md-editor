@@ -523,6 +523,11 @@
       showThinkingIndicatorWithLabel("Thinking ...", entry);
     }
 
+    function showRunningActivityIndicator(activity = {}) {
+      const activityLabel = String(activity.title || activity.tool || "Running tool").trim();
+      showThinkingIndicatorWithLabel(`${activityLabel} ...`);
+    }
+
     function showRateLimitWaitIndicator(delayMs) {
       if (!rateLimitWaitCountdown) {
         showThinkingIndicatorWithLabel("Waiting (rate limit)");
@@ -6975,7 +6980,7 @@
       const savedEvent = recordAgentEvent(displayEvent) || displayEvent;
       updateLatestRequestContextFromTool(savedEvent);
       if (savedEvent.activity) renderer?.appendActivity?.(savedEvent);
-      if (savedEvent.activity?.status === "running") hideThinkingIndicator();
+      if (savedEvent.activity?.status === "running") showRunningActivityIndicator(savedEvent.activity);
       else showThinkingIndicator();
       scrollToolLogToEnd();
       refreshApiClientAfterTool(savedEvent);
