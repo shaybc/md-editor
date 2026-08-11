@@ -1051,7 +1051,7 @@
       hideTabContextMenu();
       if (!targetTab) return;
       if (action === 'rename') renameTab(targetTab.id);
-      else if (action === 'duplicate') duplicateTab(targetTab.id);
+      else if (action === 'duplicate') await duplicateTab(targetTab.id);
       else if (action === 'compare') await compareSelectedTabs(targetTabIds);
       else if (action === 'reveal-in-tree-view') void revealTabInTreeView(targetTab);
       else if (action === 'open-project-folder') void openTabProjectFolder(targetTab);
@@ -3286,7 +3286,27 @@
     return `${tab.title || "Untitled"} (copy)`;
   }
 
-  function duplicateTab(tabId) {
+  async function duplicateImageEditorTab(tab, tabId) {
+    const draftBytes = await deps.imageEditor?.getDraftBinary?.(tab);
+    if (!draftBytes) return;
+    const originalName = getTabSourceFileName(tab) || tab.imageEditorSource?.name;
+    const sourceName = addCopySuffixToFileName(originalName) || 'Image (copy).png';
+    const source = { blank: true, name: sourceName, mimeType: 'image/png' };
+    source.width = tab.imageEditorState?.width;
+    source.height = tab.imageEditorState?.height;
+    const dup = createImageEditorTab(source, sourceName + ' \u2014 Image Editor', {
+      temporary: false,
+      state: { ...(tab.imageEditorState || {}), mimeType: 'image/png' },
+      dirty: true,
+      draftBytes
+    });
+    const idx = tabs.findIndex(function(t) { return t.id === tabId; });
+    if (idx < 0) return;
+    tabs.splice(idx + 1, 0, dup);
+    switchTab(dup.id);
+  }
+
+  async function duplicateTab(tabId) {
     const tab = tabs.find(function(t) { return t.id === tabId; });
     if (!tab) return;
     if (tab.type === "regex-tester") return;
@@ -3294,6 +3314,10 @@
       return;
     }
     saveCurrentTabState();
+    if (tab.type === 'image-editor') {
+      await duplicateImageEditorTab(tab, tabId);
+      return;
+    }
     if (tab.type === "large-file") {
       const dup = createLargeFileTab(tab.largeFileSource, `${tab.title || "Large file"} (copy)`);
       tabs.splice(tabs.findIndex(function(t) { return t.id === tabId; }) + 1, 0, dup);

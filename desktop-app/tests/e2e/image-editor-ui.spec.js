@@ -151,6 +151,46 @@ test("switching between image editor tabs preserves each tab's drawing", async (
   expect(await pixel(1, 12, 8)).toEqual([255, 255, 255]);
   expect(await pixel(0, 12, 8)).not.toEqual([255, 255, 255]);
 });
+
+test('duplicating an image editor preserves its live canvas in another image editor', async ({ page }) => {
+  await page.goto('/');
+  await page.waitForFunction(() => !!window.markdownViewerApp?.modules?.tabs?.openBlankImageEditorInTab, null, { timeout: 60000 });
+  await page.waitForFunction(() => !!window.markdownViewerApp?.modules?.keyboardShortcuts && !!window.markdownViewerApp?.services?.imageEditor, null, { timeout: 60000 });
+  await page.evaluate(() => {
+    window.markdownViewerApp.modules.apiClient.deactivateApiClientSidebar = () => {};
+    window.__duplicateImageOriginalId = window.markdownViewerApp.modules.tabs
+      .openBlankImageEditorInTab({ width: 64, height: 48, name: 'Duplicate Test' }).id;
+  });
+  await expect(page.locator('.tab-view.active[data-tab-view-kind=image-editor] .image-editor-shell')).toBeVisible();
+
+  await page.locator('.tab-view.active [data-tool=pencil]').click();
+  const overlay = page.locator('.tab-view.active .image-editor-overlay');
+  const box = await overlay.boundingBox();
+  await page.mouse.move(box.x + 8, box.y + 8);
+  await page.mouse.down();
+  await page.mouse.move(box.x + 20, box.y + 8, { steps: 6 });
+  await page.mouse.up();
+
+  const originalTab = page.locator('#tab-list .tab-item.active');
+  await originalTab.dispatchEvent('contextmenu', { bubbles: true, cancelable: true, button: 2, clientX: 180, clientY: 140 });
+  await page.locator('.tab-context-menu-action[data-action=duplicate]').evaluate((button) => button.click());
+
+  await expect(page.locator('.tab-view.active[data-tab-view-kind=image-editor] .image-editor-shell')).toBeVisible();
+  await expect(page.locator('#tab-list .tab-item.active')).toContainText('Duplicate Test (copy)');
+  const duplicate = await page.evaluate(() => {
+    const tab = window.markdownViewerApp.modules.tabs.getActiveTab();
+    return { id: tab.id, originalId: window.__duplicateImageOriginalId, type: tab.type, dirty: tab.imageEditorDirty, sourceFilePath: tab.sourceFilePath };
+  });
+  expect(duplicate.id).not.toBe(duplicate.originalId);
+  expect(duplicate).toMatchObject({
+    type: 'image-editor',
+    dirty: true,
+    sourceFilePath: null
+  });
+  const pixel = await page.locator('.tab-view.active .image-editor-canvas').evaluate((canvas) =>
+    Array.from(canvas.getContext('2d').getImageData(12, 8, 1, 1).data).slice(0, 3));
+  expect(pixel).not.toEqual([255, 255, 255]);
+});
 test("text tool creates a dragged text box and moves populated text from its border", async ({ page }) => {
   await page.goto("/");
   await page.waitForFunction(() => !!window.markdownViewerApp?.modules?.keyboardShortcuts, null, { timeout: 60000 });
