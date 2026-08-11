@@ -225,6 +225,10 @@
       }
       if (action === "copy") return copySelectionToClipboard(controller);
       if (action === "paste") {
+        if (!view.textInput.hidden) {
+          const clipboardText = await readSystemClipboardText();
+          if (clipboardText?.length && pasteTextIntoActiveEditor(controller, clipboardText)) return;
+        }
         commitSelection(controller);
         const pasteRevision = selection.beginPaste();
         state.setTool("select");
@@ -275,6 +279,18 @@
       controller.view.showTextInput(rect, controller.state);
       controller.view.textInput.value = text;
       setTimeout(() => { controller.textInputOpening = false; }, 150);
+    }
+
+    /** Insert clipboard text at the cursor without ending the current text edit. */
+    function pasteTextIntoActiveEditor(controller, text) {
+      const input = controller.view.textInput;
+      if (input.hidden) return false;
+      const start = input.selectionStart ?? input.value.length;
+      const end = input.selectionEnd ?? start;
+      input.setRangeText(text, start, end, 'end');
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+      input.focus();
+      return true;
     }
 
     function openPastedTextBox(controller, text) {
@@ -774,7 +790,7 @@
         event.stopPropagation();
         if (text) {
           keepTextInputLive(controller);
-          if (!controller.view.textInput.hidden) commitText(controller);
+          if (pasteTextIntoActiveEditor(controller, text)) return;
           openPastedTextBox(controller, text);
           return;
         }

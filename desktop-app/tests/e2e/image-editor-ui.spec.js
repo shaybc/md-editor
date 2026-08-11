@@ -164,24 +164,31 @@ test('pasting clipboard text opens a new editable text box', async ({ context, p
   await expect(page.locator('.tab-view.active[data-tab-view-kind=image-editor] .image-editor-shell')).toBeVisible();
 
   const textInput = page.locator('.tab-view.active .image-editor-text-input');
-  for (const text of ['First paste', 'Second paste', 'Third paste']) {
-    await page.evaluate((value) => navigator.clipboard.writeText(value), text);
-    await page.keyboard.press('Control+V');
-    await expect(textInput).toBeVisible();
-    await expect(textInput).toHaveValue(text);
-    await expect(page.locator('.tab-view.active [data-tool=text]')).toHaveClass(/active/);
-    await expect.poll(() => page.evaluate(() => document.activeElement?.classList.contains('image-editor-text-input'))).toBe(true);
-    const draftSize = await page.evaluate(async () => {
-      const tabs = window.markdownViewerApp.modules.tabs;
-      return (await window.markdownViewerApp.services.imageEditor.getDraftBinary(tabs.getActiveTab())).byteLength;
-    });
-    expect(draftSize).toBeGreaterThan(0);
-    await expect(textInput).toBeVisible();
-    await expect(textInput).toHaveValue(text);
-    await expect.poll(() => page.evaluate(() => document.activeElement?.classList.contains('image-editor-text-input'))).toBe(true);
-    await textInput.pressSequentially('!');
-    await expect(textInput).toHaveValue(text + '!');
-  }
+  await page.evaluate(() => navigator.clipboard.writeText('First paste'));
+  await page.keyboard.press('Control+V');
+  await expect(textInput).toBeVisible();
+  await expect(textInput).toHaveValue('First paste');
+  await expect(page.locator('.tab-view.active [data-tool=text]')).toHaveClass(/active/);
+  await textInput.evaluate((input) => input.setSelectionRange(5, 5));
+  await page.evaluate(() => navigator.clipboard.writeText(' inserted'));
+  await page.keyboard.press('Control+V');
+  await expect(textInput).toHaveValue('First inserted paste');
+  await expect.poll(() => page.evaluate(() => document.activeElement?.classList.contains('image-editor-text-input'))).toBe(true);
+  const draftSize = await page.evaluate(async () => {
+    const tabs = window.markdownViewerApp.modules.tabs;
+    return (await window.markdownViewerApp.services.imageEditor.getDraftBinary(tabs.getActiveTab())).byteLength;
+  });
+  expect(draftSize).toBeGreaterThan(0);
+  await expect(textInput).toBeVisible();
+  await expect(textInput).toHaveValue('First inserted paste');
+  await page.keyboard.press('Control+Enter');
+  await expect(textInput).toBeHidden();
+
+  await page.evaluate(() => navigator.clipboard.writeText('Second box'));
+  await page.keyboard.press('Control+V');
+  await expect(textInput).toBeVisible();
+  await expect(textInput).toHaveValue('Second box');
+  await expect.poll(() => page.evaluate(() => document.activeElement?.classList.contains('image-editor-text-input'))).toBe(true);
   const origin = await page.evaluate(() => {
     const canvas = document.querySelector('.tab-view.active .image-editor-canvas').getBoundingClientRect();
     const textBox = document.querySelector('.tab-view.active .image-editor-text-box').getBoundingClientRect();
