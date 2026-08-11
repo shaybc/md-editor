@@ -8,6 +8,7 @@
       { pattern: /(^|[\\/])makefile$/i, id: "makefile", openingModeKey: "special:makefile", openingModeLabel: "Makefile" },
       { pattern: /(^|[\\/])rakefile$/i, id: "ruby", openingModeKey: "special:rakefile", openingModeLabel: "Rakefile" },
       { pattern: /(^|[\\/])gemfile$/i, id: "ruby", openingModeKey: "special:gemfile", openingModeLabel: "Gemfile" },
+      { pattern: /(^|[\\/])md-editor-debug(?:-\d+)?\.log$/i, id: "csharp", openingModeKey: "special:md-editor-debug-log", openingModeLabel: "MD-Editor debug log" },
       { pattern: /(^|[\\/])license$/i, id: "text", openingModeKey: "special:license", openingModeLabel: "LICENSE" },
       { pattern: /(^|[\\/])readme$/i, id: "markdown", openingModeKey: "special:readme", openingModeLabel: "README" },
       { pattern: /(^|[\\/])changelog$/i, id: "markdown", openingModeKey: "special:changelog", openingModeLabel: "CHANGELOG" },

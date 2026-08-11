@@ -42,6 +42,18 @@ test("language registry detects Docker-related file names", () => {
   assert.equal(dockerignore?.id, "dockerignore");
   assert.equal(dockerignore?.codeMirrorLanguage, "text");
 });
+
+test("language registry colors MD-Editor debug logs as C#", () => {
+  const context = createContext();
+  vm.runInContext(readWebFile("js/languages/registry.js"), context);
+
+  const registry = context.window.registerMarkdownViewerLanguageRegistry(context.app);
+
+  assert.equal(registry.resolveLanguageForPath("C:/temp/md-editor-debug.log")?.codeMirrorLanguage, "csharp");
+  assert.equal(registry.resolveLanguageForPath("C:/temp/md-editor-debug-1.log")?.codeMirrorLanguage, "csharp");
+  assert.equal(registry.resolveLanguageForPath("C:/temp/application.log")?.id, "log");
+});
+
 test("language registry detects common text-based project files", () => {
   const context = createContext();
   vm.runInContext(readWebFile("js/languages/registry.js"), context);
