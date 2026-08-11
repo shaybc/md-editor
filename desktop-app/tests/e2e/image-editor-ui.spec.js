@@ -343,6 +343,79 @@ test("selection moves with arrows and Ctrl+arrow starts a movable copy", async (
   expect(afterCommitPixels.original.slice(0, 3)).toEqual([255, 0, 0]);
   expect(afterCommitPixels.copyTarget.slice(0, 3)).toEqual([255, 0, 0]);
 });
+test("selection pointer drag moves, Ctrl clones, and Shift stamps canvas content", async ({ page }) => {
+  await page.goto("/");
+  await page.waitForFunction(() => !!window.markdownViewerApp?.modules?.keyboardShortcuts, null, { timeout: 60000 });
+  await page.waitForFunction(() => !!window.markdownViewerApp?.modules?.tabs?.openImageEditorInTab);
+  expect(page.errors).toEqual([]);
+
+  await page.evaluate(async () => {
+    const sourceCanvas = document.createElement("canvas");
+    sourceCanvas.width = 80;
+    sourceCanvas.height = 70;
+    const sourceContext = sourceCanvas.getContext("2d");
+    sourceContext.fillStyle = "#ffffff";
+    sourceContext.fillRect(0, 0, 80, 70);
+    sourceContext.fillStyle = "#00ff00";
+    sourceContext.fillRect(20, 20, 4, 4);
+    const sourceBlob = await new Promise((resolve) => sourceCanvas.toBlob(resolve, "image/png"));
+    const sourceFile = new File([sourceBlob], "selection-pointer-modifiers-test.png", { type: "image/png" });
+    window.markdownViewerApp.modules.apiClient.deactivateApiClientSidebar = () => {};
+    window.markdownViewerApp.modules.tabs.openImageEditorInTab({
+      name: sourceFile.name,
+      type: sourceFile.type,
+      mimeType: sourceFile.type,
+      file: sourceFile
+    });
+  });
+
+  await expect(page.locator(".image-editor-shell")).toBeVisible();
+  await page.locator('[data-tool="select"]').click();
+  const overlay = page.locator(".image-editor-overlay");
+  const box = await overlay.boundingBox();
+  const drag = async (fromX, fromY, toX, toY) => {
+    await page.mouse.move(box.x + fromX, box.y + fromY);
+    await page.mouse.down();
+    await page.mouse.move(box.x + toX, box.y + toY, { steps: 5 });
+    await page.mouse.up();
+  };
+
+  await drag(20, 20, 24, 24);
+  await drag(22, 22, 32, 22);
+  let pixels = await page.evaluate(() => {
+    const canvas = document.querySelector(".image-editor-canvas").getContext("2d");
+    const overlay = document.querySelector(".image-editor-overlay").getContext("2d");
+    const pixel = (context, x, y) => Array.from(context.getImageData(x, y, 1, 1).data).slice(0, 3);
+    return { source: pixel(canvas, 20, 20), baseTarget: pixel(canvas, 31, 21), floatingTarget: pixel(overlay, 31, 21) };
+  });
+  expect(pixels).toEqual({ source: [255, 255, 255], baseTarget: [255, 255, 255], floatingTarget: [0, 255, 0] });
+
+  await page.mouse.click(box.x + 70, box.y + 60);
+  await drag(30, 20, 34, 24);
+
+  await page.keyboard.down("Control");
+  await drag(32, 22, 42, 22);
+  await page.keyboard.up("Control");
+  pixels = await page.evaluate(() => {
+    const canvas = document.querySelector(".image-editor-canvas").getContext("2d");
+    const overlay = document.querySelector(".image-editor-overlay").getContext("2d");
+    const pixel = (context, x, y) => Array.from(context.getImageData(x, y, 1, 1).data).slice(0, 3);
+    return { original: pixel(canvas, 31, 21), baseTarget: pixel(canvas, 41, 21), floatingTarget: pixel(overlay, 41, 21) };
+  });
+  expect(pixels).toEqual({ original: [0, 255, 0], baseTarget: [255, 255, 255], floatingTarget: [0, 255, 0] });
+
+  await page.mouse.click(box.x + 70, box.y + 60);
+  await drag(40, 20, 44, 24);
+  await page.keyboard.down("Shift");
+  await drag(42, 22, 52, 22);
+  await page.keyboard.up("Shift");
+  pixels = await page.evaluate(() => {
+    const canvas = document.querySelector(".image-editor-canvas").getContext("2d");
+    const pixel = (x, y) => Array.from(canvas.getImageData(x, y, 1, 1).data).slice(0, 3);
+    return { original: pixel(40, 20), trail: pixel(45, 20), finalStamp: pixel(50, 20) };
+  });
+  expect(pixels).toEqual({ original: [0, 255, 0], trail: [0, 255, 0], finalStamp: [0, 255, 0] });
+});
 test("clicking outside a floating selection commits it and clears the selection", async ({ page }) => {
   await page.goto("/");
   await page.waitForFunction(() => !!window.markdownViewerApp?.modules?.keyboardShortcuts, null, { timeout: 60000 });
@@ -445,11 +518,38 @@ test("dragging a pasted floating selection does not alter canvas underneath unti
   await page.evaluate(() => {
     Object.defineProperty(navigator, "clipboard", {
       configurable: true,
-      value: { async write() {}, async writeText() {}, async read() { throw new Error("Use in-app clipboard fallback"); } }
+      value: {
+        async write() {},
+        async writeText() {},
+        read() {
+          return new Promise((resolve) => { window.__resolvePendingImagePaste = resolve; });
+        }
+      }
     });
   });
   await page.keyboard.press("Control+C");
   await page.keyboard.press("Control+V");
+  await expect.poll(() => page.evaluate(() => {
+    const root = document.querySelector('.tab-view.active[data-tab-view-kind="image-editor"]');
+    return window.markdownViewerApp.services.imageEditor.getView(root.dataset.tabId).selection.isPasting;
+  })).toBe(true);
+
+  await page.mouse.move(overlayBox.x + 22, overlayBox.y + 22);
+  await page.mouse.down();
+  await page.mouse.move(overlayBox.x + 42, overlayBox.y + 42, { steps: 6 });
+  await page.mouse.up();
+  const whilePastePending = await page.evaluate(() => {
+    const canvas = document.querySelector(".image-editor-canvas");
+    const root = document.querySelector('.tab-view.active[data-tab-view-kind="image-editor"]');
+    const selection = window.markdownViewerApp.services.imageEditor.getView(root.dataset.tabId).selection;
+    return {
+      sourcePixel: Array.from(canvas.getContext("2d").getImageData(20, 20, 1, 1).data).slice(0, 3),
+      isPasting: selection.isPasting,
+      hasSelection: selection.hasSelection
+    };
+  });
+  expect(whilePastePending).toEqual({ sourcePixel: [0, 0, 255], isPasting: true, hasSelection: false });
+  await page.evaluate(() => window.__resolvePendingImagePaste([]));
   await expect.poll(() => page.evaluate(() => {
     const overlay = document.querySelector(".image-editor-overlay");
     return Array.from(overlay.getContext("2d").getImageData(4, 4, 1, 1).data).slice(0, 3);
@@ -460,23 +560,46 @@ test("dragging a pasted floating selection does not alter canvas underneath unti
     return { rect: { ...controller.selection.rect }, floating: controller.selection.floating };
   });
   expect(pastedSelection).toEqual({ rect: { x: 0, y: 0, width: 8, height: 8 }, floating: true });
+  const afterDraftCapture = await page.evaluate(async () => {
+    const root = document.querySelector('.tab-view.active[data-tab-view-kind="image-editor"]');
+    const imageEditor = window.markdownViewerApp.services.imageEditor;
+    const controller = imageEditor.getView(root.dataset.tabId);
+    const draftBytes = await imageEditor.getDraftBinary(controller.tab);
+    const draftBitmap = await createImageBitmap(new Blob([draftBytes], { type: "image/png" }));
+    const draftCanvas = document.createElement("canvas");
+    draftCanvas.width = draftBitmap.width;
+    draftCanvas.height = draftBitmap.height;
+    draftCanvas.getContext("2d").drawImage(draftBitmap, 0, 0);
+    draftBitmap.close?.();
+    const canvas = document.querySelector(".image-editor-canvas");
+    return {
+      floating: controller.selection.floating,
+      sourcePixel: Array.from(canvas.getContext("2d").getImageData(20, 20, 1, 1).data).slice(0, 3),
+      draftPastePixel: Array.from(draftCanvas.getContext("2d").getImageData(4, 4, 1, 1).data).slice(0, 3)
+    };
+  });
+  expect(afterDraftCapture).toEqual({ floating: true, sourcePixel: [0, 0, 255], draftPastePixel: [0, 0, 255] });
   await page.locator('[data-tool="select"]').click();
 
   await page.mouse.move(overlayBox.x + 4, overlayBox.y + 4);
+  await page.keyboard.down("Control");
   await page.mouse.down();
   const selectionAfterPointerDown = await page.evaluate(() => {
     const root = document.querySelector('.tab-view.active[data-tab-view-kind="image-editor"]');
     const controller = window.markdownViewerApp.services.imageEditor.getView(root.dataset.tabId);
-    return { hasSelection: controller.selection.hasSelection, moving: controller.movingSelection };
+    return { hasSelection: controller.selection.hasSelection, moving: controller.selection.isMoving };
   });
   expect(selectionAfterPointerDown).toEqual({ hasSelection: true, moving: true });
   await page.mouse.move(overlayBox.x + 24, overlayBox.y + 12, { steps: 6 });
   await page.mouse.up();
+  await page.keyboard.up("Control");
 
   await page.mouse.move(overlayBox.x + 24, overlayBox.y + 12);
+  await page.keyboard.down("Shift");
   await page.mouse.down();
   await page.mouse.move(overlayBox.x + 34, overlayBox.y + 22, { steps: 6 });
   await page.mouse.up();
+  await page.keyboard.up("Shift");
 
   const afterDrag = await page.evaluate(() => {
     function pixel(selector, x, y) {
@@ -498,11 +621,13 @@ test("dragging a pasted floating selection does not alter canvas underneath unti
     return {
       canvasStart: pixel(".image-editor-canvas", 4, 4),
       canvasUnderFloatingCopy: pixel(".image-editor-canvas", 24, 12),
+      canvasUnderShiftMovedCopy: pixel(".image-editor-canvas", 34, 22),
       overlayBluePoint
     };
   });
   expect(afterDrag.canvasStart).toEqual([0, 255, 0]);
   expect(afterDrag.canvasUnderFloatingCopy).toEqual([255, 0, 0]);
+  expect(afterDrag.canvasUnderShiftMovedCopy).toEqual([255, 255, 255]);
   expect(afterDrag.overlayBluePoint).not.toBeNull();
 
   await page.mouse.move(overlayBox.x + 60, overlayBox.y + 50);

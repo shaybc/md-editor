@@ -103,11 +103,37 @@
 
     function commitSelection(controller) {
       if (!controller.selection.floating) return false;
+      const preservesSavedPixels = controller.selection.matchesSavedFloatingLayer();
       const before = controller.selectionBefore || snapshot(controller.view);
       controller.selection.commit(controller.view.context);
       controller.selectionBefore = null;
       drawSelectionOverlay(controller);
-      return commitTransaction(controller, before);
+      const changed = commitTransaction(controller, before);
+      if (preservesSavedPixels) {
+        controller.state.markSaved();
+        controller.history.markSaved?.();
+        controller.tab.imageEditorDirty = false;
+        syncTab(controller);
+      }
+      return changed;
+    }
+
+    /** Build an export-only canvas without changing the live floating selection. */
+    function createCompositeCanvas(controller) {
+      const { view, selection } = controller;
+      if (!selection.floating || !selection.imageData || !selection.rect) return view.canvas;
+      const composite = document.createElement("canvas");
+      composite.width = view.canvas.width;
+      composite.height = view.canvas.height;
+      const context = composite.getContext("2d");
+      context.drawImage(view.canvas, 0, 0);
+      context.putImageData(selection.imageData, selection.rect.x, selection.rect.y);
+      return composite;
+    }
+
+    /** Encode the visible base canvas and floating selection without committing either. */
+    function encodeCompositeCanvas(controller, mimeType) {
+      return namespace.encodeCanvas(createCompositeCanvas(controller), mimeType, controller.state.backgroundColor);
     }
 
     async function copySelectionToClipboard(controller) {
@@ -176,9 +202,16 @@
       if (action === "copy") return copySelectionToClipboard(controller);
       if (action === "paste") {
         commitSelection(controller);
+        const pasteRevision = selection.beginPaste();
+        state.setTool("select");
+        drawSelectionOverlay(controller);
+        syncTab(controller);
         const clipboardImage = await readSystemClipboardImage();
+        if (!selection.isPastePending(pasteRevision)) return;
         const pasteData = clipboardImage || selection.internalClipboard;
         if (!pasteData) {
+          selection.clear();
+          drawSelectionOverlay(controller);
           syncTab(controller);
           return;
         }
@@ -188,8 +221,7 @@
           Math.max(view.canvas.width, pasteData.width),
           Math.max(view.canvas.height, pasteData.height)
         );
-        if (selection.paste(view.context, pasteData, state)) {
-          state.setTool("select");
+        if (selection.paste(view.context, pasteData, state, pasteRevision)) {
           drawSelectionOverlay(controller);
         }
         syncTab(controller);
@@ -316,12 +348,9 @@
     }
     function dropSelection(controller) {
       const { selection } = controller;
-      if (!selection.hasSelection) return false;
+      if (!selection.hasSelection && !selection.isPasting) return false;
       if (selection.floating) commitSelection(controller);
       controller.selectionBefore = null;
-      controller.movingSelection = false;
-      controller.stampingSelection = false;
-      controller.commitSelectionOnPointerUp = false;
       selection.clear();
       drawSelectionOverlay(controller);
       syncTab(controller);
@@ -364,22 +393,20 @@
         controller.gestureBefore = snapshot(view);
         controller.startPoint = controller.lastPoint = point;
         controller.dragging = true;
-        if (state.tool === "select" && selection.hasSelection && !selection.contains(point)) {
-          dropSelection(controller);
-          controller.dragging = false;
-          return;
-        }
-        if (state.tool === "select" && selection.hasSelection && selection.contains(point)) {
-          const wasFloatingSelection = selection.floating;
-          let cloneSelection = false;
-          if (!selection.floating) {
-            cloneSelection = event.ctrlKey || event.metaKey || event.shiftKey;
-            controller.selectionBefore = snapshot(view);
-            selection.lift(view.context, state.backgroundColor, !cloneSelection);
+        if (state.tool === "select") {
+          if (selection.hasSelection && !selection.floating) controller.selectionBefore = snapshot(view);
+          const gesture = selection.beginPointerGesture(point, view.context, state.backgroundColor, {
+            ctrl: event.ctrlKey,
+            meta: event.metaKey,
+            shift: event.shiftKey
+          });
+          if (gesture.action === "drop") dropSelection(controller);
+          if (gesture.action === "drop" || gesture.action === "ignore") {
+            controller.dragging = false;
+            return;
           }
-          controller.movingSelection = true;
-          controller.stampingSelection = event.shiftKey;
-          controller.commitSelectionOnPointerUp = !wasFloatingSelection && !cloneSelection;
+          overlay.setPointerCapture?.(event.pointerId);
+          return;
         }
         overlay.setPointerCapture?.(event.pointerId);
       });
@@ -399,14 +426,8 @@
           return;
         }
         if (state.tool === "select") {
-          if (controller.movingSelection) {
-            const previousRect = { ...selection.rect };
-            selection.moveBy(point.x - controller.lastPoint.x, point.y - controller.lastPoint.y, state);
-            if (controller.stampingSelection && (selection.rect.x !== previousRect.x || selection.rect.y !== previousRect.y)) stampFloatingSelection(controller);
-            controller.lastPoint = point;
-          } else {
-            selection.setRect(controller.startPoint, point, state);
-          }
+          const movement = selection.updatePointerGesture(point, state);
+          if (movement.stamp) stampFloatingSelection(controller);
           drawSelectionOverlay(controller);
           return;
         }
@@ -436,13 +457,8 @@
         } else if (state.tool === "pencil" || state.tool === "brush") {
           commitTransaction(controller, controller.gestureBefore);
         } else if (state.tool === "select") {
-          const movedSelection = controller.movingSelection;
-          const commitMovedSelection = controller.commitSelectionOnPointerUp;
-          controller.movingSelection = false;
-          controller.stampingSelection = false;
-          controller.commitSelectionOnPointerUp = false;
-          if (movedSelection && commitMovedSelection) commitSelection(controller);
-          else drawSelectionOverlay(controller);
+          selection.endPointerGesture();
+          drawSelectionOverlay(controller);
           syncTab(controller);
         } else {
           view.overlayContext.clearRect(0, 0, view.overlay.width, view.overlay.height);
@@ -603,7 +619,7 @@
 
     function dropSelectionWithKeyboard(controller, event) {
       const { selection } = controller;
-      if (event.key !== "Escape" || !selection.hasSelection) return false;
+      if (event.key !== "Escape" || (!selection.hasSelection && !selection.isPasting)) return false;
       event.preventDefault();
       dropSelection(controller);
       return true;
@@ -613,29 +629,23 @@
       const { view, state, selection } = controller;
       if (!delta || state.tool !== "select" || !selection.hasSelection) return false;
       event.preventDefault();
-      const wasFloating = selection.floating;
-      const stampSelection = event.shiftKey;
-      const cloneSelection = !wasFloating && (event.ctrlKey || event.metaKey || stampSelection);
-      if (!selection.floating) {
-        controller.selectionBefore = snapshot(view);
-        selection.lift(view.context, state.backgroundColor, !cloneSelection);
-      } else if (!controller.selectionBefore) {
-        controller.selectionBefore = snapshot(view);
-      }
-      const previousRect = { ...selection.rect };
-      selection.moveBy(delta.x, delta.y, state);
+      if (!selection.floating) controller.selectionBefore = snapshot(view);
+      else if (!controller.selectionBefore) controller.selectionBefore = snapshot(view);
+      const move = selection.beginMove(view.context, state.backgroundColor, {
+        ctrl: event.ctrlKey,
+        meta: event.metaKey,
+        shift: event.shiftKey
+      });
+      if (!move.started) return true;
+      const movement = selection.moveSelection(delta.x, delta.y, state);
+      selection.endMove();
       drawSelectionOverlay(controller);
-      if (selection.rect.x === previousRect.x && selection.rect.y === previousRect.y) {
+      if (!movement.moved) {
         syncTab(controller);
         return true;
       }
-      if (stampSelection) {
-        commitSelection(controller);
-      } else if (wasFloating || cloneSelection) {
-        syncTab(controller);
-      } else {
-        commitSelection(controller);
-      }
+      if (movement.stamp) stampFloatingSelection(controller);
+      syncTab(controller);
       return true;
     }
     function selectAllCanvas(controller) {
@@ -709,7 +719,7 @@
         if (deps.getActiveTab?.()?.id !== controller.tab.id) return;
         if (event.target.closest?.('[data-tool="select"]')) return;
         if (event.target.closest?.(".image-editor-selection-actions, .image-editor-history-actions")) return;
-        if (!controller.selection.hasSelection || controller.view.wrap.contains(event.target)) return;
+        if ((!controller.selection.hasSelection && !controller.selection.isPasting) || controller.view.wrap.contains(event.target)) return;
         dropSelection(controller);
       };
       global.document.addEventListener("pointerdown", listener, true);
@@ -754,9 +764,6 @@
         selection: new namespace.ImageEditorSelection(),
         polygonPoints: [],
         dragging: false,
-        movingSelection: false,
-        stampingSelection: false,
-        commitSelectionOnPointerUp: false,
         selectionBefore: null,
         textRect: null,
         creatingTextBox: false,
@@ -818,8 +825,7 @@
       const controller = views.get(tab?.id);
       if (!controller) return tab?.imageEditorDraftBytes || null;
       commitText(controller);
-      commitSelection(controller);
-      return namespace.blobToUint8Array(await namespace.encodeCanvas(controller.view.canvas, "image/png", controller.state.backgroundColor));
+      return namespace.blobToUint8Array(await encodeCompositeCanvas(controller, "image/png"));
     }
 
     async function writeBlobToSource(tab, blob) {
@@ -858,7 +864,7 @@
     }
 
     async function finishSave(controller, destination) {
-      const { tab, state, history } = controller;
+      const { tab, state, history, selection } = controller;
       if (destination && !destination.downloadOnly) {
         tab.sourceFilePath = destination.path || null;
         tab.sourceFileHandle = destination.handle || null;
@@ -876,6 +882,7 @@
       }
       state.markSaved();
       history.markSaved?.();
+      selection.markSavedFloatingLayer();
       tab.imageEditorDirty = false;
       tab.imageEditorDraftBytes = null;
       await deps.tabSessionPersistence?.cleanupDraftForTab?.(tab);
@@ -894,10 +901,9 @@
       const controller = views.get(tab?.id);
       if (!controller) return false;
       commitText(controller);
-      commitSelection(controller);
       const mimeType = namespace.mimeTypeForName(tab.sourceFileName || tab.sourceFilePath) || controller.state.mimeType;
       try {
-        const blob = await namespace.encodeCanvas(controller.view.canvas, mimeType, controller.state.backgroundColor);
+        const blob = await encodeCompositeCanvas(controller, mimeType);
         if (!await writeBlobToSource(tab, blob)) return saveTabAs(tab);
         return finishSave(controller);
       } catch (error) {
@@ -910,13 +916,12 @@
       const controller = views.get(tab?.id);
       if (!controller) return false;
       commitText(controller);
-      commitSelection(controller);
       try {
         const destination = await chooseSaveDestination(tab);
         if (!destination) return false;
         const mimeType = namespace.mimeTypeForName(destination.name || destination.path);
         if (!mimeType) throw new Error("Save As supports .png, .jpg, .jpeg, and .webp files.");
-        const blob = await namespace.encodeCanvas(controller.view.canvas, mimeType, controller.state.backgroundColor);
+        const blob = await encodeCompositeCanvas(controller, mimeType);
         if (destination.downloadOnly) {
           deps.saveAs?.(blob, destination.name);
         } else if (destination.path) {
