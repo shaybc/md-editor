@@ -169,7 +169,7 @@ test("Kotlin ABI reconciliation transports expectations and rejects unresolved t
   assert.deepEqual(payload.projects[0].entries[0].expectedFqns, ["sample.Missing"]);
 });
 
-test("unverified Kotlin ABI makes the generation incomplete without releasing ABI readiness", async () => {
+test("unverified Kotlin ABI reports provider failure without releasing ABI readiness", async () => {
   const milestones = [];
   const app = { modules: {}, registerModule(id, value) { this.modules[id] = value; } };
   const kotlinSession = { transport: {} };
@@ -187,7 +187,7 @@ test("unverified Kotlin ABI makes the generation incomplete without releasing AB
       acceptJdtLifecycle() {},
       markKotlinReady() { milestones.push("kotlin-ready"); },
       markKotlinAbiReady() { milestones.push("abi-ready"); },
-      markIncomplete(value) { milestones.push(`incomplete:${value.code}`); }
+      markProviderFailed(value) { milestones.push(`provider-failed:${value.code}`); }
     },
     kotlinClient: {
       setWorkspaceSession: (session) => session,
@@ -221,7 +221,7 @@ test("unverified Kotlin ABI makes the generation incomplete without releasing AB
   });
   await new Promise((resolve) => setTimeout(resolve, 10));
 
-  assert.deepEqual(milestones, ["incomplete:kotlin-analysis-failed"]);
+  assert.deepEqual(milestones, ["provider-failed:kotlin-analysis-failed"]);
 });
 
 test("a JDT restart re-arms ABI reconciliation for an unchanged revision", async () => {

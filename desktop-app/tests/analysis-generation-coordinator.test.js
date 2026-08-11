@@ -8,11 +8,13 @@ function createHarness(options = {}) {
   const commits = [];
   const states = [];
   const inactivityEvents = [];
+  const incompleteGenerations = [];
   const app = { modules: {}, registerModule(id, value) { this.modules[id] = value; } };
   const coordinator = registerMarkdownViewerAnalysisGenerationCoordinator(app, {
     stallTimeoutMs: options.stallTimeoutMs || 60000,
     maximumTimeoutMs: options.maximumTimeoutMs || 60000,
     onInactivity(value) { inactivityEvents.push(value); },
+    onIncomplete(value) { incompleteGenerations.push(value); },
     async requestJdtProjectInventory(value) {
       return { generationId: value.generationId, projects: [{ name: "project", locationUri: "file:///C:/Project", accessible: true, javaProject: true }] };
     },
@@ -40,7 +42,7 @@ function createHarness(options = {}) {
     }
   });
   coordinator.subscribe((state) => states.push(state));
-  return { coordinator, builds, finalizations, commits, states, inactivityEvents };
+  return { coordinator, builds, finalizations, commits, states, inactivityEvents, incompleteGenerations };
 }
 
 function beginJavaGeneration(coordinator, requirements = {}) {
@@ -143,7 +145,7 @@ test("duplicate lifecycle events request exactly one final build and one commit"
   assert.equal(harness.commits.length, 1);
 });
 
-test("mixed generation waits for Kotlin ABI, Kotlin diagnostics, and AJDT", async () => {
+test("mixed generation starts JDT and AJDT finalization independently of Kotlin readiness", async () => {
   const harness = createHarness();
   const generationId = beginJavaGeneration(harness.coordinator, {
     kotlin: true,
@@ -152,20 +154,90 @@ test("mixed generation waits for Kotlin ABI, Kotlin diagnostics, and AJDT", asyn
   });
   acceptImported(harness.coordinator, generationId);
   await nextTurn();
-  assert.equal(harness.builds.length, 0);
+  assert.equal(harness.builds.length, 1);
+
+  harness.coordinator.acceptJdtLifecycle({ generationId, workspaceRoot: "C:/Project", phase: "build-complete" });
+  await nextTurn();
+  assert.equal(harness.finalizations.length, 1);
+  assert.equal(harness.finalizations[0].ajdtRequired, true);
+  harness.coordinator.markJdtDiagnosticsSettled({ generationId, workspaceRoot: "C:/Project", snapshotId: "jdt-1" });
+  await nextTurn();
+  assert.equal(harness.commits.length, 0);
 
   harness.coordinator.markKotlinAbiReady({ generationId, workspaceRoot: "C:/Project", workspaceRevision: "1" });
   harness.coordinator.markKotlinReady({ generationId, workspaceRoot: "C:/Project", snapshotId: "kotlin-1" });
-  await nextTurn();
-  assert.equal(harness.builds.length, 1);
-  harness.coordinator.acceptJdtLifecycle({ generationId, workspaceRoot: "C:/Project", phase: "build-complete" });
-  await nextTurn();
-  harness.coordinator.markJdtDiagnosticsSettled({ generationId, workspaceRoot: "C:/Project", snapshotId: "jdt-1" });
   await nextTurn();
   assert.equal(harness.commits.length, 0);
   harness.coordinator.markAjdtTerminal({ generationId, workspaceRoot: "C:/Project", outcome: "ready" });
   await nextTurn();
   assert.equal(harness.commits.length, 1);
+});
+
+test("Kotlin failure does not prevent AJDT from submitting its terminal result", async () => {
+  const harness = createHarness();
+  const generationId = beginJavaGeneration(harness.coordinator, {
+    kotlin: true,
+    kotlinAbiRequired: true,
+    ajdt: true
+  });
+  acceptImported(harness.coordinator, generationId);
+  await nextTurn();
+  harness.coordinator.acceptJdtLifecycle({ generationId, workspaceRoot: "C:/Project", phase: "build-complete" });
+  await nextTurn();
+
+  assert.equal(harness.coordinator.markProviderFailed({
+    generationId,
+    workspaceRoot: "C:/Project",
+    providerId: "kotlin",
+    code: "kotlin-analysis-failed",
+    summary: "Kotlin failed."
+  }), true);
+  assert.equal(harness.coordinator.getState().status, "running");
+  assert.equal(harness.finalizations.length, 1);
+
+  harness.coordinator.markJdtDiagnosticsSettled({ generationId, workspaceRoot: "C:/Project", snapshotId: "jdt-1" });
+  await nextTurn();
+  assert.equal(harness.coordinator.getState().status, "running");
+  harness.coordinator.markAjdtTerminal({ generationId, workspaceRoot: "C:/Project", outcome: "ready" });
+  await nextTurn();
+
+  assert.equal(harness.coordinator.getState().status, "incomplete");
+  assert.equal(harness.coordinator.getState().failure.providerId, "kotlin");
+  assert.equal(harness.incompleteGenerations.length, 1);
+  assert.equal(harness.commits.length, 0);
+});
+
+test("AJDT failure does not prevent Kotlin from submitting its terminal result", async () => {
+  const harness = createHarness();
+  const generationId = beginJavaGeneration(harness.coordinator, {
+    kotlin: true,
+    kotlinAbiRequired: true,
+    ajdt: true
+  });
+  acceptImported(harness.coordinator, generationId);
+  await nextTurn();
+  harness.coordinator.acceptJdtLifecycle({ generationId, workspaceRoot: "C:/Project", phase: "build-complete" });
+  await nextTurn();
+  harness.coordinator.markJdtDiagnosticsSettled({ generationId, workspaceRoot: "C:/Project", snapshotId: "jdt-1" });
+  harness.coordinator.markAjdtTerminal({
+    generationId,
+    workspaceRoot: "C:/Project",
+    outcome: "failed",
+    code: "ajdt-diagnostics-failed",
+    summary: "AJDT failed."
+  });
+  await nextTurn();
+  assert.equal(harness.coordinator.getState().status, "running");
+
+  harness.coordinator.markKotlinAbiReady({ generationId, workspaceRoot: "C:/Project", workspaceRevision: "1" });
+  harness.coordinator.markKotlinReady({ generationId, workspaceRoot: "C:/Project", snapshotId: "kotlin-1" });
+  await nextTurn();
+
+  assert.equal(harness.coordinator.getState().providers.kotlin.outcome, "ready");
+  assert.equal(harness.coordinator.getState().status, "incomplete");
+  assert.equal(harness.coordinator.getState().failure.providerId, "ajdt");
+  assert.equal(harness.incompleteGenerations.length, 1);
+  assert.equal(harness.commits.length, 0);
 });
 
 test("stale events and provider failures cannot release a partial snapshot", async () => {

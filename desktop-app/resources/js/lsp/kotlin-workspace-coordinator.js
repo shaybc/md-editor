@@ -530,13 +530,18 @@
         jdtLogPath: latestAbiFailure.jdtLogPath,
         stack: String(error?.stack || "")
       });
-      deps.analysisGenerationCoordinator?.markIncomplete?.({
+      const failureEvent = {
         generationId: generation?.generationId,
         workspaceRoot: context?.workspaceRoot || "",
         providerId: "kotlin",
         code: latestAbiFailure.code,
         summary: latestAbiFailure.message
-      });
+      };
+      if (typeof deps.analysisGenerationCoordinator?.markProviderFailed === "function") {
+        deps.analysisGenerationCoordinator.markProviderFailed(failureEvent);
+      } else {
+        deps.analysisGenerationCoordinator?.markIncomplete?.(failureEvent);
+      }
       cancelActiveAbiReconciliation(latestAbiFailure.message, { failureCode: latestAbiFailure.code });
       mixedScopesReleased = false;
       analysisReady = true;

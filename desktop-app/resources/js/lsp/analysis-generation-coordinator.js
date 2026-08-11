@@ -75,11 +75,14 @@
           required: requirements.kotlin,
           abiReady: !requirements.kotlinAbiRequired,
           ready: !requirements.kotlin,
-          snapshotId: ""
+          snapshotId: "",
+          outcome: requirements.kotlin ? "waiting" : "skipped",
+          failure: null
         },
         ajdt: {
           required: requirements.ajdt,
-          outcome: requirements.ajdt ? "waiting" : "skipped"
+          outcome: requirements.ajdt ? "waiting" : "skipped",
+          failure: null
         }
       };
     }
@@ -99,8 +102,14 @@
             validatedProjectRoots: [...state.providers.jdt.validatedProjectRoots],
             scopeEvidence: state.providers.jdt.scopeEvidence ? { ...state.providers.jdt.scopeEvidence } : null
           },
-          kotlin: { ...state.providers.kotlin },
-          ajdt: { ...state.providers.ajdt }
+          kotlin: {
+            ...state.providers.kotlin,
+            failure: state.providers.kotlin.failure ? { ...state.providers.kotlin.failure } : null
+          },
+          ajdt: {
+            ...state.providers.ajdt,
+            failure: state.providers.ajdt.failure ? { ...state.providers.ajdt.failure } : null
+          }
         },
         failure: state.failure ? {
           ...state.failure,
@@ -348,6 +357,8 @@
       if (!isCurrent(event) || state.status !== "running") return false;
       state.providers.kotlin.ready = true;
       state.providers.kotlin.snapshotId = String(event.snapshotId || "");
+      state.providers.kotlin.outcome = "ready";
+      state.providers.kotlin.failure = null;
       touch("analysis-kotlin-ready", { snapshotId: state.providers.kotlin.snapshotId });
       publish();
       void advance();
@@ -386,20 +397,46 @@
       return true;
     }
 
-    /** Record the terminal AJDT outcome; an enabled-provider failure fails the generation. */
+    /** Record a provider failure while allowing independent providers to finish their analysis. */
+    function markProviderFailed(event = {}) {
+      if (!isCurrent(event) || state.status !== "running") return false;
+      const providerId = String(event.providerId || "");
+      if (providerId !== "kotlin" && providerId !== "ajdt") return false;
+      const provider = state.providers[providerId];
+      if (!provider.required) return false;
+      provider.outcome = "failed";
+      provider.failure = {
+        providerId,
+        code: String(event.code || `${providerId}-analysis-failed`),
+        summary: String(event.summary || `${providerId.toUpperCase()} analysis failed.`),
+        fatal: event.fatal !== false,
+        notificationHandled: event.notificationHandled === true,
+        details: event.details && typeof event.details === "object" ? { ...event.details } : null
+      };
+      touch("analysis-provider-failed", {
+        providerId,
+        failureCode: provider.failure.code,
+        message: provider.failure.summary
+      });
+      publish();
+      void advance();
+      return true;
+    }
+
+    /** Record the terminal AJDT outcome without interrupting an independent Kotlin provider. */
     function markAjdtTerminal(event = {}) {
       if (!isCurrent(event) || state.status !== "running") return false;
       const outcome = String(event.outcome || "");
       if (outcome === "failed") {
-        markIncomplete({
-          generationId: state.generationId,
+        return markProviderFailed({
+          ...event,
           providerId: "ajdt",
           code: event.code || "ajdt-diagnostics-failed",
           summary: event.summary || event.reason || "AJDT analysis failed."
         });
-        return true;
       }
       state.providers.ajdt.outcome = outcome === "ready" ? "ready" : "skipped";
+      state.providers.ajdt.failure = null;
       touch("analysis-ajdt-terminal", { outcome: state.providers.ajdt.outcome });
       publish();
       void advance();
@@ -501,13 +538,11 @@
       }
     }
 
-    function prerequisitesReady() {
+    function jdtPrerequisitesReady() {
       if (!state.requirementsResolved) return false;
-      const { jdt, kotlin } = state.providers;
+      const { jdt } = state.providers;
       if (jdt.required && (!jdt.serviceReady || !jdt.importReady || !jdt.initialBuildComplete)) return false;
       if (jdt.required && jdt.inventoryStatus !== "validated") return false;
-      if (kotlin.required && !kotlin.ready) return false;
-      if (kotlin.required && state.requirements.kotlinAbiRequired && !kotlin.abiReady) return false;
       return true;
     }
 
@@ -560,11 +595,15 @@
       }
     }
 
-    function providersSettled() {
+    function providersTerminal() {
       const { jdt, kotlin, ajdt } = state.providers;
       return (!jdt.required || jdt.settled)
-        && (!kotlin.required || kotlin.ready)
-        && (!ajdt.required || ajdt.outcome === "ready");
+        && (!kotlin.required || kotlin.outcome === "ready" || kotlin.outcome === "failed")
+        && (!ajdt.required || ajdt.outcome === "ready" || ajdt.outcome === "failed");
+    }
+
+    function getProviderFailure() {
+      return state.providers.kotlin.failure || state.providers.ajdt.failure || null;
     }
 
     async function commitGeneration() {
@@ -618,7 +657,7 @@
     }
 
     async function advance() {
-      if (state.status !== "running" || !prerequisitesReady()) return;
+      if (state.status !== "running" || !jdtPrerequisitesReady()) return;
       const jdt = state.providers.jdt;
       if (jdt.required && !jdt.finalBuildRequested) {
         void requestFinalBuild();
@@ -629,7 +668,16 @@
         void requestJdtFinalization();
         return;
       }
-      if (!providersSettled()) return;
+      if (!providersTerminal()) return;
+      const providerFailure = getProviderFailure();
+      if (providerFailure) {
+        markIncomplete({
+          ...providerFailure,
+          generationId: state.generationId,
+          workspaceRoot: state.workspaceRoot
+        });
+        return;
+      }
       void commitGeneration();
     }
 
@@ -696,6 +744,7 @@
       acceptJdtLifecycle,
       markKotlinAbiReady,
       markKotlinReady,
+      markProviderFailed,
       markProgress,
       markJdtDiagnosticsSettled,
       markJdtDiagnosticsUnsettled,
