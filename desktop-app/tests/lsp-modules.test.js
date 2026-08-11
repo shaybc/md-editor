@@ -3220,6 +3220,9 @@ test("JDT diagnostic worker isolates storms, emits only active-file diagnostics,
 
 test("LSP server registry exposes the bundled Kotlin adapter", async () => {
   const context = createContext();
+  context.global = undefined;
+  context.NL_OS = "Linux";
+  let resolvedMavenOptions = null;
   const installedFiles = new Set([
     "C:/Desktop/resources/bridges/kotlin-adapter-bridge/kotlin-adapter-bridge.cjs",
     "C:/Desktop/vendor/kotlin-lsp/bin/intellij-server.exe",
@@ -3235,6 +3238,13 @@ test("LSP server registry exposes the bundled Kotlin adapter", async () => {
     getJavaWorkspaceModel: () => ({
       analysis: { mode: "build-path", includedModuleRoots: ["C:/Project/buildSrc"] }
     }),
+    mavenRuntimeSettings: {
+      getConfiguration: () => ({}),
+      resolveRunner: async (options) => {
+        resolvedMavenOptions = options;
+        return { runner: "mvn" };
+      }
+    },
     Neutralino: {
       filesystem: {
         async getStats(path) {
@@ -3254,6 +3264,7 @@ test("LSP server registry exposes the bundled Kotlin adapter", async () => {
   assert.equal(server.bundledVariantId, "jetbrains-kotlin-lsp");
   assert.equal(status.installed, true);
   assert.equal(status.bundled, true);
+  assert.equal(resolvedMavenOptions.osName, "Linux");
   assert.match(descriptor.command, /^node "C:\/Desktop\/resources\/bridges\/kotlin-adapter-bridge\/kotlin-adapter-bridge\.cjs"/);
   assert.match(descriptor.command, /--server "C:\/Desktop\/vendor\/kotlin-lsp\/bin\/intellij-server\.exe"/);
   assert.match(descriptor.command, /--maximumProblems 5000/);

@@ -1015,7 +1015,7 @@
         const resolvedMaven = await deps.mavenRuntimeSettings?.resolveRunner?.({
           projectRoot: options.workspaceRoot || "",
           workspaceRoot: options.workspaceRoot || "",
-          osName: global.NL_OS || "Windows",
+          osName: typeof window.NL_OS === "string" ? window.NL_OS : "Windows",
           configuration: mavenConfiguration
         });
         if (resolvedMaven?.error) throw new Error(resolvedMaven.error);
