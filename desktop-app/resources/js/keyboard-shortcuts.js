@@ -179,6 +179,7 @@
 
     function handleDocumentWheel(event) {
       if (!(event.ctrlKey || event.metaKey) || event.altKey || !Number.isFinite(Number(event.deltaY)) || Number(event.deltaY) === 0) return;
+      if (deps.handleContextualWheelZoom?.(event) === true) return;
       event.preventDefault();
       Number(event.deltaY) < 0 ? deps.zoomIn?.() : deps.zoomOut?.();
     }

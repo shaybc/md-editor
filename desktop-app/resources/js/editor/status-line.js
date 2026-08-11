@@ -11,6 +11,13 @@
     const mobileWordCount = deps.mobileWordCount;
     const mobileCharCount = deps.mobileCharCount;
     const statusTipElement = deps.statusTipElement;
+    const imageEditorStatusElement = deps.imageEditorStatusElement;
+    const imageEditorDimensionsElement = imageEditorStatusElement?.querySelector(".image-editor-status-dimensions");
+    const imageEditorZoomPercentElement = imageEditorStatusElement?.querySelector(".image-editor-status-zoom-percent");
+    const imageEditorZoomSliderElement = imageEditorStatusElement?.querySelector(".image-editor-status-zoom-slider");
+    const imageEditorZoomOutElement = imageEditorStatusElement?.querySelector(".image-editor-status-zoom-out");
+    const imageEditorZoomInElement = imageEditorStatusElement?.querySelector(".image-editor-status-zoom-in");
+    const imageEditorUnsavedElement = imageEditorStatusElement?.querySelector(".image-editor-status-unsaved");
     const graphZoomStatusElement = deps.graphZoomStatusElement;
     const graphZoomPercentElement = deps.graphZoomPercentElement;
     const appZoomStatusElement = deps.appZoomStatusElement;
@@ -38,6 +45,7 @@
     const getAppZoomPercent = deps.getAppZoomPercent || function() { return 100; };
     const getGraphZoomScaleFromLayout = deps.getGraphZoomScaleFromLayout;
     const getPreviewHoveredLinkUrl = deps.getPreviewHoveredLinkUrl;
+    const setImageEditorZoom = deps.setImageEditorZoom || function() { return false; };
     const getActiveCodeMirrorEditor = deps.getActiveCodeMirrorEditor || function() { return null; };
     const getLargeFileDocumentStats = deps.getLargeFileDocumentStats || function() { return null; };
     const activeEditorCommands = deps.activeEditorCommands || null;
@@ -158,6 +166,42 @@
       getDefaultLabel: getDefaultStatusLabel
     });
 
+    function requestImageEditorZoom(zoom) {
+      const activeTab = getActiveTab();
+      if (activeTab?.type !== "image-editor") return;
+      setImageEditorZoom(activeTab, zoom);
+    }
+
+    imageEditorZoomSliderElement?.addEventListener("input", function() {
+      requestImageEditorZoom(Number(imageEditorZoomSliderElement.value) / 100);
+    });
+    imageEditorZoomOutElement?.addEventListener("click", function() {
+      const activeTab = getActiveTab();
+      requestImageEditorZoom((Number(activeTab?.imageEditorState?.zoom) || 1) * 0.8);
+    });
+    imageEditorZoomInElement?.addEventListener("click", function() {
+      const activeTab = getActiveTab();
+      requestImageEditorZoom((Number(activeTab?.imageEditorState?.zoom) || 1) * 1.25);
+    });
+
+    function updateImageEditorStatus(activeTab) {
+      if (!imageEditorStatusElement) return;
+
+      const shouldShowImageEditorStatus = activeTab?.type === "image-editor";
+      imageEditorStatusElement.classList.toggle("hidden", !shouldShowImageEditorStatus);
+      if (!shouldShowImageEditorStatus) return;
+
+      const width = Math.round(Number(activeTab.imageEditorSource?.width) || 0);
+      const height = Math.round(Number(activeTab.imageEditorSource?.height) || 0);
+      const zoom = Math.round((Number(activeTab.imageEditorState?.zoom) || 1) * 100);
+      if (imageEditorDimensionsElement) imageEditorDimensionsElement.textContent = `${width} \u00d7 ${height}px`;
+      if (imageEditorZoomPercentElement) imageEditorZoomPercentElement.textContent = `${zoom}%`;
+      if (imageEditorZoomSliderElement) imageEditorZoomSliderElement.value = String(zoom);
+      if (imageEditorZoomOutElement) imageEditorZoomOutElement.disabled = zoom <= Number(imageEditorZoomSliderElement?.min || 25);
+      if (imageEditorZoomInElement) imageEditorZoomInElement.disabled = zoom >= Number(imageEditorZoomSliderElement?.max || 800);
+      imageEditorUnsavedElement?.classList.toggle("hidden", !activeTab.imageEditorDirty);
+    }
+
     function updateStatusLine(options = {}) {
       const activeTab = getActiveTab();
       const activeGraphTab = activeTab && activeTab.type === "graph" ? activeTab : null;
@@ -214,6 +258,7 @@
         graphSelectedNodesStatusElement.classList.toggle("hidden", !activeGraphTab || selectedGraphNodeCount <= 0);
       }
 
+      updateImageEditorStatus(activeTab);
       updateEditorTextpadStatus(activeTab);
       updateEditorEngineStatus(activeTab);
     }

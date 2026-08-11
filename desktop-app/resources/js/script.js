@@ -143,6 +143,7 @@ async function startMarkdownViewer() {
   const lineCountElement = document.getElementById("line-count");
   const charCountElement = document.getElementById("char-count");
   const statusTipElement = document.getElementById("status-tip");
+  const imageEditorStatusElement = document.getElementById("image-editor-status");
   const graphZoomStatusElement = document.getElementById("graph-zoom-status");
   const graphZoomPercentElement = document.getElementById("graph-zoom-percent");
   const appZoomStatusElement = document.getElementById("app-zoom-status");
@@ -405,6 +406,7 @@ async function startMarkdownViewer() {
     lineCountElement,
     charCountElement,
     statusTipElement,
+    imageEditorStatusElement,
     graphZoomStatusElement,
     graphZoomPercentElement,
     appZoomStatusElement,
@@ -512,6 +514,7 @@ async function startMarkdownViewer() {
         updateSaveCurrentFileButtons();
         saveTabsToStorage(tabs);
       }
+      app.modules?.statusLine?.updateStatusLine?.();
     },
     get tabSessionPersistence() { return tabSessionPersistence; },
     refreshImagePreviews: function(path) { return filePreview?.refreshImagePreviews?.(path); },
@@ -16701,6 +16704,10 @@ async function* collectWorkspaceSearchFilesFromNeutralinoDirectory(parentPath, p
       setDocumentWordAutocompleteEnabled(!isDocumentWordAutocompleteEnabled());
       return true;
     }
+    const activeTab = getActiveTab();
+    if (command === "select-all" && activeTab?.type === "image-editor") {
+      return imageEditor.selectAll?.(activeTab) === true;
+    }
     if (!isEditableEditCommandTarget()) return false;
 
     switch (command) {
@@ -16802,6 +16809,7 @@ async function* collectWorkspaceSearchFilesFromNeutralinoDirectory(parentPath, p
     mobileWordCount,
     mobileCharCount,
     statusTipElement,
+    imageEditorStatusElement,
     graphZoomStatusElement,
     graphZoomPercentElement,
     graphPointsStatusElement,
@@ -16833,6 +16841,9 @@ async function* collectWorkspaceSearchFilesFromNeutralinoDirectory(parentPath, p
     },
     getAppZoomPercent: function() {
       return viewWindowControls.getZoomPercent();
+    },
+    setImageEditorZoom: function(activeTab, zoom) {
+      return imageEditor.setZoom(activeTab, zoom);
     },
     getGraphZoomScaleFromLayout,
     getLargeFileDocumentStats: function(activeTab) {
@@ -19213,6 +19224,10 @@ async function* collectWorkspaceSearchFilesFromNeutralinoDirectory(parentPath, p
       return tabs.find((tab) => tab.id === activeTabId)?.type || "";
     },
     getCurrentViewMode: function() { return currentViewMode; },
+    handleContextualWheelZoom: function(event) {
+      const activeTab = tabs.find((tab) => tab.id === activeTabId) || null;
+      return activeTab?.type === "image-editor" && imageEditor.handleWheelZoom(activeTab, event);
+    },
     hideGraphStaleModal,
     goToEditorLinePrompt,
     isActiveEditorFocused: function() {

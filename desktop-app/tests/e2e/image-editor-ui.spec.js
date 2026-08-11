@@ -53,6 +53,41 @@ test("opens an image editor, draws, undoes, and explicitly saves", async ({ page
 
   await expect(page.locator(".image-editor-shell")).toBeVisible();
   await expect(page.locator("#tab-list .tab-item.active")).toContainText("Image Editor");
+  await expect(page.locator(".image-editor-status-dimensions")).toHaveText("64 × 48px");
+  await expect(page.locator(".image-editor-status-zoom-percent")).toHaveText("100%");
+  await expect(page.locator(".image-editor-status-zoom-slider")).toHaveValue("100");
+  await expect(page.locator(".image-editor-shell .image-editor-status")).toHaveCount(0);
+  await expect(page.locator(".image-editor-toolbar .image-editor-zoom-actions")).toHaveCount(0);
+  await expect(page.locator(".image-editor-palette-color")).toHaveCount(20);
+  const toolbarRows = await page.evaluate(() => {
+    const rect = (selector) => document.querySelector(selector).getBoundingClientRect();
+    const undo = rect('[data-action="undo"]');
+    const cut = rect('[data-action="cut"]');
+    const line = rect('[data-tool="line"]');
+    const pencil = rect('[data-tool="pencil"]');
+    const select = rect('[data-tool="select"]');
+    return { commandsUseTwoRows: cut.top > undo.top, toolsUseTwoRows: pencil.top > line.top, selectSpansRows: select.height > line.height };
+  });
+  expect(toolbarRows).toEqual({ commandsUseTwoRows: true, toolsUseTwoRows: true, selectSpansRows: true });
+  await page.locator(".image-editor-background").evaluate((element) => element.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true })));
+  await page.locator('[data-palette-color="#ed1c24"]').click();
+  await expect(page.locator(".image-editor-background")).toHaveValue("#ed1c24");
+  await expect(page.locator(".image-editor-foreground")).toHaveValue("#111111");
+  await page.locator(".image-editor-foreground").evaluate((element) => element.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true })));
+  await page.locator('[data-palette-color="#22b14c"]').click();
+  await expect(page.locator(".image-editor-foreground")).toHaveValue("#22b14c");
+  await expect(page.locator(".image-editor-background")).toHaveValue("#ed1c24");
+  await page.locator(".image-editor-status-zoom-slider").fill("125");
+  await expect(page.locator(".image-editor-status-zoom-percent")).toHaveText("125%");
+  await page.locator(".image-editor-status-zoom-out").click();
+  await expect(page.locator(".image-editor-status-zoom-percent")).toHaveText("100%");
+  const appZoomBeforeWheel = await page.evaluate(() => window.markdownViewerApp.modules.viewWindowControls.getZoomPercent());
+  await page.locator(".image-editor-stage").dispatchEvent("wheel", { ctrlKey: true, deltaY: -100 });
+  await expect(page.locator(".image-editor-status-zoom-percent")).toHaveText("125%");
+  expect(await page.evaluate(() => window.markdownViewerApp.modules.viewWindowControls.getZoomPercent())).toBe(appZoomBeforeWheel);
+  await page.locator(".image-editor-stage").dispatchEvent("wheel", { ctrlKey: true, deltaY: 100 });
+  await expect(page.locator(".image-editor-status-zoom-percent")).toHaveText("100%");
+  expect(await page.evaluate(() => window.markdownViewerApp.modules.viewWindowControls.getZoomPercent())).toBe(appZoomBeforeWheel);
   const overlay = page.locator(".image-editor-overlay");
   const box = await overlay.boundingBox();
   await page.mouse.move(box.x + 5, box.y + 5);
@@ -60,9 +95,10 @@ test("opens an image editor, draws, undoes, and explicitly saves", async ({ page
   await page.mouse.move(box.x + 30, box.y + 20, { steps: 5 });
   await page.mouse.up();
   await expect(page.locator("#tab-list .tab-item.active")).toHaveClass(/unsaved/);
+  await expect(page.locator(".image-editor-status-unsaved")).toBeVisible();
 
   await page.keyboard.press("Control+Z");
-  await expect(page.locator(".image-editor-status")).not.toContainText("Unsaved");
+  await expect(page.locator(".image-editor-status-unsaved")).toBeHidden();
   await page.mouse.move(box.x + 8, box.y + 8);
   await page.mouse.down();
   await page.mouse.move(box.x + 35, box.y + 22, { steps: 5 });
@@ -381,10 +417,12 @@ test("dragging a pasted floating selection does not alter canvas underneath unti
     const sourceContext = sourceCanvas.getContext("2d");
     sourceContext.fillStyle = "#ffffff";
     sourceContext.fillRect(0, 0, 80, 70);
+    sourceContext.fillStyle = "#00ff00";
+    sourceContext.fillRect(0, 0, 8, 8);
     sourceContext.fillStyle = "#0000ff";
     sourceContext.fillRect(20, 20, 8, 8);
     sourceContext.fillStyle = "#ff0000";
-    sourceContext.fillRect(30, 20, 8, 8);
+    sourceContext.fillRect(20, 8, 8, 8);
     const sourceBlob = await new Promise((resolve) => sourceCanvas.toBlob(resolve, "image/png"));
     const sourceFile = new File([sourceBlob], "floating-paste-drag-test.png", { type: "image/png" });
     window.markdownViewerApp.modules.apiClient.deactivateApiClientSidebar = () => {};
@@ -407,15 +445,37 @@ test("dragging a pasted floating selection does not alter canvas underneath unti
   await page.evaluate(() => {
     Object.defineProperty(navigator, "clipboard", {
       configurable: true,
-      value: { async write() {}, async read() { throw new Error("Use in-app clipboard fallback"); } }
+      value: { async write() {}, async writeText() {}, async read() { throw new Error("Use in-app clipboard fallback"); } }
     });
   });
   await page.keyboard.press("Control+C");
   await page.keyboard.press("Control+V");
+  await expect.poll(() => page.evaluate(() => {
+    const overlay = document.querySelector(".image-editor-overlay");
+    return Array.from(overlay.getContext("2d").getImageData(4, 4, 1, 1).data).slice(0, 3);
+  })).toEqual([0, 0, 255]);
+  const pastedSelection = await page.evaluate(() => {
+    const root = document.querySelector('.tab-view.active[data-tab-view-kind="image-editor"]');
+    const controller = window.markdownViewerApp.services.imageEditor.getView(root.dataset.tabId);
+    return { rect: { ...controller.selection.rect }, floating: controller.selection.floating };
+  });
+  expect(pastedSelection).toEqual({ rect: { x: 0, y: 0, width: 8, height: 8 }, floating: true });
+  await page.locator('[data-tool="select"]').click();
 
-  await page.mouse.move(overlayBox.x + 12, overlayBox.y + 12);
+  await page.mouse.move(overlayBox.x + 4, overlayBox.y + 4);
   await page.mouse.down();
-  await page.mouse.move(overlayBox.x + 32, overlayBox.y + 20, { steps: 6 });
+  const selectionAfterPointerDown = await page.evaluate(() => {
+    const root = document.querySelector('.tab-view.active[data-tab-view-kind="image-editor"]');
+    const controller = window.markdownViewerApp.services.imageEditor.getView(root.dataset.tabId);
+    return { hasSelection: controller.selection.hasSelection, moving: controller.movingSelection };
+  });
+  expect(selectionAfterPointerDown).toEqual({ hasSelection: true, moving: true });
+  await page.mouse.move(overlayBox.x + 24, overlayBox.y + 12, { steps: 6 });
+  await page.mouse.up();
+
+  await page.mouse.move(overlayBox.x + 24, overlayBox.y + 12);
+  await page.mouse.down();
+  await page.mouse.move(overlayBox.x + 34, overlayBox.y + 22, { steps: 6 });
   await page.mouse.up();
 
   const afterDrag = await page.evaluate(() => {
@@ -436,23 +496,31 @@ test("dragging a pasted floating selection does not alter canvas underneath unti
       }
     }
     return {
-      canvasStart: pixel(".image-editor-canvas", 10, 10),
-      canvasUnderFloatingCopy: pixel(".image-editor-canvas", 32, 22),
+      canvasStart: pixel(".image-editor-canvas", 4, 4),
+      canvasUnderFloatingCopy: pixel(".image-editor-canvas", 24, 12),
       overlayBluePoint
     };
   });
-  expect(afterDrag.canvasStart).toEqual([255, 255, 255]);
+  expect(afterDrag.canvasStart).toEqual([0, 255, 0]);
   expect(afterDrag.canvasUnderFloatingCopy).toEqual([255, 0, 0]);
   expect(afterDrag.overlayBluePoint).not.toBeNull();
 
-  await page.mouse.click(overlayBox.x + 60, overlayBox.y + 50);
+  await page.mouse.move(overlayBox.x + 60, overlayBox.y + 50);
+  await page.mouse.down();
+  await page.mouse.move(overlayBox.x + 70, overlayBox.y + 60, { steps: 4 });
+  await page.mouse.up();
   const afterPlace = await page.evaluate((point) => {
     const canvas = document.querySelector(".image-editor-canvas");
-    return Array.from(canvas.getContext("2d").getImageData(point.x, point.y, 1, 1).data).slice(0, 3);
+    const root = document.querySelector('.tab-view.active[data-tab-view-kind="image-editor"]');
+    const controller = window.markdownViewerApp.services.imageEditor.getView(root.dataset.tabId);
+    return {
+      pixel: Array.from(canvas.getContext("2d").getImageData(point.x, point.y, 1, 1).data).slice(0, 3),
+      hasSelection: controller.selection.hasSelection
+    };
   }, afterDrag.overlayBluePoint);
-  expect(afterPlace).toEqual([0, 0, 255]);
+  expect(afterPlace).toEqual({ pixel: [0, 0, 255], hasSelection: false });
 });
-test("selection keyboard shortcuts copy paste and Escape abort floating selections", async ({ page }) => {
+test("selection keyboard shortcuts copy paste and Escape place floating selections", async ({ page }) => {
   await page.goto("/");
   await page.waitForFunction(() => !!window.markdownViewerApp?.modules?.keyboardShortcuts, null, { timeout: 60000 });
   await page.waitForFunction(() => !!window.markdownViewerApp?.modules?.tabs?.openImageEditorInTab);
@@ -490,14 +558,14 @@ test("selection keyboard shortcuts copy paste and Escape abort floating selectio
   await page.evaluate(() => {
     Object.defineProperty(navigator, "clipboard", {
       configurable: true,
-      value: { async write() {}, async read() { throw new Error("Use in-app clipboard fallback"); } }
+      value: { async write() {}, async writeText() {}, async read() { throw new Error("Use in-app clipboard fallback"); } }
     });
   });
   await page.keyboard.press("Control+C");
   await page.keyboard.press("Control+V");
   const pastedOverlay = await page.evaluate(() => {
     const overlay = document.querySelector(".image-editor-overlay");
-    return Array.from(overlay.getContext("2d").getImageData(14, 14, 1, 1).data).slice(0, 3);
+    return Array.from(overlay.getContext("2d").getImageData(4, 4, 1, 1).data).slice(0, 3);
   });
   expect(pastedOverlay).toEqual([0, 0, 255]);
 
@@ -515,12 +583,12 @@ test("selection keyboard shortcuts copy paste and Escape abort floating selectio
     for (let index = 3; index < overlayData.length; index += 4) overlayAlpha += overlayData[index];
     return {
       original: pixel(".image-editor-canvas", 20, 20),
-      abortedCopyTarget: pixel(".image-editor-canvas", 18, 10),
+      placedCopyTarget: pixel(".image-editor-canvas", 12, 4),
       overlayAlpha
     };
   });
   expect(afterEscape.original.slice(0, 3)).toEqual([0, 0, 255]);
-  expect(afterEscape.abortedCopyTarget.slice(0, 3)).toEqual([255, 255, 255]);
+  expect(afterEscape.placedCopyTarget.slice(0, 3)).toEqual([0, 0, 255]);
   expect(afterEscape.overlayAlpha).toBe(0);
 });
 test("selection stamps repeated copies with Shift+arrow", async ({ page }) => {

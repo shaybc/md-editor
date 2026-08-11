@@ -86,8 +86,8 @@
       if (!data) return false;
       this.imageData = data;
       this.rect = {
-        x: Math.max(0, Math.min(10, bounds.width - data.width)),
-        y: Math.max(0, Math.min(10, bounds.height - data.height)),
+        x: 0,
+        y: 0,
         width: Math.min(data.width, bounds.width),
         height: Math.min(data.height, bounds.height)
       };

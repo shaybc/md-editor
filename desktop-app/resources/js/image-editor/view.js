@@ -14,6 +14,12 @@
     bucket: "bi-paint-bucket",
     text: "bi-fonts"
   };
+  const PALETTE_COLORS = Object.freeze([
+    "#000000", "#7f7f7f", "#880015", "#ed1c24", "#ff7f27",
+    "#fff200", "#22b14c", "#00a2e8", "#3f48cc", "#a349a4",
+    "#ffffff", "#c3c3c3", "#b97a57", "#ffaec9", "#ffc90e",
+    "#efe4b0", "#b5e61d", "#99d9ea", "#7092be", "#c8bfe7"
+  ]);
 
   function button(icon, label, className) {
     const element = document.createElement("button");
@@ -31,6 +37,17 @@
     return element;
   }
 
+  function createPaletteButton(color) {
+    const element = document.createElement("button");
+    element.type = "button";
+    element.className = "image-editor-palette-color";
+    element.dataset.paletteColor = color;
+    element.style.backgroundColor = color;
+    element.title = `Use ${color}`;
+    element.setAttribute("aria-label", `Use ${color} for the active color`);
+    return element;
+  }
+
   class ImageEditorView {
     /**
      * Build the image-editor toolbar and layered canvas surface.
@@ -44,20 +61,26 @@
       this.shell.className = "image-editor-shell";
       this.shell.innerHTML = `
         <div class="image-editor-toolbar" role="toolbar" aria-label="Image editing tools">
-          <div class="image-editor-history-actions"></div>
-          <div class="image-editor-tools"></div>
-          <label title="Foreground color">FG <input class="image-editor-foreground" type="color" value="#111111"></label>
-          <label title="Background color">BG <input class="image-editor-background" type="color" value="#ffffff"></label>
-          <label>Size <input class="image-editor-size" type="range" min="1" max="64" value="8"></label>
-          <label><input class="image-editor-fill" type="checkbox"> Fill</label>
-          <div class="image-editor-text-controls">
+          <div class="image-editor-command-grid image-editor-toolbar-group">
+            <div class="image-editor-history-actions"></div>
+            <div class="image-editor-selection-actions"></div>
+          </div>
+          <div class="image-editor-tools image-editor-toolbar-group"></div>
+          <div class="image-editor-size-controls image-editor-toolbar-group">
+            <label>Size <input class="image-editor-size" type="range" min="1" max="64" value="8"></label>
+            <label><input class="image-editor-fill" type="checkbox"> Fill</label>
+          </div>
+          <div class="image-editor-color-targets image-editor-toolbar-group" role="group" aria-label="Active image colors">
+            <label class="image-editor-color-target active" data-color-target="foreground" title="Foreground color">FG <input class="image-editor-foreground" type="color" value="#111111" aria-label="Foreground color"></label>
+            <label class="image-editor-color-target" data-color-target="background" title="Background color">BG <input class="image-editor-background" type="color" value="#ffffff" aria-label="Background color"></label>
+          </div>
+          <div class="image-editor-color-palette image-editor-toolbar-group" role="group" aria-label="Predefined colors"></div>
+          <div class="image-editor-text-controls image-editor-toolbar-group">
             <select class="image-editor-font" aria-label="Font family"><option>Arial</option><option>Georgia</option><option>Courier New</option></select>
             <input class="image-editor-font-size" type="number" min="8" max="144" value="24" aria-label="Font size">
             <button type="button" class="image-editor-format" data-format="bold" title="Bold"><strong>B</strong></button>
             <button type="button" class="image-editor-format" data-format="italic" title="Italic"><em>I</em></button>
           </div>
-          <div class="image-editor-selection-actions"></div>
-          <div class="image-editor-zoom-actions"></div>
         </div>
         <div class="image-editor-stage" tabindex="0" role="application" aria-label="Image editor canvas">
           <div class="image-editor-canvas-wrap">
@@ -75,7 +98,6 @@
             </div>
           </div>
         </div>
-        <div class="image-editor-status" aria-live="polite"></div>
       `;
       root.appendChild(this.shell);
       this.toolbar = this.shell.querySelector(".image-editor-toolbar");
@@ -85,9 +107,9 @@
       this.overlay = this.shell.querySelector(".image-editor-overlay");
       this.textBox = this.shell.querySelector(".image-editor-text-box");
       this.textInput = this.shell.querySelector(".image-editor-text-input");
-      this.status = this.shell.querySelector(".image-editor-status");
       this.context = this.canvas.getContext("2d", { willReadFrequently: true });
       this.overlayContext = this.overlay.getContext("2d");
+      this.activeColorTarget = "foreground";
 
       namespace.tools.forEach((tool) => this.shell.querySelector(".image-editor-tools").appendChild(createToolButton(tool)));
       [
@@ -106,11 +128,7 @@
         element.dataset.action = action;
         this.shell.querySelector(".image-editor-selection-actions").appendChild(element);
       });
-      [["bi-dash-lg", "Zoom out", "zoom-out"], ["bi-plus-lg", "Zoom in", "zoom-in"]].forEach(([icon, label, action]) => {
-        const element = button(icon, label);
-        element.dataset.action = action;
-        this.shell.querySelector(".image-editor-zoom-actions").appendChild(element);
-      });
+      PALETTE_COLORS.forEach((color) => this.shell.querySelector(".image-editor-color-palette").appendChild(createPaletteButton(color)));
     }
 
     setDimensions(width, height) {
@@ -180,6 +198,24 @@
       };
     }
 
+    setActiveColorTarget(target, state) {
+      this.activeColorTarget = target === "background" ? "background" : "foreground";
+      this.shell.querySelectorAll("[data-color-target]").forEach((element) => {
+        const active = element.dataset.colorTarget === this.activeColorTarget;
+        element.classList.toggle("active", active);
+      });
+      this.updatePaletteSelection(state);
+    }
+
+    updatePaletteSelection(state) {
+      const activeColor = this.activeColorTarget === "background" ? state.backgroundColor : state.foregroundColor;
+      this.shell.querySelectorAll("[data-palette-color]").forEach((element) => {
+        const selected = element.dataset.paletteColor.toLowerCase() === String(activeColor).toLowerCase();
+        element.classList.toggle("selected", selected);
+        element.setAttribute("aria-pressed", String(selected));
+      });
+    }
+
     update(state, commandState) {
       this.shell.querySelectorAll("[data-tool]").forEach((element) => {
         const active = element.dataset.tool === state.tool;
@@ -188,6 +224,7 @@
       });
       this.shell.querySelector(".image-editor-foreground").value = state.foregroundColor;
       this.shell.querySelector(".image-editor-background").value = state.backgroundColor;
+      this.setActiveColorTarget(this.activeColorTarget, state);
       this.shell.querySelector(".image-editor-fill").checked = state.fillShapes;
       this.shell.querySelector(".image-editor-text-controls").hidden = state.tool !== "text";
       ["undo", "redo", "cut", "copy", "delete"].forEach((action) => {
@@ -195,7 +232,6 @@
         const element = this.shell.querySelector(`[data-action="${action}"]`);
         if (element) element.disabled = commandState[key] !== true;
       });
-      this.status.textContent = `${state.width} × ${state.height}px · ${Math.round(state.zoom * 100)}%${state.isDirty ? " · Unsaved" : ""}`;
     }
 
     getScale() {

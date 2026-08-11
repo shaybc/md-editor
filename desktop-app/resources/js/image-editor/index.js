@@ -10,14 +10,18 @@
       return view.context.getImageData(0, 0, view.canvas.width, view.canvas.height);
     }
 
-    function restoreSnapshot(view, imageData) {
+    function restoreSnapshot(controller, imageData) {
       if (!imageData) return false;
+      const { view, state } = controller;
       const restored = imageData instanceof ImageData
         ? imageData
         : new ImageData(new Uint8ClampedArray(imageData.data), imageData.width, imageData.height);
       if (view.canvas.width !== restored.width || view.canvas.height !== restored.height) view.setDimensions(restored.width, restored.height);
       view.context.putImageData(restored, 0, 0);
       view.overlayContext.clearRect(0, 0, view.overlay.width, view.overlay.height);
+      state.width = restored.width;
+      state.height = restored.height;
+      view.setZoom(state.zoom);
       return true;
     }
     function normalizeCanvasDimensions(width, height) {
@@ -147,29 +151,47 @@
       return null;
     }
 
+    function applyZoom(controller, zoom) {
+      controller.state.setZoom(zoom);
+      controller.view.setZoom(controller.state.zoom);
+      syncTab(controller);
+      return controller.state.zoom;
+    }
+
     async function runAction(controller, action) {
       const { view, state, history, selection } = controller;
       if (action === "undo" || action === "redo") {
         selection.clear();
         const next = action === "undo" ? history.undo() : history.redo();
-        if (restoreSnapshot(view, next)) {
+        if (restoreSnapshot(controller, next)) {
           state.setDirty(history.isAtSavedState !== true);
           syncTab(controller);
         }
         return;
       }
       if (action === "zoom-in" || action === "zoom-out") {
-        state.setZoom(state.zoom * (action === "zoom-in" ? 1.25 : 0.8));
-        view.setZoom(state.zoom);
-        syncTab(controller);
+        applyZoom(controller, state.zoom * (action === "zoom-in" ? 1.25 : 0.8));
         return;
       }
       if (action === "copy") return copySelectionToClipboard(controller);
       if (action === "paste") {
         commitSelection(controller);
         const clipboardImage = await readSystemClipboardImage();
+        const pasteData = clipboardImage || selection.internalClipboard;
+        if (!pasteData) {
+          syncTab(controller);
+          return;
+        }
         controller.selectionBefore = snapshot(view);
-        if (selection.paste(view.context, clipboardImage, state)) drawSelectionOverlay(controller);
+        resizeCanvas(
+          controller,
+          Math.max(view.canvas.width, pasteData.width),
+          Math.max(view.canvas.height, pasteData.height)
+        );
+        if (selection.paste(view.context, pasteData, state)) {
+          state.setTool("select");
+          drawSelectionOverlay(controller);
+        }
         syncTab(controller);
         return;
       }
@@ -211,7 +233,7 @@
     }
 
     function isTextFormattingTarget(target) {
-      return Boolean(target?.closest?.(".image-editor-text-controls, .image-editor-foreground, .image-editor-background, [data-format]"));
+      return Boolean(target?.closest?.(".image-editor-text-controls, .image-editor-foreground, .image-editor-background, [data-palette-color], [data-color-target], [data-format]"));
     }
 
     function keepTextInputLive(controller) {
@@ -221,6 +243,16 @@
 
     function refreshLiveTextStyle(controller) {
       controller.view.applyTextInputStyle?.(controller.state);
+    }
+
+    function applyToolbarColor(controller, target, color) {
+      const colorTarget = target === "background" ? "background" : "foreground";
+      const stateProperty = colorTarget === "background" ? "backgroundColor" : "foregroundColor";
+      const inputSelector = colorTarget === "background" ? ".image-editor-background" : ".image-editor-foreground";
+      controller.state[stateProperty] = color;
+      controller.view.shell.querySelector(inputSelector).value = color;
+      controller.view.setActiveColorTarget(colorTarget, controller.state);
+      if (colorTarget === "foreground") refreshLiveTextStyle(controller);
     }
 
     function bindToolbar(controller) {
@@ -235,13 +267,18 @@
         const toolButton = event.target.closest("[data-tool]");
         if (toolButton) {
           commitText(controller);
-          commitSelection(controller);
+          if (toolButton.dataset.tool !== "select") dropSelection(controller);
           state.setTool(toolButton.dataset.tool);
           syncTab(controller);
           return;
         }
         const actionButton = event.target.closest("[data-action]");
         if (actionButton && !actionButton.disabled) void runAction(controller, actionButton.dataset.action);
+        const paletteButton = event.target.closest("[data-palette-color]");
+        if (paletteButton) {
+          applyToolbarColor(controller, view.activeColorTarget, paletteButton.dataset.paletteColor);
+          return;
+        }
         const formatButton = event.target.closest("[data-format]");
         if (formatButton) {
           const key = formatButton.dataset.format === "bold" ? "fontBold" : "fontItalic";
@@ -251,11 +288,12 @@
           if (!view.textInput.hidden) setTimeout(() => view.textInput.focus(), 0);
         }
       });
-      view.shell.querySelector(".image-editor-foreground").addEventListener("input", (event) => {
-        state.foregroundColor = event.target.value;
-        refreshLiveTextStyle(controller);
+      [["foreground", ".image-editor-foreground"], ["background", ".image-editor-background"]].forEach(([target, selector]) => {
+        const input = view.shell.querySelector(selector);
+        input.addEventListener("pointerdown", () => view.setActiveColorTarget(target, state));
+        input.addEventListener("focus", () => view.setActiveColorTarget(target, state));
+        input.addEventListener("input", (event) => applyToolbarColor(controller, target, event.target.value));
       });
-      view.shell.querySelector(".image-editor-background").addEventListener("input", (event) => { state.backgroundColor = event.target.value; });
       view.shell.querySelector(".image-editor-size").addEventListener("input", (event) => {
         state.brushSize = state.lineWidth = Number(event.target.value);
       });
@@ -276,14 +314,22 @@
       view.context.putImageData(selection.imageData, selection.rect.x, selection.rect.y);
       return true;
     }
-    function clearSelectionAfterOutsideClick(controller) {
+    function dropSelection(controller) {
       const { selection } = controller;
       if (!selection.hasSelection) return false;
       if (selection.floating) commitSelection(controller);
+      controller.selectionBefore = null;
+      controller.movingSelection = false;
+      controller.stampingSelection = false;
+      controller.commitSelectionOnPointerUp = false;
       selection.clear();
       drawSelectionOverlay(controller);
       syncTab(controller);
       return true;
+    }
+    function updateSelectionHoverCursor(controller, point) {
+      const { view, state, selection } = controller;
+      view.overlay.style.cursor = state.tool === "select" && selection.contains(point) ? "move" : "crosshair";
     }
     function bindPointerTools(controller) {
       const { view, state, selection } = controller;
@@ -319,7 +365,9 @@
         controller.startPoint = controller.lastPoint = point;
         controller.dragging = true;
         if (state.tool === "select" && selection.hasSelection && !selection.contains(point)) {
-          clearSelectionAfterOutsideClick(controller);
+          dropSelection(controller);
+          controller.dragging = false;
+          return;
         }
         if (state.tool === "select" && selection.hasSelection && selection.contains(point)) {
           const wasFloatingSelection = selection.floating;
@@ -336,8 +384,11 @@
         overlay.setPointerCapture?.(event.pointerId);
       });
       overlay.addEventListener("pointermove", (event) => {
-        if (!controller.dragging) return;
         const point = view.pointFromEvent(event);
+        if (!controller.dragging) {
+          updateSelectionHoverCursor(controller, point);
+          return;
+        }
         if (state.tool === "text" && controller.creatingTextBox) {
           drawTextCreationOverlay(controller, point);
           return;
@@ -527,7 +578,6 @@
         drag.nextWidth = nextDimensions.width;
         drag.nextHeight = nextDimensions.height;
         view.updateCanvasResizePreview(drag.nextWidth, drag.nextHeight);
-        view.status.textContent = `Resize: ${drag.nextWidth} x ${drag.nextHeight}px`;
         event.preventDefault();
       });
       const finishResize = (event) => {
@@ -551,17 +601,11 @@
       return null;
     }
 
-    function cancelSelectionWithKeyboard(controller, event) {
-      const { view, selection } = controller;
+    function dropSelectionWithKeyboard(controller, event) {
+      const { selection } = controller;
       if (event.key !== "Escape" || !selection.hasSelection) return false;
       event.preventDefault();
-      if (selection.floating && controller.selectionBefore) restoreSnapshot(view, controller.selectionBefore);
-      controller.selectionBefore = null;
-      controller.movingSelection = false;
-      controller.stampingSelection = false;
-      selection.clear();
-      drawSelectionOverlay(controller);
-      syncTab(controller);
+      dropSelection(controller);
       return true;
     }
     function moveSelectionWithKeyboard(controller, event) {
@@ -594,6 +638,20 @@
       }
       return true;
     }
+    function selectAllCanvas(controller) {
+      const { view, state, selection } = controller;
+      commitText(controller);
+      commitSelection(controller);
+      selection.setRect(
+        { x: 0, y: 0 },
+        { x: view.canvas.width, y: view.canvas.height },
+        state
+      );
+      state.setTool("select");
+      drawSelectionOverlay(controller);
+      syncTab(controller);
+      return true;
+    }
     function bindKeyboard(controller) {
       const listener = (event) => {
         if (deps.getActiveTab?.()?.id !== controller.tab.id) return;
@@ -609,7 +667,12 @@
           }
           return;
         }
-        if (cancelSelectionWithKeyboard(controller, event)) return;
+        if (primary && !event.shiftKey && !event.altKey && event.key.toLowerCase() === "a") {
+          event.preventDefault();
+          selectAllCanvas(controller);
+          return;
+        }
+        if (dropSelectionWithKeyboard(controller, event)) return;
         if (moveSelectionWithKeyboard(controller, event)) return;
         let action = "";
         if (primary && event.key.toLowerCase() === "z") action = event.shiftKey ? "redo" : "undo";
@@ -639,6 +702,18 @@
       };
       global.addEventListener("keydown", listener, true);
       controller.removeKeyboardListener = () => global.removeEventListener("keydown", listener, true);
+    }
+
+    function bindSelectionDismissal(controller) {
+      const listener = (event) => {
+        if (deps.getActiveTab?.()?.id !== controller.tab.id) return;
+        if (event.target.closest?.('[data-tool="select"]')) return;
+        if (event.target.closest?.(".image-editor-selection-actions, .image-editor-history-actions")) return;
+        if (!controller.selection.hasSelection || controller.view.wrap.contains(event.target)) return;
+        dropSelection(controller);
+      };
+      global.document.addEventListener("pointerdown", listener, true);
+      controller.removeSelectionDismissalListener = () => global.document.removeEventListener("pointerdown", listener, true);
     }
 
     async function createController(tab, root) {
@@ -694,6 +769,7 @@
       bindTextInputMove(controller);
       bindCanvasResize(controller);
       bindKeyboard(controller);
+      bindSelectionDismissal(controller);
       view.textInput.addEventListener("blur", () => setTimeout(() => {
         const activeElement = global.document?.activeElement;
         if (controller.keepTextInputLive || controller.view.toolbar.contains(activeElement) || controller.view.textBox.contains(activeElement)) {
@@ -729,6 +805,7 @@
       const controller = views.get(tabId);
       if (!controller) return;
       controller.removeKeyboardListener?.();
+      controller.removeSelectionDismissalListener?.();
       controller.view.destroy();
       views.delete(tabId);
     }
@@ -863,6 +940,42 @@
       if (controller) syncTab(controller);
     }
 
+    /**
+     * Select the complete canvas for an image-editor tab.
+     * @param {object} tab - Active image-editor tab.
+     * @returns {boolean} Whether an active image-editor controller handled the command.
+     */
+    function selectAll(tab) {
+      const controller = views.get(tab?.id);
+      return controller ? selectAllCanvas(controller) : false;
+    }
+
+    /**
+     * Set the zoom factor for an active image-editor tab.
+     * @param {object} tab - Image-editor tab whose canvas should be zoomed.
+     * @param {number} zoom - Requested zoom factor, where 1 is 100 percent.
+     * @returns {number|false} Applied zoom factor, or false when the tab is not mounted.
+     */
+    function setZoom(tab, zoom) {
+      const controller = views.get(tab?.id);
+      return controller ? applyZoom(controller, zoom) : false;
+    }
+
+    /**
+     * Route Ctrl/Cmd+wheel over an image editor to its canvas zoom.
+     * @param {object} tab - Active image-editor tab under the wheel event.
+     * @param {WheelEvent} event - Wheel input whose target identifies the editor surface.
+     * @returns {boolean} Whether the image editor consumed the zoom gesture.
+     */
+    function handleWheelZoom(tab, event) {
+      const controller = views.get(tab?.id);
+      if (!controller || !controller.view.shell.contains(event.target)) return false;
+      if (!(event.ctrlKey || event.metaKey) || event.altKey || !Number.isFinite(Number(event.deltaY)) || Number(event.deltaY) === 0) return false;
+      event.preventDefault();
+      applyZoom(controller, controller.state.zoom * (Number(event.deltaY) < 0 ? 1.25 : 0.8));
+      return true;
+    }
+
     const api = {
       canEditSource: namespace.canEditSource,
       mountImageEditorTab,
@@ -872,6 +985,9 @@
       saveTabAs,
       getDraftBinary,
       refreshCommandState,
+      selectAll,
+      setZoom,
+      handleWheelZoom,
       getView(tabId) { return views.get(tabId) || null; }
     };
     app.services.imageEditor = api;
