@@ -118,20 +118,26 @@
       return changed;
     }
 
-    /** Build an export-only canvas without changing the live floating selection. */
+    /** Build an export-only canvas without changing live floating pixels or editable text. */
     function createCompositeCanvas(controller) {
-      const { view, selection } = controller;
-      if (!selection.floating || !selection.imageData || !selection.rect) return view.canvas;
+      const { view, selection, state } = controller;
+      const hasFloatingSelection = selection.floating && selection.imageData && selection.rect;
+      const editableText = view.textInput.hidden ? '' : view.textInput.value;
+      const editableTextRect = editableText
+        ? (view.getTextContentRect() || view.getTextInputRect() || controller.textRect)
+        : null;
+      if (!hasFloatingSelection && !editableTextRect) return view.canvas;
       const composite = document.createElement("canvas");
       composite.width = view.canvas.width;
       composite.height = view.canvas.height;
       const context = composite.getContext("2d");
       context.drawImage(view.canvas, 0, 0);
-      context.putImageData(selection.imageData, selection.rect.x, selection.rect.y);
+      if (hasFloatingSelection) context.putImageData(selection.imageData, selection.rect.x, selection.rect.y);
+      if (editableTextRect) namespace.drawText(context, editableTextRect, editableText, state);
       return composite;
     }
 
-    /** Encode the visible base canvas and floating selection without committing either. */
+    /** Encode visible canvas layers without committing floating pixels or editable text. */
     function encodeCompositeCanvas(controller, mimeType) {
       return namespace.encodeCanvas(createCompositeCanvas(controller), mimeType, controller.state.backgroundColor);
     }
@@ -177,6 +183,24 @@
       return null;
     }
 
+    async function readSystemClipboardText() {
+      let text = null;
+      const browserClipboard = global.navigator?.clipboard;
+      if (browserClipboard && !browserClipboard.readText) return null;
+      if (browserClipboard?.readText) {
+        try {
+          text = await browserClipboard.readText();
+          if (text) return text;
+        } catch (_error) {}
+      }
+      if (global.Neutralino?.clipboard?.readText) {
+        try {
+          return await global.Neutralino.clipboard.readText();
+        } catch (_error) {}
+      }
+      return text;
+    }
+
     function applyZoom(controller, zoom) {
       controller.state.setZoom(zoom);
       controller.view.setZoom(controller.state.zoom);
@@ -206,6 +230,12 @@
         state.setTool("select");
         drawSelectionOverlay(controller);
         syncTab(controller);
+        const clipboardText = await readSystemClipboardText();
+        if (!selection.isPastePending(pasteRevision)) return;
+        if (clipboardText?.length) {
+          openPastedTextBox(controller, clipboardText);
+          return;
+        }
         const clipboardImage = await readSystemClipboardImage();
         if (!selection.isPastePending(pasteRevision)) return;
         const pasteData = clipboardImage || selection.internalClipboard;
@@ -239,9 +269,35 @@
       commitTransaction(controller, before);
     }
 
+    function openEditableTextBox(controller, rect, text = '') {
+      controller.textRect = rect;
+      controller.textInputOpening = true;
+      controller.view.showTextInput(rect, controller.state);
+      controller.view.textInput.value = text;
+      setTimeout(() => { controller.textInputOpening = false; }, 150);
+    }
+
+    function openPastedTextBox(controller, text) {
+      const { view, state, selection } = controller;
+      controller.pastedTextEditing = true;
+      const lineCount = String(text).split(/\r?\n/).length;
+      const lineHeight = state.fontSize * 1.2;
+      selection.clear();
+      state.setTool('text');
+      drawSelectionOverlay(controller);
+      openEditableTextBox(controller, {
+        x: 0,
+        y: 0,
+        width: Math.min(view.canvas.width, Math.max(120, view.canvas.width * 0.5)),
+        height: Math.min(view.canvas.height, Math.max(lineHeight + 12, lineCount * lineHeight + 12))
+      }, text);
+      syncTab(controller);
+    }
+
     function commitText(controller) {
       const input = controller.view.textInput;
       if (input.hidden) return false;
+      controller.pastedTextEditing = false;
       const text = input.value;
       const textRect = controller.view.getTextContentRect() || controller.view.getTextInputRect() || controller.textRect;
       controller.view.hideTextInput();
@@ -450,10 +506,7 @@
           };
           textRect.width = Math.min(textRect.width, state.width - textRect.x);
           textRect.height = Math.min(textRect.height, state.height - textRect.y);
-          controller.textRect = textRect;
-          controller.textInputOpening = true;
-          view.showTextInput(textRect, state);
-          setTimeout(() => { controller.textInputOpening = false; }, 150);
+          openEditableTextBox(controller, textRect);
         } else if (state.tool === "pencil" || state.tool === "brush") {
           commitTransaction(controller, controller.gestureBefore);
         } else if (state.tool === "select") {
@@ -689,7 +742,6 @@
         else if (primary && event.key.toLowerCase() === "y") action = "redo";
         else if (primary && event.key.toLowerCase() === "x") action = "cut";
         else if (primary && event.key.toLowerCase() === "c") action = "copy";
-        else if (primary && event.key.toLowerCase() === "v") action = "paste";
         else if (event.key === "Delete") action = "delete";
         else if (primary && event.key.toLowerCase() === "s") {
           event.preventDefault();
@@ -712,6 +764,24 @@
       };
       global.addEventListener("keydown", listener, true);
       controller.removeKeyboardListener = () => global.removeEventListener("keydown", listener, true);
+    }
+
+    function bindNativeTextPaste(controller) {
+      const listener = (event) => {
+        if (deps.getActiveTab?.()?.id !== controller.tab.id) return;
+        const text = event.clipboardData?.getData('text/plain');
+        event.preventDefault();
+        event.stopPropagation();
+        if (text) {
+          keepTextInputLive(controller);
+          if (!controller.view.textInput.hidden) commitText(controller);
+          openPastedTextBox(controller, text);
+          return;
+        }
+        void runAction(controller, 'paste');
+      };
+      global.document.addEventListener('paste', listener, true);
+      controller.removeNativeTextPasteListener = () => global.document.removeEventListener('paste', listener, true);
     }
 
     function bindSelectionDismissal(controller) {
@@ -768,7 +838,8 @@
         textRect: null,
         creatingTextBox: false,
         textInputOpening: false,
-        keepTextInputLive: false
+        keepTextInputLive: false,
+        pastedTextEditing: false
       };
       views.set(tab.id, controller);
       bindToolbar(controller);
@@ -776,9 +847,14 @@
       bindTextInputMove(controller);
       bindCanvasResize(controller);
       bindKeyboard(controller);
+      bindNativeTextPaste(controller);
       bindSelectionDismissal(controller);
       view.textInput.addEventListener("blur", () => setTimeout(() => {
         const activeElement = global.document?.activeElement;
+        if (controller.pastedTextEditing && !controller.view.textInput.hidden) {
+          controller.view.textInput.focus();
+          return;
+        }
         if (controller.keepTextInputLive || controller.view.toolbar.contains(activeElement) || controller.view.textBox.contains(activeElement)) {
           controller.textInputOpening = false;
           return;
@@ -817,6 +893,7 @@
       const controller = views.get(tabId);
       if (!controller) return;
       controller.removeKeyboardListener?.();
+      controller.removeNativeTextPasteListener?.();
       controller.removeSelectionDismissalListener?.();
       controller.view.destroy();
       views.delete(tabId);
@@ -829,7 +906,6 @@
     async function getDraftBinary(tab) {
       const controller = views.get(tab?.id);
       if (!controller) return tab?.imageEditorDraftBytes || null;
-      commitText(controller);
       return namespace.blobToUint8Array(await encodeCompositeCanvas(controller, "image/png"));
     }
 

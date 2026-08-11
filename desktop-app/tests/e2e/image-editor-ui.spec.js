@@ -152,6 +152,44 @@ test("switching between image editor tabs preserves each tab's drawing", async (
   expect(await pixel(0, 12, 8)).not.toEqual([255, 255, 255]);
 });
 
+test('pasting clipboard text opens a new editable text box', async ({ context, page }) => {
+  await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+  await page.goto('/');
+  await page.waitForFunction(() => !!window.markdownViewerApp?.modules?.tabs?.openBlankImageEditorInTab, null, { timeout: 60000 });
+  await page.waitForFunction(() => !!window.markdownViewerApp?.modules?.keyboardShortcuts && !!window.markdownViewerApp?.services?.imageEditor, null, { timeout: 60000 });
+  await page.evaluate(() => {
+    window.markdownViewerApp.modules.apiClient.deactivateApiClientSidebar = () => {};
+    window.markdownViewerApp.modules.tabs.openBlankImageEditorInTab({ width: 320, height: 180, name: 'Text Paste' });
+  });
+  await expect(page.locator('.tab-view.active[data-tab-view-kind=image-editor] .image-editor-shell')).toBeVisible();
+
+  const textInput = page.locator('.tab-view.active .image-editor-text-input');
+  for (const text of ['First paste', 'Second paste', 'Third paste']) {
+    await page.evaluate((value) => navigator.clipboard.writeText(value), text);
+    await page.keyboard.press('Control+V');
+    await expect(textInput).toBeVisible();
+    await expect(textInput).toHaveValue(text);
+    await expect(page.locator('.tab-view.active [data-tool=text]')).toHaveClass(/active/);
+    await expect.poll(() => page.evaluate(() => document.activeElement?.classList.contains('image-editor-text-input'))).toBe(true);
+    const draftSize = await page.evaluate(async () => {
+      const tabs = window.markdownViewerApp.modules.tabs;
+      return (await window.markdownViewerApp.services.imageEditor.getDraftBinary(tabs.getActiveTab())).byteLength;
+    });
+    expect(draftSize).toBeGreaterThan(0);
+    await expect(textInput).toBeVisible();
+    await expect(textInput).toHaveValue(text);
+    await expect.poll(() => page.evaluate(() => document.activeElement?.classList.contains('image-editor-text-input'))).toBe(true);
+    await textInput.pressSequentially('!');
+    await expect(textInput).toHaveValue(text + '!');
+  }
+  const origin = await page.evaluate(() => {
+    const canvas = document.querySelector('.tab-view.active .image-editor-canvas').getBoundingClientRect();
+    const textBox = document.querySelector('.tab-view.active .image-editor-text-box').getBoundingClientRect();
+    return { left: Math.round(textBox.left - canvas.left), top: Math.round(textBox.top - canvas.top) };
+  });
+  expect(origin).toEqual({ left: 0, top: 0 });
+});
+
 test('duplicating an image editor preserves its live canvas in another image editor', async ({ page }) => {
   await page.goto('/');
   await page.waitForFunction(() => !!window.markdownViewerApp?.modules?.tabs?.openBlankImageEditorInTab, null, { timeout: 60000 });
@@ -610,7 +648,11 @@ test("dragging a pasted floating selection does not alter canvas underneath unti
     });
   });
   await page.keyboard.press("Control+C");
-  await page.keyboard.press("Control+V");
+  await overlay.evaluate((element) => element.dispatchEvent(new ClipboardEvent('paste', {
+    bubbles: true,
+    cancelable: true,
+    clipboardData: new DataTransfer()
+  })));
   await expect.poll(() => page.evaluate(() => {
     const root = document.querySelector('.tab-view.active[data-tab-view-kind="image-editor"]');
     return window.markdownViewerApp.services.imageEditor.getView(root.dataset.tabId).selection.isPasting;
@@ -769,7 +811,11 @@ test("selection keyboard shortcuts copy paste and Escape place floating selectio
     });
   });
   await page.keyboard.press("Control+C");
-  await page.keyboard.press("Control+V");
+  await overlay.evaluate((element) => element.dispatchEvent(new ClipboardEvent('paste', {
+    bubbles: true,
+    cancelable: true,
+    clipboardData: new DataTransfer()
+  })));
   const pastedOverlay = await page.evaluate(() => {
     const overlay = document.querySelector(".image-editor-overlay");
     return Array.from(overlay.getContext("2d").getImageData(4, 4, 1, 1).data).slice(0, 3);
