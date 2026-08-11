@@ -109,6 +109,48 @@ test("opens an image editor, draws, undoes, and explicitly saves", async ({ page
   await expect(page.locator("#tab-list .tab-item.active")).not.toHaveClass(/unsaved/);
 });
 
+test("switching between image editor tabs preserves each tab's drawing", async ({ page }) => {
+  await page.goto("/");
+  await page.waitForFunction(() => !!window.markdownViewerApp?.modules?.tabs?.openBlankImageEditorInTab, null, { timeout: 60000 });
+  await page.waitForFunction(() => !!window.markdownViewerApp?.modules?.keyboardShortcuts && !!window.markdownViewerApp?.services?.imageEditor, null, { timeout: 60000 });
+  await page.evaluate(() => {
+    window.markdownViewerApp.modules.apiClient.deactivateApiClientSidebar = () => {};
+    const first = window.markdownViewerApp.modules.tabs.openBlankImageEditorInTab({ width: 64, height: 48, name: "First" });
+    window.__switchImageTabIds = [first.id];
+  });
+  await expect(page.locator('.tab-view.active[data-tab-view-kind="image-editor"] .image-editor-shell')).toBeVisible();
+
+  async function drawAt(y) {
+    await page.locator('.tab-view.active [data-tool="pencil"]').click();
+    const overlay = page.locator('.tab-view.active .image-editor-overlay');
+    const box = await overlay.boundingBox();
+    await page.mouse.move(box.x + 8, box.y + y);
+    await page.mouse.down();
+    await page.mouse.move(box.x + 20, box.y + y, { steps: 6 });
+    await page.mouse.up();
+  }
+
+  await drawAt(8);
+  await page.evaluate(() => {
+    const second = window.markdownViewerApp.modules.tabs.openBlankImageEditorInTab({ width: 64, height: 48, name: "Second" });
+    window.__switchImageTabIds.push(second.id);
+  });
+  await expect(page.locator('.tab-view.active[data-tab-view-kind="image-editor"] .image-editor-shell')).toBeVisible();
+  await drawAt(20);
+
+  const pixel = async (tabIndex, x, y) => {
+    await page.evaluate((index) => window.markdownViewerApp.modules.tabs.switchTab(window.__switchImageTabIds[index]), tabIndex);
+    await expect(page.locator('.tab-view.active[data-tab-view-kind="image-editor"] .image-editor-shell')).toBeVisible();
+    return page.locator('.tab-view.active .image-editor-canvas').evaluate((canvas, point) =>
+      Array.from(canvas.getContext("2d").getImageData(point.x, point.y, 1, 1).data).slice(0, 3), { x, y });
+  };
+
+  expect(await pixel(0, 12, 8)).not.toEqual([255, 255, 255]);
+  expect(await pixel(0, 12, 20)).toEqual([255, 255, 255]);
+  expect(await pixel(1, 12, 20)).not.toEqual([255, 255, 255]);
+  expect(await pixel(1, 12, 8)).toEqual([255, 255, 255]);
+  expect(await pixel(0, 12, 8)).not.toEqual([255, 255, 255]);
+});
 test("text tool creates a dragged text box and moves populated text from its border", async ({ page }) => {
   await page.goto("/");
   await page.waitForFunction(() => !!window.markdownViewerApp?.modules?.keyboardShortcuts, null, { timeout: 60000 });

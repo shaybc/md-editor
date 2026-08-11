@@ -796,6 +796,11 @@
 
     async function mountImageEditorTab(tab, root) {
       if (!tab?.id || !root) return null;
+      const existing = views.get(tab.id);
+      if (existing?.view?.root === root) {
+        syncTab(existing);
+        return existing;
+      }
       destroyImageEditorTab(tab.id);
       try {
         tab.missingSource = false;
