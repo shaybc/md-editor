@@ -20,10 +20,16 @@
       view.overlayContext.clearRect(0, 0, view.overlay.width, view.overlay.height);
       return true;
     }
+    function normalizeCanvasDimensions(width, height) {
+      return {
+        width: Math.max(16, Math.round(width)),
+        height: Math.max(16, Math.round(height))
+      };
+    }
+
     function resizeCanvas(controller, width, height) {
       const { view, state } = controller;
-      const nextWidth = Math.max(16, Math.round(width));
-      const nextHeight = Math.max(16, Math.round(height));
+      const { width: nextWidth, height: nextHeight } = normalizeCanvasDimensions(width, height);
       if (nextWidth === view.canvas.width && nextHeight === view.canvas.height) return false;
       const previous = document.createElement("canvas");
       previous.width = view.canvas.width;
@@ -502,8 +508,9 @@
           y: event.clientY,
           width: view.canvas.width,
           height: view.canvas.height,
+          nextWidth: view.canvas.width,
+          nextHeight: view.canvas.height,
           before: snapshot(view),
-          changed: false
         };
         handle.setPointerCapture?.(event.pointerId);
       });
@@ -512,17 +519,20 @@
         const scale = view.getScale();
         const deltaX = (event.clientX - drag.x) / scale.x;
         const deltaY = (event.clientY - drag.y) / scale.y;
-        const nextWidth = drag.handle.includes("e") ? drag.width + deltaX : drag.width;
-        const nextHeight = drag.handle.includes("s") ? drag.height + deltaY : drag.height;
-        if (resizeCanvas(controller, nextWidth, nextHeight)) drag.changed = true;
-        syncTab(controller);
+        const nextDimensions = normalizeCanvasDimensions(
+          drag.handle.includes("e") ? drag.width + deltaX : drag.width,
+          drag.handle.includes("s") ? drag.height + deltaY : drag.height
+        );
+        drag.nextWidth = nextDimensions.width;
+        drag.nextHeight = nextDimensions.height;
+        view.status.textContent = `Resize: ${drag.nextWidth} x ${drag.nextHeight}px`;
         event.preventDefault();
       });
       const finishResize = (event) => {
         if (!drag || event.pointerId !== drag.pointerId) return;
         event.target.releasePointerCapture?.(event.pointerId);
         const before = drag.before;
-        const changed = drag.changed;
+        const changed = resizeCanvas(controller, drag.nextWidth, drag.nextHeight);
         drag = null;
         if (changed) commitTransaction(controller, before);
         else syncTab(controller);
