@@ -96,19 +96,43 @@
     context.putImageData(imageData, 0, 0);
     return true;
   }
+
+  function splitWordToWidth(context, word, maxWidth) {
+    if (!word || context.measureText(word).width <= maxWidth) return [word];
+    const segments = [];
+    let segment = "";
+    Array.from(word).forEach((character) => {
+      const candidate = segment + character;
+      if (segment && context.measureText(candidate).width > maxWidth) {
+        segments.push(segment);
+        segment = character;
+      } else {
+        segment = candidate;
+      }
+    });
+    if (segment) segments.push(segment);
+    return segments;
+  }
+
   function wrapText(context, text, maxWidth) {
     const output = [];
     String(text).split(/\r?\n/).forEach((sourceLine) => {
       const words = sourceLine.split(/\s+/);
       let line = "";
       words.forEach((word) => {
-        const candidate = line ? `${line} ${word}` : word;
-        if (line && context.measureText(candidate).width > maxWidth) {
-          output.push(line);
-          line = word;
-        } else {
-          line = candidate;
-        }
+        splitWordToWidth(context, word, maxWidth).forEach((segment, index, segments) => {
+          const candidate = line ? `${line}${index ? "" : " "}${segment}` : segment;
+          if (line && context.measureText(candidate).width > maxWidth) {
+            output.push(line);
+            line = segment;
+          } else {
+            line = candidate;
+          }
+          if (index < segments.length - 1) {
+            output.push(line);
+            line = "";
+          }
+        });
       });
       output.push(line);
     });

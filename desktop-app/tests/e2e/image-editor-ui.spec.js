@@ -190,6 +190,47 @@ test('pasting clipboard text opens a new editable text box', async ({ context, p
   expect(origin).toEqual({ left: 0, top: 0 });
 });
 
+test('committing pasted text preserves wrapped lines from an unbroken URL', async ({ context, page }) => {
+  await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+  await page.goto('/');
+  await page.waitForFunction(() => !!window.markdownViewerApp?.modules?.tabs?.openBlankImageEditorInTab, null, { timeout: 60000 });
+  await page.waitForFunction(() => !!window.markdownViewerApp?.modules?.keyboardShortcuts && !!window.markdownViewerApp?.services?.imageEditor, null, { timeout: 60000 });
+  await page.evaluate(() => {
+    window.markdownViewerApp.modules.apiClient.deactivateApiClientSidebar = () => {};
+    window.markdownViewerApp.modules.tabs.openBlankImageEditorInTab({ width: 420, height: 180, name: 'Wrapped Text Paste' });
+  });
+  await expect(page.locator('.tab-view.active[data-tab-view-kind=image-editor] .image-editor-shell')).toBeVisible();
+
+  await page.evaluate(() => navigator.clipboard.writeText('https://www.argaman4u.co.il/checkout/'));
+  await page.keyboard.press('Control+V');
+  const textInput = page.locator('.tab-view.active .image-editor-text-input');
+  await expect(textInput).toHaveValue('https://www.argaman4u.co.il/checkout/');
+  const contentRect = await page.evaluate(() => {
+    const root = document.querySelector('.tab-view.active[data-tab-view-kind=image-editor]');
+    const controller = window.markdownViewerApp.services.imageEditor.getView(root.dataset.tabId);
+    const rect = { x: 12, y: 12, width: 220, height: 100 };
+    controller.textRect = rect;
+    controller.view.positionTextInput(rect);
+    return controller.view.getTextContentRect();
+  });
+  await page.keyboard.press('Control+Enter');
+  await expect(textInput).toBeHidden();
+
+  const hasWrappedLinePixels = await page.locator('.tab-view.active .image-editor-canvas').evaluate((canvas, rect) => {
+    const context = canvas.getContext('2d');
+    const startY = Math.floor(rect.y + rect.lineHeight);
+    const endY = Math.min(canvas.height, Math.ceil(rect.y + rect.lineHeight * 2));
+    const startX = Math.floor(rect.x);
+    const endX = Math.min(canvas.width, Math.ceil(rect.x + rect.width));
+    const pixels = context.getImageData(startX, startY, endX - startX, endY - startY).data;
+    for (let index = 0; index < pixels.length; index += 4) {
+      if (pixels[index] < 240 || pixels[index + 1] < 240 || pixels[index + 2] < 240) return true;
+    }
+    return false;
+  }, contentRect);
+  expect(hasWrappedLinePixels).toBe(true);
+});
+
 test('duplicating an image editor preserves its live canvas in another image editor', async ({ page }) => {
   await page.goto('/');
   await page.waitForFunction(() => !!window.markdownViewerApp?.modules?.tabs?.openBlankImageEditorInTab, null, { timeout: 60000 });
