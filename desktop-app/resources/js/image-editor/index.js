@@ -513,6 +513,7 @@
           before: snapshot(view),
         };
         handle.setPointerCapture?.(event.pointerId);
+        view.beginCanvasResizePreview(drag.handle);
       });
       view.wrap.addEventListener("pointermove", (event) => {
         if (!drag || event.pointerId !== drag.pointerId) return;
@@ -525,6 +526,7 @@
         );
         drag.nextWidth = nextDimensions.width;
         drag.nextHeight = nextDimensions.height;
+        view.updateCanvasResizePreview(drag.nextWidth, drag.nextHeight);
         view.status.textContent = `Resize: ${drag.nextWidth} x ${drag.nextHeight}px`;
         event.preventDefault();
       });
@@ -532,6 +534,7 @@
         if (!drag || event.pointerId !== drag.pointerId) return;
         event.target.releasePointerCapture?.(event.pointerId);
         const before = drag.before;
+        view.endCanvasResizePreview();
         const changed = resizeCanvas(controller, drag.nextWidth, drag.nextHeight);
         drag = null;
         if (changed) commitTransaction(controller, before);

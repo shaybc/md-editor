@@ -132,6 +132,46 @@
       if (!this.textBox.hidden && this.textRect) this.positionTextInput(this.textRect);
     }
 
+    /**
+     * Show the edge that will become the canvas boundary when resizing finishes.
+     * @param {string} handle - Active east, south, or southeast resize handle.
+     */
+    beginCanvasResizePreview(handle) {
+      this.endCanvasResizePreview();
+      const canvasRect = this.canvas.getBoundingClientRect();
+      const element = document.createElement("div");
+      element.className = `image-editor-canvas-resize-preview image-editor-canvas-resize-preview-${handle}`;
+      document.body.appendChild(element);
+      this.canvasResizePreview = {
+        element,
+        left: canvasRect.left,
+        top: canvasRect.top,
+        scaleX: canvasRect.width / this.canvas.width,
+        scaleY: canvasRect.height / this.canvas.height
+      };
+      this.updateCanvasResizePreview(this.canvas.width, this.canvas.height);
+    }
+
+    /**
+     * Move the pending canvas boundary without changing scrollable layout dimensions.
+     * @param {number} width - Pending canvas width in image pixels.
+     * @param {number} height - Pending canvas height in image pixels.
+     */
+    updateCanvasResizePreview(width, height) {
+      const preview = this.canvasResizePreview;
+      if (!preview) return;
+      preview.element.style.left = `${preview.left}px`;
+      preview.element.style.top = `${preview.top}px`;
+      preview.element.style.width = `${width * preview.scaleX}px`;
+      preview.element.style.height = `${height * preview.scaleY}px`;
+    }
+
+    /** Remove the pending canvas boundary guide. */
+    endCanvasResizePreview() {
+      this.canvasResizePreview?.element.remove();
+      this.canvasResizePreview = null;
+    }
+
     pointFromEvent(event) {
       const rect = this.overlay.getBoundingClientRect();
       return {
@@ -240,6 +280,7 @@
     }
 
     destroy() {
+      this.endCanvasResizePreview();
       this.root.classList.remove("image-editor-root");
       this.root.innerHTML = "";
     }
