@@ -132,6 +132,8 @@
       context.lineTo(x + width / 2, y + height);
       context.lineTo(x, y + height / 2);
       context.closePath();
+    } else if (tool === "star") {
+      namespace.traceStar(context, start, end, state.starPoints);
     }
     if (state.fillShapes && tool !== "line") context.fill();
     context.stroke();

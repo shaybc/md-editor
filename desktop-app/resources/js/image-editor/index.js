@@ -59,6 +59,7 @@
         brushSize: state.brushSize,
         lineWidth: state.lineWidth,
         fillShapes: state.fillShapes,
+        starPoints: state.starPoints,
         cornerRadius: state.cornerRadius,
         adjustAllCorners: state.adjustAllCorners,
         fontFamily: state.fontFamily,
@@ -558,6 +559,12 @@
         commitText(controller);
         dropSelection(controller);
         state.setTool(nextTool);
+        syncTab(controller);
+      });
+      view.shell.querySelector(".image-editor-star-points").addEventListener("change", (event) => {
+        const starPoints = Number(event.target.value);
+        if (![4, 5, 6].includes(starPoints)) return;
+        state.starPoints = starPoints;
         syncTab(controller);
       });
       view.shell.querySelector(".image-editor-corner-radius").addEventListener("input", (event) => {

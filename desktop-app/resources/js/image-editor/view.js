@@ -17,6 +17,7 @@
     polygon: "bi-pentagon",
     triangle: "bi-triangle",
     diamond: "bi-diamond",
+    star: "bi-star",
     bucket: "bi-paint-bucket",
     text: "bi-fonts"
   };
@@ -87,6 +88,15 @@
                 <option value="callout">Rounded rectangular</option>
                 <option value="oval-callout">Oval</option>
                 <option value="cloud-callout">Cloud</option>
+              </select>
+            </label>
+          </div>
+          <div class="image-editor-star-controls image-editor-toolbar-group" hidden>
+            <label>Star
+              <select class="image-editor-star-points" aria-label="Star points">
+                <option value="4">4 points</option>
+                <option value="5">5 points</option>
+                <option value="6">6 points</option>
               </select>
             </label>
           </div>
@@ -252,6 +262,8 @@
       const calloutActive = state.tool === "callout" || state.tool === "oval-callout" || state.tool === "cloud-callout";
       this.shell.querySelector(".image-editor-callout-controls").hidden = !calloutActive;
       if (calloutActive) this.shell.querySelector(".image-editor-callout-type").value = state.tool;
+      this.shell.querySelector(".image-editor-star-controls").hidden = state.tool !== "star";
+      this.shell.querySelector(".image-editor-star-points").value = String(state.starPoints);
       this.shell.querySelector(".image-editor-text-controls").hidden = state.tool !== "text";
       ["undo", "redo", "cut", "copy", "delete"].forEach((action) => {
         const key = `can${action[0].toUpperCase()}${action.slice(1)}`;
