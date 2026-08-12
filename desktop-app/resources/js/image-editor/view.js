@@ -18,6 +18,7 @@
     triangle: "bi-triangle",
     diamond: "bi-diamond",
     star: "bi-star",
+    arrow: "bi-arrow-right",
     bucket: "bi-paint-bucket",
     text: "bi-fonts"
   };
@@ -103,6 +104,24 @@
                   <option value="4">4 points</option>
                   <option value="5">5 points</option>
                   <option value="6">6 points</option>
+                </select>
+              </label>
+            </div>
+            <div class="image-editor-arrow-controls image-editor-toolbar-group" hidden>
+              <label>Direction
+                <select class="image-editor-arrow-direction" aria-label="Arrow direction">
+                  <option value="up">Up</option>
+                  <option value="down">Down</option>
+                  <option value="left">Left</option>
+                  <option value="right">Right</option>
+                </select>
+              </label>
+              <label>Head
+                <select class="image-editor-arrow-head-angle" aria-label="Arrow head angle">
+                  <option value="90">90°</option>
+                  <option value="60">60°</option>
+                  <option value="45">45°</option>
+                  <option value="30">30°</option>
                 </select>
               </label>
             </div>
@@ -285,6 +304,9 @@
       if (calloutActive) this.shell.querySelector(".image-editor-callout-type").value = state.tool;
       this.shell.querySelector(".image-editor-star-controls").hidden = state.tool !== "star";
       this.shell.querySelector(".image-editor-star-points").value = String(state.starPoints);
+      this.shell.querySelector(".image-editor-arrow-controls").hidden = state.tool !== "arrow";
+      this.shell.querySelector(".image-editor-arrow-direction").value = state.arrowDirection;
+      this.shell.querySelector(".image-editor-arrow-head-angle").value = String(state.arrowHeadAngle);
       this.shell.querySelector(".image-editor-text-controls").hidden = state.tool !== "text";
       ["undo", "redo", "cut", "copy", "delete"].forEach((action) => {
         const key = `can${action[0].toUpperCase()}${action.slice(1)}`;

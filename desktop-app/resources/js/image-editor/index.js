@@ -60,6 +60,8 @@
         lineWidth: state.lineWidth,
         fillShapes: state.fillShapes,
         starPoints: state.starPoints,
+        arrowDirection: state.arrowDirection,
+        arrowHeadAngle: state.arrowHeadAngle,
         cornerRadius: state.cornerRadius,
         adjustAllCorners: state.adjustAllCorners,
         fontFamily: state.fontFamily,
@@ -566,6 +568,17 @@
         const starPoints = Number(event.target.value);
         if (![4, 5, 6].includes(starPoints)) return;
         state.starPoints = starPoints;
+        syncTab(controller);
+      });
+      view.shell.querySelector(".image-editor-arrow-direction").addEventListener("change", (event) => {
+        if (!["up", "down", "left", "right"].includes(event.target.value)) return;
+        state.arrowDirection = event.target.value;
+        syncTab(controller);
+      });
+      view.shell.querySelector(".image-editor-arrow-head-angle").addEventListener("change", (event) => {
+        const arrowHeadAngle = Number(event.target.value);
+        if (![30, 45, 60, 90].includes(arrowHeadAngle)) return;
+        state.arrowHeadAngle = arrowHeadAngle;
         syncTab(controller);
       });
       view.shell.querySelector(".image-editor-corner-radius").addEventListener("input", (event) => {

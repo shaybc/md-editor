@@ -1063,8 +1063,8 @@ audio.file-preview-content {
 .image-editor-command-grid [data-action="copy"] { grid-area: 2 / 2; }
 .image-editor-command-grid [data-action="paste"] { grid-area: 2 / 3; }
 .image-editor-tools {
-  display: grid; grid-template-columns: 38px repeat(7, 28px); grid-template-rows: repeat(2, 28px); gap: 2px;
-  grid-template-areas: "select line curve rectangle ellipse polygon triangle diamond" "select pencil brush bucket text rounded callout star";
+  display: grid; grid-template-columns: 38px repeat(8, 28px); grid-template-rows: repeat(2, 28px); gap: 2px;
+  grid-template-areas: "select line curve rectangle ellipse polygon triangle diamond arrow" "select pencil brush bucket text rounded callout star .";
 }
 .image-editor-tools [data-tool="select"] { grid-area: select; }
 .image-editor-tools [data-tool="line"] { grid-area: line; }
@@ -1077,6 +1077,7 @@ audio.file-preview-content {
 .image-editor-tools [data-tool="triangle"] { grid-area: triangle; }
 .image-editor-tools [data-tool="diamond"] { grid-area: diamond; }
 .image-editor-tools [data-tool="star"] { grid-area: star; }
+.image-editor-tools [data-tool="arrow"] { grid-area: arrow; }
 .image-editor-tools [data-tool="pencil"] { grid-area: pencil; }
 .image-editor-tools [data-tool="brush"] { grid-area: brush; }
 .image-editor-tools [data-tool="bucket"] { grid-area: bucket; }
@@ -1104,6 +1105,13 @@ audio.file-preview-content {
 }
 .image-editor-star-controls[hidden] { display: none; }
 .image-editor-star-points {
+  height: 28px; border: 1px solid var(--border-color); border-radius: 5px; background: var(--input-bg); color: var(--text-color);
+}
+.image-editor-arrow-controls {
+  display: flex; align-items: center; gap: 8px;
+}
+.image-editor-arrow-controls[hidden] { display: none; }
+.image-editor-arrow-direction, .image-editor-arrow-head-angle {
   height: 28px; border: 1px solid var(--border-color); border-radius: 5px; background: var(--input-bg); color: var(--text-color);
 }
 .image-editor-toolbar label {
