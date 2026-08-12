@@ -198,6 +198,35 @@
       return floatGeneratedLayer(controller, layer, before);
     }
 
+    function renderCalloutPreview(controller) {
+      const { view, calloutTool, state } = controller;
+      view.overlayContext.clearRect(0, 0, view.overlay.width, view.overlay.height);
+      calloutTool.drawPreview(view.overlayContext, state);
+    }
+
+    function cancelEditableCallout(controller) {
+      controller.calloutTool.reset();
+      controller.calloutBefore = null;
+      controller.dragging = false;
+      controller.view.overlayContext.clearRect(0, 0, controller.view.overlay.width, controller.view.overlay.height);
+      syncTab(controller);
+    }
+
+    function finishEditableCallout(controller) {
+      const { calloutTool, state, view } = controller;
+      if (!calloutTool.isEditing || !calloutTool.model) {
+        cancelEditableCallout(controller);
+        return false;
+      }
+      view.overlayContext.clearRect(0, 0, view.overlay.width, view.overlay.height);
+      const layer = calloutTool.rasterize(state, state);
+      const before = controller.calloutBefore;
+      calloutTool.reset();
+      controller.calloutBefore = null;
+      controller.dragging = false;
+      return floatGeneratedLayer(controller, layer, before);
+    }
+
     /** Build an export-only canvas without changing live floating pixels or editable text. */
     function createCompositeCanvas(controller) {
       const { view, selection, state } = controller;
@@ -284,6 +313,8 @@
     function applyZoom(controller, zoom) {
       controller.state.setZoom(zoom);
       controller.view.setZoom(controller.state.zoom);
+      if (controller.calloutTool?.isEditing) renderCalloutPreview(controller);
+      if (controller.roundedRectangleTool?.isEditing) renderRoundedRectanglePreview(controller);
       syncTab(controller);
       return controller.state.zoom;
     }
@@ -437,6 +468,7 @@
       controller.view.shell.querySelector(inputSelector).value = color;
       controller.view.setActiveColorTarget(colorTarget, controller.state);
       if (controller.roundedRectangleTool.isEditing) renderRoundedRectanglePreview(controller);
+      if (controller.calloutTool.isEditing) renderCalloutPreview(controller);
       if (colorTarget === "foreground") {
         refreshLiveTextStyle(controller);
         if (controller.curveTool.isEditing) renderCurvePreview(controller);
@@ -460,6 +492,7 @@
         if (toolButton) {
           if (state.tool === "curve" && controller.curveTool.isEditing) finishEditableCurve(controller);
           if (state.tool === "rounded-rectangle" && controller.roundedRectangleTool.isEditing) finishEditableRoundedRectangle(controller);
+          if (state.tool === "callout" && controller.calloutTool.isEditing) finishEditableCallout(controller);
           commitText(controller);
           if (toolButton.dataset.tool !== "select") dropSelection(controller);
           state.setTool(toolButton.dataset.tool);
@@ -492,10 +525,12 @@
         state.brushSize = state.lineWidth = Number(event.target.value);
         if (controller.curveTool.isEditing) renderCurvePreview(controller);
         if (controller.roundedRectangleTool.isEditing) renderRoundedRectanglePreview(controller);
+        if (controller.calloutTool.isEditing) renderCalloutPreview(controller);
       });
       view.shell.querySelector(".image-editor-fill").addEventListener("change", (event) => {
         state.fillShapes = event.target.checked;
         if (controller.roundedRectangleTool.isEditing) renderRoundedRectanglePreview(controller);
+        if (controller.calloutTool.isEditing) renderCalloutPreview(controller);
       });
       view.shell.querySelector(".image-editor-corner-radius").addEventListener("input", (event) => {
         state.cornerRadius = Number(event.target.value);
@@ -580,6 +615,25 @@
           renderRoundedRectanglePreview(controller);
           return;
         }
+        if (state.tool === "callout") {
+          event.preventDefault();
+          event.stopPropagation();
+          if (!controller.calloutTool.isEditing) {
+            commitText(controller);
+            commitSelection(controller);
+            controller.calloutBefore = snapshot(view);
+          }
+          const result = controller.calloutTool.begin(point, state.cornerRadius, state);
+          if (result.action === "outside") {
+            finishEditableCallout(controller);
+            return;
+          }
+          if (!result.started) return;
+          controller.dragging = true;
+          overlay.setPointerCapture?.(event.pointerId);
+          renderCalloutPreview(controller);
+          return;
+        }
         if (state.tool === "text") {
           event.preventDefault();
           event.stopPropagation();
@@ -641,6 +695,11 @@
           renderRoundedRectanglePreview(controller);
           return;
         }
+        if (state.tool === "callout") {
+          controller.calloutTool.update(point);
+          renderCalloutPreview(controller);
+          return;
+        }
         if (state.tool === "text" && controller.creatingTextBox) {
           drawTextCreationOverlay(controller, point);
           return;
@@ -671,6 +730,9 @@
           controller.roundedRectangleTool.completeStage(point);
           updateRoundedRectangleRadiusControl(controller);
           renderRoundedRectanglePreview(controller);
+        } else if (state.tool === "callout") {
+          controller.calloutTool.completeStage(point);
+          renderCalloutPreview(controller);
         } else if (state.tool === "text" && controller.creatingTextBox) {
           controller.creatingTextBox = false;
           view.overlayContext.clearRect(0, 0, view.overlay.width, view.overlay.height);
@@ -932,6 +994,18 @@
             return;
           }
         }
+        if (controller.state.tool === "callout" && controller.calloutTool.isEditing) {
+          if (event.key === "Escape") {
+            cancelEditableCallout(controller);
+            event.preventDefault();
+            return;
+          }
+          if (event.key === "Enter") {
+            finishEditableCallout(controller);
+            event.preventDefault();
+            return;
+          }
+        }
         if (primary && !event.shiftKey && !event.altKey && event.key.toLowerCase() === "a") {
           event.preventDefault();
           selectAllCanvas(controller);
@@ -1042,6 +1116,8 @@
         curveBefore: null,
         roundedRectangleTool: new namespace.ImageEditorRoundedRectangleTool(),
         roundedRectangleBefore: null,
+        calloutTool: new namespace.ImageEditorCalloutTool(),
+        calloutBefore: null,
         textRect: null,
         creatingTextBox: false,
         textInputOpening: false,

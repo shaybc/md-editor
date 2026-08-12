@@ -4,6 +4,8 @@
 
   const namespace = global.MarkdownViewerImageEditor = global.MarkdownViewerImageEditor || {};
   const CORNERS = Object.freeze(["topLeft", "topRight", "bottomRight", "bottomLeft"]);
+  const GUIDE_HANDLE_SCREEN_SIZE = 5;
+  const GUIDE_HIT_TARGET_SCREEN_RADIUS = 7;
 
   function rectFromPoints(start, end) {
     return {
@@ -101,19 +103,23 @@
     drawPreview(context, state) {
       const model = this.model;
       if (!model) return;
+      this.zoom = Math.max(0.25, Number(state.zoom) || 1);
+      const guideScale = 1 / this.zoom;
+      const handleSize = GUIDE_HANDLE_SCREEN_SIZE * guideScale;
+      const halfHandle = handleSize / 2;
       namespace.drawRoundedRectangle(context, model.rect, model.radii, state);
       context.save();
-      context.setLineDash([5, 4]);
-      context.strokeStyle = "#1473e6";
-      context.lineWidth = 1;
-      context.strokeRect(model.rect.x + 0.5, model.rect.y + 0.5, model.rect.width, model.rect.height);
+      context.setLineDash([3 * guideScale, 3 * guideScale]);
+      context.strokeStyle = "rgba(20, 115, 230, 0.48)";
+      context.lineWidth = 0.75 * guideScale;
+      context.strokeRect(model.rect.x, model.rect.y, model.rect.width, model.rect.height);
       context.setLineDash([]);
       CORNERS.forEach((corner) => {
         const point = this.getHandlePoint(corner);
-        context.fillStyle = corner === this.activeCorner ? "#ffffff" : "#1473e6";
-        context.strokeStyle = "#1473e6";
-        context.fillRect(Math.round(point.x) - 4, Math.round(point.y) - 4, 8, 8);
-        context.strokeRect(Math.round(point.x) - 4.5, Math.round(point.y) - 4.5, 9, 9);
+        context.fillStyle = corner === this.activeCorner ? "rgba(255, 255, 255, 0.88)" : "rgba(20, 115, 230, 0.72)";
+        context.strokeStyle = "rgba(20, 115, 230, 0.72)";
+        context.fillRect(point.x - halfHandle, point.y - halfHandle, handleSize, handleSize);
+        context.strokeRect(point.x - halfHandle, point.y - halfHandle, handleSize, handleSize);
       });
       context.restore();
     }
@@ -126,6 +132,7 @@
       this.radii = Object.fromEntries(CORNERS.map((corner) => [corner, 0]));
       this.activeCorner = "topLeft";
       this.adjustAllCorners = true;
+      this.zoom = 1;
     }
 
     maximumRadius() {
@@ -145,7 +152,7 @@
     findHandle(point) {
       return CORNERS.find((corner) => {
         const handle = this.getHandlePoint(corner);
-        return Math.hypot(handle.x - point.x, handle.y - point.y) <= 8;
+        return Math.hypot(handle.x - point.x, handle.y - point.y) <= GUIDE_HIT_TARGET_SCREEN_RADIUS / this.zoom;
       }) || null;
     }
 

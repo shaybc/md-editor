@@ -211,6 +211,33 @@ test('rounded rectangle adjusts all corners or one corner before commit', async 
     return { phase: tool.phase, radii: tool.model.radii };
   })).toEqual({ phase: 'editing', radii: { topLeft: 12, topRight: 12, bottomRight: 12, bottomLeft: 12 } });
 
+  const guideWidthAtZoom = async (zoom) => page.evaluate((requestedZoom) => {
+    const root = document.querySelector('.tab-view.active[data-tab-view-kind=image-editor]');
+    const controller = window.markdownViewerApp.services.imageEditor.getView(root.dataset.tabId);
+    window.markdownViewerApp.services.imageEditor.setZoom(controller.tab, requestedZoom);
+    const point = controller.roundedRectangleTool.getHandlePoint('topRight');
+    const context = controller.view.overlayContext;
+    const left = Math.max(0, Math.floor(point.x - 10));
+    const top = Math.max(0, Math.floor(point.y - 2));
+    const width = Math.min(context.canvas.width - left, 21);
+    const height = Math.min(context.canvas.height - top, 5);
+    const pixels = context.getImageData(left, top, width, height).data;
+    const columns = new Set();
+    for (let y = 0; y < height; y += 1) {
+      for (let x = 0; x < width; x += 1) {
+        const index = (y * width + x) * 4;
+        if (pixels[index + 2] > pixels[index + 1] + 40 && pixels[index + 3] > 20) columns.add(x);
+      }
+    }
+    return columns.size;
+  }, zoom);
+  const guideWidth100 = await guideWidthAtZoom(1);
+  const guideWidth300 = await guideWidthAtZoom(3);
+  expect(guideWidth100).toBeLessThanOrEqual(9);
+  expect(guideWidth300).toBeLessThan(guideWidth100);
+  expect(guideWidth300 * 3).toBeLessThanOrEqual(guideWidth100 + 4);
+  await guideWidthAtZoom(1);
+
   const handleClientPoint = async (corner) => page.evaluate((cornerName) => {
     const root = document.querySelector('.tab-view.active[data-tab-view-kind=image-editor]');
     const controller = window.markdownViewerApp.services.imageEditor.getView(root.dataset.tabId);
@@ -278,6 +305,125 @@ test('rounded rectangle adjusts all corners or one corner before commit', async 
     return count;
   });
   expect(afterUndoPixels).toBe(0);
+});
+
+test('rounded callout guide changes tail direction length and attachment shape before placement', async ({ page }) => {
+  await page.goto('/');
+  await page.waitForFunction(() => !!window.markdownViewerApp?.modules?.tabs?.openBlankImageEditorInTab, null, { timeout: 60000 });
+  await page.waitForFunction(() => !!window.markdownViewerApp?.modules?.keyboardShortcuts && !!window.markdownViewerApp?.services?.imageEditor, null, { timeout: 60000 });
+  await page.evaluate(() => {
+    window.markdownViewerApp.modules.apiClient.deactivateApiClientSidebar = () => {};
+    window.markdownViewerApp.modules.tabs.openBlankImageEditorInTab({ width: 140, height: 120, name: 'Rounded Callout' });
+  });
+  await expect(page.locator('.tab-view.active[data-tab-view-kind=image-editor] .image-editor-shell')).toBeVisible();
+  await page.evaluate(() => {
+    const root = document.querySelector('.tab-view.active[data-tab-view-kind=image-editor]');
+    window.markdownViewerApp.services.imageEditor.getView(root.dataset.tabId).state.cornerRadius = 0;
+  });
+  await page.locator('[data-tool=callout]').click();
+  await expect(page.locator('[data-tool=callout]')).toHaveAttribute('title', 'Rounded rectangular callout');
+  const overlay = page.locator('.image-editor-overlay');
+  const box = await overlay.boundingBox();
+  await page.mouse.move(box.x + 40, box.y + 20);
+  await page.mouse.down();
+  await page.mouse.move(box.x + 110, box.y + 70, { steps: 5 });
+  await page.mouse.up();
+
+  const initialModel = await page.evaluate(() => {
+    const root = document.querySelector('.tab-view.active[data-tab-view-kind=image-editor]');
+    const controller = window.markdownViewerApp.services.imageEditor.getView(root.dataset.tabId);
+    return { phase: controller.calloutTool.phase, tool: controller.state.tool, model: controller.calloutTool.model };
+  });
+  expect(initialModel.phase).toBe('editing');
+  expect(initialModel.tool).toBe('callout');
+  expect(initialModel.model.side).toBe('bottom');
+  expect(initialModel.model.radius).toBeGreaterThanOrEqual(12);
+  expect(initialModel.model.tip.y).toBeGreaterThan(initialModel.model.rect.y + initialModel.model.rect.height);
+  const initialLength = initialModel.model.tip.y - (initialModel.model.rect.y + initialModel.model.rect.height);
+  const initialAttachmentSpan = Math.abs(initialModel.model.attachmentEnd.x - initialModel.model.attachmentStart.x);
+  const guideWidthAtZoom = async (zoom) => page.evaluate((requestedZoom) => {
+    const root = document.querySelector('.tab-view.active[data-tab-view-kind=image-editor]');
+    const controller = window.markdownViewerApp.services.imageEditor.getView(root.dataset.tabId);
+    window.markdownViewerApp.services.imageEditor.setZoom(controller.tab, requestedZoom);
+    const tip = controller.calloutTool.model.tip;
+    const context = controller.view.overlayContext;
+    const left = Math.max(0, Math.floor(tip.x - 10));
+    const top = Math.max(0, Math.floor(tip.y - 2));
+    const width = Math.min(context.canvas.width - left, 21);
+    const height = Math.min(context.canvas.height - top, 5);
+    const pixels = context.getImageData(left, top, width, height).data;
+    const columns = new Set();
+    for (let y = 0; y < height; y += 1) {
+      for (let x = 0; x < width; x += 1) {
+        const index = (y * width + x) * 4;
+        if (pixels[index + 2] > pixels[index + 1] + 40 && pixels[index + 3] > 20) columns.add(x);
+      }
+    }
+    return columns.size;
+  }, zoom);
+  const guideWidth100 = await guideWidthAtZoom(1);
+  const guideWidth300 = await guideWidthAtZoom(3);
+  expect(guideWidth100).toBeLessThanOrEqual(7);
+  expect(guideWidth300).toBeLessThan(guideWidth100);
+  expect(guideWidth300 * 3).toBeLessThanOrEqual(guideWidth100 + 4);
+  await guideWidthAtZoom(1);
+
+  await page.mouse.move(box.x + initialModel.model.tip.x, box.y + initialModel.model.tip.y);
+  await page.mouse.down();
+  await page.mouse.move(box.x + 5, box.y + 45, { steps: 5 });
+  await page.mouse.up();
+  const redirectedModel = await page.evaluate(() => {
+    const root = document.querySelector('.tab-view.active[data-tab-view-kind=image-editor]');
+    return window.markdownViewerApp.services.imageEditor.getView(root.dataset.tabId).calloutTool.model;
+  });
+  expect(redirectedModel.side).toBe('left');
+  expect(redirectedModel.tip.x).toBe(5);
+  expect(redirectedModel.rect.x - redirectedModel.tip.x).toBeGreaterThan(initialLength);
+  expect(redirectedModel.attachmentStart.x).toBe(redirectedModel.rect.x);
+  expect(redirectedModel.attachmentEnd.x).toBe(redirectedModel.rect.x);
+
+  await page.mouse.move(box.x + redirectedModel.attachmentStart.x, box.y + redirectedModel.attachmentStart.y);
+  await page.mouse.down();
+  await page.mouse.move(box.x + redirectedModel.rect.x, box.y + 43, { steps: 3 });
+  await page.mouse.up();
+  const reshapedModel = await page.evaluate(() => {
+    const root = document.querySelector('.tab-view.active[data-tab-view-kind=image-editor]');
+    return window.markdownViewerApp.services.imageEditor.getView(root.dataset.tabId).calloutTool.model;
+  });
+  const reshapedAttachmentSpan = Math.abs(reshapedModel.attachmentEnd.y - reshapedModel.attachmentStart.y);
+  expect(reshapedAttachmentSpan).toBeLessThan(initialAttachmentSpan);
+
+  await page.keyboard.press('Enter');
+  expect(await page.evaluate(() => {
+    const root = document.querySelector('.tab-view.active[data-tab-view-kind=image-editor]');
+    const controller = window.markdownViewerApp.services.imageEditor.getView(root.dataset.tabId);
+    return { tool: controller.state.tool, floating: controller.selection.floating, origin: controller.selection.origin };
+  })).toEqual({ tool: 'select', floating: true, origin: 'shape' });
+  expect(await page.locator('.image-editor-canvas').evaluate((canvas) => {
+    const pixels = canvas.getContext('2d').getImageData(0, 0, canvas.width, canvas.height).data;
+    for (let index = 0; index < pixels.length; index += 4) {
+      if (pixels[index] < 240 || pixels[index + 1] < 240 || pixels[index + 2] < 240) return false;
+    }
+    return true;
+  })).toBe(true);
+  await page.keyboard.press('Escape');
+  await expect(page.locator('[data-tool=callout]')).toHaveClass(/active/);
+  expect(await page.locator('.image-editor-canvas').evaluate((canvas) => {
+    const pixels = canvas.getContext('2d').getImageData(0, 0, canvas.width, canvas.height).data;
+    let count = 0;
+    for (let index = 0; index < pixels.length; index += 4) {
+      if (pixels[index] < 240 || pixels[index + 1] < 240 || pixels[index + 2] < 240) count += 1;
+    }
+    return count;
+  })).toBeGreaterThan(80);
+  await page.keyboard.press('Control+Z');
+  expect(await page.locator('.image-editor-canvas').evaluate((canvas) => {
+    const pixels = canvas.getContext('2d').getImageData(0, 0, canvas.width, canvas.height).data;
+    for (let index = 0; index < pixels.length; index += 4) {
+      if (pixels[index] < 240 || pixels[index + 1] < 240 || pixels[index + 2] < 240) return false;
+    }
+    return true;
+  })).toBe(true);
 });
 
 test('triangle tool draws a filled three-point shape and supports undo', async ({ page }) => {
