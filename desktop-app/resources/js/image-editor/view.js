@@ -9,6 +9,7 @@
     brush: "bi-brush",
     line: "bi-slash-lg",
     curve: "bi-bezier2",
+    arc: "bi-circle-half",
     rectangle: "bi-square",
     "rounded-rectangle": "bi-app",
     callout: "bi-chat-square",

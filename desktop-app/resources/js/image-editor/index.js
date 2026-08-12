@@ -288,6 +288,35 @@
       return floatGeneratedLayer(controller, layer, before);
     }
 
+    function renderArcPreview(controller) {
+      const { view, arcTool, state } = controller;
+      view.overlayContext.clearRect(0, 0, view.overlay.width, view.overlay.height);
+      arcTool.drawPreview(view.overlayContext, state);
+    }
+
+    function cancelEditableArc(controller) {
+      controller.arcTool.reset();
+      controller.arcBefore = null;
+      controller.dragging = false;
+      controller.view.overlayContext.clearRect(0, 0, controller.view.overlay.width, controller.view.overlay.height);
+      syncTab(controller);
+    }
+
+    function finishEditableArc(controller) {
+      const { arcTool, state, view } = controller;
+      if (!arcTool.isEditing || !arcTool.model) {
+        cancelEditableArc(controller);
+        return false;
+      }
+      view.overlayContext.clearRect(0, 0, view.overlay.width, view.overlay.height);
+      const layer = arcTool.rasterize(state, state);
+      const before = controller.arcBefore;
+      arcTool.reset();
+      controller.arcBefore = null;
+      controller.dragging = false;
+      return floatGeneratedLayer(controller, layer, before);
+    }
+
     function isCalloutTool(tool) {
       return tool === "callout" || tool === "oval-callout" || tool === "cloud-callout";
     }
@@ -428,6 +457,7 @@
       if (controller.heartTool?.isEditing) renderHeartPreview(controller);
       if (controller.triangleTool?.isEditing) renderTrianglePreview(controller);
       if (controller.ellipseTool?.isEditing) renderEllipsePreview(controller);
+      if (controller.arcTool?.isEditing) renderArcPreview(controller);
       syncTab(controller);
       return controller.state.zoom;
     }
@@ -587,6 +617,7 @@
       if (controller.heartTool.isEditing) renderHeartPreview(controller);
       if (controller.triangleTool.isEditing) renderTrianglePreview(controller);
       if (controller.ellipseTool.isEditing) renderEllipsePreview(controller);
+      if (controller.arcTool.isEditing) renderArcPreview(controller);
       if (colorTarget === "foreground") {
         refreshLiveTextStyle(controller);
         if (controller.curveTool.isEditing) renderCurvePreview(controller);
@@ -614,6 +645,7 @@
           if (state.tool === "heart" && controller.heartTool.isEditing) finishEditableHeart(controller);
           if (state.tool === "triangle" && controller.triangleTool.isEditing) finishEditableTriangle(controller);
           if (state.tool === "ellipse" && controller.ellipseTool.isEditing) finishEditableEllipse(controller);
+          if (state.tool === "arc" && controller.arcTool.isEditing) finishEditableArc(controller);
           commitText(controller);
           if (toolButton.dataset.tool !== "select") dropSelection(controller);
           state.setTool(toolButton.dataset.tool);
@@ -650,6 +682,7 @@
         if (controller.heartTool.isEditing) renderHeartPreview(controller);
         if (controller.triangleTool.isEditing) renderTrianglePreview(controller);
         if (controller.ellipseTool.isEditing) renderEllipsePreview(controller);
+        if (controller.arcTool.isEditing) renderArcPreview(controller);
       });
       view.shell.querySelector(".image-editor-fill").addEventListener("change", (event) => {
         state.fillShapes = event.target.checked;
@@ -658,6 +691,7 @@
         if (controller.heartTool.isEditing) renderHeartPreview(controller);
         if (controller.triangleTool.isEditing) renderTrianglePreview(controller);
         if (controller.ellipseTool.isEditing) renderEllipsePreview(controller);
+        if (controller.arcTool.isEditing) renderArcPreview(controller);
       });
       view.shell.querySelector(".image-editor-callout-type").addEventListener("change", (event) => {
         const nextTool = event.target.value;
@@ -845,6 +879,25 @@
           renderEllipsePreview(controller);
           return;
         }
+        if (state.tool === "arc") {
+          event.preventDefault();
+          event.stopPropagation();
+          if (!controller.arcTool.isEditing) {
+            commitText(controller);
+            commitSelection(controller);
+            controller.arcBefore = snapshot(view);
+          }
+          const result = controller.arcTool.begin(point);
+          if (result.action === "outside") {
+            finishEditableArc(controller);
+            return;
+          }
+          if (!result.started) return;
+          controller.dragging = true;
+          overlay.setPointerCapture?.(event.pointerId);
+          renderArcPreview(controller);
+          return;
+        }
         if (state.tool === "text") {
           event.preventDefault();
           event.stopPropagation();
@@ -926,6 +979,11 @@
           renderEllipsePreview(controller);
           return;
         }
+        if (state.tool === "arc") {
+          controller.arcTool.update(point);
+          renderArcPreview(controller);
+          return;
+        }
         if (state.tool === "text" && controller.creatingTextBox) {
           drawTextCreationOverlay(controller, point);
           return;
@@ -968,6 +1026,9 @@
         } else if (state.tool === "ellipse") {
           controller.ellipseTool.completeStage(point);
           renderEllipsePreview(controller);
+        } else if (state.tool === "arc") {
+          controller.arcTool.completeStage(point);
+          renderArcPreview(controller);
         } else if (state.tool === "text" && controller.creatingTextBox) {
           controller.creatingTextBox = false;
           view.overlayContext.clearRect(0, 0, view.overlay.width, view.overlay.height);
@@ -1277,6 +1338,18 @@
             return;
           }
         }
+        if (controller.state.tool === "arc" && controller.arcTool.isEditing) {
+          if (event.key === "Escape") {
+            cancelEditableArc(controller);
+            event.preventDefault();
+            return;
+          }
+          if (event.key === "Enter") {
+            finishEditableArc(controller);
+            event.preventDefault();
+            return;
+          }
+        }
         if (primary && !event.shiftKey && !event.altKey && event.key.toLowerCase() === "a") {
           event.preventDefault();
           selectAllCanvas(controller);
@@ -1397,6 +1470,8 @@
         triangleBefore: null,
         ellipseTool: new namespace.ImageEditorEllipseTool(),
         ellipseBefore: null,
+        arcTool: new namespace.ImageEditorArcTool(),
+        arcBefore: null,
         textRect: null,
         creatingTextBox: false,
         textInputOpening: false,
