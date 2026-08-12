@@ -21,9 +21,13 @@
       this.lineWidth = Math.max(1, Math.min(64, Number(options.lineWidth || 2)));
       this.strokeType = namespace.normalizeStrokeType ? namespace.normalizeStrokeType(options.strokeType) : "solid";
       this.fillShapes = options.fillShapes === true;
-      this.bucketFillMode = options.bucketFillMode === "gradient" ? "gradient" : "solid";
+      this.bucketFillMode = ["gradient", "pattern"].includes(options.bucketFillMode) ? options.bucketFillMode : "solid";
       this.gradientStartColor = options.gradientStartColor || this.foregroundColor;
       this.gradientEndColor = options.gradientEndColor || this.backgroundColor;
+      this.patternFillType = ["crosshatch", "halftone", "grain", "mosaic", "stained-glass", "pointillize"].includes(options.patternFillType) ? options.patternFillType : "crosshatch";
+      this.patternScale = Math.max(4, Math.min(64, Number(options.patternScale || 16)));
+      this.patternAngle = Math.max(0, Math.min(180, Number(options.patternAngle || 45)));
+      this.patternDensity = Math.max(10, Math.min(90, Number(options.patternDensity || 50)));
       this.spiralDirection = options.spiralDirection === "counter-clockwise" ? "counter-clockwise" : "clockwise";
       this.spiralCapInside = options.spiralCapInside === true;
       this.rectangularGridHorizontalDividers = Math.max(0, Math.min(100, Math.round(Number(options.rectangularGridHorizontalDividers ?? 4))));

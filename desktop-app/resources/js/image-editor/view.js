@@ -62,6 +62,7 @@
         <span class="image-editor-bucket-mode-menu">
           <button type="button" data-bucket-mode="solid"><span class="image-editor-fill-sample image-editor-fill-sample-solid"></span>Solid fill</button>
           <button type="button" data-bucket-mode="gradient"><span class="image-editor-fill-sample image-editor-fill-sample-gradient"></span>Gradient fill</button>
+          <button type="button" data-bucket-mode="pattern"><span class="image-editor-fill-sample image-editor-fill-sample-pattern"></span>Pattern fill</button>
         </span>
       </details>`;
     const modeSelector = wrapper.querySelector(".image-editor-bucket-mode");
@@ -185,6 +186,21 @@
               <label>Rings <input class="image-editor-polar-grid-concentric" type="number" min="0" max="100" value="4"></label>
               <label>Radials <input class="image-editor-polar-grid-radial" type="number" min="0" max="100" value="8"></label>
               <label><input class="image-editor-polar-grid-compound" type="checkbox"> Compound rings</label>
+            </div>
+            <div class="image-editor-pattern-fill-controls image-editor-toolbar-group" hidden>
+              <label>Pattern
+                <select class="image-editor-pattern-fill-type" aria-label="Pattern fill effect">
+                  <option value="crosshatch">Crosshatch</option>
+                  <option value="halftone">Halftone dots</option>
+                  <option value="grain">Grain</option>
+                  <option value="mosaic">Mosaic tiles</option>
+                  <option value="stained-glass">Stained glass</option>
+                  <option value="pointillize">Pointillize</option>
+                </select>
+              </label>
+              <label>Scale <input class="image-editor-pattern-scale" type="range" min="4" max="64" value="16"></label>
+              <label>Angle <input class="image-editor-pattern-angle" type="range" min="0" max="180" value="45"></label>
+              <label>Density <input class="image-editor-pattern-density" type="range" min="10" max="90" value="50"></label>
             </div>
             <div class="image-editor-text-controls image-editor-toolbar-group">
               <select class="image-editor-font" aria-label="Font family"><option>Arial</option><option>Georgia</option><option>Courier New</option></select>
@@ -383,6 +399,12 @@
       this.shell.querySelector(".image-editor-background").value = state.backgroundColor;
       this.shell.querySelector(".image-editor-bucket-mode").dataset.value = state.bucketFillMode;
       this.shell.querySelectorAll("[data-bucket-mode]").forEach((element) => element.classList.toggle("active", element.dataset.bucketMode === state.bucketFillMode));
+      const patternFillActive = state.tool === "bucket" && state.bucketFillMode === "pattern";
+      this.shell.querySelector(".image-editor-pattern-fill-controls").hidden = !patternFillActive;
+      this.shell.querySelector(".image-editor-pattern-fill-type").value = state.patternFillType;
+      this.shell.querySelector(".image-editor-pattern-scale").value = String(state.patternScale);
+      this.shell.querySelector(".image-editor-pattern-angle").value = String(state.patternAngle);
+      this.shell.querySelector(".image-editor-pattern-density").value = String(state.patternDensity);
       this.setActiveColorTarget(this.activeColorTarget, state);
       this.shell.querySelector(".image-editor-fill").checked = state.fillShapes;
       namespace.syncStrokeTypeSelector(this.shell.querySelector(".image-editor-stroke-type"), state.strokeType);

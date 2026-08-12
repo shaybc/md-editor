@@ -65,6 +65,10 @@
         bucketFillMode: state.bucketFillMode,
         gradientStartColor: state.gradientStartColor,
         gradientEndColor: state.gradientEndColor,
+        patternFillType: state.patternFillType,
+        patternScale: state.patternScale,
+        patternAngle: state.patternAngle,
+        patternDensity: state.patternDensity,
         spiralDirection: state.spiralDirection,
         spiralCapInside: state.spiralCapInside,
         rectangularGridHorizontalDividers: state.rectangularGridHorizontalDividers,
@@ -834,7 +838,7 @@
         const bucketModeButton = event.target.closest("[data-bucket-mode]");
         if (bucketModeButton) {
           if (controller.gradientFillTool.isEditing) finishGradientFill(controller);
-          state.bucketFillMode = bucketModeButton.dataset.bucketMode === "gradient" ? "gradient" : "solid";
+          state.bucketFillMode = ["gradient", "pattern"].includes(bucketModeButton.dataset.bucketMode) ? bucketModeButton.dataset.bucketMode : "solid";
           state.setTool("bucket");
           view.shell.querySelector(".image-editor-bucket-mode").open = false;
           syncTab(controller);
@@ -890,6 +894,21 @@
         else state.gradientEndColor = event.target.value;
         renderGradientFill(controller);
         syncTab(controller);
+      });
+      view.shell.querySelector(".image-editor-pattern-fill-type").addEventListener("change", (event) => {
+        if (!namespace.patternFillTypes.includes(event.target.value)) return;
+        state.patternFillType = event.target.value;
+        syncTab(controller);
+      });
+      [
+        [".image-editor-pattern-scale", "patternScale", 4, 64],
+        [".image-editor-pattern-angle", "patternAngle", 0, 180],
+        [".image-editor-pattern-density", "patternDensity", 10, 90]
+      ].forEach(([selector, property, minimum, maximum]) => {
+        view.shell.querySelector(selector).addEventListener("input", (event) => {
+          state[property] = Math.max(minimum, Math.min(maximum, Number(event.target.value)));
+          syncTab(controller);
+        });
       });
       view.shell.querySelector(".image-editor-size").addEventListener("input", (event) => {
         state.brushSize = state.lineWidth = Number(event.target.value);
@@ -1284,6 +1303,12 @@
             controller.gradientBefore = snapshot(view);
             controller.gradientFillTool.start(view.context, point, state.gradientStartColor, state.gradientEndColor);
             renderGradientFill(controller);
+            return;
+          }
+          if (state.bucketFillMode === "pattern") {
+            const before = snapshot(view);
+            if (namespace.patternFill(view.context, point, state)) commitTransaction(controller, before);
+            else syncTab(controller);
             return;
           }
           const before = snapshot(view);
