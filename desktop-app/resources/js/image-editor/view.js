@@ -183,6 +183,25 @@
     }
 
     /**
+     * Zoom while keeping the canvas point beneath the cursor at the same screen position.
+     * @param {number} zoom - Requested zoom factor, where 1 is 100 percent.
+     * @param {number} clientX - Cursor X coordinate in the browser viewport.
+     * @param {number} clientY - Cursor Y coordinate in the browser viewport.
+     */
+    setZoomAtClientPoint(zoom, clientX, clientY) {
+      const stageRect = this.stage.getBoundingClientRect();
+      const wrapRect = this.wrap.getBoundingClientRect();
+      const anchorX = Math.max(stageRect.left, Math.min(stageRect.right, Number(clientX)));
+      const anchorY = Math.max(stageRect.top, Math.min(stageRect.bottom, Number(clientY)));
+      const canvasRatioX = wrapRect.width ? (anchorX - wrapRect.left) / wrapRect.width : 0.5;
+      const canvasRatioY = wrapRect.height ? (anchorY - wrapRect.top) / wrapRect.height : 0.5;
+      this.setZoom(zoom);
+      const zoomedWrapRect = this.wrap.getBoundingClientRect();
+      this.stage.scrollLeft += zoomedWrapRect.left + canvasRatioX * zoomedWrapRect.width - anchorX;
+      this.stage.scrollTop += zoomedWrapRect.top + canvasRatioY * zoomedWrapRect.height - anchorY;
+    }
+
+    /**
      * Show the edge that will become the canvas boundary when resizing finishes.
      * @param {string} handle - Active east, south, or southeast resize handle.
      */

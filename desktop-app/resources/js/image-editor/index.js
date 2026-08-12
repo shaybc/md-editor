@@ -330,9 +330,10 @@
       return text;
     }
 
-    function applyZoom(controller, zoom) {
+    function applyZoom(controller, zoom, anchor) {
       controller.state.setZoom(zoom);
-      controller.view.setZoom(controller.state.zoom);
+      if (anchor) controller.view.setZoomAtClientPoint(controller.state.zoom, anchor.clientX, anchor.clientY);
+      else controller.view.setZoom(controller.state.zoom);
       if (editingCalloutTool(controller)) renderCalloutPreview(controller);
       if (controller.roundedRectangleTool?.isEditing) renderRoundedRectanglePreview(controller);
       syncTab(controller);
@@ -1379,7 +1380,10 @@
       if (!controller || !controller.view.shell.contains(event.target)) return false;
       if (!(event.ctrlKey || event.metaKey) || event.altKey || !Number.isFinite(Number(event.deltaY)) || Number(event.deltaY) === 0) return false;
       event.preventDefault();
-      applyZoom(controller, controller.state.zoom * (Number(event.deltaY) < 0 ? 1.25 : 0.8));
+      applyZoom(controller, controller.state.zoom * (Number(event.deltaY) < 0 ? 1.25 : 0.8), {
+        clientX: event.clientX,
+        clientY: event.clientY
+      });
       return true;
     }
 
