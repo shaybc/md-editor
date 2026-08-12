@@ -223,6 +223,33 @@
       return true;
     }
 
+    /** Adopt generated transparent pixels as the active floating selection. */
+    setFloatingLayer(imageData, rect, origin = "generated") {
+      if (!imageData || !rect?.width || !rect?.height) return false;
+      this.imageData = imageData;
+      this.rect = { ...rect };
+      this.floating = true;
+      this.phase = "floating";
+      this.origin = origin;
+      this.pointerGesture = null;
+      this.moveGesture = null;
+      return true;
+    }
+
+    /** Recolor nontransparent pixels in a generated floating layer. */
+    recolorFloatingLayer(color, requiredOrigin = null) {
+      if (!this.floating || !this.imageData || (requiredOrigin && this.origin !== requiredOrigin)) return false;
+      const replacement = namespace.colorToRgba(color);
+      const pixels = this.imageData.data;
+      for (let index = 0; index < pixels.length; index += 4) {
+        if (!pixels[index + 3]) continue;
+        pixels[index] = replacement[0];
+        pixels[index + 1] = replacement[1];
+        pixels[index + 2] = replacement[2];
+      }
+      return true;
+    }
+
     clear() {
       this.pasteRevision += 1;
       this.rect = null;

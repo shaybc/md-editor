@@ -59,6 +59,7 @@ test("opens an image editor, draws, undoes, and explicitly saves", async ({ page
   await expect(page.locator(".image-editor-shell .image-editor-status")).toHaveCount(0);
   await expect(page.locator(".image-editor-toolbar .image-editor-zoom-actions")).toHaveCount(0);
   await expect(page.locator(".image-editor-palette-color")).toHaveCount(20);
+  await expect(page.locator('[data-tool="curve"]')).toHaveAttribute('title', 'Curve');
   const toolbarRows = await page.evaluate(() => {
     const rect = (selector) => document.querySelector(selector).getBoundingClientRect();
     const undo = rect('[data-action="undo"]');
@@ -99,6 +100,81 @@ test("opens an image editor, draws, undoes, and explicitly saves", async ({ page
 
   await page.keyboard.press("Control+Z");
   await expect(page.locator(".image-editor-status-unsaved")).toBeHidden();
+  await page.locator('[data-tool="curve"]').click();
+  await page.mouse.move(box.x + 5, box.y + 30);
+  await page.mouse.down();
+  await page.mouse.move(box.x + 50, box.y + 30, { steps: 5 });
+  await page.mouse.up();
+  await expect(page.locator('[data-tool="curve"]')).toHaveClass(/active/);
+  expect(await page.evaluate(() => {
+    const root = document.querySelector('.tab-view.active[data-tab-view-kind=image-editor]');
+    const controller = window.markdownViewerApp.services.imageEditor.getView(root.dataset.tabId);
+    return { phase: controller.curveTool.phase, bends: controller.curveTool.bends.length, hasSelection: controller.selection.hasSelection };
+  })).toEqual({ phase: 'awaiting-bend', bends: 0, hasSelection: false });
+  await page.mouse.move(box.x + 27, box.y + 30);
+  await page.mouse.down();
+  await page.mouse.move(box.x + 27, box.y + 10, { steps: 5 });
+  await page.mouse.up();
+  expect(await page.evaluate(() => {
+    const root = document.querySelector('.tab-view.active[data-tab-view-kind=image-editor]');
+    const controller = window.markdownViewerApp.services.imageEditor.getView(root.dataset.tabId);
+    return { phase: controller.curveTool.phase, bends: controller.curveTool.bends.length };
+  })).toEqual({ phase: 'awaiting-bend', bends: 1 });
+  const secondBend = await page.evaluate(() => {
+    const root = document.querySelector('.tab-view.active[data-tab-view-kind=image-editor]');
+    const controller = window.markdownViewerApp.services.imageEditor.getView(root.dataset.tabId);
+    const point = window.MarkdownViewerImageEditor.curvePointAt(controller.curveTool.model, 0.75);
+    const canvas = root.querySelector('.image-editor-overlay');
+    const rect = canvas.getBoundingClientRect();
+    return { x: rect.left + point.x * rect.width / canvas.width, y: rect.top + point.y * rect.height / canvas.height };
+  });
+  await page.mouse.move(secondBend.x, secondBend.y);
+  await page.mouse.down();
+  await page.mouse.move(secondBend.x + 4, secondBend.y + 15, { steps: 5 });
+  await page.mouse.up();
+  await expect(page.locator('[data-tool="select"]')).toHaveClass(/active/);
+  const floatingCurve = await page.evaluate(() => {
+    const root = document.querySelector('.tab-view.active[data-tab-view-kind=image-editor]');
+    const selection = window.markdownViewerApp.services.imageEditor.getView(root.dataset.tabId).selection;
+    return { floating: selection.floating, origin: selection.origin, rect: { ...selection.rect } };
+  });
+  expect(floatingCurve.floating).toBe(true);
+  expect(floatingCurve.origin).toBe('curve');
+  await page.locator('.image-editor-foreground').evaluate((element) => {
+    element.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));
+    element.value = '#ff0000';
+    element.dispatchEvent(new Event('input', { bubbles: true }));
+  });
+  expect(await page.evaluate(() => {
+    const root = document.querySelector('.tab-view.active[data-tab-view-kind=image-editor]');
+    const pixels = window.markdownViewerApp.services.imageEditor.getView(root.dataset.tabId).selection.imageData.data;
+    for (let index = 0; index < pixels.length; index += 4) {
+      if (pixels[index + 3] && (pixels[index] !== 255 || pixels[index + 1] !== 0 || pixels[index + 2] !== 0)) return false;
+    }
+    return true;
+  })).toBe(true);
+  await page.mouse.move(box.x + floatingCurve.rect.x + floatingCurve.rect.width / 2, box.y + floatingCurve.rect.y + floatingCurve.rect.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(box.x + floatingCurve.rect.x + floatingCurve.rect.width / 2 + 5, box.y + floatingCurve.rect.y + floatingCurve.rect.height / 2 + 3, { steps: 4 });
+  await page.mouse.up();
+  const movedCurveX = await page.evaluate(() => {
+    const root = document.querySelector('.tab-view.active[data-tab-view-kind=image-editor]');
+    return window.markdownViewerApp.services.imageEditor.getView(root.dataset.tabId).selection.rect.x;
+  });
+  expect(movedCurveX).toBeGreaterThan(floatingCurve.rect.x);
+  await page.keyboard.press('Escape');
+  const curvePixelCount = await page.locator('.image-editor-canvas').evaluate((canvas) => {
+    const pixels = canvas.getContext('2d').getImageData(0, 0, canvas.width, canvas.height).data;
+    let count = 0;
+    for (let index = 0; index < pixels.length; index += 4) {
+      if (pixels[index] > 240 && pixels[index + 1] < 20 && pixels[index + 2] < 20) count += 1;
+    }
+    return count;
+  });
+  expect(curvePixelCount).toBeGreaterThan(10);
+  await page.keyboard.press("Control+Z");
+  await expect(page.locator(".image-editor-status-unsaved")).toBeHidden();
+  await page.locator('[data-tool="pencil"]').click();
   await page.mouse.move(box.x + 8, box.y + 8);
   await page.mouse.down();
   await page.mouse.move(box.x + 35, box.y + 22, { steps: 5 });

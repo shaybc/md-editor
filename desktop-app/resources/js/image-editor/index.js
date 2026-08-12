@@ -118,6 +118,40 @@
       return changed;
     }
 
+    function renderCurvePreview(controller) {
+      const { view, curveTool, state } = controller;
+      view.overlayContext.clearRect(0, 0, view.overlay.width, view.overlay.height);
+      curveTool.drawPreview(view.overlayContext, state);
+    }
+
+    function cancelEditableCurve(controller) {
+      controller.curveTool.reset();
+      controller.curveBefore = null;
+      controller.dragging = false;
+      controller.view.overlayContext.clearRect(0, 0, controller.view.overlay.width, controller.view.overlay.height);
+      syncTab(controller);
+    }
+
+    function finishEditableCurve(controller) {
+      const { curveTool, selection, state, view } = controller;
+      if (!curveTool.isEditing) return false;
+      const layer = curveTool.rasterize(state, state);
+      if (!layer) {
+        cancelEditableCurve(controller);
+        return false;
+      }
+      controller.selectionBefore = controller.curveBefore || snapshot(view);
+      selection.setFloatingLayer(layer.imageData, layer.rect, "curve");
+      curveTool.reset();
+      controller.curveBefore = null;
+      controller.dragging = false;
+      state.setTool("select");
+      state.setDirty(true);
+      drawSelectionOverlay(controller);
+      syncTab(controller);
+      return true;
+    }
+
     /** Build an export-only canvas without changing live floating pixels or editable text. */
     function createCompositeCanvas(controller) {
       const { view, selection, state } = controller;
@@ -356,7 +390,14 @@
       controller.state[stateProperty] = color;
       controller.view.shell.querySelector(inputSelector).value = color;
       controller.view.setActiveColorTarget(colorTarget, controller.state);
-      if (colorTarget === "foreground") refreshLiveTextStyle(controller);
+      if (colorTarget === "foreground") {
+        refreshLiveTextStyle(controller);
+        if (controller.curveTool.isEditing) renderCurvePreview(controller);
+        if (controller.selection.recolorFloatingLayer(color, "curve")) {
+          drawSelectionOverlay(controller);
+          syncTab(controller);
+        }
+      }
     }
 
     function bindToolbar(controller) {
@@ -370,6 +411,7 @@
       view.toolbar.addEventListener("click", (event) => {
         const toolButton = event.target.closest("[data-tool]");
         if (toolButton) {
+          if (state.tool === "curve" && controller.curveTool.isEditing) finishEditableCurve(controller);
           commitText(controller);
           if (toolButton.dataset.tool !== "select") dropSelection(controller);
           state.setTool(toolButton.dataset.tool);
@@ -400,6 +442,7 @@
       });
       view.shell.querySelector(".image-editor-size").addEventListener("input", (event) => {
         state.brushSize = state.lineWidth = Number(event.target.value);
+        if (controller.curveTool.isEditing) renderCurvePreview(controller);
       });
       view.shell.querySelector(".image-editor-fill").addEventListener("change", (event) => { state.fillShapes = event.target.checked; });
       view.shell.querySelector(".image-editor-font").addEventListener("change", (event) => {
@@ -438,6 +481,20 @@
       overlay.addEventListener("pointerdown", (event) => {
         if (event.button !== 0) return;
         const point = view.pointFromEvent(event);
+        if (state.tool === "curve") {
+          event.preventDefault();
+          event.stopPropagation();
+          if (!controller.curveTool.isEditing) {
+            commitText(controller);
+            commitSelection(controller);
+            controller.curveBefore = snapshot(view);
+          }
+          if (!controller.curveTool.begin(point, state.lineWidth)) return;
+          controller.dragging = true;
+          overlay.setPointerCapture?.(event.pointerId);
+          renderCurvePreview(controller);
+          return;
+        }
         if (state.tool === "text") {
           event.preventDefault();
           event.stopPropagation();
@@ -488,6 +545,11 @@
           updateSelectionHoverCursor(controller, point);
           return;
         }
+        if (state.tool === "curve") {
+          controller.curveTool.update(point);
+          renderCurvePreview(controller);
+          return;
+        }
         if (state.tool === "text" && controller.creatingTextBox) {
           drawTextCreationOverlay(controller, point);
           return;
@@ -510,7 +572,11 @@
         if (!controller.dragging) return;
         controller.dragging = false;
         const point = view.pointFromEvent(event);
-        if (state.tool === "text" && controller.creatingTextBox) {
+        if (state.tool === "curve") {
+          const result = controller.curveTool.completeStage(point);
+          if (result.complete) finishEditableCurve(controller);
+          else renderCurvePreview(controller);
+        } else if (state.tool === "text" && controller.creatingTextBox) {
           controller.creatingTextBox = false;
           view.overlayContext.clearRect(0, 0, view.overlay.width, view.overlay.height);
           const draggedRect = view.rectFromPoints(controller.startPoint, point);
@@ -746,6 +812,18 @@
           }
           return;
         }
+        if (controller.state.tool === "curve" && controller.curveTool.isEditing) {
+          if (event.key === "Escape") {
+            cancelEditableCurve(controller);
+            event.preventDefault();
+            return;
+          }
+          if (event.key === "Enter") {
+            finishEditableCurve(controller);
+            event.preventDefault();
+            return;
+          }
+        }
         if (primary && !event.shiftKey && !event.altKey && event.key.toLowerCase() === "a") {
           event.preventDefault();
           selectAllCanvas(controller);
@@ -805,6 +883,7 @@
         if (deps.getActiveTab?.()?.id !== controller.tab.id) return;
         if (event.target.closest?.('[data-tool="select"]')) return;
         if (event.target.closest?.(".image-editor-selection-actions, .image-editor-history-actions")) return;
+        if (event.target.closest?.(".image-editor-color-targets, .image-editor-color-palette")) return;
         if ((!controller.selection.hasSelection && !controller.selection.isPasting) || controller.view.wrap.contains(event.target)) return;
         dropSelection(controller);
       };
@@ -851,6 +930,8 @@
         polygonPoints: [],
         dragging: false,
         selectionBefore: null,
+        curveTool: new namespace.ImageEditorCurveTool(),
+        curveBefore: null,
         textRect: null,
         creatingTextBox: false,
         textInputOpening: false,

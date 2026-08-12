@@ -8,6 +8,7 @@
     pencil: "bi-pencil",
     brush: "bi-brush",
     line: "bi-slash-lg",
+    curve: "bi-bezier2",
     rectangle: "bi-square",
     ellipse: "bi-circle",
     polygon: "bi-pentagon",
