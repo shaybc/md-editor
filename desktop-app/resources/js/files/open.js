@@ -470,6 +470,17 @@
       return tab;
     }
 
+    if (!openOptions.forceText && /\.mdimage$/i.test(filePath) && typeof openImageEditorInTab === "function") {
+      const tab = openImageEditorInTab({
+        ...sourceFile,
+        name,
+        path,
+        mimeType: "application/vnd.md-editor.image+zip"
+      }, openOptions);
+      if (tab) rememberOpenDocumentSourceFile(sourceFile, name, openOptions);
+      return tab;
+    }
+
     const existingGraphTab = isGraphFilePath(filePath) && typeof findGraphTabForSourceFile === "function"
       ? findGraphTabForSourceFile({ ...sourceFile, name })
       : null;
@@ -639,6 +650,7 @@
       try {
         const selected = await Neutralino.os.showOpenDialog("Open file", {
           filters: [
+            { name: "MD-Editor layered images", extensions: ["mdimage"] },
             { name: "Draw.io diagrams", extensions: ["drawio", "xml"] },
             { name: "Text-based files", extensions: ["md", "markdown", "mermaid", "mdviewer-graph.json", "mdgraph.json", "json", "txt", "java", "cs", "css", "js", "ts", "html", "xml", "csv", "yml", "yaml", "toml", "ini", "log"] },
             { name: "All files", extensions: ["*"] }
@@ -667,6 +679,7 @@
             {
               description: "Text-based files",
               accept: {
+                "application/vnd.md-editor.image+zip": [".mdimage"],
                 "application/xml": [".drawio", ".xml"],
                 "text/markdown": [".md", ".markdown", ".mermaid"],
                 "text/plain": [".txt", ".text", ".java", ".cs", ".css", ".js", ".ts", ".html", ".xml", ".csv", ".yml", ".yaml", ".toml", ".ini", ".log"],

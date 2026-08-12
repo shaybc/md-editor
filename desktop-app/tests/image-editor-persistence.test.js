@@ -23,7 +23,7 @@ function loadPersistence(overrides = {}) {
   return context.window.registerMarkdownViewerTabPersistence(app, deps);
 }
 
-test("dirty image editor profile payload writes a binary PNG draft", async () => {
+test("dirty image editor profile payload writes a binary layered-project draft", async () => {
   const binaryWrites = new Map();
   const persistence = loadPersistence({
     imageEditor: {
@@ -54,7 +54,7 @@ test("dirty image editor profile payload writes a binary PNG draft", async () =>
   assert.equal(descriptor.type, "image-editor");
   assert.equal(descriptor.dirty, true);
   assert.equal(descriptor.draft.kind, "image-editor");
-  assert.ok(descriptor.draft.path.endsWith("\\drafts\\image-editor\\tab_image.png"));
+  assert.ok(descriptor.draft.path.endsWith("\\drafts\\image-editor\\tab_image.mdimage"));
   assert.deepEqual(binaryWrites.get(descriptor.draft.path), [137, 80, 78, 71]);
   assert.equal(descriptor.draftBinary, undefined);
 });

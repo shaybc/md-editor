@@ -514,6 +514,7 @@ ${bodyHtml}
 
   async function saveActiveTabToSource() {
     const tab = tabs.find(function(t) { return t.id === activeTabId; });
+    if (tab?.type === "image-editor") return await deps.imageEditor?.saveTab?.(tab) === true;
     return saveMarkdownTabToSource(tab);
   }
 

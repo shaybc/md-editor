@@ -349,6 +349,18 @@
     /** Alpha-composite floating pixels without clearing destination pixels beneath transparency. */
     drawFloatingLayer(context) {
       if (!this.floating || !this.imageData || !this.rect) return false;
+      if (!global.document?.createElement) {
+        context.putImageData(this.imageData, this.rect.x, this.rect.y);
+        return true;
+      }
+      if (!global.document?.createElement) {
+        context.putImageData(this.imageData, this.rect.x, this.rect.y);
+        return true;
+      }
+      if (!global.document?.createElement) {
+        context.putImageData(this.imageData, this.rect.x, this.rect.y);
+        return true;
+      }
       const layer = global.document.createElement('canvas');
       layer.width = this.imageData.width;
       layer.height = this.imageData.height;

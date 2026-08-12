@@ -8,6 +8,108 @@
     const rotationCursor = `url("data:image/svg+xml,${encodeURIComponent(rotationCursorSvg)}") 12 12, grab`;
     const views = new Map();
 
+    function renderLayeredDocument(controller) {
+      if (!controller.compositor) return;
+      controller.compositor.render({ canvas: controller.view.canvas });
+      controller.state.width = controller.documentStore.document.canvas.width;
+      controller.state.height = controller.documentStore.document.canvas.height;
+      controller.view.setZoom(controller.state.zoom);
+    }
+
+    function selectedPlacementLayer(controller, name) {
+      const mode = controller.layerPanel?.state.placementMode || controller.tab.imageEditorState?.layersPanel?.placementMode || "new";
+      const selectedId = [...controller.documentStore.selectedIds][0];
+      const selectedNode = namespace.findDocumentNode(controller.documentStore.document, selectedId)?.node;
+      if (selectedNode?.kind === "group") return controller.documentStore.addLayer(name, selectedNode.id);
+      if (mode === "new") return controller.documentStore.addLayer(name, controller.documentStore.activeLayer()?.id);
+      const active = controller.documentStore.activeLayer();
+      return active && active.visible && !active.locked ? active : controller.documentStore.addLayer(name);
+    }
+
+    function rasterDifference(before, after) {
+      if (!before || !after || before.width !== after.width || before.height !== after.height) return after;
+      const data = new Uint8ClampedArray(after.data.length);
+      let changed = false;
+      for (let index = 0; index < data.length; index += 4) {
+        if (before.data[index] === after.data[index] && before.data[index + 1] === after.data[index + 1] && before.data[index + 2] === after.data[index + 2] && before.data[index + 3] === after.data[index + 3]) continue;
+        data[index] = after.data[index]; data[index + 1] = after.data[index + 1]; data[index + 2] = after.data[index + 2]; data[index + 3] = after.data[index + 3];
+        changed = true;
+      }
+      return changed ? new ImageData(data, after.width, after.height) : null;
+    }
+
+    /** Adopt legacy or externally written presentation pixels as a raster baseline. */
+    function synchronizePresentationCanvas(controller) {
+      if (!controller.compositor) return false;
+      const rendered = controller.compositor.render();
+      const expected = rendered.getContext("2d").getImageData(0, 0, rendered.width, rendered.height);
+      const current = snapshot(controller.view);
+      let differs = expected.data.length !== current.data.length;
+      for (let index = 0; !differs && index < current.data.length; index += 1) differs = expected.data[index] !== current.data[index];
+      if (!differs) return false;
+      const layer = controller.documentStore.addLayer("Imported canvas pixels", controller.documentStore.activeLayer()?.id);
+      controller.documentStore.addRasterObject(current, { x: 0, y: 0, width: current.width, height: current.height }, { name: "Imported canvas pixels", layerId: layer.id });
+      return true;
+    }
+
+    function commitDocumentMutation(controller, label, callback) {
+      const before = controller.documentStore.snapshot();
+      const result = callback?.();
+      if (result === false) return false;
+      const after = controller.documentStore.snapshot();
+      controller.history.push(before, after, label);
+      controller.state.markChanged();
+      renderLayeredDocument(controller);
+      syncTab(controller);
+      return true;
+    }
+
+    /** Rasterize a selected layer with the immediate panel sibling below it. */
+    function mergeSelectedLayerDown(controller) {
+      const selectedId = [...controller.documentStore.selectedIds][0];
+      const selected = namespace.findDocumentNode(controller.documentStore.document, selectedId);
+      if (!selected || selected.node.kind !== "layer" || selected.node.locked) return false;
+      const below = selected.collection[selected.index + 1];
+      if (!below || below.kind !== "layer" || below.locked) return false;
+      return commitDocumentMutation(controller, "Merge down", () => {
+        const mergeDocument = namespace.createImageDocument(controller.documentStore.document.canvas.width, controller.documentStore.document.canvas.height, controller.documentStore.document.canvas.backgroundColor);
+        mergeDocument.nodes = [namespace.cloneImageDocument(selected.node), namespace.cloneImageDocument(below)];
+        mergeDocument.activeLayerId = selected.node.id;
+        const mergeStore = new namespace.ImageEditorDocumentStore(mergeDocument, controller.documentStore.assets);
+        const canvas = new namespace.ImageEditorCompositor(mergeStore).render();
+        const imageData = canvas.getContext("2d").getImageData(0, 0, canvas.width, canvas.height);
+        const mergedLayer = namespace.createContentLayer(selected.node.name);
+        const assetId = controller.documentStore.addRasterAsset(imageData);
+        mergedLayer.objects.push(namespace.createContentObject("raster", { assetId }, {
+          name: selected.node.name,
+          bounds: { x: 0, y: 0, width: canvas.width, height: canvas.height }
+        }));
+        selected.collection.splice(selected.index, 2, mergedLayer);
+        controller.documentStore.document.activeLayerId = mergedLayer.id;
+        controller.documentStore.selectedIds = new Set([mergedLayer.id]);
+        controller.documentStore.notify({ type: "merge-down", ids: [mergedLayer.id] });
+        return true;
+      });
+    }
+
+    /** Replace visible document content with one raster layer after confirmation. */
+    function flattenDocument(controller) {
+      if (global.confirm && !global.confirm("Flatten visible content into one layer? Hidden content will be discarded.")) return false;
+      return commitDocumentMutation(controller, "Flatten document", () => {
+        const canvas = controller.compositor.render();
+        const imageData = canvas.getContext("2d").getImageData(0, 0, canvas.width, canvas.height);
+        const document = namespace.createImageDocument(canvas.width, canvas.height, controller.documentStore.document.canvas.backgroundColor);
+        const store = new namespace.ImageEditorDocumentStore(document);
+        store.document.nodes[0].name = "Flattened image";
+        store.addRasterObject(imageData, { x: 0, y: 0, width: canvas.width, height: canvas.height }, { name: "Flattened image", layerId: store.document.nodes[0].id });
+        controller.documentStore.document = store.document;
+        controller.documentStore.assets = store.assets;
+        controller.documentStore.selectedIds = new Set([store.document.activeLayerId]);
+        controller.documentStore.notify({ type: "flatten" });
+        return true;
+      });
+    }
+
     function snapshot(view) {
       return view.context.getImageData(0, 0, view.canvas.width, view.canvas.height);
     }
@@ -47,6 +149,10 @@
       view.context.drawImage(previous, 0, 0);
       state.width = nextWidth;
       state.height = nextHeight;
+      if (controller.documentStore) {
+        controller.documentStore.document.canvas.width = nextWidth;
+        controller.documentStore.document.canvas.height = nextHeight;
+      }
       view.setZoom(state.zoom);
       return true;
     }
@@ -56,6 +162,7 @@
       tab.imageEditorDirty = state.isDirty;
       tab.imageEditorState = {
         tool: state.tool,
+        selectionMode: state.selectionMode,
         foregroundColor: state.foregroundColor,
         backgroundColor: state.backgroundColor,
         brushSize: state.brushSize,
@@ -86,7 +193,8 @@
         fontSize: state.fontSize,
         fontBold: state.fontBold,
         fontItalic: state.fontItalic,
-        zoom: state.zoom
+        zoom: state.zoom,
+        layersPanel: controller.layerPanel ? { ...controller.layerPanel.state, expandedIds: [...controller.layerPanel.expandedIds], selectedIds: [...controller.documentStore.selectedIds] } : (tab.imageEditorState?.layersPanel || { mode: "expanded", height: 360, placementMode: "new", expandedIds: [], selectedIds: [] })
       };
       tab.imageEditorSource = {
         ...(tab.imageEditorSource || {}),
@@ -94,14 +202,24 @@
         width: state.width,
         height: state.height
       };
-      view.update(state, state.getCommandState(history, selection));
+      const commandState = state.getCommandState(history, selection);
+      if (state.selectionMode === "object" && controller.documentStore.selectedIds.size) {
+        commandState.canCut = commandState.canCopy = commandState.canDelete = true;
+      }
+      view.update(state, commandState);
       deps.onImageEditorStateChanged?.(tab);
     }
 
     function commitTransaction(controller, before) {
       const after = snapshot(controller.view);
-      if (!controller.history.push(before, after)) return false;
+      const documentBefore = controller.documentStore.snapshot();
+      const difference = rasterDifference(before, after);
+      if (!difference) return false;
+      const layer = selectedPlacementLayer(controller, controller.state.tool === "brush" || controller.state.tool === "pencil" ? "Brush stroke" : "Pixel edit");
+      controller.documentStore.addRasterObject(difference, { x: 0, y: 0, width: difference.width, height: difference.height }, { name: controller.state.tool === "brush" || controller.state.tool === "pencil" ? "Brush stroke" : "Pixel edit", layerId: layer.id });
+      controller.history.push(documentBefore, controller.documentStore.snapshot(), controller.state.tool);
       controller.state.markChanged();
+      renderLayeredDocument(controller);
       syncTab(controller);
       return true;
     }
@@ -136,21 +254,186 @@
       view.overlayContext.restore();
     }
 
+    function selectedDocumentObjects(controller) {
+      const objects = [];
+      const seen = new Set();
+      const includeLayer = (layer) => (layer.objects || []).forEach((object) => {
+        if (!seen.has(object.id)) { seen.add(object.id); objects.push(object); }
+      });
+      controller.documentStore.selectedIds.forEach((id) => {
+        const object = namespace.findDocumentObject(controller.documentStore.document, id)?.object;
+        if (object) {
+          if (!seen.has(object.id)) { seen.add(object.id); objects.push(object); }
+          return;
+        }
+        const node = namespace.findDocumentNode(controller.documentStore.document, id)?.node;
+        if (!node) return;
+        if (node.kind === "layer") includeLayer(node);
+        else namespace.walkDocumentNodes({ nodes: node.children || [] }, (child) => { if (child.kind === "layer") includeLayer(child); });
+      });
+      return objects;
+    }
+
+    function objectDisplayBounds(object) {
+      const bounds = object.bounds || {};
+      const transform = object.transform || {};
+      return {
+        x: Number(transform.x ?? bounds.x) || 0,
+        y: Number(transform.y ?? bounds.y) || 0,
+        width: Math.max(1, Math.abs((Number(bounds.width) || 1) * (Number(transform.scaleX) || 1))),
+        height: Math.max(1, Math.abs((Number(bounds.height) || 1) * (Number(transform.scaleY) || 1)))
+      };
+    }
+
+    function combinedObjectBounds(objects) {
+      if (!objects.length) return null;
+      const bounds = objects.map(objectDisplayBounds);
+      const left = Math.min(...bounds.map((rect) => rect.x));
+      const top = Math.min(...bounds.map((rect) => rect.y));
+      const right = Math.max(...bounds.map((rect) => rect.x + rect.width));
+      const bottom = Math.max(...bounds.map((rect) => rect.y + rect.height));
+      return { x: left, y: top, width: right - left, height: bottom - top };
+    }
+
+    function objectTransformHandleAt(controller, point) {
+      const rect = combinedObjectBounds(selectedDocumentObjects(controller));
+      if (!rect) return null;
+      const zoom = Math.max(0.25, Number(controller.state.zoom) || 1);
+      const hitRadius = 7 / zoom;
+      const corners = { nw: [rect.x, rect.y], ne: [rect.x + rect.width, rect.y], sw: [rect.x, rect.y + rect.height], se: [rect.x + rect.width, rect.y + rect.height] };
+      const distance = (candidate) => Math.hypot(point.x - candidate[0], point.y - candidate[1]);
+      for (const [handle, candidate] of Object.entries(corners)) if (distance(candidate) <= hitRadius) return { type: "resize", handle, rect };
+      const edges = { n: [rect.x + rect.width / 2, rect.y], e: [rect.x + rect.width, rect.y + rect.height / 2], s: [rect.x + rect.width / 2, rect.y + rect.height], w: [rect.x, rect.y + rect.height / 2] };
+      for (const [handle, candidate] of Object.entries(edges)) if (distance(candidate) <= hitRadius) return { type: "resize", handle, rect };
+      for (const [handle, candidate] of Object.entries(corners)) {
+        const cornerDistance = distance(candidate);
+        if (cornerDistance > hitRadius && cornerDistance <= 20 / zoom) return { type: "rotate", handle, rect };
+      }
+      return null;
+    }
+
+    function resizeObjectGesture(controller, gesture, point) {
+      const start = gesture.bounds;
+      let left = start.x;
+      let top = start.y;
+      let right = start.x + start.width;
+      let bottom = start.y + start.height;
+      if (gesture.handle.includes("w")) left = point.x;
+      if (gesture.handle.includes("e")) right = point.x;
+      if (gesture.handle.includes("n")) top = point.y;
+      if (gesture.handle.includes("s")) bottom = point.y;
+      if (gesture.handle.length === 2) {
+        const anchorX = gesture.handle.includes("w") ? right : left;
+        const anchorY = gesture.handle.includes("n") ? bottom : top;
+        const scale = Math.max(0.01, Math.max(Math.abs(point.x - anchorX) / Math.max(1, start.width), Math.abs(point.y - anchorY) / Math.max(1, start.height)));
+        const width = start.width * scale;
+        const height = start.height * scale;
+        left = gesture.handle.includes("w") ? anchorX - width : anchorX;
+        right = gesture.handle.includes("w") ? anchorX : anchorX + width;
+        top = gesture.handle.includes("n") ? anchorY - height : anchorY;
+        bottom = gesture.handle.includes("n") ? anchorY : anchorY + height;
+      }
+      const next = { x: Math.min(left, right), y: Math.min(top, bottom), width: Math.max(1, Math.abs(right - left)), height: Math.max(1, Math.abs(bottom - top)) };
+      const scaleX = next.width / Math.max(1, start.width);
+      const scaleY = next.height / Math.max(1, start.height);
+      selectedDocumentObjects(controller).forEach((object) => {
+        const original = gesture.transforms.get(object.id);
+        if (!original) return;
+        const originalRect = original.displayBounds;
+        object.transform.x = next.x + (originalRect.x - start.x) * scaleX;
+        object.transform.y = next.y + (originalRect.y - start.y) * scaleY;
+        object.transform.scaleX = original.transform.scaleX * scaleX;
+        object.transform.scaleY = original.transform.scaleY * scaleY;
+      });
+    }
+
+    function rotateObjectGesture(controller, gesture, point) {
+      const angle = Math.atan2(point.y - gesture.center.y, point.x - gesture.center.x);
+      const delta = angle - gesture.startAngle;
+      selectedDocumentObjects(controller).forEach((object) => {
+        const original = gesture.transforms.get(object.id);
+        if (!original) return;
+        const objectCenter = { x: original.displayBounds.x + original.displayBounds.width / 2, y: original.displayBounds.y + original.displayBounds.height / 2 };
+        const offsetX = objectCenter.x - gesture.center.x;
+        const offsetY = objectCenter.y - gesture.center.y;
+        const rotatedCenter = { x: gesture.center.x + offsetX * Math.cos(delta) - offsetY * Math.sin(delta), y: gesture.center.y + offsetX * Math.sin(delta) + offsetY * Math.cos(delta) };
+        object.transform.x = rotatedCenter.x - original.displayBounds.width / 2;
+        object.transform.y = rotatedCenter.y - original.displayBounds.height / 2;
+        object.transform.rotation = (Number(original.transform.rotation) || 0) + delta;
+      });
+    }
+
+    /** Draw object-selection guides only on the presentation overlay. */
+    function drawObjectSelectionOverlay(controller, marquee) {
+      const { view, state } = controller;
+      view.overlayContext.clearRect(0, 0, view.overlay.width, view.overlay.height);
+      const rect = marquee || combinedObjectBounds(selectedDocumentObjects(controller));
+      if (!rect) return;
+      const zoom = Math.max(0.25, Number(state.zoom) || 1);
+      const guideSize = 6 / zoom;
+      const points = [
+        [rect.x, rect.y], [rect.x + rect.width / 2, rect.y], [rect.x + rect.width, rect.y],
+        [rect.x, rect.y + rect.height / 2], [rect.x + rect.width, rect.y + rect.height / 2],
+        [rect.x, rect.y + rect.height], [rect.x + rect.width / 2, rect.y + rect.height], [rect.x + rect.width, rect.y + rect.height]
+      ];
+      view.overlayContext.save();
+      view.overlayContext.setLineDash([4 / zoom, 3 / zoom]);
+      view.overlayContext.lineWidth = 1 / zoom;
+      view.overlayContext.strokeStyle = "#1473e6";
+      view.overlayContext.strokeRect(rect.x, rect.y, rect.width, rect.height);
+      if (!marquee) {
+        view.overlayContext.setLineDash([]);
+        points.forEach(([x, y]) => {
+          view.overlayContext.fillStyle = "#ffffff";
+          view.overlayContext.fillRect(x - guideSize / 2, y - guideSize / 2, guideSize, guideSize);
+          view.overlayContext.strokeRect(x - guideSize / 2, y - guideSize / 2, guideSize, guideSize);
+        });
+      }
+      view.overlayContext.restore();
+    }
+
     function commitSelection(controller) {
       if (!controller.selection.floating) return false;
-      const preservesSavedPixels = controller.selection.matchesSavedFloatingLayer();
-      const before = controller.selectionBefore || snapshot(controller.view);
-      controller.selection.commit(controller.view.context);
+      const { selection } = controller;
+      const before = controller.pixelSelectionDocumentBefore || controller.documentStore.snapshot();
+      controller.pixelSelectionDocumentBefore = null;
+      const layer = selectedPlacementLayer(controller, selection.origin === "paste" ? "Pasted image" : "Object");
+      if (controller.pendingContentDescriptor) {
+        const object = namespace.ImageEditorToolContentAdapter.createShapeObject(controller.documentStore, selection.imageData, selection.rect, controller.pendingContentDescriptor, { name: controller.pendingContentDescriptor.name || "Shape", rotation: selection.rotation });
+        controller.documentStore.addObject(object, layer.id);
+      } else controller.documentStore.addRasterObject(selection.imageData, selection.rect, { name: selection.origin === "paste" ? "Pasted image" : "Object", rotation: selection.rotation, layerId: layer.id });
+      controller.pendingContentDescriptor = null;
       controller.selectionBefore = null;
+      selection.clear();
       drawSelectionOverlay(controller);
-      const changed = commitTransaction(controller, before);
-      if (preservesSavedPixels) {
-        controller.state.markSaved();
-        controller.history.markSaved?.();
-        controller.tab.imageEditorDirty = false;
-        syncTab(controller);
-      }
-      return changed;
+      controller.history.push(before, controller.documentStore.snapshot(), "Place content");
+      controller.state.markChanged();
+      renderLayeredDocument(controller);
+      syncTab(controller);
+      return true;
+    }
+
+    function fillActiveLayer(controller, point, mode) {
+      const layer = controller.documentStore.activeLayer();
+      if (!layer || layer.locked || !layer.visible) return false;
+      const before = controller.documentStore.snapshot();
+      const canvas = controller.compositor.renderLayer(layer);
+      const context = canvas.getContext("2d", { willReadFrequently: true });
+      const changed = mode === "pattern" ? namespace.patternFill(context, point, controller.state) : namespace.floodFill(context, point, controller.state);
+      if (!changed) return false;
+      const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
+      const assetId = controller.documentStore.addRasterAsset(imageData);
+      layer.objects = [namespace.createContentObject("raster", { assetId }, {
+        name: "Bucket fill",
+        bounds: { x: 0, y: 0, width: canvas.width, height: canvas.height }
+      })];
+      controller.documentStore.selectedIds = new Set([layer.id]);
+      controller.documentStore.notify({ type: "fill-layer", ids: [layer.id] });
+      controller.history.push(before, controller.documentStore.snapshot(), "Bucket fill");
+      controller.state.markChanged();
+      renderLayeredDocument(controller);
+      syncTab(controller);
+      return true;
     }
 
     function renderCurvePreview(controller) {
@@ -170,6 +453,13 @@
     function floatGeneratedLayer(controller, layer, before, origin = "shape") {
       if (!layer) return false;
       controller.selectionBefore = before || snapshot(controller.view);
+      controller.pixelSelectionDocumentBefore = controller.documentStore.snapshot();
+      controller.pendingContentDescriptor = layer.descriptor || {
+        tool: controller.state.tool,
+        name: controller.state.tool.replace(/(^|-)([a-z])/g, (_match, prefix, letter) => `${prefix ? " " : ""}${letter.toUpperCase()}`),
+        geometry: null,
+        style: namespace.captureImageEditorToolStyle(controller.state)
+      };
       controller.selection.setFloatingLayer(layer.imageData, layer.rect, origin, controller.state.tool);
       controller.state.setTool("select");
       controller.state.setDirty(true);
@@ -593,15 +883,51 @@
       const editableTextRect = editableText
         ? (view.getTextContentRect() || view.getTextInputRect() || controller.textRect)
         : null;
-      if (!hasFloatingSelection && !editableTextRect) return view.canvas;
-      const composite = document.createElement("canvas");
-      composite.width = view.canvas.width;
-      composite.height = view.canvas.height;
+      if (!hasFloatingSelection && !editableTextRect && !controller.compositor) return view.canvas;
+      const composite = controller.compositor ? controller.compositor.render() : document.createElement("canvas");
+      if (!controller.compositor) {
+        composite.width = view.canvas.width;
+        composite.height = view.canvas.height;
+      }
       const context = composite.getContext("2d");
-      context.drawImage(view.canvas, 0, 0);
+      if (!controller.compositor) context.drawImage(view.canvas, 0, 0);
       if (hasFloatingSelection) selection.drawFloatingLayer(context);
       if (editableTextRect) namespace.drawText(context, editableTextRect, editableText, state);
       return composite;
+    }
+
+    /** Build an isolated document snapshot that includes provisional content for session recovery. */
+    function createDraftDocumentStore(controller) {
+      const snapshot = controller.documentStore.snapshot();
+      const draftStore = new namespace.ImageEditorDocumentStore(snapshot.document, snapshot.assets);
+      draftStore.selectedIds = new Set(snapshot.selectedIds);
+      const { selection, view, state } = controller;
+      if (selection.floating && selection.imageData && selection.rect) {
+        draftStore.addRasterObject(selection.imageData, { ...selection.rect }, {
+          name: selection.origin === "paste" ? "Pasted image" : "Floating content",
+          rotation: selection.rotation || 0
+        });
+      }
+      const editableText = view.textInput.hidden ? "" : view.textInput.value;
+      const editableTextRect = editableText
+        ? (view.getTextContentRect() || view.getTextInputRect() || controller.textRect)
+        : null;
+      if (editableTextRect) {
+        draftStore.addObject(namespace.createContentObject("text", {
+          text: editableText,
+          box: { width: editableTextRect.width, height: editableTextRect.height },
+          font: state.fontFamily,
+          size: state.fontSize,
+          bold: state.fontBold,
+          italic: state.fontItalic,
+          color: state.foregroundColor
+        }, {
+          name: "Text",
+          bounds: { ...editableTextRect },
+          transform: { x: editableTextRect.x, y: editableTextRect.y, scaleX: 1, scaleY: 1, rotation: 0 }
+        }));
+      }
+      return draftStore;
     }
 
     /** Encode visible canvas layers without committing floating pixels or editable text. */
@@ -625,6 +951,30 @@
         }
       }
       syncTab(controller);
+      return true;
+    }
+
+    async function copyObjectSelectionToClipboard(controller) {
+      const objects = selectedDocumentObjects(controller);
+      const bounds = combinedObjectBounds(objects);
+      if (!objects.length || !bounds) return false;
+      const layeredDocument = namespace.createImageDocument(controller.documentStore.document.canvas.width, controller.documentStore.document.canvas.height, "transparent");
+      layeredDocument.nodes[0].objects = objects.map((object) => namespace.cloneImageDocument(object));
+      const store = new namespace.ImageEditorDocumentStore(layeredDocument, controller.documentStore.assets);
+      const rendered = new namespace.ImageEditorCompositor(store).render();
+      const crop = document.createElement("canvas");
+      crop.width = Math.max(1, Math.ceil(bounds.width));
+      crop.height = Math.max(1, Math.ceil(bounds.height));
+      crop.getContext("2d").drawImage(rendered, -bounds.x, -bounds.y);
+      controller.selection.internalClipboard = crop.getContext("2d").getImageData(0, 0, crop.width, crop.height);
+      if (global.ClipboardItem && global.navigator?.clipboard?.write) {
+        try {
+          const blob = await namespace.encodeCanvas(crop, "image/png", "#ffffff");
+          await global.navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
+        } catch (_error) {
+          // The internal clipboard remains available when system permission is denied.
+        }
+      }
       return true;
     }
 
@@ -693,7 +1043,9 @@
       if (action === "undo" || action === "redo") {
         selection.clear();
         const next = action === "undo" ? history.undo() : history.redo();
-        if (restoreSnapshot(controller, next)) {
+        if (next) {
+          controller.documentStore.restore(next);
+          renderLayeredDocument(controller);
           state.setDirty(history.isAtSavedState !== true);
           syncTab(controller);
         }
@@ -702,6 +1054,11 @@
       if (action === "zoom-in" || action === "zoom-out") {
         applyZoom(controller, state.zoom * (action === "zoom-in" ? 1.25 : 0.8));
         return;
+      }
+      if (state.tool === "select" && state.selectionMode === "object" && !selection.floating && selectedDocumentObjects(controller).length) {
+        if (action === "copy") return copyObjectSelectionToClipboard(controller);
+        if (action === "cut") await copyObjectSelectionToClipboard(controller);
+        if (action === "cut" || action === "delete") return commitDocumentMutation(controller, action === "cut" ? "Cut objects" : "Delete objects", () => controller.documentStore.deleteSelected());
       }
       if (action === "copy") return copySelectionToClipboard(controller);
       if (action === "paste") {
@@ -731,6 +1088,7 @@
         }
         const pasteOrigin = view.getPasteOrigin(state.zoom);
         controller.selectionBefore = snapshot(view);
+        controller.pixelSelectionDocumentBefore = controller.documentStore.snapshot();
         resizeCanvas(
           controller,
           Math.max(view.canvas.width, pasteOrigin.x + pasteData.width),
@@ -800,10 +1158,37 @@
       const textRect = controller.view.getTextContentRect() || controller.view.getTextInputRect() || controller.textRect;
       controller.view.hideTextInput();
       controller.textRect = null;
-      if (!text) return false;
-      const before = snapshot(controller.view);
-      namespace.drawText(controller.view.context, textRect, text, controller.state);
-      return commitTransaction(controller, before);
+      if (!text) { controller.editingTextObjectId = null; return false; }
+      const before = controller.documentStore.snapshot();
+      const editing = controller.editingTextObjectId ? namespace.findDocumentObject(controller.documentStore.document, controller.editingTextObjectId) : null;
+      controller.editingTextObjectId = null;
+      if (editing?.object?.type === "text") {
+        editing.object.payload = {
+          ...editing.object.payload,
+          text,
+          box: { ...textRect },
+          style: { fontFamily: controller.state.fontFamily, fontSize: controller.state.fontSize, fontBold: controller.state.fontBold, fontItalic: controller.state.fontItalic, foregroundColor: controller.state.foregroundColor }
+        };
+        editing.object.bounds = { ...textRect };
+        editing.object.transform = { ...editing.object.transform, x: textRect.x, y: textRect.y, scaleX: 1, scaleY: 1 };
+        controller.documentStore.notify({ type: "update-text", ids: [editing.object.id] });
+        controller.history.push(before, controller.documentStore.snapshot(), "Edit text");
+        controller.state.markChanged();
+        renderLayeredDocument(controller);
+        syncTab(controller);
+        return true;
+      }
+      const layer = selectedPlacementLayer(controller, "Text");
+      const object = namespace.createContentObject("text", {
+        text, box: { ...textRect },
+        style: { fontFamily: controller.state.fontFamily, fontSize: controller.state.fontSize, fontBold: controller.state.fontBold, fontItalic: controller.state.fontItalic, foregroundColor: controller.state.foregroundColor }
+      }, { name: "Text", bounds: { ...textRect }, transform: { x: textRect.x, y: textRect.y, scaleX: 1, scaleY: 1, rotation: 0 } });
+      controller.documentStore.addObject(object, layer.id);
+      controller.history.push(before, controller.documentStore.snapshot(), "Text");
+      controller.state.markChanged();
+      renderLayeredDocument(controller);
+      syncTab(controller);
+      return true;
     }
 
     function drawTextCreationOverlay(controller, point) {
@@ -868,6 +1253,11 @@
         if (!view.textInput.hidden && isTextFormattingTarget(event.target)) keepTextInputLive(controller);
       });
       view.toolbar.addEventListener("click", (event) => {
+        if (event.target.closest("[data-layers-toggle]")) {
+          controller.layerPanel?.toggle();
+          syncTab(controller);
+          return;
+        }
         const bucketModeButton = event.target.closest("[data-bucket-mode]");
         if (bucketModeButton) {
           if (controller.gradientFillTool.isEditing) finishGradientFill(controller);
@@ -927,6 +1317,13 @@
         if (side === "start") state.gradientStartColor = event.target.value;
         else state.gradientEndColor = event.target.value;
         renderGradientFill(controller);
+        syncTab(controller);
+      });
+      view.shell.querySelector(".image-editor-select-mode").addEventListener("change", (event) => {
+        state.selectionMode = event.target.value === "pixel" ? "pixel" : "object";
+        controller.selection.clear();
+        controller.documentStore.select([]);
+        view.overlayContext.clearRect(0, 0, view.overlay.width, view.overlay.height);
         syncTab(controller);
       });
       view.shell.querySelector(".image-editor-pattern-fill-type").addEventListener("change", (event) => {
@@ -1071,7 +1468,24 @@
     function stampFloatingSelection(controller) {
       const { view, selection } = controller;
       if (!selection.floating || !selection.imageData || !selection.rect) return false;
-      return selection.drawFloatingLayer(view.context);
+      selection.drawFloatingLayer(view.context);
+      const layer = controller.documentStore.activeLayer() || controller.documentStore.addLayer("Selection stamp");
+      controller.documentStore.addRasterObject(selection.imageData, selection.rect, { name: "Selection stamp", rotation: selection.rotation, layerId: layer.id });
+      return true;
+    }
+
+    function clearPixelRegionFromActiveLayer(controller, rect) {
+      const layer = controller.documentStore.activeLayer();
+      if (!layer || layer.locked || !rect) return false;
+      if (!controller.pixelSelectionDocumentBefore) controller.pixelSelectionDocumentBefore = controller.documentStore.snapshot();
+      const canvas = controller.compositor.renderLayer(layer);
+      const context = canvas.getContext("2d");
+      context.clearRect(rect.x, rect.y, rect.width, rect.height);
+      const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
+      const assetId = controller.documentStore.addRasterAsset(imageData);
+      layer.objects = [namespace.createContentObject("raster", { assetId }, { name: layer.name, bounds: { x: 0, y: 0, width: canvas.width, height: canvas.height } })];
+      controller.documentStore.notify({ type: "pixel-lift", ids: [layer.id] });
+      return true;
     }
     function dropSelection(controller) {
       const { selection } = controller;
@@ -1107,6 +1521,8 @@
       const overlay = view.overlay;
       overlay.addEventListener("pointerdown", (event) => {
         if (event.button !== 0) return;
+        const adoptedLegacyPixels = synchronizePresentationCanvas(controller);
+        if (adoptedLegacyPixels && state.tool === "select") state.selectionMode = "pixel";
         const point = view.pointFromEvent(event);
         if (state.tool === "curve") {
           event.preventDefault();
@@ -1366,9 +1782,17 @@
             return;
           }
           if (state.bucketFillMode === "pattern") {
+            if (controller.layerPanel?.state.placementMode === "active") {
+              if (!fillActiveLayer(controller, point, "pattern")) syncTab(controller);
+              return;
+            }
             const before = snapshot(view);
             if (namespace.patternFill(view.context, point, state)) commitTransaction(controller, before);
             else syncTab(controller);
+            return;
+          }
+          if (controller.layerPanel?.state.placementMode === "active") {
+            if (!fillActiveLayer(controller, point, "solid")) syncTab(controller);
             return;
           }
           const before = snapshot(view);
@@ -1381,18 +1805,46 @@
           namespace.drawPolygon(view.overlayContext, controller.polygonPoints, state, false);
           return;
         }
+        if (state.tool === "select" && state.selectionMode === "object" && !selection.floating) {
+          event.preventDefault();
+          const transformHandle = objectTransformHandleAt(controller, point);
+          const hit = transformHandle || controller.objectSelection.selectPoint(point, { additive: event.shiftKey, cycle: event.altKey });
+          const objects = selectedDocumentObjects(controller);
+          const bounds = combinedObjectBounds(objects);
+          controller.objectGesture = {
+            mode: transformHandle?.type || (hit ? "move" : "marquee"),
+            handle: transformHandle?.handle || "",
+            start: point,
+            point,
+            additive: event.shiftKey,
+            before: controller.documentStore.snapshot(),
+            bounds,
+            center: bounds ? { x: bounds.x + bounds.width / 2, y: bounds.y + bounds.height / 2 } : null,
+            startAngle: bounds ? Math.atan2(point.y - (bounds.y + bounds.height / 2), point.x - (bounds.x + bounds.width / 2)) : 0,
+            transforms: new Map(objects.map((object) => [object.id, { transform: { ...object.transform }, displayBounds: objectDisplayBounds(object) }]))
+          };
+          controller.dragging = true;
+          overlay.setPointerCapture?.(event.pointerId);
+          drawObjectSelectionOverlay(controller, hit ? null : { x: point.x, y: point.y, width: 0, height: 0 });
+          syncTab(controller);
+          return;
+        }
         controller.gestureBefore = snapshot(view);
         controller.startPoint = controller.lastPoint = point;
         controller.dragging = true;
         if (state.tool === "pencil" || state.tool === "brush") controller.freehandStrokeDistance = 0;
         if (state.tool === "select") {
-          if (selection.hasSelection && !selection.floating) controller.selectionBefore = snapshot(view);
+          if (selection.hasSelection && !selection.floating) {
+            controller.selectionBefore = snapshot(view);
+            controller.pixelSelectionDocumentBefore = controller.documentStore.snapshot();
+          }
           const gesture = selection.beginPointerGesture(point, view.context, state.backgroundColor, {
             ctrl: event.ctrlKey,
             meta: event.metaKey,
             shift: event.shiftKey,
             zoom: state.zoom
           });
+          if (gesture.sourceCleared) clearPixelRegionFromActiveLayer(controller, selection.rect);
           if (gesture.action === "drop") dropSelection(controller);
           if (gesture.action === "drop" || gesture.action === "ignore") {
             controller.dragging = false;
@@ -1404,8 +1856,15 @@
         overlay.setPointerCapture?.(event.pointerId);
       });
       overlay.addEventListener("pointermove", (event) => {
-        const point = view.pointFromEvent(event, state.tool !== "path" && !selection.isTransforming);
+        const point = view.pointFromEvent(event, state.tool !== "path" && !selection.isTransforming && !(state.tool === "select" && state.selectionMode === "object"));
         if (!controller.dragging) {
+          if (state.tool === "select" && state.selectionMode === "object" && !selection.floating) {
+            const handle = objectTransformHandleAt(controller, point);
+            if (handle?.type === "rotate") overlay.style.cursor = rotationCursor;
+            else if (handle?.type === "resize") overlay.style.cursor = handle.handle.length === 2 ? `${handle.handle}-resize` : `${handle.handle}-resize`;
+            else overlay.style.cursor = controller.objectSelection.hitTest(point) ? "move" : "crosshair";
+            return;
+          }
           if (state.tool === "bucket" && controller.gradientFillTool.isEditing) {
             const result = controller.gradientFillTool.begin(point, state.zoom);
             controller.gradientFillTool.end();
@@ -1502,6 +1961,31 @@
           controller.lastPoint = point;
           return;
         }
+        if (state.tool === "select" && state.selectionMode === "object" && controller.objectGesture) {
+          const gesture = controller.objectGesture;
+          gesture.point = point;
+          if (gesture.mode === "move") {
+            const deltaX = point.x - gesture.start.x;
+            const deltaY = point.y - gesture.start.y;
+            selectedDocumentObjects(controller).forEach((object) => {
+              const original = gesture.transforms.get(object.id);
+              if (!original) return;
+              object.transform.x = (Number(original.transform.x ?? object.bounds.x) || 0) + deltaX;
+              object.transform.y = (Number(original.transform.y ?? object.bounds.y) || 0) + deltaY;
+            });
+            renderLayeredDocument(controller);
+            drawObjectSelectionOverlay(controller);
+          } else if (gesture.mode === "resize") {
+            resizeObjectGesture(controller, gesture, point);
+            renderLayeredDocument(controller);
+            drawObjectSelectionOverlay(controller);
+          } else if (gesture.mode === "rotate") {
+            rotateObjectGesture(controller, gesture, point);
+            renderLayeredDocument(controller);
+            drawObjectSelectionOverlay(controller);
+          } else drawObjectSelectionOverlay(controller, view.rectFromPoints(gesture.start, point));
+          return;
+        }
         if (state.tool === "select") {
           const movement = selection.updatePointerGesture(point, state);
           if (movement.stamp) stampFloatingSelection(controller);
@@ -1514,7 +1998,7 @@
       overlay.addEventListener("pointerup", (event) => {
         if (!controller.dragging) return;
         controller.dragging = false;
-        const point = view.pointFromEvent(event, state.tool !== "path");
+        const point = view.pointFromEvent(event, state.tool !== "path" && !(state.tool === "select" && state.selectionMode === "object"));
         if (state.tool === "bucket" && controller.gradientFillTool.isEditing) {
           controller.gradientFillTool.update(point);
           controller.gradientFillTool.end();
@@ -1572,6 +2056,20 @@
           openEditableTextBox(controller, textRect);
         } else if (state.tool === "pencil" || state.tool === "brush") {
           commitTransaction(controller, controller.gestureBefore);
+        } else if (state.tool === "select" && state.selectionMode === "object" && controller.objectGesture) {
+          const gesture = controller.objectGesture;
+          controller.objectGesture = null;
+          if (gesture.mode === "marquee") {
+            controller.objectSelection.selectMarquee(view.rectFromPoints(gesture.start, point), gesture.additive);
+          } else if (Math.abs(point.x - gesture.start.x) > 0.01 || Math.abs(point.y - gesture.start.y) > 0.01) {
+            controller.documentStore.notify({ type: "transform", ids: [...controller.documentStore.selectedIds] });
+            const label = gesture.mode === "rotate" ? "Rotate objects" : gesture.mode === "resize" ? "Resize objects" : "Move objects";
+            controller.history.push(gesture.before, controller.documentStore.snapshot(), label);
+            state.markChanged();
+          }
+          renderLayeredDocument(controller);
+          drawObjectSelectionOverlay(controller);
+          syncTab(controller);
         } else if (state.tool === "select") {
           selection.endPointerGesture();
           drawSelectionOverlay(controller);
@@ -1583,6 +2081,21 @@
         }
       });
       overlay.addEventListener("dblclick", (event) => {
+        if (state.tool === "select" && state.selectionMode === "object") {
+          const objectId = controller.objectSelection.hitTest(view.pointFromEvent(event, false));
+          const found = objectId ? namespace.findDocumentObject(controller.documentStore.document, objectId) : null;
+          if (found?.object?.type === "text" && !found.object.locked && !found.layer.locked) {
+            event.preventDefault();
+            controller.documentStore.select(objectId);
+            const style = found.object.payload?.style || {};
+            ["fontFamily", "fontSize", "fontBold", "fontItalic", "foregroundColor"].forEach((key) => { if (style[key] != null) state[key] = style[key]; });
+            controller.editingTextObjectId = objectId;
+            state.setTool("text");
+            openEditableTextBox(controller, objectDisplayBounds(found.object), found.object.payload?.text || "");
+            syncTab(controller);
+            return;
+          }
+        }
         if (state.tool === "bucket" && state.bucketFillMode === "gradient" && controller.gradientFillTool.isEditing) {
           const point = view.pointFromEvent(event);
           if (!controller.gradientFillTool.contains(point)) return;
@@ -1756,6 +2269,13 @@
 
     function dropSelectionWithKeyboard(controller, event) {
       const { selection } = controller;
+      if (event.key === "Escape" && controller.state.tool === "select" && controller.state.selectionMode === "object" && !selection.floating && controller.documentStore.selectedIds.size) {
+        event.preventDefault();
+        controller.documentStore.select([]);
+        drawObjectSelectionOverlay(controller);
+        syncTab(controller);
+        return true;
+      }
       if (event.key !== "Escape" || (!selection.hasSelection && !selection.isPasting)) return false;
       event.preventDefault();
       dropSelection(controller);
@@ -1766,7 +2286,10 @@
       const { view, state, selection } = controller;
       if (!delta || state.tool !== "select" || !selection.hasSelection) return false;
       event.preventDefault();
-      if (!selection.floating) controller.selectionBefore = snapshot(view);
+      if (!selection.floating) {
+        controller.selectionBefore = snapshot(view);
+        controller.pixelSelectionDocumentBefore = controller.documentStore.snapshot();
+      }
       else if (!controller.selectionBefore) controller.selectionBefore = snapshot(view);
       const move = selection.beginMove(view.context, state.backgroundColor, {
         ctrl: event.ctrlKey,
@@ -1774,6 +2297,7 @@
         shift: event.shiftKey
       });
       if (!move.started) return true;
+      if (move.sourceCleared) clearPixelRegionFromActiveLayer(controller, selection.rect);
       const movement = selection.moveSelection(delta.x, delta.y, state);
       selection.endMove();
       drawSelectionOverlay(controller);
@@ -1786,16 +2310,18 @@
       return true;
     }
     function selectAllCanvas(controller) {
-      const { view, state, selection } = controller;
+      const { state } = controller;
       commitText(controller);
       commitSelection(controller);
-      selection.setRect(
-        { x: 0, y: 0 },
-        { x: view.canvas.width, y: view.canvas.height },
-        state
-      );
+      const objectIds = [];
+      namespace.walkDocumentNodes(controller.documentStore.document, (node) => {
+        if (node.kind !== "layer" || node.visible === false || node.locked) return;
+        (node.objects || []).forEach((object) => { if (object.visible !== false && !object.locked) objectIds.push(object.id); });
+      });
+      state.selectionMode = "object";
       state.setTool("select");
-      drawSelectionOverlay(controller);
+      controller.documentStore.select(objectIds);
+      drawObjectSelectionOverlay(controller);
       syncTab(controller);
       return true;
     }
@@ -1807,6 +2333,7 @@
         if (controller.view.textInput.hidden === false) {
           if (event.key === "Escape") {
             controller.view.hideTextInput();
+            controller.editingTextObjectId = null;
             event.preventDefault();
           } else if (primary && event.key === "Enter") {
             commitText(controller);
@@ -2067,32 +2594,42 @@
         file: tab.imageEditorSource?.file,
         draftBytes: tab.imageEditorDraftBytes
       };
-      const mimeType = tab.imageEditorDirty && tab.imageEditorDraftBytes ? "image/png" :
-        (source.mimeType || namespace.mimeTypeForName(source.name || source.path) || "image/png");
+      const mimeType = source.mimeType || namespace.mimeTypeForName(source.name || source.path) || "image/png";
       const view = new namespace.ImageEditorView(root);
+      const projectCodec = new namespace.ImageEditorProjectCodec();
+      let documentBundle;
       if (source.blank === true && !source.draftBytes) {
         const width = Math.max(16, Number(source.width || tab.imageEditorState?.width || 640) || 640);
         const height = Math.max(16, Number(source.height || tab.imageEditorState?.height || 360) || 360);
         view.setDimensions(width, height);
         view.context.fillStyle = tab.imageEditorState?.backgroundColor || "#ffffff";
         view.context.fillRect(0, 0, width, height);
+        documentBundle = projectCodec.fromRasterImageData(view.context.getImageData(0, 0, width, height), tab.imageEditorState?.backgroundColor || "#ffffff");
       } else {
         const bytes = await namespace.readSourceBytes(source, deps);
-        const bitmap = await namespace.decodeBytes(bytes, mimeType);
-        view.setDimensions(bitmap.width, bitmap.height);
-        view.context.drawImage(bitmap, 0, 0);
-        bitmap.close?.();
+        const isProject = mimeType === namespace.IMAGE_PROJECT_MIME_TYPE || namespace.extensionOf(source.name || source.path) === "mdimage" || (bytes[0] === 0x50 && bytes[1] === 0x4b);
+        if (isProject) {
+          documentBundle = await projectCodec.decode(bytes);
+          view.setDimensions(documentBundle.document.canvas.width, documentBundle.document.canvas.height);
+        } else {
+          const bitmap = await namespace.decodeBytes(bytes, mimeType);
+          view.setDimensions(bitmap.width, bitmap.height);
+          view.context.drawImage(bitmap, 0, 0);
+          bitmap.close?.();
+          documentBundle = projectCodec.fromRasterImageData(view.context.getImageData(0, 0, view.canvas.width, view.canvas.height), tab.imageEditorState?.backgroundColor || "#ffffff");
+        }
       }
       const state = new namespace.ImageEditorState({
         ...(tab.imageEditorState || {}),
         width: view.canvas.width,
         height: view.canvas.height,
-        mimeType: tab.imageEditorSource?.mimeType || mimeType
+        mimeType: documentBundle.document.format === namespace.IMAGE_DOCUMENT_FORMAT ? namespace.IMAGE_PROJECT_MIME_TYPE : mimeType
       });
       if (tab.imageEditorDirty) state.setDirty(true);
       const controller = {
-        tab, view, state,
-        history: new namespace.ImageEditorHistory(),
+        tab, view, state, projectCodec,
+        documentStore: new namespace.ImageEditorDocumentStore(documentBundle.document, documentBundle.assets),
+        history: new namespace.ImageEditorDocumentHistory(),
         selection: new namespace.ImageEditorSelection(),
         polygonPoints: [],
         polygonTool: new namespace.ImageEditorPolygonTool(),
@@ -2133,6 +2670,26 @@
         keepTextInputLive: false,
         pastedTextEditing: false
       };
+      if (tab.imageEditorState?.layersPanel?.selectedIds?.length) controller.documentStore.selectedIds = new Set(tab.imageEditorState.layersPanel.selectedIds);
+      controller.compositor = new namespace.ImageEditorCompositor(controller.documentStore);
+      controller.objectSelection = new namespace.ImageEditorObjectSelection(controller.documentStore);
+      controller.layerPanel = new namespace.ImageEditorLayerPanel(view.stage, controller.documentStore, {
+        state: tab.imageEditorState?.layersPanel,
+        onMutate(label, callback) {
+          if (label === "merge-down") return mergeSelectedLayerDown(controller);
+          if (label === "flatten") return flattenDocument(controller);
+          if (label === "export") return exportFlattenedImage(tab);
+          const changed = commitDocumentMutation(controller, label, callback);
+          return changed;
+        },
+        onStateChanged(panelState) {
+          tab.imageEditorState = { ...(tab.imageEditorState || {}), layersPanel: panelState };
+          syncTab(controller);
+        }
+      });
+      controller.removeObjectOverlayListener = controller.documentStore.subscribe((change) => {
+        if (change.type === "selection" && controller.state.tool === "select" && controller.state.selectionMode === "object") drawObjectSelectionOverlay(controller);
+      });
       views.set(tab.id, controller);
       bindToolbar(controller);
       bindPointerTools(controller);
@@ -2158,6 +2715,7 @@
         commitText(controller);
       }, 0));
       view.setZoom(state.zoom);
+      renderLayeredDocument(controller);
       syncTab(controller);
       return controller;
     }
@@ -2187,6 +2745,8 @@
       controller.removeKeyboardListener?.();
       controller.removeNativeTextPasteListener?.();
       controller.removeSelectionDismissalListener?.();
+      controller.removeObjectOverlayListener?.();
+      controller.layerPanel?.destroy?.();
       controller.view.destroy();
       views.delete(tabId);
     }
@@ -2198,7 +2758,10 @@
     async function getDraftBinary(tab) {
       const controller = views.get(tab?.id);
       if (!controller) return tab?.imageEditorDraftBytes || null;
-      return namespace.blobToUint8Array(await encodeCompositeCanvas(controller, "image/png"));
+      const draftStore = createDraftDocumentStore(controller);
+      const draftPreview = new namespace.ImageEditorCompositor(draftStore).render();
+      const blob = await controller.projectCodec.encode(draftStore, draftPreview);
+      return namespace.blobToUint8Array(blob);
     }
 
     async function writeBlobToSource(tab, blob) {
@@ -2216,24 +2779,54 @@
     }
 
     async function chooseSaveDestination(tab) {
-      const suggestedName = tab.sourceFileName || "image.png";
+      const sourceName = tab.sourceFileName || "image";
+      const suggestedName = /\.mdimage$/i.test(sourceName) ? sourceName : sourceName.replace(/\.[^.]+$/, "") + ".mdimage";
       if (typeof deps.NL_VERSION !== "undefined" && deps.Neutralino?.os?.showSaveDialog) {
-        const path = await deps.Neutralino.os.showSaveDialog("Save image", {
+        const path = await deps.Neutralino.os.showSaveDialog("Save layered image project", {
           defaultPath: suggestedName,
-          filters: [{ name: "Editable images", extensions: ["png", "jpg", "jpeg", "webp"] }]
+          filters: [{ name: "MD-Editor layered image", extensions: ["mdimage"] }]
         });
         return path ? { path, name: path.split(/[\\/]/).pop() } : null;
       }
       if (global.showSaveFilePicker) {
         const handle = await global.showSaveFilePicker({
           suggestedName,
-          types: [{ description: "Editable images", accept: {
-            "image/png": [".png"], "image/jpeg": [".jpg", ".jpeg"], "image/webp": [".webp"]
-          } }]
+          types: [{ description: "MD-Editor layered image", accept: { [namespace.IMAGE_PROJECT_MIME_TYPE]: [".mdimage"] } }]
         });
         return { handle, name: handle.name };
       }
       return { downloadOnly: true, name: suggestedName };
+    }
+
+    async function chooseExportDestination(tab, mimeType) {
+      const extension = mimeType === "image/jpeg" ? ".jpg" : mimeType === "image/webp" ? ".webp" : ".png";
+      const sourceName = tab.sourceFileName || "image";
+      const suggestedName = sourceName.replace(/\.[^.]+$/, "") + extension;
+      if (typeof deps.NL_VERSION !== "undefined" && deps.Neutralino?.os?.showSaveDialog) {
+        const path = await deps.Neutralino.os.showSaveDialog("Export flattened image", {
+          defaultPath: suggestedName,
+          filters: [{ name: "Image", extensions: [extension.slice(1)] }]
+        });
+        return path ? { path, name: path.split(/[\\/]/).pop() } : null;
+      }
+      if (global.showSaveFilePicker) {
+        const handle = await global.showSaveFilePicker({
+          suggestedName,
+          types: [{ description: "Image", accept: { [mimeType]: [extension] } }]
+        });
+        return { handle, name: handle.name };
+      }
+      return { downloadOnly: true, name: suggestedName };
+    }
+
+    async function writeBlobToDestination(destination, blob) {
+      if (destination.downloadOnly) deps.saveAs?.(blob, destination.name);
+      else if (destination.path) await deps.Neutralino.filesystem.writeBinaryFile(destination.path, await blob.arrayBuffer());
+      else {
+        const writable = await destination.handle.createWritable();
+        await writable.write(blob);
+        await writable.close();
+      }
     }
 
     async function finishSave(controller, destination) {
@@ -2274,13 +2867,14 @@
       const controller = views.get(tab?.id);
       if (!controller) return false;
       commitText(controller);
-      const mimeType = namespace.mimeTypeForName(tab.sourceFileName || tab.sourceFilePath) || controller.state.mimeType;
+      if (!/\.mdimage$/i.test(tab.sourceFileName || tab.sourceFilePath || "")) return saveTabAs(tab);
       try {
-        const blob = await encodeCompositeCanvas(controller, mimeType);
+        const blob = await controller.projectCodec.encode(controller.documentStore, createCompositeCanvas(controller));
         if (!await writeBlobToSource(tab, blob)) return saveTabAs(tab);
+        controller.state.mimeType = namespace.IMAGE_PROJECT_MIME_TYPE;
         return finishSave(controller);
       } catch (error) {
-        deps.alert?.(error?.message || "Unable to save this image.");
+        deps.alert?.(error?.message || "Unable to save this layered image.");
         return false;
       }
     }
@@ -2292,23 +2886,31 @@
       try {
         const destination = await chooseSaveDestination(tab);
         if (!destination) return false;
-        const mimeType = namespace.mimeTypeForName(destination.name || destination.path);
-        if (!mimeType) throw new Error("Save As supports .png, .jpg, .jpeg, and .webp files.");
-        const blob = await encodeCompositeCanvas(controller, mimeType);
-        if (destination.downloadOnly) {
-          deps.saveAs?.(blob, destination.name);
-        } else if (destination.path) {
-          await deps.Neutralino.filesystem.writeBinaryFile(destination.path, await blob.arrayBuffer());
-        } else {
-          const writable = await destination.handle.createWritable();
-          await writable.write(blob);
-          await writable.close();
-        }
-        controller.state.mimeType = mimeType;
+        if (!/\.mdimage$/i.test(destination.name || destination.path || "")) throw new Error("Layered image projects use the .mdimage extension.");
+        const blob = await controller.projectCodec.encode(controller.documentStore, createCompositeCanvas(controller));
+        await writeBlobToDestination(destination, blob);
+        controller.state.mimeType = namespace.IMAGE_PROJECT_MIME_TYPE;
         return finishSave(controller, destination);
       } catch (error) {
         if (error?.name === "AbortError") return false;
-        deps.alert?.(error?.message || "Unable to save this image.");
+        deps.alert?.(error?.message || "Unable to save this layered image.");
+        return false;
+      }
+    }
+
+    async function exportFlattenedImage(tab, options = {}) {
+      const controller = views.get(tab?.id);
+      if (!controller) return false;
+      const mimeType = ["image/png", "image/jpeg", "image/webp"].includes(options.mimeType) ? options.mimeType : "image/png";
+      try {
+        const destination = options.destination || await chooseExportDestination(tab, mimeType);
+        if (!destination) return false;
+        const blob = await encodeCompositeCanvas(controller, mimeType);
+        await writeBlobToDestination(destination, blob);
+        return true;
+      } catch (error) {
+        if (error?.name === "AbortError") return false;
+        deps.alert?.(error?.message || "Unable to export the flattened image.");
         return false;
       }
     }
@@ -2364,6 +2966,7 @@
       hasUnsavedChanges,
       saveTab,
       saveTabAs,
+      exportFlattenedImage,
       getDraftBinary,
       refreshCommandState,
       selectAll,

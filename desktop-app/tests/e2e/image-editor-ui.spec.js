@@ -36,7 +36,7 @@ test("opens an image editor, draws, undoes, and explicitly saves", async ({ page
       async getFile() { return sourceFile; },
       async createWritable() {
         return {
-          async write(blob) { window.__imageEditorSavedBlob = blob; },
+          async write(blob) { window.__imageEditorOriginalBlob = blob; },
           async close() {}
         };
       }
@@ -64,6 +64,18 @@ test("opens an image editor, draws, undoes, and explicitly saves", async ({ page
   await expect(page.locator('[data-tool="oval-callout"]')).toHaveCount(0);
   await expect(page.locator('.image-editor-callout-type option')).toHaveCount(3);
   const toolbarRows = await page.evaluate(() => {
+    Object.defineProperty(window, "showSaveFilePicker", {
+      configurable: true,
+      value: async () => {
+        window.__imageEditorPickerCalls = (window.__imageEditorPickerCalls || 0) + 1;
+        return ({
+        name: "paint-test.mdimage",
+        async createWritable() {
+          return { async write(blob) { window.__imageEditorSavedBlob = blob; }, async close() {} };
+        }
+        });
+      }
+    });
     const rect = (selector) => document.querySelector(selector).getBoundingClientRect();
     const undo = rect('[data-action="undo"]');
     const cut = rect('[data-action="cut"]');
@@ -189,9 +201,27 @@ test("opens an image editor, draws, undoes, and explicitly saves", async ({ page
   await page.mouse.down();
   await page.mouse.move(box.x + 35, box.y + 22, { steps: 5 });
   await page.mouse.up();
-  await page.keyboard.press("Control+S");
-
-  await expect.poll(() => page.evaluate(() => window.__imageEditorSavedBlob?.type || "")).toBe("image/png");
+  expect(await page.evaluate(async () => {
+    window.alert = (message) => { window.__imageEditorSaveAlert = message; };
+    Object.defineProperty(window, "showSaveFilePicker", {
+      configurable: true,
+      value: async () => ({
+        name: "paint-test.mdimage",
+        async createWritable() {
+          return { async write(blob) { window.__imageEditorSavedBlob = blob; }, async close() {} };
+        }
+      })
+    });
+    const tabs = window.markdownViewerApp.modules.tabs;
+    const result = await window.markdownViewerApp.services.imageEditor.saveTab(tabs.getActiveTab());
+    return { result, alert: window.__imageEditorSaveAlert || "", picker: typeof window.showSaveFilePicker, sourceName: tabs.getActiveTab()?.sourceFileName };
+  })).toEqual({ result: true, alert: "", picker: "function", sourceName: "paint-test.mdimage" });
+  expect(await page.evaluate(async () => {
+    const tabs = window.markdownViewerApp.modules.tabs;
+    const bytes = await window.markdownViewerApp.services.imageEditor.getDraftBinary(tabs.getActiveTab());
+    return [bytes[0], bytes[1]];
+  })).toEqual([0x50, 0x4b]);
+  expect(await page.evaluate(() => window.__imageEditorOriginalBlob)).toBeUndefined();
   await expect(page.locator("#tab-list .tab-item.active")).not.toHaveClass(/unsaved/);
 });
 
@@ -559,6 +589,7 @@ test('triangle tool draws a filled three-point shape and supports undo', async (
   await page.mouse.down();
   await page.mouse.move(box.x + 45, box.y + 60, { steps: 5 });
   await page.mouse.up();
+  await page.keyboard.press('Enter');
 
   const floatingTriangle = await page.evaluate(() => {
     const root = document.querySelector('.tab-view.active[data-tab-view-kind=image-editor]');
@@ -726,6 +757,7 @@ test('completed polygon becomes a floating selection before placement', async ({
   await page.mouse.click(box.x + 60, box.y + 10);
   await page.mouse.click(box.x + 35, box.y + 45);
   await overlay.dispatchEvent('dblclick');
+  await page.keyboard.press('Enter');
   expect(await page.evaluate(() => {
     const root = document.querySelector('.tab-view.active[data-tab-view-kind=image-editor]');
     const controller = window.markdownViewerApp.services.imageEditor.getView(root.dataset.tabId);
@@ -746,6 +778,34 @@ test('completed polygon becomes a floating selection before placement', async ({
     }
     return false;
   })).toBe(true);
+});
+
+test('layers panel creates layers and restores after being hidden', async ({ page }) => {
+  await page.goto('/');
+  await page.waitForFunction(() => !!window.markdownViewerApp?.modules?.tabs?.openBlankImageEditorInTab, null, { timeout: 60000 });
+  await page.waitForFunction(() => !!window.markdownViewerApp?.modules?.keyboardShortcuts && !!window.markdownViewerApp?.services?.imageEditor, null, { timeout: 60000 });
+  await page.evaluate(() => {
+    window.markdownViewerApp.modules.apiClient.deactivateApiClientSidebar = () => {};
+    window.markdownViewerApp.modules.tabs.openBlankImageEditorInTab({ width: 80, height: 60, name: 'Layers' });
+  });
+
+  await expect(page.locator('.tab-view.active[data-tab-view-kind=image-editor] .image-editor-shell')).toBeVisible();
+  const panel = page.locator('.tab-view.active .image-editor-layers-panel');
+  await expect(panel).toBeVisible();
+  await panel.locator('[data-layer-action="new-layer"]').click();
+  await expect(panel.locator('[data-layer-item]')).toHaveCount(2);
+  await panel.locator('.image-editor-layer-placement select').selectOption('active');
+  expect(await page.evaluate(() => {
+    const root = document.querySelector('.tab-view.active[data-tab-view-kind=image-editor]');
+    const controller = window.markdownViewerApp.services.imageEditor.getView(root.dataset.tabId);
+    return controller.layerPanel.state.placementMode;
+  })).toBe('active');
+
+  await panel.locator('[data-layer-action="hide"]').click();
+  await expect(panel).toBeHidden();
+  await page.locator('[data-layers-toggle="true"]').click();
+  await expect(panel).toBeVisible();
+  await expect(panel).not.toHaveClass(/hidden|minimized/);
 });
 
 test("switching between image editor tabs preserves each tab's drawing", async ({ page }) => {
@@ -1143,6 +1203,7 @@ test("selection moves with arrows and Ctrl+arrow starts a movable copy", async (
 
   await expect(page.locator(".image-editor-shell")).toBeVisible();
   await page.locator('[data-tool="select"]').click();
+  await page.locator('.image-editor-select-mode').selectOption('pixel');
   const overlay = page.locator(".image-editor-overlay");
   const overlayBox = await overlay.boundingBox();
   await page.mouse.move(overlayBox.x + 20, overlayBox.y + 20);
@@ -1213,6 +1274,7 @@ test("selection pointer drag moves, Ctrl clones, and Shift stamps canvas content
 
   await expect(page.locator(".image-editor-shell")).toBeVisible();
   await page.locator('[data-tool="select"]').click();
+  await page.locator('.image-editor-select-mode').selectOption('pixel');
   const overlay = page.locator(".image-editor-overlay");
   const box = await overlay.boundingBox();
   const drag = async (fromX, fromY, toX, toY) => {
@@ -1286,6 +1348,7 @@ test("clicking outside a floating selection commits it and clears the selection"
 
   await expect(page.locator(".image-editor-shell")).toBeVisible();
   await page.locator('[data-tool="select"]').click();
+  await page.locator('.image-editor-select-mode').selectOption('pixel');
   const overlay = page.locator(".image-editor-overlay");
   const overlayBox = await overlay.boundingBox();
   await page.mouse.move(overlayBox.x + 20, overlayBox.y + 20);
@@ -1351,6 +1414,7 @@ test("dragging a pasted floating selection does not alter canvas underneath unti
 
   await expect(page.locator(".image-editor-shell")).toBeVisible();
   await page.locator('[data-tool="select"]').click();
+  await page.locator('.image-editor-select-mode').selectOption('pixel');
   const overlay = page.locator(".image-editor-overlay");
   const overlayBox = await overlay.boundingBox();
   await page.mouse.move(overlayBox.x + 20, overlayBox.y + 20);
@@ -1411,7 +1475,8 @@ test("dragging a pasted floating selection does not alter canvas underneath unti
     const imageEditor = window.markdownViewerApp.services.imageEditor;
     const controller = imageEditor.getView(root.dataset.tabId);
     const draftBytes = await imageEditor.getDraftBinary(controller.tab);
-    const draftBitmap = await createImageBitmap(new Blob([draftBytes], { type: "image/png" }));
+    const draftArchive = await JSZip.loadAsync(draftBytes);
+    const draftBitmap = await createImageBitmap(await draftArchive.file("preview.png").async("blob"));
     const draftCanvas = document.createElement("canvas");
     draftCanvas.width = draftBitmap.width;
     draftCanvas.height = draftBitmap.height;
@@ -1425,7 +1490,12 @@ test("dragging a pasted floating selection does not alter canvas underneath unti
     };
   });
   expect(afterDraftCapture).toEqual({ floating: true, sourcePixel: [0, 0, 255], draftPastePixel: [0, 0, 255] });
-  await page.locator('[data-tool="select"]').click();
+  await page.locator('.image-editor-select-mode').evaluate((select) => {
+    const root = document.querySelector('.tab-view.active[data-tab-view-kind="image-editor"]');
+    const controller = window.markdownViewerApp.services.imageEditor.getView(root.dataset.tabId);
+    select.value = 'pixel';
+    controller.state.selectionMode = 'pixel';
+  });
 
   await page.mouse.move(overlayBox.x + 4, overlayBox.y + 4);
   await page.keyboard.down("Control");
@@ -1519,6 +1589,7 @@ test("selection keyboard shortcuts copy paste and Escape place floating selectio
 
   await expect(page.locator(".image-editor-shell")).toBeVisible();
   await page.locator('[data-tool="select"]').click();
+  await page.locator('.image-editor-select-mode').selectOption('pixel');
   const overlay = page.locator(".image-editor-overlay");
   const overlayBox = await overlay.boundingBox();
   await page.mouse.move(overlayBox.x + 20, overlayBox.y + 20);
@@ -1594,6 +1665,7 @@ test("selection stamps repeated copies with Shift+arrow", async ({ page }) => {
 
   await expect(page.locator(".image-editor-shell")).toBeVisible();
   await page.locator('[data-tool="select"]').click();
+  await page.locator('.image-editor-select-mode').selectOption('pixel');
   const overlay = page.locator(".image-editor-overlay");
   const overlayBox = await overlay.boundingBox();
   await page.mouse.move(overlayBox.x + 20, overlayBox.y + 20);

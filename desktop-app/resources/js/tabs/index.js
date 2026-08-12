@@ -3290,13 +3290,14 @@
     const draftBytes = await deps.imageEditor?.getDraftBinary?.(tab);
     if (!draftBytes) return;
     const originalName = getTabSourceFileName(tab) || tab.imageEditorSource?.name;
-    const sourceName = addCopySuffixToFileName(originalName) || 'Image (copy).png';
-    const source = { blank: true, name: sourceName, mimeType: 'image/png' };
+    const projectName = /\.mdimage$/i.test(originalName || "") ? originalName : String(originalName || "Image").replace(/\.[^.]+$/, "") + ".mdimage";
+    const sourceName = addCopySuffixToFileName(projectName) || 'Image (copy).mdimage';
+    const source = { blank: true, name: sourceName, mimeType: 'application/vnd.md-editor.image+zip' };
     source.width = tab.imageEditorState?.width;
     source.height = tab.imageEditorState?.height;
     const dup = createImageEditorTab(source, sourceName + ' \u2014 Image Editor', {
       temporary: false,
-      state: { ...(tab.imageEditorState || {}), mimeType: 'image/png' },
+      state: { ...(tab.imageEditorState || {}), mimeType: 'application/vnd.md-editor.image+zip' },
       dirty: true,
       draftBytes
     });

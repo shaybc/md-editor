@@ -15,12 +15,13 @@ function loadCodec() {
   return context.window.MarkdownViewerImageEditor;
 }
 
-test("codec recognizes only PNG, JPEG, and WebP editor sources", () => {
+test("codec recognizes raster images and native layered projects", () => {
   const codec = loadCodec();
 
   assert.equal(codec.canEditSource({ name: "photo.png" }), true);
   assert.equal(codec.canEditSource({ type: "image/jpeg" }), true);
   assert.equal(codec.canEditSource({ mimeType: "image/webp" }), true);
+  assert.equal(codec.canEditSource({ name: "project.mdimage" }), true);
   assert.equal(codec.canEditSource({ name: "animation.gif", type: "image/gif" }), false);
   assert.equal(codec.canEditSource({ name: "vector.svg" }), false);
 });
@@ -32,5 +33,6 @@ test("codec maps supported save extensions to canonical MIME types", () => {
   assert.equal(codec.mimeTypeForName("image.jpg"), "image/jpeg");
   assert.equal(codec.mimeTypeForName("image.jpeg"), "image/jpeg");
   assert.equal(codec.mimeTypeForName("image.webp"), "image/webp");
+  assert.equal(codec.mimeTypeForName("project.mdimage"), "application/vnd.md-editor.image+zip");
   assert.equal(codec.mimeTypeForName("image.bmp"), "");
 });

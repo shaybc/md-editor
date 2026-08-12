@@ -9,6 +9,7 @@
     jpeg: "image/jpeg",
     webp: "image/webp"
   });
+  const PROJECT_FORMAT_BY_EXTENSION = Object.freeze({ mdimage: "application/vnd.md-editor.image+zip" });
 
   function extensionOf(value) {
     const match = String(value || "").toLowerCase().match(/\.([a-z0-9]+)$/);
@@ -16,12 +17,13 @@
   }
 
   function mimeTypeForName(name) {
-    return FORMAT_BY_EXTENSION[extensionOf(name)] || "";
+    const extension = extensionOf(name);
+    return FORMAT_BY_EXTENSION[extension] || PROJECT_FORMAT_BY_EXTENSION[extension] || "";
   }
 
   function canEditSource(source = {}) {
     const mimeType = String(source.mimeType || source.type || source.file?.type || "").toLowerCase();
-    return Object.values(FORMAT_BY_EXTENSION).includes(mimeType) || !!mimeTypeForName(source.name || source.path);
+    return Object.values(FORMAT_BY_EXTENSION).includes(mimeType) || Object.values(PROJECT_FORMAT_BY_EXTENSION).includes(mimeType) || !!mimeTypeForName(source.name || source.path);
   }
 
   async function readSourceBytes(source, deps = {}) {
@@ -79,6 +81,7 @@
 
   Object.assign(namespace, {
     FORMAT_BY_EXTENSION,
+    PROJECT_FORMAT_BY_EXTENSION,
     extensionOf,
     mimeTypeForName,
     canEditSource,

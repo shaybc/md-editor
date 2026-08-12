@@ -6,7 +6,7 @@
       markdown: ".md",
       graph: ".mdviewer-graph.json",
       report: ".mdviewer-graph.json",
-      "image-editor": ".png",
+      "image-editor": ".mdimage",
       "diagram-editor": ".drawio",
       file: ".txt"
     };

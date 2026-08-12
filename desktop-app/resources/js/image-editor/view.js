@@ -128,6 +128,14 @@
           </div>
           <div class="image-editor-color-palette image-editor-toolbar-group" role="group" aria-label="Predefined colors"></div>
           <div class="image-editor-dynamic-controls">
+            <div class="image-editor-select-controls image-editor-toolbar-group" hidden>
+              <label>Select
+                <select class="image-editor-select-mode" aria-label="Selection mode">
+                  <option value="object">Objects</option>
+                  <option value="pixel">Pixel marquee</option>
+                </select>
+              </label>
+            </div>
             <div class="image-editor-rounded-rectangle-controls image-editor-toolbar-group" hidden>
               <label>Radius <input class="image-editor-corner-radius" type="range" min="0" max="100" value="16"></label>
               <label><input class="image-editor-all-corners" type="checkbox" checked> All corners</label>
@@ -255,6 +263,9 @@
         element.dataset.action = action;
         this.shell.querySelector(".image-editor-history-actions").appendChild(element);
       });
+      const layersButton = button("bi-layers", "Layers", "image-editor-layers-toggle");
+      layersButton.dataset.layersToggle = "true";
+      this.shell.querySelector(".image-editor-history-actions").appendChild(layersButton);
       [
         ["bi-scissors", "Cut", "cut"], ["bi-copy", "Copy", "copy"],
         ["bi-clipboard", "Paste", "paste"], ["bi-trash", "Delete", "delete"]
@@ -408,6 +419,8 @@
       this.shell.querySelector(".image-editor-pattern-density").value = String(state.patternDensity);
       this.setActiveColorTarget(this.activeColorTarget, state);
       this.shell.querySelector(".image-editor-fill").checked = state.fillShapes;
+      this.shell.querySelector(".image-editor-select-controls").hidden = state.tool !== "select";
+      this.shell.querySelector(".image-editor-select-mode").value = state.selectionMode;
       namespace.syncStrokeTypeSelector(this.shell.querySelector(".image-editor-stroke-type"), state.strokeType);
       this.shell.querySelector(".image-editor-corner-radius").value = String(state.cornerRadius);
       this.shell.querySelector(".image-editor-all-corners").checked = state.adjustAllCorners;

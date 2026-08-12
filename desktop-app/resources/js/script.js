@@ -627,6 +627,7 @@ async function startMarkdownViewer() {
     get openFilePreviewInTab() { return openFilePreviewInTab; },
     get openHexEditorInTab() { return tabsModule?.openHexEditorInTab; },
     get openDiagramEditorInTab() { return tabsModule?.openDiagramEditorInTab; },
+    get openImageEditorInTab() { return tabsModule?.openImageEditorInTab; },
     isDiagramPath: diagramEditor.isDiagramPath,
     isDiagramCandidatePath: diagramEditor.isDiagramCandidatePath,
     looksLikeDiagramXml: diagramEditor.looksLikeDiagramXml,

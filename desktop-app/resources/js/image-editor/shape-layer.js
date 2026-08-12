@@ -24,7 +24,7 @@
 
   /** Rasterize a completed drag-defined shape into a transparent floating layer. */
   function rasterizeShapeLayer(tool, start, end, state, bounds) {
-    return rasterizeBounds(
+    const layer = rasterizeBounds(
       Math.min(start.x, end.x),
       Math.min(start.y, end.y),
       Math.max(start.x, end.x),
@@ -33,12 +33,14 @@
       bounds,
       (context) => namespace.drawShape(context, tool, start, end, state)
     );
+    if (layer) layer.descriptor = { tool, geometry: { start: { ...start }, end: { ...end } }, style: namespace.captureImageEditorToolStyle?.(state) || {} };
+    return layer;
   }
 
   /** Rasterize a completed polygon into a transparent floating layer. */
   function rasterizePolygonLayer(points, state, bounds) {
     if (!points?.length) return null;
-    return rasterizeBounds(
+    const layer = rasterizeBounds(
       Math.min(...points.map((point) => point.x)),
       Math.min(...points.map((point) => point.y)),
       Math.max(...points.map((point) => point.x)),
@@ -47,13 +49,15 @@
       bounds,
       (context) => namespace.drawPolygon(context, points, state, true)
     );
+    if (layer) layer.descriptor = { tool: "polygon", geometry: { points: points.map((point) => ({ ...point })) }, style: namespace.captureImageEditorToolStyle?.(state) || {} };
+    return layer;
   }
 
   /** Rasterize an edited rounded rectangle into a transparent floating layer. */
   function rasterizeRoundedRectangleLayer(model, state, bounds) {
     if (!model?.rect) return null;
     const { rect } = model;
-    return rasterizeBounds(
+    const layer = rasterizeBounds(
       rect.x,
       rect.y,
       rect.x + rect.width,
@@ -62,6 +66,8 @@
       bounds,
       (context) => namespace.drawRoundedRectangle(context, rect, model.radii, state)
     );
+    if (layer) layer.descriptor = { tool: "rounded-rectangle", geometry: namespace.cloneImageDocument(model), style: namespace.captureImageEditorToolStyle?.(state) || {} };
+    return layer;
   }
 
   Object.assign(namespace, { rasterizeShapeLayer, rasterizePolygonLayer, rasterizeRoundedRectangleLayer });

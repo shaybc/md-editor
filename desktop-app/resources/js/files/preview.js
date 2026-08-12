@@ -20,6 +20,7 @@
       bmp: "image/bmp",
       ico: "image/x-icon",
       avif: "image/avif",
+      mdimage: "application/vnd.md-editor.image+zip",
       mp3: "audio/mpeg",
       wav: "audio/wav",
       ogg: "audio/ogg",

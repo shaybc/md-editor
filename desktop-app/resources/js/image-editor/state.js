@@ -15,6 +15,7 @@
       this.height = Math.max(1, Number(options.height || 1));
       this.mimeType = options.mimeType || "image/png";
       this.tool = TOOLS.includes(options.tool) ? options.tool : "pencil";
+      this.selectionMode = options.selectionMode === "pixel" ? "pixel" : "object";
       this.foregroundColor = options.foregroundColor || "#111111";
       this.backgroundColor = options.backgroundColor || "#ffffff";
       this.brushSize = Math.max(1, Math.min(64, Number(options.brushSize || 8)));
