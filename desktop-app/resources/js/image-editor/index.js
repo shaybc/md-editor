@@ -199,16 +199,19 @@
     }
 
     function isCalloutTool(tool) {
-      return tool === "callout" || tool === "oval-callout";
+      return tool === "callout" || tool === "oval-callout" || tool === "cloud-callout";
     }
 
     function calloutToolFor(controller, tool = controller.state.tool) {
-      return tool === "oval-callout" ? controller.ovalCalloutTool : controller.calloutTool;
+      if (tool === "oval-callout") return controller.ovalCalloutTool;
+      if (tool === "cloud-callout") return controller.cloudCalloutTool;
+      return controller.calloutTool;
     }
 
     function editingCalloutTool(controller) {
       if (controller.calloutTool.isEditing) return controller.calloutTool;
       if (controller.ovalCalloutTool.isEditing) return controller.ovalCalloutTool;
+      if (controller.cloudCalloutTool.isEditing) return controller.cloudCalloutTool;
       return null;
     }
 
@@ -1144,6 +1147,7 @@
         roundedRectangleBefore: null,
         calloutTool: new namespace.ImageEditorCalloutTool(),
         ovalCalloutTool: new namespace.ImageEditorOvalCalloutTool(),
+        cloudCalloutTool: new namespace.ImageEditorCloudCalloutTool(),
         calloutBefore: null,
         textRect: null,
         creatingTextBox: false,

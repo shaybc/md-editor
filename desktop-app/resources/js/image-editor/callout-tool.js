@@ -139,7 +139,7 @@
     rasterize(state, bounds) {
       const model = this.model;
       if (!model) return null;
-      const padding = Math.ceil(state.lineWidth / 2) + 2;
+      const padding = this.rasterPadding(state, model);
       const left = Math.max(0, Math.floor(Math.min(model.rect.x, model.tip.x) - padding));
       const top = Math.max(0, Math.floor(Math.min(model.rect.y, model.tip.y) - padding));
       const right = Math.min(bounds.width, Math.ceil(Math.max(model.rect.x + model.rect.width, model.tip.x) + padding));
@@ -154,6 +154,11 @@
       context.translate(-left, -top);
       this.drawShape(context, state);
       return { imageData: context.getImageData(0, 0, width, height), rect: { x: left, y: top, width, height } };
+    }
+
+    /** Return the transparent margin required around this callout's rasterized geometry. */
+    rasterPadding(state) {
+      return Math.ceil(state.lineWidth / 2) + 2;
     }
 
     /** Discard the editable callout and its guide. */

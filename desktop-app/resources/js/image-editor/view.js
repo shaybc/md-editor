@@ -86,6 +86,7 @@
               <select class="image-editor-callout-type" aria-label="Callout type">
                 <option value="callout">Rounded rectangular</option>
                 <option value="oval-callout">Oval</option>
+                <option value="cloud-callout">Cloud</option>
               </select>
             </label>
           </div>
@@ -130,7 +131,7 @@
       this.overlayContext = this.overlay.getContext("2d");
       this.activeColorTarget = "foreground";
 
-      namespace.tools.filter((tool) => tool !== "oval-callout").forEach((tool) => this.shell.querySelector(".image-editor-tools").appendChild(createToolButton(tool)));
+      namespace.tools.filter((tool) => tool !== "oval-callout" && tool !== "cloud-callout").forEach((tool) => this.shell.querySelector(".image-editor-tools").appendChild(createToolButton(tool)));
       [
         ["bi-arrow-counterclockwise", "Undo", "undo"],
         ["bi-arrow-clockwise", "Redo", "redo"]
@@ -237,7 +238,7 @@
 
     update(state, commandState) {
       this.shell.querySelectorAll("[data-tool]").forEach((element) => {
-        const active = element.dataset.tool === state.tool || (element.dataset.tool === "callout" && state.tool === "oval-callout");
+        const active = element.dataset.tool === state.tool || (element.dataset.tool === "callout" && (state.tool === "oval-callout" || state.tool === "cloud-callout"));
         element.classList.toggle("active", active);
         element.setAttribute("aria-pressed", String(active));
       });
@@ -248,7 +249,7 @@
       this.shell.querySelector(".image-editor-corner-radius").value = String(state.cornerRadius);
       this.shell.querySelector(".image-editor-all-corners").checked = state.adjustAllCorners;
       this.shell.querySelector(".image-editor-rounded-rectangle-controls").hidden = state.tool !== "rounded-rectangle";
-      const calloutActive = state.tool === "callout" || state.tool === "oval-callout";
+      const calloutActive = state.tool === "callout" || state.tool === "oval-callout" || state.tool === "cloud-callout";
       this.shell.querySelector(".image-editor-callout-controls").hidden = !calloutActive;
       if (calloutActive) this.shell.querySelector(".image-editor-callout-type").value = state.tool;
       this.shell.querySelector(".image-editor-text-controls").hidden = state.tool !== "text";

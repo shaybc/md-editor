@@ -62,7 +62,7 @@ test("opens an image editor, draws, undoes, and explicitly saves", async ({ page
   await expect(page.locator('[data-tool="curve"]')).toHaveAttribute('title', 'Curve');
   await expect(page.locator('[data-tool="callout"]')).toHaveAttribute('title', 'Rounded rectangular callout');
   await expect(page.locator('[data-tool="oval-callout"]')).toHaveCount(0);
-  await expect(page.locator('.image-editor-callout-type option')).toHaveCount(2);
+  await expect(page.locator('.image-editor-callout-type option')).toHaveCount(3);
   const toolbarRows = await page.evaluate(() => {
     const rect = (selector) => document.querySelector(selector).getBoundingClientRect();
     const undo = rect('[data-action="undo"]');
