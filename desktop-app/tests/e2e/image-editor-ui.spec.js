@@ -345,7 +345,7 @@ test('triangle tool draws a filled three-point shape and supports undo', async (
   expect(undoPixels.moved).toEqual([255, 255, 255]);
 });
 
-test('diamond tool draws a filled floating shape that can be moved and undone', async ({ page }) => {
+test('diamond and line tools return after each floating shape is placed', async ({ page }) => {
   await page.goto('/');
   await page.waitForFunction(() => !!window.markdownViewerApp?.modules?.tabs?.openBlankImageEditorInTab, null, { timeout: 60000 });
   await page.waitForFunction(() => !!window.markdownViewerApp?.modules?.keyboardShortcuts && !!window.markdownViewerApp?.services?.imageEditor, null, { timeout: 60000 });
@@ -383,6 +383,7 @@ test('diamond tool draws a filled floating shape that can be moved and undone', 
   await page.mouse.move(box.x + floatingDiamond.rect.x + floatingDiamond.rect.width / 2 + 30, box.y + floatingDiamond.rect.y + floatingDiamond.rect.height / 2, { steps: 5 });
   await page.mouse.up();
   await page.keyboard.press('Escape');
+  await expect(page.locator('[data-tool=diamond]')).toHaveClass(/active/);
 
   const placedPixels = await page.locator('.image-editor-canvas').evaluate((canvas) => {
     const context = canvas.getContext('2d');
@@ -391,9 +392,33 @@ test('diamond tool draws a filled floating shape that can be moved and undone', 
   });
   expect(placedPixels.original).toEqual([255, 255, 255]);
   expect(placedPixels.moved).toEqual([0, 255, 0]);
+  await page.mouse.move(box.x + 5, box.y + 5);
+  await page.mouse.down();
+  await page.mouse.move(box.x + 20, box.y + 20, { steps: 3 });
+  await page.mouse.up();
+  await expect(page.locator('[data-tool=select]')).toHaveClass(/active/);
+  await page.keyboard.press('Escape');
+  await expect(page.locator('[data-tool=diamond]')).toHaveClass(/active/);
+  await page.keyboard.press('Control+Z');
   await page.keyboard.press('Control+Z');
   expect(await page.locator('.image-editor-canvas').evaluate((canvas) =>
     Array.from(canvas.getContext('2d').getImageData(60, 30, 1, 1).data).slice(0, 3))).toEqual([255, 255, 255]);
+
+  await page.locator('[data-tool=line]').click();
+  await page.mouse.move(box.x + 5, box.y + 65);
+  await page.mouse.down();
+  await page.mouse.move(box.x + 30, box.y + 65, { steps: 3 });
+  await page.mouse.up();
+  await expect(page.locator('[data-tool=select]')).toHaveClass(/active/);
+  await page.keyboard.press('Escape');
+  await expect(page.locator('[data-tool=line]')).toHaveClass(/active/);
+  await page.mouse.move(box.x + 40, box.y + 65);
+  await page.mouse.down();
+  await page.mouse.move(box.x + 70, box.y + 65, { steps: 3 });
+  await page.mouse.up();
+  await expect(page.locator('[data-tool=select]')).toHaveClass(/active/);
+  await page.keyboard.press('Escape');
+  await expect(page.locator('[data-tool=line]')).toHaveClass(/active/);
 });
 
 test('placing an unfilled shape preserves canvas pixels beneath its transparent interior', async ({ page }) => {

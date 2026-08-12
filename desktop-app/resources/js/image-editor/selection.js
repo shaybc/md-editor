@@ -17,6 +17,7 @@
       this.moveGesture = null;
       this.pasteRevision = 0;
       this.savedFloatingLayer = null;
+      this.returnToolAfterPlacement = null;
     }
 
     get hasSelection() {
@@ -41,6 +42,7 @@
       this.floating = false;
       this.phase = "outlined";
       this.origin = "canvas";
+      this.returnToolAfterPlacement = null;
       return this.rect;
     }
 
@@ -56,6 +58,7 @@
       this.floating = true;
       this.phase = "floating";
       this.origin = origin;
+      this.returnToolAfterPlacement = null;
       if (clearSource) {
         context.fillStyle = backgroundColor || "#ffffff";
         context.fillRect(this.rect.x, this.rect.y, this.rect.width, this.rect.height);
@@ -136,6 +139,7 @@
       this.floating = false;
       this.phase = "pasting";
       this.origin = null;
+      this.returnToolAfterPlacement = null;
       this.pointerGesture = null;
       this.moveGesture = null;
       return this.pasteRevision;
@@ -229,17 +233,19 @@
       this.floating = true;
       this.phase = "floating";
       this.origin = "paste";
+      this.returnToolAfterPlacement = null;
       return true;
     }
 
     /** Adopt generated transparent pixels as the active floating selection. */
-    setFloatingLayer(imageData, rect, origin = "generated") {
+    setFloatingLayer(imageData, rect, origin = "generated", returnToolAfterPlacement = null) {
       if (!imageData || !rect?.width || !rect?.height) return false;
       this.imageData = imageData;
       this.rect = { ...rect };
       this.floating = true;
       this.phase = "floating";
       this.origin = origin;
+      this.returnToolAfterPlacement = returnToolAfterPlacement;
       this.pointerGesture = null;
       this.moveGesture = null;
       return true;
@@ -269,6 +275,7 @@
       this.pointerGesture = null;
       this.moveGesture = null;
       this.savedFloatingLayer = null;
+      this.returnToolAfterPlacement = null;
     }
   }
 

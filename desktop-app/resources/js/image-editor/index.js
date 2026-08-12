@@ -137,7 +137,7 @@
     function floatGeneratedLayer(controller, layer, before, origin = "shape") {
       if (!layer) return false;
       controller.selectionBefore = before || snapshot(controller.view);
-      controller.selection.setFloatingLayer(layer.imageData, layer.rect, origin);
+      controller.selection.setFloatingLayer(layer.imageData, layer.rect, origin, controller.state.tool);
       controller.state.setTool("select");
       controller.state.setDirty(true);
       drawSelectionOverlay(controller);
@@ -527,9 +527,11 @@
     function dropSelection(controller) {
       const { selection } = controller;
       if (!selection.hasSelection && !selection.isPasting) return false;
+      const returnTool = selection.returnToolAfterPlacement;
       if (selection.floating) commitSelection(controller);
       controller.selectionBefore = null;
       selection.clear();
+      if (returnTool && controller.state.tool === "select") controller.state.setTool(returnTool);
       drawSelectionOverlay(controller);
       syncTab(controller);
       return true;
