@@ -19,6 +19,7 @@
     diamond: "bi-diamond",
     star: "bi-star",
     arrow: "bi-arrow-right",
+    lightning: "bi-lightning",
     bucket: "bi-paint-bucket",
     text: "bi-fonts"
   };

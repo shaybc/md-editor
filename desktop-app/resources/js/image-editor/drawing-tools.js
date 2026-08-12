@@ -136,6 +136,8 @@
       namespace.traceStar(context, start, end, state.starPoints);
     } else if (tool === "arrow") {
       namespace.traceArrow(context, start, end, state.arrowDirection, state.arrowHeadAngle);
+    } else if (tool === "lightning") {
+      namespace.traceLightning(context, start, end);
     }
     if (state.fillShapes && tool !== "line") context.fill();
     context.stroke();
