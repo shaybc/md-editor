@@ -230,6 +230,35 @@
       return floatGeneratedLayer(controller, layer, before);
     }
 
+    function renderTrianglePreview(controller) {
+      const { view, triangleTool, state } = controller;
+      view.overlayContext.clearRect(0, 0, view.overlay.width, view.overlay.height);
+      triangleTool.drawPreview(view.overlayContext, state);
+    }
+
+    function cancelEditableTriangle(controller) {
+      controller.triangleTool.reset();
+      controller.triangleBefore = null;
+      controller.dragging = false;
+      controller.view.overlayContext.clearRect(0, 0, controller.view.overlay.width, controller.view.overlay.height);
+      syncTab(controller);
+    }
+
+    function finishEditableTriangle(controller) {
+      const { triangleTool, state, view } = controller;
+      if (!triangleTool.isEditing || !triangleTool.model) {
+        cancelEditableTriangle(controller);
+        return false;
+      }
+      view.overlayContext.clearRect(0, 0, view.overlay.width, view.overlay.height);
+      const layer = triangleTool.rasterize(state, state);
+      const before = controller.triangleBefore;
+      triangleTool.reset();
+      controller.triangleBefore = null;
+      controller.dragging = false;
+      return floatGeneratedLayer(controller, layer, before);
+    }
+
     function isCalloutTool(tool) {
       return tool === "callout" || tool === "oval-callout" || tool === "cloud-callout";
     }
@@ -368,6 +397,7 @@
       if (editingCalloutTool(controller)) renderCalloutPreview(controller);
       if (controller.roundedRectangleTool?.isEditing) renderRoundedRectanglePreview(controller);
       if (controller.heartTool?.isEditing) renderHeartPreview(controller);
+      if (controller.triangleTool?.isEditing) renderTrianglePreview(controller);
       syncTab(controller);
       return controller.state.zoom;
     }
@@ -525,6 +555,7 @@
       if (controller.roundedRectangleTool.isEditing) renderRoundedRectanglePreview(controller);
       if (editingCalloutTool(controller)) renderCalloutPreview(controller);
       if (controller.heartTool.isEditing) renderHeartPreview(controller);
+      if (controller.triangleTool.isEditing) renderTrianglePreview(controller);
       if (colorTarget === "foreground") {
         refreshLiveTextStyle(controller);
         if (controller.curveTool.isEditing) renderCurvePreview(controller);
@@ -550,6 +581,7 @@
           if (state.tool === "rounded-rectangle" && controller.roundedRectangleTool.isEditing) finishEditableRoundedRectangle(controller);
           if (isCalloutTool(state.tool) && editingCalloutTool(controller)) finishEditableCallout(controller);
           if (state.tool === "heart" && controller.heartTool.isEditing) finishEditableHeart(controller);
+          if (state.tool === "triangle" && controller.triangleTool.isEditing) finishEditableTriangle(controller);
           commitText(controller);
           if (toolButton.dataset.tool !== "select") dropSelection(controller);
           state.setTool(toolButton.dataset.tool);
@@ -584,12 +616,14 @@
         if (controller.roundedRectangleTool.isEditing) renderRoundedRectanglePreview(controller);
         if (editingCalloutTool(controller)) renderCalloutPreview(controller);
         if (controller.heartTool.isEditing) renderHeartPreview(controller);
+        if (controller.triangleTool.isEditing) renderTrianglePreview(controller);
       });
       view.shell.querySelector(".image-editor-fill").addEventListener("change", (event) => {
         state.fillShapes = event.target.checked;
         if (controller.roundedRectangleTool.isEditing) renderRoundedRectanglePreview(controller);
         if (editingCalloutTool(controller)) renderCalloutPreview(controller);
         if (controller.heartTool.isEditing) renderHeartPreview(controller);
+        if (controller.triangleTool.isEditing) renderTrianglePreview(controller);
       });
       view.shell.querySelector(".image-editor-callout-type").addEventListener("change", (event) => {
         const nextTool = event.target.value;
@@ -739,6 +773,25 @@
           renderHeartPreview(controller);
           return;
         }
+        if (state.tool === "triangle") {
+          event.preventDefault();
+          event.stopPropagation();
+          if (!controller.triangleTool.isEditing) {
+            commitText(controller);
+            commitSelection(controller);
+            controller.triangleBefore = snapshot(view);
+          }
+          const result = controller.triangleTool.begin(point);
+          if (result.action === "outside") {
+            finishEditableTriangle(controller);
+            return;
+          }
+          if (!result.started) return;
+          controller.dragging = true;
+          overlay.setPointerCapture?.(event.pointerId);
+          renderTrianglePreview(controller);
+          return;
+        }
         if (state.tool === "text") {
           event.preventDefault();
           event.stopPropagation();
@@ -810,6 +863,11 @@
           renderHeartPreview(controller);
           return;
         }
+        if (state.tool === "triangle") {
+          controller.triangleTool.update(point);
+          renderTrianglePreview(controller);
+          return;
+        }
         if (state.tool === "text" && controller.creatingTextBox) {
           drawTextCreationOverlay(controller, point);
           return;
@@ -846,6 +904,9 @@
         } else if (state.tool === "heart") {
           controller.heartTool.completeStage(point);
           renderHeartPreview(controller);
+        } else if (state.tool === "triangle") {
+          controller.triangleTool.completeStage(point);
+          renderTrianglePreview(controller);
         } else if (state.tool === "text" && controller.creatingTextBox) {
           controller.creatingTextBox = false;
           view.overlayContext.clearRect(0, 0, view.overlay.width, view.overlay.height);
@@ -1131,6 +1192,18 @@
             return;
           }
         }
+        if (controller.state.tool === "triangle" && controller.triangleTool.isEditing) {
+          if (event.key === "Escape") {
+            cancelEditableTriangle(controller);
+            event.preventDefault();
+            return;
+          }
+          if (event.key === "Enter") {
+            finishEditableTriangle(controller);
+            event.preventDefault();
+            return;
+          }
+        }
         if (primary && !event.shiftKey && !event.altKey && event.key.toLowerCase() === "a") {
           event.preventDefault();
           selectAllCanvas(controller);
@@ -1247,6 +1320,8 @@
         calloutBefore: null,
         heartTool: new namespace.ImageEditorHeartTool(),
         heartBefore: null,
+        triangleTool: new namespace.ImageEditorTriangleTool(),
+        triangleBefore: null,
         textRect: null,
         creatingTextBox: false,
         textInputOpening: false,
