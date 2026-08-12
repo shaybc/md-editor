@@ -60,6 +60,7 @@
         backgroundColor: state.backgroundColor,
         brushSize: state.brushSize,
         lineWidth: state.lineWidth,
+        strokeType: state.strokeType,
         fillShapes: state.fillShapes,
         starPoints: state.starPoints,
         arrowDirection: state.arrowDirection,
@@ -768,6 +769,18 @@
         if (controller.ellipseTool.isEditing) renderEllipsePreview(controller);
         if (controller.arcTool.isEditing) renderArcPreview(controller);
       });
+      view.shell.querySelector(".image-editor-stroke-type").addEventListener("change", (event) => {
+        state.strokeType = namespace.normalizeStrokeType(event.target.value);
+        if (controller.curveTool.isEditing) renderCurvePreview(controller);
+        if (controller.roundedRectangleTool.isEditing) renderRoundedRectanglePreview(controller);
+        if (editingCalloutTool(controller)) renderCalloutPreview(controller);
+        if (controller.heartTool.isEditing) renderHeartPreview(controller);
+        if (controller.triangleTool.isEditing) renderTrianglePreview(controller);
+        if (controller.polygonTool.isEditing) renderPolygonPreview(controller);
+        if (controller.starTool.isEditing) renderStarPreview(controller);
+        if (controller.ellipseTool.isEditing) renderEllipsePreview(controller);
+        if (controller.arcTool.isEditing) renderArcPreview(controller);
+      });
       view.shell.querySelector(".image-editor-fill").addEventListener("change", (event) => {
         state.fillShapes = event.target.checked;
         if (controller.roundedRectangleTool.isEditing) renderRoundedRectanglePreview(controller);
@@ -1058,6 +1071,7 @@
         controller.gestureBefore = snapshot(view);
         controller.startPoint = controller.lastPoint = point;
         controller.dragging = true;
+        if (state.tool === "pencil" || state.tool === "brush") controller.freehandStrokeDistance = 0;
         if (state.tool === "select") {
           if (selection.hasSelection && !selection.floating) controller.selectionBefore = snapshot(view);
           const gesture = selection.beginPointerGesture(point, view.context, state.backgroundColor, {
@@ -1138,7 +1152,9 @@
           return;
         }
         if (state.tool === "pencil" || state.tool === "brush") {
-          namespace.drawFreehand(view.context, controller.lastPoint, point, state, state.tool);
+          controller.freehandStrokeDistance = namespace.drawFreehand(
+            view.context, controller.lastPoint, point, state, state.tool, controller.freehandStrokeDistance
+          );
           controller.lastPoint = point;
           return;
         }
@@ -1640,6 +1656,7 @@
         polygonPoints: [],
         polygonTool: new namespace.ImageEditorPolygonTool(),
         dragging: false,
+        freehandStrokeDistance: 0,
         selectionBefore: null,
         curveTool: new namespace.ImageEditorCurveTool(),
         curveBefore: null,

@@ -1093,6 +1093,12 @@ audio.file-preview-content {
 .image-editor-size-controls {
   display: grid; grid-template-rows: repeat(2, 28px); align-items: center; min-width: 128px;
 }
+.image-editor-stroke-controls {
+  display: flex; align-items: center;
+}
+.image-editor-stroke-type {
+  height: 28px; border: 1px solid var(--border-color); border-radius: 5px; background: var(--input-bg); color: var(--text-color);
+}
 .image-editor-rounded-rectangle-controls {
   display: grid; grid-template-rows: repeat(2, 28px); align-items: center; min-width: 132px;
 }

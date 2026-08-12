@@ -47,11 +47,7 @@
 
   function drawTriangle(context, model, state) {
     context.save();
-    context.strokeStyle = state.foregroundColor;
-    context.fillStyle = state.backgroundColor;
-    context.lineWidth = state.lineWidth;
-    context.lineCap = "round";
-    context.lineJoin = "round";
+    namespace.configureStroke(context, state, state.lineWidth);
     context.beginPath();
     traceTriangle(context, model);
     if (state.fillShapes) context.fill();

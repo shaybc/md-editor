@@ -7,20 +7,27 @@
   const FLOOD_FILL_EDGE_SEARCH_RADIUS = 3;
   const FLOOD_FILL_EDGE_DIRECTION_ALIGNMENT = 0.97;
 
-  function configureStroke(context, state, width) {
+  function configureStroke(context, state, width, pathDistance = 0) {
     context.strokeStyle = state.foregroundColor;
     context.fillStyle = state.backgroundColor;
     context.lineWidth = width;
     context.lineCap = "round";
     context.lineJoin = "round";
+    if (namespace.applyStrokeType) namespace.applyStrokeType(context, state.strokeType, width, pathDistance);
+    else {
+      context.setLineDash([]);
+      context.lineDashOffset = 0;
+    }
   }
 
-  function drawFreehand(context, from, to, state, tool) {
-    configureStroke(context, state, tool === "pencil" ? 1 : state.brushSize);
+  function drawFreehand(context, from, to, state, tool, pathDistance = 0) {
+    const width = tool === "pencil" ? 1 : state.brushSize;
+    configureStroke(context, state, width, pathDistance);
     context.beginPath();
     context.moveTo(from.x, from.y);
     context.lineTo(to.x, to.y);
     context.stroke();
+    return pathDistance + Math.hypot(to.x - from.x, to.y - from.y);
   }
 
   function resolveCurveGeometry(curve) {

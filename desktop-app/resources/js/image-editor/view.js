@@ -82,6 +82,18 @@
             <label>Size <input class="image-editor-size" type="range" min="1" max="64" value="8"></label>
             <label><input class="image-editor-fill" type="checkbox"> Fill</label>
           </div>
+          <div class="image-editor-stroke-controls image-editor-toolbar-group">
+            <label>Line
+              <select class="image-editor-stroke-type" aria-label="Line type">
+                <option value="solid">Solid</option>
+                <option value="dash">Dash</option>
+                <option value="center">Center</option>
+                <option value="dotted">Dotted</option>
+                <option value="dash-dot">Dash-dot</option>
+                <option value="dash-double-dot">Dash-double-dot</option>
+              </select>
+            </label>
+          </div>
           <div class="image-editor-color-targets image-editor-toolbar-group" role="group" aria-label="Active image colors">
             <label class="image-editor-color-target active" data-color-target="foreground" title="Foreground color">FG <input class="image-editor-foreground" type="color" value="#111111" aria-label="Foreground color"></label>
             <label class="image-editor-color-target" data-color-target="background" title="Background color">BG <input class="image-editor-background" type="color" value="#ffffff" aria-label="Background color"></label>
@@ -319,6 +331,7 @@
       this.shell.querySelector(".image-editor-background").value = state.backgroundColor;
       this.setActiveColorTarget(this.activeColorTarget, state);
       this.shell.querySelector(".image-editor-fill").checked = state.fillShapes;
+      this.shell.querySelector(".image-editor-stroke-type").value = state.strokeType;
       this.shell.querySelector(".image-editor-corner-radius").value = String(state.cornerRadius);
       this.shell.querySelector(".image-editor-all-corners").checked = state.adjustAllCorners;
       this.shell.querySelector(".image-editor-rounded-rectangle-controls").hidden = state.tool !== "rounded-rectangle";

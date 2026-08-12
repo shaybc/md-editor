@@ -19,6 +19,7 @@
       this.backgroundColor = options.backgroundColor || "#ffffff";
       this.brushSize = Math.max(1, Math.min(64, Number(options.brushSize || 8)));
       this.lineWidth = Math.max(1, Math.min(64, Number(options.lineWidth || 2)));
+      this.strokeType = namespace.normalizeStrokeType ? namespace.normalizeStrokeType(options.strokeType) : "solid";
       this.fillShapes = options.fillShapes === true;
       this.starPoints = [4, 5, 6].includes(Number(options.starPoints)) ? Number(options.starPoints) : 5;
       this.arrowDirection = ["up", "down", "left", "right"].includes(options.arrowDirection) ? options.arrowDirection : "right";
