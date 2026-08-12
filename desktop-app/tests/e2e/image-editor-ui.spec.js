@@ -345,6 +345,57 @@ test('triangle tool draws a filled three-point shape and supports undo', async (
   expect(undoPixels.moved).toEqual([255, 255, 255]);
 });
 
+test('diamond tool draws a filled floating shape that can be moved and undone', async ({ page }) => {
+  await page.goto('/');
+  await page.waitForFunction(() => !!window.markdownViewerApp?.modules?.tabs?.openBlankImageEditorInTab, null, { timeout: 60000 });
+  await page.waitForFunction(() => !!window.markdownViewerApp?.modules?.keyboardShortcuts && !!window.markdownViewerApp?.services?.imageEditor, null, { timeout: 60000 });
+  await page.evaluate(() => {
+    window.markdownViewerApp.modules.apiClient.deactivateApiClientSidebar = () => {};
+    window.markdownViewerApp.modules.tabs.openBlankImageEditorInTab({ width: 100, height: 80, name: 'Diamond' });
+  });
+  await expect(page.locator('.tab-view.active[data-tab-view-kind=image-editor] .image-editor-shell')).toBeVisible();
+  await page.locator('.image-editor-foreground').evaluate((element) => {
+    element.value = '#ff0000';
+    element.dispatchEvent(new Event('input', { bubbles: true }));
+  });
+  await page.locator('.image-editor-background').evaluate((element) => {
+    element.value = '#00ff00';
+    element.dispatchEvent(new Event('input', { bubbles: true }));
+  });
+  await page.locator('.image-editor-fill').check();
+  await page.locator('[data-tool=diamond]').click();
+  await expect(page.locator('[data-tool=diamond]')).toHaveClass(/active/);
+  const overlay = page.locator('.image-editor-overlay');
+  const box = await overlay.boundingBox();
+  await page.mouse.move(box.x + 10, box.y + 10);
+  await page.mouse.down();
+  await page.mouse.move(box.x + 50, box.y + 50, { steps: 5 });
+  await page.mouse.up();
+
+  const floatingDiamond = await page.evaluate(() => {
+    const root = document.querySelector('.tab-view.active[data-tab-view-kind=image-editor]');
+    const controller = window.markdownViewerApp.services.imageEditor.getView(root.dataset.tabId);
+    return { tool: controller.state.tool, floating: controller.selection.floating, origin: controller.selection.origin, rect: { ...controller.selection.rect } };
+  });
+  expect(floatingDiamond).toMatchObject({ tool: 'select', floating: true, origin: 'shape' });
+  await page.mouse.move(box.x + floatingDiamond.rect.x + floatingDiamond.rect.width / 2, box.y + floatingDiamond.rect.y + floatingDiamond.rect.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(box.x + floatingDiamond.rect.x + floatingDiamond.rect.width / 2 + 30, box.y + floatingDiamond.rect.y + floatingDiamond.rect.height / 2, { steps: 5 });
+  await page.mouse.up();
+  await page.keyboard.press('Escape');
+
+  const placedPixels = await page.locator('.image-editor-canvas').evaluate((canvas) => {
+    const context = canvas.getContext('2d');
+    const read = (x, y) => Array.from(context.getImageData(x, y, 1, 1).data).slice(0, 3);
+    return { original: read(30, 30), moved: read(60, 30) };
+  });
+  expect(placedPixels.original).toEqual([255, 255, 255]);
+  expect(placedPixels.moved).toEqual([0, 255, 0]);
+  await page.keyboard.press('Control+Z');
+  expect(await page.locator('.image-editor-canvas').evaluate((canvas) =>
+    Array.from(canvas.getContext('2d').getImageData(60, 30, 1, 1).data).slice(0, 3))).toEqual([255, 255, 255]);
+});
+
 test('placing an unfilled shape preserves canvas pixels beneath its transparent interior', async ({ page }) => {
   await page.goto('/');
   await page.waitForFunction(() => !!window.markdownViewerApp?.modules?.tabs?.openBlankImageEditorInTab, null, { timeout: 60000 });

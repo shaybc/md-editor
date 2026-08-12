@@ -14,6 +14,7 @@
     ellipse: "bi-circle",
     polygon: "bi-pentagon",
     triangle: "bi-triangle",
+    diamond: "bi-diamond",
     bucket: "bi-paint-bucket",
     text: "bi-fonts"
   };

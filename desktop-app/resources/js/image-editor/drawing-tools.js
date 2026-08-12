@@ -123,6 +123,12 @@
       context.lineTo(x + width, y + height);
       context.lineTo(x, y + height);
       context.closePath();
+    } else if (tool === "diamond") {
+      context.moveTo(x + width / 2, y);
+      context.lineTo(x + width, y + height / 2);
+      context.lineTo(x + width / 2, y + height);
+      context.lineTo(x, y + height / 2);
+      context.closePath();
     }
     if (state.fillShapes && tool !== "line") context.fill();
     context.stroke();
