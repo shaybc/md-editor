@@ -273,6 +273,39 @@
       return floatGeneratedLayer(controller, layer, before);
     }
 
+    function renderPolygonPreview(controller) {
+      const { view, polygonTool, state } = controller;
+      view.overlayContext.clearRect(0, 0, view.overlay.width, view.overlay.height);
+      polygonTool.drawPreview(view.overlayContext, state);
+    }
+
+    function cancelEditablePolygon(controller) {
+      controller.polygonTool.reset();
+      controller.polygonPoints = [];
+      controller.gestureBefore = null;
+      controller.dragging = false;
+      controller.view.overlay.style.cursor = "crosshair";
+      controller.view.overlayContext.clearRect(0, 0, controller.view.overlay.width, controller.view.overlay.height);
+      syncTab(controller);
+    }
+
+    function finishEditablePolygon(controller) {
+      const { polygonTool, state, view } = controller;
+      if (!polygonTool.isEditing || !polygonTool.model) {
+        cancelEditablePolygon(controller);
+        return false;
+      }
+      view.overlayContext.clearRect(0, 0, view.overlay.width, view.overlay.height);
+      const layer = polygonTool.rasterize(state, state);
+      const before = controller.gestureBefore;
+      polygonTool.reset();
+      controller.polygonPoints = [];
+      controller.gestureBefore = null;
+      controller.dragging = false;
+      view.overlay.style.cursor = "crosshair";
+      return floatGeneratedLayer(controller, layer, before);
+    }
+
     function renderStarPreview(controller) {
       const { view, starTool, state } = controller;
       view.overlayContext.clearRect(0, 0, view.overlay.width, view.overlay.height);
@@ -499,6 +532,7 @@
       if (controller.roundedRectangleTool?.isEditing) renderRoundedRectanglePreview(controller);
       if (controller.heartTool?.isEditing) renderHeartPreview(controller);
       if (controller.triangleTool?.isEditing) renderTrianglePreview(controller);
+      if (controller.polygonTool?.isEditing) renderPolygonPreview(controller);
       if (controller.starTool?.isEditing) renderStarPreview(controller);
       if (controller.ellipseTool?.isEditing) renderEllipsePreview(controller);
       if (controller.arcTool?.isEditing) renderArcPreview(controller);
@@ -659,8 +693,9 @@
       if (controller.roundedRectangleTool.isEditing) renderRoundedRectanglePreview(controller);
       if (editingCalloutTool(controller)) renderCalloutPreview(controller);
       if (controller.heartTool.isEditing) renderHeartPreview(controller);
-      if (controller.triangleTool.isEditing) renderTrianglePreview(controller);
-      if (controller.starTool.isEditing) renderStarPreview(controller);
+        if (controller.triangleTool.isEditing) renderTrianglePreview(controller);
+        if (controller.polygonTool.isEditing) renderPolygonPreview(controller);
+        if (controller.starTool.isEditing) renderStarPreview(controller);
       if (controller.ellipseTool.isEditing) renderEllipsePreview(controller);
       if (controller.arcTool.isEditing) renderArcPreview(controller);
       if (colorTarget === "foreground") {
@@ -689,6 +724,7 @@
           if (isCalloutTool(state.tool) && editingCalloutTool(controller)) finishEditableCallout(controller);
           if (state.tool === "heart" && controller.heartTool.isEditing) finishEditableHeart(controller);
           if (state.tool === "triangle" && controller.triangleTool.isEditing) finishEditableTriangle(controller);
+          if (state.tool === "polygon" && controller.polygonTool.isEditing) finishEditablePolygon(controller);
           if (state.tool === "star" && controller.starTool.isEditing) finishEditableStar(controller);
           if (state.tool === "ellipse" && controller.ellipseTool.isEditing) finishEditableEllipse(controller);
           if (state.tool === "arc" && controller.arcTool.isEditing) finishEditableArc(controller);
@@ -727,6 +763,7 @@
         if (editingCalloutTool(controller)) renderCalloutPreview(controller);
         if (controller.heartTool.isEditing) renderHeartPreview(controller);
         if (controller.triangleTool.isEditing) renderTrianglePreview(controller);
+        if (controller.polygonTool.isEditing) renderPolygonPreview(controller);
         if (controller.starTool.isEditing) renderStarPreview(controller);
         if (controller.ellipseTool.isEditing) renderEllipsePreview(controller);
         if (controller.arcTool.isEditing) renderArcPreview(controller);
@@ -737,6 +774,7 @@
         if (editingCalloutTool(controller)) renderCalloutPreview(controller);
         if (controller.heartTool.isEditing) renderHeartPreview(controller);
         if (controller.triangleTool.isEditing) renderTrianglePreview(controller);
+        if (controller.polygonTool.isEditing) renderPolygonPreview(controller);
         if (controller.starTool.isEditing) renderStarPreview(controller);
         if (controller.ellipseTool.isEditing) renderEllipsePreview(controller);
         if (controller.arcTool.isEditing) renderArcPreview(controller);
@@ -979,6 +1017,20 @@
           renderArcPreview(controller);
           return;
         }
+        if (state.tool === "polygon" && controller.polygonTool.isEditing) {
+          event.preventDefault();
+          event.stopPropagation();
+          const result = controller.polygonTool.begin(point);
+          if (result.action === "outside") {
+            finishEditablePolygon(controller);
+            return;
+          }
+          if (!result.started) return;
+          controller.dragging = true;
+          overlay.setPointerCapture?.(event.pointerId);
+          renderPolygonPreview(controller);
+          return;
+        }
         if (state.tool === "text") {
           event.preventDefault();
           event.stopPropagation();
@@ -1027,6 +1079,11 @@
       overlay.addEventListener("pointermove", (event) => {
         const point = view.pointFromEvent(event, !selection.isTransforming);
         if (!controller.dragging) {
+          if (state.tool === "polygon" && controller.polygonTool.isEditing) {
+            const guide = controller.polygonTool.guideAt(point);
+            overlay.style.cursor = guide?.type === "edge" ? "copy" : (guide?.type === "vertex" ? "move" : "crosshair");
+            return;
+          }
           updateSelectionHoverCursor(controller, point);
           return;
         }
@@ -1054,6 +1111,11 @@
         if (state.tool === "triangle") {
           controller.triangleTool.update(point);
           renderTrianglePreview(controller);
+          return;
+        }
+        if (state.tool === "polygon" && controller.polygonTool.isEditing) {
+          controller.polygonTool.update(point);
+          renderPolygonPreview(controller);
           return;
         }
         if (state.tool === "star") {
@@ -1110,6 +1172,9 @@
         } else if (state.tool === "triangle") {
           controller.triangleTool.completeStage(point);
           renderTrianglePreview(controller);
+        } else if (state.tool === "polygon" && controller.polygonTool.isEditing) {
+          controller.polygonTool.completeStage(point);
+          renderPolygonPreview(controller);
         } else if (state.tool === "star") {
           controller.starTool.completeStage(point);
           renderStarPreview(controller);
@@ -1144,13 +1209,13 @@
           floatGeneratedLayer(controller, layer, controller.gestureBefore);
         }
       });
-      overlay.addEventListener("dblclick", () => {
+      overlay.addEventListener("dblclick", (event) => {
         if (state.tool !== "polygon" || controller.polygonPoints.length < 3) return;
+        event.preventDefault();
         view.overlayContext.clearRect(0, 0, view.overlay.width, view.overlay.height);
-        const layer = namespace.rasterizePolygonLayer(controller.polygonPoints, state, state);
-        const before = controller.gestureBefore;
+        controller.polygonTool.beginEditing(controller.polygonPoints);
         controller.polygonPoints = [];
-        floatGeneratedLayer(controller, layer, before);
+        renderPolygonPreview(controller);
       });
     }
 
@@ -1416,6 +1481,23 @@
             return;
           }
         }
+        if (controller.state.tool === "polygon" && controller.polygonTool.isEditing) {
+          if (event.key === "Escape") {
+            cancelEditablePolygon(controller);
+            event.preventDefault();
+            return;
+          }
+          if (event.key === "Enter") {
+            finishEditablePolygon(controller);
+            event.preventDefault();
+            return;
+          }
+          if (event.key === "Delete" || event.key === "Backspace") {
+            if (controller.polygonTool.removeSelectedPoint()) renderPolygonPreview(controller);
+            event.preventDefault();
+            return;
+          }
+        }
         if (controller.state.tool === "star" && controller.starTool.isEditing) {
           if (event.key === "Escape") {
             cancelEditableStar(controller);
@@ -1556,6 +1638,7 @@
         history: new namespace.ImageEditorHistory(),
         selection: new namespace.ImageEditorSelection(),
         polygonPoints: [],
+        polygonTool: new namespace.ImageEditorPolygonTool(),
         dragging: false,
         selectionBefore: null,
         curveTool: new namespace.ImageEditorCurveTool(),
