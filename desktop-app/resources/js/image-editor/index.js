@@ -4,6 +4,8 @@
 
   global.registerMarkdownViewerImageEditor = function registerMarkdownViewerImageEditor(app, deps) {
     const namespace = global.MarkdownViewerImageEditor;
+    const rotationCursorSvg = '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"><g fill="none" stroke="black" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 10a7 7 0 0 1 12-4l2-2v6h-6l2-2a5 5 0 0 0-8 3"/><path d="M19 14a7 7 0 0 1-12 4l-2 2v-6h6l-2 2a5 5 0 0 0 8-3"/></g></svg>';
+    const rotationCursor = `url("data:image/svg+xml,${encodeURIComponent(rotationCursorSvg)}") 12 12, grab`;
     const views = new Map();
 
     function snapshot(view) {
@@ -99,10 +101,10 @@
       view.overlayContext.setLineDash([5, 4]);
       view.overlayContext.lineWidth = 1;
       view.overlayContext.strokeStyle = "#ffffff";
-      view.overlayContext.strokeRect(selection.rect.x + 0.5, selection.rect.y + 0.5, selection.rect.width, selection.rect.height);
+      selection.strokeOutline(view.overlayContext);
       view.overlayContext.lineDashOffset = 4;
       view.overlayContext.strokeStyle = "#111111";
-      view.overlayContext.strokeRect(selection.rect.x + 0.5, selection.rect.y + 0.5, selection.rect.width, selection.rect.height);
+      selection.strokeOutline(view.overlayContext);
       view.overlayContext.restore();
       const zoom = Math.max(0.25, Number(state.zoom) || 1);
       const guideSize = 6 / zoom;
@@ -772,6 +774,7 @@
     }
     function updateSelectionHoverCursor(controller, point) {
       const { view, state, selection } = controller;
+      const rotationHandle = state.tool === "select" ? selection.findRotationHandle(point, state.zoom) : null;
       const resizeHandle = state.tool === "select" ? selection.findResizeHandle(point, state.zoom) : null;
       const resizeCursor = {
         n: "ns-resize",
@@ -783,7 +786,8 @@
         ne: "nesw-resize",
         sw: "nesw-resize"
       }[resizeHandle];
-      view.overlay.style.cursor = resizeCursor || (state.tool === "select" && selection.contains(point) ? "move" : "crosshair");
+      view.overlay.style.cursor = rotationHandle ? rotationCursor :
+        (resizeCursor || (state.tool === "select" && selection.contains(point) ? "move" : "crosshair"));
     }
     function bindPointerTools(controller) {
       const { view, state, selection } = controller;

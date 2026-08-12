@@ -3,6 +3,7 @@
   "use strict";
 
   const namespace = global.MarkdownViewerImageEditor = global.MarkdownViewerImageEditor || {};
+  const transform = namespace.ImageEditorSelectionTransform;
   const RESIZE_HANDLES = ['nw', 'n', 'ne', 'e', 'se', 's', 'sw', 'w'];
   const CORNER_RESIZE_HANDLES = new Set(['nw', 'ne', 'se', 'sw']);
 
@@ -84,6 +85,7 @@
       this.pasteRevision = 0;
       this.savedFloatingLayer = null;
       this.returnToolAfterPlacement = null;
+      this.rotation = 0;
     }
 
     get hasSelection() {
@@ -99,12 +101,13 @@
     }
 
     get isTransforming() {
-      return this.pointerGesture?.type === 'move' || this.pointerGesture?.type === 'resize';
+      return this.pointerGesture?.type === 'move' || this.pointerGesture?.type === 'resize' ||
+        this.pointerGesture?.type === 'rotate';
     }
 
     /** Return the canvas positions of all corner and edge resize guides. */
     resizeGuidePoints(offset = 0) {
-      return this.rect ? resizeGuidePoints(this.rect, offset) : {};
+      return this.rect ? transform.selectionGuidePoints(this.rect, this.rotation, offset) : {};
     }
 
     /** Find the resize guide under a canvas point at the current zoom. */
@@ -131,6 +134,17 @@
       return nearestHandle;
     }
 
+    /** Find the free-rotation zone positioned just beyond a selected corner. */
+    findRotationHandle(point, zoom = 1) {
+      if (!this.hasSelection) return null;
+      const normalizedZoom = Math.max(0.25, Number(zoom) || 1);
+      const rotationPoints = this.resizeGuidePoints(13 / normalizedZoom);
+      const hitRadius = 5 / normalizedZoom;
+      return ['nw', 'ne', 'se', 'sw'].find((handle) =>
+        Math.hypot(rotationPoints[handle].x - point.x, rotationPoints[handle].y - point.y) <= hitRadius
+      ) || null;
+    }
+
     setRect(start, end, bounds) {
       const left = Math.max(0, Math.floor(Math.min(start.x, end.x)));
       const top = Math.max(0, Math.floor(Math.min(start.y, end.y)));
@@ -142,13 +156,12 @@
       this.phase = "outlined";
       this.origin = "canvas";
       this.returnToolAfterPlacement = null;
+      this.rotation = 0;
       return this.rect;
     }
 
     contains(point) {
-      const rect = this.rect;
-      return !!rect && point.x >= rect.x && point.y >= rect.y &&
-        point.x <= rect.x + rect.width && point.y <= rect.y + rect.height;
+      return !!this.rect && transform.containsPoint(this.rect, this.rotation, point);
     }
 
     lift(context, backgroundColor, clearSource, origin = "canvas") {
@@ -213,6 +226,19 @@
         };
         return { action: 'resize', sourceCleared: !wasFloating };
       }
+      const rotationHandle = this.findRotationHandle(point, modifiers.zoom);
+      if (rotationHandle) {
+        const wasFloating = this.floating;
+        if (!wasFloating) this.lift(context, backgroundColor, true, 'canvas-rotate');
+        const center = transform.centerOfRect(this.rect);
+        this.pointerGesture = {
+          type: 'rotate',
+          center,
+          startPointerAngle: Math.atan2(point.y - center.y, point.x - center.x),
+          startRotation: this.rotation
+        };
+        return { action: 'rotate', sourceCleared: !wasFloating };
+      }
       if (this.isPasting) return { action: "ignore" };
       if (this.hasSelection && !this.contains(point)) return { action: "drop" };
       if (!this.hasSelection) {
@@ -234,14 +260,21 @@
         return { action: "outline", moved: true, stamp: false };
       }
       if (gesture.type === 'resize') {
-        const resizePoint = {
+        const canvasResizePoint = {
           x: point.x - gesture.pointerOffset.x,
           y: point.y - gesture.pointerOffset.y
         };
-        this.rect = CORNER_RESIZE_HANDLES.has(gesture.handle)
+        const resizePoint = transform.resizePointInSelectionSpace(gesture.startRect, this.rotation, canvasResizePoint);
+        const resizedRect = CORNER_RESIZE_HANDLES.has(gesture.handle)
           ? proportionalResizeRect(gesture.startRect, gesture.handle, resizePoint)
           : edgeResizeRect(gesture.startRect, gesture.handle, resizePoint);
+        this.rect = transform.positionResizedRect(gesture.startRect, resizedRect, this.rotation);
         return { action: 'resize', moved: true, stamp: false };
+      }
+      if (gesture.type === 'rotate') {
+        const pointerAngle = Math.atan2(point.y - gesture.center.y, point.x - gesture.center.x);
+        this.rotation = gesture.startRotation + pointerAngle - gesture.startPointerAngle;
+        return { action: 'rotate', moved: true, stamp: false };
       }
       const result = this.moveSelection(point.x - gesture.last.x, point.y - gesture.last.y, bounds, true);
       gesture.last = { ...point };
@@ -271,6 +304,7 @@
       this.returnToolAfterPlacement = null;
       this.pointerGesture = null;
       this.moveGesture = null;
+      this.rotation = 0;
       return this.pasteRevision;
     }
 
@@ -286,7 +320,8 @@
         x: this.rect.x,
         y: this.rect.y,
         width: this.rect.width,
-        height: this.rect.height
+        height: this.rect.height,
+        rotation: this.rotation
       } : null;
     }
 
@@ -295,7 +330,8 @@
       const saved = this.savedFloatingLayer;
       return !!saved && this.floating && saved.imageData === this.imageData &&
         saved.x === this.rect?.x && saved.y === this.rect?.y &&
-        saved.width === this.rect?.width && saved.height === this.rect?.height;
+        saved.width === this.rect?.width && saved.height === this.rect?.height &&
+        saved.rotation === this.rotation;
     }
 
     moveBy(deltaX, deltaY, bounds, allowOutsideCanvas = false) {
@@ -317,7 +353,14 @@
       layer.width = this.imageData.width;
       layer.height = this.imageData.height;
       layer.getContext('2d').putImageData(this.imageData, 0, 0);
-      context.drawImage(layer, this.rect.x, this.rect.y, this.rect.width, this.rect.height);
+      transform.drawImage(context, layer, this.rect, this.rotation);
+      return true;
+    }
+
+    /** Stroke the current selection boundary with its free rotation applied. */
+    strokeOutline(context) {
+      if (!this.hasSelection) return false;
+      transform.strokeRect(context, this.rect, this.rotation);
       return true;
     }
 
@@ -379,6 +422,7 @@
       this.phase = "floating";
       this.origin = "paste";
       this.returnToolAfterPlacement = null;
+      this.rotation = 0;
       return true;
     }
 
@@ -391,6 +435,7 @@
       this.phase = "floating";
       this.origin = origin;
       this.returnToolAfterPlacement = returnToolAfterPlacement;
+      this.rotation = 0;
       this.pointerGesture = null;
       this.moveGesture = null;
       return true;
@@ -421,6 +466,7 @@
       this.moveGesture = null;
       this.savedFloatingLayer = null;
       this.returnToolAfterPlacement = null;
+      this.rotation = 0;
     }
   }
 
