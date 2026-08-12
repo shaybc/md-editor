@@ -1064,13 +1064,14 @@ audio.file-preview-content {
 .image-editor-command-grid [data-action="paste"] { grid-area: 2 / 3; }
 .image-editor-tools {
   display: grid; grid-template-columns: 38px repeat(8, 28px); grid-template-rows: repeat(3, 28px); grid-auto-rows: 28px; gap: 2px;
-  grid-template-areas: "select line curve rectangle ellipse polygon triangle diamond arrow" "select pencil brush bucket text rounded callout star ." "lightning heart arc . . . . . .";
+  grid-template-areas: "select line curve rectangle ellipse polygon triangle diamond arrow" "select pencil brush bucket text rounded callout star ." "lightning heart arc spiral . . . . .";
   max-height: 88px; overflow-x: hidden; overflow-y: scroll; align-content: start; scrollbar-width: thin;
 }
 .image-editor-tools [data-tool="select"] { grid-area: select; }
 .image-editor-tools [data-tool="line"] { grid-area: line; }
 .image-editor-tools [data-tool="curve"] { grid-area: curve; }
 .image-editor-tools [data-tool="arc"] { grid-area: arc; }
+.image-editor-tools [data-tool="spiral"] { grid-area: spiral; }
 .image-editor-tools [data-tool="rectangle"] { grid-area: rectangle; }
 .image-editor-tools [data-tool="rounded-rectangle"] { grid-area: rounded; }
 .image-editor-tools [data-tool="callout"] { grid-area: callout; }
@@ -1122,6 +1123,13 @@ audio.file-preview-content {
 }
 .image-editor-arrow-controls[hidden] { display: none; }
 .image-editor-arrow-direction, .image-editor-arrow-head-angle {
+  height: 28px; border: 1px solid var(--border-color); border-radius: 5px; background: var(--input-bg); color: var(--text-color);
+}
+.image-editor-spiral-controls {
+  display: inline-flex; align-items: center; gap: 8px;
+}
+.image-editor-spiral-controls[hidden] { display: none; }
+.image-editor-spiral-direction, .image-editor-spiral-convert {
   height: 28px; border: 1px solid var(--border-color); border-radius: 5px; background: var(--input-bg); color: var(--text-color);
 }
 .image-editor-toolbar label {

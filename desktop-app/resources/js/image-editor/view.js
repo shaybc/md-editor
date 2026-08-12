@@ -10,6 +10,7 @@
     line: "bi-slash-lg",
     curve: "bi-bezier2",
     arc: "bi-circle-half",
+    spiral: "bi-hurricane",
     rectangle: "bi-square",
     "rounded-rectangle": "bi-app",
     callout: "bi-chat-square",
@@ -139,6 +140,16 @@
                   <option value="30">30°</option>
                 </select>
               </label>
+            </div>
+            <div class="image-editor-spiral-controls image-editor-toolbar-group" hidden>
+              <label>Direction
+                <select class="image-editor-spiral-direction" aria-label="Spiral direction">
+                  <option value="clockwise">Clockwise</option>
+                  <option value="counter-clockwise">Counter-clockwise</option>
+                </select>
+              </label>
+              <button type="button" class="image-editor-spiral-convert">Convert to Curves</button>
+              <label><input class="image-editor-spiral-cap-inside" type="checkbox"> Cap inside with circle</label>
             </div>
             <div class="image-editor-text-controls image-editor-toolbar-group">
               <select class="image-editor-font" aria-label="Font family"><option>Arial</option><option>Georgia</option><option>Courier New</option></select>
@@ -343,6 +354,9 @@
       this.shell.querySelector(".image-editor-arrow-controls").hidden = state.tool !== "arrow";
       this.shell.querySelector(".image-editor-arrow-direction").value = state.arrowDirection;
       this.shell.querySelector(".image-editor-arrow-head-angle").value = String(state.arrowHeadAngle);
+      this.shell.querySelector(".image-editor-spiral-controls").hidden = state.tool !== "spiral";
+      this.shell.querySelector(".image-editor-spiral-direction").value = state.spiralDirection;
+      this.shell.querySelector(".image-editor-spiral-cap-inside").checked = state.spiralCapInside;
       this.shell.querySelector(".image-editor-text-controls").hidden = state.tool !== "text";
       ["undo", "redo", "cut", "copy", "delete"].forEach((action) => {
         const key = `can${action[0].toUpperCase()}${action.slice(1)}`;

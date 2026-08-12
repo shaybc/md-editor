@@ -3,7 +3,7 @@
   "use strict";
 
   const namespace = global.MarkdownViewerImageEditor = global.MarkdownViewerImageEditor || {};
-  const TOOLS = Object.freeze(["select", "pencil", "brush", "line", "curve", "arc", "rectangle", "rounded-rectangle", "callout", "oval-callout", "cloud-callout", "ellipse", "polygon", "triangle", "diamond", "star", "arrow", "lightning", "heart", "bucket", "text"]);
+  const TOOLS = Object.freeze(["select", "pencil", "brush", "line", "curve", "arc", "spiral", "rectangle", "rounded-rectangle", "callout", "oval-callout", "cloud-callout", "ellipse", "polygon", "triangle", "diamond", "star", "arrow", "lightning", "heart", "bucket", "text"]);
 
   class ImageEditorState {
     /**
@@ -21,6 +21,8 @@
       this.lineWidth = Math.max(1, Math.min(64, Number(options.lineWidth || 2)));
       this.strokeType = namespace.normalizeStrokeType ? namespace.normalizeStrokeType(options.strokeType) : "solid";
       this.fillShapes = options.fillShapes === true;
+      this.spiralDirection = options.spiralDirection === "counter-clockwise" ? "counter-clockwise" : "clockwise";
+      this.spiralCapInside = options.spiralCapInside === true;
       this.starPoints = [4, 5, 6].includes(Number(options.starPoints)) ? Number(options.starPoints) : 5;
       this.arrowDirection = ["up", "down", "left", "right"].includes(options.arrowDirection) ? options.arrowDirection : "right";
       this.arrowHeadAngle = [30, 45, 60, 90].includes(Number(options.arrowHeadAngle)) ? Number(options.arrowHeadAngle) : 90;

@@ -62,6 +62,8 @@
         lineWidth: state.lineWidth,
         strokeType: state.strokeType,
         fillShapes: state.fillShapes,
+        spiralDirection: state.spiralDirection,
+        spiralCapInside: state.spiralCapInside,
         starPoints: state.starPoints,
         arrowDirection: state.arrowDirection,
         arrowHeadAngle: state.arrowHeadAngle,
@@ -394,6 +396,35 @@
       return floatGeneratedLayer(controller, layer, before);
     }
 
+    function renderSpiralPreview(controller) {
+      const { view, spiralTool, state } = controller;
+      view.overlayContext.clearRect(0, 0, view.overlay.width, view.overlay.height);
+      spiralTool.drawPreview(view.overlayContext, state);
+    }
+
+    function cancelEditableSpiral(controller) {
+      controller.spiralTool.reset();
+      controller.spiralBefore = null;
+      controller.dragging = false;
+      controller.view.overlayContext.clearRect(0, 0, controller.view.overlay.width, controller.view.overlay.height);
+      syncTab(controller);
+    }
+
+    function finishEditableSpiral(controller) {
+      const { spiralTool, state, view } = controller;
+      if (!spiralTool.isEditing || !spiralTool.model) {
+        cancelEditableSpiral(controller);
+        return false;
+      }
+      view.overlayContext.clearRect(0, 0, view.overlay.width, view.overlay.height);
+      const layer = spiralTool.rasterize(state, state);
+      const before = controller.spiralBefore;
+      spiralTool.reset();
+      controller.spiralBefore = null;
+      controller.dragging = false;
+      return floatGeneratedLayer(controller, layer, before);
+    }
+
     function isCalloutTool(tool) {
       return tool === "callout" || tool === "oval-callout" || tool === "cloud-callout";
     }
@@ -537,6 +568,7 @@
       if (controller.starTool?.isEditing) renderStarPreview(controller);
       if (controller.ellipseTool?.isEditing) renderEllipsePreview(controller);
       if (controller.arcTool?.isEditing) renderArcPreview(controller);
+      if (controller.spiralTool?.isEditing) renderSpiralPreview(controller);
       syncTab(controller);
       return controller.state.zoom;
     }
@@ -699,6 +731,7 @@
         if (controller.starTool.isEditing) renderStarPreview(controller);
       if (controller.ellipseTool.isEditing) renderEllipsePreview(controller);
       if (controller.arcTool.isEditing) renderArcPreview(controller);
+      if (controller.spiralTool.isEditing) renderSpiralPreview(controller);
       if (colorTarget === "foreground") {
         refreshLiveTextStyle(controller);
         if (controller.curveTool.isEditing) renderCurvePreview(controller);
@@ -729,6 +762,7 @@
           if (state.tool === "star" && controller.starTool.isEditing) finishEditableStar(controller);
           if (state.tool === "ellipse" && controller.ellipseTool.isEditing) finishEditableEllipse(controller);
           if (state.tool === "arc" && controller.arcTool.isEditing) finishEditableArc(controller);
+          if (state.tool === "spiral" && controller.spiralTool.isEditing) finishEditableSpiral(controller);
           commitText(controller);
           if (toolButton.dataset.tool !== "select") dropSelection(controller);
           state.setTool(toolButton.dataset.tool);
@@ -768,6 +802,7 @@
         if (controller.starTool.isEditing) renderStarPreview(controller);
         if (controller.ellipseTool.isEditing) renderEllipsePreview(controller);
         if (controller.arcTool.isEditing) renderArcPreview(controller);
+        if (controller.spiralTool.isEditing) renderSpiralPreview(controller);
       });
       view.shell.querySelector(".image-editor-stroke-type").addEventListener("change", (event) => {
         state.strokeType = namespace.normalizeStrokeType(event.target.value);
@@ -780,6 +815,20 @@
         if (controller.starTool.isEditing) renderStarPreview(controller);
         if (controller.ellipseTool.isEditing) renderEllipsePreview(controller);
         if (controller.arcTool.isEditing) renderArcPreview(controller);
+        if (controller.spiralTool.isEditing) renderSpiralPreview(controller);
+      });
+      view.shell.querySelector(".image-editor-spiral-direction").addEventListener("change", (event) => {
+        state.spiralDirection = event.target.value === "counter-clockwise" ? "counter-clockwise" : "clockwise";
+        controller.spiralTool.setDirection(state.spiralDirection);
+        if (controller.spiralTool.isEditing) renderSpiralPreview(controller);
+      });
+      view.shell.querySelector(".image-editor-spiral-cap-inside").addEventListener("change", (event) => {
+        state.spiralCapInside = event.target.checked;
+        if (controller.spiralTool.isEditing) renderSpiralPreview(controller);
+      });
+      view.shell.querySelector(".image-editor-spiral-convert").addEventListener("click", (event) => {
+        event.preventDefault();
+        finishEditableSpiral(controller);
       });
       view.shell.querySelector(".image-editor-fill").addEventListener("change", (event) => {
         state.fillShapes = event.target.checked;
@@ -1030,6 +1079,25 @@
           renderArcPreview(controller);
           return;
         }
+        if (state.tool === "spiral") {
+          event.preventDefault();
+          event.stopPropagation();
+          if (!controller.spiralTool.isEditing) {
+            commitText(controller);
+            commitSelection(controller);
+            controller.spiralBefore = snapshot(view);
+          }
+          const result = controller.spiralTool.begin(point, state);
+          if (result.action === "outside") {
+            finishEditableSpiral(controller);
+            return;
+          }
+          if (!result.started) return;
+          controller.dragging = true;
+          overlay.setPointerCapture?.(event.pointerId);
+          renderSpiralPreview(controller);
+          return;
+        }
         if (state.tool === "polygon" && controller.polygonTool.isEditing) {
           event.preventDefault();
           event.stopPropagation();
@@ -1147,6 +1215,11 @@
           renderArcPreview(controller);
           return;
         }
+        if (state.tool === "spiral") {
+          controller.spiralTool.update(point);
+          renderSpiralPreview(controller);
+          return;
+        }
         if (state.tool === "text" && controller.creatingTextBox) {
           drawTextCreationOverlay(controller, point);
           return;
@@ -1200,6 +1273,9 @@
         } else if (state.tool === "arc") {
           controller.arcTool.completeStage(point);
           renderArcPreview(controller);
+        } else if (state.tool === "spiral") {
+          controller.spiralTool.completeStage(point);
+          renderSpiralPreview(controller);
         } else if (state.tool === "text" && controller.creatingTextBox) {
           controller.creatingTextBox = false;
           view.overlayContext.clearRect(0, 0, view.overlay.width, view.overlay.height);
@@ -1550,6 +1626,18 @@
             return;
           }
         }
+        if (controller.state.tool === "spiral" && controller.spiralTool.isEditing) {
+          if (event.key === "Escape") {
+            cancelEditableSpiral(controller);
+            event.preventDefault();
+            return;
+          }
+          if (event.key === "Enter") {
+            finishEditableSpiral(controller);
+            event.preventDefault();
+            return;
+          }
+        }
         if (primary && !event.shiftKey && !event.altKey && event.key.toLowerCase() === "a") {
           event.preventDefault();
           selectAllCanvas(controller);
@@ -1676,6 +1764,8 @@
         ellipseBefore: null,
         arcTool: new namespace.ImageEditorArcTool(),
         arcBefore: null,
+        spiralTool: new namespace.ImageEditorSpiralTool(),
+        spiralBefore: null,
         textRect: null,
         creatingTextBox: false,
         textInputOpening: false,
