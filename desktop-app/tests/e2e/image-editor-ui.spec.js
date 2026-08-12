@@ -752,7 +752,7 @@ test("text tool creates a dragged text box and moves populated text from its bor
   expect(committedTextBounds.minY).toBeGreaterThanOrEqual(Math.floor(textContentRect.y) - 1);
   await expect(page.locator("#tab-list .tab-item.active")).toHaveClass(/unsaved/);
 });
-test("bucket fill colors a connected area and undo restores it", async ({ page }) => {
+test("bucket fill recolors both sides of an antialiased curved edge and undo restores it", async ({ page }) => {
   await page.goto("/");
   await page.waitForFunction(() => !!window.markdownViewerApp?.modules?.keyboardShortcuts, null, { timeout: 60000 });
   await page.waitForFunction(() => !!window.markdownViewerApp?.modules?.tabs?.openImageEditorInTab);
@@ -760,14 +760,16 @@ test("bucket fill colors a connected area and undo restores it", async ({ page }
 
   await page.evaluate(async () => {
     const sourceCanvas = document.createElement("canvas");
-    sourceCanvas.width = 40;
-    sourceCanvas.height = 40;
+    sourceCanvas.width = 80;
+    sourceCanvas.height = 80;
     const sourceContext = sourceCanvas.getContext("2d");
     sourceContext.fillStyle = "#ffffff";
-    sourceContext.fillRect(0, 0, 40, 40);
-    sourceContext.strokeStyle = "#000000";
-    sourceContext.lineWidth = 1;
-    sourceContext.strokeRect(9.5, 9.5, 20, 20);
+    sourceContext.fillRect(0, 0, 80, 80);
+    sourceContext.strokeStyle = "#a349a4";
+    sourceContext.lineWidth = 2;
+    sourceContext.beginPath();
+    sourceContext.ellipse(40, 40, 20, 20, 0, 0, Math.PI * 2);
+    sourceContext.stroke();
     const sourceBlob = await new Promise((resolve) => sourceCanvas.toBlob(resolve, "image/png"));
     const sourceFile = new File([sourceBlob], "bucket-fill-test.png", { type: "image/png" });
     window.markdownViewerApp.modules.apiClient.deactivateApiClientSidebar = () => {};
@@ -781,32 +783,65 @@ test("bucket fill colors a connected area and undo restores it", async ({ page }
 
   await expect(page.locator(".image-editor-shell")).toBeVisible();
   await page.locator(".image-editor-foreground").evaluate((element) => {
-    element.value = "#ff0000";
+    element.value = "#a349a4";
     element.dispatchEvent(new Event("input", { bubbles: true }));
   });
   await page.locator('[data-tool="bucket"]').click();
   const overlay = page.locator(".image-editor-overlay");
   const box = await overlay.boundingBox();
-  await page.mouse.click(box.x + 20, box.y + 20);
+  await page.mouse.click(box.x + 40, box.y + 40);
 
-  const filledPixels = await page.evaluate(() => {
-    function pixel(x, y) {
-      const canvas = document.querySelector(".image-editor-canvas");
-      return Array.from(canvas.getContext("2d").getImageData(x, y, 1, 1).data).slice(0, 3);
+  const inspectCircle = () => page.evaluate(() => {
+    const canvas = document.querySelector(".image-editor-canvas");
+    const context = canvas.getContext("2d");
+    const data = context.getImageData(0, 0, canvas.width, canvas.height).data;
+    const distanceSquared = (index, color) => {
+      const red = data[index] - color[0];
+      const green = data[index + 1] - color[1];
+      const blue = data[index + 2] - color[2];
+      return red * red + green * green + blue * blue;
+    };
+    let insideWhiteFringe = 0;
+    let outsideWhiteFringe = 0;
+    let purpleBoundaryPixels = 0;
+    for (let y = 0; y < canvas.height; y += 1) {
+      for (let x = 0; x < canvas.width; x += 1) {
+        const radius = Math.hypot(x + 0.5 - 40, y + 0.5 - 40);
+        const index = (y * canvas.width + x) * 4;
+        const whiteDistance = distanceSquared(index, [255, 255, 255]);
+        const purpleDistance = distanceSquared(index, [163, 73, 164]);
+        const grayDistance = distanceSquared(index, [128, 128, 128]);
+        if (radius >= 17.5 && radius <= 20.5 && whiteDistance < purpleDistance) insideWhiteFringe += 1;
+        if (radius >= 19.5 && radius <= 22.5 && whiteDistance < purpleDistance && whiteDistance < grayDistance) outsideWhiteFringe += 1;
+        if (radius >= 19 && radius <= 21 && purpleDistance < whiteDistance && purpleDistance < grayDistance) purpleBoundaryPixels += 1;
+      }
     }
-    return { inside: pixel(20, 20), border: pixel(9, 20), outside: pixel(5, 5) };
+    const pixel = (x, y) => Array.from(context.getImageData(x, y, 1, 1).data).slice(0, 3);
+    return { insideWhiteFringe, outsideWhiteFringe, purpleBoundaryPixels, center: pixel(40, 40), outside: pixel(5, 5) };
   });
-  expect(filledPixels.inside).toEqual([255, 0, 0]);
-  expect(filledPixels.border).toEqual([0, 0, 0]);
-  expect(filledPixels.outside).toEqual([255, 255, 255]);
+  const insideFill = await inspectCircle();
+  expect(insideFill.insideWhiteFringe).toBe(0);
+  expect(insideFill.purpleBoundaryPixels).toBeGreaterThan(80);
+  expect(insideFill.center).toEqual([163, 73, 164]);
+  expect(insideFill.outside).toEqual([255, 255, 255]);
   await expect(page.locator("#tab-list .tab-item.active")).toHaveClass(/unsaved/);
 
   await page.keyboard.press("Control+Z");
-  const restoredInside = await page.evaluate(() => {
+  expect(await page.evaluate(() => {
     const canvas = document.querySelector(".image-editor-canvas");
-    return Array.from(canvas.getContext("2d").getImageData(20, 20, 1, 1).data).slice(0, 3);
+    return Array.from(canvas.getContext("2d").getImageData(40, 40, 1, 1).data).slice(0, 3);
+  })).toEqual([255, 255, 255]);
+
+  await page.locator(".image-editor-foreground").evaluate((element) => {
+    element.value = "#808080";
+    element.dispatchEvent(new Event("input", { bubbles: true }));
   });
-  expect(restoredInside).toEqual([255, 255, 255]);
+  await page.mouse.click(box.x + 5, box.y + 5);
+  const outsideFill = await inspectCircle();
+  expect(outsideFill.outsideWhiteFringe).toBe(0);
+  expect(outsideFill.purpleBoundaryPixels).toBeGreaterThan(80);
+  expect(outsideFill.center).toEqual([255, 255, 255]);
+  expect(outsideFill.outside).toEqual([128, 128, 128]);
 });
 test("selection moves with arrows and Ctrl+arrow starts a movable copy", async ({ page }) => {
   await page.goto("/");

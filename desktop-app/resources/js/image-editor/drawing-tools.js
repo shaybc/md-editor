@@ -3,6 +3,9 @@
   "use strict";
 
   const namespace = global.MarkdownViewerImageEditor = global.MarkdownViewerImageEditor || {};
+  const FLOOD_FILL_COLOR_TOLERANCE = 48;
+  const FLOOD_FILL_EDGE_SEARCH_RADIUS = 3;
+  const FLOOD_FILL_EDGE_DIRECTION_ALIGNMENT = 0.97;
 
   function configureStroke(context, state, width) {
     context.strokeStyle = state.foregroundColor;
@@ -185,8 +188,11 @@
     return [0, 0, 0, 255];
   }
 
-  function pixelsMatch(data, index, color) {
-    return data[index] === color[0] && data[index + 1] === color[1] && data[index + 2] === color[2] && data[index + 3] === color[3];
+  function pixelsMatchFillTarget(data, index, color) {
+    return Math.abs(data[index] - color[0]) <= FLOOD_FILL_COLOR_TOLERANCE &&
+      Math.abs(data[index + 1] - color[1]) <= FLOOD_FILL_COLOR_TOLERANCE &&
+      Math.abs(data[index + 2] - color[2]) <= FLOOD_FILL_COLOR_TOLERANCE &&
+      Math.abs(data[index + 3] - color[3]) <= FLOOD_FILL_COLOR_TOLERANCE;
   }
 
   function setPixel(data, index, color) {
@@ -196,6 +202,71 @@
     data[index + 3] = color[3];
   }
 
+  function colorDistanceSquared(data, index, color) {
+    const red = data[index] - color[0];
+    const green = data[index + 1] - color[1];
+    const blue = data[index + 2] - color[2];
+    return red * red + green * green + blue * blue;
+  }
+
+  function colorDirectionsAlign(data, firstIndex, secondIndex, targetColor) {
+    let dotProduct = 0;
+    let firstLength = 0;
+    let secondLength = 0;
+    for (let channel = 0; channel < 3; channel += 1) {
+      const first = data[firstIndex + channel] - targetColor[channel];
+      const second = data[secondIndex + channel] - targetColor[channel];
+      dotProduct += first * second;
+      firstLength += first * first;
+      secondLength += second * second;
+    }
+    return firstLength > 0 && secondLength > 0 &&
+      dotProduct / Math.sqrt(firstLength * secondLength) >= FLOOD_FILL_EDGE_DIRECTION_ALIGNMENT;
+  }
+
+  /** Replace only the source-background contribution in antialiased boundary pixels. */
+  function recolorFloodFillEdge(original, data, filled, width, height, targetColor, fillColor) {
+    const frontier = new Set();
+    for (let pixelIndex = 0; pixelIndex < filled.length; pixelIndex += 1) {
+      if (!filled[pixelIndex]) continue;
+      const x = pixelIndex % width;
+      const y = Math.floor(pixelIndex / width);
+      for (let offsetY = -1; offsetY <= 1; offsetY += 1) {
+        for (let offsetX = -1; offsetX <= 1; offsetX += 1) {
+          const neighborX = x + offsetX;
+          const neighborY = y + offsetY;
+          if (neighborX < 0 || neighborY < 0 || neighborX >= width || neighborY >= height) continue;
+          const neighborIndex = neighborY * width + neighborX;
+          if (!filled[neighborIndex]) frontier.add(neighborIndex);
+        }
+      }
+    }
+    frontier.forEach((pixelIndex) => {
+      const x = pixelIndex % width;
+      const y = Math.floor(pixelIndex / width);
+      const index = pixelIndex * 4;
+      const pixelDistance = colorDistanceSquared(original, index, targetColor);
+      if (!pixelDistance) return;
+      let referenceIndex = index;
+      let referenceDistance = pixelDistance;
+      for (let candidateY = Math.max(0, y - FLOOD_FILL_EDGE_SEARCH_RADIUS); candidateY <= Math.min(height - 1, y + FLOOD_FILL_EDGE_SEARCH_RADIUS); candidateY += 1) {
+        for (let candidateX = Math.max(0, x - FLOOD_FILL_EDGE_SEARCH_RADIUS); candidateX <= Math.min(width - 1, x + FLOOD_FILL_EDGE_SEARCH_RADIUS); candidateX += 1) {
+          const candidateIndex = (candidateY * width + candidateX) * 4;
+          const candidateDistance = colorDistanceSquared(original, candidateIndex, targetColor);
+          if (candidateDistance <= referenceDistance || !colorDirectionsAlign(original, index, candidateIndex, targetColor)) continue;
+          referenceDistance = candidateDistance;
+          referenceIndex = candidateIndex;
+        }
+      }
+      if (referenceIndex === index || referenceDistance < pixelDistance * 1.1) return;
+      const boundaryCoverage = Math.min(1, Math.sqrt(pixelDistance / referenceDistance));
+      for (let channel = 0; channel < 4; channel += 1) {
+        data[index + channel] = Math.round(original[index + channel] +
+          (1 - boundaryCoverage) * (fillColor[channel] - targetColor[channel]));
+      }
+    });
+  }
+
   function floodFill(context, point, state) {
     const width = context.canvas.width;
     const height = context.canvas.height;
@@ -203,19 +274,27 @@
     const startY = Math.max(0, Math.min(height - 1, Math.floor(point.y)));
     const imageData = context.getImageData(0, 0, width, height);
     const data = imageData.data;
+    const original = new Uint8ClampedArray(data);
     const startIndex = (startY * width + startX) * 4;
     const targetColor = [data[startIndex], data[startIndex + 1], data[startIndex + 2], data[startIndex + 3]];
     const fillColor = colorToRgba(state.foregroundColor);
     if (targetColor.every((channel, index) => channel === fillColor[index])) return false;
     const stack = [[startX, startY]];
+    const visited = new Uint8Array(width * height);
+    const filled = new Uint8Array(width * height);
     while (stack.length) {
       const [x, y] = stack.pop();
       if (x < 0 || y < 0 || x >= width || y >= height) continue;
-      const index = (y * width + x) * 4;
-      if (!pixelsMatch(data, index, targetColor)) continue;
+      const pixelIndex = y * width + x;
+      if (visited[pixelIndex]) continue;
+      visited[pixelIndex] = 1;
+      const index = pixelIndex * 4;
+      if (!pixelsMatchFillTarget(original, index, targetColor)) continue;
+      filled[pixelIndex] = 1;
       setPixel(data, index, fillColor);
       stack.push([x + 1, y], [x - 1, y], [x, y + 1], [x, y - 1]);
     }
+    recolorFloodFillEdge(original, data, filled, width, height, targetColor, fillColor);
     context.putImageData(imageData, 0, 0);
     return true;
   }
