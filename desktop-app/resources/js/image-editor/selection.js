@@ -3,6 +3,72 @@
   "use strict";
 
   const namespace = global.MarkdownViewerImageEditor = global.MarkdownViewerImageEditor || {};
+  const RESIZE_HANDLES = ['nw', 'n', 'ne', 'e', 'se', 's', 'sw', 'w'];
+  const CORNER_RESIZE_HANDLES = new Set(['nw', 'ne', 'se', 'sw']);
+
+  function resizeGuidePoints(rect, offset = 0) {
+    const centerX = rect.x + rect.width / 2;
+    const centerY = rect.y + rect.height / 2;
+    return {
+      nw: { x: rect.x - offset, y: rect.y - offset },
+      n: { x: centerX, y: rect.y - offset },
+      ne: { x: rect.x + rect.width + offset, y: rect.y - offset },
+      e: { x: rect.x + rect.width + offset, y: centerY },
+      se: { x: rect.x + rect.width + offset, y: rect.y + rect.height + offset },
+      s: { x: centerX, y: rect.y + rect.height + offset },
+      sw: { x: rect.x - offset, y: rect.y + rect.height + offset },
+      w: { x: rect.x - offset, y: centerY }
+    };
+  }
+
+  function proportionalResizeRect(rect, handle, point) {
+    const points = resizeGuidePoints(rect);
+    const opposite = { nw: 'se', ne: 'sw', se: 'nw', sw: 'ne' }[handle];
+    const anchor = points[opposite];
+    const original = points[handle];
+    const vectorX = original.x - anchor.x;
+    const vectorY = original.y - anchor.y;
+    const scale = Math.max(
+      Math.max(1 / rect.width, 1 / rect.height),
+      ((point.x - anchor.x) * vectorX + (point.y - anchor.y) * vectorY) /
+        (vectorX * vectorX + vectorY * vectorY)
+    );
+    const resizedPoint = { x: anchor.x + vectorX * scale, y: anchor.y + vectorY * scale };
+    return {
+      x: Math.round(Math.min(anchor.x, resizedPoint.x)),
+      y: Math.round(Math.min(anchor.y, resizedPoint.y)),
+      width: Math.max(1, Math.round(Math.abs(resizedPoint.x - anchor.x))),
+      height: Math.max(1, Math.round(Math.abs(resizedPoint.y - anchor.y)))
+    };
+  }
+
+  function edgeResizeRect(rect, handle, point) {
+    const right = rect.x + rect.width;
+    const bottom = rect.y + rect.height;
+    if (handle === 'w') {
+      const x = Math.min(Math.round(point.x), right - 1);
+      return { ...rect, x, width: right - x };
+    }
+    if (handle === 'e') return { ...rect, width: Math.max(1, Math.round(point.x - rect.x)) };
+    if (handle === 'n') {
+      const y = Math.min(Math.round(point.y), bottom - 1);
+      return { ...rect, y, height: bottom - y };
+    }
+    return { ...rect, height: Math.max(1, Math.round(point.y - rect.y)) };
+  }
+
+  function resizeImageData(imageData, width, height) {
+    if (imageData.width === width && imageData.height === height) return imageData;
+    const source = global.document.createElement('canvas');
+    source.width = imageData.width;
+    source.height = imageData.height;
+    source.getContext('2d').putImageData(imageData, 0, 0);
+    const resized = global.document.createElement('canvas');
+    resized.width = width;
+    resized.height = height;
+    resized.getContext('2d').drawImage(source, 0, 0, width, height);
+    return resized.getContext('2d').getImageData(0, 0, width, height);
+  }
 
   /** Owns the complete outlined, pending-paste, and floating pixel selection lifecycle. */
   class ImageEditorSelection {
@@ -30,6 +96,39 @@
 
     get isMoving() {
       return this.pointerGesture?.type === "move";
+    }
+
+    get isTransforming() {
+      return this.pointerGesture?.type === 'move' || this.pointerGesture?.type === 'resize';
+    }
+
+    /** Return the canvas positions of all corner and edge resize guides. */
+    resizeGuidePoints(offset = 0) {
+      return this.rect ? resizeGuidePoints(this.rect, offset) : {};
+    }
+
+    /** Find the resize guide under a canvas point at the current zoom. */
+    findResizeHandle(point, zoom = 1) {
+      if (!this.hasSelection) return null;
+      const normalizedZoom = Math.max(0.25, Number(zoom) || 1);
+      const hitRadius = 4 / normalizedZoom;
+      const boundaryPoints = this.resizeGuidePoints();
+      const visualPoints = this.resizeGuidePoints(4 / normalizedZoom);
+      const isInside = point.x > this.rect.x && point.x < this.rect.x + this.rect.width &&
+        point.y > this.rect.y && point.y < this.rect.y + this.rect.height;
+      let nearestHandle = null;
+      let nearestDistance = Infinity;
+      RESIZE_HANDLES.forEach((handle) => {
+        const visualDistance = Math.hypot(visualPoints[handle].x - point.x, visualPoints[handle].y - point.y);
+        const boundaryDistance = isInside ? Infinity :
+          Math.hypot(boundaryPoints[handle].x - point.x, boundaryPoints[handle].y - point.y);
+        const distance = Math.min(visualDistance, boundaryDistance);
+        if (distance <= hitRadius && distance < nearestDistance) {
+          nearestHandle = handle;
+          nearestDistance = distance;
+        }
+      });
+      return nearestHandle;
     }
 
     setRect(start, end, bounds) {
@@ -97,6 +196,23 @@
 
     /** Classify and begin a selection pointer gesture from the current lifecycle state. */
     beginPointerGesture(point, context, backgroundColor, modifiers = {}) {
+      const resizeHandle = this.findResizeHandle(point, modifiers.zoom);
+      if (resizeHandle) {
+        const wasFloating = this.floating;
+        if (!wasFloating) this.lift(context, backgroundColor, true, 'canvas-resize');
+        const normalizedZoom = Math.max(0.25, Number(modifiers.zoom) || 1);
+        const boundaryPoint = this.resizeGuidePoints()[resizeHandle];
+        const visualPoint = this.resizeGuidePoints(4 / normalizedZoom)[resizeHandle];
+        const grabbedPoint = Math.hypot(visualPoint.x - point.x, visualPoint.y - point.y) <
+          Math.hypot(boundaryPoint.x - point.x, boundaryPoint.y - point.y) ? visualPoint : boundaryPoint;
+        this.pointerGesture = {
+          type: 'resize',
+          handle: resizeHandle,
+          startRect: { ...this.rect },
+          pointerOffset: { x: grabbedPoint.x - boundaryPoint.x, y: grabbedPoint.y - boundaryPoint.y }
+        };
+        return { action: 'resize', sourceCleared: !wasFloating };
+      }
       if (this.isPasting) return { action: "ignore" };
       if (this.hasSelection && !this.contains(point)) return { action: "drop" };
       if (!this.hasSelection) {
@@ -109,7 +225,7 @@
       return { action: "move", ...move };
     }
 
-    /** Advance the current outline or movement pointer gesture. */
+    /** Advance the current outline, movement, or resize pointer gesture. */
     updatePointerGesture(point, bounds) {
       const gesture = this.pointerGesture;
       if (!gesture) return { action: "ignore", moved: false, stamp: false };
@@ -117,17 +233,30 @@
         this.setRect(gesture.start, point, bounds);
         return { action: "outline", moved: true, stamp: false };
       }
+      if (gesture.type === 'resize') {
+        const resizePoint = {
+          x: point.x - gesture.pointerOffset.x,
+          y: point.y - gesture.pointerOffset.y
+        };
+        this.rect = CORNER_RESIZE_HANDLES.has(gesture.handle)
+          ? proportionalResizeRect(gesture.startRect, gesture.handle, resizePoint)
+          : edgeResizeRect(gesture.startRect, gesture.handle, resizePoint);
+        return { action: 'resize', moved: true, stamp: false };
+      }
       const result = this.moveSelection(point.x - gesture.last.x, point.y - gesture.last.y, bounds, true);
       gesture.last = { ...point };
       return { action: "move", ...result };
     }
 
-    /** End the current pointer gesture without inventing a second interaction. */
+    /** End the current pointer gesture and retain resized pixels as the floating source. */
     endPointerGesture() {
       const gesture = this.pointerGesture;
       this.pointerGesture = null;
       if (!gesture) return { action: "ignore" };
       if (gesture.type === "move") this.endMove();
+      if (gesture.type === 'resize' && this.imageData) {
+        this.imageData = resizeImageData(this.imageData, this.rect.width, this.rect.height);
+      }
       return { action: gesture.type };
     }
 
@@ -188,7 +317,7 @@
       layer.width = this.imageData.width;
       layer.height = this.imageData.height;
       layer.getContext('2d').putImageData(this.imageData, 0, 0);
-      context.drawImage(layer, this.rect.x, this.rect.y);
+      context.drawImage(layer, this.rect.x, this.rect.y, this.rect.width, this.rect.height);
       return true;
     }
 

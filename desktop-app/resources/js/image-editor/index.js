@@ -89,11 +89,11 @@
     }
 
     function drawSelectionOverlay(controller) {
-      const { view, selection } = controller;
+      const { view, selection, state } = controller;
       view.overlayContext.clearRect(0, 0, view.overlay.width, view.overlay.height);
       if (!selection.hasSelection) return;
       if (selection.floating && selection.imageData) {
-        view.overlayContext.putImageData(selection.imageData, selection.rect.x, selection.rect.y);
+        selection.drawFloatingLayer(view.overlayContext);
       }
       view.overlayContext.save();
       view.overlayContext.setLineDash([5, 4]);
@@ -103,6 +103,18 @@
       view.overlayContext.lineDashOffset = 4;
       view.overlayContext.strokeStyle = "#111111";
       view.overlayContext.strokeRect(selection.rect.x + 0.5, selection.rect.y + 0.5, selection.rect.width, selection.rect.height);
+      view.overlayContext.restore();
+      const zoom = Math.max(0.25, Number(state.zoom) || 1);
+      const guideSize = 6 / zoom;
+      const halfGuide = guideSize / 2;
+      view.overlayContext.save();
+      view.overlayContext.fillStyle = "#ffffff";
+      view.overlayContext.strokeStyle = "#1473e6";
+      view.overlayContext.lineWidth = 1 / zoom;
+      Object.values(selection.resizeGuidePoints(guideSize / 2 + 1 / zoom)).forEach((point) => {
+        view.overlayContext.fillRect(point.x - halfGuide, point.y - halfGuide, guideSize, guideSize);
+        view.overlayContext.strokeRect(point.x - halfGuide, point.y - halfGuide, guideSize, guideSize);
+      });
       view.overlayContext.restore();
     }
 
@@ -760,7 +772,18 @@
     }
     function updateSelectionHoverCursor(controller, point) {
       const { view, state, selection } = controller;
-      view.overlay.style.cursor = state.tool === "select" && selection.contains(point) ? "move" : "crosshair";
+      const resizeHandle = state.tool === "select" ? selection.findResizeHandle(point, state.zoom) : null;
+      const resizeCursor = {
+        n: "ns-resize",
+        s: "ns-resize",
+        e: "ew-resize",
+        w: "ew-resize",
+        nw: "nwse-resize",
+        se: "nwse-resize",
+        ne: "nesw-resize",
+        sw: "nesw-resize"
+      }[resizeHandle];
+      view.overlay.style.cursor = resizeCursor || (state.tool === "select" && selection.contains(point) ? "move" : "crosshair");
     }
     function bindPointerTools(controller) {
       const { view, state, selection } = controller;
@@ -930,7 +953,8 @@
           const gesture = selection.beginPointerGesture(point, view.context, state.backgroundColor, {
             ctrl: event.ctrlKey,
             meta: event.metaKey,
-            shift: event.shiftKey
+            shift: event.shiftKey,
+            zoom: state.zoom
           });
           if (gesture.action === "drop") dropSelection(controller);
           if (gesture.action === "drop" || gesture.action === "ignore") {
@@ -943,7 +967,7 @@
         overlay.setPointerCapture?.(event.pointerId);
       });
       overlay.addEventListener("pointermove", (event) => {
-        const point = view.pointFromEvent(event, !selection.isMoving);
+        const point = view.pointFromEvent(event, !selection.isTransforming);
         if (!controller.dragging) {
           updateSelectionHoverCursor(controller, point);
           return;
