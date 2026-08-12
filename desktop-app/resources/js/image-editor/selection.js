@@ -81,11 +81,11 @@
     }
 
     /** Move the active floating pixels without implicitly committing them. */
-    moveSelection(deltaX, deltaY, bounds) {
+    moveSelection(deltaX, deltaY, bounds, allowOutsideCanvas = false) {
       if (!this.moveGesture || !this.hasSelection) return { moved: false, stamp: false };
       const previousX = this.rect.x;
       const previousY = this.rect.y;
-      this.moveBy(deltaX, deltaY, bounds);
+      this.moveBy(deltaX, deltaY, bounds, allowOutsideCanvas);
       const moved = this.rect.x !== previousX || this.rect.y !== previousY;
       return { moved, stamp: moved && this.moveGesture.stamp };
     }
@@ -117,7 +117,7 @@
         this.setRect(gesture.start, point, bounds);
         return { action: "outline", moved: true, stamp: false };
       }
-      const result = this.moveSelection(point.x - gesture.last.x, point.y - gesture.last.y, bounds);
+      const result = this.moveSelection(point.x - gesture.last.x, point.y - gesture.last.y, bounds, true);
       gesture.last = { ...point };
       return { action: "move", ...result };
     }
@@ -169,8 +169,13 @@
         saved.width === this.rect?.width && saved.height === this.rect?.height;
     }
 
-    moveBy(deltaX, deltaY, bounds) {
+    moveBy(deltaX, deltaY, bounds, allowOutsideCanvas = false) {
       if (!this.hasSelection) return false;
+      if (allowOutsideCanvas) {
+        this.rect.x += Math.round(deltaX);
+        this.rect.y += Math.round(deltaY);
+        return true;
+      }
       this.rect.x = Math.max(0, Math.min(bounds.width - this.rect.width, this.rect.x + Math.round(deltaX)));
       this.rect.y = Math.max(0, Math.min(bounds.height - this.rect.height, this.rect.y + Math.round(deltaY)));
       return true;

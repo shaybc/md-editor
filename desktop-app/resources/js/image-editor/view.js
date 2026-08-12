@@ -280,11 +280,14 @@
       this.canvasResizePreview = null;
     }
 
-    pointFromEvent(event) {
+    /** Convert a pointer event to canvas coordinates, optionally retaining positions beyond its borders. */
+    pointFromEvent(event, constrainToCanvas = true) {
       const rect = this.overlay.getBoundingClientRect();
+      const x = (event.clientX - rect.left) * this.canvas.width / rect.width;
+      const y = (event.clientY - rect.top) * this.canvas.height / rect.height;
       return {
-        x: Math.max(0, Math.min(this.canvas.width, (event.clientX - rect.left) * this.canvas.width / rect.width)),
-        y: Math.max(0, Math.min(this.canvas.height, (event.clientY - rect.top) * this.canvas.height / rect.height))
+        x: constrainToCanvas ? Math.max(0, Math.min(this.canvas.width, x)) : x,
+        y: constrainToCanvas ? Math.max(0, Math.min(this.canvas.height, y)) : y
       };
     }
 

@@ -943,7 +943,7 @@
         overlay.setPointerCapture?.(event.pointerId);
       });
       overlay.addEventListener("pointermove", (event) => {
-        const point = view.pointFromEvent(event);
+        const point = view.pointFromEvent(event, !selection.isMoving);
         if (!controller.dragging) {
           updateSelectionHoverCursor(controller, point);
           return;
