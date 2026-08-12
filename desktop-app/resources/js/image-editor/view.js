@@ -78,38 +78,40 @@
             <label>Size <input class="image-editor-size" type="range" min="1" max="64" value="8"></label>
             <label><input class="image-editor-fill" type="checkbox"> Fill</label>
           </div>
-          <div class="image-editor-rounded-rectangle-controls image-editor-toolbar-group" hidden>
-            <label>Radius <input class="image-editor-corner-radius" type="range" min="0" max="100" value="16"></label>
-            <label><input class="image-editor-all-corners" type="checkbox" checked> All corners</label>
-          </div>
-          <div class="image-editor-callout-controls image-editor-toolbar-group" hidden>
-            <label>Callout
-              <select class="image-editor-callout-type" aria-label="Callout type">
-                <option value="callout">Rounded rectangular</option>
-                <option value="oval-callout">Oval</option>
-                <option value="cloud-callout">Cloud</option>
-              </select>
-            </label>
-          </div>
-          <div class="image-editor-star-controls image-editor-toolbar-group" hidden>
-            <label>Star
-              <select class="image-editor-star-points" aria-label="Star points">
-                <option value="4">4 points</option>
-                <option value="5">5 points</option>
-                <option value="6">6 points</option>
-              </select>
-            </label>
-          </div>
           <div class="image-editor-color-targets image-editor-toolbar-group" role="group" aria-label="Active image colors">
             <label class="image-editor-color-target active" data-color-target="foreground" title="Foreground color">FG <input class="image-editor-foreground" type="color" value="#111111" aria-label="Foreground color"></label>
             <label class="image-editor-color-target" data-color-target="background" title="Background color">BG <input class="image-editor-background" type="color" value="#ffffff" aria-label="Background color"></label>
           </div>
           <div class="image-editor-color-palette image-editor-toolbar-group" role="group" aria-label="Predefined colors"></div>
-          <div class="image-editor-text-controls image-editor-toolbar-group">
-            <select class="image-editor-font" aria-label="Font family"><option>Arial</option><option>Georgia</option><option>Courier New</option></select>
-            <input class="image-editor-font-size" type="number" min="8" max="144" value="24" aria-label="Font size">
-            <button type="button" class="image-editor-format" data-format="bold" title="Bold"><strong>B</strong></button>
-            <button type="button" class="image-editor-format" data-format="italic" title="Italic"><em>I</em></button>
+          <div class="image-editor-dynamic-controls">
+            <div class="image-editor-rounded-rectangle-controls image-editor-toolbar-group" hidden>
+              <label>Radius <input class="image-editor-corner-radius" type="range" min="0" max="100" value="16"></label>
+              <label><input class="image-editor-all-corners" type="checkbox" checked> All corners</label>
+            </div>
+            <div class="image-editor-callout-controls image-editor-toolbar-group" hidden>
+              <label>Callout
+                <select class="image-editor-callout-type" aria-label="Callout type">
+                  <option value="callout">Rounded rectangular</option>
+                  <option value="oval-callout">Oval</option>
+                  <option value="cloud-callout">Cloud</option>
+                </select>
+              </label>
+            </div>
+            <div class="image-editor-star-controls image-editor-toolbar-group" hidden>
+              <label>Star
+                <select class="image-editor-star-points" aria-label="Star points">
+                  <option value="4">4 points</option>
+                  <option value="5">5 points</option>
+                  <option value="6">6 points</option>
+                </select>
+              </label>
+            </div>
+            <div class="image-editor-text-controls image-editor-toolbar-group">
+              <select class="image-editor-font" aria-label="Font family"><option>Arial</option><option>Georgia</option><option>Courier New</option></select>
+              <input class="image-editor-font-size" type="number" min="8" max="144" value="24" aria-label="Font size">
+              <button type="button" class="image-editor-format" data-format="bold" title="Bold"><strong>B</strong></button>
+              <button type="button" class="image-editor-format" data-format="italic" title="Italic"><em>I</em></button>
+            </div>
           </div>
         </div>
         <div class="image-editor-stage" tabindex="0" role="application" aria-label="Image editor canvas">

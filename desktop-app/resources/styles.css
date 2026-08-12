@@ -1051,6 +1051,7 @@ audio.file-preview-content {
   margin: 0; padding: 0 8px; border-right: 1px solid var(--border-color);
 }
 .image-editor-toolbar-group:last-child { border-right: 0; }
+.image-editor-dynamic-controls { display: contents; }
 .image-editor-command-grid {
   display: grid; grid-template-columns: repeat(3, 28px); grid-template-rows: repeat(2, 28px); gap: 2px;
 }
