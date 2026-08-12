@@ -185,6 +185,88 @@ test("opens an image editor, draws, undoes, and explicitly saves", async ({ page
   await expect(page.locator("#tab-list .tab-item.active")).not.toHaveClass(/unsaved/);
 });
 
+test('rounded rectangle adjusts all corners or one corner before commit', async ({ page }) => {
+  await page.goto('/');
+  await page.waitForFunction(() => !!window.markdownViewerApp?.modules?.tabs?.openBlankImageEditorInTab, null, { timeout: 60000 });
+  await page.waitForFunction(() => !!window.markdownViewerApp?.modules?.keyboardShortcuts && !!window.markdownViewerApp?.services?.imageEditor, null, { timeout: 60000 });
+  await page.evaluate(() => {
+    window.markdownViewerApp.modules.apiClient.deactivateApiClientSidebar = () => {};
+    window.markdownViewerApp.modules.tabs.openBlankImageEditorInTab({ width: 140, height: 100, name: 'Rounded Rectangle' });
+  });
+  await expect(page.locator('.tab-view.active[data-tab-view-kind=image-editor] .image-editor-shell')).toBeVisible();
+
+  await page.locator('[data-tool="rounded-rectangle"]').click();
+  await expect(page.locator('.image-editor-rounded-rectangle-controls')).toBeVisible();
+  await page.locator('.image-editor-corner-radius').fill('12');
+  const overlay = page.locator('.image-editor-overlay');
+  const box = await overlay.boundingBox();
+  await page.mouse.move(box.x + 20, box.y + 20);
+  await page.mouse.down();
+  await page.mouse.move(box.x + 120, box.y + 80, { steps: 5 });
+  await page.mouse.up();
+
+  expect(await page.evaluate(() => {
+    const root = document.querySelector('.tab-view.active[data-tab-view-kind=image-editor]');
+    const tool = window.markdownViewerApp.services.imageEditor.getView(root.dataset.tabId).roundedRectangleTool;
+    return { phase: tool.phase, radii: tool.model.radii };
+  })).toEqual({ phase: 'editing', radii: { topLeft: 12, topRight: 12, bottomRight: 12, bottomLeft: 12 } });
+
+  const handleClientPoint = async (corner) => page.evaluate((cornerName) => {
+    const root = document.querySelector('.tab-view.active[data-tab-view-kind=image-editor]');
+    const controller = window.markdownViewerApp.services.imageEditor.getView(root.dataset.tabId);
+    const point = controller.roundedRectangleTool.getHandlePoint(cornerName);
+    const canvas = root.querySelector('.image-editor-overlay');
+    const rect = canvas.getBoundingClientRect();
+    return { x: rect.left + point.x * rect.width / canvas.width, y: rect.top + point.y * rect.height / canvas.height };
+  }, corner);
+  const topLeftHandle = await handleClientPoint('topLeft');
+  await page.mouse.move(topLeftHandle.x, topLeftHandle.y);
+  await page.mouse.down();
+  await page.mouse.move(topLeftHandle.x + 12, topLeftHandle.y, { steps: 4 });
+  await page.mouse.up();
+  expect(await page.evaluate(() => {
+    const root = document.querySelector('.tab-view.active[data-tab-view-kind=image-editor]');
+    return window.markdownViewerApp.services.imageEditor.getView(root.dataset.tabId).roundedRectangleTool.model.radii;
+  })).toEqual({ topLeft: 24, topRight: 24, bottomRight: 24, bottomLeft: 24 });
+
+  await page.locator('.image-editor-all-corners').uncheck();
+  const bottomRightHandle = await handleClientPoint('bottomRight');
+  await page.mouse.move(bottomRightHandle.x, bottomRightHandle.y);
+  await page.mouse.down();
+  await page.mouse.move(bottomRightHandle.x + 14, bottomRightHandle.y, { steps: 4 });
+  await page.mouse.up();
+  expect(await page.evaluate(() => {
+    const root = document.querySelector('.tab-view.active[data-tab-view-kind=image-editor]');
+    return window.markdownViewerApp.services.imageEditor.getView(root.dataset.tabId).roundedRectangleTool.model.radii;
+  })).toEqual({ topLeft: 24, topRight: 24, bottomRight: 10, bottomLeft: 24 });
+  await page.locator('.image-editor-corner-radius').fill('18');
+  expect(await page.evaluate(() => {
+    const root = document.querySelector('.tab-view.active[data-tab-view-kind=image-editor]');
+    return window.markdownViewerApp.services.imageEditor.getView(root.dataset.tabId).roundedRectangleTool.model.radii;
+  })).toEqual({ topLeft: 24, topRight: 24, bottomRight: 18, bottomLeft: 24 });
+
+  await page.keyboard.press('Enter');
+  const committedPixels = await page.locator('.image-editor-canvas').evaluate((canvas) => {
+    const pixels = canvas.getContext('2d').getImageData(0, 0, canvas.width, canvas.height).data;
+    let count = 0;
+    for (let index = 0; index < pixels.length; index += 4) {
+      if (pixels[index] < 240 || pixels[index + 1] < 240 || pixels[index + 2] < 240) count += 1;
+    }
+    return count;
+  });
+  expect(committedPixels).toBeGreaterThan(20);
+  await page.keyboard.press('Control+Z');
+  const afterUndoPixels = await page.locator('.image-editor-canvas').evaluate((canvas) => {
+    const pixels = canvas.getContext('2d').getImageData(0, 0, canvas.width, canvas.height).data;
+    let count = 0;
+    for (let index = 0; index < pixels.length; index += 4) {
+      if (pixels[index] < 240 || pixels[index + 1] < 240 || pixels[index + 2] < 240) count += 1;
+    }
+    return count;
+  });
+  expect(afterUndoPixels).toBe(0);
+});
+
 test("switching between image editor tabs preserves each tab's drawing", async ({ page }) => {
   await page.goto("/");
   await page.waitForFunction(() => !!window.markdownViewerApp?.modules?.tabs?.openBlankImageEditorInTab, null, { timeout: 60000 });

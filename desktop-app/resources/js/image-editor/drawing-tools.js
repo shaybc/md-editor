@@ -123,6 +123,33 @@
     context.stroke();
   }
 
+  /** Draw a rectangle whose four corners may use different radii. */
+  function drawRoundedRectangle(context, rect, radii, state) {
+    if (!rect?.width || !rect?.height) return;
+    configureStroke(context, state, state.lineWidth);
+    const maximum = Math.min(rect.width, rect.height) / 2;
+    const radius = (corner) => Math.max(0, Math.min(maximum, Number(radii?.[corner] || 0)));
+    const topLeft = radius("topLeft");
+    const topRight = radius("topRight");
+    const bottomRight = radius("bottomRight");
+    const bottomLeft = radius("bottomLeft");
+    const right = rect.x + rect.width;
+    const bottom = rect.y + rect.height;
+    context.beginPath();
+    context.moveTo(rect.x + topLeft, rect.y);
+    context.lineTo(right - topRight, rect.y);
+    context.quadraticCurveTo(right, rect.y, right, rect.y + topRight);
+    context.lineTo(right, bottom - bottomRight);
+    context.quadraticCurveTo(right, bottom, right - bottomRight, bottom);
+    context.lineTo(rect.x + bottomLeft, bottom);
+    context.quadraticCurveTo(rect.x, bottom, rect.x, bottom - bottomLeft);
+    context.lineTo(rect.x, rect.y + topLeft);
+    context.quadraticCurveTo(rect.x, rect.y, rect.x + topLeft, rect.y);
+    context.closePath();
+    if (state.fillShapes) context.fill();
+    context.stroke();
+  }
+
   function drawPolygon(context, points, state, close) {
     if (!points?.length) return;
     configureStroke(context, state, state.lineWidth);
@@ -251,5 +278,5 @@
     context.restore();
   }
 
-  Object.assign(namespace, { configureStroke, drawFreehand, curvePointAt, drawCurve, drawShape, drawPolygon, colorToRgba, floodFill, drawText });
+  Object.assign(namespace, { configureStroke, drawFreehand, curvePointAt, drawCurve, drawShape, drawRoundedRectangle, drawPolygon, colorToRgba, floodFill, drawText });
 })(typeof window !== "undefined" ? window : globalThis);

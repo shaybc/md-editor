@@ -10,11 +10,13 @@
     line: "bi-slash-lg",
     curve: "bi-bezier2",
     rectangle: "bi-square",
+    "rounded-rectangle": "bi-app",
     ellipse: "bi-circle",
     polygon: "bi-pentagon",
     bucket: "bi-paint-bucket",
     text: "bi-fonts"
   };
+  const TOOL_LABELS = { "rounded-rectangle": "Rounded rectangle" };
   const PALETTE_COLORS = Object.freeze([
     "#000000", "#7f7f7f", "#880015", "#ed1c24", "#ff7f27",
     "#fff200", "#22b14c", "#00a2e8", "#3f48cc", "#a349a4",
@@ -33,7 +35,7 @@
   }
 
   function createToolButton(tool) {
-    const element = button(TOOL_ICONS[tool], tool[0].toUpperCase() + tool.slice(1), "image-editor-tool");
+    const element = button(TOOL_ICONS[tool], TOOL_LABELS[tool] || tool[0].toUpperCase() + tool.slice(1), "image-editor-tool");
     element.dataset.tool = tool;
     return element;
   }
@@ -70,6 +72,10 @@
           <div class="image-editor-size-controls image-editor-toolbar-group">
             <label>Size <input class="image-editor-size" type="range" min="1" max="64" value="8"></label>
             <label><input class="image-editor-fill" type="checkbox"> Fill</label>
+          </div>
+          <div class="image-editor-rounded-rectangle-controls image-editor-toolbar-group" hidden>
+            <label>Radius <input class="image-editor-corner-radius" type="range" min="0" max="100" value="16"></label>
+            <label><input class="image-editor-all-corners" type="checkbox" checked> All corners</label>
           </div>
           <div class="image-editor-color-targets image-editor-toolbar-group" role="group" aria-label="Active image colors">
             <label class="image-editor-color-target active" data-color-target="foreground" title="Foreground color">FG <input class="image-editor-foreground" type="color" value="#111111" aria-label="Foreground color"></label>
@@ -227,6 +233,9 @@
       this.shell.querySelector(".image-editor-background").value = state.backgroundColor;
       this.setActiveColorTarget(this.activeColorTarget, state);
       this.shell.querySelector(".image-editor-fill").checked = state.fillShapes;
+      this.shell.querySelector(".image-editor-corner-radius").value = String(state.cornerRadius);
+      this.shell.querySelector(".image-editor-all-corners").checked = state.adjustAllCorners;
+      this.shell.querySelector(".image-editor-rounded-rectangle-controls").hidden = state.tool !== "rounded-rectangle";
       this.shell.querySelector(".image-editor-text-controls").hidden = state.tool !== "text";
       ["undo", "redo", "cut", "copy", "delete"].forEach((action) => {
         const key = `can${action[0].toUpperCase()}${action.slice(1)}`;

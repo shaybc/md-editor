@@ -3,7 +3,7 @@
   "use strict";
 
   const namespace = global.MarkdownViewerImageEditor = global.MarkdownViewerImageEditor || {};
-  const TOOLS = Object.freeze(["select", "pencil", "brush", "line", "curve", "rectangle", "ellipse", "polygon", "bucket", "text"]);
+  const TOOLS = Object.freeze(["select", "pencil", "brush", "line", "curve", "rectangle", "rounded-rectangle", "ellipse", "polygon", "bucket", "text"]);
 
   class ImageEditorState {
     /**
@@ -20,6 +20,8 @@
       this.brushSize = Math.max(1, Math.min(64, Number(options.brushSize || 8)));
       this.lineWidth = Math.max(1, Math.min(64, Number(options.lineWidth || 2)));
       this.fillShapes = options.fillShapes === true;
+      this.cornerRadius = Math.max(0, Math.min(100, Number(options.cornerRadius ?? 16)));
+      this.adjustAllCorners = options.adjustAllCorners !== false;
       this.fontFamily = options.fontFamily || "Arial";
       this.fontSize = Math.max(8, Math.min(144, Number(options.fontSize || 24)));
       this.fontBold = options.fontBold === true;

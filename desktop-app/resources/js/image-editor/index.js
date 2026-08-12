@@ -59,6 +59,8 @@
         brushSize: state.brushSize,
         lineWidth: state.lineWidth,
         fillShapes: state.fillShapes,
+        cornerRadius: state.cornerRadius,
+        adjustAllCorners: state.adjustAllCorners,
         fontFamily: state.fontFamily,
         fontSize: state.fontSize,
         fontBold: state.fontBold,
@@ -150,6 +152,44 @@
       drawSelectionOverlay(controller);
       syncTab(controller);
       return true;
+    }
+
+    function renderRoundedRectanglePreview(controller) {
+      const { view, roundedRectangleTool, state } = controller;
+      view.overlayContext.clearRect(0, 0, view.overlay.width, view.overlay.height);
+      roundedRectangleTool.drawPreview(view.overlayContext, state);
+    }
+
+    function updateRoundedRectangleRadiusControl(controller) {
+      const model = controller.roundedRectangleTool.model;
+      if (!model) return;
+      const corner = controller.roundedRectangleTool.activeCorner;
+      controller.state.cornerRadius = model.radii[corner];
+      controller.view.shell.querySelector(".image-editor-corner-radius").value = String(controller.state.cornerRadius);
+    }
+
+    function cancelEditableRoundedRectangle(controller) {
+      controller.roundedRectangleTool.reset();
+      controller.roundedRectangleBefore = null;
+      controller.dragging = false;
+      controller.view.overlayContext.clearRect(0, 0, controller.view.overlay.width, controller.view.overlay.height);
+      syncTab(controller);
+    }
+
+    function finishEditableRoundedRectangle(controller) {
+      const { roundedRectangleTool, state, view } = controller;
+      const model = roundedRectangleTool.model;
+      if (!roundedRectangleTool.isEditing || !model?.rect.width || !model?.rect.height) {
+        cancelEditableRoundedRectangle(controller);
+        return false;
+      }
+      view.overlayContext.clearRect(0, 0, view.overlay.width, view.overlay.height);
+      namespace.drawRoundedRectangle(view.context, model.rect, model.radii, state);
+      const before = controller.roundedRectangleBefore || snapshot(view);
+      roundedRectangleTool.reset();
+      controller.roundedRectangleBefore = null;
+      controller.dragging = false;
+      return commitTransaction(controller, before);
     }
 
     /** Build an export-only canvas without changing live floating pixels or editable text. */
@@ -390,6 +430,7 @@
       controller.state[stateProperty] = color;
       controller.view.shell.querySelector(inputSelector).value = color;
       controller.view.setActiveColorTarget(colorTarget, controller.state);
+      if (controller.roundedRectangleTool.isEditing) renderRoundedRectanglePreview(controller);
       if (colorTarget === "foreground") {
         refreshLiveTextStyle(controller);
         if (controller.curveTool.isEditing) renderCurvePreview(controller);
@@ -412,6 +453,7 @@
         const toolButton = event.target.closest("[data-tool]");
         if (toolButton) {
           if (state.tool === "curve" && controller.curveTool.isEditing) finishEditableCurve(controller);
+          if (state.tool === "rounded-rectangle" && controller.roundedRectangleTool.isEditing) finishEditableRoundedRectangle(controller);
           commitText(controller);
           if (toolButton.dataset.tool !== "select") dropSelection(controller);
           state.setTool(toolButton.dataset.tool);
@@ -443,8 +485,24 @@
       view.shell.querySelector(".image-editor-size").addEventListener("input", (event) => {
         state.brushSize = state.lineWidth = Number(event.target.value);
         if (controller.curveTool.isEditing) renderCurvePreview(controller);
+        if (controller.roundedRectangleTool.isEditing) renderRoundedRectanglePreview(controller);
       });
-      view.shell.querySelector(".image-editor-fill").addEventListener("change", (event) => { state.fillShapes = event.target.checked; });
+      view.shell.querySelector(".image-editor-fill").addEventListener("change", (event) => {
+        state.fillShapes = event.target.checked;
+        if (controller.roundedRectangleTool.isEditing) renderRoundedRectanglePreview(controller);
+      });
+      view.shell.querySelector(".image-editor-corner-radius").addEventListener("input", (event) => {
+        state.cornerRadius = Number(event.target.value);
+        if (controller.roundedRectangleTool.setRadius(state.cornerRadius, state.adjustAllCorners)) renderRoundedRectanglePreview(controller);
+      });
+      view.shell.querySelector(".image-editor-all-corners").addEventListener("change", (event) => {
+        state.adjustAllCorners = event.target.checked;
+        if (state.adjustAllCorners && controller.roundedRectangleTool.isEditing) {
+          controller.roundedRectangleTool.unifyCorners();
+          updateRoundedRectangleRadiusControl(controller);
+          renderRoundedRectanglePreview(controller);
+        }
+      });
       view.shell.querySelector(".image-editor-font").addEventListener("change", (event) => {
         state.fontFamily = event.target.value;
         refreshLiveTextStyle(controller);
@@ -493,6 +551,26 @@
           controller.dragging = true;
           overlay.setPointerCapture?.(event.pointerId);
           renderCurvePreview(controller);
+          return;
+        }
+        if (state.tool === "rounded-rectangle") {
+          event.preventDefault();
+          event.stopPropagation();
+          if (!controller.roundedRectangleTool.isEditing) {
+            commitText(controller);
+            commitSelection(controller);
+            controller.roundedRectangleBefore = snapshot(view);
+          }
+          const result = controller.roundedRectangleTool.begin(point, state.cornerRadius, state.adjustAllCorners);
+          if (result.action === "outside") {
+            finishEditableRoundedRectangle(controller);
+            return;
+          }
+          if (!result.started) return;
+          controller.dragging = true;
+          overlay.setPointerCapture?.(event.pointerId);
+          updateRoundedRectangleRadiusControl(controller);
+          renderRoundedRectanglePreview(controller);
           return;
         }
         if (state.tool === "text") {
@@ -550,6 +628,12 @@
           renderCurvePreview(controller);
           return;
         }
+        if (state.tool === "rounded-rectangle") {
+          controller.roundedRectangleTool.update(point);
+          updateRoundedRectangleRadiusControl(controller);
+          renderRoundedRectanglePreview(controller);
+          return;
+        }
         if (state.tool === "text" && controller.creatingTextBox) {
           drawTextCreationOverlay(controller, point);
           return;
@@ -576,6 +660,10 @@
           const result = controller.curveTool.completeStage(point);
           if (result.complete) finishEditableCurve(controller);
           else renderCurvePreview(controller);
+        } else if (state.tool === "rounded-rectangle") {
+          controller.roundedRectangleTool.completeStage(point);
+          updateRoundedRectangleRadiusControl(controller);
+          renderRoundedRectanglePreview(controller);
         } else if (state.tool === "text" && controller.creatingTextBox) {
           controller.creatingTextBox = false;
           view.overlayContext.clearRect(0, 0, view.overlay.width, view.overlay.height);
@@ -824,6 +912,18 @@
             return;
           }
         }
+        if (controller.state.tool === "rounded-rectangle" && controller.roundedRectangleTool.isEditing) {
+          if (event.key === "Escape") {
+            cancelEditableRoundedRectangle(controller);
+            event.preventDefault();
+            return;
+          }
+          if (event.key === "Enter") {
+            finishEditableRoundedRectangle(controller);
+            event.preventDefault();
+            return;
+          }
+        }
         if (primary && !event.shiftKey && !event.altKey && event.key.toLowerCase() === "a") {
           event.preventDefault();
           selectAllCanvas(controller);
@@ -932,6 +1032,8 @@
         selectionBefore: null,
         curveTool: new namespace.ImageEditorCurveTool(),
         curveBefore: null,
+        roundedRectangleTool: new namespace.ImageEditorRoundedRectangleTool(),
+        roundedRectangleBefore: null,
         textRect: null,
         creatingTextBox: false,
         textInputOpening: false,
