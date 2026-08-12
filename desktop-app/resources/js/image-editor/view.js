@@ -12,6 +12,7 @@
     rectangle: "bi-square",
     "rounded-rectangle": "bi-app",
     callout: "bi-chat-square",
+    "oval-callout": "bi-chat-oval",
     ellipse: "bi-circle",
     polygon: "bi-pentagon",
     triangle: "bi-triangle",
@@ -19,7 +20,7 @@
     bucket: "bi-paint-bucket",
     text: "bi-fonts"
   };
-  const TOOL_LABELS = { "rounded-rectangle": "Rounded rectangle", callout: "Rounded rectangular callout" };
+  const TOOL_LABELS = { "rounded-rectangle": "Rounded rectangle", callout: "Rounded rectangular callout", "oval-callout": "Oval callout" };
   const PALETTE_COLORS = Object.freeze([
     "#000000", "#7f7f7f", "#880015", "#ed1c24", "#ff7f27",
     "#fff200", "#22b14c", "#00a2e8", "#3f48cc", "#a349a4",
@@ -80,6 +81,14 @@
             <label>Radius <input class="image-editor-corner-radius" type="range" min="0" max="100" value="16"></label>
             <label><input class="image-editor-all-corners" type="checkbox" checked> All corners</label>
           </div>
+          <div class="image-editor-callout-controls image-editor-toolbar-group" hidden>
+            <label>Callout
+              <select class="image-editor-callout-type" aria-label="Callout type">
+                <option value="callout">Rounded rectangular</option>
+                <option value="oval-callout">Oval</option>
+              </select>
+            </label>
+          </div>
           <div class="image-editor-color-targets image-editor-toolbar-group" role="group" aria-label="Active image colors">
             <label class="image-editor-color-target active" data-color-target="foreground" title="Foreground color">FG <input class="image-editor-foreground" type="color" value="#111111" aria-label="Foreground color"></label>
             <label class="image-editor-color-target" data-color-target="background" title="Background color">BG <input class="image-editor-background" type="color" value="#ffffff" aria-label="Background color"></label>
@@ -121,7 +130,7 @@
       this.overlayContext = this.overlay.getContext("2d");
       this.activeColorTarget = "foreground";
 
-      namespace.tools.forEach((tool) => this.shell.querySelector(".image-editor-tools").appendChild(createToolButton(tool)));
+      namespace.tools.filter((tool) => tool !== "oval-callout").forEach((tool) => this.shell.querySelector(".image-editor-tools").appendChild(createToolButton(tool)));
       [
         ["bi-arrow-counterclockwise", "Undo", "undo"],
         ["bi-arrow-clockwise", "Redo", "redo"]
@@ -228,7 +237,7 @@
 
     update(state, commandState) {
       this.shell.querySelectorAll("[data-tool]").forEach((element) => {
-        const active = element.dataset.tool === state.tool;
+        const active = element.dataset.tool === state.tool || (element.dataset.tool === "callout" && state.tool === "oval-callout");
         element.classList.toggle("active", active);
         element.setAttribute("aria-pressed", String(active));
       });
@@ -239,6 +248,9 @@
       this.shell.querySelector(".image-editor-corner-radius").value = String(state.cornerRadius);
       this.shell.querySelector(".image-editor-all-corners").checked = state.adjustAllCorners;
       this.shell.querySelector(".image-editor-rounded-rectangle-controls").hidden = state.tool !== "rounded-rectangle";
+      const calloutActive = state.tool === "callout" || state.tool === "oval-callout";
+      this.shell.querySelector(".image-editor-callout-controls").hidden = !calloutActive;
+      if (calloutActive) this.shell.querySelector(".image-editor-callout-type").value = state.tool;
       this.shell.querySelector(".image-editor-text-controls").hidden = state.tool !== "text";
       ["undo", "redo", "cut", "copy", "delete"].forEach((action) => {
         const key = `can${action[0].toUpperCase()}${action.slice(1)}`;

@@ -60,6 +60,9 @@ test("opens an image editor, draws, undoes, and explicitly saves", async ({ page
   await expect(page.locator(".image-editor-toolbar .image-editor-zoom-actions")).toHaveCount(0);
   await expect(page.locator(".image-editor-palette-color")).toHaveCount(20);
   await expect(page.locator('[data-tool="curve"]')).toHaveAttribute('title', 'Curve');
+  await expect(page.locator('[data-tool="callout"]')).toHaveAttribute('title', 'Rounded rectangular callout');
+  await expect(page.locator('[data-tool="oval-callout"]')).toHaveCount(0);
+  await expect(page.locator('.image-editor-callout-type option')).toHaveCount(2);
   const toolbarRows = await page.evaluate(() => {
     const rect = (selector) => document.querySelector(selector).getBoundingClientRect();
     const undo = rect('[data-action="undo"]');
@@ -67,9 +70,16 @@ test("opens an image editor, draws, undoes, and explicitly saves", async ({ page
     const line = rect('[data-tool="line"]');
     const pencil = rect('[data-tool="pencil"]');
     const select = rect('[data-tool="select"]');
-    return { commandsUseTwoRows: cut.top > undo.top, toolsUseTwoRows: pencil.top > line.top, selectSpansRows: select.height > line.height };
+    const roundedRectangle = rect('[data-tool="rounded-rectangle"]');
+    const callout = rect('[data-tool="callout"]');
+    return {
+      commandsUseTwoRows: cut.top > undo.top,
+      toolsUseTwoRows: pencil.top > line.top,
+      selectSpansRows: select.height > line.height,
+      calloutUsesSecondRow: Math.abs(callout.top - roundedRectangle.top) < 1
+    };
   });
-  expect(toolbarRows).toEqual({ commandsUseTwoRows: true, toolsUseTwoRows: true, selectSpansRows: true });
+  expect(toolbarRows).toEqual({ commandsUseTwoRows: true, toolsUseTwoRows: true, selectSpansRows: true, calloutUsesSecondRow: true });
   await page.locator(".image-editor-background").evaluate((element) => element.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true })));
   await page.locator('[data-palette-color="#ed1c24"]').click();
   await expect(page.locator(".image-editor-background")).toHaveValue("#ed1c24");
@@ -416,6 +426,97 @@ test('rounded callout guide changes tail direction length and attachment shape b
     }
     return count;
   })).toBeGreaterThan(80);
+  await page.keyboard.press('Control+Z');
+  expect(await page.locator('.image-editor-canvas').evaluate((canvas) => {
+    const pixels = canvas.getContext('2d').getImageData(0, 0, canvas.width, canvas.height).data;
+    for (let index = 0; index < pixels.length; index += 4) {
+      if (pixels[index] < 240 || pixels[index + 1] < 240 || pixels[index + 2] < 240) return false;
+    }
+    return true;
+  })).toBe(true);
+});
+
+test('oval callout guide changes tail direction length and attachment shape before placement', async ({ page }) => {
+  await page.goto('/');
+  await page.waitForFunction(() => !!window.markdownViewerApp?.modules?.tabs?.openBlankImageEditorInTab, null, { timeout: 60000 });
+  await page.waitForFunction(() => !!window.markdownViewerApp?.modules?.keyboardShortcuts && !!window.markdownViewerApp?.services?.imageEditor, null, { timeout: 60000 });
+  await page.evaluate(() => {
+    window.markdownViewerApp.modules.apiClient.deactivateApiClientSidebar = () => {};
+    window.markdownViewerApp.modules.tabs.openBlankImageEditorInTab({ width: 160, height: 120, name: 'Oval Callout' });
+  });
+  await expect(page.locator('.tab-view.active[data-tab-view-kind=image-editor] .image-editor-shell')).toBeVisible();
+  await page.locator('[data-tool=callout]').click();
+  await expect(page.locator('.image-editor-callout-controls')).toBeVisible();
+  await expect(page.locator('.image-editor-callout-type')).toHaveValue('callout');
+  await page.locator('.image-editor-callout-type').selectOption('oval-callout');
+  await expect(page.locator('.image-editor-callout-type')).toHaveValue('oval-callout');
+  await expect(page.locator('[data-tool=callout]')).toHaveClass(/active/);
+  const overlay = page.locator('.image-editor-overlay');
+  const box = await overlay.boundingBox();
+  await page.mouse.move(box.x + 35, box.y + 20);
+  await page.mouse.down();
+  await page.mouse.move(box.x + 115, box.y + 70, { steps: 5 });
+  await page.mouse.up();
+
+  const initialModel = await page.evaluate(() => {
+    const root = document.querySelector('.tab-view.active[data-tab-view-kind=image-editor]');
+    const controller = window.markdownViewerApp.services.imageEditor.getView(root.dataset.tabId);
+    return { phase: controller.ovalCalloutTool.phase, tool: controller.state.tool, model: controller.ovalCalloutTool.model };
+  });
+  expect(initialModel.phase).toBe('editing');
+  expect(initialModel.tool).toBe('oval-callout');
+  expect(initialModel.model.side).toBe('bottom');
+  expect(initialModel.model.attachmentStart.y).toBeLessThan(initialModel.model.rect.y + initialModel.model.rect.height);
+  expect(initialModel.model.attachmentEnd.y).toBeLessThan(initialModel.model.rect.y + initialModel.model.rect.height);
+  const initialLength = initialModel.model.tip.y - initialModel.model.attachmentStart.y;
+  const initialAttachmentSpan = Math.abs(initialModel.model.attachmentEnd.x - initialModel.model.attachmentStart.x);
+
+  await page.mouse.move(box.x + initialModel.model.tip.x, box.y + initialModel.model.tip.y);
+  await page.mouse.down();
+  await page.mouse.move(box.x + 150, box.y + 45, { steps: 5 });
+  await page.mouse.up();
+  const redirectedModel = await page.evaluate(() => {
+    const root = document.querySelector('.tab-view.active[data-tab-view-kind=image-editor]');
+    return window.markdownViewerApp.services.imageEditor.getView(root.dataset.tabId).ovalCalloutTool.model;
+  });
+  expect(redirectedModel.side).toBe('right');
+  expect(redirectedModel.tip.x).toBe(150);
+  expect(redirectedModel.tip.x - redirectedModel.attachmentStart.x).toBeGreaterThan(initialLength);
+  expect(redirectedModel.attachmentStart.x).toBeLessThan(redirectedModel.rect.x + redirectedModel.rect.width);
+  expect(redirectedModel.attachmentEnd.x).toBeLessThan(redirectedModel.rect.x + redirectedModel.rect.width);
+
+  await page.mouse.move(box.x + redirectedModel.attachmentStart.x, box.y + redirectedModel.attachmentStart.y);
+  await page.mouse.down();
+  await page.mouse.move(box.x + redirectedModel.attachmentStart.x, box.y + 43, { steps: 3 });
+  await page.mouse.up();
+  const reshapedModel = await page.evaluate(() => {
+    const root = document.querySelector('.tab-view.active[data-tab-view-kind=image-editor]');
+    return window.markdownViewerApp.services.imageEditor.getView(root.dataset.tabId).ovalCalloutTool.model;
+  });
+  expect(Math.abs(reshapedModel.attachmentEnd.y - reshapedModel.attachmentStart.y)).toBeLessThan(initialAttachmentSpan);
+
+  await page.keyboard.press('Enter');
+  expect(await page.evaluate(() => {
+    const root = document.querySelector('.tab-view.active[data-tab-view-kind=image-editor]');
+    const controller = window.markdownViewerApp.services.imageEditor.getView(root.dataset.tabId);
+    return { tool: controller.state.tool, floating: controller.selection.floating, origin: controller.selection.origin };
+  })).toEqual({ tool: 'select', floating: true, origin: 'shape' });
+  await page.keyboard.press('Escape');
+  await expect(page.locator('[data-tool=callout]')).toHaveClass(/active/);
+  await expect(page.locator('.image-editor-callout-type')).toHaveValue('oval-callout');
+  const placed = await page.locator('.image-editor-canvas').evaluate((canvas) => {
+    const context = canvas.getContext('2d');
+    const pixel = (x, y) => Array.from(context.getImageData(x, y, 1, 1).data).slice(0, 3);
+    const data = context.getImageData(0, 0, canvas.width, canvas.height).data;
+    let changed = 0;
+    for (let index = 0; index < data.length; index += 4) {
+      if (data[index] < 240 || data[index + 1] < 240 || data[index + 2] < 240) changed += 1;
+    }
+    return { corner: pixel(35, 20), topCenter: pixel(75, 20), changed };
+  });
+  expect(placed.corner).toEqual([255, 255, 255]);
+  expect(placed.topCenter[0]).toBeLessThan(240);
+  expect(placed.changed).toBeGreaterThan(80);
   await page.keyboard.press('Control+Z');
   expect(await page.locator('.image-editor-canvas').evaluate((canvas) => {
     const pixels = canvas.getContext('2d').getImageData(0, 0, canvas.width, canvas.height).data;

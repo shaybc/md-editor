@@ -198,14 +198,29 @@
       return floatGeneratedLayer(controller, layer, before);
     }
 
+    function isCalloutTool(tool) {
+      return tool === "callout" || tool === "oval-callout";
+    }
+
+    function calloutToolFor(controller, tool = controller.state.tool) {
+      return tool === "oval-callout" ? controller.ovalCalloutTool : controller.calloutTool;
+    }
+
+    function editingCalloutTool(controller) {
+      if (controller.calloutTool.isEditing) return controller.calloutTool;
+      if (controller.ovalCalloutTool.isEditing) return controller.ovalCalloutTool;
+      return null;
+    }
+
     function renderCalloutPreview(controller) {
-      const { view, calloutTool, state } = controller;
+      const { view, state } = controller;
+      const calloutTool = editingCalloutTool(controller) || calloutToolFor(controller);
       view.overlayContext.clearRect(0, 0, view.overlay.width, view.overlay.height);
       calloutTool.drawPreview(view.overlayContext, state);
     }
 
     function cancelEditableCallout(controller) {
-      controller.calloutTool.reset();
+      (editingCalloutTool(controller) || calloutToolFor(controller)).reset();
       controller.calloutBefore = null;
       controller.dragging = false;
       controller.view.overlayContext.clearRect(0, 0, controller.view.overlay.width, controller.view.overlay.height);
@@ -213,7 +228,8 @@
     }
 
     function finishEditableCallout(controller) {
-      const { calloutTool, state, view } = controller;
+      const { state, view } = controller;
+      const calloutTool = editingCalloutTool(controller) || calloutToolFor(controller);
       if (!calloutTool.isEditing || !calloutTool.model) {
         cancelEditableCallout(controller);
         return false;
@@ -313,7 +329,7 @@
     function applyZoom(controller, zoom) {
       controller.state.setZoom(zoom);
       controller.view.setZoom(controller.state.zoom);
-      if (controller.calloutTool?.isEditing) renderCalloutPreview(controller);
+      if (editingCalloutTool(controller)) renderCalloutPreview(controller);
       if (controller.roundedRectangleTool?.isEditing) renderRoundedRectanglePreview(controller);
       syncTab(controller);
       return controller.state.zoom;
@@ -468,7 +484,7 @@
       controller.view.shell.querySelector(inputSelector).value = color;
       controller.view.setActiveColorTarget(colorTarget, controller.state);
       if (controller.roundedRectangleTool.isEditing) renderRoundedRectanglePreview(controller);
-      if (controller.calloutTool.isEditing) renderCalloutPreview(controller);
+      if (editingCalloutTool(controller)) renderCalloutPreview(controller);
       if (colorTarget === "foreground") {
         refreshLiveTextStyle(controller);
         if (controller.curveTool.isEditing) renderCurvePreview(controller);
@@ -492,7 +508,7 @@
         if (toolButton) {
           if (state.tool === "curve" && controller.curveTool.isEditing) finishEditableCurve(controller);
           if (state.tool === "rounded-rectangle" && controller.roundedRectangleTool.isEditing) finishEditableRoundedRectangle(controller);
-          if (state.tool === "callout" && controller.calloutTool.isEditing) finishEditableCallout(controller);
+          if (isCalloutTool(state.tool) && editingCalloutTool(controller)) finishEditableCallout(controller);
           commitText(controller);
           if (toolButton.dataset.tool !== "select") dropSelection(controller);
           state.setTool(toolButton.dataset.tool);
@@ -525,12 +541,21 @@
         state.brushSize = state.lineWidth = Number(event.target.value);
         if (controller.curveTool.isEditing) renderCurvePreview(controller);
         if (controller.roundedRectangleTool.isEditing) renderRoundedRectanglePreview(controller);
-        if (controller.calloutTool.isEditing) renderCalloutPreview(controller);
+        if (editingCalloutTool(controller)) renderCalloutPreview(controller);
       });
       view.shell.querySelector(".image-editor-fill").addEventListener("change", (event) => {
         state.fillShapes = event.target.checked;
         if (controller.roundedRectangleTool.isEditing) renderRoundedRectanglePreview(controller);
-        if (controller.calloutTool.isEditing) renderCalloutPreview(controller);
+        if (editingCalloutTool(controller)) renderCalloutPreview(controller);
+      });
+      view.shell.querySelector(".image-editor-callout-type").addEventListener("change", (event) => {
+        const nextTool = event.target.value;
+        if (!isCalloutTool(nextTool) || nextTool === state.tool) return;
+        if (isCalloutTool(state.tool) && editingCalloutTool(controller)) finishEditableCallout(controller);
+        commitText(controller);
+        dropSelection(controller);
+        state.setTool(nextTool);
+        syncTab(controller);
       });
       view.shell.querySelector(".image-editor-corner-radius").addEventListener("input", (event) => {
         state.cornerRadius = Number(event.target.value);
@@ -615,15 +640,16 @@
           renderRoundedRectanglePreview(controller);
           return;
         }
-        if (state.tool === "callout") {
+        if (isCalloutTool(state.tool)) {
           event.preventDefault();
           event.stopPropagation();
-          if (!controller.calloutTool.isEditing) {
+          const calloutTool = calloutToolFor(controller);
+          if (!calloutTool.isEditing) {
             commitText(controller);
             commitSelection(controller);
             controller.calloutBefore = snapshot(view);
           }
-          const result = controller.calloutTool.begin(point, state.cornerRadius, state);
+          const result = calloutTool.begin(point, state.cornerRadius, state);
           if (result.action === "outside") {
             finishEditableCallout(controller);
             return;
@@ -695,8 +721,8 @@
           renderRoundedRectanglePreview(controller);
           return;
         }
-        if (state.tool === "callout") {
-          controller.calloutTool.update(point);
+        if (isCalloutTool(state.tool)) {
+          calloutToolFor(controller).update(point);
           renderCalloutPreview(controller);
           return;
         }
@@ -730,8 +756,8 @@
           controller.roundedRectangleTool.completeStage(point);
           updateRoundedRectangleRadiusControl(controller);
           renderRoundedRectanglePreview(controller);
-        } else if (state.tool === "callout") {
-          controller.calloutTool.completeStage(point);
+        } else if (isCalloutTool(state.tool)) {
+          calloutToolFor(controller).completeStage(point);
           renderCalloutPreview(controller);
         } else if (state.tool === "text" && controller.creatingTextBox) {
           controller.creatingTextBox = false;
@@ -994,7 +1020,7 @@
             return;
           }
         }
-        if (controller.state.tool === "callout" && controller.calloutTool.isEditing) {
+        if (isCalloutTool(controller.state.tool) && editingCalloutTool(controller)) {
           if (event.key === "Escape") {
             cancelEditableCallout(controller);
             event.preventDefault();
@@ -1117,6 +1143,7 @@
         roundedRectangleTool: new namespace.ImageEditorRoundedRectangleTool(),
         roundedRectangleBefore: null,
         calloutTool: new namespace.ImageEditorCalloutTool(),
+        ovalCalloutTool: new namespace.ImageEditorOvalCalloutTool(),
         calloutBefore: null,
         textRect: null,
         creatingTextBox: false,

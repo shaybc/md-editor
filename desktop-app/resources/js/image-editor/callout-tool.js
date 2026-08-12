@@ -95,9 +95,7 @@
     drawPreview(context, state) {
       this.zoom = Math.max(0.25, Number(state.zoom) || 1);
       if (this.phase === "drawing" && this.rect) {
-        const radius = Math.min(this.radius, this.rect.width / 2, this.rect.height / 2);
-        const radii = { topLeft: radius, topRight: radius, bottomRight: radius, bottomLeft: radius };
-        namespace.drawRoundedRectangle(context, this.rect, radii, state);
+        this.drawBodyPreview(context, state);
         return;
       }
       const model = this.model;
@@ -128,6 +126,13 @@
         context.strokeRect(point.x - halfHandle, point.y - halfHandle, handleSize, handleSize);
       });
       context.restore();
+    }
+
+    /** Draw the body while its initial bounds are being dragged. */
+    drawBodyPreview(context, state) {
+      const radius = Math.min(this.radius, this.rect.width / 2, this.rect.height / 2);
+      const radii = { topLeft: radius, topRight: radius, bottomRight: radius, bottomLeft: radius };
+      namespace.drawRoundedRectangle(context, this.rect, radii, state);
     }
 
     /** Rasterize the accepted callout into a tightly bounded transparent layer. */
