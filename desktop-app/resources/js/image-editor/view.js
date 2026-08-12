@@ -11,6 +11,8 @@
     curve: "bi-bezier2",
     arc: "bi-circle-half",
     spiral: "bi-hurricane",
+    "rectangular-grid": "bi-grid-3x3",
+    "polar-grid": "bi-bullseye",
     rectangle: "bi-square",
     "rounded-rectangle": "bi-app",
     callout: "bi-chat-square",
@@ -26,7 +28,7 @@
     bucket: "bi-paint-bucket",
     text: "bi-fonts"
   };
-  const TOOL_LABELS = { "rounded-rectangle": "Rounded rectangle", callout: "Rounded rectangular callout", "oval-callout": "Oval callout" };
+  const TOOL_LABELS = { "rounded-rectangle": "Rounded rectangle", "rectangular-grid": "Rectangular grid", "polar-grid": "Polar grid", callout: "Rounded rectangular callout", "oval-callout": "Oval callout" };
   const PALETTE_COLORS = Object.freeze([
     "#000000", "#7f7f7f", "#880015", "#ed1c24", "#ff7f27",
     "#fff200", "#22b14c", "#00a2e8", "#3f48cc", "#a349a4",
@@ -84,16 +86,15 @@
             <label><input class="image-editor-fill" type="checkbox"> Fill</label>
           </div>
           <div class="image-editor-stroke-controls image-editor-toolbar-group">
-            <label>Line
-              <select class="image-editor-stroke-type" aria-label="Line type">
-                <option value="solid">Solid</option>
-                <option value="dash">Dash</option>
-                <option value="center">Center</option>
-                <option value="dotted">Dotted</option>
-                <option value="dash-dot">Dash-dot</option>
-                <option value="dash-double-dot">Dash-double-dot</option>
-              </select>
-            </label>
+            <span class="image-editor-stroke-label">Line</span>
+            <details class="image-editor-stroke-type" data-value="solid">
+              <summary class="image-editor-stroke-type-trigger" aria-haspopup="listbox" aria-expanded="false">
+                <span class="image-editor-line-pattern" data-stroke-type="solid"></span><i class="bi bi-chevron-down"></i>
+              </summary>
+              <span class="image-editor-stroke-type-menu" role="listbox" aria-label="Line type">
+                ${["solid", "dash", "center", "dotted", "dash-dot", "dash-double-dot"].map((type) => `<button type="button" class="image-editor-stroke-type-option" data-value="${type}" role="option" aria-label="${type}" aria-selected="${type === "solid"}"><span class="image-editor-line-pattern" data-stroke-type="${type}"></span></button>`).join("")}
+              </span>
+            </details>
           </div>
           <div class="image-editor-color-targets image-editor-toolbar-group" role="group" aria-label="Active image colors">
             <label class="image-editor-color-target active" data-color-target="foreground" title="Foreground color">FG <input class="image-editor-foreground" type="color" value="#111111" aria-label="Foreground color"></label>
@@ -150,6 +151,16 @@
               </label>
               <button type="button" class="image-editor-spiral-convert">Convert to Curves</button>
               <label><input class="image-editor-spiral-cap-inside" type="checkbox"> Cap inside with circle</label>
+            </div>
+            <div class="image-editor-rectangular-grid-controls image-editor-grid-controls image-editor-toolbar-group" hidden>
+              <label>Rows <input class="image-editor-rectangular-grid-horizontal" type="number" min="0" max="100" value="4"></label>
+              <label>Columns <input class="image-editor-rectangular-grid-vertical" type="number" min="0" max="100" value="4"></label>
+              <label><input class="image-editor-rectangular-grid-frame" type="checkbox" checked> Frame</label>
+            </div>
+            <div class="image-editor-polar-grid-controls image-editor-grid-controls image-editor-toolbar-group" hidden>
+              <label>Rings <input class="image-editor-polar-grid-concentric" type="number" min="0" max="100" value="4"></label>
+              <label>Radials <input class="image-editor-polar-grid-radial" type="number" min="0" max="100" value="8"></label>
+              <label><input class="image-editor-polar-grid-compound" type="checkbox"> Compound rings</label>
             </div>
             <div class="image-editor-text-controls image-editor-toolbar-group">
               <select class="image-editor-font" aria-label="Font family"><option>Arial</option><option>Georgia</option><option>Courier New</option></select>
@@ -342,7 +353,7 @@
       this.shell.querySelector(".image-editor-background").value = state.backgroundColor;
       this.setActiveColorTarget(this.activeColorTarget, state);
       this.shell.querySelector(".image-editor-fill").checked = state.fillShapes;
-      this.shell.querySelector(".image-editor-stroke-type").value = state.strokeType;
+      namespace.syncStrokeTypeSelector(this.shell.querySelector(".image-editor-stroke-type"), state.strokeType);
       this.shell.querySelector(".image-editor-corner-radius").value = String(state.cornerRadius);
       this.shell.querySelector(".image-editor-all-corners").checked = state.adjustAllCorners;
       this.shell.querySelector(".image-editor-rounded-rectangle-controls").hidden = state.tool !== "rounded-rectangle";
@@ -357,6 +368,14 @@
       this.shell.querySelector(".image-editor-spiral-controls").hidden = state.tool !== "spiral";
       this.shell.querySelector(".image-editor-spiral-direction").value = state.spiralDirection;
       this.shell.querySelector(".image-editor-spiral-cap-inside").checked = state.spiralCapInside;
+      this.shell.querySelector(".image-editor-rectangular-grid-controls").hidden = state.tool !== "rectangular-grid";
+      this.shell.querySelector(".image-editor-rectangular-grid-horizontal").value = String(state.rectangularGridHorizontalDividers);
+      this.shell.querySelector(".image-editor-rectangular-grid-vertical").value = String(state.rectangularGridVerticalDividers);
+      this.shell.querySelector(".image-editor-rectangular-grid-frame").checked = state.rectangularGridFrame;
+      this.shell.querySelector(".image-editor-polar-grid-controls").hidden = state.tool !== "polar-grid";
+      this.shell.querySelector(".image-editor-polar-grid-concentric").value = String(state.polarGridConcentricDividers);
+      this.shell.querySelector(".image-editor-polar-grid-radial").value = String(state.polarGridRadialDividers);
+      this.shell.querySelector(".image-editor-polar-grid-compound").checked = state.polarGridCompoundRings;
       this.shell.querySelector(".image-editor-text-controls").hidden = state.tool !== "text";
       ["undo", "redo", "cut", "copy", "delete"].forEach((action) => {
         const key = `can${action[0].toUpperCase()}${action.slice(1)}`;

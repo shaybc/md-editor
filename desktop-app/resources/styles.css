@@ -1045,6 +1045,7 @@ audio.file-preview-content {
 }
 .image-editor-toolbar {
   display: flex; flex: 0 0 auto; flex-wrap: wrap; align-items: stretch; gap: 0; padding: 4px 8px;
+  position: relative; z-index: 5; overflow: visible;
   border-bottom: 1px solid var(--border-color); background: var(--header-bg);
 }
 .image-editor-toolbar-group {
@@ -1064,7 +1065,7 @@ audio.file-preview-content {
 .image-editor-command-grid [data-action="paste"] { grid-area: 2 / 3; }
 .image-editor-tools {
   display: grid; grid-template-columns: 38px repeat(8, 28px); grid-template-rows: repeat(3, 28px); grid-auto-rows: 28px; gap: 2px;
-  grid-template-areas: "select line curve rectangle ellipse polygon triangle diamond arrow" "select pencil brush bucket text rounded callout star ." "lightning heart arc spiral . . . . .";
+  grid-template-areas: "select line curve rectangle ellipse polygon triangle diamond arrow" "select pencil brush bucket text rounded callout star ." "lightning heart arc spiral rectangular-grid polar-grid . . .";
   max-height: 88px; overflow-x: hidden; overflow-y: scroll; align-content: start; scrollbar-width: thin;
 }
 .image-editor-tools [data-tool="select"] { grid-area: select; }
@@ -1072,6 +1073,8 @@ audio.file-preview-content {
 .image-editor-tools [data-tool="curve"] { grid-area: curve; }
 .image-editor-tools [data-tool="arc"] { grid-area: arc; }
 .image-editor-tools [data-tool="spiral"] { grid-area: spiral; }
+.image-editor-tools [data-tool="rectangular-grid"] { grid-area: rectangular-grid; }
+.image-editor-tools [data-tool="polar-grid"] { grid-area: polar-grid; }
 .image-editor-tools [data-tool="rectangle"] { grid-area: rectangle; }
 .image-editor-tools [data-tool="rounded-rectangle"] { grid-area: rounded; }
 .image-editor-tools [data-tool="callout"] { grid-area: callout; }
@@ -1095,10 +1098,38 @@ audio.file-preview-content {
   display: grid; grid-template-rows: repeat(2, 28px); align-items: center; min-width: 128px;
 }
 .image-editor-stroke-controls {
-  display: flex; align-items: center;
+  display: flex; align-items: center; gap: 4px;
 }
+.image-editor-stroke-label { color: var(--muted-text); font-size: 0.75rem; }
 .image-editor-stroke-type {
-  height: 28px; border: 1px solid var(--border-color); border-radius: 5px; background: var(--input-bg); color: var(--text-color);
+  position: relative; display: inline-flex; color: var(--text-color);
+}
+.image-editor-stroke-type-trigger, .image-editor-stroke-type-option {
+  display: flex; align-items: center; justify-content: space-between; height: 28px; border: 0; background: var(--input-bg); color: var(--text-color);
+}
+.image-editor-stroke-type-trigger {
+  width: 112px; padding: 0 7px; border: 1px solid var(--border-color); border-radius: 5px;
+  box-sizing: border-box; cursor: pointer; list-style: none;
+}
+.image-editor-stroke-type-trigger::-webkit-details-marker { display: none; }
+.image-editor-stroke-type-menu {
+  position: absolute; z-index: 20; top: calc(100% + 3px); left: 0; width: 112px; padding: 3px; border: 1px solid var(--border-color); border-radius: 5px; background: var(--panel-bg); box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
+}
+.image-editor-stroke-type:not([open]) .image-editor-stroke-type-menu { display: none; }
+.image-editor-stroke-type-option { width: 100%; padding: 0 7px; border-radius: 3px; }
+.image-editor-stroke-type-option:hover, .image-editor-stroke-type-option:focus, .image-editor-stroke-type-option.active { background: var(--hover-bg); }
+.image-editor-line-pattern {
+  display: block; width: 84px; height: 12px; color: currentColor; background-position: left center; background-repeat: repeat-x;
+}
+.image-editor-line-pattern[data-stroke-type="solid"] { background-image: linear-gradient(currentColor, currentColor); background-size: 100% 2px; }
+.image-editor-line-pattern[data-stroke-type="dash"] { background-image: repeating-linear-gradient(90deg, currentColor 0 16px, transparent 16px 24px); background-size: 100% 2px; }
+.image-editor-line-pattern[data-stroke-type="center"] { background-image: repeating-linear-gradient(90deg, currentColor 0 28px, transparent 28px 34px, currentColor 34px 40px, transparent 40px 46px); background-size: 100% 2px; }
+.image-editor-line-pattern[data-stroke-type="dotted"] { background-image: radial-gradient(circle, currentColor 0 1.5px, transparent 1.75px); background-size: 8px 8px; }
+.image-editor-line-pattern[data-stroke-type="dash-dot"] { background-image: repeating-linear-gradient(90deg, currentColor 0 20px, transparent 20px 26px, currentColor 26px 29px, transparent 29px 35px); background-size: 100% 2px; }
+.image-editor-line-pattern[data-stroke-type="dash-double-dot"] { background-image: repeating-linear-gradient(90deg, currentColor 0 20px, transparent 20px 26px, currentColor 26px 29px, transparent 29px 35px, currentColor 35px 38px, transparent 38px 44px); background-size: 100% 2px; }
+.image-editor-stroke-type-trigger .bi { margin-left: 4px; font-size: 0.65rem; }
+.image-editor-stroke-type-trigger:focus-visible, .image-editor-stroke-type-option:focus-visible {
+  outline: 1px solid var(--accent-color); outline-offset: -1px;
 }
 .image-editor-rounded-rectangle-controls {
   display: grid; grid-template-rows: repeat(2, 28px); align-items: center; min-width: 132px;
@@ -1131,6 +1162,13 @@ audio.file-preview-content {
 .image-editor-spiral-controls[hidden] { display: none; }
 .image-editor-spiral-direction, .image-editor-spiral-convert {
   height: 28px; border: 1px solid var(--border-color); border-radius: 5px; background: var(--input-bg); color: var(--text-color);
+}
+.image-editor-grid-controls {
+  display: inline-flex; align-items: center; gap: 8px;
+}
+.image-editor-grid-controls[hidden] { display: none; }
+.image-editor-grid-controls input[type="number"] {
+  width: 48px; height: 28px; border: 1px solid var(--border-color); border-radius: 5px; background: var(--input-bg); color: var(--text-color);
 }
 .image-editor-toolbar label {
   display: inline-flex; align-items: center; gap: 4px; margin: 0; color: var(--muted-text); font-size: 0.75rem;

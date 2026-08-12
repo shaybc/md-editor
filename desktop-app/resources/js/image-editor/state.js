@@ -3,7 +3,7 @@
   "use strict";
 
   const namespace = global.MarkdownViewerImageEditor = global.MarkdownViewerImageEditor || {};
-  const TOOLS = Object.freeze(["select", "pencil", "brush", "line", "curve", "arc", "spiral", "rectangle", "rounded-rectangle", "callout", "oval-callout", "cloud-callout", "ellipse", "polygon", "triangle", "diamond", "star", "arrow", "lightning", "heart", "bucket", "text"]);
+  const TOOLS = Object.freeze(["select", "pencil", "brush", "line", "curve", "arc", "spiral", "rectangular-grid", "polar-grid", "rectangle", "rounded-rectangle", "callout", "oval-callout", "cloud-callout", "ellipse", "polygon", "triangle", "diamond", "star", "arrow", "lightning", "heart", "bucket", "text"]);
 
   class ImageEditorState {
     /**
@@ -23,6 +23,12 @@
       this.fillShapes = options.fillShapes === true;
       this.spiralDirection = options.spiralDirection === "counter-clockwise" ? "counter-clockwise" : "clockwise";
       this.spiralCapInside = options.spiralCapInside === true;
+      this.rectangularGridHorizontalDividers = Math.max(0, Math.min(100, Math.round(Number(options.rectangularGridHorizontalDividers ?? 4))));
+      this.rectangularGridVerticalDividers = Math.max(0, Math.min(100, Math.round(Number(options.rectangularGridVerticalDividers ?? 4))));
+      this.rectangularGridFrame = options.rectangularGridFrame !== false;
+      this.polarGridConcentricDividers = Math.max(0, Math.min(100, Math.round(Number(options.polarGridConcentricDividers ?? 4))));
+      this.polarGridRadialDividers = Math.max(0, Math.min(100, Math.round(Number(options.polarGridRadialDividers ?? 8))));
+      this.polarGridCompoundRings = options.polarGridCompoundRings === true;
       this.starPoints = [4, 5, 6].includes(Number(options.starPoints)) ? Number(options.starPoints) : 5;
       this.arrowDirection = ["up", "down", "left", "right"].includes(options.arrowDirection) ? options.arrowDirection : "right";
       this.arrowHeadAngle = [30, 45, 60, 90].includes(Number(options.arrowHeadAngle)) ? Number(options.arrowHeadAngle) : 90;

@@ -64,6 +64,12 @@
         fillShapes: state.fillShapes,
         spiralDirection: state.spiralDirection,
         spiralCapInside: state.spiralCapInside,
+        rectangularGridHorizontalDividers: state.rectangularGridHorizontalDividers,
+        rectangularGridVerticalDividers: state.rectangularGridVerticalDividers,
+        rectangularGridFrame: state.rectangularGridFrame,
+        polarGridConcentricDividers: state.polarGridConcentricDividers,
+        polarGridRadialDividers: state.polarGridRadialDividers,
+        polarGridCompoundRings: state.polarGridCompoundRings,
         starPoints: state.starPoints,
         arrowDirection: state.arrowDirection,
         arrowHeadAngle: state.arrowHeadAngle,
@@ -425,6 +431,44 @@
       return floatGeneratedLayer(controller, layer, before);
     }
 
+    function isGridTool(tool) {
+      return tool === "rectangular-grid" || tool === "polar-grid";
+    }
+
+    function gridToolFor(controller, tool = controller.state.tool) {
+      return tool === "polar-grid" ? controller.polarGridTool : controller.rectangularGridTool;
+    }
+
+    function renderGridPreview(controller) {
+      const tool = gridToolFor(controller);
+      controller.view.overlayContext.clearRect(0, 0, controller.view.overlay.width, controller.view.overlay.height);
+      tool.drawPreview(controller.view.overlayContext, controller.state);
+    }
+
+    function cancelEditableGrid(controller) {
+      const tool = gridToolFor(controller);
+      tool.reset();
+      controller.gridBefore = null;
+      controller.dragging = false;
+      controller.view.overlayContext.clearRect(0, 0, controller.view.overlay.width, controller.view.overlay.height);
+      syncTab(controller);
+    }
+
+    function finishEditableGrid(controller) {
+      const tool = gridToolFor(controller);
+      if (!tool.isEditing || !tool.rect) {
+        cancelEditableGrid(controller);
+        return false;
+      }
+      controller.view.overlayContext.clearRect(0, 0, controller.view.overlay.width, controller.view.overlay.height);
+      const layer = tool.rasterize(controller.state, controller.state);
+      const before = controller.gridBefore;
+      tool.reset();
+      controller.gridBefore = null;
+      controller.dragging = false;
+      return floatGeneratedLayer(controller, layer, before);
+    }
+
     function isCalloutTool(tool) {
       return tool === "callout" || tool === "oval-callout" || tool === "cloud-callout";
     }
@@ -569,6 +613,7 @@
       if (controller.ellipseTool?.isEditing) renderEllipsePreview(controller);
       if (controller.arcTool?.isEditing) renderArcPreview(controller);
       if (controller.spiralTool?.isEditing) renderSpiralPreview(controller);
+      if (isGridTool(controller.state.tool) && gridToolFor(controller).isEditing) renderGridPreview(controller);
       syncTab(controller);
       return controller.state.zoom;
     }
@@ -732,6 +777,7 @@
       if (controller.ellipseTool.isEditing) renderEllipsePreview(controller);
       if (controller.arcTool.isEditing) renderArcPreview(controller);
       if (controller.spiralTool.isEditing) renderSpiralPreview(controller);
+      if (isGridTool(controller.state.tool) && gridToolFor(controller).isEditing) renderGridPreview(controller);
       if (colorTarget === "foreground") {
         refreshLiveTextStyle(controller);
         if (controller.curveTool.isEditing) renderCurvePreview(controller);
@@ -763,6 +809,7 @@
           if (state.tool === "ellipse" && controller.ellipseTool.isEditing) finishEditableEllipse(controller);
           if (state.tool === "arc" && controller.arcTool.isEditing) finishEditableArc(controller);
           if (state.tool === "spiral" && controller.spiralTool.isEditing) finishEditableSpiral(controller);
+          if (isGridTool(state.tool) && gridToolFor(controller).isEditing) finishEditableGrid(controller);
           commitText(controller);
           if (toolButton.dataset.tool !== "select") dropSelection(controller);
           state.setTool(toolButton.dataset.tool);
@@ -803,9 +850,10 @@
         if (controller.ellipseTool.isEditing) renderEllipsePreview(controller);
         if (controller.arcTool.isEditing) renderArcPreview(controller);
         if (controller.spiralTool.isEditing) renderSpiralPreview(controller);
+        if (isGridTool(state.tool) && gridToolFor(controller).isEditing) renderGridPreview(controller);
       });
-      view.shell.querySelector(".image-editor-stroke-type").addEventListener("change", (event) => {
-        state.strokeType = namespace.normalizeStrokeType(event.target.value);
+      namespace.bindStrokeTypeSelector(view.shell.querySelector(".image-editor-stroke-type"), (strokeType) => {
+        state.strokeType = strokeType;
         if (controller.curveTool.isEditing) renderCurvePreview(controller);
         if (controller.roundedRectangleTool.isEditing) renderRoundedRectanglePreview(controller);
         if (editingCalloutTool(controller)) renderCalloutPreview(controller);
@@ -816,6 +864,7 @@
         if (controller.ellipseTool.isEditing) renderEllipsePreview(controller);
         if (controller.arcTool.isEditing) renderArcPreview(controller);
         if (controller.spiralTool.isEditing) renderSpiralPreview(controller);
+        if (isGridTool(state.tool) && gridToolFor(controller).isEditing) renderGridPreview(controller);
       });
       view.shell.querySelector(".image-editor-spiral-direction").addEventListener("change", (event) => {
         state.spiralDirection = event.target.value === "counter-clockwise" ? "counter-clockwise" : "clockwise";
@@ -830,6 +879,25 @@
         event.preventDefault();
         finishEditableSpiral(controller);
       });
+      [
+        [".image-editor-rectangular-grid-horizontal", "rectangularGridHorizontalDividers"],
+        [".image-editor-rectangular-grid-vertical", "rectangularGridVerticalDividers"],
+        [".image-editor-polar-grid-concentric", "polarGridConcentricDividers"],
+        [".image-editor-polar-grid-radial", "polarGridRadialDividers"]
+      ].forEach(([selector, property]) => {
+        view.shell.querySelector(selector).addEventListener("input", (event) => {
+          state[property] = Math.max(0, Math.min(100, Math.round(Number(event.target.value) || 0)));
+          if (isGridTool(state.tool) && gridToolFor(controller).isEditing) renderGridPreview(controller);
+        });
+      });
+      view.shell.querySelector(".image-editor-rectangular-grid-frame").addEventListener("change", (event) => {
+        state.rectangularGridFrame = event.target.checked;
+        if (state.tool === "rectangular-grid" && controller.rectangularGridTool.isEditing) renderGridPreview(controller);
+      });
+      view.shell.querySelector(".image-editor-polar-grid-compound").addEventListener("change", (event) => {
+        state.polarGridCompoundRings = event.target.checked;
+        if (state.tool === "polar-grid" && controller.polarGridTool.isEditing) renderGridPreview(controller);
+      });
       view.shell.querySelector(".image-editor-fill").addEventListener("change", (event) => {
         state.fillShapes = event.target.checked;
         if (controller.roundedRectangleTool.isEditing) renderRoundedRectanglePreview(controller);
@@ -840,6 +908,7 @@
         if (controller.starTool.isEditing) renderStarPreview(controller);
         if (controller.ellipseTool.isEditing) renderEllipsePreview(controller);
         if (controller.arcTool.isEditing) renderArcPreview(controller);
+        if (isGridTool(state.tool) && gridToolFor(controller).isEditing) renderGridPreview(controller);
       });
       view.shell.querySelector(".image-editor-callout-type").addEventListener("change", (event) => {
         const nextTool = event.target.value;
@@ -1098,6 +1167,26 @@
           renderSpiralPreview(controller);
           return;
         }
+        if (isGridTool(state.tool)) {
+          event.preventDefault();
+          event.stopPropagation();
+          const tool = gridToolFor(controller);
+          if (!tool.isEditing) {
+            commitText(controller);
+            commitSelection(controller);
+            controller.gridBefore = snapshot(view);
+          }
+          const result = tool.begin(point);
+          if (result.action === "outside") {
+            finishEditableGrid(controller);
+            return;
+          }
+          if (!result.started) return;
+          controller.dragging = true;
+          overlay.setPointerCapture?.(event.pointerId);
+          renderGridPreview(controller);
+          return;
+        }
         if (state.tool === "polygon" && controller.polygonTool.isEditing) {
           event.preventDefault();
           event.stopPropagation();
@@ -1220,6 +1309,11 @@
           renderSpiralPreview(controller);
           return;
         }
+        if (isGridTool(state.tool)) {
+          gridToolFor(controller).update(point);
+          renderGridPreview(controller);
+          return;
+        }
         if (state.tool === "text" && controller.creatingTextBox) {
           drawTextCreationOverlay(controller, point);
           return;
@@ -1276,6 +1370,9 @@
         } else if (state.tool === "spiral") {
           controller.spiralTool.completeStage(point);
           renderSpiralPreview(controller);
+        } else if (isGridTool(state.tool)) {
+          gridToolFor(controller).completeStage(point);
+          renderGridPreview(controller);
         } else if (state.tool === "text" && controller.creatingTextBox) {
           controller.creatingTextBox = false;
           view.overlayContext.clearRect(0, 0, view.overlay.width, view.overlay.height);
@@ -1638,6 +1735,18 @@
             return;
           }
         }
+        if (isGridTool(controller.state.tool) && gridToolFor(controller).isEditing) {
+          if (event.key === "Escape") {
+            cancelEditableGrid(controller);
+            event.preventDefault();
+            return;
+          }
+          if (event.key === "Enter") {
+            finishEditableGrid(controller);
+            event.preventDefault();
+            return;
+          }
+        }
         if (primary && !event.shiftKey && !event.altKey && event.key.toLowerCase() === "a") {
           event.preventDefault();
           selectAllCanvas(controller);
@@ -1766,6 +1875,9 @@
         arcBefore: null,
         spiralTool: new namespace.ImageEditorSpiralTool(),
         spiralBefore: null,
+        rectangularGridTool: new namespace.ImageEditorRectangularGridTool(),
+        polarGridTool: new namespace.ImageEditorPolarGridTool(),
+        gridBefore: null,
         textRect: null,
         creatingTextBox: false,
         textInputOpening: false,
