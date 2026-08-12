@@ -172,10 +172,19 @@
       return true;
     }
 
+    /** Alpha-composite floating pixels without clearing destination pixels beneath transparency. */
+    drawFloatingLayer(context) {
+      if (!this.floating || !this.imageData || !this.rect) return false;
+      const layer = global.document.createElement('canvas');
+      layer.width = this.imageData.width;
+      layer.height = this.imageData.height;
+      layer.getContext('2d').putImageData(this.imageData, 0, 0);
+      context.drawImage(layer, this.rect.x, this.rect.y);
+      return true;
+    }
+
     commit(context) {
-      if (this.floating && this.imageData && this.rect) {
-        context.putImageData(this.imageData, this.rect.x, this.rect.y);
-      }
+      this.drawFloatingLayer(context);
       this.floating = false;
       this.imageData = null;
       this.phase = this.hasSelection ? "outlined" : "idle";

@@ -134,24 +134,30 @@
       syncTab(controller);
     }
 
+    function floatGeneratedLayer(controller, layer, before, origin = "shape") {
+      if (!layer) return false;
+      controller.selectionBefore = before || snapshot(controller.view);
+      controller.selection.setFloatingLayer(layer.imageData, layer.rect, origin);
+      controller.state.setTool("select");
+      controller.state.setDirty(true);
+      drawSelectionOverlay(controller);
+      syncTab(controller);
+      return true;
+    }
+
     function finishEditableCurve(controller) {
-      const { curveTool, selection, state, view } = controller;
+      const { curveTool, state } = controller;
       if (!curveTool.isEditing) return false;
       const layer = curveTool.rasterize(state, state);
       if (!layer) {
         cancelEditableCurve(controller);
         return false;
       }
-      controller.selectionBefore = controller.curveBefore || snapshot(view);
-      selection.setFloatingLayer(layer.imageData, layer.rect, "curve");
+      const before = controller.curveBefore;
       curveTool.reset();
       controller.curveBefore = null;
       controller.dragging = false;
-      state.setTool("select");
-      state.setDirty(true);
-      drawSelectionOverlay(controller);
-      syncTab(controller);
-      return true;
+      return floatGeneratedLayer(controller, layer, before, "curve");
     }
 
     function renderRoundedRectanglePreview(controller) {
@@ -184,12 +190,12 @@
         return false;
       }
       view.overlayContext.clearRect(0, 0, view.overlay.width, view.overlay.height);
-      namespace.drawRoundedRectangle(view.context, model.rect, model.radii, state);
-      const before = controller.roundedRectangleBefore || snapshot(view);
+      const layer = namespace.rasterizeRoundedRectangleLayer(model, state, state);
+      const before = controller.roundedRectangleBefore;
       roundedRectangleTool.reset();
       controller.roundedRectangleBefore = null;
       controller.dragging = false;
-      return commitTransaction(controller, before);
+      return floatGeneratedLayer(controller, layer, before);
     }
 
     /** Build an export-only canvas without changing live floating pixels or editable text. */
@@ -206,7 +212,7 @@
       composite.height = view.canvas.height;
       const context = composite.getContext("2d");
       context.drawImage(view.canvas, 0, 0);
-      if (hasFloatingSelection) context.putImageData(selection.imageData, selection.rect.x, selection.rect.y);
+      if (hasFloatingSelection) selection.drawFloatingLayer(context);
       if (editableTextRect) namespace.drawText(context, editableTextRect, editableText, state);
       return composite;
     }
@@ -516,8 +522,7 @@
     function stampFloatingSelection(controller) {
       const { view, selection } = controller;
       if (!selection.floating || !selection.imageData || !selection.rect) return false;
-      view.context.putImageData(selection.imageData, selection.rect.x, selection.rect.y);
-      return true;
+      return selection.drawFloatingLayer(view.context);
     }
     function dropSelection(controller) {
       const { selection } = controller;
@@ -685,16 +690,17 @@
           syncTab(controller);
         } else {
           view.overlayContext.clearRect(0, 0, view.overlay.width, view.overlay.height);
-          namespace.drawShape(view.context, state.tool, controller.startPoint, point, state);
-          commitTransaction(controller, controller.gestureBefore);
+          const layer = namespace.rasterizeShapeLayer(state.tool, controller.startPoint, point, state, state);
+          floatGeneratedLayer(controller, layer, controller.gestureBefore);
         }
       });
       overlay.addEventListener("dblclick", () => {
         if (state.tool !== "polygon" || controller.polygonPoints.length < 3) return;
         view.overlayContext.clearRect(0, 0, view.overlay.width, view.overlay.height);
-        namespace.drawPolygon(view.context, controller.polygonPoints, state, true);
+        const layer = namespace.rasterizePolygonLayer(controller.polygonPoints, state, state);
+        const before = controller.gestureBefore;
         controller.polygonPoints = [];
-        commitTransaction(controller, controller.gestureBefore);
+        floatGeneratedLayer(controller, layer, before);
       });
     }
 

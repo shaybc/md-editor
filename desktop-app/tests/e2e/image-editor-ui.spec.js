@@ -246,6 +246,19 @@ test('rounded rectangle adjusts all corners or one corner before commit', async 
   })).toEqual({ topLeft: 24, topRight: 24, bottomRight: 18, bottomLeft: 24 });
 
   await page.keyboard.press('Enter');
+  expect(await page.evaluate(() => {
+    const root = document.querySelector('.tab-view.active[data-tab-view-kind=image-editor]');
+    const controller = window.markdownViewerApp.services.imageEditor.getView(root.dataset.tabId);
+    return { tool: controller.state.tool, floating: controller.selection.floating, origin: controller.selection.origin };
+  })).toEqual({ tool: 'select', floating: true, origin: 'shape' });
+  expect(await page.locator('.image-editor-canvas').evaluate((canvas) => {
+    const pixels = canvas.getContext('2d').getImageData(0, 0, canvas.width, canvas.height).data;
+    for (let index = 0; index < pixels.length; index += 4) {
+      if (pixels[index] < 240 || pixels[index + 1] < 240 || pixels[index + 2] < 240) return false;
+    }
+    return true;
+  })).toBe(true);
+  await page.keyboard.press('Escape');
   const committedPixels = await page.locator('.image-editor-canvas').evaluate((canvas) => {
     const pixels = canvas.getContext('2d').getImageData(0, 0, canvas.width, canvas.height).data;
     let count = 0;
@@ -276,6 +289,11 @@ test('triangle tool draws a filled three-point shape and supports undo', async (
     window.markdownViewerApp.modules.tabs.openBlankImageEditorInTab({ width: 100, height: 80, name: 'Triangle' });
   });
   await expect(page.locator('.tab-view.active[data-tab-view-kind=image-editor] .image-editor-shell')).toBeVisible();
+  await page.locator('.image-editor-canvas').evaluate((canvas) => {
+    const context = canvas.getContext('2d');
+    context.fillStyle = '#0000ff';
+    context.fillRect(5, 5, 45, 70);
+  });
 
   await page.locator('.image-editor-foreground').evaluate((element) => {
     element.value = '#ff0000';
@@ -292,19 +310,119 @@ test('triangle tool draws a filled three-point shape and supports undo', async (
   const box = await overlay.boundingBox();
   await page.mouse.move(box.x + 10, box.y + 10);
   await page.mouse.down();
-  await page.mouse.move(box.x + 90, box.y + 70, { steps: 5 });
+  await page.mouse.move(box.x + 45, box.y + 60, { steps: 5 });
   await page.mouse.up();
 
-  const pixels = await page.locator('.image-editor-canvas').evaluate((canvas) => {
+  const floatingTriangle = await page.evaluate(() => {
+    const root = document.querySelector('.tab-view.active[data-tab-view-kind=image-editor]');
+    const controller = window.markdownViewerApp.services.imageEditor.getView(root.dataset.tabId);
+    return { tool: controller.state.tool, floating: controller.selection.floating, origin: controller.selection.origin, rect: { ...controller.selection.rect } };
+  });
+  expect(floatingTriangle).toMatchObject({ tool: 'select', floating: true, origin: 'shape' });
+  expect(await page.locator('.image-editor-canvas').evaluate((canvas) =>
+    Array.from(canvas.getContext('2d').getImageData(27, 35, 1, 1).data).slice(0, 3))).toEqual([0, 0, 255]);
+  await page.mouse.move(box.x + floatingTriangle.rect.x + floatingTriangle.rect.width / 2, box.y + floatingTriangle.rect.y + floatingTriangle.rect.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(box.x + floatingTriangle.rect.x + floatingTriangle.rect.width / 2 + 40, box.y + floatingTriangle.rect.y + floatingTriangle.rect.height / 2, { steps: 6 });
+  await page.mouse.up();
+  expect(await page.locator('.image-editor-canvas').evaluate((canvas) =>
+    Array.from(canvas.getContext('2d').getImageData(27, 35, 1, 1).data).slice(0, 3))).toEqual([0, 0, 255]);
+  await page.keyboard.press('Escape');
+  const placedPixels = await page.locator('.image-editor-canvas').evaluate((canvas) => {
     const context = canvas.getContext('2d');
     const read = (x, y) => Array.from(context.getImageData(x, y, 1, 1).data).slice(0, 3);
-    return { inside: read(50, 40), outside: read(12, 12) };
+    return { original: read(27, 35), moved: read(67, 35) };
   });
-  expect(pixels.inside).toEqual([0, 255, 0]);
-  expect(pixels.outside).toEqual([255, 255, 255]);
+  expect(placedPixels.original).toEqual([0, 0, 255]);
+  expect(placedPixels.moved).toEqual([0, 255, 0]);
   await page.keyboard.press('Control+Z');
-  expect(await page.locator('.image-editor-canvas').evaluate((canvas) =>
-    Array.from(canvas.getContext('2d').getImageData(50, 40, 1, 1).data).slice(0, 3))).toEqual([255, 255, 255]);
+  const undoPixels = await page.locator('.image-editor-canvas').evaluate((canvas) => {
+    const context = canvas.getContext('2d');
+    const read = (x, y) => Array.from(context.getImageData(x, y, 1, 1).data).slice(0, 3);
+    return { original: read(27, 35), moved: read(67, 35) };
+  });
+  expect(undoPixels.original).toEqual([0, 0, 255]);
+  expect(undoPixels.moved).toEqual([255, 255, 255]);
+});
+
+test('placing an unfilled shape preserves canvas pixels beneath its transparent interior', async ({ page }) => {
+  await page.goto('/');
+  await page.waitForFunction(() => !!window.markdownViewerApp?.modules?.tabs?.openBlankImageEditorInTab, null, { timeout: 60000 });
+  await page.waitForFunction(() => !!window.markdownViewerApp?.modules?.keyboardShortcuts && !!window.markdownViewerApp?.services?.imageEditor, null, { timeout: 60000 });
+  await page.evaluate(() => {
+    window.markdownViewerApp.modules.apiClient.deactivateApiClientSidebar = () => {};
+    window.markdownViewerApp.modules.tabs.openBlankImageEditorInTab({ width: 100, height: 80, name: 'Transparent Shape' });
+  });
+  await expect(page.locator('.tab-view.active[data-tab-view-kind=image-editor] .image-editor-shell')).toBeVisible();
+  await page.locator('.image-editor-canvas').evaluate((canvas) => {
+    const context = canvas.getContext('2d');
+    context.fillStyle = '#0000ff';
+    context.fillRect(0, 0, canvas.width, canvas.height);
+  });
+  await page.locator('.image-editor-foreground').evaluate((element) => {
+    element.value = '#ff0000';
+    element.dispatchEvent(new Event('input', { bubbles: true }));
+  });
+  await expect(page.locator('.image-editor-fill')).not.toBeChecked();
+  await page.locator('[data-tool=rectangle]').click();
+  const overlay = page.locator('.image-editor-overlay');
+  const box = await overlay.boundingBox();
+  await page.mouse.move(box.x + 10, box.y + 10);
+  await page.mouse.down();
+  await page.mouse.move(box.x + 60, box.y + 50, { steps: 5 });
+  await page.mouse.up();
+  await page.keyboard.press('Escape');
+
+  const placed = await page.locator('.image-editor-canvas').evaluate((canvas) => {
+    const context = canvas.getContext('2d');
+    const center = Array.from(context.getImageData(35, 30, 1, 1).data);
+    const pixels = context.getImageData(0, 0, canvas.width, canvas.height).data;
+    let redPixels = 0;
+    for (let index = 0; index < pixels.length; index += 4) {
+      if (pixels[index] > 180 && pixels[index + 1] < 80 && pixels[index + 2] < 80 && pixels[index + 3] > 0) redPixels += 1;
+    }
+    return { center, redPixels };
+  });
+  expect(placed.center).toEqual([0, 0, 255, 255]);
+  expect(placed.redPixels).toBeGreaterThan(20);
+});
+
+test('completed polygon becomes a floating selection before placement', async ({ page }) => {
+  await page.goto('/');
+  await page.waitForFunction(() => !!window.markdownViewerApp?.modules?.tabs?.openBlankImageEditorInTab, null, { timeout: 60000 });
+  await page.waitForFunction(() => !!window.markdownViewerApp?.modules?.keyboardShortcuts && !!window.markdownViewerApp?.services?.imageEditor, null, { timeout: 60000 });
+  await page.evaluate(() => {
+    window.markdownViewerApp.modules.apiClient.deactivateApiClientSidebar = () => {};
+    window.markdownViewerApp.modules.tabs.openBlankImageEditorInTab({ width: 80, height: 60, name: 'Polygon Layer' });
+  });
+  await expect(page.locator('.tab-view.active[data-tab-view-kind=image-editor] .image-editor-shell')).toBeVisible();
+  await page.locator('[data-tool="polygon"]').click();
+  const overlay = page.locator('.image-editor-overlay');
+  const box = await overlay.boundingBox();
+  await page.mouse.click(box.x + 10, box.y + 10);
+  await page.mouse.click(box.x + 60, box.y + 10);
+  await page.mouse.click(box.x + 35, box.y + 45);
+  await overlay.dispatchEvent('dblclick');
+  expect(await page.evaluate(() => {
+    const root = document.querySelector('.tab-view.active[data-tab-view-kind=image-editor]');
+    const controller = window.markdownViewerApp.services.imageEditor.getView(root.dataset.tabId);
+    return { tool: controller.state.tool, floating: controller.selection.floating, origin: controller.selection.origin };
+  })).toEqual({ tool: 'select', floating: true, origin: 'shape' });
+  expect(await page.locator('.image-editor-canvas').evaluate((canvas) => {
+    const pixels = canvas.getContext('2d').getImageData(0, 0, canvas.width, canvas.height).data;
+    for (let index = 0; index < pixels.length; index += 4) {
+      if (pixels[index] < 240 || pixels[index + 1] < 240 || pixels[index + 2] < 240) return false;
+    }
+    return true;
+  })).toBe(true);
+  await page.keyboard.press('Escape');
+  expect(await page.locator('.image-editor-canvas').evaluate((canvas) => {
+    const pixels = canvas.getContext('2d').getImageData(0, 0, canvas.width, canvas.height).data;
+    for (let index = 0; index < pixels.length; index += 4) {
+      if (pixels[index] < 240 || pixels[index + 1] < 240 || pixels[index + 2] < 240) return true;
+    }
+    return false;
+  })).toBe(true);
 });
 
 test("switching between image editor tabs preserves each tab's drawing", async ({ page }) => {
