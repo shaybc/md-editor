@@ -523,6 +523,9 @@ async function startMarkdownViewer() {
     get Neutralino() { return typeof Neutralino !== "undefined" ? Neutralino : undefined; },
     get NL_VERSION() { return typeof NL_VERSION !== "undefined" ? NL_VERSION : undefined; },
     get saveAs() { return typeof saveAs === "function" ? saveAs : null; },
+    prompt: function(options) { return notificationModal?.prompt?.(options) || Promise.resolve(null); },
+    confirm: function(options) { return notificationModal?.confirm?.(options) || Promise.resolve(true); },
+    shouldConfirmLayerDeletion: function() { return shouldConfirmLayerDeletion(); },
     alert: function(message) { window.alert(message); }
   });
 
@@ -4242,6 +4245,7 @@ async function startMarkdownViewer() {
   const settingsConfirmCancelBackgroundProcessInput = document.getElementById("settings-confirm-cancel-background-process");
   const settingsConfirmOpenManyGraphNodesInput = document.getElementById("settings-confirm-open-many-graph-nodes");
   const settingsConfirmDeleteFilesInput = document.getElementById("settings-confirm-delete-files");
+  const settingsConfirmDeleteImageEditorLayersInput = document.getElementById("settings-confirm-delete-image-editor-layers");
   const settingsConfirmMoveFilesInput = document.getElementById("settings-confirm-move-files");
   const settingsConfirmResetStateInput = document.getElementById("settings-confirm-reset-state");
   const settingsConfirmResetJdtWorkspaceInput = document.getElementById("settings-confirm-reset-jdt-workspace");
@@ -4646,6 +4650,7 @@ async function startMarkdownViewer() {
     "settings-confirm-exit-application": "Toggle confirmation before exiting MD-Editor.",
     "settings-confirm-open-many-graph-nodes": "Toggle confirmation before opening many graph nodes at once.",
     "settings-confirm-delete-files": "Toggle confirmation before deleting files or folders.",
+    "settings-confirm-delete-image-editor-layers": "Toggle confirmation before deleting layers or objects from the image editor.",
     "settings-confirm-move-files": "Toggle confirmation before moving or copying files or folders.",
     "settings-confirm-reset-state": "Toggle confirmation before clearing settings, caches, history, or drafts.",
     "settings-confirm-reset-jdt-workspace": "Toggle confirmation before deleting generated JDT workspace data and importing the active Java project again.",
@@ -5044,6 +5049,7 @@ async function startMarkdownViewer() {
     confirmExitApplication: false,
     confirmCancelBackgroundProcess: true,
     confirmDeleteFiles: true,
+    confirmDeleteImageEditorLayers: true,
     confirmMoveFiles: true,
     confirmOpenManyGraphNodes: true,
     backgroundProcessHistory: [],
@@ -6573,6 +6579,10 @@ async function startMarkdownViewer() {
 
   function shouldConfirmDeleteFiles() {
     return loadGlobalState().confirmDeleteFiles !== false;
+  }
+
+  function shouldConfirmLayerDeletion() {
+    return loadGlobalState().confirmDeleteImageEditorLayers !== false;
   }
 
   function shouldConfirmMoveFiles() {
@@ -9303,6 +9313,9 @@ Markdown content is processed client-side in your browser and sanitized before p
     if (settingsConfirmDeleteFilesInput) {
       settingsConfirmDeleteFilesInput.checked = shouldConfirmDeleteFiles();
     }
+    if (settingsConfirmDeleteImageEditorLayersInput) {
+      settingsConfirmDeleteImageEditorLayersInput.checked = shouldConfirmLayerDeletion();
+    }
     if (settingsConfirmMoveFilesInput) {
       settingsConfirmMoveFilesInput.checked = shouldConfirmMoveFiles();
     }
@@ -11669,6 +11682,7 @@ Markdown content is processed client-side in your browser and sanitized before p
         confirmExitApplication: !!settingsConfirmExitApplicationInput?.checked,
         confirmOpenManyGraphNodes: !!settingsConfirmOpenManyGraphNodesInput?.checked,
         confirmDeleteFiles: !!settingsConfirmDeleteFilesInput?.checked,
+        confirmDeleteImageEditorLayers: !!settingsConfirmDeleteImageEditorLayersInput?.checked,
         confirmMoveFiles: !!settingsConfirmMoveFilesInput?.checked,
         confirmResetState: !!settingsConfirmResetStateInput?.checked,
         confirmResetJdtWorkspace: !!settingsConfirmResetJdtWorkspaceInput?.checked,

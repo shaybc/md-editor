@@ -21,7 +21,7 @@
 
   /** Create a named compositing layer that owns ordered content objects. */
   function createContentLayer(name = "Layer") {
-    return { ...commonNode("layer", name), objects: [] };
+    return { ...commonNode("layer", name), rasterAssetId: null, pixelEdits: [], objects: [] };
   }
 
   /** Create a hierarchy group that owns layers or nested groups. */
@@ -95,6 +95,8 @@
     const ids = new Set();
     walkDocumentNodes(document, (node) => {
       if (node.kind !== "layer") return;
+      if (node.rasterAssetId) ids.add(node.rasterAssetId);
+      (node.pixelEdits || []).forEach((edit) => { if (edit.assetId) ids.add(edit.assetId); });
       (node.objects || []).forEach((object) => {
         if (object.type === "raster" && object.payload?.assetId) ids.add(object.payload.assetId);
         if (object.payload?.fallbackAssetId) ids.add(object.payload.fallbackAssetId);

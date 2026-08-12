@@ -20,6 +20,9 @@
       this.store = store;
       this.onMutate = options.onMutate || ((_label, callback) => callback?.());
       this.onStateChanged = options.onStateChanged || (() => {});
+      this.requestRename = options.requestRename || (() => Promise.resolve(null));
+      this.requestDeleteConfirmation = options.requestDeleteConfirmation || (() => Promise.resolve(true));
+      this.shouldConfirmDelete = options.shouldConfirmDelete || (() => true);
       this.expandedIds = new Set(options.state?.expandedIds || []);
       this.state = { mode: options.state?.mode || "expanded", height: Number(options.state?.height || 360), placementMode: options.state?.placementMode === "active" ? "active" : "new" };
       this.element = document.createElement("aside");
@@ -54,15 +57,17 @@
             const start = ids.indexOf(this.lastSelectedId);
             const end = ids.indexOf(id);
             this.store.select(start >= 0 && end >= 0 ? ids.slice(Math.min(start, end), Math.max(start, end) + 1) : id, { additive: event.ctrlKey || event.metaKey });
-          } else this.store.select(id, { additive: event.ctrlKey || event.metaKey });
+          } else if (event.ctrlKey || event.metaKey || this.store.selectedIds.size !== 1 || !this.store.selectedIds.has(id)) {
+            this.store.select(id, { additive: event.ctrlKey || event.metaKey });
+          }
           this.lastSelectedId = id;
         }
       });
       this.element.addEventListener("dblclick", (event) => {
         const name = event.target.closest(".image-editor-layer-name");
         if (!name) return;
-        const next = global.prompt?.("Rename", name.textContent);
-        if (next?.trim()) this.mutate("Rename", () => this.store.updateItem(name.closest("[data-layer-item]").dataset.layerItem, { name: next.trim() }));
+        const itemId = name.closest("[data-layer-item]").dataset.layerItem;
+        void this.renameItem(itemId, name.textContent);
       });
       this.element.addEventListener("dragstart", (event) => { this.draggedId = event.target.closest("[data-layer-item]")?.dataset.layerItem || ""; });
       this.element.addEventListener("dragover", (event) => { if (event.target.closest("[data-layer-node]")) event.preventDefault(); });
@@ -93,23 +98,53 @@
 
     mutate(label, callback) { return this.onMutate(label, callback); }
 
+    /** Request and apply a layer or object name through the application dialog service. */
+    async renameItem(itemId, currentName) {
+      const next = await this.requestRename({
+        title: "Rename layer or object",
+        message: "Enter a new name.",
+        value: currentName,
+        confirmLabel: "Rename"
+      });
+      if (next?.trim()) this.mutate("Rename", () => this.store.updateItem(itemId, { name: next.trim() }));
+    }
+
+    /** Confirm and delete the selected layer-panel items. */
+    async deleteSelected() {
+      const selectedItems = [...this.store.selectedIds].map((id) => {
+        return namespace.findDocumentNode(this.store.document, id)?.node
+          || namespace.findDocumentObject(this.store.document, id)?.object;
+      }).filter(Boolean);
+      if (!selectedItems.length) return;
+      if (this.shouldConfirmDelete()) {
+        const item = selectedItems[0];
+        const isNonemptyGroup = selectedItems.length === 1 && item.kind === "group" && item.children?.length;
+        const itemType = item.kind === "group" ? "group" : item.kind === "layer" ? "layer" : "object";
+        const confirmed = await this.requestDeleteConfirmation({
+          title: selectedItems.length === 1 ? `Delete ${itemType}?` : "Delete selected items?",
+          message: isNonemptyGroup
+            ? "Delete the selected nonempty group and all of its contents?"
+            : selectedItems.length === 1
+              ? `Delete “${item.name || itemType}”?`
+              : `Delete the ${selectedItems.length} selected layers or objects?`,
+          confirmLabel: "Delete",
+          confirmVariant: "danger"
+        });
+        if (!confirmed) return;
+      }
+      this.mutate("delete", () => this.store.deleteSelected());
+    }
+
     runAction(action) {
       if (action === "minimize") { this.state.mode = this.state.mode === "minimized" ? "expanded" : "minimized"; this.applyState(); this.reportState(); return; }
       if (action === "hide") { this.state.mode = "hidden"; this.applyState(); this.reportState(); return; }
-      if (action === "delete") {
-        const includesNonemptyGroup = [...this.store.selectedIds].some((id) => {
-          const node = namespace.findDocumentNode(this.store.document, id)?.node;
-          return node?.kind === "group" && node.children?.length;
-        });
-        if (includesNonemptyGroup && global.confirm && !global.confirm("Delete the selected nonempty group and all of its contents?")) return;
-      }
+      if (action === "delete") { void this.deleteSelected(); return; }
       const operations = {
         "new-layer": () => this.store.addLayer("Layer", [...this.store.selectedIds][0]),
         "new-group": () => this.store.addGroup("Group"),
         duplicate: () => this.store.duplicateSelected(),
         group: () => this.store.groupSelected(),
-        ungroup: () => this.store.ungroupSelected(),
-        delete: () => this.store.deleteSelected()
+        ungroup: () => this.store.ungroupSelected()
       };
       if (operations[action]) this.mutate(action, operations[action]);
       else this.onMutate(action, null);

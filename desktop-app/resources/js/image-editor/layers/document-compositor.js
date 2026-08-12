@@ -74,7 +74,17 @@
       canvas.width = width;
       canvas.height = height;
       const context = canvas.getContext("2d");
+      const layerPixels = this.store.assets.get(layer.rasterAssetId);
+      if (layerPixels) context.drawImage(imageDataCanvas(layerPixels), 0, 0);
       [...(layer.objects || [])].reverse().forEach((object) => drawObject(context, object, this.store.assets));
+      (layer.pixelEdits || []).forEach((edit) => {
+        const pixels = this.store.assets.get(edit.assetId);
+        if (!pixels) return;
+        context.save();
+        context.globalCompositeOperation = edit.compositeOperation === "destination-out" ? "destination-out" : "source-over";
+        context.drawImage(imageDataCanvas(pixels), 0, 0);
+        context.restore();
+      });
       return canvas;
     }
 

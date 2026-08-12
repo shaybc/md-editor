@@ -26,16 +26,31 @@
       return active && active.visible && !active.locked ? active : controller.documentStore.addLayer(name);
     }
 
-    function rasterDifference(before, after) {
-      if (!before || !after || before.width !== after.width || before.height !== after.height) return after;
-      const data = new Uint8ClampedArray(after.data.length);
+    function changedPixelOverlay(before, after) {
+      if (!before || !after || before.width !== after.width || before.height !== after.height) return null;
+      const pixels = new ImageData(after.width, after.height);
       let changed = false;
-      for (let index = 0; index < data.length; index += 4) {
+      for (let index = 0; index < after.data.length; index += 4) {
         if (before.data[index] === after.data[index] && before.data[index + 1] === after.data[index + 1] && before.data[index + 2] === after.data[index + 2] && before.data[index + 3] === after.data[index + 3]) continue;
-        data[index] = after.data[index]; data[index + 1] = after.data[index + 1]; data[index + 2] = after.data[index + 2]; data[index + 3] = after.data[index + 3];
+        pixels.data[index] = after.data[index];
+        pixels.data[index + 1] = after.data[index + 1];
+        pixels.data[index + 2] = after.data[index + 2];
+        pixels.data[index + 3] = after.data[index + 3];
         changed = true;
       }
-      return changed ? new ImageData(data, after.width, after.height) : null;
+      return changed ? pixels : null;
+    }
+
+    function appendLayerPixelEdit(controller, layer, pixels, compositeOperation = "source-over") {
+      if (!layer || layer.locked || !layer.visible || !pixels) return false;
+      const assetId = controller.documentStore.addRasterAsset(pixels);
+      layer.pixelEdits = [...(layer.pixelEdits || []), { assetId, compositeOperation }];
+      controller.documentStore.notify({ type: "edit-layer", ids: [layer.id] });
+      return true;
+    }
+
+    function applyPresentationEditsToLayer(controller, layer, before, after) {
+      return appendLayerPixelEdit(controller, layer, changedPixelOverlay(before, after));
     }
 
     /** Adopt legacy or externally written presentation pixels as a raster baseline. */
@@ -213,10 +228,16 @@
     function commitTransaction(controller, before) {
       const after = snapshot(controller.view);
       const documentBefore = controller.documentStore.snapshot();
-      const difference = rasterDifference(before, after);
-      if (!difference) return false;
-      const layer = selectedPlacementLayer(controller, controller.state.tool === "brush" || controller.state.tool === "pencil" ? "Brush stroke" : "Pixel edit");
-      controller.documentStore.addRasterObject(difference, { x: 0, y: 0, width: difference.width, height: difference.height }, { name: controller.state.tool === "brush" || controller.state.tool === "pencil" ? "Brush stroke" : "Pixel edit", layerId: layer.id });
+      const layer = controller.documentStore.activeLayer();
+      if (!applyPresentationEditsToLayer(controller, layer, before, after)) {
+        if (before?.width !== after.width || before?.height !== after.height) {
+          controller.state.markChanged();
+          renderLayeredDocument(controller);
+          syncTab(controller);
+          return true;
+        }
+        return false;
+      }
       controller.history.push(documentBefore, controller.documentStore.snapshot(), controller.state.tool);
       controller.state.markChanged();
       renderLayeredDocument(controller);
@@ -397,11 +418,21 @@
       const { selection } = controller;
       const before = controller.pixelSelectionDocumentBefore || controller.documentStore.snapshot();
       controller.pixelSelectionDocumentBefore = null;
-      const layer = selectedPlacementLayer(controller, selection.origin === "paste" ? "Pasted image" : "Object");
       if (controller.pendingContentDescriptor) {
+        const layer = selectedPlacementLayer(controller, controller.pendingContentDescriptor.name || "Shape");
         const object = namespace.ImageEditorToolContentAdapter.createShapeObject(controller.documentStore, selection.imageData, selection.rect, controller.pendingContentDescriptor, { name: controller.pendingContentDescriptor.name || "Shape", rotation: selection.rotation });
         controller.documentStore.addObject(object, layer.id);
-      } else controller.documentStore.addRasterObject(selection.imageData, selection.rect, { name: selection.origin === "paste" ? "Pasted image" : "Object", rotation: selection.rotation, layerId: layer.id });
+      } else if (selection.origin === "paste") {
+        const layer = selectedPlacementLayer(controller, "Pasted image");
+        controller.documentStore.addRasterObject(selection.imageData, selection.rect, { name: "Pasted image", rotation: selection.rotation, layerId: layer.id });
+      } else {
+        const layer = controller.documentStore.activeLayer();
+        const canvas = document.createElement("canvas");
+        canvas.width = controller.view.canvas.width;
+        canvas.height = controller.view.canvas.height;
+        selection.drawFloatingLayer(canvas.getContext("2d"));
+        appendLayerPixelEdit(controller, layer, canvas.getContext("2d").getImageData(0, 0, canvas.width, canvas.height));
+      }
       controller.pendingContentDescriptor = null;
       controller.selectionBefore = null;
       selection.clear();
@@ -419,15 +450,11 @@
       const before = controller.documentStore.snapshot();
       const canvas = controller.compositor.renderLayer(layer);
       const context = canvas.getContext("2d", { willReadFrequently: true });
+      const layerBefore = context.getImageData(0, 0, canvas.width, canvas.height);
       const changed = mode === "pattern" ? namespace.patternFill(context, point, controller.state) : namespace.floodFill(context, point, controller.state);
       if (!changed) return false;
       const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
-      const assetId = controller.documentStore.addRasterAsset(imageData);
-      layer.objects = [namespace.createContentObject("raster", { assetId }, {
-        name: "Bucket fill",
-        bounds: { x: 0, y: 0, width: canvas.width, height: canvas.height }
-      })];
-      controller.documentStore.selectedIds = new Set([layer.id]);
+      appendLayerPixelEdit(controller, layer, changedPixelOverlay(layerBefore, imageData));
       controller.documentStore.notify({ type: "fill-layer", ids: [layer.id] });
       controller.history.push(before, controller.documentStore.snapshot(), "Bucket fill");
       controller.state.markChanged();
@@ -1101,15 +1128,22 @@
         return;
       }
       if (!selection.hasSelection) return;
-      const before = snapshot(view);
+      const rect = { ...selection.rect };
+      const documentBefore = controller.documentStore.snapshot();
       if (action === "cut") {
         await copySelectionToClipboard(controller);
         selection.delete(view.context, state.backgroundColor);
       } else if (action === "delete") {
         selection.delete(view.context, state.backgroundColor);
       }
+      const changed = (action === "cut" || action === "delete") && clearPixelRegionFromActiveLayer(controller, rect);
       drawSelectionOverlay(controller);
-      commitTransaction(controller, before);
+      if (changed) {
+        controller.history.push(documentBefore, controller.documentStore.snapshot(), action === "cut" ? "Cut pixels" : "Delete pixels");
+        state.markChanged();
+        renderLayeredDocument(controller);
+      }
+      syncTab(controller);
     }
 
     function openEditableTextBox(controller, rect, text = '') {
@@ -1469,23 +1503,27 @@
       const { view, selection } = controller;
       if (!selection.floating || !selection.imageData || !selection.rect) return false;
       selection.drawFloatingLayer(view.context);
-      const layer = controller.documentStore.activeLayer() || controller.documentStore.addLayer("Selection stamp");
-      controller.documentStore.addRasterObject(selection.imageData, selection.rect, { name: "Selection stamp", rotation: selection.rotation, layerId: layer.id });
-      return true;
+      const layer = controller.documentStore.activeLayer();
+      if (!layer || layer.locked || !layer.visible) return false;
+      const canvas = document.createElement("canvas");
+      canvas.width = view.canvas.width;
+      canvas.height = view.canvas.height;
+      selection.drawFloatingLayer(canvas.getContext("2d"));
+      return appendLayerPixelEdit(controller, layer, canvas.getContext("2d").getImageData(0, 0, canvas.width, canvas.height));
     }
 
     function clearPixelRegionFromActiveLayer(controller, rect) {
       const layer = controller.documentStore.activeLayer();
       if (!layer || layer.locked || !rect) return false;
-      if (!controller.pixelSelectionDocumentBefore) controller.pixelSelectionDocumentBefore = controller.documentStore.snapshot();
-      const canvas = controller.compositor.renderLayer(layer);
-      const context = canvas.getContext("2d");
-      context.clearRect(rect.x, rect.y, rect.width, rect.height);
-      const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
-      const assetId = controller.documentStore.addRasterAsset(imageData);
-      layer.objects = [namespace.createContentObject("raster", { assetId }, { name: layer.name, bounds: { x: 0, y: 0, width: canvas.width, height: canvas.height } })];
-      controller.documentStore.notify({ type: "pixel-lift", ids: [layer.id] });
-      return true;
+      const mask = new ImageData(controller.view.canvas.width, controller.view.canvas.height);
+      const left = Math.max(0, Math.floor(rect.x));
+      const top = Math.max(0, Math.floor(rect.y));
+      const right = Math.min(mask.width, Math.ceil(rect.x + rect.width));
+      const bottom = Math.min(mask.height, Math.ceil(rect.y + rect.height));
+      for (let y = top; y < bottom; y += 1) {
+        for (let x = left; x < right; x += 1) mask.data[(y * mask.width + x) * 4 + 3] = 255;
+      }
+      return appendLayerPixelEdit(controller, layer, mask, "destination-out");
     }
     function dropSelection(controller) {
       const { selection } = controller;
@@ -1782,22 +1820,10 @@
             return;
           }
           if (state.bucketFillMode === "pattern") {
-            if (controller.layerPanel?.state.placementMode === "active") {
-              if (!fillActiveLayer(controller, point, "pattern")) syncTab(controller);
-              return;
-            }
-            const before = snapshot(view);
-            if (namespace.patternFill(view.context, point, state)) commitTransaction(controller, before);
-            else syncTab(controller);
+            if (!fillActiveLayer(controller, point, "pattern")) syncTab(controller);
             return;
           }
-          if (controller.layerPanel?.state.placementMode === "active") {
-            if (!fillActiveLayer(controller, point, "solid")) syncTab(controller);
-            return;
-          }
-          const before = snapshot(view);
-          if (namespace.floodFill(view.context, point, state)) commitTransaction(controller, before);
-          else syncTab(controller);
+          if (!fillActiveLayer(controller, point, "solid")) syncTab(controller);
           return;
         }        if (state.tool === "polygon") {
           if (!controller.polygonPoints.length) controller.gestureBefore = snapshot(view);
@@ -2675,6 +2701,15 @@
       controller.objectSelection = new namespace.ImageEditorObjectSelection(controller.documentStore);
       controller.layerPanel = new namespace.ImageEditorLayerPanel(view.stage, controller.documentStore, {
         state: tab.imageEditorState?.layersPanel,
+        requestRename(options) {
+          return deps.prompt?.(options) || Promise.resolve(null);
+        },
+        requestDeleteConfirmation(options) {
+          return deps.confirm?.(options) || Promise.resolve(true);
+        },
+        shouldConfirmDelete() {
+          return deps.shouldConfirmLayerDeletion?.() !== false;
+        },
         onMutate(label, callback) {
           if (label === "merge-down") return mergeSelectedLayerDown(controller);
           if (label === "flatten") return flattenDocument(controller);

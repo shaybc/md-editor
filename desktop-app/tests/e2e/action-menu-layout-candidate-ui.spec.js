@@ -164,6 +164,7 @@ test("settings menu updates graph auto-clustering threshold", async ({ page }) =
   await expect(page.locator("#settings-confirm-exit-application")).not.toBeChecked();
   await expect(page.locator("#settings-confirm-open-many-graph-nodes")).toBeChecked();
   await expect(page.locator("#settings-confirm-delete-files")).toBeChecked();
+  await expect(page.locator("#settings-confirm-delete-image-editor-layers")).toBeChecked();
   await expect(page.locator("#settings-confirm-move-files")).toBeChecked();
   await expect(page.locator("#settings-confirm-reset-state")).toBeChecked();
   await expect(page.locator("#settings-confirm-edited-prompt-attachment-removal")).not.toBeChecked();
@@ -199,6 +200,7 @@ test("settings menu updates graph auto-clustering threshold", async ({ page }) =
   await page.locator("#settings-confirm-exit-application").check();
   await page.locator("#settings-confirm-open-many-graph-nodes").uncheck();
   await page.locator("#settings-confirm-delete-files").uncheck();
+  await page.locator("#settings-confirm-delete-image-editor-layers").uncheck();
   await page.locator("#settings-confirm-move-files").uncheck();
   await page.locator("#settings-confirm-reset-state").uncheck();
   await page.locator("#settings-confirm-edited-prompt-attachment-removal").check();
@@ -244,6 +246,7 @@ test("settings menu updates graph auto-clustering threshold", async ({ page }) =
       confirmExitApplication: state.confirmExitApplication,
       confirmOpenManyGraphNodes: state.confirmOpenManyGraphNodes,
       confirmDeleteFiles: state.confirmDeleteFiles,
+      confirmDeleteImageEditorLayers: state.confirmDeleteImageEditorLayers,
       confirmMoveFiles: state.confirmMoveFiles,
       confirmResetState: state.confirmResetState,
       confirmEditedPromptAttachmentRemoval: state.confirmEditedPromptAttachmentRemoval,
@@ -278,6 +281,7 @@ test("settings menu updates graph auto-clustering threshold", async ({ page }) =
     confirmExitApplication: true,
     confirmOpenManyGraphNodes: false,
     confirmDeleteFiles: false,
+    confirmDeleteImageEditorLayers: false,
     confirmMoveFiles: false,
     confirmResetState: false,
     confirmEditedPromptAttachmentRemoval: true,
@@ -315,6 +319,7 @@ test("settings menu updates graph auto-clustering threshold", async ({ page }) =
   await expect(page.locator("#settings-confirm-exit-application")).toBeChecked();
   await expect(page.locator("#settings-confirm-open-many-graph-nodes")).not.toBeChecked();
   await expect(page.locator("#settings-confirm-delete-files")).not.toBeChecked();
+  await expect(page.locator("#settings-confirm-delete-image-editor-layers")).not.toBeChecked();
   await expect(page.locator("#settings-confirm-move-files")).not.toBeChecked();
   await expect(page.locator("#settings-confirm-reset-state")).not.toBeChecked();
   await expect(page.locator("#settings-confirm-edited-prompt-attachment-removal")).toBeChecked();

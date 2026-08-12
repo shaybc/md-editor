@@ -229,6 +229,7 @@ test('rounded rectangle adjusts all corners or one corner before commit', async 
   await page.goto('/');
   await page.waitForFunction(() => !!window.markdownViewerApp?.modules?.tabs?.openBlankImageEditorInTab, null, { timeout: 60000 });
   await page.waitForFunction(() => !!window.markdownViewerApp?.modules?.keyboardShortcuts && !!window.markdownViewerApp?.services?.imageEditor, null, { timeout: 60000 });
+  await page.waitForFunction(() => !!window.markdownViewerApp?.modules?.keyboardShortcuts && !!window.markdownViewerApp?.services?.imageEditor, null, { timeout: 60000 });
   await page.evaluate(() => {
     window.markdownViewerApp.modules.apiClient.deactivateApiClientSidebar = () => {};
     window.markdownViewerApp.modules.tabs.openBlankImageEditorInTab({ width: 140, height: 100, name: 'Rounded Rectangle' });
@@ -794,6 +795,22 @@ test('layers panel creates layers and restores after being hidden', async ({ pag
   await expect(panel).toBeVisible();
   await panel.locator('[data-layer-action="new-layer"]').click();
   await expect(panel.locator('[data-layer-item]')).toHaveCount(2);
+  await panel.locator('[data-layer-item]').first().locator('.image-editor-layer-name').dblclick();
+  await expect(page.locator('#app-notification-modal')).toBeVisible();
+  await expect(page.locator('#app-notification-title')).toHaveText('Rename layer or object');
+  await page.locator('#app-notification-input').fill('Renamed layer');
+  await page.locator('[data-notification-button-id="confirm"]').click();
+  await expect(panel.locator('[data-layer-item]').first().locator('.image-editor-layer-name')).toHaveText('Renamed layer');
+  await panel.locator('[data-layer-action="delete"]').click();
+  await expect(page.locator('#app-notification-modal')).toBeVisible();
+  await expect(page.locator('#app-notification-title')).toHaveText('Delete layer?');
+  await expect(panel.locator('[data-layer-item]')).toHaveCount(2);
+  await page.locator('[data-notification-button-id="cancel"]').click();
+  await expect(panel.locator('[data-layer-item]')).toHaveCount(2);
+  await panel.locator('[data-layer-action="delete"]').click();
+  await page.locator('[data-notification-button-id="confirm"]').click();
+  await expect(panel.locator('[data-layer-item]')).toHaveCount(1);
+  await panel.locator('[data-layer-action="new-layer"]').click();
   await panel.locator('.image-editor-layer-placement select').selectOption('active');
   expect(await page.evaluate(() => {
     const root = document.querySelector('.tab-view.active[data-tab-view-kind=image-editor]');
@@ -806,6 +823,107 @@ test('layers panel creates layers and restores after being hidden', async ({ pag
   await page.locator('[data-layers-toggle="true"]').click();
   await expect(panel).toBeVisible();
   await expect(panel).not.toHaveClass(/hidden|minimized/);
+  await page.evaluate(() => {
+    const key = 'markdownViewerGlobalState';
+    const state = JSON.parse(localStorage.getItem(key) || '{}');
+    localStorage.setItem(key, JSON.stringify({ ...state, confirmDeleteImageEditorLayers: false }));
+  });
+  await panel.locator('[data-layer-action="delete"]').click();
+  await expect(page.locator('#app-notification-modal')).toBeHidden();
+  await expect(panel.locator('[data-layer-item]')).toHaveCount(1);
+});
+
+test('editing a selected layer preserves its objects without creating new panel items', async ({ page }) => {
+  await page.goto('/');
+  await page.waitForFunction(() => !!window.markdownViewerApp?.modules?.tabs?.openBlankImageEditorInTab, null, { timeout: 60000 });
+  await page.waitForFunction(() => !!window.markdownViewerApp?.modules?.keyboardShortcuts && !!window.markdownViewerApp?.services?.imageEditor, null, { timeout: 60000 });
+  await page.evaluate(() => {
+    window.markdownViewerApp.modules.apiClient.deactivateApiClientSidebar = () => {};
+    window.markdownViewerApp.modules.tabs.openBlankImageEditorInTab({ width: 120, height: 80, name: 'Layer edits' });
+  });
+  const root = page.locator('.tab-view.active[data-tab-view-kind=image-editor]');
+  const panel = root.locator('.image-editor-layers-panel');
+  const overlay = root.locator('.image-editor-overlay');
+  await expect(root.locator('.image-editor-shell')).toBeVisible();
+  await page.evaluate(() => {
+    const root = document.querySelector('.tab-view.active[data-tab-view-kind=image-editor]');
+    const controller = window.markdownViewerApp.services.imageEditor.getView(root.dataset.tabId);
+    const pixels = new ImageData(120, 80);
+    for (let index = 0; index < pixels.data.length; index += 4) {
+      pixels.data[index] = 180;
+      pixels.data[index + 3] = 255;
+    }
+    const object = controller.documentStore.addRasterObject(pixels, { x: 0, y: 0, width: 120, height: 80 }, { name: 'Existing object', layerId: controller.documentStore.activeLayer().id });
+    window.__layerEditObjectId = object.id;
+    window.__layerEditObjectCount = controller.documentStore.activeLayer().objects.length;
+    controller.compositor.render({ canvas: controller.view.canvas });
+    controller.state.setTool('brush');
+  });
+  await panel.locator('[data-layer-expand]').click();
+  const initialPanelItemCount = await panel.locator('[data-layer-item]').count();
+  await overlay.hover({ position: { x: 20, y: 20 } });
+  await page.mouse.down();
+  await page.mouse.move((await overlay.boundingBox()).x + 55, (await overlay.boundingBox()).y + 35);
+  await page.mouse.up();
+  await expect(panel.locator('[data-layer-item]')).toHaveCount(initialPanelItemCount);
+  const layerEditResult = await page.evaluate(() => {
+    const root = document.querySelector('.tab-view.active[data-tab-view-kind=image-editor]');
+    const controller = window.markdownViewerApp.services.imageEditor.getView(root.dataset.tabId);
+    const layer = controller.documentStore.activeLayer();
+    return { objects: layer.objects.length, expectedObjects: window.__layerEditObjectCount, objectPreserved: layer.objects.some((object) => object.id === window.__layerEditObjectId), pixelEdits: layer.pixelEdits.length };
+  });
+  expect(layerEditResult.objects).toBe(layerEditResult.expectedObjects);
+  expect({ objectPreserved: layerEditResult.objectPreserved, pixelEdits: layerEditResult.pixelEdits }).toEqual({ objectPreserved: true, pixelEdits: 1 });
+});
+
+test('pixel deletion affects only the selected layer and preserves its object row', async ({ page }) => {
+  await page.goto('/');
+  await page.waitForFunction(() => !!window.markdownViewerApp?.modules?.tabs?.openBlankImageEditorInTab, null, { timeout: 60000 });
+  await page.waitForFunction(() => !!window.markdownViewerApp?.modules?.keyboardShortcuts && !!window.markdownViewerApp?.services?.imageEditor, null, { timeout: 60000 });
+  await page.evaluate(() => {
+    window.markdownViewerApp.modules.apiClient.deactivateApiClientSidebar = () => {};
+    window.markdownViewerApp.modules.tabs.openBlankImageEditorInTab({ width: 100, height: 70, name: 'Layer delete isolation' });
+    const root = document.querySelector('.tab-view.active[data-tab-view-kind=image-editor]');
+    const controller = window.markdownViewerApp.services.imageEditor.getView(root.dataset.tabId);
+    const solidPixels = (red, green, blue) => {
+      const pixels = new ImageData(100, 70);
+      for (let index = 0; index < pixels.data.length; index += 4) {
+        pixels.data[index] = red; pixels.data[index + 1] = green; pixels.data[index + 2] = blue; pixels.data[index + 3] = 255;
+      }
+      return pixels;
+    };
+    const lower = controller.documentStore.activeLayer();
+    controller.documentStore.addRasterObject(solidPixels(0, 0, 255), { x: 0, y: 0, width: 100, height: 70 }, { name: 'Lower object', layerId: lower.id });
+    const upper = controller.documentStore.addLayer('Upper layer', lower.id);
+    const upperObject = controller.documentStore.addRasterObject(solidPixels(255, 0, 0), { x: 0, y: 0, width: 100, height: 70 }, { name: 'Upper object', layerId: upper.id });
+    window.__upperLayerObjectId = upperObject.id;
+    controller.compositor.render({ canvas: controller.view.canvas });
+    controller.state.selectionMode = 'pixel';
+    controller.state.setTool('select');
+  });
+  const root = page.locator('.tab-view.active[data-tab-view-kind=image-editor]');
+  await expect(root.locator('.image-editor-shell')).toBeVisible();
+  const panel = root.locator('.image-editor-layers-panel');
+  await expect(panel.locator('[data-layer-expand]')).toHaveCount(2);
+  await panel.locator('[data-layer-expand]').nth(0).click();
+  await panel.locator('[data-layer-expand]').nth(1).click();
+  const initialPanelItemCount = await panel.locator('[data-layer-item]').count();
+  const overlay = root.locator('.image-editor-overlay');
+  const box = await overlay.boundingBox();
+  await page.mouse.move(box.x + 20, box.y + 20);
+  await page.mouse.down();
+  await page.mouse.move(box.x + 40, box.y + 40, { steps: 4 });
+  await page.mouse.up();
+  await page.keyboard.press('Delete');
+  expect(await page.evaluate(() => {
+    const root = document.querySelector('.tab-view.active[data-tab-view-kind=image-editor]');
+    const controller = window.markdownViewerApp.services.imageEditor.getView(root.dataset.tabId);
+    const canvas = controller.view.canvas.getContext('2d');
+    const pixel = (x, y) => Array.from(canvas.getImageData(x, y, 1, 1).data).slice(0, 3);
+    const object = window.MarkdownViewerImageEditor.findDocumentObject(controller.documentStore.document, window.__upperLayerObjectId)?.object;
+    return { deletedArea: pixel(30, 30), untouchedArea: pixel(10, 10), objectPreserved: !!object };
+  })).toEqual({ deletedArea: [0, 0, 255], untouchedArea: [255, 0, 0], objectPreserved: true });
+  await expect(panel.locator('[data-layer-item]')).toHaveCount(initialPanelItemCount);
 });
 
 test("switching between image editor tabs preserves each tab's drawing", async ({ page }) => {
