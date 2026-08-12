@@ -21,6 +21,9 @@
       this.lineWidth = Math.max(1, Math.min(64, Number(options.lineWidth || 2)));
       this.strokeType = namespace.normalizeStrokeType ? namespace.normalizeStrokeType(options.strokeType) : "solid";
       this.fillShapes = options.fillShapes === true;
+      this.bucketFillMode = options.bucketFillMode === "gradient" ? "gradient" : "solid";
+      this.gradientStartColor = options.gradientStartColor || this.foregroundColor;
+      this.gradientEndColor = options.gradientEndColor || this.backgroundColor;
       this.spiralDirection = options.spiralDirection === "counter-clockwise" ? "counter-clockwise" : "clockwise";
       this.spiralCapInside = options.spiralCapInside === true;
       this.rectangularGridHorizontalDividers = Math.max(0, Math.min(100, Math.round(Number(options.rectangularGridHorizontalDividers ?? 4))));

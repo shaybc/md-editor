@@ -1088,7 +1088,32 @@ audio.file-preview-content {
 .image-editor-tools [data-tool="heart"] { grid-area: heart; }
 .image-editor-tools [data-tool="pencil"] { grid-area: pencil; }
 .image-editor-tools [data-tool="brush"] { grid-area: brush; }
-.image-editor-tools [data-tool="bucket"] { grid-area: bucket; }
+.image-editor-bucket-tool { grid-area: bucket; display: grid; grid-template-columns: 20px 8px; position: relative; }
+.image-editor-tools .image-editor-bucket-tool .image-editor-bucket-main { width: 20px; border-radius: 6px 0 0 6px; }
+.image-editor-bucket-mode { position: relative; }
+.image-editor-bucket-mode-trigger {
+  display: flex; width: 8px; height: 28px; align-items: center; justify-content: center; padding: 0;
+  border: 1px solid transparent; border-radius: 0 6px 6px 0; cursor: pointer; list-style: none;
+}
+.image-editor-bucket-mode-trigger::-webkit-details-marker { display: none; }
+.image-editor-bucket-mode-trigger .bi { font-size: 0.45rem; }
+.image-editor-bucket-tool:hover .image-editor-bucket-mode-trigger, .image-editor-bucket-tool:has(.image-editor-bucket-main.active) .image-editor-bucket-mode-trigger {
+  border-color: var(--border-color); background: var(--button-hover);
+}
+.image-editor-bucket-mode-menu {
+  position: fixed; z-index: 1000; width: 128px; padding: 4px;
+  border: 1px solid var(--border-color); border-radius: 5px; background: var(--panel-bg); box-shadow: 0 4px 12px rgba(0,0,0,.35);
+}
+.image-editor-bucket-mode:not([open]) .image-editor-bucket-mode-menu { display: none; }
+.image-editor-bucket-mode-menu button {
+  display: flex; width: 100%; height: 28px; align-items: center; gap: 7px; padding: 0 6px;
+  border: 0; border-radius: 3px; background: transparent; color: var(--text-color); font-size: .75rem; cursor: pointer;
+}
+.image-editor-bucket-mode-menu button:hover, .image-editor-bucket-mode-menu button.active { background: var(--hover-bg); }
+.image-editor-fill-sample { display: block; width: 30px; height: 14px; border: 1px solid var(--border-color); }
+.image-editor-fill-sample-solid { background: var(--text-color); }
+.image-editor-fill-sample-gradient { background: linear-gradient(90deg, #111 0%, #fff 100%); }
+.image-editor-gradient-side-color { position: absolute; width: 0 !important; height: 0 !important; opacity: 0; pointer-events: none; }
 .image-editor-tools [data-tool="text"] { grid-area: text; }
 .image-editor-command-grid .image-editor-button, .image-editor-tools .image-editor-button {
   width: 28px; height: 28px;

@@ -237,8 +237,9 @@
       dotProduct / Math.sqrt(firstLength * secondLength) >= FLOOD_FILL_EDGE_DIRECTION_ALIGNMENT;
   }
 
-  /** Replace only the source-background contribution in antialiased boundary pixels. */
-  function recolorFloodFillEdge(original, data, filled, width, height, targetColor, fillColor) {
+  /** Measure how much source-background color remains in antialiased boundary pixels. */
+  function calculateFloodFillEdgeCoverage(original, filled, width, height, targetColor) {
+    const coverage = new Float32Array(width * height);
     const frontier = new Set();
     for (let pixelIndex = 0; pixelIndex < filled.length; pixelIndex += 1) {
       if (!filled[pixelIndex]) continue;
@@ -273,14 +274,13 @@
       }
       if (referenceIndex === index || referenceDistance < pixelDistance * 1.1) return;
       const boundaryCoverage = Math.min(1, Math.sqrt(pixelDistance / referenceDistance));
-      for (let channel = 0; channel < 4; channel += 1) {
-        data[index + channel] = Math.round(original[index + channel] +
-          (1 - boundaryCoverage) * (fillColor[channel] - targetColor[channel]));
-      }
+      coverage[pixelIndex] = 1 - boundaryCoverage;
     });
+    return coverage;
   }
 
-  function floodFill(context, point, state) {
+  /** Collect the contiguous bucket region without changing canvas pixels. */
+  function createFloodFillRegion(context, point) {
     const width = context.canvas.width;
     const height = context.canvas.height;
     const startX = Math.max(0, Math.min(width - 1, Math.floor(point.x)));
@@ -290,8 +290,6 @@
     const original = new Uint8ClampedArray(data);
     const startIndex = (startY * width + startX) * 4;
     const targetColor = [data[startIndex], data[startIndex + 1], data[startIndex + 2], data[startIndex + 3]];
-    const fillColor = colorToRgba(state.foregroundColor);
-    if (targetColor.every((channel, index) => channel === fillColor[index])) return false;
     const stack = [[startX, startY]];
     const visited = new Uint8Array(width * height);
     const filled = new Uint8Array(width * height);
@@ -304,12 +302,62 @@
       const index = pixelIndex * 4;
       if (!pixelsMatchFillTarget(original, index, targetColor)) continue;
       filled[pixelIndex] = 1;
-      setPixel(data, index, fillColor);
       stack.push([x + 1, y], [x - 1, y], [x, y + 1], [x, y - 1]);
     }
-    recolorFloodFillEdge(original, data, filled, width, height, targetColor, fillColor);
-    context.putImageData(imageData, 0, 0);
+    const edgeCoverage = calculateFloodFillEdgeCoverage(original, filled, width, height, targetColor);
+    let minX = width;
+    let minY = height;
+    let maxX = 0;
+    let maxY = 0;
+    filled.forEach((value, pixelIndex) => {
+      if (!value) return;
+      const x = pixelIndex % width;
+      const y = Math.floor(pixelIndex / width);
+      minX = Math.min(minX, x);
+      minY = Math.min(minY, y);
+      maxX = Math.max(maxX, x);
+      maxY = Math.max(maxY, y);
+    });
+    return {
+      width,
+      height,
+      original,
+      targetColor,
+      filled,
+      edgeCoverage,
+      bounds: { x: minX, y: minY, width: maxX - minX + 1, height: maxY - minY + 1 }
+    };
+  }
+
+  /** Paint a collected bucket region with a solid or position-dependent color. */
+  function paintFloodFillRegion(context, region, colorAtPoint) {
+    if (!region) return false;
+    const data = new Uint8ClampedArray(region.original);
+    for (let pixelIndex = 0; pixelIndex < region.filled.length; pixelIndex += 1) {
+      const isFilled = region.filled[pixelIndex] === 1;
+      const coverage = isFilled ? 1 : region.edgeCoverage[pixelIndex];
+      if (!coverage) continue;
+      const x = pixelIndex % region.width;
+      const y = Math.floor(pixelIndex / region.width);
+      const fillColor = colorAtPoint(x, y);
+      const dataIndex = pixelIndex * 4;
+      if (isFilled) setPixel(data, dataIndex, fillColor);
+      else {
+        for (let channel = 0; channel < 4; channel += 1) {
+          data[dataIndex + channel] = Math.round(region.original[dataIndex + channel] +
+            coverage * (fillColor[channel] - region.targetColor[channel]));
+        }
+      }
+    }
+    context.putImageData(new ImageData(data, region.width, region.height), 0, 0);
     return true;
+  }
+
+  function floodFill(context, point, state) {
+    const fillColor = colorToRgba(state.foregroundColor);
+    const region = createFloodFillRegion(context, point);
+    if (region.targetColor.every((channel, index) => channel === fillColor[index])) return false;
+    return paintFloodFillRegion(context, region, () => fillColor);
   }
 
   function splitWordToWidth(context, word, maxWidth) {
@@ -381,5 +429,5 @@
     context.restore();
   }
 
-  Object.assign(namespace, { configureStroke, drawFreehand, curvePointAt, drawCurve, drawShape, drawRoundedRectangle, drawPolygon, colorToRgba, floodFill, drawText });
+  Object.assign(namespace, { configureStroke, drawFreehand, curvePointAt, drawCurve, drawShape, drawRoundedRectangle, drawPolygon, colorToRgba, createFloodFillRegion, paintFloodFillRegion, floodFill, drawText });
 })(typeof window !== "undefined" ? window : globalThis);

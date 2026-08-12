@@ -52,6 +52,30 @@
     return element;
   }
 
+  function createBucketTool() {
+    const wrapper = document.createElement("div");
+    wrapper.className = "image-editor-bucket-tool";
+    wrapper.innerHTML = `
+      <button type="button" class="image-editor-button image-editor-tool image-editor-bucket-main" data-tool="bucket" title="Fill" aria-label="Fill"><i class="bi bi-paint-bucket" aria-hidden="true"></i></button>
+      <details class="image-editor-bucket-mode">
+        <summary class="image-editor-bucket-mode-trigger" title="Fill type" aria-label="Choose fill type"><i class="bi bi-caret-down-fill"></i></summary>
+        <span class="image-editor-bucket-mode-menu">
+          <button type="button" data-bucket-mode="solid"><span class="image-editor-fill-sample image-editor-fill-sample-solid"></span>Solid fill</button>
+          <button type="button" data-bucket-mode="gradient"><span class="image-editor-fill-sample image-editor-fill-sample-gradient"></span>Gradient fill</button>
+        </span>
+      </details>`;
+    const modeSelector = wrapper.querySelector(".image-editor-bucket-mode");
+    modeSelector.addEventListener("toggle", () => {
+      if (!modeSelector.open) return;
+      const triggerRect = modeSelector.querySelector(".image-editor-bucket-mode-trigger").getBoundingClientRect();
+      const menu = modeSelector.querySelector(".image-editor-bucket-mode-menu");
+      const menuWidth = 128;
+      menu.style.left = Math.max(4, Math.min(global.innerWidth - menuWidth - 4, triggerRect.left - 20)) + "px";
+      menu.style.top = triggerRect.bottom + 3 + "px";
+    });
+    return wrapper;
+  }
+
   function createPaletteButton(color) {
     const element = document.createElement("button");
     element.type = "button";
@@ -199,7 +223,13 @@
       this.overlayContext = this.overlay.getContext("2d");
       this.activeColorTarget = "foreground";
 
-      namespace.tools.filter((tool) => tool !== "oval-callout" && tool !== "cloud-callout").forEach((tool) => this.shell.querySelector(".image-editor-tools").appendChild(createToolButton(tool)));
+      namespace.tools.filter((tool) => tool !== "oval-callout" && tool !== "cloud-callout").forEach((tool) => {
+        this.shell.querySelector(".image-editor-tools").appendChild(tool === "bucket" ? createBucketTool() : createToolButton(tool));
+      });
+      const gradientColorInput = document.createElement("input");
+      gradientColorInput.type = "color";
+      gradientColorInput.className = "image-editor-gradient-side-color";
+      this.toolbar.appendChild(gradientColorInput);
       [
         ["bi-arrow-counterclockwise", "Undo", "undo"],
         ["bi-arrow-clockwise", "Redo", "redo"]
@@ -351,6 +381,8 @@
       });
       this.shell.querySelector(".image-editor-foreground").value = state.foregroundColor;
       this.shell.querySelector(".image-editor-background").value = state.backgroundColor;
+      this.shell.querySelector(".image-editor-bucket-mode").dataset.value = state.bucketFillMode;
+      this.shell.querySelectorAll("[data-bucket-mode]").forEach((element) => element.classList.toggle("active", element.dataset.bucketMode === state.bucketFillMode));
       this.setActiveColorTarget(this.activeColorTarget, state);
       this.shell.querySelector(".image-editor-fill").checked = state.fillShapes;
       namespace.syncStrokeTypeSelector(this.shell.querySelector(".image-editor-stroke-type"), state.strokeType);

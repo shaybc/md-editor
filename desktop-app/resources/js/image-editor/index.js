@@ -62,6 +62,9 @@
         lineWidth: state.lineWidth,
         strokeType: state.strokeType,
         fillShapes: state.fillShapes,
+        bucketFillMode: state.bucketFillMode,
+        gradientStartColor: state.gradientStartColor,
+        gradientEndColor: state.gradientEndColor,
         spiralDirection: state.spiralDirection,
         spiralCapInside: state.spiralCapInside,
         rectangularGridHorizontalDividers: state.rectangularGridHorizontalDividers,
@@ -469,6 +472,36 @@
       return floatGeneratedLayer(controller, layer, before);
     }
 
+    function renderGradientFill(controller) {
+      const { gradientFillTool, view, state } = controller;
+      if (!gradientFillTool.isEditing) return;
+      gradientFillTool.paint(view.context);
+      view.overlayContext.clearRect(0, 0, view.overlay.width, view.overlay.height);
+      gradientFillTool.drawGuides(view.overlayContext, state.zoom);
+    }
+
+    function cancelGradientFill(controller) {
+      if (controller.gradientBefore) restoreSnapshot(controller, controller.gradientBefore);
+      controller.gradientFillTool.reset();
+      controller.gradientBefore = null;
+      controller.activeGradientColorSide = "";
+      controller.dragging = false;
+      controller.view.overlayContext.clearRect(0, 0, controller.view.overlay.width, controller.view.overlay.height);
+      syncTab(controller);
+    }
+
+    function finishGradientFill(controller) {
+      if (!controller.gradientFillTool.isEditing) return false;
+      controller.gradientFillTool.paint(controller.view.context);
+      controller.view.overlayContext.clearRect(0, 0, controller.view.overlay.width, controller.view.overlay.height);
+      const before = controller.gradientBefore;
+      controller.gradientFillTool.reset();
+      controller.gradientBefore = null;
+      controller.activeGradientColorSide = "";
+      controller.dragging = false;
+      return commitTransaction(controller, before);
+    }
+
     function isCalloutTool(tool) {
       return tool === "callout" || tool === "oval-callout" || tool === "cloud-callout";
     }
@@ -614,6 +647,7 @@
       if (controller.arcTool?.isEditing) renderArcPreview(controller);
       if (controller.spiralTool?.isEditing) renderSpiralPreview(controller);
       if (isGridTool(controller.state.tool) && gridToolFor(controller).isEditing) renderGridPreview(controller);
+      if (controller.gradientFillTool?.isEditing) renderGradientFill(controller);
       syncTab(controller);
       return controller.state.zoom;
     }
@@ -797,8 +831,18 @@
         if (!view.textInput.hidden && isTextFormattingTarget(event.target)) keepTextInputLive(controller);
       });
       view.toolbar.addEventListener("click", (event) => {
+        const bucketModeButton = event.target.closest("[data-bucket-mode]");
+        if (bucketModeButton) {
+          if (controller.gradientFillTool.isEditing) finishGradientFill(controller);
+          state.bucketFillMode = bucketModeButton.dataset.bucketMode === "gradient" ? "gradient" : "solid";
+          state.setTool("bucket");
+          view.shell.querySelector(".image-editor-bucket-mode").open = false;
+          syncTab(controller);
+          return;
+        }
         const toolButton = event.target.closest("[data-tool]");
         if (toolButton) {
+          if (controller.gradientFillTool.isEditing) finishGradientFill(controller);
           if (state.tool === "curve" && controller.curveTool.isEditing) finishEditableCurve(controller);
           if (state.tool === "rounded-rectangle" && controller.roundedRectangleTool.isEditing) finishEditableRoundedRectangle(controller);
           if (isCalloutTool(state.tool) && editingCalloutTool(controller)) finishEditableCallout(controller);
@@ -837,6 +881,15 @@
         input.addEventListener("pointerdown", () => view.setActiveColorTarget(target, state));
         input.addEventListener("focus", () => view.setActiveColorTarget(target, state));
         input.addEventListener("input", (event) => applyToolbarColor(controller, target, event.target.value));
+      });
+      view.shell.querySelector(".image-editor-gradient-side-color").addEventListener("input", (event) => {
+        const side = controller.activeGradientColorSide;
+        if (!side || !controller.gradientFillTool.isEditing) return;
+        controller.gradientFillTool.setColor(side, event.target.value);
+        if (side === "start") state.gradientStartColor = event.target.value;
+        else state.gradientEndColor = event.target.value;
+        renderGradientFill(controller);
+        syncTab(controller);
       });
       view.shell.querySelector(".image-editor-size").addEventListener("input", (event) => {
         state.brushSize = state.lineWidth = Number(event.target.value);
@@ -1215,6 +1268,24 @@
           event.preventDefault();
           commitText(controller);
           commitSelection(controller);
+          if (state.bucketFillMode === "gradient") {
+            if (controller.gradientFillTool.isEditing) {
+              const result = controller.gradientFillTool.begin(point, state.zoom);
+              if (result.action === "outside") {
+                finishGradientFill(controller);
+                return;
+              }
+              if (result.action === "guide") {
+                controller.dragging = true;
+                overlay.setPointerCapture?.(event.pointerId);
+              }
+              return;
+            }
+            controller.gradientBefore = snapshot(view);
+            controller.gradientFillTool.start(view.context, point, state.gradientStartColor, state.gradientEndColor);
+            renderGradientFill(controller);
+            return;
+          }
           const before = snapshot(view);
           if (namespace.floodFill(view.context, point, state)) commitTransaction(controller, before);
           else syncTab(controller);
@@ -1250,12 +1321,23 @@
       overlay.addEventListener("pointermove", (event) => {
         const point = view.pointFromEvent(event, !selection.isTransforming);
         if (!controller.dragging) {
+          if (state.tool === "bucket" && controller.gradientFillTool.isEditing) {
+            const result = controller.gradientFillTool.begin(point, state.zoom);
+            controller.gradientFillTool.end();
+            overlay.style.cursor = result.action === "guide" ? "move" : (result.action === "side" ? "crosshair" : "default");
+            return;
+          }
           if (state.tool === "polygon" && controller.polygonTool.isEditing) {
             const guide = controller.polygonTool.guideAt(point);
             overlay.style.cursor = guide?.type === "edge" ? "copy" : (guide?.type === "vertex" ? "move" : "crosshair");
             return;
           }
           updateSelectionHoverCursor(controller, point);
+          return;
+        }
+        if (state.tool === "bucket" && controller.gradientFillTool.isEditing) {
+          controller.gradientFillTool.update(point);
+          renderGradientFill(controller);
           return;
         }
         if (state.tool === "curve") {
@@ -1338,7 +1420,11 @@
         if (!controller.dragging) return;
         controller.dragging = false;
         const point = view.pointFromEvent(event);
-        if (state.tool === "curve") {
+        if (state.tool === "bucket" && controller.gradientFillTool.isEditing) {
+          controller.gradientFillTool.update(point);
+          controller.gradientFillTool.end();
+          renderGradientFill(controller);
+        } else if (state.tool === "curve") {
           const result = controller.curveTool.completeStage(point);
           if (result.complete) finishEditableCurve(controller);
           else renderCurvePreview(controller);
@@ -1399,6 +1485,21 @@
         }
       });
       overlay.addEventListener("dblclick", (event) => {
+        if (state.tool === "bucket" && state.bucketFillMode === "gradient" && controller.gradientFillTool.isEditing) {
+          const point = view.pointFromEvent(event);
+          if (!controller.gradientFillTool.contains(point)) return;
+          event.preventDefault();
+          controller.activeGradientColorSide = controller.gradientFillTool.sideAt(point);
+          const input = view.shell.querySelector(".image-editor-gradient-side-color");
+          input.value = controller.activeGradientColorSide === "start" ? controller.gradientFillTool.startColor : controller.gradientFillTool.endColor;
+          try {
+            if (typeof input.showPicker === "function") input.showPicker();
+            else input.click();
+          } catch (_error) {
+            input.click();
+          }
+          return;
+        }
         if (state.tool !== "polygon" || controller.polygonPoints.length < 3) return;
         event.preventDefault();
         view.overlayContext.clearRect(0, 0, view.overlay.width, view.overlay.height);
@@ -1610,6 +1711,18 @@
           }
           return;
         }
+        if (controller.state.tool === "bucket" && controller.gradientFillTool.isEditing) {
+          if (event.key === "Escape") {
+            cancelGradientFill(controller);
+            event.preventDefault();
+            return;
+          }
+          if (event.key === "Enter") {
+            finishGradientFill(controller);
+            event.preventDefault();
+            return;
+          }
+        }
         if (controller.state.tool === "curve" && controller.curveTool.isEditing) {
           if (event.key === "Escape") {
             cancelEditableCurve(controller);
@@ -1804,6 +1917,10 @@
     function bindSelectionDismissal(controller) {
       const listener = (event) => {
         if (deps.getActiveTab?.()?.id !== controller.tab.id) return;
+        if (controller.gradientFillTool.isEditing && !controller.view.wrap.contains(event.target) &&
+            !event.target.closest?.(".image-editor-gradient-side-color")) {
+          finishGradientFill(controller);
+        }
         if (event.target.closest?.('[data-tool="select"]')) return;
         if (event.target.closest?.(".image-editor-selection-actions, .image-editor-history-actions")) return;
         if (event.target.closest?.(".image-editor-color-targets, .image-editor-color-palette")) return;
@@ -1878,6 +1995,9 @@
         rectangularGridTool: new namespace.ImageEditorRectangularGridTool(),
         polarGridTool: new namespace.ImageEditorPolarGridTool(),
         gridBefore: null,
+        gradientFillTool: new namespace.ImageEditorGradientFillTool(),
+        gradientBefore: null,
+        activeGradientColorSide: "",
         textRect: null,
         creatingTextBox: false,
         textInputOpening: false,
