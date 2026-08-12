@@ -118,6 +118,11 @@
       context.rect(x, y, width, height);
     } else if (tool === "ellipse") {
       context.ellipse(x + width / 2, y + height / 2, Math.max(0.5, width / 2), Math.max(0.5, height / 2), 0, 0, Math.PI * 2);
+    } else if (tool === "triangle") {
+      context.moveTo(x + width / 2, y);
+      context.lineTo(x + width, y + height);
+      context.lineTo(x, y + height);
+      context.closePath();
     }
     if (state.fillShapes && tool !== "line") context.fill();
     context.stroke();

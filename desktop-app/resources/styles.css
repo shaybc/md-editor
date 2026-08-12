@@ -1062,8 +1062,8 @@ audio.file-preview-content {
 .image-editor-command-grid [data-action="copy"] { grid-area: 2 / 2; }
 .image-editor-command-grid [data-action="paste"] { grid-area: 2 / 3; }
 .image-editor-tools {
-  display: grid; grid-template-columns: 38px repeat(5, 28px); grid-template-rows: repeat(2, 28px); gap: 2px;
-  grid-template-areas: "select line curve rectangle ellipse polygon" "select pencil brush bucket text rounded";
+  display: grid; grid-template-columns: 38px repeat(6, 28px); grid-template-rows: repeat(2, 28px); gap: 2px;
+  grid-template-areas: "select line curve rectangle ellipse polygon triangle" "select pencil brush bucket text rounded .";
 }
 .image-editor-tools [data-tool="select"] { grid-area: select; }
 .image-editor-tools [data-tool="line"] { grid-area: line; }
@@ -1072,6 +1072,7 @@ audio.file-preview-content {
 .image-editor-tools [data-tool="rounded-rectangle"] { grid-area: rounded; }
 .image-editor-tools [data-tool="ellipse"] { grid-area: ellipse; }
 .image-editor-tools [data-tool="polygon"] { grid-area: polygon; }
+.image-editor-tools [data-tool="triangle"] { grid-area: triangle; }
 .image-editor-tools [data-tool="pencil"] { grid-area: pencil; }
 .image-editor-tools [data-tool="brush"] { grid-area: brush; }
 .image-editor-tools [data-tool="bucket"] { grid-area: bucket; }

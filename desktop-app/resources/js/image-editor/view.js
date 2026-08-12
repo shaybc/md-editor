@@ -13,6 +13,7 @@
     "rounded-rectangle": "bi-app",
     ellipse: "bi-circle",
     polygon: "bi-pentagon",
+    triangle: "bi-triangle",
     bucket: "bi-paint-bucket",
     text: "bi-fonts"
   };

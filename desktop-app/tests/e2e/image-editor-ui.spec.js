@@ -267,6 +267,46 @@ test('rounded rectangle adjusts all corners or one corner before commit', async 
   expect(afterUndoPixels).toBe(0);
 });
 
+test('triangle tool draws a filled three-point shape and supports undo', async ({ page }) => {
+  await page.goto('/');
+  await page.waitForFunction(() => !!window.markdownViewerApp?.modules?.tabs?.openBlankImageEditorInTab, null, { timeout: 60000 });
+  await page.waitForFunction(() => !!window.markdownViewerApp?.modules?.keyboardShortcuts && !!window.markdownViewerApp?.services?.imageEditor, null, { timeout: 60000 });
+  await page.evaluate(() => {
+    window.markdownViewerApp.modules.apiClient.deactivateApiClientSidebar = () => {};
+    window.markdownViewerApp.modules.tabs.openBlankImageEditorInTab({ width: 100, height: 80, name: 'Triangle' });
+  });
+  await expect(page.locator('.tab-view.active[data-tab-view-kind=image-editor] .image-editor-shell')).toBeVisible();
+
+  await page.locator('.image-editor-foreground').evaluate((element) => {
+    element.value = '#ff0000';
+    element.dispatchEvent(new Event('input', { bubbles: true }));
+  });
+  await page.locator('.image-editor-background').evaluate((element) => {
+    element.value = '#00ff00';
+    element.dispatchEvent(new Event('input', { bubbles: true }));
+  });
+  await page.locator('.image-editor-fill').check();
+  await page.locator('[data-tool="triangle"]').click();
+  await expect(page.locator('[data-tool="triangle"]')).toHaveClass(/active/);
+  const overlay = page.locator('.image-editor-overlay');
+  const box = await overlay.boundingBox();
+  await page.mouse.move(box.x + 10, box.y + 10);
+  await page.mouse.down();
+  await page.mouse.move(box.x + 90, box.y + 70, { steps: 5 });
+  await page.mouse.up();
+
+  const pixels = await page.locator('.image-editor-canvas').evaluate((canvas) => {
+    const context = canvas.getContext('2d');
+    const read = (x, y) => Array.from(context.getImageData(x, y, 1, 1).data).slice(0, 3);
+    return { inside: read(50, 40), outside: read(12, 12) };
+  });
+  expect(pixels.inside).toEqual([0, 255, 0]);
+  expect(pixels.outside).toEqual([255, 255, 255]);
+  await page.keyboard.press('Control+Z');
+  expect(await page.locator('.image-editor-canvas').evaluate((canvas) =>
+    Array.from(canvas.getContext('2d').getImageData(50, 40, 1, 1).data).slice(0, 3))).toEqual([255, 255, 255]);
+});
+
 test("switching between image editor tabs preserves each tab's drawing", async ({ page }) => {
   await page.goto("/");
   await page.waitForFunction(() => !!window.markdownViewerApp?.modules?.tabs?.openBlankImageEditorInTab, null, { timeout: 60000 });
