@@ -20,6 +20,7 @@
     star: "bi-star",
     arrow: "bi-arrow-right",
     lightning: "bi-lightning",
+    heart: "bi-heart",
     bucket: "bi-paint-bucket",
     text: "bi-fonts"
   };

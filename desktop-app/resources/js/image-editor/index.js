@@ -201,6 +201,35 @@
       return floatGeneratedLayer(controller, layer, before);
     }
 
+    function renderHeartPreview(controller) {
+      const { view, heartTool, state } = controller;
+      view.overlayContext.clearRect(0, 0, view.overlay.width, view.overlay.height);
+      heartTool.drawPreview(view.overlayContext, state);
+    }
+
+    function cancelEditableHeart(controller) {
+      controller.heartTool.reset();
+      controller.heartBefore = null;
+      controller.dragging = false;
+      controller.view.overlayContext.clearRect(0, 0, controller.view.overlay.width, controller.view.overlay.height);
+      syncTab(controller);
+    }
+
+    function finishEditableHeart(controller) {
+      const { heartTool, state, view } = controller;
+      if (!heartTool.isEditing || !heartTool.model) {
+        cancelEditableHeart(controller);
+        return false;
+      }
+      view.overlayContext.clearRect(0, 0, view.overlay.width, view.overlay.height);
+      const layer = heartTool.rasterize(state, state);
+      const before = controller.heartBefore;
+      heartTool.reset();
+      controller.heartBefore = null;
+      controller.dragging = false;
+      return floatGeneratedLayer(controller, layer, before);
+    }
+
     function isCalloutTool(tool) {
       return tool === "callout" || tool === "oval-callout" || tool === "cloud-callout";
     }
@@ -338,6 +367,7 @@
       else controller.view.setZoom(controller.state.zoom);
       if (editingCalloutTool(controller)) renderCalloutPreview(controller);
       if (controller.roundedRectangleTool?.isEditing) renderRoundedRectanglePreview(controller);
+      if (controller.heartTool?.isEditing) renderHeartPreview(controller);
       syncTab(controller);
       return controller.state.zoom;
     }
@@ -494,6 +524,7 @@
       controller.view.setActiveColorTarget(colorTarget, controller.state);
       if (controller.roundedRectangleTool.isEditing) renderRoundedRectanglePreview(controller);
       if (editingCalloutTool(controller)) renderCalloutPreview(controller);
+      if (controller.heartTool.isEditing) renderHeartPreview(controller);
       if (colorTarget === "foreground") {
         refreshLiveTextStyle(controller);
         if (controller.curveTool.isEditing) renderCurvePreview(controller);
@@ -518,6 +549,7 @@
           if (state.tool === "curve" && controller.curveTool.isEditing) finishEditableCurve(controller);
           if (state.tool === "rounded-rectangle" && controller.roundedRectangleTool.isEditing) finishEditableRoundedRectangle(controller);
           if (isCalloutTool(state.tool) && editingCalloutTool(controller)) finishEditableCallout(controller);
+          if (state.tool === "heart" && controller.heartTool.isEditing) finishEditableHeart(controller);
           commitText(controller);
           if (toolButton.dataset.tool !== "select") dropSelection(controller);
           state.setTool(toolButton.dataset.tool);
@@ -551,11 +583,13 @@
         if (controller.curveTool.isEditing) renderCurvePreview(controller);
         if (controller.roundedRectangleTool.isEditing) renderRoundedRectanglePreview(controller);
         if (editingCalloutTool(controller)) renderCalloutPreview(controller);
+        if (controller.heartTool.isEditing) renderHeartPreview(controller);
       });
       view.shell.querySelector(".image-editor-fill").addEventListener("change", (event) => {
         state.fillShapes = event.target.checked;
         if (controller.roundedRectangleTool.isEditing) renderRoundedRectanglePreview(controller);
         if (editingCalloutTool(controller)) renderCalloutPreview(controller);
+        if (controller.heartTool.isEditing) renderHeartPreview(controller);
       });
       view.shell.querySelector(".image-editor-callout-type").addEventListener("change", (event) => {
         const nextTool = event.target.value;
@@ -686,6 +720,25 @@
           renderCalloutPreview(controller);
           return;
         }
+        if (state.tool === "heart") {
+          event.preventDefault();
+          event.stopPropagation();
+          if (!controller.heartTool.isEditing) {
+            commitText(controller);
+            commitSelection(controller);
+            controller.heartBefore = snapshot(view);
+          }
+          const result = controller.heartTool.begin(point);
+          if (result.action === "outside") {
+            finishEditableHeart(controller);
+            return;
+          }
+          if (!result.started) return;
+          controller.dragging = true;
+          overlay.setPointerCapture?.(event.pointerId);
+          renderHeartPreview(controller);
+          return;
+        }
         if (state.tool === "text") {
           event.preventDefault();
           event.stopPropagation();
@@ -752,6 +805,11 @@
           renderCalloutPreview(controller);
           return;
         }
+        if (state.tool === "heart") {
+          controller.heartTool.update(point);
+          renderHeartPreview(controller);
+          return;
+        }
         if (state.tool === "text" && controller.creatingTextBox) {
           drawTextCreationOverlay(controller, point);
           return;
@@ -785,6 +843,9 @@
         } else if (isCalloutTool(state.tool)) {
           calloutToolFor(controller).completeStage(point);
           renderCalloutPreview(controller);
+        } else if (state.tool === "heart") {
+          controller.heartTool.completeStage(point);
+          renderHeartPreview(controller);
         } else if (state.tool === "text" && controller.creatingTextBox) {
           controller.creatingTextBox = false;
           view.overlayContext.clearRect(0, 0, view.overlay.width, view.overlay.height);
@@ -1058,6 +1119,18 @@
             return;
           }
         }
+        if (controller.state.tool === "heart" && controller.heartTool.isEditing) {
+          if (event.key === "Escape") {
+            cancelEditableHeart(controller);
+            event.preventDefault();
+            return;
+          }
+          if (event.key === "Enter") {
+            finishEditableHeart(controller);
+            event.preventDefault();
+            return;
+          }
+        }
         if (primary && !event.shiftKey && !event.altKey && event.key.toLowerCase() === "a") {
           event.preventDefault();
           selectAllCanvas(controller);
@@ -1172,6 +1245,8 @@
         ovalCalloutTool: new namespace.ImageEditorOvalCalloutTool(),
         cloudCalloutTool: new namespace.ImageEditorCloudCalloutTool(),
         calloutBefore: null,
+        heartTool: new namespace.ImageEditorHeartTool(),
+        heartBefore: null,
         textRect: null,
         creatingTextBox: false,
         textInputOpening: false,

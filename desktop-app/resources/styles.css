@@ -1064,7 +1064,7 @@ audio.file-preview-content {
 .image-editor-command-grid [data-action="paste"] { grid-area: 2 / 3; }
 .image-editor-tools {
   display: grid; grid-template-columns: 38px repeat(8, 28px); grid-template-rows: repeat(3, 28px); grid-auto-rows: 28px; gap: 2px;
-  grid-template-areas: "select line curve rectangle ellipse polygon triangle diamond arrow" "select pencil brush bucket text rounded callout star ." "lightning . . . . . . . .";
+  grid-template-areas: "select line curve rectangle ellipse polygon triangle diamond arrow" "select pencil brush bucket text rounded callout star ." "lightning heart . . . . . . .";
   max-height: 88px; overflow-x: hidden; overflow-y: scroll; align-content: start; scrollbar-width: thin;
 }
 .image-editor-tools [data-tool="select"] { grid-area: select; }
@@ -1080,6 +1080,7 @@ audio.file-preview-content {
 .image-editor-tools [data-tool="star"] { grid-area: star; }
 .image-editor-tools [data-tool="arrow"] { grid-area: arrow; }
 .image-editor-tools [data-tool="lightning"] { grid-area: lightning; }
+.image-editor-tools [data-tool="heart"] { grid-area: heart; }
 .image-editor-tools [data-tool="pencil"] { grid-area: pencil; }
 .image-editor-tools [data-tool="brush"] { grid-area: brush; }
 .image-editor-tools [data-tool="bucket"] { grid-area: bucket; }
