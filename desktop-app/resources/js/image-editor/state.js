@@ -3,7 +3,7 @@
   "use strict";
 
   const namespace = global.MarkdownViewerImageEditor = global.MarkdownViewerImageEditor || {};
-  const TOOLS = Object.freeze(["select", "pencil", "brush", "line", "curve", "arc", "spiral", "rectangular-grid", "polar-grid", "rectangle", "rounded-rectangle", "callout", "oval-callout", "cloud-callout", "ellipse", "polygon", "triangle", "diamond", "star", "arrow", "lightning", "heart", "bucket", "text"]);
+  const TOOLS = Object.freeze(["select", "pencil", "brush", "line", "curve", "path", "arc", "spiral", "rectangular-grid", "polar-grid", "rectangle", "rounded-rectangle", "callout", "oval-callout", "cloud-callout", "ellipse", "polygon", "triangle", "diamond", "star", "arrow", "lightning", "heart", "bucket", "text"]);
 
   class ImageEditorState {
     /**

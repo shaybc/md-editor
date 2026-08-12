@@ -9,6 +9,7 @@
     brush: "bi-brush",
     line: "bi-slash-lg",
     curve: "bi-bezier2",
+    path: "bi-vector-pen",
     arc: "bi-circle-half",
     spiral: "bi-hurricane",
     "rectangular-grid": "bi-grid-3x3",

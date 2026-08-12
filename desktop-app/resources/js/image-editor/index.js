@@ -193,6 +193,37 @@
       return floatGeneratedLayer(controller, layer, before, "curve");
     }
 
+    function renderPathPreview(controller) {
+      const { view, pathTool, state } = controller;
+      view.overlayContext.clearRect(0, 0, view.overlay.width, view.overlay.height);
+      pathTool.drawPreview(view.overlayContext, state);
+    }
+
+    function cancelEditablePath(controller) {
+      controller.pathTool.reset();
+      controller.pathBefore = null;
+      controller.dragging = false;
+      controller.view.overlay.style.cursor = "crosshair";
+      controller.view.overlayContext.clearRect(0, 0, controller.view.overlay.width, controller.view.overlay.height);
+      syncTab(controller);
+    }
+
+    function finishEditablePath(controller) {
+      const { pathTool, state, view } = controller;
+      if (!pathTool.isEditing || !pathTool.model) {
+        cancelEditablePath(controller);
+        return false;
+      }
+      view.overlayContext.clearRect(0, 0, view.overlay.width, view.overlay.height);
+      const layer = pathTool.rasterize(state, state);
+      const before = controller.pathBefore;
+      pathTool.reset();
+      controller.pathBefore = null;
+      controller.dragging = false;
+      view.overlay.style.cursor = "crosshair";
+      return floatGeneratedLayer(controller, layer, before);
+    }
+
     function renderRoundedRectanglePreview(controller) {
       const { view, roundedRectangleTool, state } = controller;
       view.overlayContext.clearRect(0, 0, view.overlay.width, view.overlay.height);
@@ -650,6 +681,7 @@
       if (controller.ellipseTool?.isEditing) renderEllipsePreview(controller);
       if (controller.arcTool?.isEditing) renderArcPreview(controller);
       if (controller.spiralTool?.isEditing) renderSpiralPreview(controller);
+      if (controller.pathTool?.isEditing) renderPathPreview(controller);
       if (isGridTool(controller.state.tool) && gridToolFor(controller).isEditing) renderGridPreview(controller);
       if (controller.gradientFillTool?.isEditing) renderGradientFill(controller);
       syncTab(controller);
@@ -815,6 +847,7 @@
       if (controller.ellipseTool.isEditing) renderEllipsePreview(controller);
       if (controller.arcTool.isEditing) renderArcPreview(controller);
       if (controller.spiralTool.isEditing) renderSpiralPreview(controller);
+      if (controller.pathTool.isEditing) renderPathPreview(controller);
       if (isGridTool(controller.state.tool) && gridToolFor(controller).isEditing) renderGridPreview(controller);
       if (colorTarget === "foreground") {
         refreshLiveTextStyle(controller);
@@ -848,6 +881,7 @@
         if (toolButton) {
           if (controller.gradientFillTool.isEditing) finishGradientFill(controller);
           if (state.tool === "curve" && controller.curveTool.isEditing) finishEditableCurve(controller);
+          if (state.tool === "path" && controller.pathTool.isEditing) finishEditablePath(controller);
           if (state.tool === "rounded-rectangle" && controller.roundedRectangleTool.isEditing) finishEditableRoundedRectangle(controller);
           if (isCalloutTool(state.tool) && editingCalloutTool(controller)) finishEditableCallout(controller);
           if (state.tool === "heart" && controller.heartTool.isEditing) finishEditableHeart(controller);
@@ -913,6 +947,7 @@
       view.shell.querySelector(".image-editor-size").addEventListener("input", (event) => {
         state.brushSize = state.lineWidth = Number(event.target.value);
         if (controller.curveTool.isEditing) renderCurvePreview(controller);
+        if (controller.pathTool.isEditing) renderPathPreview(controller);
         if (controller.roundedRectangleTool.isEditing) renderRoundedRectanglePreview(controller);
         if (editingCalloutTool(controller)) renderCalloutPreview(controller);
         if (controller.heartTool.isEditing) renderHeartPreview(controller);
@@ -927,6 +962,7 @@
       namespace.bindStrokeTypeSelector(view.shell.querySelector(".image-editor-stroke-type"), (strokeType) => {
         state.strokeType = strokeType;
         if (controller.curveTool.isEditing) renderCurvePreview(controller);
+        if (controller.pathTool.isEditing) renderPathPreview(controller);
         if (controller.roundedRectangleTool.isEditing) renderRoundedRectanglePreview(controller);
         if (editingCalloutTool(controller)) renderCalloutPreview(controller);
         if (controller.heartTool.isEditing) renderHeartPreview(controller);
@@ -972,6 +1008,7 @@
       });
       view.shell.querySelector(".image-editor-fill").addEventListener("change", (event) => {
         state.fillShapes = event.target.checked;
+        if (controller.pathTool.isEditing) renderPathPreview(controller);
         if (controller.roundedRectangleTool.isEditing) renderRoundedRectanglePreview(controller);
         if (editingCalloutTool(controller)) renderCalloutPreview(controller);
         if (controller.heartTool.isEditing) renderHeartPreview(controller);
@@ -1083,6 +1120,29 @@
           controller.dragging = true;
           overlay.setPointerCapture?.(event.pointerId);
           renderCurvePreview(controller);
+          return;
+        }
+        if (state.tool === "path") {
+          event.preventDefault();
+          event.stopPropagation();
+          if (!controller.pathTool.isEditing) {
+            commitText(controller);
+            commitSelection(controller);
+            controller.pathBefore = snapshot(view);
+          }
+          const result = controller.pathTool.begin(point, state);
+          if (result.action === "outside") {
+            finishEditablePath(controller);
+            return;
+          }
+          if (result.action === "closed") {
+            renderPathPreview(controller);
+            return;
+          }
+          if (!result.started) return;
+          controller.dragging = true;
+          overlay.setPointerCapture?.(event.pointerId);
+          renderPathPreview(controller);
           return;
         }
         if (state.tool === "rounded-rectangle") {
@@ -1344,7 +1404,7 @@
         overlay.setPointerCapture?.(event.pointerId);
       });
       overlay.addEventListener("pointermove", (event) => {
-        const point = view.pointFromEvent(event, !selection.isTransforming);
+        const point = view.pointFromEvent(event, state.tool !== "path" && !selection.isTransforming);
         if (!controller.dragging) {
           if (state.tool === "bucket" && controller.gradientFillTool.isEditing) {
             const result = controller.gradientFillTool.begin(point, state.zoom);
@@ -1355,6 +1415,11 @@
           if (state.tool === "polygon" && controller.polygonTool.isEditing) {
             const guide = controller.polygonTool.guideAt(point);
             overlay.style.cursor = guide?.type === "edge" ? "copy" : (guide?.type === "vertex" ? "move" : "crosshair");
+            return;
+          }
+          if (state.tool === "path" && controller.pathTool.isEditing) {
+            const guide = controller.pathTool.guideAt(point);
+            overlay.style.cursor = guide?.type === "segment" ? "grab" : (guide ? "move" : "crosshair");
             return;
           }
           updateSelectionHoverCursor(controller, point);
@@ -1368,6 +1433,11 @@
         if (state.tool === "curve") {
           controller.curveTool.update(point);
           renderCurvePreview(controller);
+          return;
+        }
+        if (state.tool === "path") {
+          controller.pathTool.update(point, event.shiftKey);
+          renderPathPreview(controller);
           return;
         }
         if (state.tool === "rounded-rectangle") {
@@ -1444,7 +1514,7 @@
       overlay.addEventListener("pointerup", (event) => {
         if (!controller.dragging) return;
         controller.dragging = false;
-        const point = view.pointFromEvent(event);
+        const point = view.pointFromEvent(event, state.tool !== "path");
         if (state.tool === "bucket" && controller.gradientFillTool.isEditing) {
           controller.gradientFillTool.update(point);
           controller.gradientFillTool.end();
@@ -1453,6 +1523,9 @@
           const result = controller.curveTool.completeStage(point);
           if (result.complete) finishEditableCurve(controller);
           else renderCurvePreview(controller);
+        } else if (state.tool === "path") {
+          controller.pathTool.completeStage(point, event.shiftKey);
+          renderPathPreview(controller);
         } else if (state.tool === "rounded-rectangle") {
           controller.roundedRectangleTool.completeStage(point);
           updateRoundedRectangleRadiusControl(controller);
@@ -1523,6 +1596,11 @@
           } catch (_error) {
             input.click();
           }
+          return;
+        }
+        if (state.tool === "path" && controller.pathTool.isEditing) {
+          event.preventDefault();
+          if (controller.pathTool.doubleClick(view.pointFromEvent(event, false))) renderPathPreview(controller);
           return;
         }
         if (state.tool !== "polygon" || controller.polygonPoints.length < 3) return;
@@ -1756,6 +1834,30 @@
           }
           if (event.key === "Enter") {
             finishEditableCurve(controller);
+            event.preventDefault();
+            return;
+          }
+        }
+        if (controller.state.tool === "path" && controller.pathTool.isEditing) {
+          if (event.key === "Escape") {
+            cancelEditablePath(controller);
+            event.preventDefault();
+            return;
+          }
+          if (event.key === "Enter") {
+            finishEditablePath(controller);
+            event.preventDefault();
+            return;
+          }
+          if (event.key === "Delete" || event.key === "Backspace") {
+            if (controller.pathTool.removeSelectedAnchor()) renderPathPreview(controller);
+            event.preventDefault();
+            return;
+          }
+          const delta = keyboardSelectionDelta(event);
+          if (delta) {
+            const amount = event.shiftKey ? 10 : 1;
+            if (controller.pathTool.nudgeSelectedAnchor(delta.x * amount, delta.y * amount)) renderPathPreview(controller);
             event.preventDefault();
             return;
           }
@@ -1999,6 +2101,8 @@
         selectionBefore: null,
         curveTool: new namespace.ImageEditorCurveTool(),
         curveBefore: null,
+        pathTool: new namespace.ImageEditorPathTool(),
+        pathBefore: null,
         roundedRectangleTool: new namespace.ImageEditorRoundedRectangleTool(),
         roundedRectangleBefore: null,
         calloutTool: new namespace.ImageEditorCalloutTool(),
