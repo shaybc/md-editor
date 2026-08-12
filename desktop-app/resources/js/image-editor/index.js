@@ -273,6 +273,35 @@
       return floatGeneratedLayer(controller, layer, before);
     }
 
+    function renderStarPreview(controller) {
+      const { view, starTool, state } = controller;
+      view.overlayContext.clearRect(0, 0, view.overlay.width, view.overlay.height);
+      starTool.drawPreview(view.overlayContext, state);
+    }
+
+    function cancelEditableStar(controller) {
+      controller.starTool.reset();
+      controller.starBefore = null;
+      controller.dragging = false;
+      controller.view.overlayContext.clearRect(0, 0, controller.view.overlay.width, controller.view.overlay.height);
+      syncTab(controller);
+    }
+
+    function finishEditableStar(controller) {
+      const { starTool, state, view } = controller;
+      if (!starTool.isEditing || !starTool.model) {
+        cancelEditableStar(controller);
+        return false;
+      }
+      view.overlayContext.clearRect(0, 0, view.overlay.width, view.overlay.height);
+      const layer = starTool.rasterize(state, state);
+      const before = controller.starBefore;
+      starTool.reset();
+      controller.starBefore = null;
+      controller.dragging = false;
+      return floatGeneratedLayer(controller, layer, before);
+    }
+
     function renderEllipsePreview(controller) {
       const { view, ellipseTool, state } = controller;
       view.overlayContext.clearRect(0, 0, view.overlay.width, view.overlay.height);
@@ -470,6 +499,7 @@
       if (controller.roundedRectangleTool?.isEditing) renderRoundedRectanglePreview(controller);
       if (controller.heartTool?.isEditing) renderHeartPreview(controller);
       if (controller.triangleTool?.isEditing) renderTrianglePreview(controller);
+      if (controller.starTool?.isEditing) renderStarPreview(controller);
       if (controller.ellipseTool?.isEditing) renderEllipsePreview(controller);
       if (controller.arcTool?.isEditing) renderArcPreview(controller);
       syncTab(controller);
@@ -630,6 +660,7 @@
       if (editingCalloutTool(controller)) renderCalloutPreview(controller);
       if (controller.heartTool.isEditing) renderHeartPreview(controller);
       if (controller.triangleTool.isEditing) renderTrianglePreview(controller);
+      if (controller.starTool.isEditing) renderStarPreview(controller);
       if (controller.ellipseTool.isEditing) renderEllipsePreview(controller);
       if (controller.arcTool.isEditing) renderArcPreview(controller);
       if (colorTarget === "foreground") {
@@ -658,6 +689,7 @@
           if (isCalloutTool(state.tool) && editingCalloutTool(controller)) finishEditableCallout(controller);
           if (state.tool === "heart" && controller.heartTool.isEditing) finishEditableHeart(controller);
           if (state.tool === "triangle" && controller.triangleTool.isEditing) finishEditableTriangle(controller);
+          if (state.tool === "star" && controller.starTool.isEditing) finishEditableStar(controller);
           if (state.tool === "ellipse" && controller.ellipseTool.isEditing) finishEditableEllipse(controller);
           if (state.tool === "arc" && controller.arcTool.isEditing) finishEditableArc(controller);
           commitText(controller);
@@ -695,6 +727,7 @@
         if (editingCalloutTool(controller)) renderCalloutPreview(controller);
         if (controller.heartTool.isEditing) renderHeartPreview(controller);
         if (controller.triangleTool.isEditing) renderTrianglePreview(controller);
+        if (controller.starTool.isEditing) renderStarPreview(controller);
         if (controller.ellipseTool.isEditing) renderEllipsePreview(controller);
         if (controller.arcTool.isEditing) renderArcPreview(controller);
       });
@@ -704,6 +737,7 @@
         if (editingCalloutTool(controller)) renderCalloutPreview(controller);
         if (controller.heartTool.isEditing) renderHeartPreview(controller);
         if (controller.triangleTool.isEditing) renderTrianglePreview(controller);
+        if (controller.starTool.isEditing) renderStarPreview(controller);
         if (controller.ellipseTool.isEditing) renderEllipsePreview(controller);
         if (controller.arcTool.isEditing) renderArcPreview(controller);
       });
@@ -720,6 +754,7 @@
         const starPoints = Number(event.target.value);
         if (![4, 5, 6].includes(starPoints)) return;
         state.starPoints = starPoints;
+        if (controller.starTool.setPointCount(starPoints)) renderStarPreview(controller);
         syncTab(controller);
       });
       view.shell.querySelector(".image-editor-arrow-direction").addEventListener("change", (event) => {
@@ -887,6 +922,25 @@
           renderTrianglePreview(controller);
           return;
         }
+        if (state.tool === "star") {
+          event.preventDefault();
+          event.stopPropagation();
+          if (!controller.starTool.isEditing) {
+            commitText(controller);
+            commitSelection(controller);
+            controller.starBefore = snapshot(view);
+          }
+          const result = controller.starTool.begin(point, state.starPoints);
+          if (result.action === "outside") {
+            finishEditableStar(controller);
+            return;
+          }
+          if (!result.started) return;
+          controller.dragging = true;
+          overlay.setPointerCapture?.(event.pointerId);
+          renderStarPreview(controller);
+          return;
+        }
         if (state.tool === "ellipse") {
           event.preventDefault();
           event.stopPropagation();
@@ -1002,6 +1056,11 @@
           renderTrianglePreview(controller);
           return;
         }
+        if (state.tool === "star") {
+          controller.starTool.update(point);
+          renderStarPreview(controller);
+          return;
+        }
         if (state.tool === "ellipse") {
           controller.ellipseTool.update(point);
           renderEllipsePreview(controller);
@@ -1051,6 +1110,9 @@
         } else if (state.tool === "triangle") {
           controller.triangleTool.completeStage(point);
           renderTrianglePreview(controller);
+        } else if (state.tool === "star") {
+          controller.starTool.completeStage(point);
+          renderStarPreview(controller);
         } else if (state.tool === "ellipse") {
           controller.ellipseTool.completeStage(point);
           renderEllipsePreview(controller);
@@ -1354,6 +1416,18 @@
             return;
           }
         }
+        if (controller.state.tool === "star" && controller.starTool.isEditing) {
+          if (event.key === "Escape") {
+            cancelEditableStar(controller);
+            event.preventDefault();
+            return;
+          }
+          if (event.key === "Enter") {
+            finishEditableStar(controller);
+            event.preventDefault();
+            return;
+          }
+        }
         if (controller.state.tool === "ellipse" && controller.ellipseTool.isEditing) {
           if (event.key === "Escape") {
             cancelEditableEllipse(controller);
@@ -1496,6 +1570,8 @@
         heartBefore: null,
         triangleTool: new namespace.ImageEditorTriangleTool(),
         triangleBefore: null,
+        starTool: new namespace.ImageEditorStarTool(),
+        starBefore: null,
         ellipseTool: new namespace.ImageEditorEllipseTool(),
         ellipseBefore: null,
         arcTool: new namespace.ImageEditorArcTool(),
