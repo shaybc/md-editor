@@ -220,15 +220,26 @@
       return copied;
     }
 
-    paste(context, imageData, bounds, pasteRevision = this.pasteRevision) {
+    /**
+     * Adopt clipboard pixels as a floating selection at the requested canvas origin.
+     * @param {CanvasRenderingContext2D} context - Canvas context retained for API compatibility.
+     * @param {ImageData} imageData - Clipboard pixels, or null to use the internal clipboard.
+     * @param {{width:number,height:number}} bounds - Current canvas dimensions.
+     * @param {number} pasteRevision - Active asynchronous paste revision.
+     * @param {{x:number,y:number}} origin - Top-left canvas coordinate for the floating content.
+     * @returns {boolean} Whether clipboard pixels became the active floating selection.
+     */
+    paste(context, imageData, bounds, pasteRevision = this.pasteRevision, origin = { x: 0, y: 0 }) {
       const data = imageData || this.internalClipboard;
       if (!data || !this.isPastePending(pasteRevision)) return false;
+      const x = Math.max(0, Math.min(bounds.width - 1, Math.floor(Number(origin.x) || 0)));
+      const y = Math.max(0, Math.min(bounds.height - 1, Math.floor(Number(origin.y) || 0)));
       this.imageData = data;
       this.rect = {
-        x: 0,
-        y: 0,
-        width: Math.min(data.width, bounds.width),
-        height: Math.min(data.height, bounds.height)
+        x,
+        y,
+        width: Math.min(data.width, bounds.width - x),
+        height: Math.min(data.height, bounds.height - y)
       };
       this.floating = true;
       this.phase = "floating";

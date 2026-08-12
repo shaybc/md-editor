@@ -221,6 +221,23 @@
     }
 
     /**
+     * Resolve the canvas pixel at the top-left of the currently visible zoomed area.
+     * @param {number} zoom - Current zoom factor, where 1 is 100 percent.
+     * @returns {{x:number,y:number}} Integer canvas coordinates for newly pasted content.
+     */
+    getPasteOrigin(zoom) {
+      if (Number(zoom) <= 1) return { x: 0, y: 0 };
+      const stageRect = this.stage.getBoundingClientRect();
+      const canvasRect = this.canvas.getBoundingClientRect();
+      const scaleX = canvasRect.width ? this.canvas.width / canvasRect.width : 1;
+      const scaleY = canvasRect.height ? this.canvas.height / canvasRect.height : 1;
+      return {
+        x: Math.max(0, Math.min(this.canvas.width - 1, Math.ceil((stageRect.left - canvasRect.left) * scaleX))),
+        y: Math.max(0, Math.min(this.canvas.height - 1, Math.ceil((stageRect.top - canvasRect.top) * scaleY)))
+      };
+    }
+
+    /**
      * Show the edge that will become the canvas boundary when resizing finishes.
      * @param {string} handle - Active east, south, or southeast resize handle.
      */

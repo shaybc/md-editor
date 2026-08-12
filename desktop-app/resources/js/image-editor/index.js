@@ -383,13 +383,14 @@
           syncTab(controller);
           return;
         }
+        const pasteOrigin = view.getPasteOrigin(state.zoom);
         controller.selectionBefore = snapshot(view);
         resizeCanvas(
           controller,
-          Math.max(view.canvas.width, pasteData.width),
-          Math.max(view.canvas.height, pasteData.height)
+          Math.max(view.canvas.width, pasteOrigin.x + pasteData.width),
+          Math.max(view.canvas.height, pasteOrigin.y + pasteData.height)
         );
-        if (selection.paste(view.context, pasteData, state, pasteRevision)) {
+        if (selection.paste(view.context, pasteData, state, pasteRevision, pasteOrigin)) {
           drawSelectionOverlay(controller);
         }
         syncTab(controller);
@@ -429,6 +430,7 @@
 
     function openPastedTextBox(controller, text) {
       const { view, state, selection } = controller;
+      const pasteOrigin = view.getPasteOrigin(state.zoom);
       controller.pastedTextEditing = true;
       const lineCount = String(text).split(/\r?\n/).length;
       const lineHeight = state.fontSize * 1.2;
@@ -436,10 +438,10 @@
       state.setTool('text');
       drawSelectionOverlay(controller);
       openEditableTextBox(controller, {
-        x: 0,
-        y: 0,
-        width: Math.min(view.canvas.width, Math.max(120, view.canvas.width * 0.5)),
-        height: Math.min(view.canvas.height, Math.max(lineHeight + 12, lineCount * lineHeight + 12))
+        x: pasteOrigin.x,
+        y: pasteOrigin.y,
+        width: Math.min(view.canvas.width - pasteOrigin.x, Math.max(120, view.canvas.width * 0.5)),
+        height: Math.min(view.canvas.height - pasteOrigin.y, Math.max(lineHeight + 12, lineCount * lineHeight + 12))
       }, text);
       syncTab(controller);
     }
