@@ -1160,9 +1160,9 @@
       const documentBefore = controller.documentStore.snapshot();
       if (action === "cut") {
         await copySelectionToClipboard(controller);
-        selection.delete(view.context, state.backgroundColor);
+        selection.clear();
       } else if (action === "delete") {
-        selection.delete(view.context, state.backgroundColor);
+        selection.clear();
       }
       const changed = (action === "cut" || action === "delete") && clearPixelRegionFromSelectedLayers(controller, rect);
       drawSelectionOverlay(controller);

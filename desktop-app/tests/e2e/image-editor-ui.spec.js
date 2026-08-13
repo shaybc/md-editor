@@ -1307,6 +1307,60 @@ test('a pixel marquee stays active while the Layers panel changes and extends it
   });
 });
 
+test('deleting a marquee never imports flattened presentation pixels', async ({ page }) => {
+  await page.goto('/');
+  await page.waitForFunction(() => !!window.markdownViewerApp?.modules?.tabs?.openBlankImageEditorInTab, null, { timeout: 60000 });
+  await page.waitForFunction(() => !!window.markdownViewerApp?.modules?.keyboardShortcuts && !!window.markdownViewerApp?.services?.imageEditor, null, { timeout: 60000 });
+  await page.evaluate(() => {
+    window.markdownViewerApp.modules.apiClient.deactivateApiClientSidebar = () => {};
+    window.markdownViewerApp.modules.tabs.openBlankImageEditorInTab({ width: 120, height: 60, name: 'Layered marquee delete' });
+  });
+  await page.waitForFunction(() => {
+    const root = document.querySelector('.tab-view.active[data-tab-view-kind=image-editor]');
+    return !!root && !!window.markdownViewerApp?.services?.imageEditor?.getView(root.dataset.tabId);
+  }, null, { timeout: 60000 });
+  await page.evaluate(() => {
+    const root = document.querySelector('.tab-view.active[data-tab-view-kind=image-editor]');
+    const controller = window.markdownViewerApp.services.imageEditor.getView(root.dataset.tabId);
+    const background = controller.documentStore.activeLayer();
+    background.objects[0].payload = { assetId: controller.documentStore.addRasterAsset(new ImageData(120, 60)) };
+    const addRaster = (name, x, color) => {
+      const layer = controller.documentStore.addLayer(name, controller.documentStore.activeLayer().id);
+      const pixels = new ImageData(30, 30);
+      for (let index = 0; index < pixels.data.length; index += 4) {
+        pixels.data[index] = color[0]; pixels.data[index + 1] = color[1]; pixels.data[index + 2] = color[2]; pixels.data[index + 3] = 255;
+      }
+      controller.documentStore.addRasterObject(pixels, { x, y: 15, width: 30, height: 30 }, { name, layerId: layer.id });
+    };
+    addRaster('Rectangle', 75, [255, 0, 0]);
+    addRaster('Triangle', 20, [0, 160, 220]);
+    controller.documentStore.select(background.id);
+    controller.compositor.render({ canvas: controller.view.canvas });
+  });
+  const root = page.locator('.tab-view.active[data-tab-view-kind=image-editor]');
+  await root.locator('[data-tool=select]').click();
+  const overlay = root.locator('.image-editor-overlay');
+  const box = await overlay.boundingBox();
+  await page.mouse.move(box.x + 5, box.y + 20);
+  await page.mouse.down();
+  await page.mouse.move(box.x + 110, box.y + 40, { steps: 4 });
+  await page.mouse.up();
+  await root.locator('[data-action=delete]').click();
+  await root.locator('[data-tool=move]').click();
+  await page.mouse.click(box.x + 10, box.y + 10);
+  expect(await page.evaluate(() => {
+    const root = document.querySelector('.tab-view.active[data-tab-view-kind=image-editor]');
+    const controller = window.markdownViewerApp.services.imageEditor.getView(root.dataset.tabId);
+    const presentation = Array.from(controller.view.canvas.getContext('2d').getImageData(25, 25, 1, 1).data);
+    const composite = Array.from(controller.compositor.render().getContext('2d').getImageData(25, 25, 1, 1).data);
+    return { names: controller.documentStore.document.nodes.map((node) => node.name), presentation, composite };
+  })).toEqual({
+    names: ['Triangle', 'Rectangle', 'Background'],
+    presentation: [0, 160, 220, 255],
+    composite: [0, 160, 220, 255]
+  });
+});
+
 test('pixel marquee lifts only the selected layer above a filled background', async ({ page }) => {
   await page.goto('/');
   await page.waitForFunction(() => !!window.markdownViewerApp?.modules?.tabs?.openBlankImageEditorInTab, null, { timeout: 60000 });
