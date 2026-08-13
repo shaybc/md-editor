@@ -50,9 +50,43 @@ test("groups preserve sibling order through group and ungroup transactions", () 
   assert.equal(store.groupSelected(), true);
   const group = store.document.nodes[0];
   assert.equal(group.kind, "group");
-  assert.deepEqual(JSON.parse(JSON.stringify(group.children.map((node) => node.name))), ["Second", "Background"]);
+  assert.deepEqual(JSON.parse(JSON.stringify(group.children.map((node) => node.name))), ["Second"]);
+  assert.deepEqual(JSON.parse(JSON.stringify(store.document.nodes.map((node) => node.name))), ["Group", "Background"]);
   assert.equal(store.ungroupSelected(), true);
   assert.deepEqual(JSON.parse(JSON.stringify(store.document.nodes.map((node) => node.name))), ["Second", "Background"]);
+});
+
+test("canvas background remains the permanent bottom layer", () => {
+  const layers = loadLayers();
+  const store = new layers.ImageEditorDocumentStore(layers.createImageDocument(100, 80));
+  const background = store.activeLayer();
+  const foreground = store.addLayer("Foreground");
+
+  store.select(background.id);
+  assert.equal(store.deleteSelected(), false);
+  assert.equal(store.duplicateSelected(), false);
+  assert.equal(store.updateItem(background.id, { visible: false }), false);
+  assert.equal(store.updateItem(background.id, { opacity: 0.5 }), false);
+  assert.equal(background.visible, true);
+  assert.equal(background.opacity, 1);
+  assert.equal(store.moveItems([background.id], foreground.id, "before"), false);
+  assert.equal(store.moveItems([foreground.id], background.id, "after"), false);
+  assert.deepEqual(JSON.parse(JSON.stringify(store.document.nodes.map((node) => node.name))), ["Foreground", "Background"]);
+});
+
+test("legacy background nodes migrate to the root bottom position", () => {
+  const layers = loadLayers();
+  const document = layers.createImageDocument(100, 80, "transparent");
+  const background = document.nodes.pop();
+  delete background.extensions.canvasBackground;
+  const group = layers.createLayerGroup("Group");
+  group.children.push(background);
+  document.nodes.push(group);
+
+  const store = new layers.ImageEditorDocumentStore(document);
+  assert.equal(store.document.nodes.at(-1).name, "Background");
+  assert.equal(store.document.nodes.at(-1).extensions.canvasBackground, true);
+  assert.equal(store.document.nodes.at(-1).kind, "layer");
 });
 
 test("drag placement moves layers into and out of groups while preserving multiple-row order", () => {

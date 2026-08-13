@@ -140,6 +140,7 @@
           depth = Number(row.dataset.layerDepth) || 0;
         }
       }
+      if (namespace.isCanvasBackgroundLayer(targetNode) && placement !== "before") return null;
       if (this.draggedIds.includes(targetId)) return null;
       return { targetId, placement, row, depth: Number(row.dataset.layerDepth) || 0 };
     }
@@ -180,7 +181,7 @@
       const selectedItems = [...this.store.selectedIds].map((id) => {
         return namespace.findDocumentNode(this.store.document, id)?.node
           || namespace.findDocumentObject(this.store.document, id)?.object;
-      }).filter(Boolean);
+      }).filter((item) => item && !namespace.isCanvasBackgroundLayer(item));
       if (!selectedItems.length) return;
       if (this.shouldConfirmDelete()) {
         const item = selectedItems[0];
@@ -231,6 +232,7 @@
     render() {
       this.list.innerHTML = "";
       const renderNode = (node, depth) => {
+        if (namespace.isCanvasBackgroundLayer(node)) return;
         const parent = namespace.findDocumentNode(this.store.document, node.id)?.parent;
         this.list.appendChild(this.createRow(node, depth, true, node.kind === "group" || (node.objects || []).length > 0, parent?.id));
         if (!this.expandedIds.has(node.id)) return;
@@ -242,7 +244,9 @@
       const currentId = [...this.store.selectedIds][0];
       const item = namespace.findDocumentNode(this.store.document, currentId)?.node || namespace.findDocumentObject(this.store.document, currentId)?.object;
       const value = Math.round(Number(item?.opacity ?? 1) * 100);
-      this.element.querySelector(".image-editor-layer-opacity input").value = value;
+      const opacity = this.element.querySelector(".image-editor-layer-opacity input");
+      opacity.value = value;
+      opacity.disabled = !item || namespace.isCanvasBackgroundLayer(item);
       this.element.querySelector(".image-editor-layer-opacity output").textContent = `${value}%`;
     }
 
@@ -254,7 +258,7 @@
       if (isNode) row.dataset.layerNode = "true";
       row.dataset.layerDepth = depth;
       row.dataset.layerParent = parentId;
-      row.draggable = true;
+      row.draggable = !namespace.isCanvasBackgroundLayer(item);
       row.setAttribute("role", "treeitem");
       row.style.setProperty("--layer-depth", depth);
       const safeName = String(item.name || "Item").replace(/[&<>]/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[character]));

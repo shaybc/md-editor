@@ -23,7 +23,7 @@
       if (selectedNode?.kind === "group") return controller.documentStore.addLayer(name, selectedNode.id);
       if (mode === "new") return controller.documentStore.addLayer(name, controller.documentStore.activeLayer()?.id);
       const active = controller.documentStore.activeLayer();
-      return active && active.visible && !active.locked ? active : controller.documentStore.addLayer(name);
+      return active && active.visible && !active.locked && !namespace.isCanvasBackgroundLayer(active) ? active : controller.documentStore.addLayer(name);
     }
 
     function changedPixelOverlay(before, after) {
@@ -93,10 +93,12 @@
         const mergeStore = new namespace.ImageEditorDocumentStore(mergeDocument, controller.documentStore.assets);
         const canvas = new namespace.ImageEditorCompositor(mergeStore).render();
         const imageData = canvas.getContext("2d").getImageData(0, 0, canvas.width, canvas.height);
-        const mergedLayer = namespace.createContentLayer(selected.node.name);
+        const mergesIntoBackground = namespace.isCanvasBackgroundLayer(below);
+        const mergedLayer = namespace.createContentLayer(mergesIntoBackground ? "Background" : selected.node.name);
+        if (mergesIntoBackground) mergedLayer.extensions.canvasBackground = true;
         const assetId = controller.documentStore.addRasterAsset(imageData);
         mergedLayer.objects.push(namespace.createContentObject("raster", { assetId }, {
-          name: selected.node.name,
+          name: mergesIntoBackground ? "Background" : selected.node.name,
           bounds: { x: 0, y: 0, width: canvas.width, height: canvas.height }
         }));
         selected.collection.splice(selected.index, 2, mergedLayer);
@@ -2678,7 +2680,7 @@
           view.setDimensions(bitmap.width, bitmap.height);
           view.context.drawImage(bitmap, 0, 0);
           bitmap.close?.();
-          documentBundle = projectCodec.fromRasterImageData(view.context.getImageData(0, 0, view.canvas.width, view.canvas.height), tab.imageEditorState?.backgroundColor || "#ffffff");
+          documentBundle = projectCodec.fromRasterImageData(view.context.getImageData(0, 0, view.canvas.width, view.canvas.height), "transparent");
         }
       }
       const state = new namespace.ImageEditorState({

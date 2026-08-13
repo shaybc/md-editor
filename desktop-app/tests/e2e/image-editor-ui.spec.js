@@ -1055,6 +1055,68 @@ test('background fill reaches canvas area added by resizing', async ({ page }) =
   })).toEqual({ original: [128, 128, 128, 255], expanded: [128, 128, 128, 255] });
 });
 
+test('canvas background is permanent, bottommost, and represents the canvas base', async ({ page }) => {
+  await page.goto('/');
+  await page.waitForFunction(() => !!window.markdownViewerApp?.modules?.tabs?.openBlankImageEditorInTab, null, { timeout: 60000 });
+  await page.waitForFunction(() => !!window.markdownViewerApp?.modules?.keyboardShortcuts && !!window.markdownViewerApp?.services?.imageEditor, null, { timeout: 60000 });
+  const result = await page.evaluate(() => {
+    window.markdownViewerApp.modules.apiClient.deactivateApiClientSidebar = () => {};
+    window.markdownViewerApp.modules.tabs.openBlankImageEditorInTab({ width: 20, height: 20, name: 'Permanent canvas background' });
+    const root = document.querySelector('.tab-view.active[data-tab-view-kind=image-editor]');
+    const controller = window.markdownViewerApp.services.imageEditor.getView(root.dataset.tabId);
+    const background = controller.documentStore.document.nodes.at(-1);
+    const initialPanelRows = controller.layerPanel.list.querySelectorAll('[data-layer-item]').length;
+    const initialOpacityDisabled = controller.layerPanel.element.querySelector('.image-editor-layer-opacity input').disabled;
+    const backgroundObject = background.objects[0];
+    const source = controller.documentStore.assets.get(backgroundObject.payload.assetId);
+    const initialPixel = Array.from(controller.compositor.render().getContext('2d').getImageData(0, 0, 1, 1).data);
+    const pixels = new ImageData(new Uint8ClampedArray(source.data), source.width, source.height);
+    pixels.data[3] = 0;
+    backgroundObject.payload = { assetId: controller.documentStore.addRasterAsset(pixels) };
+    const foreground = controller.documentStore.addLayer('Foreground');
+    controller.documentStore.select(background.id);
+    const deleted = controller.documentStore.deleteSelected();
+    const movedBackground = controller.documentStore.moveItems([background.id], foreground.id, 'before');
+    const movedBelowBackground = controller.documentStore.moveItems([foreground.id], background.id, 'after');
+    controller.compositor.render({ canvas: controller.view.canvas });
+    controller.layerPanel.render();
+    return {
+      backgroundId: background.id,
+      initialPanelRows,
+      initialOpacityDisabled,
+      deleted,
+      movedBackground,
+      movedBelowBackground,
+      nodeNames: controller.documentStore.document.nodes.map((node) => node.name),
+      initialPixel,
+      basePixel: Array.from(controller.view.canvas.getContext('2d').getImageData(0, 0, 1, 1).data)
+    };
+  });
+  expect(result).toEqual({
+    backgroundId: result.backgroundId,
+    initialPanelRows: 0,
+    initialOpacityDisabled: true,
+    deleted: false,
+    movedBackground: false,
+    movedBelowBackground: false,
+    nodeNames: ['Foreground', 'Background'],
+    initialPixel: [255, 255, 255, 255],
+    basePixel: [0, 0, 0, 0]
+  });
+  await expect(page.locator(`[data-layer-item="${result.backgroundId}"]`)).toHaveCount(0);
+  await expect(page.locator('.tab-view.active .image-editor-layer-list [data-layer-item]')).toHaveCount(1);
+
+  expect(await page.evaluate(() => {
+    window.markdownViewerApp.modules.tabs.openBlankImageEditorInTab({ width: 20, height: 20, name: 'Transparent canvas base', background: { mode: 'transparent' } });
+    const root = document.querySelector('.tab-view.active[data-tab-view-kind=image-editor]');
+    const controller = window.markdownViewerApp.services.imageEditor.getView(root.dataset.tabId);
+    return {
+      pixel: Array.from(controller.compositor.render().getContext('2d').getImageData(0, 0, 1, 1).data),
+      checkerboard: getComputedStyle(controller.view.wrap).backgroundImage
+    };
+  })).toEqual({ pixel: [0, 0, 0, 0], checkerboard: expect.stringContaining('linear-gradient') });
+});
+
 test('layer drag shows an insertion line and moves multiple layers into and out of a group', async ({ page }) => {
   await page.goto('/');
   await page.waitForFunction(() => !!window.markdownViewerApp?.modules?.tabs?.openBlankImageEditorInTab, null, { timeout: 60000 });

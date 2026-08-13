@@ -1281,7 +1281,10 @@ audio.file-preview-content {
 .image-editor-layers-panel.minimized { height: 35px !important; min-height: 35px; }
 .image-editor-layers-panel.minimized > :not(header) { display: none; }
 .image-editor-canvas-wrap {
-  position: relative; flex: 0 0 auto; border: 1px solid var(--border-color); background: #fff;
+  position: relative; flex: 0 0 auto; border: 1px solid var(--border-color); background-color: #fff;
+  background-image: linear-gradient(45deg, #d8d8d8 25%, transparent 25%), linear-gradient(-45deg, #d8d8d8 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #d8d8d8 75%), linear-gradient(-45deg, transparent 75%, #d8d8d8 75%);
+  background-position: 0 0, 0 8px, 8px -8px, -8px 0;
+  background-size: 16px 16px;
   box-shadow: 0 5px 22px rgba(0, 0, 0, 0.2);
 }
 .image-editor-canvas, .image-editor-overlay { position: absolute; inset: 0; display: block; image-rendering: auto; }

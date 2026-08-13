@@ -50,6 +50,7 @@
       const manifestEntry = zip.file("manifest.json");
       if (!manifestEntry) throw new Error("The .mdimage project does not contain manifest.json.");
       const document = JSON.parse(await manifestEntry.async("string"));
+      namespace.normalizeCanvasBackgroundLayer(document);
       namespace.validateImageDocument(document);
       const assets = new Map();
       for (const assetId of namespace.referencedAssetIds(document)) {

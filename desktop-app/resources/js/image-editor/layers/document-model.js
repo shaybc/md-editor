@@ -91,6 +91,34 @@
     return result;
   }
 
+  /** Return whether a hierarchy node is the permanent canvas background layer. */
+  function isCanvasBackgroundLayer(node) {
+    return node?.kind === "layer" && node.extensions?.canvasBackground === true;
+  }
+
+  /** Migrate and place the permanent canvas background as the final root node. */
+  function normalizeCanvasBackgroundLayer(document) {
+    const marked = [];
+    walkDocumentNodes(document, (node) => {
+      if (isCanvasBackgroundLayer(node)) marked.push(node);
+    });
+    let background = marked[0] || null;
+    marked.slice(1).forEach((node) => { delete node.extensions.canvasBackground; });
+    if (!background) {
+      walkDocumentNodes(document, (node) => {
+        if (!background && node.kind === "layer" && node.name === "Background") background = node;
+      });
+    }
+    if (!background) background = createContentLayer("Background");
+    const location = findDocumentNode(document, background.id);
+    if (location) location.collection.splice(location.index, 1);
+    background.extensions = { ...(background.extensions || {}), canvasBackground: true };
+    background.visible = true;
+    document.nodes.push(background);
+    if (!findDocumentNode(document, document.activeLayerId)) document.activeLayerId = background.id;
+    return background;
+  }
+
   /** Return all asset identifiers referenced by raster objects. */
   function referencedAssetIds(document) {
     const ids = new Set();
@@ -128,6 +156,9 @@
       }
     });
     validateNodes(document.nodes);
+    const backgroundNodes = [];
+    walkDocumentNodes(document, (node) => { if (isCanvasBackgroundLayer(node)) backgroundNodes.push(node); });
+    if (backgroundNodes.length !== 1 || document.nodes.at(-1) !== backgroundNodes[0] || backgroundNodes[0].visible === false) throw new Error("The canvas background must be the visible final root layer.");
     return true;
   }
 
@@ -143,6 +174,8 @@
     walkDocumentNodes,
     findDocumentNode,
     findDocumentObject,
+    isCanvasBackgroundLayer,
+    normalizeCanvasBackgroundLayer,
     referencedAssetIds,
     validateImageDocument
   });

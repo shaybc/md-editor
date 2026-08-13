@@ -29,8 +29,9 @@
   class ImageEditorDocumentStore {
     /** Own a validated document, immutable raster assets, selection, and render revisions. */
     constructor(document, assets = new Map()) {
-      namespace.validateImageDocument(document);
       this.document = namespace.cloneImageDocument(document);
+      namespace.normalizeCanvasBackgroundLayer(this.document);
+      namespace.validateImageDocument(this.document);
       this.assets = new Map(assets);
       this.selectedIds = new Set([this.document.activeLayerId].filter(Boolean));
       this.revision = 0;
@@ -160,7 +161,7 @@
           return;
         }
         const nodeResult = namespace.findDocumentNode(this.document, id);
-        if (!nodeResult) return;
+        if (!nodeResult || namespace.isCanvasBackgroundLayer(nodeResult.node)) return;
         const copy = namespace.cloneImageDocument(nodeResult.node);
         this.refreshNodeIds(copy);
         copy.name = this.uniqueName(`${copy.name} copy`);
@@ -189,7 +190,7 @@
 
     /** Group selected sibling hierarchy nodes while preserving their panel order. */
     groupSelected() {
-      const locations = [...this.selectedIds].map((id) => namespace.findDocumentNode(this.document, id)).filter(Boolean);
+      const locations = [...this.selectedIds].map((id) => namespace.findDocumentNode(this.document, id)).filter((item) => item && !namespace.isCanvasBackgroundLayer(item.node));
       if (locations.length < 1 || locations.some((item) => item.collection !== locations[0].collection)) return false;
       const collection = locations[0].collection;
       const indices = locations.map((item) => item.index).sort((a, b) => a - b);
@@ -229,6 +230,8 @@
     moveHierarchyNodes(sources, targetId, placement) {
       const target = namespace.findDocumentNode(this.document, targetId);
       if (!target || (placement === "inside" && target.node.kind !== "group")) return false;
+      if (sources.some((source) => namespace.isCanvasBackgroundLayer(source.node))) return false;
+      if (namespace.isCanvasBackgroundLayer(target.node) && placement !== "before") return false;
       const selectedIds = new Set(sources.map((source) => source.node.id));
       const topLevelSources = sources.filter((source) => {
         let parent = source.parent;
@@ -323,6 +326,7 @@
       const foundObject = namespace.findDocumentObject(this.document, id)?.object;
       const item = foundNode || foundObject;
       if (!item) return false;
+      if (namespace.isCanvasBackgroundLayer(item)) return false;
       if (item.locked && Object.keys(patch).some((key) => key !== "visible" && key !== "locked")) return false;
       ["name", "visible", "locked", "opacity"].forEach((key) => {
         if (!(key in patch)) return;
@@ -343,12 +347,12 @@
         changed ||= before !== node.objects.length;
       });
       const removeNodes = (nodes) => nodes.filter((node) => {
-        if (ids.has(node.id) && !node.locked) { changed = true; return false; }
+        if (ids.has(node.id) && !node.locked && !namespace.isCanvasBackgroundLayer(node)) { changed = true; return false; }
         if (node.kind === "group") node.children = removeNodes(node.children || []);
         return true;
       });
       this.document.nodes = removeNodes(this.document.nodes);
-      if (!this.document.nodes.some((node) => node.kind === "layer") && !this.document.nodes.some((node) => node.kind === "group" && node.children?.length)) this.document.nodes.push(namespace.createContentLayer("Layer"));
+      namespace.normalizeCanvasBackgroundLayer(this.document);
       const active = this.activeLayer();
       this.document.activeLayerId = active?.id || this.document.nodes[0]?.id;
       this.selectedIds = new Set([this.document.activeLayerId].filter(Boolean));
