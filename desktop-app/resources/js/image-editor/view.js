@@ -54,6 +54,29 @@
     return element;
   }
 
+  function createBrushTool() {
+    const wrapper = document.createElement("div");
+    wrapper.className = "image-editor-brush-tool";
+    wrapper.innerHTML = `
+      <button type="button" class="image-editor-button image-editor-tool image-editor-brush-main" data-tool="brush" title="Brush" aria-label="Brush"><i class="bi bi-brush" aria-hidden="true"></i></button>
+      <details class="image-editor-brush-mode">
+        <summary class="image-editor-brush-mode-trigger" title="Brush type" aria-label="Choose brush type"><i class="bi bi-caret-down-fill"></i></summary>
+        <span class="image-editor-brush-mode-menu" role="listbox" aria-label="Brush types">
+          ${(namespace.ImageEditorBrushPresets || []).map((preset) => `<button type="button" data-brush-type="${preset.id}" role="option" aria-label="${preset.label}"><span><strong>${preset.label}</strong><small>${preset.category}</small></span><span class="image-editor-brush-sample" data-brush-sample="${preset.id}"></span></button>`).join("")}
+        </span>
+      </details>`;
+    const modeSelector = wrapper.querySelector(".image-editor-brush-mode");
+    modeSelector.addEventListener("toggle", () => {
+      if (!modeSelector.open) return;
+      const triggerRect = modeSelector.querySelector(".image-editor-brush-mode-trigger").getBoundingClientRect();
+      const menu = modeSelector.querySelector(".image-editor-brush-mode-menu");
+      const menuWidth = 286;
+      menu.style.left = Math.max(4, Math.min(global.innerWidth - menuWidth - 4, triggerRect.left - 60)) + "px";
+      menu.style.top = triggerRect.bottom + 3 + "px";
+    });
+    return wrapper;
+  }
+
   function createBucketTool() {
     const wrapper = document.createElement("div");
     wrapper.className = "image-editor-bucket-tool";
@@ -242,7 +265,7 @@
       this.activeColorTarget = "foreground";
 
       namespace.tools.filter((tool) => tool !== "oval-callout" && tool !== "cloud-callout").forEach((tool) => {
-        this.shell.querySelector(".image-editor-tools").appendChild(tool === "bucket" ? createBucketTool() : createToolButton(tool));
+        this.shell.querySelector(".image-editor-tools").appendChild(tool === "bucket" ? createBucketTool() : tool === "brush" ? createBrushTool() : createToolButton(tool));
       });
       const gradientColorInput = document.createElement("input");
       gradientColorInput.type = "color";
@@ -404,6 +427,12 @@
       this.shell.querySelector(".image-editor-background").value = state.backgroundColor;
       this.shell.querySelector(".image-editor-bucket-mode").dataset.value = state.bucketFillMode;
       this.shell.querySelectorAll("[data-bucket-mode]").forEach((element) => element.classList.toggle("active", element.dataset.bucketMode === state.bucketFillMode));
+      this.shell.querySelector(".image-editor-brush-mode").dataset.value = state.brushType;
+      this.shell.querySelectorAll("[data-brush-type]").forEach((element) => {
+        const active = element.dataset.brushType === state.brushType;
+        element.classList.toggle("active", active);
+        element.setAttribute("aria-selected", String(active));
+      });
       const patternFillActive = state.tool === "bucket" && state.bucketFillMode === "pattern";
       this.shell.querySelector(".image-editor-pattern-fill-controls").hidden = !patternFillActive;
       this.shell.querySelector(".image-editor-pattern-fill-type").value = state.patternFillType;

@@ -195,6 +195,7 @@
         foregroundColor: state.foregroundColor,
         backgroundColor: state.backgroundColor,
         brushSize: state.brushSize,
+        brushType: state.brushType,
         lineWidth: state.lineWidth,
         strokeType: state.strokeType,
         fillShapes: state.fillShapes,
@@ -1333,6 +1334,14 @@
           state.bucketFillMode = ["gradient", "pattern"].includes(bucketModeButton.dataset.bucketMode) ? bucketModeButton.dataset.bucketMode : "solid";
           state.setTool("bucket");
           view.shell.querySelector(".image-editor-bucket-mode").open = false;
+          syncTab(controller);
+          return;
+        }
+        const brushTypeButton = event.target.closest("[data-brush-type]");
+        if (brushTypeButton) {
+          state.brushType = namespace.normalizeBrushPreset(brushTypeButton.dataset.brushType);
+          state.setTool("brush");
+          view.shell.querySelector(".image-editor-brush-mode").open = false;
           syncTab(controller);
           return;
         }

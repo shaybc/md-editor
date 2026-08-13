@@ -22,6 +22,7 @@ test("image editor state exposes Paint defaults and bounded zoom", () => {
   assert.equal(state.tool, "pencil");
   assert.equal(state.foregroundColor, "#111111");
   assert.equal(state.backgroundColor, "#ffffff");
+  assert.equal(state.brushType, "round");
   assert.equal(state.width, 640);
   assert.equal(state.height, 480);
   assert.equal(state.setZoom(20), 8);

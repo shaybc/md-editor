@@ -1090,6 +1090,41 @@ audio.file-preview-content {
 .image-editor-tools [data-tool="heart"] { grid-area: heart; }
 .image-editor-tools [data-tool="pencil"] { grid-area: pencil; }
 .image-editor-tools [data-tool="brush"] { grid-area: brush; }
+.image-editor-brush-tool { grid-area: brush; display: grid; grid-template-columns: 20px 8px; position: relative; }
+.image-editor-tools .image-editor-brush-tool .image-editor-brush-main { width: 20px; border-radius: 6px 0 0 6px; }
+.image-editor-brush-mode { position: relative; }
+.image-editor-brush-mode-trigger {
+  display: flex; width: 8px; height: 28px; align-items: center; justify-content: center; padding: 0;
+  border: 1px solid transparent; border-radius: 0 6px 6px 0; cursor: pointer; list-style: none;
+}
+.image-editor-brush-mode-trigger::-webkit-details-marker { display: none; }
+.image-editor-brush-mode-trigger .bi { font-size: .45rem; }
+.image-editor-brush-tool:hover .image-editor-brush-mode-trigger, .image-editor-brush-tool:has(.image-editor-brush-main.active) .image-editor-brush-mode-trigger {
+  border-color: var(--border-color); background: var(--button-hover);
+}
+.image-editor-brush-mode-menu {
+  position: fixed; z-index: 1000; width: 286px; max-height: min(470px, calc(100vh - 60px)); overflow-y: auto; padding: 5px;
+  border: 1px solid var(--border-color); border-radius: 6px; background: var(--panel-bg); box-shadow: 0 5px 16px rgba(0,0,0,.45);
+}
+.image-editor-brush-mode:not([open]) .image-editor-brush-mode-menu { display: none; }
+.image-editor-brush-mode-menu button {
+  display: grid; width: 100%; min-height: 52px; grid-template-columns: 92px 1fr; align-items: center; gap: 8px; padding: 5px 7px;
+  border: 0; border-radius: 4px; background: transparent; color: var(--text-color); text-align: left; cursor: pointer;
+}
+.image-editor-brush-mode-menu button:hover, .image-editor-brush-mode-menu button.active { background: var(--hover-bg); }
+.image-editor-brush-mode-menu strong, .image-editor-brush-mode-menu small { display: block; }
+.image-editor-brush-mode-menu strong { font-size: .75rem; font-weight: 600; }
+.image-editor-brush-mode-menu small { margin-top: 2px; color: var(--muted-text); font-size: .65rem; }
+.image-editor-brush-sample { position: relative; display: block; height: 32px; overflow: hidden; }
+.image-editor-brush-sample::before { content: ""; position: absolute; left: 5px; right: 5px; top: 50%; height: 12px; border-radius: 999px; background: currentColor; transform: translateY(-50%); }
+.image-editor-brush-sample[data-brush-sample="flat"]::before { height: 10px; border-radius: 0; }
+.image-editor-brush-sample[data-brush-sample="marker"]::before { height: 16px; border-radius: 2px; opacity: .58; }
+.image-editor-brush-sample[data-brush-sample="ink"]::before { height: 8px; clip-path: polygon(0 35%, 82% 0, 100% 50%, 82% 100%, 0 65%); }
+.image-editor-brush-sample[data-brush-sample="calligraphy"]::before { height: 5px; border-radius: 0; transform: translateY(-50%) skewY(-8deg); box-shadow: 0 -5px currentColor, 0 5px currentColor; }
+.image-editor-brush-sample[data-brush-sample="airbrush"]::before { height: 25px; opacity: .5; filter: blur(7px); }
+.image-editor-brush-sample[data-brush-sample="charcoal"]::before { height: 17px; opacity: .75; filter: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence baseFrequency='.8' numOctaves='3'/%3E%3CfeComposite in='SourceGraphic' operator='in'/%3E%3C/filter%3E%3C/svg%3E%23n"); }
+.image-editor-brush-sample[data-brush-sample="watercolor"]::before { height: 20px; opacity: .45; filter: blur(2px); box-shadow: 0 4px 5px currentColor; }
+.image-editor-brush-sample[data-brush-sample="spray"]::before { height: 27px; opacity: .7; background: radial-gradient(circle, currentColor 0 1px, transparent 1.5px) 0 0 / 7px 7px; }
 .image-editor-bucket-tool { grid-area: bucket; display: grid; grid-template-columns: 20px 8px; position: relative; }
 .image-editor-tools .image-editor-bucket-tool .image-editor-bucket-main { width: 20px; border-radius: 6px 0 0 6px; }
 .image-editor-bucket-mode { position: relative; }

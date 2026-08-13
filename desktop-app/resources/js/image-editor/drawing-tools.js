@@ -22,6 +22,7 @@
 
   function drawFreehand(context, from, to, state, tool, pathDistance = 0) {
     const width = tool === "pencil" ? 1 : state.brushSize;
+    if (tool === "brush" && namespace.drawBrushPresetSegment) return namespace.drawBrushPresetSegment(context, from, to, state, pathDistance);
     configureStroke(context, state, width, pathDistance);
     context.beginPath();
     context.moveTo(from.x, from.y);

@@ -20,6 +20,7 @@
       this.foregroundColor = options.foregroundColor || "#111111";
       this.backgroundColor = options.backgroundColor || "#ffffff";
       this.brushSize = Math.max(1, Math.min(64, Number(options.brushSize || 8)));
+      this.brushType = namespace.normalizeBrushPreset ? namespace.normalizeBrushPreset(options.brushType) : "round";
       this.lineWidth = Math.max(1, Math.min(64, Number(options.lineWidth || 2)));
       this.strokeType = namespace.normalizeStrokeType ? namespace.normalizeStrokeType(options.strokeType) : "solid";
       this.fillShapes = options.fillShapes === true;
