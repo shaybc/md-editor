@@ -127,6 +127,11 @@
       });
     }
 
+    /** Merge visible user layers without discarding hidden layers. */
+    function mergeVisibleLayers(controller) {
+      return commitDocumentMutation(controller, "Merge visible", () => namespace.ImageEditorLayerDocumentActions.mergeVisible(controller.documentStore));
+    }
+
     function snapshot(view) {
       return view.context.getImageData(0, 0, view.canvas.width, view.canvas.height);
     }
@@ -2750,8 +2755,11 @@
         },
         onMutate(label, callback) {
           if (label === "merge-down") return mergeSelectedLayerDown(controller);
+          if (label === "merge-visible") return mergeVisibleLayers(controller);
           if (label === "flatten") return flattenDocument(controller);
           if (label === "export") return exportFlattenedImage(tab);
+          if (label === "export-layer-png") return exportLayerImage(tab, callback?.layerIds, { mimeType: "image/png" });
+          if (label === "export-layer-as") return exportLayerImage(tab, callback?.layerIds);
           const changed = commitDocumentMutation(controller, label, callback);
           return changed;
         },
@@ -2892,6 +2900,39 @@
       return { downloadOnly: true, name: suggestedName };
     }
 
+    /** Choose a destination for exporting one isolated layer. */
+    async function chooseLayerExportDestination(tab, layerName, mimeType = null) {
+      const resolvedMimeType = mimeType || "image/png";
+      const extension = resolvedMimeType === "image/jpeg" ? ".jpg" : resolvedMimeType === "image/webp" ? ".webp" : ".png";
+      const suggestedName = `${layerName || (tab.sourceFileName || "layer").replace(/\.[^.]+$/, "")}${extension}`;
+      const formats = mimeType
+        ? [{ name: "Image", extensions: [extension.slice(1)] }]
+        : [{ name: "PNG image", extensions: ["png"] }, { name: "JPEG image", extensions: ["jpg", "jpeg"] }, { name: "WebP image", extensions: ["webp"] }];
+      if (typeof deps.NL_VERSION !== "undefined" && deps.Neutralino?.os?.showSaveDialog) {
+        const path = await deps.Neutralino.os.showSaveDialog("Export layer", { defaultPath: suggestedName, filters: formats });
+        return path ? { path, name: path.split(/[\\/]/).pop() } : null;
+      }
+      if (global.showSaveFilePicker) {
+        const types = mimeType
+          ? [{ description: "Image", accept: { [resolvedMimeType]: [extension] } }]
+          : [
+              { description: "PNG image", accept: { "image/png": [".png"] } },
+              { description: "JPEG image", accept: { "image/jpeg": [".jpg", ".jpeg"] } },
+              { description: "WebP image", accept: { "image/webp": [".webp"] } }
+            ];
+        const handle = await global.showSaveFilePicker({ suggestedName, types });
+        return { handle, name: handle.name };
+      }
+      return { downloadOnly: true, name: suggestedName };
+    }
+
+    function mimeTypeForExportName(name, fallback = "image/png") {
+      if (/\.jpe?g$/i.test(name || "")) return "image/jpeg";
+      if (/\.webp$/i.test(name || "")) return "image/webp";
+      if (/\.png$/i.test(name || "")) return "image/png";
+      return fallback;
+    }
+
     async function writeBlobToDestination(destination, blob) {
       if (destination.downloadOnly) deps.saveAs?.(blob, destination.name);
       else if (destination.path) await deps.Neutralino.filesystem.writeBinaryFile(destination.path, await blob.arrayBuffer());
@@ -2984,6 +3025,26 @@
       } catch (error) {
         if (error?.name === "AbortError") return false;
         deps.alert?.(error?.message || "Unable to export the flattened image.");
+        return false;
+      }
+    }
+
+    /** Export one layer on a transparent full-canvas surface. */
+    async function exportLayerImage(tab, layerIds, options = {}) {
+      const controller = views.get(tab?.id);
+      const layer = namespace.findDocumentNode(controller?.documentStore?.document, layerIds?.[0])?.node;
+      if (!controller || layer?.kind !== "layer") return false;
+      try {
+        const destination = await chooseLayerExportDestination(tab, layer.name, options.mimeType);
+        if (!destination) return false;
+        const mimeType = mimeTypeForExportName(destination.name || destination.path, options.mimeType || "image/png");
+        const canvas = namespace.ImageEditorLayerDocumentActions.renderLayers(controller.documentStore, [layer.id]);
+        const blob = await namespace.encodeCanvas(canvas, mimeType, controller.state.backgroundColor);
+        await writeBlobToDestination(destination, blob);
+        return true;
+      } catch (error) {
+        if (error?.name === "AbortError") return false;
+        deps.alert?.(error?.message || "Unable to export the selected layer.");
         return false;
       }
     }

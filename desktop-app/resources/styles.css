@@ -5186,6 +5186,12 @@ body.shared-viewer .help-browser-toolbar {
   display: none;
 }
 
+.image-editor-layer-context-menu {
+  position: fixed;
+  z-index: 4700;
+  min-width: 13.5rem;
+}
+
 .graph-health-package-context-menu {
   position: fixed;
   z-index: 4601;

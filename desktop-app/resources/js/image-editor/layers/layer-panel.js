@@ -23,6 +23,7 @@
       this.requestRename = options.requestRename || (() => Promise.resolve(null));
       this.requestDeleteConfirmation = options.requestDeleteConfirmation || (() => Promise.resolve(true));
       this.shouldConfirmDelete = options.shouldConfirmDelete || (() => true);
+      this.contextMenu = new namespace.ImageEditorLayerContextMenu();
       this.expandedIds = new Set(options.state?.expandedIds || []);
       this.state = { mode: options.state?.mode || "expanded", height: Number(options.state?.height || 360), placementMode: options.state?.placementMode === "active" ? "active" : "new" };
       this.element = document.createElement("aside");
@@ -99,6 +100,66 @@
       placement.value = this.state.placementMode;
       placement.addEventListener("change", () => { this.state.placementMode = placement.value; this.reportState(); });
       this.bindResize();
+      this.list.addEventListener("contextmenu", (event) => this.openContextMenu(event));
+    }
+
+    /** Resolve selected hierarchy targets, mapping object rows to their containing layer. */
+    selectedTargets() {
+      const targets = [];
+      [...this.store.selectedIds].forEach((id) => {
+        const node = namespace.findDocumentNode(this.store.document, id)?.node;
+        const target = node || namespace.findDocumentObject(this.store.document, id)?.layer;
+        if (target && !namespace.isCanvasBackgroundLayer(target) && !targets.some((item) => item.id === target.id)) targets.push(target);
+      });
+      return targets;
+    }
+
+    selectedLayers() { return this.selectedTargets().filter((item) => item.kind === "layer"); }
+
+    /** Open the layer action menu while preserving an existing multi-selection. */
+    openContextMenu(event) {
+      event.preventDefault();
+      const row = event.target.closest("[data-layer-item]");
+      if (row) {
+        const objectResult = namespace.findDocumentObject(this.store.document, row.dataset.layerItem);
+        const layerId = objectResult?.layer.id || row.dataset.layerItem;
+        if (objectResult || !this.store.selectedIds.has(layerId)) this.store.select(layerId);
+      }
+      const targets = this.selectedTargets();
+      const layers = this.selectedLayers();
+      const selectedNodes = [...this.store.selectedIds].map((id) => namespace.findDocumentNode(this.store.document, id)?.node).filter((node) => node && !namespace.isCanvasBackgroundLayer(node));
+      const singleLayer = layers.length === 1 ? layers[0] : null;
+      const mergeLocation = singleLayer ? namespace.findDocumentNode(this.store.document, singleLayer.id) : null;
+      const below = mergeLocation?.collection?.[mergeLocation.index + 1];
+      const allLocked = targets.length > 0 && targets.every((item) => item.locked);
+      const allHidden = targets.length > 0 && targets.every((item) => item.visible === false);
+      const otherLayers = [];
+      const selectedTargetIds = new Set(targets.map((item) => item.id));
+      namespace.walkDocumentNodes(this.store.document, (node) => {
+        if (node.kind === "layer" && !namespace.isCanvasBackgroundLayer(node) && !selectedTargetIds.has(node.id)) otherLayers.push(node);
+      });
+      const hideOthers = otherLayers.some((layer) => layer.visible !== false);
+      this.contextMenu.show(event.clientX, event.clientY, [
+        { id: "new-layer", label: "New layer", icon: "bi-plus-square" },
+        { id: "new-group", label: "New group", icon: "bi-folder-plus" },
+        { id: "group", label: "New group from selected layers", icon: "bi-collection", disabled: selectedNodes.length === 0 },
+        { separator: true },
+        { id: "duplicate", label: "Duplicate layer", icon: "bi-copy", disabled: selectedNodes.length === 0 },
+        { id: "delete", label: "Delete layer", icon: "bi-trash", danger: true, disabled: selectedNodes.length === 0 },
+        { separator: true },
+        { id: "export-layer-png", label: "Export layer as PNG", icon: "bi-filetype-png", disabled: !singleLayer },
+        { id: "export-layer-as", label: "Export as…", icon: "bi-box-arrow-up", disabled: !singleLayer },
+        { separator: true },
+        { id: "merge-down", label: "Merge down", icon: "bi-layers-half", disabled: !singleLayer || singleLayer.locked || !below || below.kind !== "layer" || below.locked || namespace.isCanvasBackgroundLayer(below) },
+        { id: "merge-visible", label: "Merge visible", icon: "bi-layers", disabled: [...layers, ...otherLayers].filter((layer) => layer.visible !== false).length < 2 },
+        { id: "flatten", label: "Flatten layers", icon: "bi-layers-fill", disabled: !this.store.document.nodes.some((node) => !namespace.isCanvasBackgroundLayer(node)) },
+        { separator: true },
+        { id: "toggle-lock", label: allLocked ? "Unlock layer" : "Lock layer", icon: allLocked ? "bi-unlock" : "bi-lock", disabled: targets.length === 0 },
+        { id: "rename", label: "Rename layer", icon: "bi-pencil", disabled: targets.length !== 1 },
+        { separator: true },
+        { id: "toggle-visibility", label: allHidden ? "Show layer" : "Hide layer", icon: allHidden ? "bi-eye" : "bi-eye-slash", disabled: targets.length === 0 },
+        { id: "toggle-other-visibility", label: hideOthers ? "Hide other layers" : "Show other layers", icon: hideOthers ? "bi-eye-slash" : "bi-eye", disabled: targets.length === 0 || otherLayers.length === 0 }
+      ], (action) => this.runAction(action));
     }
 
     bindResize() {
@@ -206,12 +267,25 @@
       if (action === "minimize") { this.state.mode = this.state.mode === "minimized" ? "expanded" : "minimized"; this.applyState(); this.reportState(); return; }
       if (action === "hide") { this.state.mode = "hidden"; this.applyState(); this.reportState(); return; }
       if (action === "delete") { void this.deleteSelected(); return; }
+      const targets = this.selectedTargets();
+      const layers = targets.filter((item) => item.kind === "layer");
+      if (action === "rename" && targets.length === 1) { void this.renameItem(targets[0].id, targets[0].name); return; }
+      if (action === "export-layer-png" || action === "export-layer-as") { this.onMutate(action, { layerIds: layers.map((layer) => layer.id) }); return; }
       const operations = {
         "new-layer": () => this.store.addLayer("Layer", [...this.store.selectedIds][0]),
         "new-group": () => this.store.addGroup("Group", [...this.store.selectedIds][0] || null),
         duplicate: () => this.store.duplicateSelected(),
         group: () => this.store.groupSelected(),
-        ungroup: () => this.store.ungroupSelected()
+        ungroup: () => this.store.ungroupSelected(),
+        "toggle-lock": () => targets.map((item) => this.store.updateItem(item.id, { locked: !targets.every((target) => target.locked) })).some(Boolean),
+        "toggle-visibility": () => targets.map((item) => this.store.updateItem(item.id, { visible: targets.every((target) => target.visible === false) })).some(Boolean),
+        "toggle-other-visibility": () => {
+          const selectedIds = new Set(targets.map((item) => item.id));
+          const others = [];
+          namespace.walkDocumentNodes(this.store.document, (node) => { if (node.kind === "layer" && !namespace.isCanvasBackgroundLayer(node) && !selectedIds.has(node.id)) others.push(node); });
+          const visible = !others.some((layer) => layer.visible !== false);
+          return others.map((layer) => this.store.updateItem(layer.id, { visible })).some(Boolean);
+        }
       };
       if (operations[action]) this.mutate(action, operations[action]);
       else this.onMutate(action, null);
@@ -266,7 +340,7 @@
       return row;
     }
 
-    destroy() { this.unsubscribe?.(); this.element.remove(); }
+    destroy() { this.unsubscribe?.(); this.contextMenu?.destroy(); this.element.remove(); }
   }
 
   namespace.ImageEditorLayerPanel = ImageEditorLayerPanel;

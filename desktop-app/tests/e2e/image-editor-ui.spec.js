@@ -1002,6 +1002,52 @@ test('layers panel creates layers and restores after being hidden', async ({ pag
   await expect(panel.locator('[data-layer-item]')).toHaveCount(1);
 });
 
+test('layers panel right-click menu exposes layer actions and targets an object owning layer', async ({ page }) => {
+  await page.goto('/');
+  await page.waitForFunction(() => !!window.markdownViewerApp?.modules?.tabs?.openBlankImageEditorInTab && !!window.markdownViewerApp?.services?.imageEditor, null, { timeout: 60000 });
+  await page.evaluate(async () => {
+    window.markdownViewerApp.modules.apiClient.deactivateApiClientSidebar = () => {};
+    await window.markdownViewerApp.modules.tabs.openBlankImageEditorInTab({ width: 80, height: 60, name: 'Layer context menu' });
+  });
+  await expect(page.locator('.tab-view[data-tab-view-kind=image-editor] .image-editor-shell').last()).toBeAttached();
+  await page.evaluate(() => {
+    const root = [...document.querySelectorAll('.tab-view[data-tab-view-kind=image-editor]')].at(-1);
+    window.markdownViewerApp.services.imageEditor.getView(root.dataset.tabId).layerPanel.reveal();
+  });
+  const panel = page.locator('.tab-view[data-tab-view-kind=image-editor] .image-editor-layers-panel').last();
+  const ids = await page.evaluate(() => {
+    const root = [...document.querySelectorAll('.tab-view[data-tab-view-kind=image-editor]')].at(-1);
+    const controller = window.markdownViewerApp.services.imageEditor.getView(root.dataset.tabId);
+    const layer = controller.documentStore.addLayer('Menu layer');
+    const pixels = new ImageData(1, 1);
+    pixels.data[3] = 255;
+    const object = controller.documentStore.addRasterObject(pixels, { x: 0, y: 0, width: 1, height: 1 }, { name: 'Menu object', layerId: layer.id });
+    return { layerId: layer.id, objectId: object.id };
+  });
+  await page.evaluate((layerId) => {
+    const root = [...document.querySelectorAll('.tab-view[data-tab-view-kind=image-editor]')].at(-1);
+    window.markdownViewerApp.services.imageEditor.getView(root.dataset.tabId).layerPanel.toggleExpanded(layerId);
+  }, ids.layerId);
+  await panel.locator(`[data-layer-item="${ids.objectId}"]`).dispatchEvent('contextmenu', { clientX: 200, clientY: 200 });
+  const menu = page.locator('.image-editor-layer-context-menu');
+  await expect(menu).toBeVisible();
+  await expect(menu.locator('[data-layer-context-action]')).toHaveCount(14);
+  await expect(menu.locator('[data-layer-context-action="new-layer"]')).toHaveText(/New layer/);
+  await expect(menu.locator('[data-layer-context-action="group"]')).toHaveText(/New group from selected layers/);
+  await expect(menu.locator('[data-layer-context-action="export-layer-png"]')).toBeEnabled();
+  expect(await page.evaluate(() => {
+    const root = [...document.querySelectorAll('.tab-view[data-tab-view-kind=image-editor]')].at(-1);
+    const controller = window.markdownViewerApp.services.imageEditor.getView(root.dataset.tabId);
+    return [...controller.documentStore.selectedIds];
+  })).toEqual([ids.layerId]);
+  await menu.locator('[data-layer-context-action="toggle-lock"]').dispatchEvent('click');
+  expect(await page.evaluate((layerId) => {
+    const root = [...document.querySelectorAll('.tab-view[data-tab-view-kind=image-editor]')].at(-1);
+    const controller = window.markdownViewerApp.services.imageEditor.getView(root.dataset.tabId);
+    return window.MarkdownViewerImageEditor.findDocumentNode(controller.documentStore.document, layerId).node.locked;
+  }, ids.layerId)).toBe(true);
+});
+
 test('new group creates an empty root group when no layer is selected', async ({ page }) => {
   await page.goto('/');
   await page.waitForFunction(() => !!window.markdownViewerApp?.modules?.tabs?.openBlankImageEditorInTab, null, { timeout: 60000 });
