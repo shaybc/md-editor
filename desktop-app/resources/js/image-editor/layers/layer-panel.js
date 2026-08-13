@@ -139,6 +139,7 @@
         if (node.kind === "layer" && !namespace.isCanvasBackgroundLayer(node) && !selectedTargetIds.has(node.id)) otherLayers.push(node);
       });
       const hideOthers = otherLayers.some((layer) => layer.visible !== false);
+      const canCreateTextOutlines = namespace.ImageEditorTextOutlineConverter?.canConvert(this.store) === true;
       this.contextMenu.show(event.clientX, event.clientY, [
         { id: "new-layer", label: "New layer", icon: "bi-plus-square" },
         { id: "new-group", label: "New group", icon: "bi-folder-plus" },
@@ -156,6 +157,7 @@
         { separator: true },
         { id: "toggle-lock", label: allLocked ? "Unlock layer" : "Lock layer", icon: allLocked ? "bi-unlock" : "bi-lock", disabled: targets.length === 0 },
         { id: "rename", label: "Rename layer", icon: "bi-pencil", disabled: targets.length !== 1 },
+        { id: "create-text-outlines", label: "Create Outline from Text", icon: "bi-vector-pen", disabled: !canCreateTextOutlines },
         { separator: true },
         { id: "toggle-visibility", label: allHidden ? "Show layer" : "Hide layer", icon: allHidden ? "bi-eye" : "bi-eye-slash", disabled: targets.length === 0 },
         { id: "toggle-other-visibility", label: hideOthers ? "Hide other layers" : "Show other layers", icon: hideOthers ? "bi-eye-slash" : "bi-eye", disabled: targets.length === 0 || otherLayers.length === 0 }
@@ -270,6 +272,7 @@
       const targets = this.selectedTargets();
       const layers = targets.filter((item) => item.kind === "layer");
       if (action === "rename" && targets.length === 1) { void this.renameItem(targets[0].id, targets[0].name); return; }
+      if (action === "create-text-outlines") { this.onMutate(action, null); return; }
       if (action === "export-layer-png" || action === "export-layer-as") { this.onMutate(action, { layerIds: layers.map((layer) => layer.id) }); return; }
       const operations = {
         "new-layer": () => this.store.addLayer("Layer", [...this.store.selectedIds][0]),

@@ -429,5 +429,5 @@
     context.restore();
   }
 
-  Object.assign(namespace, { configureStroke, drawFreehand, curvePointAt, drawCurve, drawShape, drawRoundedRectangle, drawPolygon, colorToRgba, createFloodFillRegion, paintFloodFillRegion, floodFill, drawText });
+  Object.assign(namespace, { configureStroke, drawFreehand, curvePointAt, drawCurve, drawShape, drawRoundedRectangle, drawPolygon, colorToRgba, createFloodFillRegion, paintFloodFillRegion, floodFill, drawText, wrapImageEditorText: wrapText });
 })(typeof window !== "undefined" ? window : globalThis);

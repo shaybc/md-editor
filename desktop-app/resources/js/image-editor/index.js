@@ -2760,6 +2760,7 @@
           if (label === "export") return exportFlattenedImage(tab);
           if (label === "export-layer-png") return exportLayerImage(tab, callback?.layerIds, { mimeType: "image/png" });
           if (label === "export-layer-as") return exportLayerImage(tab, callback?.layerIds);
+          if (label === "create-text-outlines") return commitDocumentMutation(controller, "Create text outlines", () => namespace.ImageEditorTextOutlineConverter.convertSelected(controller.documentStore));
           const changed = commitDocumentMutation(controller, label, callback);
           return changed;
         },
