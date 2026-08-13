@@ -88,6 +88,23 @@
       return canvas;
     }
 
+    /** Render only the supplied content layers for layer-scoped pixel editing. */
+    renderLayers(layers) {
+      const canvas = document.createElement("canvas");
+      canvas.width = this.store.document.canvas.width;
+      canvas.height = this.store.document.canvas.height;
+      const context = canvas.getContext("2d");
+      [...(layers || [])].reverse().forEach((layer) => {
+        if (!layer || layer.visible === false) return;
+        context.save();
+        context.globalAlpha *= Math.max(0, Math.min(1, Number(layer.opacity ?? 1)));
+        context.globalCompositeOperation = layer.blendMode === "normal" ? "source-over" : "source-over";
+        context.drawImage(this.renderLayer(layer), 0, 0);
+        context.restore();
+      });
+      return canvas;
+    }
+
     renderNodes(context, nodes) {
       [...nodes].reverse().forEach((node) => {
         if (!node.visible) return;

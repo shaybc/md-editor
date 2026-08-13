@@ -201,8 +201,11 @@
     canvas.width = width;
     canvas.height = height;
     const context = canvas.getContext("2d");
-    context.fillStyle = backgroundColor || store.document.canvas.backgroundColor || "#ffffff";
-    context.fillRect(0, 0, width, height);
+    const canvasBackgroundColor = backgroundColor || store.document.canvas.backgroundColor || "#ffffff";
+    if (canvasBackgroundColor !== "transparent") {
+      context.fillStyle = canvasBackgroundColor;
+      context.fillRect(0, 0, width, height);
+    }
     context.putImageData(source, 0, 0);
     object.payload = { assetId: store.addRasterAsset(context.getImageData(0, 0, width, height)) };
     object.bounds = { ...object.bounds, width, height };

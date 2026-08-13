@@ -15,6 +15,119 @@ test.afterEach(async ({ page }) => {
   expect(page.errors).toEqual([]);
 });
 
+test("File New Image configures preset, manual, solid, and transparent canvases", async ({ page }) => {
+  await page.goto("/");
+  await page.waitForFunction(() => !!window.markdownViewerApp?.modules?.newImageDialog, null, { timeout: 60000 });
+  const fileCategory = page.locator("#desktop-application-menu .application-menu-file");
+  const newSubmenu = fileCategory.locator(".new-file-submenu");
+  const openNewImageDialog = async () => {
+    await fileCategory.locator("> .application-menu-category-toggle").click();
+    await newSubmenu.locator("> .dropdown-toggle").hover();
+    await newSubmenu.locator(".open-image-editor-tool").click();
+  };
+  await openNewImageDialog();
+
+  const modal = page.locator("#new-image-modal");
+  await expect(modal).toBeVisible();
+  await expect(modal.locator("[data-new-image-template]")).toHaveCount(10);
+  await expect(modal.locator('[data-new-image-template="screen-full-hd"]')).toHaveAttribute("aria-pressed", "true");
+  await expect(modal.getByText("Color Mode")).toHaveCount(0);
+  await expect(modal.getByText("Advanced Options")).toHaveCount(0);
+  await expect(modal.locator('[role="tab"]')).toHaveCount(0);
+
+  await modal.locator('[data-new-image-template="icon"]').click();
+  await expect(modal.locator("#new-image-width")).toHaveValue("512");
+  await expect(modal.locator("#new-image-height")).toHaveValue("512");
+  await modal.locator("#new-image-background").selectOption("custom");
+  await modal.locator("#new-image-custom-color").fill("#123456");
+  await modal.locator("[data-new-image-create]").click();
+
+  let root = page.locator('.tab-view.active[data-tab-view-kind="image-editor"]');
+  await expect(root.locator(".image-editor-canvas")).toHaveAttribute("width", "512");
+  await expect(root.locator(".image-editor-canvas")).toHaveAttribute("height", "512");
+  expect(await root.locator(".image-editor-canvas").evaluate((canvas) => ({
+    pixel: Array.from(canvas.getContext("2d").getImageData(500, 500, 1, 1).data),
+    background: window.markdownViewerApp.services.imageEditor.getView(canvas.closest("[data-tab-id]").dataset.tabId).documentStore.document.canvas.backgroundColor
+  }))).toEqual({ pixel: [18, 52, 86, 255], background: "#123456" });
+
+  const tabCount = await page.locator("#tab-list .tab-item").count();
+  await openNewImageDialog();
+  await modal.locator("#new-image-width").fill("40");
+  await modal.locator("#new-image-height").fill("30");
+  await modal.locator("[data-new-image-create]").click();
+  root = page.locator('.tab-view.active[data-tab-view-kind="image-editor"]');
+  await expect(root.locator(".image-editor-canvas")).toHaveAttribute("width", "40");
+  await expect(root.locator(".image-editor-canvas")).toHaveAttribute("height", "30");
+  expect(await root.locator(".image-editor-canvas").evaluate((canvas) => Array.from(canvas.getContext("2d").getImageData(5, 5, 1, 1).data))).toEqual([0, 0, 0, 0]);
+
+  const resizeHandle = root.locator('[data-canvas-resize="se"]');
+  const handleBox = await resizeHandle.boundingBox();
+  await page.mouse.move(handleBox.x + handleBox.width / 2, handleBox.y + handleBox.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(handleBox.x + handleBox.width / 2 + 10, handleBox.y + handleBox.height / 2 + 10, { steps: 4 });
+  await page.mouse.up();
+  await expect(root.locator(".image-editor-canvas")).toHaveAttribute("width", "50");
+  await expect(root.locator(".image-editor-canvas")).toHaveAttribute("height", "40");
+  expect(await root.locator(".image-editor-canvas").evaluate((canvas) => Array.from(canvas.getContext("2d").getImageData(45, 35, 1, 1).data))).toEqual([0, 0, 0, 0]);
+
+  await openNewImageDialog();
+  await page.keyboard.press("Escape");
+  await expect(modal).toBeHidden();
+  await expect(page.locator("#tab-list .tab-item")).toHaveCount(tabCount + 1);
+});
+
+test("New Image uses clipboard dimensions without overriding manual input", async ({ page }) => {
+  await page.goto("/");
+  await page.waitForFunction(() => !!window.markdownViewerApp?.modules?.newImageDialog, null, { timeout: 60000 });
+  await page.evaluate(async () => {
+    const canvas = document.createElement("canvas");
+    canvas.width = 37;
+    canvas.height = 23;
+    window.__newImageClipboardBlob = await new Promise((resolve) => canvas.toBlob(resolve, "image/png"));
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: {
+        async read() {
+          return [{ types: ["image/png"], async getType() { return window.__newImageClipboardBlob; } }];
+        }
+      }
+    });
+    window.markdownViewerApp.modules.newImageDialog.open();
+  });
+
+  const modal = page.locator("#new-image-modal");
+  const clipboardCard = modal.locator('[data-new-image-template="clipboard"]');
+  await expect(clipboardCard).toBeEnabled();
+  await expect(clipboardCard).toHaveAttribute("aria-pressed", "true");
+  await expect(modal.locator("#new-image-width")).toHaveValue("37");
+  await expect(modal.locator("#new-image-height")).toHaveValue("23");
+  await modal.locator("[data-new-image-cancel]").last().click();
+
+  await page.evaluate(() => {
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: {
+        read() {
+          return new Promise((resolve) => {
+            window.__resolveNewImageClipboard = () => resolve([
+              { types: ["image/png"], async getType() { return window.__newImageClipboardBlob; } }
+            ]);
+          });
+        }
+      }
+    });
+    window.markdownViewerApp.modules.newImageDialog.open();
+  });
+  await modal.locator("#new-image-width").fill("77");
+  await modal.locator("#new-image-height").fill("55");
+  await page.evaluate(() => window.__resolveNewImageClipboard());
+  await expect(clipboardCard).toBeEnabled();
+  await expect(clipboardCard).toHaveAttribute("aria-pressed", "false");
+  await expect(modal.locator("#new-image-width")).toHaveValue("77");
+  await expect(modal.locator("#new-image-height")).toHaveValue("55");
+  await modal.locator("[data-new-image-cancel]").last().click();
+});
+
 test("opens an image editor, draws, undoes, and explicitly saves", async ({ page }) => {
   await page.goto("/");
   await page.waitForFunction(() => !!window.markdownViewerApp?.modules?.keyboardShortcuts, null, { timeout: 60000 });
@@ -1122,6 +1235,62 @@ test('pixel deletion affects only the selected layer and preserves its object ro
   });
   expect(movedResult).toEqual({ previousLocation: [255, 0, 0], movedDeletedArea: [0, 0, 255], objectId: await page.evaluate(() => window.__upperLayerObjectId) });
   await expect(panel.locator('[data-layer-item]')).toHaveCount(initialPanelItemCount);
+});
+
+test('pixel marquee lifts only the selected layer above a filled background', async ({ page }) => {
+  await page.goto('/');
+  await page.waitForFunction(() => !!window.markdownViewerApp?.modules?.tabs?.openBlankImageEditorInTab, null, { timeout: 60000 });
+  await page.waitForFunction(() => !!window.markdownViewerApp?.modules?.keyboardShortcuts && !!window.markdownViewerApp?.services?.imageEditor, null, { timeout: 60000 });
+  await page.evaluate(() => {
+    window.markdownViewerApp.modules.apiClient.deactivateApiClientSidebar = () => {};
+    window.markdownViewerApp.modules.tabs.openBlankImageEditorInTab({ width: 100, height: 70, name: 'Layer scoped pixel lift', background: { mode: 'transparent' } });
+    const root = document.querySelector('.tab-view.active[data-tab-view-kind=image-editor]');
+    const controller = window.markdownViewerApp.services.imageEditor.getView(root.dataset.tabId);
+    const background = controller.documentStore.activeLayer();
+    const red = new ImageData(100, 70);
+    for (let index = 0; index < red.data.length; index += 4) { red.data[index] = 255; red.data[index + 3] = 255; }
+    const backgroundObject = controller.documentStore.addRasterObject(red, { x: 0, y: 0, width: 100, height: 70 }, { name: 'Red background', layerId: background.id });
+    const triangleLayer = controller.documentStore.addLayer('Triangle', background.id);
+    const blue = new ImageData(40, 30);
+    for (let index = 0; index < blue.data.length; index += 4) { blue.data[index + 2] = 255; blue.data[index + 3] = 255; }
+    const triangleObject = controller.documentStore.addRasterObject(blue, { x: 30, y: 10, width: 40, height: 30 }, { name: 'Triangle', layerId: triangleLayer.id });
+    controller.layerPanel.expandedIds.add(triangleLayer.id);
+    controller.layerPanel.render();
+    controller.documentStore.select([backgroundObject.id]);
+    controller.compositor.render({ canvas: controller.view.canvas });
+    window.__pixelLayerSyncIds = { backgroundObjectId: backgroundObject.id, triangleObjectId: triangleObject.id };
+  });
+  const root = page.locator('.tab-view.active[data-tab-view-kind=image-editor]');
+  await expect(root.locator('.image-editor-shell')).toBeVisible();
+  await root.locator('[data-tool=select]').click();
+  const overlay = root.locator('.image-editor-overlay');
+  const box = await overlay.boundingBox();
+  await page.mouse.move(box.x + 40, box.y + 20);
+  await page.mouse.down();
+  await page.mouse.move(box.x + 80, box.y + 30, { steps: 3 });
+  await page.mouse.up();
+  const selectedIds = await page.evaluate(() => {
+    const root = document.querySelector('.tab-view.active[data-tab-view-kind=image-editor]');
+    const controller = window.markdownViewerApp.services.imageEditor.getView(root.dataset.tabId);
+    return [...controller.documentStore.selectedIds];
+  });
+  expect(selectedIds).toEqual([await page.evaluate(() => window.__pixelLayerSyncIds.triangleObjectId)]);
+  await expect(root.locator(`[data-layer-item="${selectedIds[0]}"]`)).toHaveClass(/selected/);
+  await page.mouse.move(box.x + 50, box.y + 25);
+  await page.mouse.down();
+  await page.mouse.move(box.x + 50, box.y + 55, { steps: 3 });
+  await page.mouse.up();
+  expect(await page.evaluate(() => {
+    const root = document.querySelector('.tab-view.active[data-tab-view-kind=image-editor]');
+    const controller = window.markdownViewerApp.services.imageEditor.getView(root.dataset.tabId);
+    const canvasContext = controller.view.canvas.getContext('2d');
+    const overlayContext = controller.view.overlay.getContext('2d');
+    return {
+      sourceAfterLift: Array.from(canvasContext.getImageData(50, 25, 1, 1).data),
+      floatingTriangle: Array.from(overlayContext.getImageData(50, 55, 1, 1).data),
+      floatingOutsideTriangle: Array.from(overlayContext.getImageData(75, 55, 1, 1).data)
+    };
+  })).toEqual({ sourceAfterLift: [255, 0, 0, 255], floatingTriangle: [0, 0, 255, 255], floatingOutsideTriangle: [0, 0, 0, 0] });
 });
 
 test('selected object outline refreshes and bucket fill follows the moved object', async ({ page }) => {

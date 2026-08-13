@@ -17360,16 +17360,26 @@ async function* collectWorkspaceSearchFilesFromNeutralinoDirectory(parentPath, p
     });
   });
 
+  const newImageDialog = typeof window.registerMarkdownViewerNewImageDialog === "function"
+    ? window.registerMarkdownViewerNewImageDialog(app, {
+        getCurrentBackgroundColor: function() {
+          const activeTab = tabsModule?.getActiveTab?.();
+          return activeTab?.type === "image-editor" ? (activeTab.imageEditorState?.backgroundColor || "#ffffff") : "#ffffff";
+        }
+      })
+    : null;
+
   imageEditorToolButtons.forEach(function(button) {
-    button.addEventListener("click", function(e) {
+    button.addEventListener("click", async function(e) {
       e.preventDefault();
-      if (typeof tabsModule?.openBlankImageEditorInTab === "function") {
-        tabsModule.openBlankImageEditorInTab();
-      } else {
-        console.warn("Image editor tool is unavailable: tabs API is not ready.");
-      }
       if (button.classList.contains("mobile-menu-item")) {
         closeMobileMenu();
+      }
+      if (typeof tabsModule?.openBlankImageEditorInTab === "function") {
+        const options = newImageDialog ? await newImageDialog.open({ invoker: button }) : {};
+        if (options) tabsModule.openBlankImageEditorInTab(options);
+      } else {
+        console.warn("Image editor tool is unavailable: tabs API is not ready.");
       }
     });
   });

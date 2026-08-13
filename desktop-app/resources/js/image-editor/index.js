@@ -161,13 +161,17 @@
       previous.height = view.canvas.height;
       previous.getContext("2d").drawImage(view.canvas, 0, 0);
       view.setDimensions(nextWidth, nextHeight);
-      view.context.fillStyle = state.backgroundColor || "#ffffff";
-      view.context.fillRect(0, 0, nextWidth, nextHeight);
+      const canvasBackgroundColor = controller.documentStore?.document?.canvas?.backgroundColor || "#ffffff";
+      view.context.clearRect(0, 0, nextWidth, nextHeight);
+      if (canvasBackgroundColor !== "transparent") {
+        view.context.fillStyle = canvasBackgroundColor;
+        view.context.fillRect(0, 0, nextWidth, nextHeight);
+      }
       view.context.drawImage(previous, 0, 0);
       state.width = nextWidth;
       state.height = nextHeight;
       if (controller.documentStore) {
-        namespace.ImageEditorObjectPixelEditor.resizeCanvasBackground(controller.documentStore, previousWidth, previousHeight, nextWidth, nextHeight, state.backgroundColor);
+        namespace.ImageEditorObjectPixelEditor.resizeCanvasBackground(controller.documentStore, previousWidth, previousHeight, nextWidth, nextHeight, canvasBackgroundColor);
         controller.documentStore.document.canvas.width = nextWidth;
         controller.documentStore.document.canvas.height = nextHeight;
       }
@@ -280,6 +284,20 @@
         view.overlayContext.strokeRect(point.x - halfGuide, point.y - halfGuide, guideSize, guideSize);
       });
       view.overlayContext.restore();
+    }
+
+    /** Provide pixel-marquee lifting with only the explicitly selected editable layers. */
+    function pixelSelectionSourceContext(controller) {
+      const layers = controller.documentStore.selectedContentLayers({ editableOnly: true });
+      return controller.compositor.renderLayers(layers).getContext("2d", { willReadFrequently: true });
+    }
+
+    /** Synchronize pixel-marquee editing with the topmost object under its starting point. */
+    function selectPixelEditingObjectAtPoint(controller, point) {
+      const objectId = controller.objectSelection.hitTest(point);
+      if (!objectId) return false;
+      controller.documentStore.select(objectId);
+      return true;
     }
 
     function selectedDocumentObjects(controller) {
@@ -1867,17 +1885,18 @@
         controller.dragging = true;
         if (state.tool === "pencil" || state.tool === "brush") controller.freehandStrokeDistance = 0;
         if (state.tool === "select") {
+          if (!selection.hasSelection) selectPixelEditingObjectAtPoint(controller, point);
           if (selection.hasSelection && !selection.floating) {
             controller.selectionBefore = snapshot(view);
             controller.pixelSelectionDocumentBefore = controller.documentStore.snapshot();
           }
-          const gesture = selection.beginPointerGesture(point, view.context, state.backgroundColor, {
+          const gesture = selection.beginPointerGesture(point, pixelSelectionSourceContext(controller), state.backgroundColor, {
             ctrl: event.ctrlKey,
             meta: event.metaKey,
             shift: event.shiftKey,
             zoom: state.zoom
           });
-          if (gesture.sourceCleared) clearPixelRegionFromSelectedLayers(controller, selection.rect);
+          if (gesture.sourceCleared && clearPixelRegionFromSelectedLayers(controller, selection.rect)) renderLayeredDocument(controller);
           if (gesture.action === "drop") dropSelection(controller);
           if (gesture.action === "drop" || gesture.action === "ignore") {
             controller.dragging = false;
@@ -2324,13 +2343,13 @@
         controller.pixelSelectionDocumentBefore = controller.documentStore.snapshot();
       }
       else if (!controller.selectionBefore) controller.selectionBefore = snapshot(view);
-      const move = selection.beginMove(view.context, state.backgroundColor, {
+      const move = selection.beginMove(pixelSelectionSourceContext(controller), state.backgroundColor, {
         ctrl: event.ctrlKey,
         meta: event.metaKey,
         shift: event.shiftKey
       });
       if (!move.started) return true;
-      if (move.sourceCleared) clearPixelRegionFromSelectedLayers(controller, selection.rect);
+      if (move.sourceCleared && clearPixelRegionFromSelectedLayers(controller, selection.rect)) renderLayeredDocument(controller);
       const movement = selection.moveSelection(delta.x, delta.y, state);
       selection.endMove();
       drawSelectionOverlay(controller);
@@ -2638,10 +2657,17 @@
       if (source.blank === true && !source.draftBytes) {
         const width = Math.max(16, Number(source.width || tab.imageEditorState?.width || 640) || 640);
         const height = Math.max(16, Number(source.height || tab.imageEditorState?.height || 360) || 360);
+        const blankBackground = source.background?.mode === "transparent"
+          ? { mode: "transparent" }
+          : { mode: "solid", color: String(source.background?.color || "#ffffff") };
+        const canvasBackgroundColor = blankBackground.mode === "transparent" ? "transparent" : blankBackground.color;
         view.setDimensions(width, height);
-        view.context.fillStyle = tab.imageEditorState?.backgroundColor || "#ffffff";
-        view.context.fillRect(0, 0, width, height);
-        documentBundle = projectCodec.fromRasterImageData(view.context.getImageData(0, 0, width, height), tab.imageEditorState?.backgroundColor || "#ffffff");
+        view.context.clearRect(0, 0, width, height);
+        if (blankBackground.mode === "solid") {
+          view.context.fillStyle = blankBackground.color;
+          view.context.fillRect(0, 0, width, height);
+        }
+        documentBundle = projectCodec.fromRasterImageData(view.context.getImageData(0, 0, width, height), canvasBackgroundColor);
       } else {
         const bytes = await namespace.readSourceBytes(source, deps);
         const isProject = mimeType === namespace.IMAGE_PROJECT_MIME_TYPE || namespace.extensionOf(source.name || source.path) === "mdimage" || (bytes[0] === 0x50 && bytes[1] === 0x4b);

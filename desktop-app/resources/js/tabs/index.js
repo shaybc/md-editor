@@ -2484,7 +2484,10 @@
     const width = Math.max(16, Number(options.width || 640) || 640);
     const height = Math.max(16, Number(options.height || 360) || 360);
     const name = options.name || `${nextUntitledTitle()} Image`;
-    const source = { blank: true, name, mimeType: "image/png", width, height };
+    const background = options.background?.mode === "transparent"
+      ? { mode: "transparent" }
+      : { mode: "solid", color: String(options.background?.color || "#ffffff") };
+    const source = { blank: true, name, mimeType: "image/png", width, height, background };
     const tab = createImageEditorTab(source, `${name} - Image Editor`, {
       temporary: false,
       blank: true,

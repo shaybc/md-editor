@@ -231,6 +231,11 @@ test.describe("application-wide desktop menu", () => {
       await fileCategory.locator("> .application-menu-category-toggle").click();
       await newSubmenu.locator("> .dropdown-toggle").hover();
       await newSubmenu.locator(selector).click();
+      if (selector === ".open-image-editor-tool") {
+        await page.locator("#new-image-width").fill("32");
+        await page.locator("#new-image-height").fill("24");
+        await page.locator("[data-new-image-create]").click();
+      }
     };
 
     await openNew(".open-image-editor-tool");
