@@ -25,7 +25,7 @@ test.describe("application-wide desktop menu", () => {
     await expect(hamburgerMenu.locator(":scope > .new-file-submenu .new-document-button")).toContainText("New Document ...");
     await expect(hamburgerMenu.locator(":scope > .exit-app-button:last-child")).toHaveCount(1);
     await expect(hamburgerMenu.locator(":scope > .reload-current-file-button + .diagram-export-submenu")).toHaveCount(1);
-    await expect(hamburgerMenu.locator(":scope > .diagram-export-submenu + .dropdown-divider + .application-menu-edit")).toHaveCount(1);
+    await expect(hamburgerMenu.locator(":scope > .diagram-export-submenu + .image-export-submenu + .dropdown-divider + .application-menu-edit")).toHaveCount(1);
     await expect(hamburgerMenu.locator(":scope > .application-menu-edit + .dropdown-divider + .application-menu-find")).toHaveCount(1);
     await expect(hamburgerMenu.locator(":scope > .application-menu-find + .dropdown-divider + .application-menu-view")).toHaveCount(1);
     await expect(hamburgerMenu.locator(":scope > .application-menu-help + .dropdown-divider + .exit-app-button")).toHaveCount(1);

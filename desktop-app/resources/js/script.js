@@ -4221,6 +4221,8 @@ async function startMarkdownViewer() {
   const diagramEditorToolButtons = document.querySelectorAll(".open-diagram-editor-tool");
   const diagramExportSubmenus = document.querySelectorAll(".diagram-export-submenu");
   const diagramExportButtons = document.querySelectorAll(".export-active-diagram");
+  const imageExportSubmenus = document.querySelectorAll(".image-export-submenu");
+  const imageExportButtons = document.querySelectorAll(".export-active-image");
   const updateProjectButtons = document.querySelectorAll(".update-project-button");
   const setOriginalSourceRootButtons = document.querySelectorAll(".set-original-source-root");
   const editorFindDialogButtons = document.querySelectorAll(".open-editor-find-dialog");
@@ -8566,6 +8568,7 @@ Markdown content is processed client-side in your browser and sanitized before p
     clearGraphTabUnsavedChanges,
     onActiveTabChanged: function(tab) {
       updateDiagramExportMenu(tab);
+      updateImageExportMenu(tab);
       applyWordWrapPreference(isWordWrapEnabled());
       updateWordWrapToggleButtons();
       updateEditorSortDialogButtons();
@@ -17389,6 +17392,12 @@ async function* collectWorkspaceSearchFilesFromNeutralinoDirectory(parentPath, p
     diagramExportSubmenus.forEach((submenu) => { submenu.hidden = !isDiagramTab; });
   }
 
+  /** Show flattened image export formats only while an image-editor tab is active. */
+  function updateImageExportMenu(tab = tabsModule?.getActiveTab?.()) {
+    const isImageTab = tab?.type === "image-editor";
+    imageExportSubmenus.forEach((submenu) => { submenu.hidden = !isImageTab; });
+  }
+
   diagramExportButtons.forEach(function(button) {
     button.addEventListener("click", async function(e) {
       e.preventDefault();
@@ -17398,13 +17407,24 @@ async function* collectWorkspaceSearchFilesFromNeutralinoDirectory(parentPath, p
     });
   });
 
+  imageExportButtons.forEach(function(button) {
+    button.addEventListener("click", async function(e) {
+      e.preventDefault();
+      const activeTab = tabsModule?.getActiveTab?.();
+      if (activeTab?.type !== "image-editor") return;
+      await imageEditor.exportFlattenedImage(activeTab, { mimeType: button.dataset.imageExportMimeType });
+    });
+  });
+
   document.querySelectorAll("#desktopActionMenu, .application-menu-file > .application-menu-category-toggle").forEach(function(button) {
     button.addEventListener("click", function() {
       updateDiagramExportMenu();
+      updateImageExportMenu();
     });
   });
 
   updateDiagramExportMenu();
+  updateImageExportMenu();
 
   diagramEditorToolButtons.forEach(function(button) {
     button.addEventListener("click", function(e) {
@@ -18621,6 +18641,7 @@ async function* collectWorkspaceSearchFilesFromNeutralinoDirectory(parentPath, p
   await initTabs();
   window.markdownViewerOpenDocumentSourceFile = openDocumentSourceFile;
   updateDiagramExportMenu(tabsModule?.getActiveTab?.() || null);
+  updateImageExportMenu(tabsModule?.getActiveTab?.() || null);
   startupPerf?.mark?.("initTabs complete", {
     activeTabId,
     tabCount: Array.isArray(tabs) ? tabs.length : 0

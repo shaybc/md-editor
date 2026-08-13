@@ -452,11 +452,7 @@
         controller.documentStore.addRasterObject(selection.imageData, selection.rect, { name: "Pasted image", rotation: selection.rotation, layerId: layer.id });
       } else {
         const layer = controller.documentStore.activeLayer();
-        const canvas = document.createElement("canvas");
-        canvas.width = controller.view.canvas.width;
-        canvas.height = controller.view.canvas.height;
-        selection.drawFloatingLayer(canvas.getContext("2d"));
-        appendLayerPixelEdit(controller, layer, canvas.getContext("2d").getImageData(0, 0, canvas.width, canvas.height));
+        namespace.ImageEditorObjectPixelEditor.applySelectionPatchToLayerObject(controller.documentStore, layer, selection.imageData, selection.rect, selection.rotation);
       }
       controller.pendingContentDescriptor = null;
       controller.selectionBefore = null;
@@ -1528,14 +1524,11 @@
     function stampFloatingSelection(controller) {
       const { view, selection } = controller;
       if (!selection.floating || !selection.imageData || !selection.rect) return false;
-      selection.drawFloatingLayer(view.context);
       const layer = controller.documentStore.activeLayer();
       if (!layer || layer.locked || !layer.visible) return false;
-      const canvas = document.createElement("canvas");
-      canvas.width = view.canvas.width;
-      canvas.height = view.canvas.height;
-      selection.drawFloatingLayer(canvas.getContext("2d"));
-      return appendLayerPixelEdit(controller, layer, canvas.getContext("2d").getImageData(0, 0, canvas.width, canvas.height));
+      const changed = namespace.ImageEditorObjectPixelEditor.applySelectionPatchToLayerObject(controller.documentStore, layer, selection.imageData, selection.rect, selection.rotation);
+      if (changed) renderLayeredDocument(controller);
+      return changed;
     }
 
     function clearPixelRegionFromSelectedLayers(controller, rect) {
@@ -1885,6 +1878,11 @@
         controller.dragging = true;
         if (state.tool === "pencil" || state.tool === "brush") controller.freehandStrokeDistance = 0;
         if (state.tool === "select") {
+          if (selection.hasSelection && !selection.contains(point) && !selection.isPasting) {
+            const returnsToDrawingTool = !!selection.returnToolAfterPlacement;
+            dropSelection(controller);
+            if (returnsToDrawingTool) { controller.dragging = false; return; }
+          }
           if (!selection.hasSelection) selectPixelEditingObjectAtPoint(controller, point);
           if (selection.hasSelection && !selection.floating) {
             controller.selectionBefore = snapshot(view);
@@ -2631,6 +2629,7 @@
             !event.target.closest?.(".image-editor-gradient-side-color")) {
           finishGradientFill(controller);
         }
+        if (event.target.closest?.('.image-editor-layers-panel')) return;
         if (event.target.closest?.('[data-tool="select"]')) return;
         if (event.target.closest?.(".image-editor-selection-actions, .image-editor-history-actions")) return;
         if (event.target.closest?.(".image-editor-color-targets, .image-editor-color-palette")) return;

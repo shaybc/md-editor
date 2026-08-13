@@ -220,6 +220,12 @@
     toggle() { if (this.state.mode === "hidden") this.reveal(); else { this.state.mode = "hidden"; this.applyState(); this.reportState(); } }
     applyState() { this.element.hidden = this.state.mode === "hidden"; this.element.classList.toggle("minimized", this.state.mode === "minimized"); this.element.style.height = `${this.state.height}px`; }
     reportState() { this.onStateChanged({ ...this.state, expandedIds: [...this.expandedIds], selectedIds: [...this.store.selectedIds] }); }
+
+    /** Include a selected object's containing layer in the panel's visual selection. */
+    rowReflectsObjectSelection(item) {
+      if (item.kind !== 'layer') return false;
+      return [...this.store.selectedIds].some((id) => namespace.findDocumentObject(this.store.document, id)?.layer.id === item.id);
+    }
     toggleExpanded(id) { if (this.expandedIds.has(id)) this.expandedIds.delete(id); else this.expandedIds.add(id); this.render(); this.reportState(); }
 
     render() {
@@ -243,6 +249,7 @@
     createRow(item, depth, isNode, expandable, parentId = "") {
       const row = document.createElement("div");
       row.className = `image-editor-layer-row ${this.store.selectedIds.has(item.id) ? "selected" : ""}`;
+      if (this.rowReflectsObjectSelection(item)) row.classList.add('selected');
       row.dataset.layerItem = item.id;
       if (isNode) row.dataset.layerNode = "true";
       row.dataset.layerDepth = depth;

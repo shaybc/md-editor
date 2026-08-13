@@ -71,6 +71,66 @@
     return null;
   }
 
+  function selectedEditableObject(store, layer) {
+    return [...store.selectedIds]
+      .map((id) => namespace.findDocumentObject(store.document, id))
+      .find((found) => found?.layer.id === layer.id && found.object.visible !== false && !found.object.locked)?.object || null;
+  }
+
+  function imageDataCanvas(imageData) {
+    const canvas = document.createElement("canvas");
+    canvas.width = imageData.width;
+    canvas.height = imageData.height;
+    canvas.getContext("2d").putImageData(imageData, 0, 0);
+    return canvas;
+  }
+
+  function opaquePixelBounds(context, width, height) {
+    const pixels = context.getImageData(0, 0, width, height);
+    let left = width;
+    let top = height;
+    let right = -1;
+    let bottom = -1;
+    for (let y = 0; y < height; y += 1) {
+      for (let x = 0; x < width; x += 1) {
+        if (!pixels.data[(y * width + x) * 4 + 3]) continue;
+        left = Math.min(left, x);
+        top = Math.min(top, y);
+        right = Math.max(right, x);
+        bottom = Math.max(bottom, y);
+      }
+    }
+    return right < left || bottom < top ? null : { x: left, y: top, width: right - left + 1, height: bottom - top + 1 };
+  }
+
+  /** Composite floating selection pixels into their selected object without creating a detached layer edit. */
+  function applySelectionPatchToLayerObject(store, layer, imageData, rect, rotation = 0) {
+    if (!store || !layer || layer.locked || !imageData || !rect) return false;
+    const object = selectedEditableObject(store, layer);
+    if (!object) return false;
+    const width = store.document.canvas.width;
+    const height = store.document.canvas.height;
+    const canvas = document.createElement("canvas");
+    canvas.width = width;
+    canvas.height = height;
+    const context = canvas.getContext("2d", { willReadFrequently: true });
+    namespace.imageEditorContentRenderers.render(context, { ...object, opacity: 1 }, store.assets);
+    context.save();
+    context.translate(rect.x + rect.width / 2, rect.y + rect.height / 2);
+    context.rotate(Number(rotation) || 0);
+    context.drawImage(imageDataCanvas(imageData), -rect.width / 2, -rect.height / 2, rect.width, rect.height);
+    context.restore();
+    const combinedBounds = opaquePixelBounds(context, width, height);
+    if (!combinedBounds) return false;
+    const pixels = context.getImageData(combinedBounds.x, combinedBounds.y, combinedBounds.width, combinedBounds.height);
+    object.type = "raster";
+    object.payload = { assetId: store.addRasterAsset(pixels) };
+    object.bounds = { ...combinedBounds };
+    object.transform = { x: combinedBounds.x, y: combinedBounds.y, scaleX: 1, scaleY: 1, rotation: 0 };
+    store.notify({ type: "edit-object-pixels", ids: [layer.id, object.id] });
+    return true;
+  }
+
   function eraseObjectPixels(imageData, object, rect) {
     const bounds = object.bounds || {};
     const transform = object.transform || {};
@@ -213,5 +273,5 @@
     return true;
   }
 
-  namespace.ImageEditorObjectPixelEditor = { eraseLayerRegion, fillLayerObjectAtPoint, resizeCanvasBackground };
+  namespace.ImageEditorObjectPixelEditor = { eraseLayerRegion, fillLayerObjectAtPoint, applySelectionPatchToLayerObject, resizeCanvasBackground };
 })(typeof window !== "undefined" ? window : globalThis);

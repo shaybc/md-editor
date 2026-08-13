@@ -1237,6 +1237,76 @@ test('pixel deletion affects only the selected layer and preserves its object ro
   await expect(panel.locator('[data-layer-item]')).toHaveCount(initialPanelItemCount);
 });
 
+test('a pixel marquee stays active while the Layers panel changes and extends its targets', async ({ page }) => {
+  await page.goto('/');
+  await page.waitForFunction(() => !!window.markdownViewerApp?.modules?.keyboardShortcuts && !!window.markdownViewerApp?.services?.imageEditor, null, { timeout: 60000 });
+  await page.evaluate(() => {
+    window.markdownViewerApp.modules.apiClient.deactivateApiClientSidebar = () => {};
+    window.markdownViewerApp.modules.tabs.openBlankImageEditorInTab({ width: 120, height: 60, name: 'Pixel layer synchronization' });
+    const root = document.querySelector('.tab-view.active[data-tab-view-kind=image-editor]');
+    const controller = window.markdownViewerApp.services.imageEditor.getView(root.dataset.tabId);
+    const addObject = (name, x, colorIndex, targetId) => {
+      const layer = controller.documentStore.addLayer(name, targetId);
+      const pixels = new ImageData(30, 30);
+      for (let index = 0; index < pixels.data.length; index += 4) { pixels.data[index + colorIndex] = 255; pixels.data[index + 3] = 255; }
+      const object = controller.documentStore.addRasterObject(pixels, { x, y: 15, width: 30, height: 30 }, { name, layerId: layer.id });
+      controller.layerPanel.expandedIds.add(layer.id);
+      return { layer, object };
+    };
+    const first = addObject('First object', 10, 0, controller.documentStore.activeLayer().id);
+    const second = addObject('Second object', 70, 2, first.layer.id);
+    controller.documentStore.select(first.object.id);
+    controller.compositor.render({ canvas: controller.view.canvas });
+    window.__pixelSyncIds = { first: first.object.id, firstLayer: first.layer.id, second: second.object.id, secondLayer: second.layer.id };
+  });
+  const root = page.locator('.tab-view.active[data-tab-view-kind=image-editor]');
+  await expect(root.locator('.image-editor-shell')).toBeVisible();
+  await root.locator('[data-tool=select]').click();
+  const overlay = root.locator('.image-editor-overlay');
+  const box = await overlay.boundingBox();
+  const marquee = async (x1, x2) => {
+    await page.mouse.move(box.x + x1, box.y + 20);
+    await page.mouse.down();
+    await page.mouse.move(box.x + x2, box.y + 40, { steps: 3 });
+    await page.mouse.up();
+  };
+  await marquee(15, 35);
+  await marquee(75, 95);
+  await expect.poll(() => page.evaluate(() => {
+    const root = document.querySelector('.tab-view.active[data-tab-view-kind=image-editor]');
+    const controller = window.markdownViewerApp.services.imageEditor.getView(root.dataset.tabId);
+    const selected = [...controller.documentStore.selectedIds];
+    const selectedRows = [...root.querySelectorAll('.image-editor-layer-row.selected')].map((row) => row.dataset.layerItem);
+    return { selected, activeLayer: controller.documentStore.document.activeLayerId, selectedRows };
+  })).toEqual({
+    selected: [await page.evaluate(() => window.__pixelSyncIds.second)],
+    activeLayer: await page.evaluate(() => window.__pixelSyncIds.secondLayer),
+    selectedRows: [
+      await page.evaluate(() => window.__pixelSyncIds.secondLayer),
+      await page.evaluate(() => window.__pixelSyncIds.second)
+    ]
+  });
+  const selectionRect = await page.evaluate(() => {
+    const root = document.querySelector('.tab-view.active[data-tab-view-kind=image-editor]');
+    return { ...window.markdownViewerApp.services.imageEditor.getView(root.dataset.tabId).selection.rect };
+  });
+  const panel = root.locator('.image-editor-layers-panel');
+  await panel.locator(`[data-layer-item=${await page.evaluate(() => window.__pixelSyncIds.firstLayer)}]`).click();
+  await panel.locator(`[data-layer-item=${await page.evaluate(() => window.__pixelSyncIds.secondLayer)}]`).click({ modifiers: ['Control'] });
+  expect(await page.evaluate(() => {
+    const root = document.querySelector('.tab-view.active[data-tab-view-kind=image-editor]');
+    const controller = window.markdownViewerApp.services.imageEditor.getView(root.dataset.tabId);
+    return { hasSelection: controller.selection.hasSelection, rect: controller.selection.rect, selected: [...controller.documentStore.selectedIds] };
+  })).toEqual({
+    hasSelection: true,
+    rect: selectionRect,
+    selected: [
+      await page.evaluate(() => window.__pixelSyncIds.firstLayer),
+      await page.evaluate(() => window.__pixelSyncIds.secondLayer)
+    ]
+  });
+});
+
 test('pixel marquee lifts only the selected layer above a filled background', async ({ page }) => {
   await page.goto('/');
   await page.waitForFunction(() => !!window.markdownViewerApp?.modules?.tabs?.openBlankImageEditorInTab, null, { timeout: 60000 });
@@ -1291,6 +1361,92 @@ test('pixel marquee lifts only the selected layer above a filled background', as
       floatingOutsideTriangle: Array.from(overlayContext.getImageData(75, 55, 1, 1).data)
     };
   })).toEqual({ sourceAfterLift: [255, 0, 0, 255], floatingTriangle: [0, 0, 255, 255], floatingOutsideTriangle: [0, 0, 0, 0] });
+});
+
+test('File menu offers flattened PNG, JPEG, and WebP export for image tabs', async ({ page }) => {
+  await page.goto('/');
+  await page.waitForFunction(() => !!window.markdownViewerApp?.modules?.tabs?.openBlankImageEditorInTab, null, { timeout: 60000 });
+  await page.waitForFunction(() => !!window.markdownViewerApp?.modules?.keyboardShortcuts && !!window.markdownViewerApp?.services?.imageEditor?.exportFlattenedImage, null, { timeout: 60000 });
+  await page.evaluate(() => {
+    window.markdownViewerApp.modules.apiClient.deactivateApiClientSidebar = () => {};
+    window.__tabBeforeImageExport = window.markdownViewerApp.modules.tabs.getActiveTab().id;
+    window.markdownViewerApp.modules.tabs.openBlankImageEditorInTab({ width: 80, height: 60, name: 'File menu image export' });
+    window.__imageExportRequests = [];
+    window.markdownViewerApp.services.imageEditor.exportFlattenedImage = async (tab, options) => {
+      window.__imageExportRequests.push({ tabId: tab.id, mimeType: options.mimeType });
+      return true;
+    };
+  });
+  const fileMenu = page.locator('#desktop-application-menu .application-menu-file');
+  await fileMenu.locator('> .application-menu-category-toggle').click();
+  const exportMenu = fileMenu.locator('.image-export-submenu');
+  await expect(exportMenu).toBeVisible();
+  await exportMenu.hover();
+  await expect(exportMenu.locator('.export-active-image')).toHaveText(['Export PNG', 'Export JPEG', 'Export WebP']);
+  await exportMenu.locator('[data-image-export-mime-type="image/webp"]').click();
+  await expect.poll(() => page.evaluate(() => window.__imageExportRequests)).toEqual([
+    { tabId: await page.evaluate(() => window.markdownViewerApp.modules.tabs.getActiveTab().id), mimeType: 'image/webp' }
+  ]);
+  await page.evaluate(() => window.markdownViewerApp.modules.tabs.switchTab(window.__tabBeforeImageExport));
+  await fileMenu.locator('> .application-menu-category-toggle').click();
+  await expect(exportMenu).toBeHidden();
+});
+
+test('Shift-arrow pixel stamping remains attached to the selected object', async ({ page }) => {
+  await page.goto('/');
+  await page.waitForFunction(() => !!window.markdownViewerApp?.modules?.tabs?.openBlankImageEditorInTab, null, { timeout: 60000 });
+  await page.waitForFunction(() => !!window.markdownViewerApp?.modules?.keyboardShortcuts && !!window.markdownViewerApp?.services?.imageEditor, null, { timeout: 60000 });
+  await page.evaluate(() => {
+    window.markdownViewerApp.modules.apiClient.deactivateApiClientSidebar = () => {};
+    window.markdownViewerApp.modules.tabs.openBlankImageEditorInTab({ width: 100, height: 70, name: 'Object pixel stamping' });
+    const root = document.querySelector('.tab-view.active[data-tab-view-kind=image-editor]');
+    const controller = window.markdownViewerApp.services.imageEditor.getView(root.dataset.tabId);
+    const layer = controller.documentStore.addLayer('Rectangle', controller.documentStore.activeLayer().id);
+    const pixels = new ImageData(40, 30);
+    for (let y = 0; y < 10; y += 1) for (let x = 0; x < 10; x += 1) {
+      const index = (y * pixels.width + x) * 4;
+      pixels.data[index + 1] = 160;
+      pixels.data[index + 2] = 220;
+      pixels.data[index + 3] = 255;
+    }
+    const object = controller.documentStore.addRasterObject(pixels, { x: 30, y: 20, width: 40, height: 30 }, { name: 'Rectangle', layerId: layer.id });
+    controller.documentStore.select([object.id]);
+    controller.compositor.render({ canvas: controller.view.canvas });
+    window.__stampedObjectId = object.id;
+  });
+  const root = page.locator('.tab-view.active[data-tab-view-kind=image-editor]');
+  await expect(root.locator('.image-editor-shell')).toBeVisible();
+  await root.locator('[data-tool=select]').click();
+  const overlay = root.locator('.image-editor-overlay');
+  const box = await overlay.boundingBox();
+  await page.mouse.move(box.x + 30, box.y + 20);
+  await page.mouse.down();
+  await page.mouse.move(box.x + 40, box.y + 30, { steps: 3 });
+  await page.mouse.up();
+  for (let step = 0; step < 15; step += 1) await page.keyboard.press('Shift+ArrowRight');
+  const stamped = await page.evaluate(() => {
+    const root = document.querySelector('.tab-view.active[data-tab-view-kind=image-editor]');
+    const controller = window.markdownViewerApp.services.imageEditor.getView(root.dataset.tabId);
+    const found = window.MarkdownViewerImageEditor.findDocumentObject(controller.documentStore.document, window.__stampedObjectId);
+    const pixel = Array.from(controller.view.canvas.getContext('2d').getImageData(50, 25, 1, 1).data);
+    return { objectCount: found.layer.objects.length, objectPreserved: found.object.id === window.__stampedObjectId, pixelEdits: found.layer.pixelEdits.length, stampedPixel: pixel };
+  });
+  expect({ objectCount: stamped.objectCount, objectPreserved: stamped.objectPreserved, pixelEdits: stamped.pixelEdits }).toEqual({ objectCount: 1, objectPreserved: true, pixelEdits: 0 });
+  expect(stamped.stampedPixel[3]).toBe(255);
+  const moved = await page.evaluate(() => {
+    const root = document.querySelector('.tab-view.active[data-tab-view-kind=image-editor]');
+    const controller = window.markdownViewerApp.services.imageEditor.getView(root.dataset.tabId);
+    const object = window.MarkdownViewerImageEditor.findDocumentObject(controller.documentStore.document, window.__stampedObjectId).object;
+    object.transform.x += 20;
+    object.transform.y += 10;
+    controller.documentStore.notify({ type: 'transform', ids: [object.id] });
+    controller.compositor.render({ canvas: controller.view.canvas });
+    const context = controller.view.canvas.getContext('2d');
+    return { previousPixel: Array.from(context.getImageData(40, 25, 1, 1).data), movedStamp: Array.from(context.getImageData(70, 35, 1, 1).data) };
+  });
+  expect(moved.previousPixel).toEqual([255, 255, 255, 255]);
+  expect(moved.movedStamp[3]).toBe(255);
+  expect(moved.movedStamp.slice(0, 3)).not.toEqual([255, 255, 255]);
 });
 
 test('selected object outline refreshes and bucket fill follows the moved object', async ({ page }) => {

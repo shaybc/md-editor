@@ -82,7 +82,7 @@
       appendCommandGroup(category.content, [".new-file-submenu", ".new-project-button"]);
       appendCommandGroup(category.content, ["#import-from-github", "#import-from-file", "#import-from-folder", ".close-folder-button"]);
       appendCommandGroup(category.content, [".recent-files-submenu", ".recent-folders-submenu"]);
-      appendCommandGroup(category.content, [".save-current-file-button", ".save-as-file-button", ".save-all-files-button", ".reload-current-file-button", ".diagram-export-submenu"]);
+      appendCommandGroup(category.content, [".save-current-file-button", ".save-as-file-button", ".save-all-files-button", ".reload-current-file-button", ".diagram-export-submenu", ".image-export-submenu"]);
       appendCommandGroup(category.content, [".exit-app-button"]);
       return category;
     }
