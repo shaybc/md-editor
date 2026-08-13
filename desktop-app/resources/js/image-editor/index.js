@@ -154,6 +154,8 @@
       const { view, state } = controller;
       const { width: nextWidth, height: nextHeight } = normalizeCanvasDimensions(width, height);
       if (nextWidth === view.canvas.width && nextHeight === view.canvas.height) return false;
+      const previousWidth = view.canvas.width;
+      const previousHeight = view.canvas.height;
       const previous = document.createElement("canvas");
       previous.width = view.canvas.width;
       previous.height = view.canvas.height;
@@ -165,6 +167,7 @@
       state.width = nextWidth;
       state.height = nextHeight;
       if (controller.documentStore) {
+        namespace.ImageEditorObjectPixelEditor.resizeCanvasBackground(controller.documentStore, previousWidth, previousHeight, nextWidth, nextHeight, state.backgroundColor);
         controller.documentStore.document.canvas.width = nextWidth;
         controller.documentStore.document.canvas.height = nextHeight;
       }
@@ -218,7 +221,7 @@
         height: state.height
       };
       const commandState = state.getCommandState(history, selection);
-      if (state.selectionMode === "object" && controller.documentStore.selectedIds.size) {
+      if (state.tool === "move" && controller.documentStore.selectedIds.size) {
         commandState.canCut = commandState.canCopy = commandState.canDelete = true;
       }
       view.update(state, commandState);
@@ -228,8 +231,12 @@
     function commitTransaction(controller, before) {
       const after = snapshot(controller.view);
       const documentBefore = controller.documentStore.snapshot();
-      const layer = controller.documentStore.activeLayer();
-      if (!applyPresentationEditsToLayer(controller, layer, before, after)) {
+      const layers = controller.documentStore.selectedContentLayers({ editableOnly: true });
+      let changed = false;
+      layers.forEach((layer) => {
+        if (applyPresentationEditsToLayer(controller, layer, before, after)) changed = true;
+      });
+      if (!changed) {
         if (before?.width !== after.width || before?.height !== after.height) {
           controller.state.markChanged();
           renderLayeredDocument(controller);
@@ -444,18 +451,22 @@
       return true;
     }
 
-    function fillActiveLayer(controller, point, mode) {
-      const layer = controller.documentStore.activeLayer();
-      if (!layer || layer.locked || !layer.visible) return false;
+    function fillSelectedLayers(controller, point, mode) {
+      const layers = controller.documentStore.selectedContentLayers({ editableOnly: true });
+      if (!layers.length) return false;
       const before = controller.documentStore.snapshot();
-      const canvas = controller.compositor.renderLayer(layer);
-      const context = canvas.getContext("2d", { willReadFrequently: true });
-      const layerBefore = context.getImageData(0, 0, canvas.width, canvas.height);
-      const changed = mode === "pattern" ? namespace.patternFill(context, point, controller.state) : namespace.floodFill(context, point, controller.state);
-      if (!changed) return false;
-      const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
-      appendLayerPixelEdit(controller, layer, changedPixelOverlay(layerBefore, imageData));
-      controller.documentStore.notify({ type: "fill-layer", ids: [layer.id] });
+      const changedLayers = layers.filter((layer) => {
+        const objectFill = namespace.ImageEditorObjectPixelEditor.fillLayerObjectAtPoint(controller.documentStore, layer, point, controller.state, mode);
+        if (objectFill.handled) return objectFill.changed;
+        const canvas = controller.compositor.renderLayer(layer);
+        const context = canvas.getContext("2d", { willReadFrequently: true });
+        const layerBefore = context.getImageData(0, 0, canvas.width, canvas.height);
+        const changed = mode === "pattern" ? namespace.patternFill(context, point, controller.state) : namespace.floodFill(context, point, controller.state);
+        if (changed) appendLayerPixelEdit(controller, layer, changedPixelOverlay(layerBefore, context.getImageData(0, 0, canvas.width, canvas.height)));
+        return changed;
+      });
+      if (!changedLayers.length) return false;
+      controller.documentStore.notify({ type: "fill-layer", ids: changedLayers.map((layer) => layer.id) });
       controller.history.push(before, controller.documentStore.snapshot(), "Bucket fill");
       controller.state.markChanged();
       renderLayeredDocument(controller);
@@ -481,11 +492,14 @@
       if (!layer) return false;
       controller.selectionBefore = before || snapshot(controller.view);
       controller.pixelSelectionDocumentBefore = controller.documentStore.snapshot();
-      controller.pendingContentDescriptor = layer.descriptor || {
+      const descriptor = layer.descriptor || {
         tool: controller.state.tool,
-        name: controller.state.tool.replace(/(^|-)([a-z])/g, (_match, prefix, letter) => `${prefix ? " " : ""}${letter.toUpperCase()}`),
         geometry: null,
         style: namespace.captureImageEditorToolStyle(controller.state)
+      };
+      controller.pendingContentDescriptor = {
+        ...descriptor,
+        name: descriptor.name || namespace.imageEditorToolContentName(descriptor.tool)
       };
       controller.selection.setFloatingLayer(layer.imageData, layer.rect, origin, controller.state.tool);
       controller.state.setTool("select");
@@ -1082,7 +1096,7 @@
         applyZoom(controller, state.zoom * (action === "zoom-in" ? 1.25 : 0.8));
         return;
       }
-      if (state.tool === "select" && state.selectionMode === "object" && !selection.floating && selectedDocumentObjects(controller).length) {
+      if (state.tool === "move" && !selection.floating && selectedDocumentObjects(controller).length) {
         if (action === "copy") return copyObjectSelectionToClipboard(controller);
         if (action === "cut") await copyObjectSelectionToClipboard(controller);
         if (action === "cut" || action === "delete") return commitDocumentMutation(controller, action === "cut" ? "Cut objects" : "Delete objects", () => controller.documentStore.deleteSelected());
@@ -1136,7 +1150,7 @@
       } else if (action === "delete") {
         selection.delete(view.context, state.backgroundColor);
       }
-      const changed = (action === "cut" || action === "delete") && clearPixelRegionFromActiveLayer(controller, rect);
+      const changed = (action === "cut" || action === "delete") && clearPixelRegionFromSelectedLayers(controller, rect);
       drawSelectionOverlay(controller);
       if (changed) {
         controller.history.push(documentBefore, controller.documentStore.snapshot(), action === "cut" ? "Cut pixels" : "Delete pixels");
@@ -1319,6 +1333,7 @@
           commitText(controller);
           if (toolButton.dataset.tool !== "select") dropSelection(controller);
           state.setTool(toolButton.dataset.tool);
+          if (state.tool === "move") drawObjectSelectionOverlay(controller);
           syncTab(controller);
           return;
         }
@@ -1351,13 +1366,6 @@
         if (side === "start") state.gradientStartColor = event.target.value;
         else state.gradientEndColor = event.target.value;
         renderGradientFill(controller);
-        syncTab(controller);
-      });
-      view.shell.querySelector(".image-editor-select-mode").addEventListener("change", (event) => {
-        state.selectionMode = event.target.value === "pixel" ? "pixel" : "object";
-        controller.selection.clear();
-        controller.documentStore.select([]);
-        view.overlayContext.clearRect(0, 0, view.overlay.width, view.overlay.height);
         syncTab(controller);
       });
       view.shell.querySelector(".image-editor-pattern-fill-type").addEventListener("change", (event) => {
@@ -1512,18 +1520,13 @@
       return appendLayerPixelEdit(controller, layer, canvas.getContext("2d").getImageData(0, 0, canvas.width, canvas.height));
     }
 
-    function clearPixelRegionFromActiveLayer(controller, rect) {
-      const layer = controller.documentStore.activeLayer();
-      if (!layer || layer.locked || !rect) return false;
-      const mask = new ImageData(controller.view.canvas.width, controller.view.canvas.height);
-      const left = Math.max(0, Math.floor(rect.x));
-      const top = Math.max(0, Math.floor(rect.y));
-      const right = Math.min(mask.width, Math.ceil(rect.x + rect.width));
-      const bottom = Math.min(mask.height, Math.ceil(rect.y + rect.height));
-      for (let y = top; y < bottom; y += 1) {
-        for (let x = left; x < right; x += 1) mask.data[(y * mask.width + x) * 4 + 3] = 255;
-      }
-      return appendLayerPixelEdit(controller, layer, mask, "destination-out");
+    function clearPixelRegionFromSelectedLayers(controller, rect) {
+      if (!rect) return false;
+      let changed = false;
+      controller.documentStore.selectedContentLayers({ editableOnly: true }).forEach((layer) => {
+        if (namespace.ImageEditorObjectPixelEditor.eraseLayerRegion(controller.documentStore, layer, rect)) changed = true;
+      });
+      return changed;
     }
     function dropSelection(controller) {
       const { selection } = controller;
@@ -1820,10 +1823,10 @@
             return;
           }
           if (state.bucketFillMode === "pattern") {
-            if (!fillActiveLayer(controller, point, "pattern")) syncTab(controller);
+            if (!fillSelectedLayers(controller, point, "pattern")) syncTab(controller);
             return;
           }
-          if (!fillActiveLayer(controller, point, "solid")) syncTab(controller);
+          if (!fillSelectedLayers(controller, point, "solid")) syncTab(controller);
           return;
         }        if (state.tool === "polygon") {
           if (!controller.polygonPoints.length) controller.gestureBefore = snapshot(view);
@@ -1831,10 +1834,14 @@
           namespace.drawPolygon(view.overlayContext, controller.polygonPoints, state, false);
           return;
         }
-        if (state.tool === "select" && state.selectionMode === "object" && !selection.floating) {
+        if (state.tool === "move" && !selection.floating) {
           event.preventDefault();
           const transformHandle = objectTransformHandleAt(controller, point);
-          const hit = transformHandle || controller.objectSelection.selectPoint(point, { additive: event.shiftKey, cycle: event.altKey });
+          const existingHit = transformHandle ? null : controller.objectSelection.hitTest(point, { cycle: event.altKey });
+          const selectedObjectIds = new Set(selectedDocumentObjects(controller).map((object) => object.id));
+          const hit = transformHandle || (existingHit && selectedObjectIds.has(existingHit)
+            ? existingHit
+            : controller.objectSelection.selectPoint(point, { additive: event.shiftKey, cycle: event.altKey }));
           const objects = selectedDocumentObjects(controller);
           const bounds = combinedObjectBounds(objects);
           controller.objectGesture = {
@@ -1870,7 +1877,7 @@
             shift: event.shiftKey,
             zoom: state.zoom
           });
-          if (gesture.sourceCleared) clearPixelRegionFromActiveLayer(controller, selection.rect);
+          if (gesture.sourceCleared) clearPixelRegionFromSelectedLayers(controller, selection.rect);
           if (gesture.action === "drop") dropSelection(controller);
           if (gesture.action === "drop" || gesture.action === "ignore") {
             controller.dragging = false;
@@ -1882,9 +1889,9 @@
         overlay.setPointerCapture?.(event.pointerId);
       });
       overlay.addEventListener("pointermove", (event) => {
-        const point = view.pointFromEvent(event, state.tool !== "path" && !selection.isTransforming && !(state.tool === "select" && state.selectionMode === "object"));
+        const point = view.pointFromEvent(event, state.tool !== "path" && !selection.isTransforming && state.tool !== "move");
         if (!controller.dragging) {
-          if (state.tool === "select" && state.selectionMode === "object" && !selection.floating) {
+          if (state.tool === "move" && !selection.floating) {
             const handle = objectTransformHandleAt(controller, point);
             if (handle?.type === "rotate") overlay.style.cursor = rotationCursor;
             else if (handle?.type === "resize") overlay.style.cursor = handle.handle.length === 2 ? `${handle.handle}-resize` : `${handle.handle}-resize`;
@@ -1987,7 +1994,7 @@
           controller.lastPoint = point;
           return;
         }
-        if (state.tool === "select" && state.selectionMode === "object" && controller.objectGesture) {
+        if (state.tool === "move" && controller.objectGesture) {
           const gesture = controller.objectGesture;
           gesture.point = point;
           if (gesture.mode === "move") {
@@ -2024,7 +2031,7 @@
       overlay.addEventListener("pointerup", (event) => {
         if (!controller.dragging) return;
         controller.dragging = false;
-        const point = view.pointFromEvent(event, state.tool !== "path" && !(state.tool === "select" && state.selectionMode === "object"));
+        const point = view.pointFromEvent(event, state.tool !== "path" && state.tool !== "move");
         if (state.tool === "bucket" && controller.gradientFillTool.isEditing) {
           controller.gradientFillTool.update(point);
           controller.gradientFillTool.end();
@@ -2082,7 +2089,7 @@
           openEditableTextBox(controller, textRect);
         } else if (state.tool === "pencil" || state.tool === "brush") {
           commitTransaction(controller, controller.gestureBefore);
-        } else if (state.tool === "select" && state.selectionMode === "object" && controller.objectGesture) {
+        } else if (state.tool === "move" && controller.objectGesture) {
           const gesture = controller.objectGesture;
           controller.objectGesture = null;
           if (gesture.mode === "marquee") {
@@ -2107,7 +2114,7 @@
         }
       });
       overlay.addEventListener("dblclick", (event) => {
-        if (state.tool === "select" && state.selectionMode === "object") {
+        if (state.tool === "move") {
           const objectId = controller.objectSelection.hitTest(view.pointFromEvent(event, false));
           const found = objectId ? namespace.findDocumentObject(controller.documentStore.document, objectId) : null;
           if (found?.object?.type === "text" && !found.object.locked && !found.layer.locked) {
@@ -2295,7 +2302,7 @@
 
     function dropSelectionWithKeyboard(controller, event) {
       const { selection } = controller;
-      if (event.key === "Escape" && controller.state.tool === "select" && controller.state.selectionMode === "object" && !selection.floating && controller.documentStore.selectedIds.size) {
+      if (event.key === "Escape" && controller.state.tool === "move" && !selection.floating && controller.documentStore.selectedIds.size) {
         event.preventDefault();
         controller.documentStore.select([]);
         drawObjectSelectionOverlay(controller);
@@ -2323,7 +2330,7 @@
         shift: event.shiftKey
       });
       if (!move.started) return true;
-      if (move.sourceCleared) clearPixelRegionFromActiveLayer(controller, selection.rect);
+      if (move.sourceCleared) clearPixelRegionFromSelectedLayers(controller, selection.rect);
       const movement = selection.moveSelection(delta.x, delta.y, state);
       selection.endMove();
       drawSelectionOverlay(controller);
@@ -2344,16 +2351,20 @@
         if (node.kind !== "layer" || node.visible === false || node.locked) return;
         (node.objects || []).forEach((object) => { if (object.visible !== false && !object.locked) objectIds.push(object.id); });
       });
-      state.selectionMode = "object";
-      state.setTool("select");
+      state.setTool("move");
       controller.documentStore.select(objectIds);
       drawObjectSelectionOverlay(controller);
       syncTab(controller);
       return true;
     }
+    /** Keep editor shortcuts out of native text-entry controls and application dialogs. */
+    function isNativeTextEditingTarget(target) {
+      return target instanceof global.HTMLElement && !!target.closest("input, textarea, select, [contenteditable=true], [contenteditable='']");
+    }
     function bindKeyboard(controller) {
       const listener = (event) => {
         if (deps.getActiveTab?.()?.id !== controller.tab.id) return;
+        if (isNativeTextEditingTarget(event.target) && event.target !== controller.view.textInput) return;
         const primary = event.ctrlKey || event.metaKey;
         if (primary && event.key.toLowerCase() === "s" && event.defaultPrevented) return;
         if (controller.view.textInput.hidden === false) {
@@ -2723,7 +2734,7 @@
         }
       });
       controller.removeObjectOverlayListener = controller.documentStore.subscribe((change) => {
-        if (change.type === "selection" && controller.state.tool === "select" && controller.state.selectionMode === "object") drawObjectSelectionOverlay(controller);
+        if (change.type === "selection" && controller.state.tool === "move") drawObjectSelectionOverlay(controller);
       });
       views.set(tab.id, controller);
       bindToolbar(controller);

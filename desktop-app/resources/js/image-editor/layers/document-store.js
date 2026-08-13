@@ -57,6 +57,36 @@
       return first;
     }
 
+    /**
+     * Resolve selected layers, object owners, and selected groups into one deduplicated layer target list.
+     * @param {{ editableOnly?: boolean, fallbackToActive?: boolean }} options - Filtering and fallback behavior.
+     * @returns {Array<object>} Layers affected by a content-editing action in panel selection order.
+     */
+    selectedContentLayers(options = {}) {
+      const layers = [];
+      const seen = new Set();
+      const includeLayer = (layer, inheritedVisible = true, inheritedLocked = false) => {
+        if (!layer || seen.has(layer.id)) return;
+        if (options.editableOnly && (!inheritedVisible || inheritedLocked || layer.visible === false || layer.locked)) return;
+        seen.add(layer.id);
+        layers.push(layer);
+      };
+      const includeNode = (node, inheritedVisible = true, inheritedLocked = false) => {
+        if (!node) return;
+        const visible = inheritedVisible && node.visible !== false;
+        const locked = inheritedLocked || node.locked === true;
+        if (node.kind === "layer") { includeLayer(node, visible, locked); return; }
+        (node.children || []).forEach((child) => includeNode(child, visible, locked));
+      };
+      this.selectedIds.forEach((id) => {
+        const object = namespace.findDocumentObject(this.document, id);
+        if (object) { includeLayer(object.layer); return; }
+        includeNode(namespace.findDocumentNode(this.document, id)?.node);
+      });
+      if (!layers.length && options.fallbackToActive !== false) includeLayer(this.activeLayer());
+      return layers;
+    }
+
     /** Apply a command only when it leaves the document hierarchy valid. */
     applyCommand(command) {
       if (!command || typeof command.apply !== "function" || typeof command.revert !== "function") throw new TypeError("A document command must provide apply and revert functions.");
@@ -104,10 +134,10 @@
       return layer;
     }
 
-    /** Add a hierarchy group above the active layer. */
-    addGroup(name = "Group") {
+    /** Add a hierarchy group above a requested node, or at the root when no target is provided. */
+    addGroup(name = "Group", targetId = this.document.activeLayerId) {
       const group = namespace.createLayerGroup(this.uniqueName(name));
-      const target = namespace.findDocumentNode(this.document, this.document.activeLayerId);
+      const target = targetId ? namespace.findDocumentNode(this.document, targetId) : null;
       if (target) target.collection.splice(target.index, 0, group);
       else this.document.nodes.unshift(group);
       this.selectedIds = new Set([group.id]);
@@ -184,45 +214,86 @@
       return true;
     }
 
-    /** Move one hierarchy node before another while rejecting recursive group drops. */
-    moveNode(sourceId, targetId) {
-      if (sourceId === targetId) return false;
-      const source = namespace.findDocumentNode(this.document, sourceId);
-      const target = namespace.findDocumentNode(this.document, targetId);
-      if (!source || !target) return false;
-      if (source.node.kind === "group") {
-        let containsTarget = false;
-        namespace.walkDocumentNodes({ nodes: source.node.children || [] }, (node) => { if (node.id === targetId) containsTarget = true; });
-        if (containsTarget) return false;
-      }
-      source.collection.splice(source.index, 1);
-      const refreshedTarget = namespace.findDocumentNode(this.document, targetId);
-      refreshedTarget.collection.splice(refreshedTarget.index, 0, source.node);
-      this.notify({ type: "reorder", ids: [sourceId] });
-      return true;
+    /** Move selected layer-panel rows to a before, after, or inside destination. */
+    moveItems(sourceIds, targetId, placement = "before") {
+      const ids = [...new Set(sourceIds || [])];
+      if (!ids.length || ids.includes(targetId) || !["before", "after", "inside"].includes(placement)) return false;
+      const objectSources = ids.map((id) => namespace.findDocumentObject(this.document, id));
+      const nodeSources = ids.map((id) => namespace.findDocumentNode(this.document, id));
+      if (objectSources.every(Boolean)) return this.moveObjects(objectSources, targetId, placement);
+      if (nodeSources.every(Boolean)) return this.moveHierarchyNodes(nodeSources, targetId, placement);
+      return false;
     }
 
-    /** Move selected sibling hierarchy rows as one stable block before a target row. */
-    moveNodes(sourceIds, targetId) {
-      const ids = [...new Set(sourceIds || [])].filter((id) => id !== targetId);
-      if (!ids.length) return false;
-      const sources = ids.map((id) => namespace.findDocumentNode(this.document, id)).filter(Boolean);
+    /** Move hierarchy nodes across root and group collections while preserving panel order. */
+    moveHierarchyNodes(sources, targetId, placement) {
       const target = namespace.findDocumentNode(this.document, targetId);
-      if (!target || sources.length !== ids.length || sources.some((source) => source.collection !== sources[0].collection || source.collection !== target.collection)) return false;
-      for (const source of sources) {
+      if (!target || (placement === "inside" && target.node.kind !== "group")) return false;
+      const selectedIds = new Set(sources.map((source) => source.node.id));
+      const topLevelSources = sources.filter((source) => {
+        let parent = source.parent;
+        while (parent) {
+          if (selectedIds.has(parent.id)) return false;
+          parent = namespace.findDocumentNode(this.document, parent.id)?.parent;
+        }
+        return true;
+      });
+      for (const source of topLevelSources) {
         if (source.node.kind !== "group") continue;
         let containsTarget = false;
         namespace.walkDocumentNodes({ nodes: source.node.children || [] }, (node) => { if (node.id === targetId) containsTarget = true; });
         if (containsTarget) return false;
       }
-      const ordered = sources.sort((a, b) => a.index - b.index).map((source) => source.node);
-      [...sources].sort((a, b) => b.index - a.index).forEach((source) => source.collection.splice(source.index, 1));
+      const panelOrder = new Map();
+      namespace.walkDocumentNodes(this.document, (node) => panelOrder.set(node.id, panelOrder.size));
+      const ordered = [...topLevelSources].sort((left, right) => panelOrder.get(left.node.id) - panelOrder.get(right.node.id)).map((source) => source.node);
+      [...topLevelSources].sort((left, right) => right.index - left.index).forEach((source) => source.collection.splice(source.index, 1));
       const refreshed = namespace.findDocumentNode(this.document, targetId);
-      refreshed.collection.splice(refreshed.index, 0, ...ordered);
+      if (!refreshed) return false;
+      const collection = placement === "inside" ? refreshed.node.children : refreshed.collection;
+      const insertionIndex = placement === "inside" ? 0 : refreshed.index + (placement === "after" ? 1 : 0);
+      collection.splice(insertionIndex, 0, ...ordered);
       this.selectedIds = new Set(ordered.map((node) => node.id));
       this.notify({ type: "reorder", ids: [...this.selectedIds] });
       return true;
     }
+
+    /** Move objects within or between content layers while preserving their panel order. */
+    moveObjects(sources, targetId, placement) {
+      if (sources.some((source) => source.object.locked || source.layer.locked)) return false;
+      const targetObject = namespace.findDocumentObject(this.document, targetId);
+      const targetNode = namespace.findDocumentNode(this.document, targetId)?.node;
+      const targetLayer = targetObject?.layer || (targetNode?.kind === "layer" ? targetNode : null);
+      if (!targetLayer || targetLayer.locked) return false;
+      const objectOrder = new Map();
+      namespace.walkDocumentNodes(this.document, (node) => {
+        if (node.kind === "layer") (node.objects || []).forEach((object) => objectOrder.set(object.id, objectOrder.size));
+      });
+      const ordered = [...sources].sort((left, right) => objectOrder.get(left.object.id) - objectOrder.get(right.object.id)).map((source) => source.object);
+      const removals = new Map();
+      sources.forEach((source) => {
+        if (!removals.has(source.layer)) removals.set(source.layer, []);
+        removals.get(source.layer).push(source.index);
+      });
+      removals.forEach((indices, layer) => [...indices].sort((left, right) => right - left).forEach((index) => layer.objects.splice(index, 1)));
+      let insertionIndex = placement === "after" ? targetLayer.objects.length : 0;
+      if (targetObject) {
+        const refreshedIndex = targetLayer.objects.findIndex((object) => object.id === targetId);
+        if (refreshedIndex < 0) return false;
+        insertionIndex = refreshedIndex + (placement === "after" ? 1 : 0);
+      }
+      targetLayer.objects.splice(insertionIndex, 0, ...ordered);
+      this.document.activeLayerId = targetLayer.id;
+      this.selectedIds = new Set(ordered.map((object) => object.id));
+      this.notify({ type: "reorder", ids: [...this.selectedIds] });
+      return true;
+    }
+
+    /** Move one hierarchy node before another. */
+    moveNode(sourceId, targetId) { return this.moveItems([sourceId], targetId, "before"); }
+
+    /** Move selected hierarchy nodes as one stable block before another. */
+    moveNodes(sourceIds, targetId) { return this.moveItems(sourceIds, targetId, "before"); }
 
     /** Append an object to a target layer and select it. */
     addObject(object, layerId = this.document.activeLayerId) {

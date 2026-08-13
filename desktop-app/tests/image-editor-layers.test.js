@@ -55,6 +55,34 @@ test("groups preserve sibling order through group and ungroup transactions", () 
   assert.deepEqual(JSON.parse(JSON.stringify(store.document.nodes.map((node) => node.name))), ["Second", "Background"]);
 });
 
+test("drag placement moves layers into and out of groups while preserving multiple-row order", () => {
+  const layers = loadLayers();
+  const store = new layers.ImageEditorDocumentStore(layers.createImageDocument(100, 80));
+  const group = store.addGroup("Group", null);
+  const first = store.addLayer("First", null);
+  const second = store.addLayer("Second", null);
+
+  assert.equal(store.moveItems([second.id, first.id], group.id, "inside"), true);
+  assert.deepEqual(JSON.parse(JSON.stringify(group.children.map((node) => node.name))), ["Second", "First"]);
+  assert.equal(store.moveItems([second.id, first.id], group.id, "after"), true);
+  assert.deepEqual(JSON.parse(JSON.stringify(store.document.nodes.map((node) => node.name))), ["Group", "Second", "First", "Background"]);
+  assert.equal(layers.validateImageDocument(store.document), true);
+});
+
+test("drag placement moves multiple objects between layers in panel order", () => {
+  const layers = loadLayers();
+  const store = new layers.ImageEditorDocumentStore(layers.createImageDocument(100, 80));
+  const source = store.activeLayer();
+  const first = store.addRasterObject(pixels(), { x: 0, y: 0, width: 2, height: 2 }, { name: "First", layerId: source.id });
+  const second = store.addRasterObject(pixels(), { x: 2, y: 0, width: 2, height: 2 }, { name: "Second", layerId: source.id });
+  const target = store.addLayer("Target", source.id);
+
+  assert.equal(store.moveItems([first.id, second.id], target.id, "inside"), true);
+  assert.deepEqual(JSON.parse(JSON.stringify(target.objects.map((object) => object.name))), ["Second", "First"]);
+  assert.equal(source.objects.length, 0);
+  assert.equal(layers.validateImageDocument(store.document), true);
+});
+
 test("object selection ignores hidden and locked content and supports off-canvas objects", () => {
   const layers = loadLayers();
   const store = new layers.ImageEditorDocumentStore(layers.createImageDocument(20, 20));

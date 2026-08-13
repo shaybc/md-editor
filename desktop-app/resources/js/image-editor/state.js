@@ -3,7 +3,7 @@
   "use strict";
 
   const namespace = global.MarkdownViewerImageEditor = global.MarkdownViewerImageEditor || {};
-  const TOOLS = Object.freeze(["select", "pencil", "brush", "line", "curve", "path", "arc", "spiral", "rectangular-grid", "polar-grid", "rectangle", "rounded-rectangle", "callout", "oval-callout", "cloud-callout", "ellipse", "polygon", "triangle", "diamond", "star", "arrow", "lightning", "heart", "bucket", "text"]);
+  const TOOLS = Object.freeze(["select", "move", "pencil", "brush", "line", "curve", "path", "arc", "spiral", "rectangular-grid", "polar-grid", "rectangle", "rounded-rectangle", "callout", "oval-callout", "cloud-callout", "ellipse", "polygon", "triangle", "diamond", "star", "arrow", "lightning", "heart", "bucket", "text"]);
 
   class ImageEditorState {
     /**
@@ -14,8 +14,9 @@
       this.width = Math.max(1, Number(options.width || 1));
       this.height = Math.max(1, Number(options.height || 1));
       this.mimeType = options.mimeType || "image/png";
-      this.tool = TOOLS.includes(options.tool) ? options.tool : "pencil";
-      this.selectionMode = options.selectionMode === "pixel" ? "pixel" : "object";
+      const requestedTool = TOOLS.includes(options.tool) ? options.tool : "pencil";
+      this.tool = requestedTool === "select" && options.selectionMode === "object" ? "move" : requestedTool;
+      this.selectionMode = this.tool === "move" ? "object" : "pixel";
       this.foregroundColor = options.foregroundColor || "#111111";
       this.backgroundColor = options.backgroundColor || "#ffffff";
       this.brushSize = Math.max(1, Math.min(64, Number(options.brushSize || 8)));
@@ -59,6 +60,8 @@
     setTool(tool) {
       if (!TOOLS.includes(tool)) throw new RangeError(`Unsupported image tool: ${tool}`);
       this.tool = tool;
+      if (tool === "select") this.selectionMode = "pixel";
+      if (tool === "move") this.selectionMode = "object";
       return tool;
     }
 

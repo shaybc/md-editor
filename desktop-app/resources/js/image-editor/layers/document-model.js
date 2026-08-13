@@ -44,6 +44,7 @@
   /** Create an empty versioned layered document. */
   function createImageDocument(width, height, backgroundColor = "#ffffff") {
     const layer = createContentLayer("Background");
+    layer.extensions.canvasBackground = true;
     return {
       format: DOCUMENT_FORMAT, version: DOCUMENT_VERSION,
       canvas: { width: Math.max(1, Math.round(Number(width) || 1)), height: Math.max(1, Math.round(Number(height) || 1)), backgroundColor },

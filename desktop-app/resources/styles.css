@@ -1263,10 +1263,15 @@ audio.file-preview-content {
 .image-editor-layer-opacity { display: flex; align-items: center; gap: 6px; padding: 6px 9px; border-bottom: 1px solid var(--border-color); font-size: .75rem; }
 .image-editor-layer-opacity label { display: flex; flex: 1; align-items: center; gap: 6px; }
 .image-editor-layer-opacity input { flex: 1; min-width: 0; }
-.image-editor-layer-list { min-height: 80px; flex: 1; overflow: auto; padding: 3px; }
+.image-editor-layer-list { position: relative; min-height: 80px; flex: 1; overflow: auto; padding: 3px; }
 .image-editor-layer-row { display: grid; grid-template-columns: 22px 22px 25px minmax(0,1fr) 24px; min-height: 29px; align-items: center; padding-left: calc(var(--layer-depth) * 15px); border-radius: 4px; font-size: .78rem; cursor: default; }
 .image-editor-layer-row:hover { background: var(--hover-bg); }
 .image-editor-layer-row.selected { background: color-mix(in srgb, var(--accent-color) 28%, transparent); outline: 1px solid color-mix(in srgb, var(--accent-color) 65%, transparent); }
+.image-editor-layer-drop-indicator {
+  position: absolute; z-index: 3; right: 4px; left: calc(4px + var(--drop-depth) * 15px); height: 2px;
+  pointer-events: none; background: var(--accent-color); box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent-color) 35%, transparent);
+}
+.image-editor-layer-drop-indicator::before { position: absolute; top: -3px; left: -1px; width: 8px; height: 8px; border-radius: 50%; background: var(--accent-color); content: ""; }
 .image-editor-layer-thumbnail { display: inline-flex; width: 21px; height: 21px; align-items: center; justify-content: center; border: 1px solid var(--border-color); background: var(--content-bg); }
 .image-editor-layer-name { overflow: hidden; padding: 0 5px; text-overflow: ellipsis; white-space: nowrap; }
 .image-editor-layers-panel footer { padding: 5px 7px 8px; border-top: 1px solid var(--border-color); }

@@ -700,7 +700,7 @@ test('diamond and line tools return after each floating shape is placed', async 
   await expect(page.locator('[data-tool=line]')).toHaveClass(/active/);
 });
 
-test('placing an unfilled shape preserves canvas pixels beneath its transparent interior', async ({ page }) => {
+test('placing an unfilled shape preserves transparency and names new or existing layers correctly', async ({ page }) => {
   await page.goto('/');
   await page.waitForFunction(() => !!window.markdownViewerApp?.modules?.tabs?.openBlankImageEditorInTab, null, { timeout: 60000 });
   await page.waitForFunction(() => !!window.markdownViewerApp?.modules?.keyboardShortcuts && !!window.markdownViewerApp?.services?.imageEditor, null, { timeout: 60000 });
@@ -740,6 +740,37 @@ test('placing an unfilled shape preserves canvas pixels beneath its transparent 
   });
   expect(placed.center).toEqual([0, 0, 255, 255]);
   expect(placed.redPixels).toBeGreaterThan(20);
+  expect(await page.evaluate(() => {
+    const root = document.querySelector('.tab-view.active[data-tab-view-kind=image-editor]');
+    const controller = window.markdownViewerApp.services.imageEditor.getView(root.dataset.tabId);
+    const layer = controller.documentStore.activeLayer();
+    return { layerName: layer.name, objectNames: layer.objects.map((object) => object.name) };
+  })).toEqual({ layerName: 'Rectangle', objectNames: ['Rectangle'] });
+
+  await page.evaluate(() => {
+    const root = document.querySelector('.tab-view.active[data-tab-view-kind=image-editor]');
+    const controller = window.markdownViewerApp.services.imageEditor.getView(root.dataset.tabId);
+    controller.documentStore.activeLayer().name = 'City';
+    controller.layerPanel.state.placementMode = 'active';
+    window.__rectangleLayerCount = controller.documentStore.document.nodes.filter((node) => node.kind === 'layer').length;
+    controller.documentStore.notify({ type: 'rename-layer' });
+  });
+  await page.locator('[data-tool=rectangle]').click();
+  await page.mouse.move(box.x + 65, box.y + 10);
+  await page.mouse.down();
+  await page.mouse.move(box.x + 90, box.y + 35, { steps: 5 });
+  await page.mouse.up();
+  await page.keyboard.press('Escape');
+  expect(await page.evaluate(() => {
+    const root = document.querySelector('.tab-view.active[data-tab-view-kind=image-editor]');
+    const controller = window.markdownViewerApp.services.imageEditor.getView(root.dataset.tabId);
+    const layer = controller.documentStore.activeLayer();
+    return {
+      layerName: layer.name,
+      layerCount: controller.documentStore.document.nodes.filter((node) => node.kind === 'layer').length,
+      objectNames: layer.objects.map((object) => object.name)
+    };
+  })).toEqual({ layerName: 'City', layerCount: await page.evaluate(() => window.__rectangleLayerCount), objectNames: ['Rectangle', 'Rectangle'] });
 });
 
 test('completed polygon becomes a floating selection before placement', async ({ page }) => {
@@ -798,9 +829,34 @@ test('layers panel creates layers and restores after being hidden', async ({ pag
   await panel.locator('[data-layer-item]').first().locator('.image-editor-layer-name').dblclick();
   await expect(page.locator('#app-notification-modal')).toBeVisible();
   await expect(page.locator('#app-notification-title')).toHaveText('Rename layer or object');
+  await page.locator('#app-notification-input').fill('Layer zoom');
+  await page.locator('#app-notification-input').evaluate((input) => input.setSelectionRange(6, 10));
+  await page.keyboard.press('Delete');
+  await expect(page.locator('#app-notification-input')).toHaveValue('Layer ');
+  await expect(panel.locator('[data-layer-item]')).toHaveCount(2);
   await page.locator('#app-notification-input').fill('Renamed layer');
   await page.locator('[data-notification-button-id="confirm"]').click();
   await expect(panel.locator('[data-layer-item]').first().locator('.image-editor-layer-name')).toHaveText('Renamed layer');
+  const objectId = await page.evaluate(() => {
+    const root = document.querySelector('.tab-view.active[data-tab-view-kind=image-editor]');
+    const controller = window.markdownViewerApp.services.imageEditor.getView(root.dataset.tabId);
+    const pixels = new ImageData(1, 1);
+    pixels.data[3] = 255;
+    return controller.documentStore.addRasterObject(pixels, { x: 0, y: 0, width: 1, height: 1 }, { name: 'Object to rename', layerId: controller.documentStore.activeLayer().id }).id;
+  });
+  await panel.locator('[data-layer-item]').first().locator('[data-layer-expand]').click();
+  await panel.locator(`[data-layer-item="${objectId}"] .image-editor-layer-name`).dblclick();
+  await expect(page.locator('#app-notification-modal')).toBeVisible();
+  await page.locator('#app-notification-input').fill('Object zoom');
+  await page.locator('#app-notification-input').evaluate((input) => input.setSelectionRange(7, 11));
+  await page.keyboard.press('Delete');
+  await expect(page.locator('#app-notification-input')).toHaveValue('Object ');
+  await expect(panel.locator(`[data-layer-item="${objectId}"]`)).toHaveCount(1);
+  await page.locator('#app-notification-input').fill('Renamed object');
+  await page.locator('[data-notification-button-id="confirm"]').click();
+  await expect(panel.locator(`[data-layer-item="${objectId}"] .image-editor-layer-name`)).toHaveText('Renamed object');
+  await panel.locator('[data-layer-item]').first().locator('[data-layer-expand]').click();
+  await panel.locator('[data-layer-item]').first().locator('.image-editor-layer-thumbnail').click();
   await panel.locator('[data-layer-action="delete"]').click();
   await expect(page.locator('#app-notification-modal')).toBeVisible();
   await expect(page.locator('#app-notification-title')).toHaveText('Delete layer?');
@@ -831,6 +887,135 @@ test('layers panel creates layers and restores after being hidden', async ({ pag
   await panel.locator('[data-layer-action="delete"]').click();
   await expect(page.locator('#app-notification-modal')).toBeHidden();
   await expect(panel.locator('[data-layer-item]')).toHaveCount(1);
+});
+
+test('new group creates an empty root group when no layer is selected', async ({ page }) => {
+  await page.goto('/');
+  await page.waitForFunction(() => !!window.markdownViewerApp?.modules?.tabs?.openBlankImageEditorInTab, null, { timeout: 60000 });
+  await page.waitForFunction(() => !!window.markdownViewerApp?.modules?.keyboardShortcuts && !!window.markdownViewerApp?.services?.imageEditor, null, { timeout: 60000 });
+  await page.evaluate(() => {
+    window.markdownViewerApp.modules.apiClient.deactivateApiClientSidebar = () => {};
+    window.markdownViewerApp.modules.tabs.openBlankImageEditorInTab({ width: 80, height: 60, name: 'Empty group' });
+    const root = document.querySelector('.tab-view.active[data-tab-view-kind=image-editor]');
+    window.markdownViewerApp.services.imageEditor.getView(root.dataset.tabId).documentStore.select([]);
+  });
+
+  const panel = page.locator('.tab-view.active .image-editor-layers-panel');
+  await panel.locator('[data-layer-action=new-group]').click();
+  expect(await page.evaluate(() => {
+    const root = document.querySelector('.tab-view.active[data-tab-view-kind=image-editor]');
+    const controller = window.markdownViewerApp.services.imageEditor.getView(root.dataset.tabId);
+    const groups = controller.documentStore.document.nodes.filter((node) => node.kind === 'group');
+    return { groupCount: groups.length, children: groups[0]?.children.length, selected: [...controller.documentStore.selectedIds] };
+  })).toEqual({ groupCount: 1, children: 0, selected: [expect.any(String)] });
+  await expect(panel.locator('[data-layer-item]').first().locator('.image-editor-layer-name')).toHaveText('Group');
+});
+
+test('background fill reaches canvas area added by resizing', async ({ page }) => {
+  await page.goto('/');
+  await page.waitForFunction(() => !!window.markdownViewerApp?.modules?.tabs?.openBlankImageEditorInTab, null, { timeout: 60000 });
+  await page.waitForFunction(() => !!window.markdownViewerApp?.modules?.keyboardShortcuts && !!window.markdownViewerApp?.services?.imageEditor, null, { timeout: 60000 });
+  await page.evaluate(() => {
+    window.markdownViewerApp.modules.apiClient.deactivateApiClientSidebar = () => {};
+    window.markdownViewerApp.modules.tabs.openBlankImageEditorInTab({ width: 40, height: 30, name: 'Background resize fill' });
+  });
+  const root = page.locator('.tab-view.active[data-tab-view-kind=image-editor]');
+  const resizeHandle = root.locator('[data-canvas-resize="se"]');
+  const handleBox = await resizeHandle.boundingBox();
+  await page.mouse.move(handleBox.x + handleBox.width / 2, handleBox.y + handleBox.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(handleBox.x + handleBox.width / 2 + 20, handleBox.y + handleBox.height / 2 + 15, { steps: 5 });
+  await page.mouse.up();
+  await expect(root.locator('.image-editor-canvas')).toHaveAttribute('width', '60');
+  await expect(root.locator('.image-editor-canvas')).toHaveAttribute('height', '45');
+  await page.evaluate(() => {
+    const root = document.querySelector('.tab-view.active[data-tab-view-kind=image-editor]');
+    window.markdownViewerApp.services.imageEditor.getView(root.dataset.tabId).state.foregroundColor = '#808080';
+  });
+  await root.locator('[data-tool="bucket"]').click();
+  const overlayBox = await root.locator('.image-editor-overlay').boundingBox();
+  await page.mouse.click(overlayBox.x + 5, overlayBox.y + 5);
+  expect(await root.locator('.image-editor-canvas').evaluate((canvas) => {
+    const context = canvas.getContext('2d');
+    const pixel = (x, y) => Array.from(context.getImageData(x, y, 1, 1).data);
+    return { original: pixel(5, 5), expanded: pixel(50, 35) };
+  })).toEqual({ original: [128, 128, 128, 255], expanded: [128, 128, 128, 255] });
+});
+
+test('layer drag shows an insertion line and moves multiple layers into and out of a group', async ({ page }) => {
+  await page.goto('/');
+  await page.waitForFunction(() => !!window.markdownViewerApp?.modules?.tabs?.openBlankImageEditorInTab, null, { timeout: 60000 });
+  await page.waitForFunction(() => !!window.markdownViewerApp?.modules?.keyboardShortcuts && !!window.markdownViewerApp?.services?.imageEditor, null, { timeout: 60000 });
+  const ids = await page.evaluate(() => {
+    window.markdownViewerApp.modules.apiClient.deactivateApiClientSidebar = () => {};
+    window.markdownViewerApp.modules.tabs.openBlankImageEditorInTab({ width: 80, height: 60, name: 'Layer drag hierarchy' });
+    const root = document.querySelector('.tab-view.active[data-tab-view-kind=image-editor]');
+    const controller = window.markdownViewerApp.services.imageEditor.getView(root.dataset.tabId);
+    const group = controller.documentStore.addGroup('Destination', null);
+    const first = controller.documentStore.addLayer('First', null);
+    const second = controller.documentStore.addLayer('Second', null);
+    controller.layerPanel.expandedIds.add(group.id);
+    controller.documentStore.select([second.id, first.id]);
+    controller.layerPanel.render();
+    return { group: group.id, first: first.id, second: second.id };
+  });
+  const panel = page.locator('.tab-view.active .image-editor-layers-panel');
+  const dataTransfer = await page.evaluateHandle(() => new DataTransfer());
+  const secondRow = panel.locator(`[data-layer-item="${ids.second}"]`);
+  const groupRow = panel.locator(`[data-layer-item="${ids.group}"]`);
+  const groupBox = await groupRow.boundingBox();
+  await secondRow.dispatchEvent('dragstart', { dataTransfer });
+  await groupRow.dispatchEvent('dragover', { dataTransfer, clientX: groupBox.x + 80, clientY: groupBox.y + groupBox.height / 2 });
+  const indicator = panel.locator('.image-editor-layer-drop-indicator');
+  await expect(indicator).toBeVisible();
+  await expect(indicator).toHaveAttribute('data-placement', 'inside');
+  await groupRow.dispatchEvent('drop', { dataTransfer, clientX: groupBox.x + 80, clientY: groupBox.y + groupBox.height / 2 });
+  expect(await page.evaluate(({ group }) => {
+    const root = document.querySelector('.tab-view.active[data-tab-view-kind=image-editor]');
+    const controller = window.markdownViewerApp.services.imageEditor.getView(root.dataset.tabId);
+    return window.MarkdownViewerImageEditor.findDocumentNode(controller.documentStore.document, group).node.children.map((node) => node.name);
+  }, ids)).toEqual(['Second', 'First']);
+
+  const nestedSecondRow = panel.locator(`[data-layer-item="${ids.second}"]`);
+  const refreshedGroupBox = await groupRow.boundingBox();
+  await nestedSecondRow.dispatchEvent('dragstart', { dataTransfer });
+  await groupRow.dispatchEvent('dragover', { dataTransfer, clientX: refreshedGroupBox.x + 4, clientY: refreshedGroupBox.y + refreshedGroupBox.height - 1 });
+  await expect(indicator).toBeVisible();
+  await expect(indicator).toHaveAttribute('data-placement', 'after');
+  await groupRow.dispatchEvent('drop', { dataTransfer, clientX: refreshedGroupBox.x + 4, clientY: refreshedGroupBox.y + refreshedGroupBox.height - 1 });
+  expect(await page.evaluate(() => {
+    const root = document.querySelector('.tab-view.active[data-tab-view-kind=image-editor]');
+    const controller = window.markdownViewerApp.services.imageEditor.getView(root.dataset.tabId);
+    return controller.documentStore.document.nodes.map((node) => node.name);
+  })).toEqual(['Destination', 'Second', 'First', 'Background']);
+  await expect(indicator).toBeHidden();
+});
+
+test('select and move are distinct tools without a selection mode dropdown', async ({ page }) => {
+  await page.goto('/');
+  await page.waitForFunction(() => !!window.markdownViewerApp?.modules?.tabs?.openBlankImageEditorInTab, null, { timeout: 60000 });
+  await page.waitForFunction(() => !!window.markdownViewerApp?.modules?.keyboardShortcuts && !!window.markdownViewerApp?.services?.imageEditor, null, { timeout: 60000 });
+  await page.evaluate(() => {
+    window.markdownViewerApp.modules.apiClient.deactivateApiClientSidebar = () => {};
+    window.markdownViewerApp.modules.tabs.openBlankImageEditorInTab({ width: 100, height: 70, name: 'Selection tools' });
+  });
+  const root = page.locator('.tab-view.active[data-tab-view-kind=image-editor]');
+  await expect(root.locator('.image-editor-shell')).toBeVisible();
+  await expect(root.locator('.image-editor-select-mode')).toHaveCount(0);
+  await expect(root.locator('[data-tool="select"]')).toHaveAttribute('title', 'Select');
+  await expect(root.locator('[data-tool="move"]')).toHaveAttribute('title', 'Move');
+  await root.locator('[data-tool="select"]').click();
+  expect(await page.evaluate(() => {
+    const root = document.querySelector('.tab-view.active[data-tab-view-kind=image-editor]');
+    const state = window.markdownViewerApp.services.imageEditor.getView(root.dataset.tabId).state;
+    return { tool: state.tool, selectionMode: state.selectionMode };
+  })).toEqual({ tool: 'select', selectionMode: 'pixel' });
+  await root.locator('[data-tool="move"]').click();
+  expect(await page.evaluate(() => {
+    const root = document.querySelector('.tab-view.active[data-tab-view-kind=image-editor]');
+    const state = window.markdownViewerApp.services.imageEditor.getView(root.dataset.tabId).state;
+    return { tool: state.tool, selectionMode: state.selectionMode };
+  })).toEqual({ tool: 'move', selectionMode: 'object' });
 });
 
 test('editing a selected layer preserves its objects without creating new panel items', async ({ page }) => {
@@ -921,9 +1106,152 @@ test('pixel deletion affects only the selected layer and preserves its object ro
     const canvas = controller.view.canvas.getContext('2d');
     const pixel = (x, y) => Array.from(canvas.getImageData(x, y, 1, 1).data).slice(0, 3);
     const object = window.MarkdownViewerImageEditor.findDocumentObject(controller.documentStore.document, window.__upperLayerObjectId)?.object;
-    return { deletedArea: pixel(30, 30), untouchedArea: pixel(10, 10), objectPreserved: !!object };
-  })).toEqual({ deletedArea: [0, 0, 255], untouchedArea: [255, 0, 0], objectPreserved: true });
+    const layer = controller.documentStore.activeLayer();
+    return { deletedArea: pixel(30, 30), untouchedArea: pixel(10, 10), objectPreserved: !!object, pixelEdits: layer.pixelEdits.length };
+  })).toEqual({ deletedArea: [0, 0, 255], untouchedArea: [255, 0, 0], objectPreserved: true, pixelEdits: 0 });
+  const movedResult = await page.evaluate(() => {
+    const root = document.querySelector('.tab-view.active[data-tab-view-kind=image-editor]');
+    const controller = window.markdownViewerApp.services.imageEditor.getView(root.dataset.tabId);
+    const object = window.MarkdownViewerImageEditor.findDocumentObject(controller.documentStore.document, window.__upperLayerObjectId)?.object;
+    object.transform.x += 10;
+    controller.documentStore.notify({ type: 'transform', ids: [object.id] });
+    controller.compositor.render({ canvas: controller.view.canvas });
+    const canvas = controller.view.canvas.getContext('2d');
+    const pixel = (x, y) => Array.from(canvas.getImageData(x, y, 1, 1).data).slice(0, 3);
+    return { previousLocation: pixel(25, 30), movedDeletedArea: pixel(35, 30), objectId: object.id };
+  });
+  expect(movedResult).toEqual({ previousLocation: [255, 0, 0], movedDeletedArea: [0, 0, 255], objectId: await page.evaluate(() => window.__upperLayerObjectId) });
   await expect(panel.locator('[data-layer-item]')).toHaveCount(initialPanelItemCount);
+});
+
+test('selected object outline refreshes and bucket fill follows the moved object', async ({ page }) => {
+  await page.goto('/');
+  await page.waitForFunction(() => !!window.markdownViewerApp?.modules?.tabs?.openBlankImageEditorInTab, null, { timeout: 60000 });
+  await page.waitForFunction(() => !!window.markdownViewerApp?.modules?.keyboardShortcuts && !!window.markdownViewerApp?.services?.imageEditor, null, { timeout: 60000 });
+  await page.evaluate(() => {
+    window.markdownViewerApp.modules.apiClient.deactivateApiClientSidebar = () => {};
+    window.markdownViewerApp.modules.tabs.openBlankImageEditorInTab({ width: 100, height: 70, name: 'Object fill movement' });
+    const root = document.querySelector('.tab-view.active[data-tab-view-kind=image-editor]');
+    const controller = window.markdownViewerApp.services.imageEditor.getView(root.dataset.tabId);
+    const pixels = new ImageData(30, 30);
+    for (let y = 0; y < 30; y += 1) for (let x = 0; x < 30; x += 1) {
+      if (x !== 0 && x !== 29 && y !== 0 && y !== 29) continue;
+      pixels.data[(y * 30 + x) * 4 + 3] = 255;
+    }
+    const object = controller.documentStore.addRasterObject(pixels, { x: 10, y: 10, width: 30, height: 30 }, { name: 'Outlined object', layerId: controller.documentStore.activeLayer().id });
+    window.__filledObjectId = object.id;
+    controller.compositor.render({ canvas: controller.view.canvas });
+  });
+  const root = page.locator('.tab-view.active[data-tab-view-kind=image-editor]');
+  await expect(root.locator('.image-editor-shell')).toBeVisible();
+  await root.locator('[data-tool="move"]').click();
+  await root.locator('[data-layer-expand]').click();
+  await root.locator(`[data-layer-item="${await page.evaluate(() => window.__filledObjectId)}"]`).click();
+  expect(await root.locator('.image-editor-overlay').evaluate((canvas) => canvas.getContext('2d').getImageData(10, 10, 1, 1).data[3])).toBeGreaterThan(0);
+  await root.locator('[data-tool="bucket"]').click();
+  const overlay = root.locator('.image-editor-overlay');
+  const box = await overlay.boundingBox();
+  const backgroundPixel = await root.locator('.image-editor-canvas').evaluate((canvas) => Array.from(canvas.getContext('2d').getImageData(20, 20, 1, 1).data));
+  await page.mouse.click(box.x + 20, box.y + 20);
+  const result = await page.evaluate(() => {
+    const root = document.querySelector('.tab-view.active[data-tab-view-kind=image-editor]');
+    const controller = window.markdownViewerApp.services.imageEditor.getView(root.dataset.tabId);
+    const object = window.MarkdownViewerImageEditor.findDocumentObject(controller.documentStore.document, window.__filledObjectId).object;
+    const context = controller.view.canvas.getContext('2d');
+    const pixel = (x, y) => Array.from(context.getImageData(x, y, 1, 1).data);
+    const filledPixel = pixel(20, 20);
+    object.transform.x += 40;
+    controller.compositor.render({ canvas: controller.view.canvas });
+    return { filledPixel, oldPixel: pixel(20, 20), movedPixel: pixel(60, 20), pixelEdits: controller.documentStore.activeLayer().pixelEdits.length, objectId: object.id };
+  });
+  expect(result.filledPixel).not.toEqual(backgroundPixel);
+  expect(result.oldPixel).toEqual(backgroundPixel);
+  expect(result.movedPixel).toEqual(result.filledPixel);
+  expect({ pixelEdits: result.pixelEdits, objectId: result.objectId }).toEqual({ pixelEdits: 0, objectId: await page.evaluate(() => window.__filledObjectId) });
+});
+
+test('fill, move, pixel delete, and layer delete affect every selected layer', async ({ page }) => {
+  await page.goto('/');
+  await page.waitForFunction(() => !!window.markdownViewerApp?.modules?.tabs?.openBlankImageEditorInTab, null, { timeout: 60000 });
+  await page.waitForFunction(() => !!window.markdownViewerApp?.modules?.keyboardShortcuts && !!window.markdownViewerApp?.services?.imageEditor, null, { timeout: 60000 });
+  await page.evaluate(() => {
+    window.markdownViewerApp.modules.apiClient.deactivateApiClientSidebar = () => {};
+    window.markdownViewerApp.modules.tabs.openBlankImageEditorInTab({ width: 100, height: 70, name: 'Multiple layer edits' });
+    const root = document.querySelector('.tab-view.active[data-tab-view-kind=image-editor]');
+    const controller = window.markdownViewerApp.services.imageEditor.getView(root.dataset.tabId);
+    const outlinedPixels = () => {
+      const pixels = new ImageData(30, 30);
+      for (let y = 0; y < 30; y += 1) for (let x = 0; x < 30; x += 1) {
+        if (x !== 0 && x !== 29 && y !== 0 && y !== 29) continue;
+        pixels.data[(y * 30 + x) * 4 + 3] = 255;
+      }
+      return pixels;
+    };
+    const first = controller.documentStore.addLayer('First');
+    const firstObject = controller.documentStore.addRasterObject(outlinedPixels(), { x: 10, y: 10, width: 30, height: 30 }, { name: 'First object', layerId: first.id });
+    const second = controller.documentStore.addLayer('Second', first.id);
+    const secondObject = controller.documentStore.addRasterObject(outlinedPixels(), { x: 10, y: 10, width: 30, height: 30 }, { name: 'Second object', layerId: second.id });
+    controller.documentStore.select([second.id, first.id]);
+    controller.compositor.render({ canvas: controller.view.canvas });
+    window.__multiLayerIds = [second.id, first.id];
+    window.__multiObjectIds = [secondObject.id, firstObject.id];
+  });
+  const root = page.locator('.tab-view.active[data-tab-view-kind=image-editor]');
+  await expect(root.locator('.image-editor-shell')).toBeVisible();
+  const overlay = root.locator('.image-editor-overlay');
+  const box = await overlay.boundingBox();
+
+  await root.locator('[data-tool="bucket"]').click();
+  await page.mouse.click(box.x + 20, box.y + 20);
+  expect(await page.evaluate(() => {
+    const root = document.querySelector('.tab-view.active[data-tab-view-kind=image-editor]');
+    const controller = window.markdownViewerApp.services.imageEditor.getView(root.dataset.tabId);
+    return window.__multiObjectIds.map((id) => {
+      const object = window.MarkdownViewerImageEditor.findDocumentObject(controller.documentStore.document, id).object;
+      const pixels = controller.documentStore.assets.get(object.payload.assetId);
+      return { centerAlpha: pixels.data[(15 * pixels.width + 15) * 4 + 3], layerPixelEdits: window.MarkdownViewerImageEditor.findDocumentObject(controller.documentStore.document, id).layer.pixelEdits.length };
+    });
+  })).toEqual([{ centerAlpha: 255, layerPixelEdits: 0 }, { centerAlpha: 255, layerPixelEdits: 0 }]);
+
+  await root.locator('[data-tool="move"]').click();
+  await page.mouse.move(box.x + 25, box.y + 25);
+  await page.mouse.down();
+  expect(await page.evaluate(() => {
+    const root = document.querySelector('.tab-view.active[data-tab-view-kind=image-editor]');
+    const controller = window.markdownViewerApp.services.imageEditor.getView(root.dataset.tabId);
+    return { selectedCount: controller.documentStore.selectedIds.size, mode: controller.objectGesture?.mode, transformCount: controller.objectGesture?.transforms.size };
+  })).toEqual({ selectedCount: 2, mode: 'move', transformCount: 2 });
+  await page.mouse.move(box.x + 55, box.y + 25, { steps: 5 });
+  await page.mouse.up();
+  expect(await page.evaluate(() => {
+    const root = document.querySelector('.tab-view.active[data-tab-view-kind=image-editor]');
+    const controller = window.markdownViewerApp.services.imageEditor.getView(root.dataset.tabId);
+    return window.__multiObjectIds.map((id) => window.MarkdownViewerImageEditor.findDocumentObject(controller.documentStore.document, id).object.transform.x);
+  })).toEqual([40, 40]);
+
+  await root.locator('[data-tool="select"]').click();
+  await page.mouse.move(box.x + 50, box.y + 20);
+  await page.mouse.down();
+  await page.mouse.move(box.x + 60, box.y + 30, { steps: 4 });
+  await page.mouse.up();
+  await page.keyboard.press('Delete');
+  expect(await page.evaluate(() => {
+    const root = document.querySelector('.tab-view.active[data-tab-view-kind=image-editor]');
+    const controller = window.markdownViewerApp.services.imageEditor.getView(root.dataset.tabId);
+    return window.__multiObjectIds.map((id) => {
+      const object = window.MarkdownViewerImageEditor.findDocumentObject(controller.documentStore.document, id).object;
+      const pixels = controller.documentStore.assets.get(object.payload.assetId);
+      return pixels.data[(15 * pixels.width + 15) * 4 + 3];
+    });
+  })).toEqual([0, 0]);
+
+  await root.locator('[data-layer-action="delete"]').click();
+  await page.locator('[data-notification-button-id="confirm"]').click();
+  expect(await page.evaluate(() => {
+    const root = document.querySelector('.tab-view.active[data-tab-view-kind=image-editor]');
+    const controller = window.markdownViewerApp.services.imageEditor.getView(root.dataset.tabId);
+    return window.__multiLayerIds.map((id) => !!window.MarkdownViewerImageEditor.findDocumentNode(controller.documentStore.document, id));
+  })).toEqual([false, false]);
 });
 
 test("switching between image editor tabs preserves each tab's drawing", async ({ page }) => {
@@ -1321,7 +1649,6 @@ test("selection moves with arrows and Ctrl+arrow starts a movable copy", async (
 
   await expect(page.locator(".image-editor-shell")).toBeVisible();
   await page.locator('[data-tool="select"]').click();
-  await page.locator('.image-editor-select-mode').selectOption('pixel');
   const overlay = page.locator(".image-editor-overlay");
   const overlayBox = await overlay.boundingBox();
   await page.mouse.move(overlayBox.x + 20, overlayBox.y + 20);
@@ -1392,7 +1719,6 @@ test("selection pointer drag moves, Ctrl clones, and Shift stamps canvas content
 
   await expect(page.locator(".image-editor-shell")).toBeVisible();
   await page.locator('[data-tool="select"]').click();
-  await page.locator('.image-editor-select-mode').selectOption('pixel');
   const overlay = page.locator(".image-editor-overlay");
   const box = await overlay.boundingBox();
   const drag = async (fromX, fromY, toX, toY) => {
@@ -1466,7 +1792,6 @@ test("clicking outside a floating selection commits it and clears the selection"
 
   await expect(page.locator(".image-editor-shell")).toBeVisible();
   await page.locator('[data-tool="select"]').click();
-  await page.locator('.image-editor-select-mode').selectOption('pixel');
   const overlay = page.locator(".image-editor-overlay");
   const overlayBox = await overlay.boundingBox();
   await page.mouse.move(overlayBox.x + 20, overlayBox.y + 20);
@@ -1532,7 +1857,6 @@ test("dragging a pasted floating selection does not alter canvas underneath unti
 
   await expect(page.locator(".image-editor-shell")).toBeVisible();
   await page.locator('[data-tool="select"]').click();
-  await page.locator('.image-editor-select-mode').selectOption('pixel');
   const overlay = page.locator(".image-editor-overlay");
   const overlayBox = await overlay.boundingBox();
   await page.mouse.move(overlayBox.x + 20, overlayBox.y + 20);
@@ -1608,11 +1932,10 @@ test("dragging a pasted floating selection does not alter canvas underneath unti
     };
   });
   expect(afterDraftCapture).toEqual({ floating: true, sourcePixel: [0, 0, 255], draftPastePixel: [0, 0, 255] });
-  await page.locator('.image-editor-select-mode').evaluate((select) => {
+  await page.evaluate(() => {
     const root = document.querySelector('.tab-view.active[data-tab-view-kind="image-editor"]');
     const controller = window.markdownViewerApp.services.imageEditor.getView(root.dataset.tabId);
-    select.value = 'pixel';
-    controller.state.selectionMode = 'pixel';
+    controller.state.setTool('select');
   });
 
   await page.mouse.move(overlayBox.x + 4, overlayBox.y + 4);
@@ -1707,7 +2030,6 @@ test("selection keyboard shortcuts copy paste and Escape place floating selectio
 
   await expect(page.locator(".image-editor-shell")).toBeVisible();
   await page.locator('[data-tool="select"]').click();
-  await page.locator('.image-editor-select-mode').selectOption('pixel');
   const overlay = page.locator(".image-editor-overlay");
   const overlayBox = await overlay.boundingBox();
   await page.mouse.move(overlayBox.x + 20, overlayBox.y + 20);
@@ -1783,7 +2105,6 @@ test("selection stamps repeated copies with Shift+arrow", async ({ page }) => {
 
   await expect(page.locator(".image-editor-shell")).toBeVisible();
   await page.locator('[data-tool="select"]').click();
-  await page.locator('.image-editor-select-mode').selectOption('pixel');
   const overlay = page.locator(".image-editor-overlay");
   const overlayBox = await overlay.boundingBox();
   await page.mouse.move(overlayBox.x + 20, overlayBox.y + 20);

@@ -5,6 +5,7 @@
   const namespace = global.MarkdownViewerImageEditor = global.MarkdownViewerImageEditor || {};
   const TOOL_ICONS = {
     select: "bi-bounding-box",
+    move: "bi-arrows-move",
     pencil: "bi-pencil",
     brush: "bi-brush",
     line: "bi-slash-lg",
@@ -29,7 +30,7 @@
     bucket: "bi-paint-bucket",
     text: "bi-fonts"
   };
-  const TOOL_LABELS = { "rounded-rectangle": "Rounded rectangle", "rectangular-grid": "Rectangular grid", "polar-grid": "Polar grid", callout: "Rounded rectangular callout", "oval-callout": "Oval callout" };
+  const TOOL_LABELS = { move: "Move", "rounded-rectangle": "Rounded rectangle", "rectangular-grid": "Rectangular grid", "polar-grid": "Polar grid", callout: "Rounded rectangular callout", "oval-callout": "Oval callout" };
   const PALETTE_COLORS = Object.freeze([
     "#000000", "#7f7f7f", "#880015", "#ed1c24", "#ff7f27",
     "#fff200", "#22b14c", "#00a2e8", "#3f48cc", "#a349a4",
@@ -128,14 +129,6 @@
           </div>
           <div class="image-editor-color-palette image-editor-toolbar-group" role="group" aria-label="Predefined colors"></div>
           <div class="image-editor-dynamic-controls">
-            <div class="image-editor-select-controls image-editor-toolbar-group" hidden>
-              <label>Select
-                <select class="image-editor-select-mode" aria-label="Selection mode">
-                  <option value="object">Objects</option>
-                  <option value="pixel">Pixel marquee</option>
-                </select>
-              </label>
-            </div>
             <div class="image-editor-rounded-rectangle-controls image-editor-toolbar-group" hidden>
               <label>Radius <input class="image-editor-corner-radius" type="range" min="0" max="100" value="16"></label>
               <label><input class="image-editor-all-corners" type="checkbox" checked> All corners</label>
@@ -419,8 +412,6 @@
       this.shell.querySelector(".image-editor-pattern-density").value = String(state.patternDensity);
       this.setActiveColorTarget(this.activeColorTarget, state);
       this.shell.querySelector(".image-editor-fill").checked = state.fillShapes;
-      this.shell.querySelector(".image-editor-select-controls").hidden = state.tool !== "select";
-      this.shell.querySelector(".image-editor-select-mode").value = state.selectionMode;
       namespace.syncStrokeTypeSelector(this.shell.querySelector(".image-editor-stroke-type"), state.strokeType);
       this.shell.querySelector(".image-editor-corner-radius").value = String(state.cornerRadius);
       this.shell.querySelector(".image-editor-all-corners").checked = state.adjustAllCorners;
