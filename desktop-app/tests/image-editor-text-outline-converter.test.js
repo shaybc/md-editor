@@ -45,6 +45,7 @@ test("selected text is replaced in place by independently editable glyph paths",
   assert.equal(namespace.ImageEditorTextOutlineConverter.convertSelected(store, { createGlyphOutlines: glyphs }), true);
   assert.equal(layer.objects[0], neighbor);
   assert.deepEqual(Array.from(layer.objects.slice(1), (object) => object.name), ["A", "B"]);
+  assert.equal(new Set(layer.objects.slice(1).map((object) => object.id)).size, 2);
   layer.objects.slice(1).forEach((object) => {
     assert.equal(object.type, "path");
     assert.equal(object.payload.outlinedFromText, true);
@@ -55,9 +56,11 @@ test("selected text is replaced in place by independently editable glyph paths",
     assert.equal(object.transform.scaleX, 1.5);
     assert.equal(object.transform.scaleY, 2);
   });
-  assert.equal(store.selectedIds.size, 2);
+  assert.equal(store.selectedIds.size, 1);
+  assert.equal(store.selectedIds.has(layer.objects[1].id), true);
   assert.equal(document.activeLayerId, layer.id);
   assert.equal(changes[0].type, "create-text-outlines");
+  assert.deepEqual(Array.from(changes[0].ids), Array.from(layer.objects.slice(1), (object) => object.id));
 });
 
 test("conversion preserves group order and ignores locked text", () => {

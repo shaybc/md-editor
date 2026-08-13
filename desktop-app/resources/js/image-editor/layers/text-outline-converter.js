@@ -221,17 +221,17 @@
     static convertSelected(store, options = {}) {
       const targets = selectedText(store).sort((left, right) => right.index - left.index);
       if (!targets.length) return false;
-      const selectedIds = [];
+      const convertedIds = [];
       targets.forEach((target) => {
         const paths = (options.createGlyphOutlines || glyphOutlines)(target.object).map((glyph, index) => createPath(target.object, glyph, index));
         if (!paths.length) return;
         target.layer.objects.splice(target.index, 1, ...paths);
-        selectedIds.push(...paths.map((path) => path.id));
+        convertedIds.push(...paths.map((path) => path.id));
       });
-      if (!selectedIds.length) return false;
-      store.selectedIds = new Set(selectedIds);
-      store.document.activeLayerId = namespace.findDocumentObject(store.document, selectedIds[0])?.layer.id || store.document.activeLayerId;
-      store.notify({ type: "create-text-outlines", ids: selectedIds });
+      if (!convertedIds.length) return false;
+      store.selectedIds = new Set([convertedIds[0]]);
+      store.document.activeLayerId = namespace.findDocumentObject(store.document, convertedIds[0])?.layer.id || store.document.activeLayerId;
+      store.notify({ type: "create-text-outlines", ids: convertedIds });
       return true;
     }
   }
