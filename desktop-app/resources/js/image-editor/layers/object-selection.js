@@ -26,8 +26,12 @@
         const visible = inheritedVisible && node.visible !== false;
         const locked = inheritedLocked || node.locked === true;
         if (!visible) return;
-        if (node.kind === "group") visit(node.children || [], visible, locked);
-        else (node.objects || []).forEach((object) => {
+        if (node.kind === "object") {
+          if (!locked && pointInObject(point, node)) hits.push(node.id);
+          return;
+        }
+        if (node.kind === "group") { visit(node.children || [], visible, locked); return; }
+        (node.objects || []).forEach((object) => {
           if (object.visible !== false && !locked && !object.locked && pointInObject(point, object)) hits.push(object.id);
         });
       });
@@ -67,14 +71,13 @@
 
     selectMarquee(rect, additive = false) {
       const ids = [];
-      namespace.walkDocumentNodes(this.store.document, (node) => {
-        if (node.kind !== "layer" || !node.visible || node.locked) return;
-        (node.objects || []).forEach((object) => {
+      namespace.walkDocumentObjects(this.store.document, (object, location) => {
+        if (location.visible && !location.locked) {
           const bounds = object.bounds || {};
           const x = Number(object.transform?.x ?? bounds.x) || 0;
           const y = Number(object.transform?.y ?? bounds.y) || 0;
           if (object.visible && !object.locked && x < rect.x + rect.width && x + bounds.width > rect.x && y < rect.y + rect.height && y + bounds.height > rect.y) ids.push(object.id);
-        });
+        }
       });
       this.store.select(ids, { additive });
       return ids;

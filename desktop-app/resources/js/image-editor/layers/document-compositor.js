@@ -114,6 +114,10 @@
     renderNodes(context, nodes) {
       [...nodes].reverse().forEach((node) => {
         if (!node.visible) return;
+        if (node.kind === "object") {
+          drawObject(context, node, this.store.assets);
+          return;
+        }
         const canvas = document.createElement("canvas");
         canvas.width = this.store.document.canvas.width;
         canvas.height = this.store.document.canvas.height;

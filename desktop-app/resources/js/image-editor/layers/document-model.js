@@ -24,7 +24,7 @@
     return { ...commonNode("layer", name), rasterAssetId: null, pixelEdits: [], objects: [] };
   }
 
-  /** Create a hierarchy group that owns layers or nested groups. */
+  /** Create a hierarchy group that owns objects, layers, or nested groups. */
   function createLayerGroup(name = "Group") {
     return { ...commonNode("group", name), children: [] };
   }
@@ -75,19 +75,35 @@
   function findDocumentNode(document, id) {
     let result = null;
     walkDocumentNodes(document, (node, parent, index) => {
-      if (!result && node.id === id) result = { node, parent, index, collection: parent ? parent.children : document.nodes };
+      if (!result && node.kind !== "object" && node.id === id) result = { node, parent, index, collection: parent ? parent.children : document.nodes };
     });
     return result;
   }
 
-  /** Locate a content object and its owning layer. */
+  /** Walk content objects whether they belong to a layer or directly to the hierarchy. */
+  function walkDocumentObjects(document, visitor, items = document?.nodes || [], parent = null, inheritedVisible = true, inheritedLocked = false) {
+    items.forEach((item, index) => {
+      const visible = inheritedVisible && item.visible !== false;
+      const locked = inheritedLocked || item.locked === true;
+      if (item.kind === "object") {
+        visitor(item, { object: item, layer: null, parent, index, collection: items, visible, locked });
+        return;
+      }
+      if (item.kind === "group") {
+        walkDocumentObjects(document, visitor, item.children || [], item, visible, locked);
+        return;
+      }
+      (item.objects || []).forEach((object, objectIndex) => visitor(object, {
+        object, layer: item, parent: item, index: objectIndex, collection: item.objects,
+        visible: visible && object.visible !== false, locked: locked || object.locked === true
+      }));
+    });
+  }
+
+  /** Locate a content object and its actual owning collection. */
   function findDocumentObject(document, id) {
     let result = null;
-    walkDocumentNodes(document, (node) => {
-      if (result || node.kind !== "layer") return;
-      const index = (node.objects || []).findIndex((object) => object.id === id);
-      if (index >= 0) result = { object: node.objects[index], layer: node, index };
-    });
+    walkDocumentObjects(document, (object, location) => { if (!result && object.id === id) result = location; });
     return result;
   }
 
@@ -122,14 +138,15 @@
   /** Return all asset identifiers referenced by raster objects. */
   function referencedAssetIds(document) {
     const ids = new Set();
+    walkDocumentObjects(document, (object) => {
+      if (object.type === "raster" && object.payload?.assetId) ids.add(object.payload.assetId);
+      if (object.payload?.fallbackAssetId) ids.add(object.payload.fallbackAssetId);
+    });
     walkDocumentNodes(document, (node) => {
-      if (node.kind !== "layer") return;
-      if (node.rasterAssetId) ids.add(node.rasterAssetId);
-      (node.pixelEdits || []).forEach((edit) => { if (edit.assetId) ids.add(edit.assetId); });
-      (node.objects || []).forEach((object) => {
-        if (object.type === "raster" && object.payload?.assetId) ids.add(object.payload.assetId);
-        if (object.payload?.fallbackAssetId) ids.add(object.payload.fallbackAssetId);
-      });
+      if (node.kind === "layer") {
+        if (node.rasterAssetId) ids.add(node.rasterAssetId);
+        (node.pixelEdits || []).forEach((edit) => { if (edit.assetId) ids.add(edit.assetId); });
+      }
     });
     return ids;
   }
@@ -144,14 +161,15 @@
       if (ancestors.has(node)) throw new Error("The layered image hierarchy contains a cycle.");
       if (!node?.id || ids.has(node.id)) throw new Error("The layered image contains duplicate or missing node identifiers.");
       ids.add(node.id);
-      if (node.kind !== "layer" && node.kind !== "group") throw new Error("The layered image contains an unsupported hierarchy node.");
+      if (node.kind !== "layer" && node.kind !== "group" && node.kind !== "object") throw new Error("The layered image contains an unsupported hierarchy node.");
+      if (node.kind === "object") return;
       (node.objects || []).forEach((object) => {
         if (!object?.id || ids.has(object.id)) throw new Error("The layered image contains duplicate or missing object identifiers.");
         ids.add(object.id);
       });
       if (node.kind === "group") {
         ancestors.add(node);
-        validateNodes(node.children);
+        validateNodes(node.children || []);
         ancestors.delete(node);
       }
     });
@@ -172,6 +190,7 @@
     createContentObject,
     cloneImageDocument,
     walkDocumentNodes,
+    walkDocumentObjects,
     findDocumentNode,
     findDocumentObject,
     isCanvasBackgroundLayer,

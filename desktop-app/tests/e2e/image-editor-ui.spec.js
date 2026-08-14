@@ -173,9 +173,12 @@ test("opens an image editor, draws, undoes, and explicitly saves", async ({ page
   await expect(page.locator(".image-editor-toolbar .image-editor-zoom-actions")).toHaveCount(0);
   await expect(page.locator(".image-editor-palette-color")).toHaveCount(20);
   await expect(page.locator('[data-tool="curve"]')).toHaveAttribute('title', 'Curve');
-  await expect(page.locator('[data-tool="callout"]')).toHaveAttribute('title', 'Rounded rectangular callout');
-  await expect(page.locator('[data-tool="oval-callout"]')).toHaveCount(0);
-  await expect(page.locator('.image-editor-callout-type option')).toHaveCount(3);
+  const calloutGroup = page.locator('[data-tool-group="callouts"]');
+  await expect(calloutGroup.locator('.image-editor-grouped-tool-main')).toHaveAttribute('title', 'Callouts');
+  await expect(calloutGroup.locator('.image-editor-grouped-tool-menu [data-tool]')).toHaveCount(3);
+  await expect(calloutGroup.locator('[data-tool="oval-callout"]')).toHaveCount(1);
+  await expect(calloutGroup.locator('[data-tool="cloud-callout"]')).toHaveCount(1);
+  await expect(page.locator('.image-editor-callout-type')).toHaveCount(0);
   const toolbarRows = await page.evaluate(() => {
     Object.defineProperty(window, "showSaveFilePicker", {
       configurable: true,
@@ -474,8 +477,8 @@ test('rounded callout guide changes tail direction length and attachment shape b
     const root = document.querySelector('.tab-view.active[data-tab-view-kind=image-editor]');
     window.markdownViewerApp.services.imageEditor.getView(root.dataset.tabId).state.cornerRadius = 0;
   });
-  await page.locator('[data-tool=callout]').click();
-  await expect(page.locator('[data-tool=callout]')).toHaveAttribute('title', 'Rounded rectangular callout');
+  const calloutMain = page.locator('[data-tool-group="callouts"] .image-editor-grouped-tool-main');
+  await calloutMain.click();
   const overlay = page.locator('.image-editor-overlay');
   const box = await overlay.boundingBox();
   await page.mouse.move(box.x + 40, box.y + 20);
@@ -561,7 +564,7 @@ test('rounded callout guide changes tail direction length and attachment shape b
     return true;
   })).toBe(true);
   await page.keyboard.press('Escape');
-  await expect(page.locator('[data-tool=callout]')).toHaveClass(/active/);
+  await expect(calloutMain).toHaveClass(/active/);
   expect(await page.locator('.image-editor-canvas').evaluate((canvas) => {
     const pixels = canvas.getContext('2d').getImageData(0, 0, canvas.width, canvas.height).data;
     let count = 0;
@@ -589,12 +592,12 @@ test('oval callout guide changes tail direction length and attachment shape befo
     window.markdownViewerApp.modules.tabs.openBlankImageEditorInTab({ width: 160, height: 120, name: 'Oval Callout' });
   });
   await expect(page.locator('.tab-view.active[data-tab-view-kind=image-editor] .image-editor-shell')).toBeVisible();
-  await page.locator('[data-tool=callout]').click();
-  await expect(page.locator('.image-editor-callout-controls')).toBeVisible();
-  await expect(page.locator('.image-editor-callout-type')).toHaveValue('callout');
-  await page.locator('.image-editor-callout-type').selectOption('oval-callout');
-  await expect(page.locator('.image-editor-callout-type')).toHaveValue('oval-callout');
-  await expect(page.locator('[data-tool=callout]')).toHaveClass(/active/);
+  const calloutGroup = page.locator('[data-tool-group="callouts"]');
+  const calloutMain = calloutGroup.locator('.image-editor-grouped-tool-main');
+  await calloutGroup.locator('.image-editor-grouped-tool-trigger').click();
+  await calloutGroup.locator('.image-editor-grouped-tool-menu [data-tool="oval-callout"]').click();
+  await expect(calloutMain).toHaveAttribute('data-tool', 'oval-callout');
+  await expect(calloutMain.locator('.bi-chat')).toBeVisible();
   const overlay = page.locator('.image-editor-overlay');
   const box = await overlay.boundingBox();
   await page.mouse.move(box.x + 35, box.y + 20);
@@ -646,8 +649,8 @@ test('oval callout guide changes tail direction length and attachment shape befo
     return { tool: controller.state.tool, floating: controller.selection.floating, origin: controller.selection.origin };
   })).toEqual({ tool: 'select', floating: true, origin: 'shape' });
   await page.keyboard.press('Escape');
-  await expect(page.locator('[data-tool=callout]')).toHaveClass(/active/);
-  await expect(page.locator('.image-editor-callout-type')).toHaveValue('oval-callout');
+  await expect(calloutMain).toHaveClass(/active/);
+  await expect(calloutMain).toHaveAttribute('data-tool', 'oval-callout');
   const placed = await page.locator('.image-editor-canvas').evaluate((canvas) => {
     const context = canvas.getContext('2d');
     const pixel = (x, y) => Array.from(context.getImageData(x, y, 1, 1).data).slice(0, 3);
@@ -1069,13 +1072,65 @@ test('image tools are arranged in a narrow scrollable sidebar left of the canvas
   expect(await toolContainer.evaluate((element) => getComputedStyle(element).overflowY)).toBe('auto');
   expect(await root.locator('.image-editor-toolbar .image-editor-tools').count()).toBe(0);
 
-  await expect(root.locator('.image-editor-select-main .bi-bounding-box-circles')).toBeVisible();
+  const selectMain = root.locator('.image-editor-select-main');
+  const rectangleSelectIcon = selectMain.locator('[data-selection-shape-icon="rectangle"]');
+  await expect(rectangleSelectIcon).toBeVisible();
+  await expect(rectangleSelectIcon).toHaveAttribute('stroke-dasharray', '2.2 1.7');
+  const selectIconBox = await rectangleSelectIcon.boundingBox();
+  expect(selectIconBox.width).toBeCloseTo(16, 0);
+  expect(selectIconBox.height).toBeCloseTo(16, 0);
+  await root.locator('.image-editor-select-mode-trigger').click();
+  await root.locator('.image-editor-select-mode-menu [data-selection-shape="ellipse"]').click();
+  const ellipseSelectIcon = selectMain.locator('[data-selection-shape-icon="ellipse"]');
+  await expect(ellipseSelectIcon).toBeVisible();
+  await expect(ellipseSelectIcon.locator('ellipse')).toHaveCount(1);
+  await expect(ellipseSelectIcon).toHaveAttribute('stroke-dasharray', '2.2 1.7');
   await expect(root.locator('[data-tool="clone-stamp"] .bi-postage')).toBeVisible();
+  const splitToolGeometry = await toolContainer.locator(':scope > .image-editor-select-tool, :scope > .image-editor-brush-tool, :scope > .image-editor-bucket-tool, :scope > .image-editor-grouped-tool').evaluateAll((elements) => elements.map((element) => {
+    const group = element.getBoundingClientRect();
+    const main = element.querySelector(':scope > .image-editor-tool').getBoundingClientRect();
+    const trigger = element.querySelector(':scope > details > summary').getBoundingClientRect();
+    return {
+      groupWidth: group.width,
+      mainLeft: main.left,
+      mainRight: main.right,
+      mainTop: main.top,
+      triggerLeft: trigger.left,
+      triggerRight: trigger.right,
+      triggerTop: trigger.top
+    };
+  }));
+  expect(splitToolGeometry).toHaveLength(7);
+  splitToolGeometry.forEach((geometry) => {
+    expect(geometry.groupWidth).toBeCloseTo(28, 0);
+    expect(geometry.mainRight).toBeCloseTo(geometry.triggerLeft, 0);
+    expect(geometry.triggerRight - geometry.mainLeft).toBeCloseTo(28, 0);
+    expect(geometry.triggerTop).toBeCloseTo(geometry.mainTop, 0);
+  });
 
   const shapeGroup = root.locator('[data-tool-group="shapes"]');
   const shapeMain = shapeGroup.locator('.image-editor-grouped-tool-main');
   const shapeMenu = shapeGroup.locator('.image-editor-grouped-tool-menu');
   await expect(shapeMain).toHaveAttribute('data-tool', 'rectangle');
+  const closedShapeGeometry = await shapeGroup.evaluate((element) => {
+    const group = element.getBoundingClientRect();
+    const main = element.querySelector('.image-editor-grouped-tool-main').getBoundingClientRect();
+    const trigger = element.querySelector('.image-editor-grouped-tool-trigger').getBoundingClientRect();
+    const menu = element.querySelector('.image-editor-grouped-tool-menu');
+    return {
+      groupWidth: group.width,
+      mainLeft: main.left,
+      mainRight: main.right,
+      triggerLeft: trigger.left,
+      triggerRight: trigger.right,
+      menuDisplay: getComputedStyle(menu).display
+    };
+  });
+  expect(closedShapeGeometry.groupWidth).toBeCloseTo(28, 0);
+  expect(closedShapeGeometry.mainLeft).toBeLessThan(closedShapeGeometry.mainRight);
+  expect(closedShapeGeometry.mainRight).toBeCloseTo(closedShapeGeometry.triggerLeft, 0);
+  expect(closedShapeGeometry.triggerRight - closedShapeGeometry.mainLeft).toBeCloseTo(28, 0);
+  expect(closedShapeGeometry.menuDisplay).toBe('none');
   await shapeGroup.locator('.image-editor-grouped-tool-trigger').click();
   await expect(shapeMenu).toBeVisible();
   const shapeMenuBox = await shapeMenu.boundingBox();
@@ -1092,6 +1147,22 @@ test('image tools are arranged in a narrow scrollable sidebar left of the canvas
   await expect(shapeMain).toHaveAttribute('data-tool', 'triangle');
   await expect(shapeMain.locator('.bi-triangle')).toBeVisible();
   await expect(shapeMain).toHaveClass(/active/);
+  await expect(shapeMenu.locator('[data-tool="callout"]')).toHaveCount(0);
+
+  const calloutGroup = root.locator('[data-tool-group="callouts"]');
+  const calloutMain = calloutGroup.locator('.image-editor-grouped-tool-main');
+  const calloutMenu = calloutGroup.locator('.image-editor-grouped-tool-menu');
+  await expect(calloutMain).toHaveAttribute('data-tool', 'callout');
+  await expect(calloutMain.locator('.bi-chat-square')).toBeVisible();
+  await calloutGroup.locator('.image-editor-grouped-tool-trigger').click();
+  await expect(calloutMenu.locator('[data-tool="callout"] .bi-chat-square')).toBeVisible();
+  await expect(calloutMenu.locator('[data-tool="oval-callout"] .bi-chat')).toBeVisible();
+  await expect(calloutMenu.locator('[data-tool="cloud-callout"] .bi-cloud')).toBeVisible();
+  await calloutMenu.locator('[data-tool="cloud-callout"]').click();
+  await expect(calloutMain).toHaveAttribute('data-tool', 'cloud-callout');
+  await expect(calloutMain.locator('.bi-cloud')).toBeVisible();
+  await expect(calloutMain).toHaveClass(/active/);
+  await expect(root.locator('.image-editor-callout-type')).toHaveCount(0);
 
   const gridGroup = root.locator('[data-tool-group="grids"]');
   const gridMain = gridGroup.locator('.image-editor-grouped-tool-main');
@@ -1100,6 +1171,26 @@ test('image tools are arranged in a narrow scrollable sidebar left of the canvas
   await gridGroup.locator('.image-editor-grouped-tool-menu [data-tool="polar-grid"]').click();
   await expect(gridMain).toHaveAttribute('data-tool', 'polar-grid');
   await expect(gridMain.locator('.bi-bullseye')).toBeVisible();
+
+  const arrowGroup = root.locator('[data-tool-group="arrow-direction"]');
+  const arrowMain = arrowGroup.locator('.image-editor-arrow-main');
+  const arrowMenu = arrowGroup.locator('.image-editor-arrow-direction-menu');
+  await expect(arrowMain.locator('.bi-arrow-right')).toBeVisible();
+  await arrowGroup.locator('.image-editor-grouped-tool-trigger').click();
+  await expect(arrowMenu.locator('[data-arrow-direction]')).toHaveCount(4);
+  await expect(arrowMenu.locator('[data-arrow-direction="up"] .bi-arrow-up')).toBeVisible();
+  await expect(arrowMenu.locator('[data-arrow-direction="down"] .bi-arrow-down')).toBeVisible();
+  await expect(arrowMenu.locator('[data-arrow-direction="left"] .bi-arrow-left')).toBeVisible();
+  await expect(arrowMenu.locator('[data-arrow-direction="right"] .bi-arrow-right')).toBeVisible();
+  await arrowMenu.locator('[data-arrow-direction="up"]').click();
+  await expect(arrowMain.locator('.bi-arrow-up')).toBeVisible();
+  await expect(arrowMain).toHaveClass(/active/);
+  await expect(root.locator('.image-editor-arrow-direction')).toHaveCount(0);
+  await expect(root.locator('.image-editor-arrow-head-angle')).toBeVisible();
+  expect(await root.evaluate((element) => {
+    const controller = window.markdownViewerApp.services.imageEditor.getView(element.dataset.tabId);
+    return { tool: controller.state.tool, direction: controller.state.arrowDirection };
+  })).toEqual({ tool: 'arrow', direction: 'up' });
 });
 
 
@@ -1442,6 +1533,67 @@ test('layer drag shows an insertion line and moves multiple layers into and out 
     return controller.documentStore.document.nodes.map((node) => node.name);
   })).toEqual(['Destination', 'Second', 'First', 'Background']);
   await expect(indicator).toBeHidden();
+});
+
+test('objects can be dragged from a layer to the document root and directly into a group', async ({ page }) => {
+  await page.goto('/');
+  await page.waitForFunction(() => !!window.markdownViewerApp?.modules?.tabs?.openBlankImageEditorInTab, null, { timeout: 60000 });
+  await page.waitForFunction(() => !!window.markdownViewerApp?.modules?.keyboardShortcuts && !!window.markdownViewerApp?.services?.imageEditor, null, { timeout: 60000 });
+  const ids = await page.evaluate(() => {
+    window.markdownViewerApp.modules.apiClient.deactivateApiClientSidebar = () => {};
+    window.markdownViewerApp.modules.tabs.openBlankImageEditorInTab({ width: 80, height: 60, name: 'Standalone object hierarchy' });
+    const root = document.querySelector('.tab-view.active[data-tab-view-kind=image-editor]');
+    const controller = window.markdownViewerApp.services.imageEditor.getView(root.dataset.tabId);
+    const group = controller.documentStore.addGroup('Destination', null);
+    const layer = controller.documentStore.addLayer('Host', null);
+    const pixels = new ImageData(8, 8);
+    for (let index = 0; index < pixels.data.length; index += 4) {
+      pixels.data[index] = 24;
+      pixels.data[index + 1] = 160;
+      pixels.data[index + 2] = 220;
+      pixels.data[index + 3] = 255;
+    }
+    const object = controller.documentStore.addRasterObject(pixels, { x: 5, y: 6, width: 8, height: 8 }, { name: 'Standalone', layerId: layer.id });
+    controller.layerPanel.expandedIds.add(layer.id);
+    controller.layerPanel.expandedIds.add(group.id);
+    controller.layerPanel.render();
+    return { group: group.id, layer: layer.id, object: object.id };
+  });
+  const panel = page.locator('.tab-view.active .image-editor-layers-panel');
+  const indicator = panel.locator('.image-editor-layer-drop-indicator');
+  const dataTransfer = await page.evaluateHandle(() => new DataTransfer());
+  const objectRow = panel.locator(`[data-layer-item="${ids.object}"]`);
+  const layerRow = panel.locator(`[data-layer-item="${ids.layer}"]`);
+  const layerBox = await layerRow.boundingBox();
+  await objectRow.dispatchEvent('dragstart', { dataTransfer });
+  await layerRow.dispatchEvent('dragover', { dataTransfer, clientX: layerBox.x + 5, clientY: layerBox.y + 1 });
+  await expect(indicator).toBeVisible();
+  await expect(indicator).toHaveAttribute('data-placement', 'before');
+  await layerRow.dispatchEvent('drop', { dataTransfer, clientX: layerBox.x + 5, clientY: layerBox.y + 1 });
+  expect(await page.evaluate(({ object }) => {
+    const root = document.querySelector('.tab-view.active[data-tab-view-kind=image-editor]');
+    const controller = window.markdownViewerApp.services.imageEditor.getView(root.dataset.tabId);
+    const location = window.MarkdownViewerImageEditor.findDocumentObject(controller.documentStore.document, object);
+    return { layerId: location.layer?.id || null, parentId: location.parent?.id || null, root: location.collection === controller.documentStore.document.nodes };
+  }, ids)).toEqual({ layerId: null, parentId: null, root: true });
+  await expect(panel.locator(`[data-layer-item="${ids.object}"][data-layer-depth="0"]`)).toBeVisible();
+
+  const rootObjectRow = panel.locator(`[data-layer-item="${ids.object}"]`);
+  const groupRow = panel.locator(`[data-layer-item="${ids.group}"]`);
+  const groupBox = await groupRow.boundingBox();
+  await rootObjectRow.dispatchEvent('dragstart', { dataTransfer });
+  await groupRow.dispatchEvent('dragover', { dataTransfer, clientX: groupBox.x + 60, clientY: groupBox.y + groupBox.height / 2 });
+  await expect(indicator).toBeVisible();
+  await expect(indicator).toHaveAttribute('data-placement', 'inside');
+  await groupRow.dispatchEvent('drop', { dataTransfer, clientX: groupBox.x + 60, clientY: groupBox.y + groupBox.height / 2 });
+  expect(await page.evaluate(({ group, object }) => {
+    const root = document.querySelector('.tab-view.active[data-tab-view-kind=image-editor]');
+    const controller = window.markdownViewerApp.services.imageEditor.getView(root.dataset.tabId);
+    const location = window.MarkdownViewerImageEditor.findDocumentObject(controller.documentStore.document, object);
+    const pixel = Array.from(controller.compositor.render().getContext('2d').getImageData(6, 7, 1, 1).data);
+    return { layerId: location.layer?.id || null, parentId: location.parent?.id || null, childIds: location.parent.children.map((child) => child.id), pixel };
+  }, ids)).toEqual({ layerId: null, parentId: ids.group, childIds: [ids.object], pixel: [24, 160, 220, 255] });
+  await expect(panel.locator(`[data-layer-item="${ids.object}"][data-layer-depth="1"]`)).toBeVisible();
 });
 
 test('select and move are distinct tools without a selection mode dropdown', async ({ page }) => {

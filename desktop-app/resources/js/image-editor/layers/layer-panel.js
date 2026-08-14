@@ -103,12 +103,13 @@
       this.list.addEventListener("contextmenu", (event) => this.openContextMenu(event));
     }
 
-    /** Resolve selected hierarchy targets, mapping object rows to their containing layer. */
+    /** Resolve selected hierarchy targets, retaining objects that have no containing layer. */
     selectedTargets() {
       const targets = [];
       [...this.store.selectedIds].forEach((id) => {
         const node = namespace.findDocumentNode(this.store.document, id)?.node;
-        const target = node || namespace.findDocumentObject(this.store.document, id)?.layer;
+        const object = namespace.findDocumentObject(this.store.document, id);
+        const target = node || object?.layer || object?.object;
         if (target && !namespace.isCanvasBackgroundLayer(target) && !targets.some((item) => item.id === target.id)) targets.push(target);
       });
       return targets;
@@ -122,14 +123,14 @@
       const row = event.target.closest("[data-layer-item]");
       if (row) {
         const objectResult = namespace.findDocumentObject(this.store.document, row.dataset.layerItem);
-        const layerId = objectResult?.layer.id || row.dataset.layerItem;
+        const targetId = objectResult?.layer?.id || row.dataset.layerItem;
         const selectedTargets = this.selectedTargets();
-        const clickedSelectedTarget = selectedTargets.some((target) => target.id === layerId);
-        if (!clickedSelectedTarget || (objectResult && selectedTargets.length === 1)) this.store.select(layerId);
+        const clickedSelectedTarget = selectedTargets.some((target) => target.id === targetId);
+        if (!clickedSelectedTarget || (objectResult?.layer && selectedTargets.length === 1)) this.store.select(targetId);
       }
       const targets = this.selectedTargets();
       const layers = this.selectedLayers();
-      const selectedNodes = [...this.store.selectedIds].map((id) => namespace.findDocumentNode(this.store.document, id)?.node).filter((node) => node && !namespace.isCanvasBackgroundLayer(node));
+      const selectedNodes = targets.filter((item) => ["layer", "group", "object"].includes(item.kind));
       const singleLayer = layers.length === 1 ? layers[0] : null;
       const mergeLocation = singleLayer ? namespace.findDocumentNode(this.store.document, singleLayer.id) : null;
       const below = mergeLocation?.collection?.[mergeLocation.index + 1];
@@ -188,17 +189,14 @@
       if (!row) return null;
       let targetId = row.dataset.layerItem;
       const targetNode = namespace.findDocumentNode(this.store.document, targetId)?.node;
+      const targetObject = namespace.findDocumentObject(this.store.document, targetId);
       const draggedObjects = this.draggedIds.every((id) => namespace.findDocumentObject(this.store.document, id));
       const bounds = row.getBoundingClientRect();
       const verticalRatio = bounds.height ? (event.clientY - bounds.top) / bounds.height : 0.5;
       let placement = verticalRatio < 0.35 ? "before" : "after";
-      if ((targetNode?.kind === "group" && verticalRatio >= 0.35 && verticalRatio <= 0.65) || (draggedObjects && targetNode?.kind === "layer")) placement = "inside";
-      if (!targetNode && !draggedObjects) {
-        const owningLayer = namespace.findDocumentObject(this.store.document, targetId)?.layer;
-        if (!owningLayer) return null;
-        targetId = owningLayer.id;
-        row = this.list.querySelector(`[data-layer-item="${targetId}"]`) || row;
-      }
+      if (verticalRatio >= 0.35 && verticalRatio <= 0.65 && (targetNode?.kind === "group" || (draggedObjects && targetNode?.kind === "layer"))) placement = "inside";
+      if (!targetNode && !targetObject) return null;
+      if (!draggedObjects && targetObject) return null;
       if (placement !== "inside") {
         const listLeft = this.list.getBoundingClientRect().left;
         const desiredDepth = Math.max(0, Math.floor((event.clientX - listLeft - 3) / 15));
@@ -310,7 +308,7 @@
     /** Include a selected object's containing layer in the panel's visual selection. */
     rowReflectsObjectSelection(item) {
       if (item.kind !== 'layer') return false;
-      return [...this.store.selectedIds].some((id) => namespace.findDocumentObject(this.store.document, id)?.layer.id === item.id);
+      return [...this.store.selectedIds].some((id) => namespace.findDocumentObject(this.store.document, id)?.layer?.id === item.id);
     }
     toggleExpanded(id) { if (this.expandedIds.has(id)) this.expandedIds.delete(id); else this.expandedIds.add(id); this.render(); this.reportState(); }
 
@@ -318,6 +316,11 @@
       this.list.innerHTML = "";
       const renderNode = (node, depth) => {
         if (namespace.isCanvasBackgroundLayer(node)) return;
+        if (node.kind === "object") {
+          const location = namespace.findDocumentObject(this.store.document, node.id);
+          this.list.appendChild(this.createRow(node, depth, false, false, location?.parent?.id));
+          return;
+        }
         const parent = namespace.findDocumentNode(this.store.document, node.id)?.parent;
         this.list.appendChild(this.createRow(node, depth, true, true, parent?.id));
         if (!this.expandedIds.has(node.id)) return;

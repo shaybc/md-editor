@@ -60,7 +60,7 @@
   function fillTargetObject(store, layer, point) {
     const selected = [...store.selectedIds]
       .map((id) => namespace.findDocumentObject(store.document, id))
-      .find((found) => found?.layer.id === layer.id && found.object.visible !== false && !found.object.locked);
+      .find((found) => found?.layer?.id === layer.id && found.object.visible !== false && !found.object.locked);
     if (selected) {
       const pixels = objectSourcePixels(selected.object, store.assets);
       if (objectSourcePoint(point, selected.object, pixels)) return { object: selected.object, pixels };
@@ -76,7 +76,7 @@
   function selectedEditableObject(store, layer) {
     return [...store.selectedIds]
       .map((id) => namespace.findDocumentObject(store.document, id))
-      .find((found) => found?.layer.id === layer.id && found.object.visible !== false && !found.object.locked)?.object || null;
+      .find((found) => found?.layer?.id === layer.id && found.object.visible !== false && !found.object.locked)?.object || null;
   }
 
   function imageDataCanvas(imageData) {

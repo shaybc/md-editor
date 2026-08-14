@@ -22,7 +22,8 @@
     rectangle: "bi-square",
     "rounded-rectangle": "bi-app",
     callout: "bi-chat-square",
-    "oval-callout": "bi-chat-oval",
+    "oval-callout": "bi-chat",
+    "cloud-callout": "bi-cloud",
     ellipse: "bi-circle",
     polygon: "bi-pentagon",
     triangle: "bi-triangle",
@@ -34,9 +35,15 @@
     bucket: "bi-paint-bucket",
     text: "bi-fonts"
   };
-  const TOOL_LABELS = { move: "Move", eraser: "Eraser", blur: "Blur", "clone-stamp": "Clone Stamp", smudge: "Smudge", "rounded-rectangle": "Rounded rectangle", "rectangular-grid": "Rectangular grid", "polar-grid": "Polar grid", callout: "Rounded rectangular callout", "oval-callout": "Oval callout" };
-  const SHAPE_TOOL_GROUP = Object.freeze(["rectangle", "ellipse", "triangle", "rounded-rectangle", "callout", "lightning", "heart"]);
+  const TOOL_LABELS = { move: "Move", eraser: "Eraser", blur: "Blur", "clone-stamp": "Clone Stamp", smudge: "Smudge", "rounded-rectangle": "Rounded rectangle", "rectangular-grid": "Rectangular grid", "polar-grid": "Polar grid", callout: "Rounded rectangular callout", "oval-callout": "Oval callout", "cloud-callout": "Cloud callout" };
+  const SHAPE_TOOL_GROUP = Object.freeze(["rectangle", "ellipse", "triangle", "rounded-rectangle", "lightning", "heart"]);
+  const CALLOUT_TOOL_GROUP = Object.freeze(["callout", "oval-callout", "cloud-callout"]);
   const GRID_TOOL_GROUP = Object.freeze(["rectangular-grid", "polar-grid"]);
+  const ARROW_DIRECTIONS = Object.freeze(["up", "down", "left", "right"]);
+  const ARROW_DIRECTION_ICONS = Object.freeze({
+    up: "bi-arrow-up", down: "bi-arrow-down",
+    left: "bi-arrow-left", right: "bi-arrow-right"
+  });
   let flyoutDismissalInstalled = false;
   const PALETTE_COLORS = Object.freeze([
     "#000000", "#7f7f7f", "#880015", "#ed1c24", "#ff7f27",
@@ -76,8 +83,10 @@
       const sidebarRect = details.closest(".image-editor-tool-sidebar")?.getBoundingClientRect();
       const menu = details.querySelector(menuSelector);
       const anchorRight = sidebarRect?.right || triggerRect.right;
+      const statusLineTop = document.querySelector("#app-status-line")?.getBoundingClientRect().top;
+      const viewportBottom = Number.isFinite(statusLineTop) ? statusLineTop : global.innerHeight;
       menu.style.left = Math.max(4, Math.min(global.innerWidth - menu.offsetWidth - 4, anchorRight + 6)) + "px";
-      menu.style.top = Math.max(4, Math.min(global.innerHeight - menu.offsetHeight - 4, triggerRect.top)) + "px";
+      menu.style.top = Math.max(4, Math.min(viewportBottom - menu.offsetHeight - 4, triggerRect.top)) + "px";
     });
   }
 
@@ -91,19 +100,37 @@
     }, true);
   }
 
+  /** Render the active marquee geometry as a dashed toolbar icon. */
+  function selectionShapeIcon(shape) {
+    const normalizedShape = ["rectangle", "ellipse", "triangle", "lasso"].includes(shape) ? shape : "rectangle";
+    const geometry = {
+      rectangle: '<rect x="2" y="3" width="12" height="10" rx="0.5"></rect>',
+      ellipse: '<ellipse cx="8" cy="8" rx="6" ry="5"></ellipse>',
+      triangle: '<path d="M8 2.2 14 13.5H2Z"></path>',
+      lasso: '<path d="M3.2 4.8C5.1 1.7 11.7 2.1 13.3 5.7c1.8 4-2.2 7.5-6.6 6.8-4.2-.7-5.8-4.5-3.5-7.7Zm3.5 7.7c-1 1.1-1 2.2.4 2.8"></path>'
+    }[normalizedShape];
+    return `<svg class="image-editor-selection-shape-icon" data-selection-shape-icon="${normalizedShape}" viewBox="0 0 16 16" stroke-dasharray="2.2 1.7" aria-hidden="true" focusable="false">${geometry}</svg>`;
+  }
+
+  function updateSelectionShapeIcon(shell, shape) {
+    const main = shell.querySelector(".image-editor-select-main");
+    if (main?.querySelector("[data-selection-shape-icon]")?.dataset.selectionShapeIcon === shape) return;
+    if (main) main.innerHTML = selectionShapeIcon(shape);
+  }
+
   /** Build the Select tool and its geometric marquee chooser. */
   function createSelectTool() {
     const wrapper = document.createElement("div");
     wrapper.className = "image-editor-select-tool";
     wrapper.innerHTML = `
-      <button type="button" class="image-editor-button image-editor-tool image-editor-select-main" data-tool="select" title="Select" aria-label="Select"><i class="bi ${TOOL_ICONS.select}" aria-hidden="true"></i></button>
+      <button type="button" class="image-editor-button image-editor-tool image-editor-select-main" data-tool="select" title="Select" aria-label="Select">${selectionShapeIcon("rectangle")}</button>
       <details class="image-editor-select-mode">
         <summary class="image-editor-select-mode-trigger" title="Selection shape" aria-label="Choose selection shape"><i class="bi bi-caret-down-fill"></i></summary>
         <span class="image-editor-select-mode-menu" role="listbox" aria-label="Selection shapes">
-          <button type="button" data-selection-shape="rectangle" role="option"><i class="bi bi-square"></i>Rectangle</button>
-          <button type="button" data-selection-shape="ellipse" role="option"><i class="bi bi-circle"></i>Ellipse</button>
-          <button type="button" data-selection-shape="triangle" role="option"><i class="bi bi-triangle"></i>Triangle</button>
-          <button type="button" data-selection-shape="lasso" role="option"><i class="bi bi-vector-pen"></i>Lasso</button>
+          <button type="button" data-selection-shape="rectangle" role="option">${selectionShapeIcon("rectangle")}Rectangle</button>
+          <button type="button" data-selection-shape="ellipse" role="option">${selectionShapeIcon("ellipse")}Ellipse</button>
+          <button type="button" data-selection-shape="triangle" role="option">${selectionShapeIcon("triangle")}Triangle</button>
+          <button type="button" data-selection-shape="lasso" role="option">${selectionShapeIcon("lasso")}Lasso</button>
         </span>
       </details>`;
     const modeSelector = wrapper.querySelector(".image-editor-select-mode");
@@ -172,6 +199,41 @@
     main.innerHTML = `<i class="bi ${TOOL_ICONS[activeTool]}" aria-hidden="true"></i>`;
   }
 
+  /** Build the Arrow tool and its direction chooser. */
+  function createArrowTool() {
+    const wrapper = document.createElement("div");
+    wrapper.className = "image-editor-grouped-tool image-editor-arrow-tool";
+    wrapper.dataset.toolGroup = "arrow-direction";
+    wrapper.innerHTML = `
+      <button type="button" class="image-editor-button image-editor-tool image-editor-grouped-tool-main image-editor-arrow-main" data-tool="arrow" title="Arrow right" aria-label="Arrow right"><i class="bi bi-arrow-right" aria-hidden="true"></i></button>
+      <details class="image-editor-grouped-tool-mode image-editor-arrow-direction-mode">
+        <summary class="image-editor-grouped-tool-trigger" title="Choose arrow direction" aria-label="Choose arrow direction"><i class="bi bi-caret-down-fill"></i></summary>
+        <span class="image-editor-grouped-tool-menu image-editor-arrow-direction-menu" role="listbox" aria-label="Arrow directions">
+          ${ARROW_DIRECTIONS.map((direction) => `<button type="button" data-tool="arrow" data-arrow-direction="${direction}" role="option"><i class="bi ${ARROW_DIRECTION_ICONS[direction]}"></i>${direction[0].toUpperCase() + direction.slice(1)}</button>`).join("")}
+        </span>
+      </details>`;
+    positionToolFlyout(wrapper.querySelector(".image-editor-arrow-direction-mode"), ".image-editor-grouped-tool-trigger", ".image-editor-arrow-direction-menu");
+    return wrapper;
+  }
+
+  /** Synchronize the Arrow split button with its selected direction. */
+  function updateArrowTool(shell, direction) {
+    const normalizedDirection = ARROW_DIRECTIONS.includes(direction) ? direction : "right";
+    const wrapper = shell.querySelector('[data-tool-group="arrow-direction"]');
+    const main = wrapper?.querySelector(".image-editor-arrow-main");
+    if (main) {
+      const label = `Arrow ${normalizedDirection}`;
+      main.title = label;
+      main.setAttribute("aria-label", label);
+      main.innerHTML = `<i class="bi ${ARROW_DIRECTION_ICONS[normalizedDirection]}" aria-hidden="true"></i>`;
+    }
+    wrapper?.querySelectorAll("[data-arrow-direction]").forEach((element) => {
+      const active = element.dataset.arrowDirection === normalizedDirection;
+      element.classList.toggle("active", active);
+      element.setAttribute("aria-selected", String(active));
+    });
+  }
+
   function createPaletteButton(color) {
     const element = document.createElement("button");
     element.type = "button";
@@ -225,15 +287,6 @@
               <label>Radius <input class="image-editor-corner-radius" type="range" min="0" max="100" value="16"></label>
               <label><input class="image-editor-all-corners" type="checkbox" checked> All corners</label>
             </div>
-            <div class="image-editor-callout-controls image-editor-toolbar-group" hidden>
-              <label>Callout
-                <select class="image-editor-callout-type" aria-label="Callout type">
-                  <option value="callout">Rounded rectangular</option>
-                  <option value="oval-callout">Oval</option>
-                  <option value="cloud-callout">Cloud</option>
-                </select>
-              </label>
-            </div>
             <div class="image-editor-star-controls image-editor-toolbar-group" hidden>
               <label>Star
                 <select class="image-editor-star-points" aria-label="Star points">
@@ -244,14 +297,6 @@
               </label>
             </div>
             <div class="image-editor-arrow-controls image-editor-toolbar-group" hidden>
-              <label>Direction
-                <select class="image-editor-arrow-direction" aria-label="Arrow direction">
-                  <option value="up">Up</option>
-                  <option value="down">Down</option>
-                  <option value="left">Left</option>
-                  <option value="right">Right</option>
-                </select>
-              </label>
               <label>Head
                 <select class="image-editor-arrow-head-angle" aria-label="Arrow head angle">
                   <option value="90">90°</option>
@@ -367,8 +412,14 @@
       installFlyoutDismissal();
       const toolsContainer = this.shell.querySelector(".image-editor-tools");
       let shapeGroupAdded = false;
+      let calloutGroupAdded = false;
       let gridGroupAdded = false;
       namespace.tools.filter((tool) => tool !== "oval-callout" && tool !== "cloud-callout").forEach((tool) => {
+        if (CALLOUT_TOOL_GROUP.includes(tool)) {
+          if (!calloutGroupAdded) toolsContainer.appendChild(createGroupedTool("callouts", CALLOUT_TOOL_GROUP, "callout", "Callouts"));
+          calloutGroupAdded = true;
+          return;
+        }
         if (SHAPE_TOOL_GROUP.includes(tool)) {
           if (!shapeGroupAdded) toolsContainer.appendChild(createGroupedTool("shapes", SHAPE_TOOL_GROUP, "rectangle", "Shapes"));
           shapeGroupAdded = true;
@@ -379,7 +430,7 @@
           gridGroupAdded = true;
           return;
         }
-        toolsContainer.appendChild(tool === "select" ? createSelectTool() : tool === "bucket" ? createBucketTool() : tool === "brush" ? createBrushTool() : createToolButton(tool));
+        toolsContainer.appendChild(tool === "select" ? createSelectTool() : tool === "bucket" ? createBucketTool() : tool === "brush" ? createBrushTool() : tool === "arrow" ? createArrowTool() : createToolButton(tool));
       });
       const gradientColorInput = document.createElement("input");
       gradientColorInput.type = "color";
@@ -533,12 +584,15 @@
 
     update(state, commandState) {
       updateGroupedTool(this.shell, "shapes", state.tool, SHAPE_TOOL_GROUP);
+      updateGroupedTool(this.shell, "callouts", state.tool, CALLOUT_TOOL_GROUP);
       updateGroupedTool(this.shell, "grids", state.tool, GRID_TOOL_GROUP);
+      updateSelectionShapeIcon(this.shell, state.selectionShape);
       this.shell.querySelectorAll("[data-tool]").forEach((element) => {
-        const active = element.dataset.tool === state.tool || (element.dataset.tool === "callout" && (state.tool === "oval-callout" || state.tool === "cloud-callout"));
+        const active = element.dataset.tool === state.tool;
         element.classList.toggle("active", active);
         element.setAttribute("aria-pressed", String(active));
       });
+      updateArrowTool(this.shell, state.arrowDirection);
       this.shell.querySelectorAll("[data-selection-shape]").forEach((element) => {
         const active = element.dataset.selectionShape === state.selectionShape;
         element.classList.toggle("active", active);
@@ -581,13 +635,9 @@
       this.shell.querySelector(".image-editor-corner-radius").value = String(state.cornerRadius);
       this.shell.querySelector(".image-editor-all-corners").checked = state.adjustAllCorners;
       this.shell.querySelector(".image-editor-rounded-rectangle-controls").hidden = state.tool !== "rounded-rectangle";
-      const calloutActive = state.tool === "callout" || state.tool === "oval-callout" || state.tool === "cloud-callout";
-      this.shell.querySelector(".image-editor-callout-controls").hidden = !calloutActive;
-      if (calloutActive) this.shell.querySelector(".image-editor-callout-type").value = state.tool;
       this.shell.querySelector(".image-editor-star-controls").hidden = state.tool !== "star";
       this.shell.querySelector(".image-editor-star-points").value = String(state.starPoints);
       this.shell.querySelector(".image-editor-arrow-controls").hidden = state.tool !== "arrow";
-      this.shell.querySelector(".image-editor-arrow-direction").value = state.arrowDirection;
       this.shell.querySelector(".image-editor-arrow-head-angle").value = String(state.arrowHeadAngle);
       this.shell.querySelector(".image-editor-spiral-controls").hidden = state.tool !== "spiral";
       this.shell.querySelector(".image-editor-spiral-direction").value = state.spiralDirection;

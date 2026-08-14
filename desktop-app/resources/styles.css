@@ -1079,6 +1079,10 @@ audio.file-preview-content {
 .image-editor-tools [data-tool="select"] { grid-area: select; }
 .image-editor-select-tool { display: grid; width: 28px; grid-template-columns: 20px 8px; position: relative; }
 .image-editor-tools .image-editor-select-tool .image-editor-select-main { width: 20px !important; border-radius: 6px 0 0 6px; }
+.image-editor-selection-shape-icon {
+  width: 16px; height: 16px; flex: 0 0 16px; fill: none; stroke: currentColor;
+  stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round;
+}
 .image-editor-select-mode { position: relative; }
 .image-editor-select-mode-trigger {
   display: flex; width: 8px; height: 28px; align-items: center; justify-content: center; padding: 0;
@@ -1100,6 +1104,18 @@ audio.file-preview-content {
 }
 .image-editor-select-mode-menu button:hover, .image-editor-select-mode-menu button.active { background: var(--hover-bg); }
 .image-editor-grouped-tool { display: grid; width: 28px; grid-template-columns: 20px 8px; position: relative; }
+.image-editor-tools .image-editor-select-tool > .image-editor-select-main,
+.image-editor-tools .image-editor-brush-tool > .image-editor-brush-main,
+.image-editor-tools .image-editor-bucket-tool > .image-editor-bucket-main,
+.image-editor-tools .image-editor-grouped-tool > .image-editor-grouped-tool-main {
+  grid-area: 1 / 1 / 2 / 2;
+}
+.image-editor-tools .image-editor-select-tool > .image-editor-select-mode,
+.image-editor-tools .image-editor-brush-tool > .image-editor-brush-mode,
+.image-editor-tools .image-editor-bucket-tool > .image-editor-bucket-mode,
+.image-editor-tools .image-editor-grouped-tool > .image-editor-grouped-tool-mode {
+  grid-area: 1 / 2 / 2 / 3;
+}
 .image-editor-tools .image-editor-grouped-tool .image-editor-grouped-tool-main { width: 20px; border-radius: 6px 0 0 6px; }
 .image-editor-grouped-tool-mode { position: relative; }
 .image-editor-grouped-tool-trigger {
@@ -1144,7 +1160,7 @@ audio.file-preview-content {
 .image-editor-tools [data-tool="pencil"] { grid-area: pencil; }
 .image-editor-tools [data-tool="brush"] { grid-area: brush; }
 .image-editor-brush-tool { grid-area: brush; display: grid; width: 28px; grid-template-columns: 20px 8px; position: relative; }
-.image-editor-tools .image-editor-brush-tool .image-editor-brush-main { grid-area: auto; width: 20px; border-radius: 6px 0 0 6px; }
+.image-editor-tools .image-editor-brush-tool .image-editor-brush-main { width: 20px; border-radius: 6px 0 0 6px; }
 .image-editor-brush-mode { position: relative; }
 .image-editor-brush-mode-trigger {
   display: flex; width: 8px; height: 28px; align-items: center; justify-content: center; padding: 0;

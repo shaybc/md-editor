@@ -198,26 +198,16 @@
   function selectedText(store) {
     const results = [];
     const seen = new Set();
-    const layer = (node) => {
-      if (!node || node.locked || node.visible === false) return;
-      (node.objects || []).forEach((object, index) => {
-        if (object.type === "text" && !object.locked && object.visible !== false && !seen.has(object.id)) {
-          seen.add(object.id);
-          results.push({ object, layer: node, index });
-        }
-      });
-    };
-    const node = (item) => {
-      if (!item || item.locked || item.visible === false) return;
-      if (item.kind === "layer") layer(item);
-      else (item.children || []).forEach(node);
+    const include = (object, location) => {
+      if (object.type !== "text" || location.locked || !location.visible || seen.has(object.id)) return;
+      seen.add(object.id);
+      results.push(location);
     };
     store.selectedIds.forEach((id) => {
       const object = namespace.findDocumentObject(store.document, id);
-      if (object?.object.type === "text" && !object.object.locked && object.object.visible !== false && !object.layer.locked && object.layer.visible !== false && !seen.has(id)) {
-        seen.add(id);
-        results.push(object);
-      } else node(namespace.findDocumentNode(store.document, id)?.node);
+      if (object) { include(object.object, object); return; }
+      const node = namespace.findDocumentNode(store.document, id)?.node;
+      if (node) namespace.walkDocumentObjects({ nodes: [node] }, include);
     });
     return results;
   }
@@ -233,13 +223,13 @@
       targets.forEach((target) => {
         const paths = (options.createGlyphOutlines || glyphOutlines)(target.object).map((glyph, index) => createPath(target.object, glyph, index));
         if (!paths.length) return;
-        target.layer.objects.splice(target.index, 1, ...paths);
-        if (target.layer.name === 'Text' && !target.layer.objects.some((object) => object.type === 'text')) target.layer.name = 'Outlines';
+        target.collection.splice(target.index, 1, ...paths);
+        if (target.layer?.name === 'Text' && !target.layer.objects.some((object) => object.type === 'text')) target.layer.name = 'Outlines';
         convertedIds.push(...paths.map((path) => path.id));
       });
       if (!convertedIds.length) return false;
       store.selectedIds = new Set(convertedIds);
-      store.document.activeLayerId = namespace.findDocumentObject(store.document, convertedIds[0])?.layer.id || store.document.activeLayerId;
+      store.document.activeLayerId = namespace.findDocumentObject(store.document, convertedIds[0])?.layer?.id || store.document.activeLayerId;
       store.notify({ type: "create-text-outlines", ids: convertedIds });
       return true;
     }

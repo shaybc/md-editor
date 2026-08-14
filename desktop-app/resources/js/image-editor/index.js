@@ -470,19 +470,15 @@
     function selectedDocumentObjects(controller) {
       const objects = [];
       const seen = new Set();
-      const includeLayer = (layer) => (layer.objects || []).forEach((object) => {
+      const includeObject = (object) => {
         if (!seen.has(object.id)) { seen.add(object.id); objects.push(object); }
-      });
+      };
       controller.documentStore.selectedIds.forEach((id) => {
         const object = namespace.findDocumentObject(controller.documentStore.document, id)?.object;
-        if (object) {
-          if (!seen.has(object.id)) { seen.add(object.id); objects.push(object); }
-          return;
-        }
+        if (object) { includeObject(object); return; }
         const node = namespace.findDocumentNode(controller.documentStore.document, id)?.node;
         if (!node) return;
-        if (node.kind === "layer") includeLayer(node);
-        else namespace.walkDocumentNodes({ nodes: node.children || [] }, (child) => { if (child.kind === "layer") includeLayer(child); });
+        namespace.walkDocumentObjects({ nodes: [node] }, includeObject);
       });
       return objects;
     }
@@ -1520,6 +1516,10 @@
           syncTab(controller);
           return;
         }
+        const arrowDirectionButton = event.target.closest("[data-arrow-direction]");
+        if (arrowDirectionButton && ["up", "down", "left", "right"].includes(arrowDirectionButton.dataset.arrowDirection)) {
+          state.arrowDirection = arrowDirectionButton.dataset.arrowDirection;
+        }
         const toolButton = event.target.closest("[data-tool]");
         if (toolButton) {
           if (controller.gradientFillTool.isEditing) finishGradientFill(controller);
@@ -1710,25 +1710,11 @@
         if (controller.arcTool.isEditing) renderArcPreview(controller);
         if (isGridTool(state.tool) && gridToolFor(controller).isEditing) renderGridPreview(controller);
       });
-      view.shell.querySelector(".image-editor-callout-type").addEventListener("change", (event) => {
-        const nextTool = event.target.value;
-        if (!isCalloutTool(nextTool) || nextTool === state.tool) return;
-        if (isCalloutTool(state.tool) && editingCalloutTool(controller)) finishEditableCallout(controller);
-        commitText(controller);
-        dropSelection(controller);
-        state.setTool(nextTool);
-        syncTab(controller);
-      });
       view.shell.querySelector(".image-editor-star-points").addEventListener("change", (event) => {
         const starPoints = Number(event.target.value);
         if (![4, 5, 6].includes(starPoints)) return;
         state.starPoints = starPoints;
         if (controller.starTool.setPointCount(starPoints)) renderStarPreview(controller);
-        syncTab(controller);
-      });
-      view.shell.querySelector(".image-editor-arrow-direction").addEventListener("change", (event) => {
-        if (!["up", "down", "left", "right"].includes(event.target.value)) return;
-        state.arrowDirection = event.target.value;
         syncTab(controller);
       });
       view.shell.querySelector(".image-editor-arrow-head-angle").addEventListener("change", (event) => {
@@ -2565,7 +2551,7 @@
         if (state.tool === "move") {
           const objectId = controller.objectSelection.hitTest(view.pointFromEvent(event, false));
           const found = objectId ? namespace.findDocumentObject(controller.documentStore.document, objectId) : null;
-          if (found?.object?.type === "text" && !found.object.locked && !found.layer.locked) {
+          if (found?.object?.type === "text" && !found.locked) {
             event.preventDefault();
             controller.documentStore.select(objectId);
             const style = found.object.payload?.style || {};
@@ -2795,9 +2781,8 @@
       commitText(controller);
       commitSelection(controller);
       const objectIds = [];
-      namespace.walkDocumentNodes(controller.documentStore.document, (node) => {
-        if (node.kind !== "layer" || node.visible === false || node.locked) return;
-        (node.objects || []).forEach((object) => { if (object.visible !== false && !object.locked) objectIds.push(object.id); });
+      namespace.walkDocumentObjects(controller.documentStore.document, (object, location) => {
+        if (location.visible && !location.locked) objectIds.push(object.id);
       });
       state.setTool("move");
       controller.documentStore.select(objectIds);
@@ -2833,11 +2818,8 @@
       }
       const selected = controller.documentStore.selectedIds;
       const invertedIds = [];
-      namespace.walkDocumentNodes(controller.documentStore.document, (node) => {
-        if (node.kind !== "layer" || node.visible === false || node.locked) return;
-        (node.objects || []).forEach((object) => {
-          if (object.visible !== false && !object.locked && !selected.has(object.id) && !selected.has(node.id)) invertedIds.push(object.id);
-        });
+      namespace.walkDocumentObjects(controller.documentStore.document, (object, location) => {
+        if (location.visible && !location.locked && !selected.has(object.id) && !selected.has(location.layer?.id) && !selected.has(location.parent?.id)) invertedIds.push(object.id);
       });
       controller.state.setTool("move");
       controller.documentStore.select(invertedIds);

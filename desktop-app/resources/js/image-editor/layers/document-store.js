@@ -66,6 +66,7 @@
     selectedContentLayers(options = {}) {
       const layers = [];
       const seen = new Set();
+      let hasExplicitContentSelection = false;
       const includeLayer = (layer, inheritedVisible = true, inheritedLocked = false) => {
         if (!layer || seen.has(layer.id)) return;
         if (options.editableOnly && (!inheritedVisible || inheritedLocked || layer.visible === false || layer.locked)) return;
@@ -81,10 +82,12 @@
       };
       this.selectedIds.forEach((id) => {
         const object = namespace.findDocumentObject(this.document, id);
-        if (object) { includeLayer(object.layer); return; }
-        includeNode(namespace.findDocumentNode(this.document, id)?.node);
+        if (object) { hasExplicitContentSelection = true; includeLayer(object.layer); return; }
+        const node = namespace.findDocumentNode(this.document, id)?.node;
+        if (node) hasExplicitContentSelection = true;
+        includeNode(node);
       });
-      if (!layers.length && options.fallbackToActive !== false) includeLayer(this.activeLayer());
+      if (!layers.length && !hasExplicitContentSelection && options.fallbackToActive !== false) includeLayer(this.activeLayer());
       return layers;
     }
 
@@ -110,7 +113,7 @@
       const selected = next[0];
       const object = namespace.findDocumentObject(this.document, selected);
       const node = namespace.findDocumentNode(this.document, selected)?.node;
-      if (object) this.document.activeLayerId = object.layer.id;
+      if (object?.layer) this.document.activeLayerId = object.layer.id;
       else if (node?.kind === "layer") this.document.activeLayerId = node.id;
       this.notify({ type: "selection" });
     }
@@ -155,8 +158,8 @@
         if (objectResult) {
           const copy = namespace.cloneImageDocument(objectResult.object);
           copy.id = namespace.createImageEditorId("object");
-          copy.name = this.uniqueObjectName(objectResult.layer, `${copy.name} copy`);
-          objectResult.layer.objects.splice(objectResult.index, 0, copy);
+          copy.name = this.uniqueObjectName(objectResult.collection, `${copy.name} copy`);
+          objectResult.collection.splice(objectResult.index, 0, copy);
           duplicated.push(copy.id);
           return;
         }
@@ -175,13 +178,14 @@
     }
 
     refreshNodeIds(node) {
+      if (node.kind === "object") { node.id = namespace.createImageEditorId("object"); return; }
       node.id = namespace.createImageEditorId(node.kind);
       (node.objects || []).forEach((object) => { object.id = namespace.createImageEditorId("object"); });
       (node.children || []).forEach((child) => this.refreshNodeIds(child));
     }
 
-    uniqueObjectName(layer, base) {
-      const used = new Set((layer.objects || []).map((object) => object.name));
+    uniqueObjectName(owner, base) {
+      const used = new Set((Array.isArray(owner) ? owner : owner?.objects || []).filter((item) => item.kind === "object").map((object) => object.name));
       if (!used.has(base)) return base;
       let index = 2;
       while (used.has(`${base} ${index}`)) index += 1;
@@ -190,7 +194,12 @@
 
     /** Group selected sibling hierarchy nodes while preserving their panel order. */
     groupSelected() {
-      const locations = [...this.selectedIds].map((id) => namespace.findDocumentNode(this.document, id)).filter((item) => item && !namespace.isCanvasBackgroundLayer(item.node));
+      const locations = [...this.selectedIds].map((id) => {
+        const node = namespace.findDocumentNode(this.document, id);
+        if (node) return namespace.isCanvasBackgroundLayer(node.node) ? null : node;
+        const object = namespace.findDocumentObject(this.document, id);
+        return object && !object.layer ? { node: object.object, ...object } : null;
+      }).filter(Boolean);
       if (locations.length < 1 || locations.some((item) => item.collection !== locations[0].collection)) return false;
       const collection = locations[0].collection;
       const indices = locations.map((item) => item.index).sort((a, b) => a - b);
@@ -261,32 +270,48 @@
       return true;
     }
 
-    /** Move objects within or between content layers while preserving their panel order. */
+    /** Move objects between layers, groups, and the document root while preserving panel order. */
     moveObjects(sources, targetId, placement) {
-      if (sources.some((source) => source.object.locked || source.layer.locked)) return false;
+      if (sources.some((source) => source.object.locked || source.layer?.locked || source.parent?.locked)) return false;
       const targetObject = namespace.findDocumentObject(this.document, targetId);
-      const targetNode = namespace.findDocumentNode(this.document, targetId)?.node;
-      const targetLayer = targetObject?.layer || (targetNode?.kind === "layer" ? targetNode : null);
-      if (!targetLayer || targetLayer.locked) return false;
+      const targetNodeResult = namespace.findDocumentNode(this.document, targetId);
+      const targetNode = targetNodeResult?.node;
+      if (!targetObject && !targetNode) return false;
+      if (targetNode?.locked || targetObject?.locked || targetObject?.parent?.locked) return false;
+      if (placement === "inside" && targetNode?.kind !== "layer" && targetNode?.kind !== "group") return false;
+      if (namespace.isCanvasBackgroundLayer(targetNode) && placement !== "before") return false;
       const objectOrder = new Map();
-      namespace.walkDocumentNodes(this.document, (node) => {
-        if (node.kind === "layer") (node.objects || []).forEach((object) => objectOrder.set(object.id, objectOrder.size));
-      });
+      namespace.walkDocumentObjects(this.document, (object) => objectOrder.set(object.id, objectOrder.size));
       const ordered = [...sources].sort((left, right) => objectOrder.get(left.object.id) - objectOrder.get(right.object.id)).map((source) => source.object);
       const removals = new Map();
       sources.forEach((source) => {
-        if (!removals.has(source.layer)) removals.set(source.layer, []);
-        removals.get(source.layer).push(source.index);
+        if (!removals.has(source.collection)) removals.set(source.collection, []);
+        removals.get(source.collection).push(source.index);
       });
-      removals.forEach((indices, layer) => [...indices].sort((left, right) => right - left).forEach((index) => layer.objects.splice(index, 1)));
-      let insertionIndex = placement === "after" ? targetLayer.objects.length : 0;
-      if (targetObject) {
-        const refreshedIndex = targetLayer.objects.findIndex((object) => object.id === targetId);
-        if (refreshedIndex < 0) return false;
-        insertionIndex = refreshedIndex + (placement === "after" ? 1 : 0);
+      removals.forEach((indices, collection) => [...indices].sort((left, right) => right - left).forEach((index) => collection.splice(index, 1)));
+      const refreshedObject = namespace.findDocumentObject(this.document, targetId);
+      const refreshedNode = namespace.findDocumentNode(this.document, targetId);
+      let collection;
+      let insertionIndex;
+      let targetLayer = null;
+      if (refreshedObject) {
+        collection = refreshedObject.collection;
+        insertionIndex = refreshedObject.index + (placement === "after" ? 1 : 0);
+        targetLayer = refreshedObject.layer;
+      } else if (placement === "inside" && refreshedNode?.node.kind === "layer") {
+        collection = refreshedNode.node.objects;
+        insertionIndex = 0;
+        targetLayer = refreshedNode.node;
+      } else if (placement === "inside" && refreshedNode?.node.kind === "group") {
+        collection = refreshedNode.node.children;
+        insertionIndex = 0;
+      } else if (refreshedNode) {
+        collection = refreshedNode.collection;
+        insertionIndex = refreshedNode.index + (placement === "after" ? 1 : 0);
       }
-      targetLayer.objects.splice(insertionIndex, 0, ...ordered);
-      this.document.activeLayerId = targetLayer.id;
+      if (!collection || !Number.isInteger(insertionIndex)) return false;
+      collection.splice(insertionIndex, 0, ...ordered);
+      if (targetLayer) this.document.activeLayerId = targetLayer.id;
       this.selectedIds = new Set(ordered.map((object) => object.id));
       this.notify({ type: "reorder", ids: [...this.selectedIds] });
       return true;
@@ -336,19 +361,23 @@
       return true;
     }
 
-    /** Remove selected objects and hierarchy nodes, retaining at least one layer. */
+    /** Remove selected objects and hierarchy nodes while preserving the canvas background. */
     deleteSelected() {
       const ids = new Set(this.selectedIds);
       let changed = false;
       namespace.walkDocumentNodes(this.document, (node) => {
         if (node.kind !== "layer") return;
-        const before = node.objects.length;
-        node.objects = node.objects.filter((object) => !ids.has(object.id) || object.locked);
+        const before = (node.objects || []).length;
+        node.objects = (node.objects || []).filter((object) => !ids.has(object.id) || object.locked);
         changed ||= before !== node.objects.length;
       });
-      const removeNodes = (nodes) => nodes.filter((node) => {
-        if (ids.has(node.id) && !node.locked && !namespace.isCanvasBackgroundLayer(node)) { changed = true; return false; }
-        if (node.kind === "group") node.children = removeNodes(node.children || []);
+      const removeNodes = (nodes) => nodes.filter((item) => {
+        if (item.kind === "object") {
+          if (ids.has(item.id) && !item.locked) { changed = true; return false; }
+          return true;
+        }
+        if (ids.has(item.id) && !item.locked && !namespace.isCanvasBackgroundLayer(item)) { changed = true; return false; }
+        if (item.kind === "group") item.children = removeNodes(item.children || []);
         return true;
       });
       this.document.nodes = removeNodes(this.document.nodes);
@@ -371,7 +400,7 @@
 
     uniqueName(base) {
       const used = new Set();
-      namespace.walkDocumentNodes(this.document, (node) => used.add(node.name));
+      namespace.walkDocumentNodes(this.document, (node) => { if (node.kind !== "object") used.add(node.name); });
       if (!used.has(base)) return base;
       let index = 2;
       while (used.has(`${base} ${index}`)) index += 1;
