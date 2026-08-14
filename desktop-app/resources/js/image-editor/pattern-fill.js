@@ -95,6 +95,8 @@
     const type = PATTERN_TYPES.includes(state.patternFillType) ? state.patternFillType : "crosshatch";
     const foreground = namespace.colorToRgba(state.foregroundColor);
     const background = namespace.colorToRgba(state.backgroundColor);
+    foreground[3] = Math.round(namespace.clampImageEditorColorValue(state.foregroundOpacity) * 255);
+    background[3] = Math.round(namespace.clampImageEditorColorValue(state.backgroundOpacity) * 255);
     return namespace.paintFloodFillRegion(context, region, (x, y) =>
       patternColorAt(type, x, y, state, foreground, background));
   }

@@ -8,8 +8,8 @@
   const FLOOD_FILL_EDGE_DIRECTION_ALIGNMENT = 0.97;
 
   function configureStroke(context, state, width, pathDistance = 0) {
-    context.strokeStyle = state.foregroundColor;
-    context.fillStyle = state.backgroundColor;
+    context.strokeStyle = namespace.imageEditorColorWithOpacity(state.foregroundColor, state.foregroundOpacity);
+    context.fillStyle = namespace.imageEditorColorWithOpacity(state.backgroundColor, state.backgroundOpacity);
     context.lineWidth = width;
     context.lineCap = "round";
     context.lineJoin = "round";
@@ -356,6 +356,7 @@
 
   function floodFill(context, point, state) {
     const fillColor = colorToRgba(state.foregroundColor);
+    fillColor[3] = Math.round(namespace.clampImageEditorColorValue(state.foregroundOpacity) * 255);
     const region = createFloodFillRegion(context, point);
     if (region.targetColor.every((channel, index) => channel === fillColor[index])) return false;
     return paintFloodFillRegion(context, region, () => fillColor);
@@ -409,7 +410,7 @@
     const font = `${state.fontItalic ? "italic " : ""}${state.fontBold ? "bold " : ""}${fontSize}px ${state.fontFamily}`;
     context.font = font;
     context.textBaseline = "alphabetic";
-    context.fillStyle = state.foregroundColor;
+    context.fillStyle = namespace.imageEditorColorWithOpacity(state.foregroundColor, state.foregroundOpacity);
     const width = Math.max(1, box.width || context.canvas.width - box.x);
     const height = Math.max(1, box.height || context.canvas.height - box.y);
     const lineHeight = box.lineHeight || fontSize * 1.2;

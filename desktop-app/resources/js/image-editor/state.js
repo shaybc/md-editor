@@ -20,6 +20,8 @@
       this.selectionShape = namespace.ImageEditorSelectionShapes?.normalize(options.selectionShape) || "rectangle";
       this.foregroundColor = options.foregroundColor || "#111111";
       this.backgroundColor = options.backgroundColor || "#ffffff";
+      this.foregroundOpacity = Math.max(0, Math.min(1, Number(options.foregroundOpacity ?? 1)));
+      this.backgroundOpacity = Math.max(0, Math.min(1, Number(options.backgroundOpacity ?? 1)));
       this.brushSize = Math.max(1, Math.min(64, Number(options.brushSize || 8)));
       this.brushType = namespace.normalizeBrushPreset ? namespace.normalizeBrushPreset(options.brushType) : "round";
       this.eraserHardness = Math.max(0, Math.min(100, Number(options.eraserHardness ?? 100)));

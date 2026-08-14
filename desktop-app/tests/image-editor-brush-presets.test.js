@@ -8,7 +8,7 @@ function loadBrushPresets() {
   const context = { window: {} };
   context.window.window = context.window;
   vm.createContext(context);
-  ["drawing-tools.js", "brush-presets.js"].forEach((file) => vm.runInContext(
+  ["color-opacity.js", "drawing-tools.js", "brush-presets.js", "brush-stroke-effects.js"].forEach((file) => vm.runInContext(
     fs.readFileSync(path.resolve(__dirname, `../resources/js/image-editor/${file}`), "utf8"), context
   ));
   return context.window.MarkdownViewerImageEditor;
@@ -19,14 +19,16 @@ function fakeContext() {
   return {
     calls,
     save() {}, restore() {}, setLineDash() {}, beginPath() { calls.push("begin"); },
-    moveTo() {}, lineTo() {}, stroke() { calls.push("stroke"); }, arc() { calls.push("arc"); }, fill() { calls.push("fill"); }
+    moveTo() {}, lineTo() {}, stroke() { calls.push("stroke"); }, arc() { calls.push("arc"); }, fill() { calls.push("fill"); },
+    getImageData() { calls.push("sample"); return { data: new Uint8ClampedArray([200, 40, 20, 255]) }; }
   };
 }
 
 test("brush library exposes named visual presets and normalizes unknown selections", () => {
   const brush = loadBrushPresets();
   assert.deepEqual(Array.from(brush.ImageEditorBrushPresets, (preset) => preset.id), [
-    "round", "flat", "marker", "ink", "calligraphy", "airbrush", "charcoal", "watercolor", "spray"
+    "round", "flat", "marker", "ink", "calligraphy", "airbrush", "charcoal", "watercolor", "spray",
+    "wet-paint", "oil-paint", "paint-splatter", "graphite-pencil", "wax-crayon", "chalk", "pastel", "pattern"
   ]);
   assert.equal(brush.normalizeBrushPreset("watercolor"), "watercolor");
   assert.equal(brush.normalizeBrushPreset("unknown"), "round");
@@ -41,6 +43,22 @@ test("textured presets use their dedicated raster rendering", () => {
   assert.equal(distance, 12);
   assert.ok(context.calls.includes("arc"));
   assert.ok(context.calls.includes("fill"));
+});
+
+test("wet paint samples existing pixels and pattern brush stamps a repeated motif", () => {
+  const brush = loadBrushPresets();
+  const wetContext = fakeContext();
+  brush.drawBrushPresetSegment(wetContext, { x: 0, y: 0 }, { x: 20, y: 0 }, {
+    brushSize: 12, brushType: "wet-paint", foregroundColor: "#0044ff", backgroundColor: "#ffffff", strokeType: "solid"
+  });
+  assert.ok(wetContext.calls.includes("sample"));
+  assert.ok(wetContext.calls.includes("stroke"));
+
+  const patternContext = fakeContext();
+  brush.drawBrushPresetSegment(patternContext, { x: 0, y: 0 }, { x: 30, y: 0 }, {
+    brushSize: 10, brushType: "pattern", foregroundColor: "#000000", backgroundColor: "#ffffff", strokeType: "solid"
+  });
+  assert.ok(patternContext.calls.filter((call) => call === "arc").length >= 4);
 });
 
 test("every brush preset renders a segment and preserves path distance", () => {

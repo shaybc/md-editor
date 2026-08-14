@@ -154,8 +154,9 @@
         const localX = ((sourceX + 0.5) / imageData.width - 0.5) * width;
         const canvasX = centerX + localX * Math.sign(scaleX) * cosine - localY * Math.sign(scaleY) * sine;
         const canvasY = centerY + localX * Math.sign(scaleX) * sine + localY * Math.sign(scaleY) * cosine;
-        if (!namespace.ImageEditorSelectionShapes.contains(rect, { x: canvasX, y: canvasY })) continue;
-        imageData.data[alphaIndex] = 0;
+        const strength = namespace.ImageEditorSelectionShapes.strength(rect, { x: canvasX, y: canvasY });
+        if (!strength) continue;
+        imageData.data[alphaIndex] = Math.round(imageData.data[alphaIndex] * (1 - strength));
         changed = true;
       }
     }
@@ -171,10 +172,11 @@
     let changed = false;
     for (let y = top; y < bottom; y += 1) {
       for (let x = left; x < right; x += 1) {
-        if (!namespace.ImageEditorSelectionShapes.contains(rect, { x: x + .5, y: y + .5 })) continue;
+        const strength = namespace.ImageEditorSelectionShapes.strength(rect, { x: x + .5, y: y + .5 });
+        if (!strength) continue;
         const alphaIndex = (y * imageData.width + x) * 4 + 3;
         if (!imageData.data[alphaIndex]) continue;
-        imageData.data[alphaIndex] = 0;
+        imageData.data[alphaIndex] = Math.round(imageData.data[alphaIndex] * (1 - strength));
         changed = true;
       }
     }

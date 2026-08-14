@@ -88,6 +88,10 @@
       this.rotation = 0;
       this.shape = "rectangle";
       this.points = null;
+      this.mask = null;
+      this.maskWidth = 0;
+      this.maskHeight = 0;
+      this.inverted = false;
     }
 
     get hasSelection() {
@@ -161,8 +165,30 @@
       this.rotation = 0;
       this.shape = namespace.ImageEditorSelectionShapes.normalize(shape);
       this.points = Array.isArray(points) ? points.map((point) => ({ ...point })) : null;
+      this.mask = null;
+      this.maskWidth = 0;
+      this.maskHeight = 0;
       this.inverted = false;
       return this.rect;
+    }
+
+    /** Adopt a sampled-color alpha mask as the active pixel selection. */
+    setMaskSelection(mask, inverted = false) {
+      if (!mask?.data || !mask.width || !mask.height) return false;
+      this.rect = { x: mask.x, y: mask.y, width: mask.width, height: mask.height };
+      this.imageData = null;
+      this.floating = false;
+      this.phase = "outlined";
+      this.origin = "canvas";
+      this.returnToolAfterPlacement = null;
+      this.rotation = 0;
+      this.shape = "color-range";
+      this.points = null;
+      this.mask = new Uint8ClampedArray(mask.data);
+      this.maskWidth = mask.width;
+      this.maskHeight = mask.height;
+      this.inverted = !!inverted;
+      return true;
     }
 
     contains(point) {
@@ -171,7 +197,7 @@
 
     /** Return the active marquee shape as one canvas-space region. */
     region() {
-      return this.rect ? { ...this.rect, shape: this.shape, points: this.points, rotation: this.rotation, inverted: this.inverted } : null;
+      return this.rect ? { ...this.rect, shape: this.shape, points: this.points, mask: this.mask, maskWidth: this.maskWidth, maskHeight: this.maskHeight, rotation: this.rotation, inverted: this.inverted } : null;
     }
 
     lift(context, backgroundColor, clearSource, origin = "canvas") {
@@ -327,6 +353,9 @@
       this.rotation = 0;
       this.shape = "rectangle";
       this.points = null;
+      this.mask = null;
+      this.maskWidth = 0;
+      this.maskHeight = 0;
       return this.pasteRevision;
     }
 
@@ -424,9 +453,10 @@
         const excludedRegion = { ...this.region(), inverted: false };
         for (let y = 0; y < copied.height; y += 1) {
           for (let x = 0; x < copied.width; x += 1) {
-            if (!namespace.ImageEditorSelectionShapes.contains(excludedRegion, { x: x + .5, y: y + .5 })) continue;
+            const strength = namespace.ImageEditorSelectionShapes.strength(excludedRegion, { x: x + .5, y: y + .5 });
+            if (!strength) continue;
             const index = (y * copied.width + x) * 4;
-            copied.data[index] = copied.data[index + 1] = copied.data[index + 2] = copied.data[index + 3] = 0;
+            copied.data[index + 3] = Math.round(copied.data[index + 3] * (1 - strength));
           }
         }
         this.internalClipboard = copied;
@@ -473,13 +503,24 @@
       this.rotation = 0;
       this.shape = "rectangle";
       this.points = null;
+      this.mask = null;
+      this.maskWidth = 0;
+      this.maskHeight = 0;
       return true;
     }
 
     /** Adopt generated transparent pixels as the active floating selection. */
-    setFloatingLayer(imageData, rect, origin = "generated", returnToolAfterPlacement = null) {
+    setFloatingLayer(imageData, rect, origin = "generated", returnToolAfterPlacement = null, sourceOpacity = 1) {
       if (!imageData || !rect?.width || !rect?.height) return false;
       this.imageData = imageData;
+      this.floatingAlphaMask = new Uint8ClampedArray(imageData.width * imageData.height);
+      const normalizedSourceOpacity = namespace.clampImageEditorColorValue(sourceOpacity);
+      for (let index = 0; index < this.floatingAlphaMask.length; index += 1) {
+        const alpha = imageData.data[index * 4 + 3];
+        this.floatingAlphaMask[index] = normalizedSourceOpacity > 0
+          ? Math.min(255, Math.round(alpha / normalizedSourceOpacity))
+          : alpha;
+      }
       this.rect = { ...rect };
       this.floating = true;
       this.phase = "floating";
@@ -488,13 +529,16 @@
       this.rotation = 0;
       this.shape = "rectangle";
       this.points = null;
+      this.mask = null;
+      this.maskWidth = 0;
+      this.maskHeight = 0;
       this.pointerGesture = null;
       this.moveGesture = null;
       return true;
     }
 
     /** Recolor nontransparent pixels in a generated floating layer. */
-    recolorFloatingLayer(color, requiredOrigin = null) {
+    recolorFloatingLayer(color, requiredOrigin = null, opacity = 1) {
       if (!this.floating || !this.imageData || (requiredOrigin && this.origin !== requiredOrigin)) return false;
       const replacement = namespace.colorToRgba(color);
       const pixels = this.imageData.data;
@@ -503,6 +547,7 @@
         pixels[index] = replacement[0];
         pixels[index + 1] = replacement[1];
         pixels[index + 2] = replacement[2];
+        if (this.floatingAlphaMask) pixels[index + 3] = Math.round(this.floatingAlphaMask[index / 4] * namespace.clampImageEditorColorValue(opacity));
       }
       return true;
     }
@@ -511,6 +556,7 @@
       this.pasteRevision += 1;
       this.rect = null;
       this.imageData = null;
+      this.floatingAlphaMask = null;
       this.floating = false;
       this.phase = "idle";
       this.origin = null;
@@ -521,6 +567,9 @@
       this.rotation = 0;
       this.shape = "rectangle";
       this.points = null;
+      this.mask = null;
+      this.maskWidth = 0;
+      this.maskHeight = 0;
       this.inverted = false;
     }
   }

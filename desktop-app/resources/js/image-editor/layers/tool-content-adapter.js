@@ -21,6 +21,8 @@
     return {
       foregroundColor: state.foregroundColor,
       backgroundColor: state.backgroundColor,
+      foregroundOpacity: state.foregroundOpacity,
+      backgroundOpacity: state.backgroundOpacity,
       lineWidth: state.lineWidth,
       strokeType: state.strokeType,
       fillShapes: state.fillShapes

@@ -1004,6 +1004,100 @@ test('layers panel creates layers and restores after being hidden', async ({ pag
   await expect(page.locator('#app-notification-modal')).toBeHidden();
   await expect(panel.locator('[data-layer-item]')).toHaveCount(1);
 });
+
+test('flatten layers uses the app-wide styled confirmation dialog', async ({ page }) => {
+  await page.goto('/');
+  await page.waitForFunction(() => !!window.markdownViewerApp?.modules?.tabs?.openBlankImageEditorInTab, null, { timeout: 60000 });
+  await page.waitForFunction(() => !!window.markdownViewerApp?.modules?.keyboardShortcuts && !!window.markdownViewerApp?.services?.imageEditor, null, { timeout: 60000 });
+  await page.evaluate(() => {
+    window.markdownViewerApp.modules.apiClient.deactivateApiClientSidebar = () => {};
+    window.markdownViewerApp.modules.tabs.openBlankImageEditorInTab({ width: 80, height: 60, name: 'Flatten dialog' });
+    window.__nativeFlattenConfirmCalls = 0;
+    window.confirm = () => {
+      window.__nativeFlattenConfirmCalls += 1;
+      return true;
+    };
+  });
+
+  await expect(page.locator('.tab-view.active[data-tab-view-kind=image-editor] .image-editor-shell')).toBeVisible();
+  const panel = page.locator('.tab-view.active .image-editor-layers-panel');
+  await panel.locator('[data-layer-action="new-layer"]').click();
+  await panel.locator('[data-layer-action="flatten"]').click();
+
+  await expect(page.locator('#app-notification-modal')).toBeVisible();
+  await expect(page.locator('#app-notification-title')).toHaveText('Flatten layers?');
+  await expect(page.locator('#app-notification-message')).toHaveText('Flatten visible content into one layer? Hidden content will be discarded.');
+  await expect(page.locator('[data-notification-button-id="confirm"]')).toHaveText('Flatten');
+  expect(await page.evaluate(() => window.__nativeFlattenConfirmCalls)).toBe(0);
+  await page.locator('[data-notification-button-id="cancel"]').click();
+  await expect(page.locator('#app-notification-modal')).toBeHidden();
+});
+
+test('image editor color picker switches modes and remembers independent FG and BG opacity', async ({ page }) => {
+  await page.goto('/');
+  await page.waitForFunction(() => !!window.markdownViewerApp?.modules?.tabs?.openBlankImageEditorInTab, null, { timeout: 60000 });
+  await page.evaluate(() => {
+    window.markdownViewerApp.modules.apiClient.deactivateApiClientSidebar = () => {};
+    window.markdownViewerApp.modules.tabs.openBlankImageEditorInTab({ width: 80, height: 60, name: 'Color picker modes' });
+  });
+
+  const root = page.locator('.tab-view[data-tab-view-kind="image-editor"]').last();
+  await expect(root.locator('.image-editor-shell')).toBeAttached();
+  await root.evaluate((element) => {
+    document.querySelectorAll('.tab-view.active').forEach((view) => view.classList.remove('active'));
+    element.hidden = false;
+    element.classList.add('active');
+  });
+
+  await root.locator('[data-color-picker-target="foreground"]').click();
+  const picker = root.locator('.image-editor-color-picker');
+  await expect(picker).toBeVisible();
+  await expect(picker.locator('[data-color-picker-mode="round"]')).toHaveAttribute('aria-selected', 'true');
+  await expect(picker.locator('.image-editor-color-picker-surface-round')).toBeVisible();
+  await expect(picker.locator('.image-editor-color-picker-hue span')).toHaveText('Value');
+  expect(await picker.evaluate((element) => parseFloat(getComputedStyle(element).borderTopWidth))).toBeGreaterThan(0);
+
+  await picker.locator('[data-color-picker-mode="rectangular"]').click();
+  await expect(picker.locator('[data-color-picker-mode="rectangular"]')).toHaveAttribute('aria-selected', 'true');
+  await expect(picker.locator('.image-editor-color-picker-surface-rectangular')).toBeVisible();
+  await expect(picker.locator('.image-editor-color-picker-hue span')).toHaveText('Hue');
+  await expect(picker.locator('.image-editor-color-picker-surface-round')).toBeHidden();
+  const foregroundInput = root.locator('.image-editor-foreground');
+  const previousColor = await foregroundInput.inputValue();
+  const rectangularSurface = picker.locator('.image-editor-color-picker-surface-rectangular canvas');
+  const surfaceBox = await rectangularSurface.boundingBox();
+  await page.mouse.click(surfaceBox.x + surfaceBox.width * 0.75, surfaceBox.y + surfaceBox.height * 0.25);
+  await expect.poll(() => foregroundInput.inputValue()).not.toBe(previousColor);
+
+  await picker.locator('[data-color-picker-mode="hsb"]').click();
+  await expect(picker.locator('[data-color-picker-mode="hsb"]')).toHaveAttribute('aria-selected', 'true');
+  await expect(picker.locator('.image-editor-color-picker-hsb')).toBeVisible();
+  await expect(picker.locator('.image-editor-color-picker-surface-rectangular')).toBeHidden();
+  await expect(picker.locator('.image-editor-color-picker-palette-swatch')).toHaveCount(5);
+  await picker.locator('[data-color-slider="opacity"]').evaluate((input) => {
+    input.value = '42';
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+  });
+  await expect(picker.locator('.image-editor-color-picker-rgba')).toContainText('0.42');
+  await expect.poll(() => root.evaluate((element) => window.markdownViewerApp.services.imageEditor.getView(element.dataset.tabId).state.foregroundOpacity)).toBe(0.42);
+
+  await root.locator('[data-color-picker-target="background"]').click();
+  await expect(picker.locator('[data-color-slider="opacity"]')).toHaveValue('100');
+  await picker.locator('[data-color-slider="opacity"]').evaluate((input) => {
+    input.value = '73';
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+  });
+  await expect.poll(() => root.evaluate((element) => window.markdownViewerApp.services.imageEditor.getView(element.dataset.tabId).state.backgroundOpacity)).toBe(0.73);
+
+  await root.locator('[data-color-picker-target="foreground"]').click();
+  await expect(picker.locator('[data-color-slider="opacity"]')).toHaveValue('42');
+  await picker.locator('[data-color-picker-mode="round"]').click();
+  await expect(picker.locator('.image-editor-color-picker-surface-round')).toBeVisible();
+  await picker.locator('[data-color-picker-mode="hsb"]').click();
+  await expect(picker.locator('[data-color-slider="opacity"]')).toHaveValue('42');
+  await page.mouse.click(4, 4);
+  await expect(picker).toBeHidden();
+});
 test('layers panel keeps its screen position and size while a zoomed canvas scrolls', async ({ page }) => {
   await page.goto('/');
   await page.waitForFunction(() => !!window.markdownViewerApp?.modules?.tabs?.openBlankImageEditorInTab && !!window.markdownViewerApp?.services?.imageEditor, null, { timeout: 60000 });
@@ -1085,6 +1179,24 @@ test('image tools are arranged in a narrow scrollable sidebar left of the canvas
   await expect(ellipseSelectIcon).toBeVisible();
   await expect(ellipseSelectIcon.locator('ellipse')).toHaveCount(1);
   await expect(ellipseSelectIcon).toHaveAttribute('stroke-dasharray', '2.2 1.7');
+  await root.locator('.image-editor-select-mode-trigger').click();
+  await root.locator('.image-editor-select-mode-menu [data-selection-shape="color-range"]').click();
+  const colorRangeDialog = page.locator('.image-editor-color-range-modal');
+  await expect(colorRangeDialog).toBeVisible();
+  await colorRangeDialog.locator('[data-color-range-preview]').click({ position: { x: 180, y: 110 } });
+  await expect(colorRangeDialog.locator('[data-color-range-apply]')).toBeEnabled();
+  await colorRangeDialog.locator('[data-color-range-apply]').click();
+  await expect(colorRangeDialog).toBeHidden();
+  const colorRangeSelectIcon = selectMain.locator('[data-selection-shape-icon="color-range"]');
+  await expect(colorRangeSelectIcon).toBeVisible();
+  expect(await root.evaluate((element) => {
+    const view = window.markdownViewerApp.services.imageEditor.getView(element.dataset.tabId);
+    return {
+      shape: view.selection.shape,
+      hasSelection: view.selection.hasSelection,
+      maskLength: view.selection.mask?.length || 0
+    };
+  })).toEqual({ shape: 'color-range', hasSelection: true, maskLength: 320 * 240 });
   await expect(root.locator('[data-tool="clone-stamp"] .bi-postage')).toBeVisible();
   const splitToolGeometry = await toolContainer.locator(':scope > .image-editor-select-tool, :scope > .image-editor-brush-tool, :scope > .image-editor-bucket-tool, :scope > .image-editor-grouped-tool').evaluateAll((elements) => elements.map((element) => {
     const group = element.getBoundingClientRect();

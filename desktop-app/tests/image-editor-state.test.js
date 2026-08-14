@@ -22,11 +22,21 @@ test("image editor state exposes Paint defaults and bounded zoom", () => {
   assert.equal(state.tool, "pencil");
   assert.equal(state.foregroundColor, "#111111");
   assert.equal(state.backgroundColor, "#ffffff");
+  assert.equal(state.foregroundOpacity, 1);
+  assert.equal(state.backgroundOpacity, 1);
   assert.equal(state.brushType, "round");
   assert.equal(state.width, 640);
   assert.equal(state.height, 480);
   assert.equal(state.setZoom(20), 8);
   assert.equal(state.setZoom(0.1), 0.25);
+});
+
+test("image editor state restores independently clamped foreground and background opacity", () => {
+  const { ImageEditorState } = loadState();
+  const state = new ImageEditorState({ foregroundOpacity: 0.35, backgroundOpacity: 2 });
+
+  assert.equal(state.foregroundOpacity, 0.35);
+  assert.equal(state.backgroundOpacity, 1);
 });
 
 test("image editor state tracks dirty and saved revisions", () => {

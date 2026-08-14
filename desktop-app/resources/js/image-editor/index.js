@@ -250,8 +250,15 @@
     }
 
     /** Replace visible document content with one raster layer after confirmation. */
-    function flattenDocument(controller) {
-      if (global.confirm && !global.confirm("Flatten visible content into one layer? Hidden content will be discarded.")) return false;
+    async function flattenDocument(controller) {
+      if (typeof deps.confirm !== "function") return false;
+      const confirmed = await deps.confirm({
+        title: "Flatten layers?",
+        message: "Flatten visible content into one layer? Hidden content will be discarded.",
+        confirmLabel: "Flatten",
+        confirmVariant: "danger"
+      });
+      if (!confirmed) return false;
       return commitDocumentMutation(controller, "Flatten document", () => {
         const canvas = controller.compositor.render();
         const imageData = canvas.getContext("2d").getImageData(0, 0, canvas.width, canvas.height);
@@ -334,6 +341,8 @@
         selectionMode: state.selectionMode,
         foregroundColor: state.foregroundColor,
         backgroundColor: state.backgroundColor,
+        foregroundOpacity: state.foregroundOpacity,
+        backgroundOpacity: state.backgroundOpacity,
         brushSize: state.brushSize,
         brushType: state.brushType,
         cloneStampHardness: state.cloneStampHardness,
@@ -457,6 +466,25 @@
     function pixelSelectionSourceContext(controller) {
       const layers = controller.documentStore.selectedContentLayers({ editableOnly: true });
       return controller.compositor.renderLayers(layers).getContext("2d", { willReadFrequently: true });
+    }
+
+    /** Open Color Range and replace the current marquee with its sampled soft mask. */
+    async function openColorRangeSelection(controller) {
+      if (controller.selection.floating) commitSelection(controller);
+      else controller.selection.clear();
+      const canvas = controller.compositor.render();
+      const context = canvas.getContext("2d", { willReadFrequently: true });
+      const result = await controller.colorRangeDialog.open(context.getImageData(0, 0, canvas.width, canvas.height));
+      if (!result) {
+        drawSelectionOverlay(controller);
+        syncTab(controller);
+        return false;
+      }
+      controller.selection.setMaskSelection(result.mask, result.inverted);
+      controller.state.setTool("select");
+      drawSelectionOverlay(controller);
+      syncTab(controller);
+      return true;
     }
 
     /** Synchronize pixel-marquee editing with the topmost object under its starting point. */
@@ -678,7 +706,13 @@
         ...descriptor,
         name: descriptor.name || namespace.imageEditorToolContentName(descriptor.tool)
       };
-      controller.selection.setFloatingLayer(layer.imageData, layer.rect, origin, controller.state.tool);
+      controller.selection.setFloatingLayer(
+        layer.imageData,
+        layer.rect,
+        origin,
+        controller.state.tool,
+        origin === "curve" ? controller.state.foregroundOpacity : 1
+      );
       controller.state.setTool("select");
       controller.state.setDirty(true);
       drawSelectionOverlay(controller);
@@ -1319,10 +1353,7 @@
         return;
       }
       if (!selection.hasSelection) return;
-      const rect = { ...selection.rect };
-      const regions = selection.inverted
-        ? namespace.imageEditorInverseSelectionRects(rect, { width: view.canvas.width, height: view.canvas.height })
-        : [rect];
+      const regions = pixelSelectionRegions(controller);
       const documentBefore = controller.documentStore.snapshot();
       if (action === "cut") {
         await copySelectionToClipboard(controller);
@@ -1400,7 +1431,7 @@
           ...editing.object.payload,
           text,
           box: { ...textRect },
-          style: { fontFamily: controller.state.fontFamily, fontSize: controller.state.fontSize, fontBold: controller.state.fontBold, fontItalic: controller.state.fontItalic, foregroundColor: controller.state.foregroundColor }
+          style: { fontFamily: controller.state.fontFamily, fontSize: controller.state.fontSize, fontBold: controller.state.fontBold, fontItalic: controller.state.fontItalic, foregroundColor: controller.state.foregroundColor, foregroundOpacity: controller.state.foregroundOpacity }
         };
         editing.object.bounds = { ...textRect };
         editing.object.transform = { ...editing.object.transform, x: textRect.x, y: textRect.y, scaleX: 1, scaleY: 1 };
@@ -1414,7 +1445,7 @@
       const layer = selectedPlacementLayer(controller, "Text");
       const object = namespace.createContentObject("text", {
         text, box: { ...textRect },
-        style: { fontFamily: controller.state.fontFamily, fontSize: controller.state.fontSize, fontBold: controller.state.fontBold, fontItalic: controller.state.fontItalic, foregroundColor: controller.state.foregroundColor }
+        style: { fontFamily: controller.state.fontFamily, fontSize: controller.state.fontSize, fontBold: controller.state.fontBold, fontItalic: controller.state.fontItalic, foregroundColor: controller.state.foregroundColor, foregroundOpacity: controller.state.foregroundOpacity }
       }, { name: "Text", bounds: { ...textRect }, transform: { x: textRect.x, y: textRect.y, scaleX: 1, scaleY: 1, rotation: 0 } });
       controller.documentStore.addObject(object, layer.id);
       controller.history.push(before, controller.documentStore.snapshot(), "Text");
@@ -1437,7 +1468,7 @@
     }
 
     function isTextFormattingTarget(target) {
-      return Boolean(target?.closest?.(".image-editor-text-controls, .image-editor-foreground, .image-editor-background, [data-palette-color], [data-color-target], [data-format]"));
+      return Boolean(target?.closest?.(".image-editor-text-controls, .image-editor-color-picker, .image-editor-foreground, .image-editor-background, [data-palette-color], [data-color-target], [data-format]"));
     }
 
     function keepTextInputLive(controller) {
@@ -1449,12 +1480,15 @@
       controller.view.applyTextInputStyle?.(controller.state);
     }
 
-    function applyToolbarColor(controller, target, color) {
+    function applyToolbarColor(controller, target, color, opacity) {
       const colorTarget = target === "background" ? "background" : "foreground";
       const stateProperty = colorTarget === "background" ? "backgroundColor" : "foregroundColor";
+      const opacityProperty = colorTarget === "background" ? "backgroundOpacity" : "foregroundOpacity";
       const inputSelector = colorTarget === "background" ? ".image-editor-background" : ".image-editor-foreground";
       controller.state[stateProperty] = color;
+      if (opacity !== undefined) controller.state[opacityProperty] = namespace.clampImageEditorColorValue(opacity);
       controller.view.shell.querySelector(inputSelector).value = color;
+      controller.view.colorPicker?.setColor(colorTarget, color, controller.state[opacityProperty]);
       controller.view.setActiveColorTarget(colorTarget, controller.state);
       if (controller.roundedRectangleTool.isEditing) renderRoundedRectanglePreview(controller);
       if (editingCalloutTool(controller)) renderCalloutPreview(controller);
@@ -1470,11 +1504,12 @@
       if (colorTarget === "foreground") {
         refreshLiveTextStyle(controller);
         if (controller.curveTool.isEditing) renderCurvePreview(controller);
-        if (controller.selection.recolorFloatingLayer(color, "curve")) {
+        if (controller.selection.recolorFloatingLayer(color, "curve", controller.state.foregroundOpacity)) {
           drawSelectionOverlay(controller);
           syncTab(controller);
         }
       }
+      syncTab(controller);
     }
 
     function bindToolbar(controller) {
@@ -1514,6 +1549,7 @@
           state.setTool("select");
           view.shell.querySelector(".image-editor-select-mode").open = false;
           syncTab(controller);
+          if (state.selectionShape === "color-range") void openColorRangeSelection(controller);
           return;
         }
         const arrowDirectionButton = event.target.closest("[data-arrow-direction]");
@@ -1561,6 +1597,12 @@
       };
       view.toolbar.addEventListener("click", handleToolbarClick);
       view.toolSidebar.addEventListener("click", handleToolbarClick);
+      view.colorPicker = new namespace.ImageEditorColorPicker(view.shell, {
+        onActivate: (target) => view.setActiveColorTarget(target, state),
+        onChange: (target, color, opacity) => applyToolbarColor(controller, target, color, opacity)
+      });
+      view.colorPicker.setColor("foreground", state.foregroundColor, state.foregroundOpacity);
+      view.colorPicker.setColor("background", state.backgroundColor, state.backgroundOpacity);
       [["foreground", ".image-editor-foreground"], ["background", ".image-editor-background"]].forEach(([target, selector]) => {
         const input = view.shell.querySelector(selector);
         input.addEventListener("pointerdown", () => view.setActiveColorTarget(target, state));
@@ -1905,6 +1947,7 @@
           const sourceCanvas = state.smudgeSampleAllLayers ? controller.compositor.render() : targetCanvas;
           controller.smudgeLayerBefore = targetCanvas.getContext("2d").getImageData(0, 0, targetCanvas.width, targetCanvas.height);
           const fingerColor = state.smudgeFingerPainting ? namespace.colorToRgba(state.foregroundColor) : null;
+          if (fingerColor) fingerColor[3] = Math.round(namespace.clampImageEditorColorValue(state.foregroundOpacity) * 255);
           if (!controller.smudgeTool.begin(point, targetCanvas, sourceCanvas, {
             size: state.brushSize,
             hardness: state.smudgeHardness / 100,
@@ -2204,6 +2247,11 @@
         controller.dragging = true;
         if (state.tool === "pencil" || state.tool === "brush") controller.freehandStrokeDistance = 0;
         if (state.tool === "select") {
+          if (!selection.hasSelection && state.selectionShape === "color-range") {
+            controller.dragging = false;
+            void openColorRangeSelection(controller);
+            return;
+          }
           if (selection.hasSelection && !selection.contains(point) && !selection.isPasting) {
             const returnsToDrawingTool = !!selection.returnToolAfterPlacement;
             dropSelection(controller);
@@ -3205,7 +3253,7 @@
         if (event.target.closest?.('.image-editor-layers-panel')) return;
         if (event.target.closest?.('[data-tool="select"]')) return;
         if (event.target.closest?.(".image-editor-selection-actions, .image-editor-history-actions")) return;
-        if (event.target.closest?.(".image-editor-color-targets, .image-editor-color-palette")) return;
+        if (event.target.closest?.(".image-editor-color-targets, .image-editor-color-palette, .image-editor-color-picker")) return;
         if ((!controller.selection.hasSelection && !controller.selection.isPasting) || controller.view.wrap.contains(event.target)) return;
         dropSelection(controller);
       };
@@ -3318,7 +3366,8 @@
         textInputOpening: false,
         keepTextInputLive: false,
         pastedTextEditing: false,
-        canvasContextMenu: new namespace.ImageEditorCanvasContextMenu()
+        canvasContextMenu: new namespace.ImageEditorCanvasContextMenu(),
+        colorRangeDialog: new namespace.ImageEditorColorRangeDialog()
       };
       if (tab.imageEditorState?.layersPanel?.selectedIds?.length) controller.documentStore.selectedIds = new Set(tab.imageEditorState.layersPanel.selectedIds);
       controller.compositor = new namespace.ImageEditorCompositor(controller.documentStore);
@@ -3412,6 +3461,7 @@
       controller.removeObjectOverlayListener?.();
       controller.removeCanvasContextMenuListener?.();
       controller.canvasContextMenu?.destroy?.();
+      controller.colorRangeDialog?.destroy?.();
       controller.layerPanel?.destroy?.();
       controller.view.destroy();
       views.delete(tabId);

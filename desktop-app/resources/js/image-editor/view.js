@@ -102,12 +102,13 @@
 
   /** Render the active marquee geometry as a dashed toolbar icon. */
   function selectionShapeIcon(shape) {
-    const normalizedShape = ["rectangle", "ellipse", "triangle", "lasso"].includes(shape) ? shape : "rectangle";
+    const normalizedShape = ["rectangle", "ellipse", "triangle", "lasso", "color-range"].includes(shape) ? shape : "rectangle";
     const geometry = {
       rectangle: '<rect x="2" y="3" width="12" height="10" rx="0.5"></rect>',
       ellipse: '<ellipse cx="8" cy="8" rx="6" ry="5"></ellipse>',
       triangle: '<path d="M8 2.2 14 13.5H2Z"></path>',
-      lasso: '<path d="M3.2 4.8C5.1 1.7 11.7 2.1 13.3 5.7c1.8 4-2.2 7.5-6.6 6.8-4.2-.7-5.8-4.5-3.5-7.7Zm3.5 7.7c-1 1.1-1 2.2.4 2.8"></path>'
+      lasso: '<path d="M3.2 4.8C5.1 1.7 11.7 2.1 13.3 5.7c1.8 4-2.2 7.5-6.6 6.8-4.2-.7-5.8-4.5-3.5-7.7Zm3.5 7.7c-1 1.1-1 2.2.4 2.8"></path>',
+      "color-range": '<circle cx="5" cy="6" r="2.2"></circle><circle cx="10.8" cy="4.2" r="1.5"></circle><circle cx="10.2" cy="10.5" r="2.5"></circle>'
     }[normalizedShape];
     return `<svg class="image-editor-selection-shape-icon" data-selection-shape-icon="${normalizedShape}" viewBox="0 0 16 16" stroke-dasharray="2.2 1.7" aria-hidden="true" focusable="false">${geometry}</svg>`;
   }
@@ -131,6 +132,7 @@
           <button type="button" data-selection-shape="ellipse" role="option">${selectionShapeIcon("ellipse")}Ellipse</button>
           <button type="button" data-selection-shape="triangle" role="option">${selectionShapeIcon("triangle")}Triangle</button>
           <button type="button" data-selection-shape="lasso" role="option">${selectionShapeIcon("lasso")}Lasso</button>
+          <button type="button" data-selection-shape="color-range" role="option">${selectionShapeIcon("color-range")}Color range…</button>
         </span>
       </details>`;
     const modeSelector = wrapper.querySelector(".image-editor-select-mode");
@@ -278,8 +280,8 @@
             </details>
           </div>
           <div class="image-editor-color-targets image-editor-toolbar-group" role="group" aria-label="Active image colors">
-            <label class="image-editor-color-target active" data-color-target="foreground" title="Foreground color">FG <input class="image-editor-foreground" type="color" value="#111111" aria-label="Foreground color"></label>
-            <label class="image-editor-color-target" data-color-target="background" title="Background color">BG <input class="image-editor-background" type="color" value="#ffffff" aria-label="Background color"></label>
+            <div class="image-editor-color-target active" data-color-target="foreground" title="Foreground color"><span>FG</span><button type="button" class="image-editor-color-trigger" data-color-picker-target="foreground" aria-label="Choose foreground color"></button><input class="image-editor-foreground image-editor-color-input-proxy" type="color" value="#111111" tabindex="-1" aria-hidden="true"></div>
+            <div class="image-editor-color-target" data-color-target="background" title="Background color"><span>BG</span><button type="button" class="image-editor-color-trigger" data-color-picker-target="background" aria-label="Choose background color"></button><input class="image-editor-background image-editor-color-input-proxy" type="color" value="#ffffff" tabindex="-1" aria-hidden="true"></div>
           </div>
           <div class="image-editor-color-palette image-editor-toolbar-group" role="group" aria-label="Predefined colors"></div>
           <div class="image-editor-dynamic-controls">
@@ -600,6 +602,8 @@
       });
       this.shell.querySelector(".image-editor-foreground").value = state.foregroundColor;
       this.shell.querySelector(".image-editor-background").value = state.backgroundColor;
+      this.colorPicker?.setColor("foreground", state.foregroundColor, state.foregroundOpacity);
+      this.colorPicker?.setColor("background", state.backgroundColor, state.backgroundOpacity);
       this.shell.querySelector(".image-editor-bucket-mode").dataset.value = state.bucketFillMode;
       this.shell.querySelectorAll("[data-bucket-mode]").forEach((element) => element.classList.toggle("active", element.dataset.bucketMode === state.bucketFillMode));
       this.shell.querySelector(".image-editor-brush-mode").dataset.value = state.brushType;
@@ -678,7 +682,7 @@
       if (this.textInput.hidden) return;
       const scale = this.getScale();
       this.textInput.style.font = `${state.fontItalic ? "italic " : ""}${state.fontBold ? "bold " : ""}${state.fontSize * scale.y}px ${state.fontFamily}`;
-      this.textInput.style.color = state.foregroundColor;
+      this.textInput.style.color = namespace.imageEditorColorWithOpacity(state.foregroundColor, state.foregroundOpacity);
     }
 
     showTextInput(rect, state) {
@@ -741,6 +745,7 @@
 
     destroy() {
       this.endCanvasResizePreview();
+      this.colorPicker?.destroy();
       this.root.classList.remove("image-editor-root");
       this.root.innerHTML = "";
     }

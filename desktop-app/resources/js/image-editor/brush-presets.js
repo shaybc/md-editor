@@ -12,7 +12,15 @@
     { id: "airbrush", label: "Airbrush", category: "Airbrushing" },
     { id: "charcoal", label: "Charcoal", category: "Charcoals" },
     { id: "watercolor", label: "Watercolor", category: "Painting" },
-    { id: "spray", label: "Spray paint", category: "Spraypaints" }
+    { id: "spray", label: "Spray paint", category: "Spraypaints" },
+    { id: "wet-paint", label: "Wet paint", category: "Painting" },
+    { id: "oil-paint", label: "Oil paint", category: "Painting" },
+    { id: "paint-splatter", label: "Paint splatter", category: "Spraypaints" },
+    { id: "graphite-pencil", label: "Graphite pencil", category: "Pencils" },
+    { id: "wax-crayon", label: "Wax crayon", category: "Crayons" },
+    { id: "chalk", label: "Chalk", category: "Chalks" },
+    { id: "pastel", label: "Pastel", category: "Pastels" },
+    { id: "pattern", label: "Pattern brush", category: "Patterns" }
   ]);
   const PRESET_IDS = new Set(PRESETS.map((preset) => preset.id));
 
@@ -60,6 +68,13 @@
     const distance = Math.hypot(to.x - from.x, to.y - from.y);
     context.save();
     namespace.configureStroke(context, state, width, pathDistance);
+    const specialtyRendered = namespace.drawSpecialtyBrushPresetSegment?.(
+      context, from, to, state, preset, pathDistance, distance, { line, scatter, seededNoise }
+    );
+    if (specialtyRendered) {
+      context.restore();
+      return pathDistance + distance;
+    }
     if (preset === "flat") line(context, from, to, width, 1, 0, 0, "butt");
     else if (preset === "marker") line(context, from, to, width * 1.35, 0.55, 0, 0, "square");
     else if (preset === "ink") line(context, from, to, width * (0.55 + Math.min(0.45, distance / 30)), 1);
