@@ -50,6 +50,14 @@
     return [...simplify(points.slice(0, split + 1), tolerance).slice(0, -1), ...simplify(points.slice(split), tolerance)];
   }
 
+  function simplifyClosed(points, tolerance) {
+    if (points.length < 4) return points;
+    const midpoint = Math.floor(points.length / 2);
+    const firstHalf = simplify(points.slice(0, midpoint + 1), tolerance);
+    const secondHalf = simplify([...points.slice(midpoint), points[0]], tolerance);
+    return [...firstHalf.slice(0, -1), ...secondHalf.slice(0, -1)];
+  }
+
   /** Trace a rendered glyph's alpha boundary into editable closed path contours. */
   function traceGlyphContours(imageData, scale = SCALE) {
     const { width, height, data } = imageData;
@@ -84,7 +92,7 @@
       }
       if (points.length < 3) continue;
       const reduced = removeCollinear(points);
-      const simplified = simplify([...reduced, reduced[0]], 1.1).slice(0, -1);
+      const simplified = simplifyClosed(reduced, 1.1);
       if (simplified.length >= 3) contours.push({
         closed: true,
         anchors: simplified.map((point) => ({ point: { x: point.x / scale, y: point.y / scale }, inHandle: null, outHandle: null, smooth: false }))
@@ -226,10 +234,11 @@
         const paths = (options.createGlyphOutlines || glyphOutlines)(target.object).map((glyph, index) => createPath(target.object, glyph, index));
         if (!paths.length) return;
         target.layer.objects.splice(target.index, 1, ...paths);
+        if (target.layer.name === 'Text' && !target.layer.objects.some((object) => object.type === 'text')) target.layer.name = 'Outlines';
         convertedIds.push(...paths.map((path) => path.id));
       });
       if (!convertedIds.length) return false;
-      store.selectedIds = new Set([convertedIds[0]]);
+      store.selectedIds = new Set(convertedIds);
       store.document.activeLayerId = namespace.findDocumentObject(store.document, convertedIds[0])?.layer.id || store.document.activeLayerId;
       store.notify({ type: "create-text-outlines", ids: convertedIds });
       return true;

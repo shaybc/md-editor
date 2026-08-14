@@ -123,7 +123,9 @@
       if (row) {
         const objectResult = namespace.findDocumentObject(this.store.document, row.dataset.layerItem);
         const layerId = objectResult?.layer.id || row.dataset.layerItem;
-        if (objectResult || !this.store.selectedIds.has(layerId)) this.store.select(layerId);
+        const selectedTargets = this.selectedTargets();
+        const clickedSelectedTarget = selectedTargets.some((target) => target.id === layerId);
+        if (!clickedSelectedTarget || (objectResult && selectedTargets.length === 1)) this.store.select(layerId);
       }
       const targets = this.selectedTargets();
       const layers = this.selectedLayers();
@@ -161,7 +163,13 @@
         { separator: true },
         { id: "toggle-visibility", label: allHidden ? "Show layer" : "Hide layer", icon: allHidden ? "bi-eye" : "bi-eye-slash", disabled: targets.length === 0 },
         { id: "toggle-other-visibility", label: hideOthers ? "Hide other layers" : "Show other layers", icon: hideOthers ? "bi-eye-slash" : "bi-eye", disabled: targets.length === 0 || otherLayers.length === 0 }
-      ], (action) => this.runAction(action));
+      ], (action) => this.runContextMenuAction(action, targets));
+    }
+
+    /** Run hierarchy context actions against each distinct selected layer or group. */
+    runContextMenuAction(action, targets) {
+      if (["duplicate", "group", "delete"].includes(action)) this.store.select(targets.map((target) => target.id));
+      this.runAction(action);
     }
 
     bindResize() {
@@ -311,7 +319,7 @@
       const renderNode = (node, depth) => {
         if (namespace.isCanvasBackgroundLayer(node)) return;
         const parent = namespace.findDocumentNode(this.store.document, node.id)?.parent;
-        this.list.appendChild(this.createRow(node, depth, true, node.kind === "group" || (node.objects || []).length > 0, parent?.id));
+        this.list.appendChild(this.createRow(node, depth, true, true, parent?.id));
         if (!this.expandedIds.has(node.id)) return;
         if (node.kind === "group") (node.children || []).forEach((child) => renderNode(child, depth + 1));
         else (node.objects || []).forEach((object) => this.list.appendChild(this.createRow(object, depth + 1, false, false, node.id)));

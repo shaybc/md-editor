@@ -8,8 +8,10 @@
     if (!Array.isArray(contours) || !contours.length) return false;
     const bounds = object.bounds || {};
     const transform = object.transform || {};
-    const width = Math.max(1, (Number(bounds.width) || 1) * (Number(transform.scaleX) || 1));
-    const height = Math.max(1, (Number(bounds.height) || 1) * (Number(transform.scaleY) || 1));
+    const scaleX = Number(transform.scaleX) || 1;
+    const scaleY = Number(transform.scaleY) || 1;
+    const width = Math.max(1, Math.abs((Number(bounds.width) || 1) * scaleX));
+    const height = Math.max(1, Math.abs((Number(bounds.height) || 1) * scaleY));
     const sourceWidth = Math.max(1, Number(bounds.width) || 1);
     const sourceHeight = Math.max(1, Number(bounds.height) || 1);
     const x = Number(transform.x ?? bounds.x) || 0;
@@ -19,6 +21,7 @@
     context.globalAlpha *= Math.max(0, Math.min(1, Number(object.opacity ?? 1)));
     context.translate(x + width / 2, y + height / 2);
     context.rotate(Number(transform.rotation) || 0);
+    context.scale(Math.sign(scaleX), Math.sign(scaleY));
     context.scale(width / sourceWidth, height / sourceHeight);
     context.translate(-sourceWidth / 2, -sourceHeight / 2);
     context.beginPath();

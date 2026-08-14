@@ -3,7 +3,7 @@
   "use strict";
 
   const namespace = global.MarkdownViewerImageEditor = global.MarkdownViewerImageEditor || {};
-  const TOOLS = Object.freeze(["select", "move", "pencil", "brush", "line", "curve", "path", "arc", "spiral", "rectangular-grid", "polar-grid", "rectangle", "rounded-rectangle", "callout", "oval-callout", "cloud-callout", "ellipse", "polygon", "triangle", "diamond", "star", "arrow", "lightning", "heart", "bucket", "text"]);
+  const TOOLS = Object.freeze(["select", "move", "pencil", "brush", "eraser", "blur", "clone-stamp", "smudge", "line", "curve", "path", "arc", "spiral", "rectangular-grid", "polar-grid", "rectangle", "rounded-rectangle", "callout", "oval-callout", "cloud-callout", "ellipse", "polygon", "triangle", "diamond", "star", "arrow", "lightning", "heart", "bucket", "text"]);
 
   class ImageEditorState {
     /**
@@ -17,10 +17,22 @@
       const requestedTool = TOOLS.includes(options.tool) ? options.tool : "pencil";
       this.tool = requestedTool === "select" && options.selectionMode === "object" ? "move" : requestedTool;
       this.selectionMode = this.tool === "move" ? "object" : "pixel";
+      this.selectionShape = namespace.ImageEditorSelectionShapes?.normalize(options.selectionShape) || "rectangle";
       this.foregroundColor = options.foregroundColor || "#111111";
       this.backgroundColor = options.backgroundColor || "#ffffff";
       this.brushSize = Math.max(1, Math.min(64, Number(options.brushSize || 8)));
       this.brushType = namespace.normalizeBrushPreset ? namespace.normalizeBrushPreset(options.brushType) : "round";
+      this.eraserHardness = Math.max(0, Math.min(100, Number(options.eraserHardness ?? 100)));
+      this.blurHardness = Math.max(0, Math.min(100, Number(options.blurHardness ?? 50)));
+      this.blurStrength = Math.max(1, Math.min(100, Number(options.blurStrength ?? 50)));
+      this.cloneStampHardness = Math.max(0, Math.min(100, Number(options.cloneStampHardness ?? 75)));
+      this.cloneStampOpacity = Math.max(1, Math.min(100, Number(options.cloneStampOpacity ?? 100)));
+      this.cloneStampAligned = options.cloneStampAligned !== false;
+      this.cloneStampSample = options.cloneStampSample === "all" ? "all" : "current";
+      this.smudgeHardness = Math.max(0, Math.min(100, Number(options.smudgeHardness ?? 25)));
+      this.smudgeStrength = Math.max(1, Math.min(100, Number(options.smudgeStrength ?? 50)));
+      this.smudgeSampleAllLayers = options.smudgeSampleAllLayers === true;
+      this.smudgeFingerPainting = options.smudgeFingerPainting === true;
       this.lineWidth = Math.max(1, Math.min(64, Number(options.lineWidth || 2)));
       this.strokeType = namespace.normalizeStrokeType ? namespace.normalizeStrokeType(options.strokeType) : "solid";
       this.fillShapes = options.fillShapes === true;

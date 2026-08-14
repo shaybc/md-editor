@@ -40,14 +40,16 @@
     const bounds = object.bounds || {};
     const transform = object.transform || {};
     const width = Math.max(1, Math.abs((Number(bounds.width) || 1) * (Number(transform.scaleX) || 1)));
+    const scaleX = Number(transform.scaleX) || 1;
+    const scaleY = Number(transform.scaleY) || 1;
     const height = Math.max(1, Math.abs((Number(bounds.height) || 1) * (Number(transform.scaleY) || 1)));
     const centerX = (Number(transform.x ?? bounds.x) || 0) + width / 2;
     const centerY = (Number(transform.y ?? bounds.y) || 0) + height / 2;
     const rotation = -(Number(transform.rotation) || 0);
     const deltaX = point.x - centerX;
     const deltaY = point.y - centerY;
-    const localX = deltaX * Math.cos(rotation) - deltaY * Math.sin(rotation) + width / 2;
-    const localY = deltaX * Math.sin(rotation) + deltaY * Math.cos(rotation) + height / 2;
+    const localX = (deltaX * Math.cos(rotation) - deltaY * Math.sin(rotation)) * Math.sign(scaleX) + width / 2;
+    const localY = (deltaX * Math.sin(rotation) + deltaY * Math.cos(rotation)) * Math.sign(scaleY) + height / 2;
     if (localX < 0 || localY < 0 || localX >= width || localY >= height) return null;
     return {
       x: Math.max(0, Math.min(imageData.width - 1, Math.floor(localX * imageData.width / width))),
@@ -137,12 +139,12 @@
     const width = Math.max(1, Math.abs((Number(bounds.width) || 1) * (Number(transform.scaleX) || 1)));
     const height = Math.max(1, Math.abs((Number(bounds.height) || 1) * (Number(transform.scaleY) || 1)));
     const centerX = (Number(transform.x ?? bounds.x) || 0) + width / 2;
+    const scaleX = Number(transform.scaleX) || 1;
+    const scaleY = Number(transform.scaleY) || 1;
     const centerY = (Number(transform.y ?? bounds.y) || 0) + height / 2;
     const rotation = Number(transform.rotation) || 0;
     const cosine = Math.cos(rotation);
     const sine = Math.sin(rotation);
-    const right = rect.x + rect.width;
-    const bottom = rect.y + rect.height;
     let changed = false;
     for (let sourceY = 0; sourceY < imageData.height; sourceY += 1) {
       const localY = ((sourceY + 0.5) / imageData.height - 0.5) * height;
@@ -150,9 +152,9 @@
         const alphaIndex = (sourceY * imageData.width + sourceX) * 4 + 3;
         if (!imageData.data[alphaIndex]) continue;
         const localX = ((sourceX + 0.5) / imageData.width - 0.5) * width;
-        const canvasX = centerX + localX * cosine - localY * sine;
-        const canvasY = centerY + localX * sine + localY * cosine;
-        if (canvasX < rect.x || canvasX >= right || canvasY < rect.y || canvasY >= bottom) continue;
+        const canvasX = centerX + localX * Math.sign(scaleX) * cosine - localY * Math.sign(scaleY) * sine;
+        const canvasY = centerY + localX * Math.sign(scaleX) * sine + localY * Math.sign(scaleY) * cosine;
+        if (!namespace.ImageEditorSelectionShapes.contains(rect, { x: canvasX, y: canvasY })) continue;
         imageData.data[alphaIndex] = 0;
         changed = true;
       }
@@ -161,13 +163,15 @@
   }
 
   function eraseCanvasPixels(imageData, rect) {
-    const left = Math.max(0, Math.floor(rect.x));
-    const top = Math.max(0, Math.floor(rect.y));
-    const right = Math.min(imageData.width, Math.ceil(rect.x + rect.width));
-    const bottom = Math.min(imageData.height, Math.ceil(rect.y + rect.height));
+    const shaped = rect.shape && rect.shape !== "rectangle";
+    const left = rect.inverted || shaped ? 0 : Math.max(0, Math.floor(rect.x));
+    const top = rect.inverted || shaped ? 0 : Math.max(0, Math.floor(rect.y));
+    const right = rect.inverted || shaped ? imageData.width : Math.min(imageData.width, Math.ceil(rect.x + rect.width));
+    const bottom = rect.inverted || shaped ? imageData.height : Math.min(imageData.height, Math.ceil(rect.y + rect.height));
     let changed = false;
     for (let y = top; y < bottom; y += 1) {
       for (let x = left; x < right; x += 1) {
+        if (!namespace.ImageEditorSelectionShapes.contains(rect, { x: x + .5, y: y + .5 })) continue;
         const alphaIndex = (y * imageData.width + x) * 4 + 3;
         if (!imageData.data[alphaIndex]) continue;
         imageData.data[alphaIndex] = 0;

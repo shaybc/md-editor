@@ -1001,6 +1001,107 @@ test('layers panel creates layers and restores after being hidden', async ({ pag
   await expect(page.locator('#app-notification-modal')).toBeHidden();
   await expect(panel.locator('[data-layer-item]')).toHaveCount(1);
 });
+test('layers panel keeps its screen position and size while a zoomed canvas scrolls', async ({ page }) => {
+  await page.goto('/');
+  await page.waitForFunction(() => !!window.markdownViewerApp?.modules?.tabs?.openBlankImageEditorInTab && !!window.markdownViewerApp?.services?.imageEditor, null, { timeout: 60000 });
+  await page.evaluate(() => {
+    window.markdownViewerApp.modules.apiClient.deactivateApiClientSidebar = () => {};
+    window.markdownViewerApp.modules.tabs.openBlankImageEditorInTab({ width: 1600, height: 1200, name: 'Fixed layers panel' });
+  });
+
+  const root = page.locator('.tab-view[data-tab-view-kind=image-editor]').last();
+  await expect(root.locator('.image-editor-shell')).toBeAttached();
+  await root.evaluate((element) => {
+    document.querySelectorAll('.tab-view.active').forEach((view) => view.classList.remove('active'));
+    element.hidden = false;
+    element.classList.add('active');
+  });
+  const panel = root.locator('.image-editor-layers-panel');
+  await expect(panel).toBeVisible();
+  const before = await panel.boundingBox();
+
+  await root.evaluate((element) => {
+    const controller = window.markdownViewerApp.services.imageEditor.getView(element.dataset.tabId);
+    controller.view.setZoom(controller.state.setZoom(2));
+  });
+  await root.locator('.image-editor-stage').evaluate((stage) => {
+    stage.scrollLeft = 320;
+    stage.scrollTop = 240;
+  });
+  const after = await panel.boundingBox();
+
+  expect(await panel.evaluate((element) => element.parentElement.classList.contains('image-editor-stage-frame'))).toBe(true);
+  expect(after.x).toBeCloseTo(before.x, 0);
+  expect(after.y).toBeCloseTo(before.y, 0);
+  expect(after.width).toBeCloseTo(before.width, 0);
+  expect(after.height).toBeCloseTo(before.height, 0);
+});
+
+test('image tools are arranged in a narrow scrollable sidebar left of the canvas', async ({ page }) => {
+  await page.goto('/');
+  await page.waitForFunction(() => !!window.markdownViewerApp?.modules?.tabs?.openBlankImageEditorInTab && !!window.markdownViewerApp?.services?.imageEditor, null, { timeout: 60000 });
+  await page.evaluate(() => {
+    window.markdownViewerApp.modules.apiClient.deactivateApiClientSidebar = () => {};
+    window.markdownViewerApp.modules.tabs.openBlankImageEditorInTab({ width: 320, height: 240, name: 'Tool sidebar' });
+  });
+
+  const root = page.locator('.tab-view[data-tab-view-kind=image-editor]').last();
+  await expect(root.locator('.image-editor-shell')).toBeAttached();
+  await root.evaluate((element) => {
+    document.querySelectorAll('.tab-view.active').forEach((view) => view.classList.remove('active'));
+    element.hidden = false;
+    element.classList.add('active');
+  });
+  const sidebar = root.locator('.image-editor-tool-sidebar');
+  const stage = root.locator('.image-editor-stage-frame');
+  const toolContainer = sidebar.locator('.image-editor-tools');
+  const tools = toolContainer.locator(':scope > *');
+  await expect(sidebar).toBeVisible();
+
+  const sidebarBox = await sidebar.boundingBox();
+  const stageBox = await stage.boundingBox();
+  const firstBox = await tools.nth(0).boundingBox();
+  const secondBox = await tools.nth(1).boundingBox();
+  expect(sidebarBox.width).toBeLessThanOrEqual(44);
+  expect(sidebarBox.x + sidebarBox.width).toBeLessThanOrEqual(stageBox.x + 1);
+  expect(secondBox.y).toBeGreaterThan(firstBox.y);
+  expect(secondBox.x).toBeCloseTo(firstBox.x, 0);
+  expect(await toolContainer.evaluate((element) => getComputedStyle(element).overflowY)).toBe('auto');
+  expect(await root.locator('.image-editor-toolbar .image-editor-tools').count()).toBe(0);
+
+  await expect(root.locator('.image-editor-select-main .bi-bounding-box-circles')).toBeVisible();
+  await expect(root.locator('[data-tool="clone-stamp"] .bi-postage')).toBeVisible();
+
+  const shapeGroup = root.locator('[data-tool-group="shapes"]');
+  const shapeMain = shapeGroup.locator('.image-editor-grouped-tool-main');
+  const shapeMenu = shapeGroup.locator('.image-editor-grouped-tool-menu');
+  await expect(shapeMain).toHaveAttribute('data-tool', 'rectangle');
+  await shapeGroup.locator('.image-editor-grouped-tool-trigger').click();
+  await expect(shapeMenu).toBeVisible();
+  const shapeMenuBox = await shapeMenu.boundingBox();
+  const flyoutGeometry = await shapeGroup.evaluate((element) => {
+    const trigger = element.querySelector('.image-editor-grouped-tool-trigger').getBoundingClientRect();
+    const menu = element.querySelector('.image-editor-grouped-tool-menu');
+    return { triggerRight: trigger.right, menuLeft: menu.getBoundingClientRect().left, styleLeft: menu.style.left, innerWidth };
+  });
+  expect(shapeMenuBox.x, JSON.stringify(flyoutGeometry)).toBeGreaterThanOrEqual(sidebarBox.x + sidebarBox.width);
+  await page.mouse.click(stageBox.x + 20, stageBox.y + 20);
+  await expect(shapeMenu).toBeHidden();
+  await shapeGroup.locator('.image-editor-grouped-tool-trigger').click();
+  await shapeMenu.locator('[data-tool="triangle"]').click();
+  await expect(shapeMain).toHaveAttribute('data-tool', 'triangle');
+  await expect(shapeMain.locator('.bi-triangle')).toBeVisible();
+  await expect(shapeMain).toHaveClass(/active/);
+
+  const gridGroup = root.locator('[data-tool-group="grids"]');
+  const gridMain = gridGroup.locator('.image-editor-grouped-tool-main');
+  await expect(gridMain).toHaveAttribute('data-tool', 'rectangular-grid');
+  await gridGroup.locator('.image-editor-grouped-tool-trigger').click();
+  await gridGroup.locator('.image-editor-grouped-tool-menu [data-tool="polar-grid"]').click();
+  await expect(gridMain).toHaveAttribute('data-tool', 'polar-grid');
+  await expect(gridMain.locator('.bi-bullseye')).toBeVisible();
+});
+
 
 test('layers panel right-click menu exposes layer actions and targets an object owning layer', async ({ page }) => {
   await page.goto('/');
@@ -1029,9 +1130,9 @@ test('layers panel right-click menu exposes layer actions and targets an object 
     window.markdownViewerApp.services.imageEditor.getView(root.dataset.tabId).layerPanel.toggleExpanded(layerId);
   }, ids.layerId);
   await panel.locator(`[data-layer-item="${ids.objectId}"]`).dispatchEvent('contextmenu', { clientX: 200, clientY: 200 });
-  const menu = page.locator('.image-editor-layer-context-menu');
+  const menu = page.locator('.image-editor-layer-context-menu:not(.image-editor-canvas-context-menu)');
   await expect(menu).toBeVisible();
-  await expect(menu.locator('[data-layer-context-action]')).toHaveCount(14);
+  await expect(menu.locator('[data-layer-context-action]')).toHaveCount(15);
   await expect(menu.locator('[data-layer-context-action="new-layer"]')).toHaveText(/New layer/);
   await expect(menu.locator('[data-layer-context-action="group"]')).toHaveText(/New group from selected layers/);
   await expect(menu.locator('[data-layer-context-action="export-layer-png"]')).toBeEnabled();
@@ -1046,6 +1147,109 @@ test('layers panel right-click menu exposes layer actions and targets an object 
     const controller = window.markdownViewerApp.services.imageEditor.getView(root.dataset.tabId);
     return window.MarkdownViewerImageEditor.findDocumentNode(controller.documentStore.document, layerId).node.locked;
   }, ids.layerId)).toBe(true);
+});
+
+test('layers panel context menu preserves and applies actions to a multi-layer selection', async ({ page }) => {
+  await page.goto('/');
+  await page.waitForFunction(() => !!window.markdownViewerApp?.modules?.tabs?.openBlankImageEditorInTab && !!window.markdownViewerApp?.services?.imageEditor, null, { timeout: 60000 });
+  await page.evaluate(async () => {
+    window.markdownViewerApp.modules.apiClient.deactivateApiClientSidebar = () => {};
+    await window.markdownViewerApp.modules.tabs.openBlankImageEditorInTab({ width: 80, height: 60, name: 'Multi-layer context menu' });
+  });
+  await expect(page.locator('.tab-view[data-tab-view-kind=image-editor] .image-editor-shell').last()).toBeAttached();
+  const layerIds = await page.evaluate(() => {
+    const root = [...document.querySelectorAll('.tab-view[data-tab-view-kind=image-editor]')].at(-1);
+    const controller = window.markdownViewerApp.services.imageEditor.getView(root.dataset.tabId);
+    const first = controller.documentStore.addLayer('First layer');
+    const second = controller.documentStore.addLayer('Second layer');
+    const pixels = new ImageData(1, 1);
+    pixels.data[3] = 255;
+    const firstObject = controller.documentStore.addRasterObject(pixels, { x: 0, y: 0, width: 1, height: 1 }, { name: 'First object', layerId: first.id });
+    const secondObject = controller.documentStore.addRasterObject(pixels, { x: 1, y: 0, width: 1, height: 1 }, { name: 'Second object', layerId: second.id });
+    controller.documentStore.select([first.id, firstObject.id, second.id, secondObject.id]);
+    controller.layerPanel.expandedIds.add(first.id);
+    controller.layerPanel.expandedIds.add(second.id);
+    controller.layerPanel.reveal();
+    controller.layerPanel.render();
+    return { layerIds: [first.id, second.id], selectedIds: [first.id, firstObject.id, second.id, secondObject.id], firstObjectId: firstObject.id };
+  });
+  const panel = page.locator('.tab-view[data-tab-view-kind=image-editor] .image-editor-layers-panel').last();
+  await panel.locator(`[data-layer-item="${layerIds.firstObjectId}"]`).dispatchEvent('contextmenu', { clientX: 200, clientY: 200 });
+
+  const menu = page.locator('.image-editor-layer-context-menu:not(.image-editor-canvas-context-menu)');
+  await expect(menu).toBeVisible();
+  expect(await page.evaluate(() => {
+    const root = [...document.querySelectorAll('.tab-view[data-tab-view-kind=image-editor]')].at(-1);
+    return [...window.markdownViewerApp.services.imageEditor.getView(root.dataset.tabId).documentStore.selectedIds];
+  })).toEqual(layerIds.selectedIds);
+  await expect(menu.locator('[data-layer-context-action="duplicate"]')).toBeEnabled();
+  await expect(menu.locator('[data-layer-context-action="delete"]')).toBeEnabled();
+  await expect(menu.locator('[data-layer-context-action="toggle-lock"]')).toBeEnabled();
+  await expect(menu.locator('[data-layer-context-action="export-layer-png"]')).toBeDisabled();
+  await expect(menu.locator('[data-layer-context-action="export-layer-as"]')).toBeDisabled();
+  await expect(menu.locator('[data-layer-context-action="merge-down"]')).toBeDisabled();
+  await expect(menu.locator('[data-layer-context-action="rename"]')).toBeDisabled();
+
+  await menu.locator('[data-layer-context-action="duplicate"]').dispatchEvent('click');
+  expect(await page.evaluate(() => {
+    const root = [...document.querySelectorAll('.tab-view[data-tab-view-kind=image-editor]')].at(-1);
+    const controller = window.markdownViewerApp.services.imageEditor.getView(root.dataset.tabId);
+    const copies = controller.documentStore.document.nodes.filter((node) => node.name === 'First layer copy' || node.name === 'Second layer copy');
+    return { copyNames: copies.map((node) => node.name).sort(), objectCounts: copies.map((node) => node.objects.length), selectedCount: controller.documentStore.selectedIds.size };
+  })).toEqual({ copyNames: ['First layer copy', 'Second layer copy'], objectCounts: [1, 1], selectedCount: 2 });
+});
+
+test('Create Outline from Text replaces browser-rendered text with one path per glyph', async ({ page }) => {
+  await page.goto('/');
+  await page.waitForFunction(() => !!window.markdownViewerApp?.modules?.tabs?.openBlankImageEditorInTab && !!window.markdownViewerApp?.services?.imageEditor, null, { timeout: 60000 });
+  await page.evaluate(async () => {
+    window.markdownViewerApp.modules.apiClient.deactivateApiClientSidebar = () => {};
+    const tab = await window.markdownViewerApp.modules.tabs.openBlankImageEditorInTab({ width: 320, height: 160, name: 'Text outlines' });
+    window.markdownViewerApp.modules.tabs.switchTab(tab.id);
+  });
+  await expect(page.locator('.tab-view[data-tab-view-kind=image-editor] .image-editor-shell').last()).toBeAttached();
+  await page.evaluate(() => {
+    const root = [...document.querySelectorAll('.tab-view[data-tab-view-kind=image-editor]')].at(-1);
+    const controller = window.markdownViewerApp.services.imageEditor.getView(root.dataset.tabId);
+    const layer = controller.documentStore.addLayer('Text', controller.documentStore.activeLayer()?.id);
+    controller.documentStore.addObject(window.MarkdownViewerImageEditor.createContentObject('text', {
+      text: 'ABC',
+      box: { width: 180, height: 70 },
+      style: { fontFamily: 'Arial', fontSize: 52, foregroundColor: '#4654d9' }
+    }, {
+      name: 'Text',
+      bounds: { x: 40, y: 35, width: 180, height: 70 },
+      transform: { x: 40, y: 35, scaleX: 1, scaleY: 1, rotation: 0 }
+    }), layer.id);
+    controller.documentStore.select(layer.id);
+    controller.layerPanel.expandedIds.add(layer.id);
+    controller.layerPanel.reveal();
+  });
+
+  const openOutlineContextMenu = () => page.evaluate(() => {
+    const root = [...document.querySelectorAll('.tab-view[data-tab-view-kind=image-editor]')].at(-1);
+    const controller = window.markdownViewerApp.services.imageEditor.getView(root.dataset.tabId);
+    controller.layerPanel.openContextMenu({ preventDefault() {}, target: controller.layerPanel.list.querySelector('[data-layer-item]'), clientX: 20, clientY: 20 });
+  });
+  await openOutlineContextMenu();
+  const outlineAction = page.locator('[data-layer-context-action=create-text-outlines]');
+  await expect(outlineAction).toBeEnabled();
+  await outlineAction.click();
+
+  expect(await page.evaluate(() => {
+    const root = [...document.querySelectorAll('.tab-view[data-tab-view-kind=image-editor]')].at(-1);
+    const controller = window.markdownViewerApp.services.imageEditor.getView(root.dataset.tabId);
+    const layer = controller.documentStore.document.nodes.find((node) => node.name === 'Outlines');
+    return {
+      layerName: layer?.name,
+      objectNames: layer?.objects.map((object) => object.name),
+      objectTypes: layer?.objects.map((object) => object.type),
+      selectedCount: controller.documentStore.selectedIds.size
+    };
+  })).toEqual({ layerName: 'Outlines', objectNames: ['A', 'B', 'C'], objectTypes: ['path', 'path', 'path'], selectedCount: 3 });
+
+  await openOutlineContextMenu();
+  await expect(page.locator('[data-layer-context-action=create-text-outlines]')).toBeDisabled();
 });
 
 test('new group creates an empty root group when no layer is selected', async ({ page }) => {
@@ -1069,6 +1273,34 @@ test('new group creates an empty root group when no layer is selected', async ({
   })).toEqual({ groupCount: 1, children: 0, selected: [expect.any(String)] });
   await expect(panel.locator('[data-layer-item]').first().locator('.image-editor-layer-name')).toHaveText('Group');
 });
+
+test('layer and group rows always show disclosure chevrons', async ({ page }) => {
+  await page.goto('/');
+  await page.waitForFunction(() => !!window.markdownViewerApp?.modules?.tabs?.openBlankImageEditorInTab, null, { timeout: 60000 });
+  await page.waitForFunction(() => !!window.markdownViewerApp?.modules?.keyboardShortcuts && !!window.markdownViewerApp?.services?.imageEditor, null, { timeout: 60000 });
+  const ids = await page.evaluate(() => {
+    window.markdownViewerApp.modules.apiClient.deactivateApiClientSidebar = () => {};
+    window.markdownViewerApp.modules.tabs.openBlankImageEditorInTab({ width: 80, height: 60, name: 'Container chevrons' });
+    const root = document.querySelector('.tab-view.active[data-tab-view-kind=image-editor]');
+    const store = window.markdownViewerApp.services.imageEditor.getView(root.dataset.tabId).documentStore;
+    const layer = store.addLayer('Empty layer');
+    const group = store.addGroup('Empty group', null);
+    return { layerId: layer.id, groupId: group.id };
+  });
+
+  const panel = page.locator('.tab-view.active .image-editor-layers-panel');
+  const layerDisclosure = panel.locator(`[data-layer-item="${ids.layerId}"] [data-layer-expand="${ids.layerId}"]`);
+  const groupDisclosure = panel.locator(`[data-layer-item="${ids.groupId}"] [data-layer-expand="${ids.groupId}"]`);
+  await expect(layerDisclosure).toBeVisible();
+  await expect(groupDisclosure).toBeVisible();
+  await expect(layerDisclosure.locator('.bi-chevron-right')).toBeVisible();
+  await expect(groupDisclosure.locator('.bi-chevron-right')).toBeVisible();
+  await layerDisclosure.click();
+  await groupDisclosure.click();
+  await expect(panel.locator(`[data-layer-item="${ids.layerId}"] .bi-chevron-down`)).toBeVisible();
+  await expect(panel.locator(`[data-layer-item="${ids.groupId}"] .bi-chevron-down`)).toBeVisible();
+});
+
 
 test('background fill reaches canvas area added by resizing', async ({ page }) => {
   await page.goto('/');
@@ -1609,6 +1841,290 @@ test('Shift-arrow pixel stamping remains attached to the selected object', async
   expect(moved.previousPixel).toEqual([255, 255, 255, 255]);
   expect(moved.movedStamp[3]).toBe(255);
   expect(moved.movedStamp.slice(0, 3)).not.toEqual([255, 255, 255]);
+});
+
+test('clone stamp samples pixels into only the selected layer and undoes as one edit', async ({ page }) => {
+  await page.goto('/');
+  await page.waitForFunction(() => !!window.markdownViewerApp?.modules?.tabs?.openBlankImageEditorInTab, null, { timeout: 60000 });
+  await page.waitForFunction(() => !!window.markdownViewerApp?.services?.imageEditor, null, { timeout: 60000 });
+  await page.evaluate(() => {
+    window.markdownViewerApp.modules.apiClient.deactivateApiClientSidebar = () => {};
+    window.markdownViewerApp.modules.tabs.openBlankImageEditorInTab({ width: 100, height: 70, name: 'Clone stamp' });
+  });
+  const root = page.locator('.tab-view[data-tab-view-kind=image-editor]').last();
+  await expect(root.locator('.image-editor-shell')).toBeAttached();
+  await root.evaluate((element) => {
+    element.hidden = false;
+    element.classList.add('active');
+  });
+  await page.evaluate(() => {
+    const root = [...document.querySelectorAll('.tab-view[data-tab-view-kind=image-editor]')].at(-1);
+    const controller = window.markdownViewerApp.services.imageEditor.getView(root.dataset.tabId);
+    const otherLayer = controller.documentStore.addLayer('Other', controller.documentStore.activeLayer().id);
+    const targetLayer = controller.documentStore.addLayer('Target', otherLayer.id);
+    const pixels = new ImageData(100, 70);
+    for (let y = 10; y < 30; y += 1) for (let x = 10; x < 30; x += 1) {
+      const index = (y * pixels.width + x) * 4;
+      pixels.data[index] = 220;
+      pixels.data[index + 1] = 30;
+      pixels.data[index + 2] = 20;
+      pixels.data[index + 3] = 255;
+    }
+    const object = controller.documentStore.addRasterObject(pixels, { x: 0, y: 0, width: 100, height: 70 }, { name: 'Target pixels', layerId: targetLayer.id });
+    controller.documentStore.select(object.id);
+    controller.compositor.render({ canvas: controller.view.canvas });
+    window.__cloneStampLayerIds = { target: targetLayer.id, other: otherLayer.id };
+  });
+  await root.locator('[data-tool=clone-stamp]').click();
+  await expect(root.locator('.image-editor-clone-stamp-controls')).toBeVisible();
+  const overlay = root.locator('.image-editor-overlay');
+  const box = await overlay.boundingBox();
+  await page.keyboard.down('Alt');
+  await page.mouse.click(box.x + 20, box.y + 20);
+  await page.keyboard.up('Alt');
+  await page.mouse.move(box.x + 70, box.y + 45);
+  await page.mouse.down();
+  await page.mouse.move(box.x + 75, box.y + 45, { steps: 3 });
+  await page.mouse.up();
+
+  const stamped = await page.evaluate(() => {
+    const root = [...document.querySelectorAll('.tab-view[data-tab-view-kind=image-editor]')].at(-1);
+    const controller = window.markdownViewerApp.services.imageEditor.getView(root.dataset.tabId);
+    const target = window.MarkdownViewerImageEditor.findDocumentNode(controller.documentStore.document, window.__cloneStampLayerIds.target).node;
+    const other = window.MarkdownViewerImageEditor.findDocumentNode(controller.documentStore.document, window.__cloneStampLayerIds.other).node;
+    return {
+      targetEdits: target.pixelEdits.length,
+      otherEdits: other.pixelEdits.length,
+      destination: Array.from(controller.view.context.getImageData(70, 45, 1, 1).data),
+      canUndo: controller.history.canUndo
+    };
+  });
+  expect(stamped.targetEdits).toBe(1);
+  expect(stamped.otherEdits).toBe(0);
+  expect(stamped.destination[0]).toBeGreaterThanOrEqual(218);
+  expect(stamped.destination[1]).toBeLessThanOrEqual(31);
+  expect(stamped.destination[2]).toBeLessThanOrEqual(21);
+  expect(stamped.destination[3]).toBe(255);
+  expect(stamped.canUndo).toBe(true);
+
+  await root.locator('[data-action=undo]').click();
+  expect(await root.locator('.image-editor-canvas').evaluate((canvas) => Array.from(canvas.getContext('2d').getImageData(70, 45, 1, 1).data))).toEqual([255, 255, 255, 255]);
+});
+
+
+test('blur softens pixels in only the selected layer and undoes as one edit', async ({ page }) => {
+  await page.goto('/');
+  await page.waitForFunction(() => !!window.markdownViewerApp?.modules?.tabs?.openBlankImageEditorInTab, null, { timeout: 60000 });
+  await page.waitForFunction(() => !!window.markdownViewerApp?.services?.imageEditor, null, { timeout: 60000 });
+  await page.evaluate(() => {
+    window.markdownViewerApp.modules.apiClient.deactivateApiClientSidebar = () => {};
+    window.markdownViewerApp.modules.tabs.openBlankImageEditorInTab({ width: 100, height: 70, name: 'Blur' });
+  });
+  const root = page.locator('.tab-view[data-tab-view-kind=image-editor]').last();
+  await expect(root.locator('.image-editor-shell')).toBeAttached();
+  await root.evaluate((element) => {
+    element.hidden = false;
+    element.classList.add('active');
+  });
+  await page.evaluate(() => {
+    const root = [...document.querySelectorAll('.tab-view[data-tab-view-kind=image-editor]')].at(-1);
+    const controller = window.markdownViewerApp.services.imageEditor.getView(root.dataset.tabId);
+    const otherLayer = controller.documentStore.addLayer('Other', controller.documentStore.activeLayer()?.id);
+    const otherPixels = new ImageData(100, 70);
+    for (let index = 0; index < otherPixels.data.length; index += 4) {
+      otherPixels.data[index + 1] = 255;
+      otherPixels.data[index + 3] = 255;
+    }
+    controller.documentStore.addRasterObject(otherPixels, { x: 0, y: 0, width: 100, height: 70 }, { name: 'Other pixels', layerId: otherLayer.id });
+    const targetLayer = controller.documentStore.addLayer('Target', otherLayer.id);
+    const targetPixels = new ImageData(100, 70);
+    for (let y = 0; y < 70; y += 1) for (let x = 0; x < 100; x += 1) {
+      const index = (y * targetPixels.width + x) * 4;
+      const value = x < 50 ? 0 : 255;
+      targetPixels.data[index] = value;
+      targetPixels.data[index + 1] = value;
+      targetPixels.data[index + 2] = value;
+      targetPixels.data[index + 3] = 255;
+    }
+    const object = controller.documentStore.addRasterObject(targetPixels, { x: 0, y: 0, width: 100, height: 70 }, { name: 'Target pixels', layerId: targetLayer.id });
+    controller.documentStore.select(object.id);
+    controller.compositor.render({ canvas: controller.view.canvas });
+    window.__blurLayerIds = { target: targetLayer.id, other: otherLayer.id };
+  });
+
+  await root.locator('[data-tool=blur]').click();
+  expect(await root.locator('.image-editor-blur-controls').evaluate((element) => element.hidden)).toBe(false);
+  await root.locator('.image-editor-size').evaluate((input) => {
+    input.value = '18';
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+  });
+  await root.locator('.image-editor-blur-strength').evaluate((input) => {
+    input.value = '100';
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+  });
+  const overlay = root.locator('.image-editor-overlay');
+  const box = await overlay.boundingBox();
+  await page.mouse.move(box.x + 50, box.y + 35);
+  await page.mouse.down();
+  await page.mouse.move(box.x + 54, box.y + 35, { steps: 4 });
+  await page.mouse.up();
+
+  const blurred = await page.evaluate(() => {
+    const root = [...document.querySelectorAll('.tab-view[data-tab-view-kind=image-editor]')].at(-1);
+    const controller = window.markdownViewerApp.services.imageEditor.getView(root.dataset.tabId);
+    const target = window.MarkdownViewerImageEditor.findDocumentNode(controller.documentStore.document, window.__blurLayerIds.target).node;
+    const other = window.MarkdownViewerImageEditor.findDocumentNode(controller.documentStore.document, window.__blurLayerIds.other).node;
+    return {
+      targetEdits: target.pixelEdits.length,
+      otherEdits: other.pixelEdits.length,
+      boundary: Array.from(controller.view.context.getImageData(49, 35, 1, 1).data),
+      canUndo: controller.history.canUndo
+    };
+  });
+  expect(blurred.targetEdits).toBe(2);
+  expect(blurred.otherEdits).toBe(0);
+  expect(blurred.boundary[0]).toBeGreaterThan(0);
+  expect(blurred.boundary[0]).toBeLessThan(255);
+  expect(blurred.canUndo).toBe(true);
+
+  await root.locator('[data-action=undo]').click();
+  expect(await root.locator('.image-editor-canvas').evaluate((canvas) => Array.from(canvas.getContext('2d').getImageData(49, 35, 1, 1).data))).toEqual([0, 0, 0, 255]);
+});
+
+test('smudge blends pixels into only the selected layer and undoes as one edit', async ({ page }) => {
+  await page.goto('/');
+  await page.waitForFunction(() => !!window.markdownViewerApp?.modules?.tabs?.openBlankImageEditorInTab, null, { timeout: 60000 });
+  await page.waitForFunction(() => !!window.markdownViewerApp?.services?.imageEditor, null, { timeout: 60000 });
+  await page.evaluate(() => {
+    window.markdownViewerApp.modules.apiClient.deactivateApiClientSidebar = () => {};
+    window.markdownViewerApp.modules.tabs.openBlankImageEditorInTab({ width: 100, height: 70, name: 'Smudge' });
+  });
+  const root = page.locator('.tab-view[data-tab-view-kind=image-editor]').last();
+  await expect(root.locator('.image-editor-shell')).toBeAttached();
+  await root.evaluate((element) => {
+    element.hidden = false;
+    element.classList.add('active');
+  });
+  await page.evaluate(() => {
+    const root = [...document.querySelectorAll('.tab-view[data-tab-view-kind=image-editor]')].at(-1);
+    const controller = window.markdownViewerApp.services.imageEditor.getView(root.dataset.tabId);
+    const otherLayer = controller.documentStore.addLayer('Other', controller.documentStore.activeLayer()?.id);
+    const targetLayer = controller.documentStore.addLayer('Target', otherLayer.id);
+    const pixels = new ImageData(100, 70);
+    for (let y = 0; y < 70; y += 1) for (let x = 0; x < 100; x += 1) {
+      const index = (y * pixels.width + x) * 4;
+      pixels.data[index + (x < 45 ? 0 : 2)] = 255;
+      pixels.data[index + 3] = 255;
+    }
+    const object = controller.documentStore.addRasterObject(pixels, { x: 0, y: 0, width: 100, height: 70 }, { name: 'Target pixels', layerId: targetLayer.id });
+    controller.documentStore.select(object.id);
+    controller.compositor.render({ canvas: controller.view.canvas });
+    window.__smudgeLayerIds = { target: targetLayer.id, other: otherLayer.id };
+  });
+
+  await root.locator('[data-tool=smudge]').click();
+  await expect(root.locator('.image-editor-smudge-controls')).toBeVisible();
+  await root.locator('.image-editor-size').evaluate((input) => {
+    input.value = '18';
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+  });
+  await root.locator('.image-editor-smudge-strength').evaluate((input) => {
+    input.value = '100';
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+  });
+  const overlay = root.locator('.image-editor-overlay');
+  const box = await overlay.boundingBox();
+  await page.mouse.move(box.x + 39, box.y + 35);
+  await page.mouse.down();
+  await page.mouse.move(box.x + 62, box.y + 35, { steps: 8 });
+  await page.mouse.up();
+
+  const smudged = await page.evaluate(() => {
+    const root = [...document.querySelectorAll('.tab-view[data-tab-view-kind=image-editor]')].at(-1);
+    const controller = window.markdownViewerApp.services.imageEditor.getView(root.dataset.tabId);
+    const target = window.MarkdownViewerImageEditor.findDocumentNode(controller.documentStore.document, window.__smudgeLayerIds.target).node;
+    const other = window.MarkdownViewerImageEditor.findDocumentNode(controller.documentStore.document, window.__smudgeLayerIds.other).node;
+    return {
+      targetEdits: target.pixelEdits.length,
+      otherEdits: other.pixelEdits.length,
+      destination: Array.from(controller.view.context.getImageData(55, 35, 1, 1).data),
+      canUndo: controller.history.canUndo
+    };
+  });
+  expect(smudged.targetEdits).toBe(2);
+  expect(smudged.otherEdits).toBe(0);
+  expect(smudged.destination[0]).toBeGreaterThan(0);
+  expect(smudged.destination[3]).toBe(255);
+  expect(smudged.canUndo).toBe(true);
+
+  await root.locator('[data-action=undo]').click();
+  expect(await root.locator('.image-editor-canvas').evaluate((canvas) => Array.from(canvas.getContext('2d').getImageData(55, 35, 1, 1).data))).toEqual([0, 0, 255, 255]);
+});
+
+test('eraser removes pixels from only the selected layer and undoes as one edit', async ({ page }) => {
+  await page.goto('/');
+  await page.waitForFunction(() => !!window.markdownViewerApp?.modules?.tabs?.openBlankImageEditorInTab, null, { timeout: 60000 });
+  await page.waitForFunction(() => !!window.markdownViewerApp?.services?.imageEditor, null, { timeout: 60000 });
+  await page.evaluate(() => {
+    window.markdownViewerApp.modules.apiClient.deactivateApiClientSidebar = () => {};
+    window.markdownViewerApp.modules.tabs.openBlankImageEditorInTab({ width: 100, height: 70, name: 'Eraser' });
+  });
+  const root = page.locator('.tab-view[data-tab-view-kind=image-editor]').last();
+  await expect(root.locator('.image-editor-shell')).toBeAttached();
+  await root.evaluate((element) => {
+    element.hidden = false;
+    element.classList.add('active');
+  });
+  await page.evaluate(() => {
+    const root = [...document.querySelectorAll('.tab-view[data-tab-view-kind=image-editor]')].at(-1);
+    const controller = window.markdownViewerApp.services.imageEditor.getView(root.dataset.tabId);
+    const otherLayer = controller.documentStore.addLayer('Other', controller.documentStore.activeLayer()?.id);
+    const targetLayer = controller.documentStore.addLayer('Target', otherLayer.id);
+    const otherPixels = new ImageData(100, 70);
+    const targetPixels = new ImageData(100, 70);
+    for (let index = 0; index < otherPixels.data.length; index += 4) {
+      otherPixels.data[index + 2] = 255;
+      otherPixels.data[index + 3] = 255;
+      targetPixels.data[index] = 255;
+      targetPixels.data[index + 3] = 255;
+    }
+    controller.documentStore.addRasterObject(otherPixels, { x: 0, y: 0, width: 100, height: 70 }, { name: 'Other pixels', layerId: otherLayer.id });
+    const targetObject = controller.documentStore.addRasterObject(targetPixels, { x: 0, y: 0, width: 100, height: 70 }, { name: 'Target pixels', layerId: targetLayer.id });
+    controller.documentStore.select(targetObject.id);
+    controller.compositor.render({ canvas: controller.view.canvas });
+    window.__eraserLayerIds = { target: targetLayer.id, other: otherLayer.id };
+  });
+
+  await root.locator('[data-tool=eraser]').click();
+  expect(await root.locator('.image-editor-eraser-controls').evaluate((element) => element.hidden)).toBe(false);
+  await root.locator('.image-editor-size').evaluate((input) => {
+    input.value = '18';
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+  });
+  const overlay = root.locator('.image-editor-overlay');
+  const box = await overlay.boundingBox();
+  await page.mouse.move(box.x + 30, box.y + 35);
+  await page.mouse.down();
+  await page.mouse.move(box.x + 65, box.y + 35, { steps: 8 });
+  await page.mouse.up();
+
+  const erased = await page.evaluate(() => {
+    const root = [...document.querySelectorAll('.tab-view[data-tab-view-kind=image-editor]')].at(-1);
+    const controller = window.markdownViewerApp.services.imageEditor.getView(root.dataset.tabId);
+    const target = window.MarkdownViewerImageEditor.findDocumentNode(controller.documentStore.document, window.__eraserLayerIds.target).node;
+    const other = window.MarkdownViewerImageEditor.findDocumentNode(controller.documentStore.document, window.__eraserLayerIds.other).node;
+    return {
+      targetEdits: target.pixelEdits.length,
+      targetOperation: target.pixelEdits.at(-1)?.compositeOperation,
+      otherEdits: other.pixelEdits.length,
+      center: Array.from(controller.view.context.getImageData(48, 35, 1, 1).data),
+      canUndo: controller.history.canUndo
+    };
+  });
+  expect(erased).toEqual({ targetEdits: 1, targetOperation: 'destination-out', otherEdits: 0, center: [0, 0, 255, 255], canUndo: true });
+
+  await root.locator('[data-action=undo]').click();
+  expect(await root.locator('.image-editor-canvas').evaluate((canvas) => Array.from(canvas.getContext('2d').getImageData(48, 35, 1, 1).data))).toEqual([255, 0, 0, 255]);
 });
 
 test('selected object outline refreshes and bucket fill follows the moved object', async ({ page }) => {

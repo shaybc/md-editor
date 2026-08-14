@@ -4,10 +4,14 @@
 
   const namespace = global.MarkdownViewerImageEditor = global.MarkdownViewerImageEditor || {};
   const TOOL_ICONS = {
-    select: "bi-bounding-box",
+    select: "bi-bounding-box-circles",
     move: "bi-arrows-move",
     pencil: "bi-pencil",
     brush: "bi-brush",
+    eraser: "bi-eraser",
+    blur: "bi-droplet",
+    "clone-stamp": "bi-postage",
+    smudge: "bi-droplet-half",
     line: "bi-slash-lg",
     curve: "bi-bezier2",
     path: "bi-vector-pen",
@@ -30,7 +34,10 @@
     bucket: "bi-paint-bucket",
     text: "bi-fonts"
   };
-  const TOOL_LABELS = { move: "Move", "rounded-rectangle": "Rounded rectangle", "rectangular-grid": "Rectangular grid", "polar-grid": "Polar grid", callout: "Rounded rectangular callout", "oval-callout": "Oval callout" };
+  const TOOL_LABELS = { move: "Move", eraser: "Eraser", blur: "Blur", "clone-stamp": "Clone Stamp", smudge: "Smudge", "rounded-rectangle": "Rounded rectangle", "rectangular-grid": "Rectangular grid", "polar-grid": "Polar grid", callout: "Rounded rectangular callout", "oval-callout": "Oval callout" };
+  const SHAPE_TOOL_GROUP = Object.freeze(["rectangle", "ellipse", "triangle", "rounded-rectangle", "callout", "lightning", "heart"]);
+  const GRID_TOOL_GROUP = Object.freeze(["rectangular-grid", "polar-grid"]);
+  let flyoutDismissalInstalled = false;
   const PALETTE_COLORS = Object.freeze([
     "#000000", "#7f7f7f", "#880015", "#ed1c24", "#ff7f27",
     "#fff200", "#22b14c", "#00a2e8", "#3f48cc", "#a349a4",
@@ -54,6 +61,56 @@
     return element;
   }
 
+  function closeOtherToolFlyouts(current) {
+    document.querySelectorAll(".image-editor-tool-flyout[open]").forEach((details) => {
+      if (details !== current) details.open = false;
+    });
+  }
+
+  function positionToolFlyout(details, triggerSelector, menuSelector) {
+    details.classList.add("image-editor-tool-flyout");
+    details.addEventListener("toggle", () => {
+      if (!details.open) return;
+      closeOtherToolFlyouts(details);
+      const triggerRect = details.querySelector(triggerSelector).getBoundingClientRect();
+      const sidebarRect = details.closest(".image-editor-tool-sidebar")?.getBoundingClientRect();
+      const menu = details.querySelector(menuSelector);
+      const anchorRight = sidebarRect?.right || triggerRect.right;
+      menu.style.left = Math.max(4, Math.min(global.innerWidth - menu.offsetWidth - 4, anchorRight + 6)) + "px";
+      menu.style.top = Math.max(4, Math.min(global.innerHeight - menu.offsetHeight - 4, triggerRect.top)) + "px";
+    });
+  }
+
+  function installFlyoutDismissal() {
+    if (flyoutDismissalInstalled) return;
+    flyoutDismissalInstalled = true;
+    document.addEventListener("pointerdown", (event) => {
+      document.querySelectorAll(".image-editor-tool-flyout[open]").forEach((details) => {
+        if (!details.contains(event.target)) details.open = false;
+      });
+    }, true);
+  }
+
+  /** Build the Select tool and its geometric marquee chooser. */
+  function createSelectTool() {
+    const wrapper = document.createElement("div");
+    wrapper.className = "image-editor-select-tool";
+    wrapper.innerHTML = `
+      <button type="button" class="image-editor-button image-editor-tool image-editor-select-main" data-tool="select" title="Select" aria-label="Select"><i class="bi ${TOOL_ICONS.select}" aria-hidden="true"></i></button>
+      <details class="image-editor-select-mode">
+        <summary class="image-editor-select-mode-trigger" title="Selection shape" aria-label="Choose selection shape"><i class="bi bi-caret-down-fill"></i></summary>
+        <span class="image-editor-select-mode-menu" role="listbox" aria-label="Selection shapes">
+          <button type="button" data-selection-shape="rectangle" role="option"><i class="bi bi-square"></i>Rectangle</button>
+          <button type="button" data-selection-shape="ellipse" role="option"><i class="bi bi-circle"></i>Ellipse</button>
+          <button type="button" data-selection-shape="triangle" role="option"><i class="bi bi-triangle"></i>Triangle</button>
+          <button type="button" data-selection-shape="lasso" role="option"><i class="bi bi-vector-pen"></i>Lasso</button>
+        </span>
+      </details>`;
+    const modeSelector = wrapper.querySelector(".image-editor-select-mode");
+    positionToolFlyout(modeSelector, ".image-editor-select-mode-trigger", ".image-editor-select-mode-menu");
+    return wrapper;
+  }
+
   function createBrushTool() {
     const wrapper = document.createElement("div");
     wrapper.className = "image-editor-brush-tool";
@@ -66,14 +123,7 @@
         </span>
       </details>`;
     const modeSelector = wrapper.querySelector(".image-editor-brush-mode");
-    modeSelector.addEventListener("toggle", () => {
-      if (!modeSelector.open) return;
-      const triggerRect = modeSelector.querySelector(".image-editor-brush-mode-trigger").getBoundingClientRect();
-      const menu = modeSelector.querySelector(".image-editor-brush-mode-menu");
-      const menuWidth = 286;
-      menu.style.left = Math.max(4, Math.min(global.innerWidth - menuWidth - 4, triggerRect.left - 60)) + "px";
-      menu.style.top = triggerRect.bottom + 3 + "px";
-    });
+    positionToolFlyout(modeSelector, ".image-editor-brush-mode-trigger", ".image-editor-brush-mode-menu");
     return wrapper;
   }
 
@@ -91,15 +141,35 @@
         </span>
       </details>`;
     const modeSelector = wrapper.querySelector(".image-editor-bucket-mode");
-    modeSelector.addEventListener("toggle", () => {
-      if (!modeSelector.open) return;
-      const triggerRect = modeSelector.querySelector(".image-editor-bucket-mode-trigger").getBoundingClientRect();
-      const menu = modeSelector.querySelector(".image-editor-bucket-mode-menu");
-      const menuWidth = 128;
-      menu.style.left = Math.max(4, Math.min(global.innerWidth - menuWidth - 4, triggerRect.left - 20)) + "px";
-      menu.style.top = triggerRect.bottom + 3 + "px";
-    });
+    positionToolFlyout(modeSelector, ".image-editor-bucket-mode-trigger", ".image-editor-bucket-mode-menu");
     return wrapper;
+  }
+
+  function createGroupedTool(groupName, tools, initialTool, label) {
+    const wrapper = document.createElement("div");
+    wrapper.className = "image-editor-grouped-tool";
+    wrapper.dataset.toolGroup = groupName;
+    wrapper.innerHTML = `
+      <button type="button" class="image-editor-button image-editor-tool image-editor-grouped-tool-main" data-tool="${initialTool}" title="${label}" aria-label="${label}"><i class="bi ${TOOL_ICONS[initialTool]}" aria-hidden="true"></i></button>
+      <details class="image-editor-grouped-tool-mode">
+        <summary class="image-editor-grouped-tool-trigger" title="Choose ${label.toLowerCase()}" aria-label="Choose ${label.toLowerCase()}"><i class="bi bi-caret-down-fill"></i></summary>
+        <span class="image-editor-grouped-tool-menu" role="listbox" aria-label="${label} options">
+          ${tools.map((tool) => `<button type="button" data-tool="${tool}" role="option"><i class="bi ${TOOL_ICONS[tool]}"></i>${TOOL_LABELS[tool] || tool[0].toUpperCase() + tool.slice(1)}</button>`).join("")}
+        </span>
+      </details>`;
+    positionToolFlyout(wrapper.querySelector(".image-editor-grouped-tool-mode"), ".image-editor-grouped-tool-trigger", ".image-editor-grouped-tool-menu");
+    return wrapper;
+  }
+
+  function updateGroupedTool(shell, groupName, activeTool, tools) {
+    if (!tools.includes(activeTool)) return;
+    const wrapper = shell.querySelector(`[data-tool-group="${groupName}"]`);
+    const main = wrapper?.querySelector(".image-editor-grouped-tool-main");
+    if (!main) return;
+    main.dataset.tool = activeTool;
+    main.title = TOOL_LABELS[activeTool] || activeTool[0].toUpperCase() + activeTool.slice(1);
+    main.setAttribute("aria-label", main.title);
+    main.innerHTML = `<i class="bi ${TOOL_ICONS[activeTool]}" aria-hidden="true"></i>`;
   }
 
   function createPaletteButton(color) {
@@ -130,7 +200,6 @@
             <div class="image-editor-history-actions"></div>
             <div class="image-editor-selection-actions"></div>
           </div>
-          <div class="image-editor-tools image-editor-toolbar-group"></div>
           <div class="image-editor-size-controls image-editor-toolbar-group">
             <label>Size <input class="image-editor-size" type="range" min="1" max="64" value="8"></label>
             <label><input class="image-editor-fill" type="checkbox"> Fill</label>
@@ -227,6 +296,30 @@
               <label>Angle <input class="image-editor-pattern-angle" type="range" min="0" max="180" value="45"></label>
               <label>Density <input class="image-editor-pattern-density" type="range" min="10" max="90" value="50"></label>
             </div>
+            <div class="image-editor-clone-stamp-controls image-editor-toolbar-group" hidden>
+              <label>Hardness <input class="image-editor-clone-stamp-hardness" type="range" min="0" max="100" value="75"></label>
+              <label>Opacity <input class="image-editor-clone-stamp-opacity" type="range" min="1" max="100" value="100"></label>
+              <label><input class="image-editor-clone-stamp-aligned" type="checkbox" checked> Aligned</label>
+              <label>Sample
+                <select class="image-editor-clone-stamp-sample" aria-label="Clone stamp sample">
+                  <option value="current">Current layer</option>
+                  <option value="all">All visible layers</option>
+                </select>
+              </label>
+            </div>
+            <div class="image-editor-smudge-controls image-editor-toolbar-group" hidden>
+              <label>Hardness <input class="image-editor-smudge-hardness" type="range" min="0" max="100" value="25"></label>
+              <label>Strength <input class="image-editor-smudge-strength" type="range" min="1" max="100" value="50"></label>
+              <label><input class="image-editor-smudge-sample-all" type="checkbox"> Sample All Layers</label>
+              <label><input class="image-editor-smudge-finger-painting" type="checkbox"> Finger Painting</label>
+            </div>
+            <div class="image-editor-eraser-controls image-editor-toolbar-group" hidden>
+              <label>Hardness <input class="image-editor-eraser-hardness" type="range" min="0" max="100" value="100"></label>
+            </div>
+            <div class="image-editor-blur-controls image-editor-toolbar-group" hidden>
+              <label>Hardness <input class="image-editor-blur-hardness" type="range" min="0" max="100" value="50"></label>
+              <label>Strength <input class="image-editor-blur-strength" type="range" min="1" max="100" value="50"></label>
+            </div>
             <div class="image-editor-text-controls image-editor-toolbar-group">
               <select class="image-editor-font" aria-label="Font family"><option>Arial</option><option>Georgia</option><option>Courier New</option></select>
               <input class="image-editor-font-size" type="number" min="8" max="144" value="24" aria-label="Font size">
@@ -235,7 +328,10 @@
             </div>
           </div>
         </div>
-        <div class="image-editor-stage" tabindex="0" role="application" aria-label="Image editor canvas">
+        <div class="image-editor-work-area">
+          <aside class="image-editor-tool-sidebar" aria-label="Image editing tools"><div class="image-editor-tools"></div></aside>
+          <div class="image-editor-stage-frame">
+          <div class="image-editor-stage" tabindex="0" role="application" aria-label="Image editor canvas">
           <div class="image-editor-canvas-wrap">
             <canvas class="image-editor-canvas"></canvas>
             <canvas class="image-editor-overlay"></canvas>
@@ -251,9 +347,13 @@
             </div>
           </div>
         </div>
+        </div>
+        </div>
       `;
       root.appendChild(this.shell);
       this.toolbar = this.shell.querySelector(".image-editor-toolbar");
+      this.toolSidebar = this.shell.querySelector(".image-editor-tool-sidebar");
+      this.stageFrame = this.shell.querySelector(".image-editor-stage-frame");
       this.stage = this.shell.querySelector(".image-editor-stage");
       this.wrap = this.shell.querySelector(".image-editor-canvas-wrap");
       this.canvas = this.shell.querySelector(".image-editor-canvas");
@@ -264,8 +364,22 @@
       this.overlayContext = this.overlay.getContext("2d");
       this.activeColorTarget = "foreground";
 
+      installFlyoutDismissal();
+      const toolsContainer = this.shell.querySelector(".image-editor-tools");
+      let shapeGroupAdded = false;
+      let gridGroupAdded = false;
       namespace.tools.filter((tool) => tool !== "oval-callout" && tool !== "cloud-callout").forEach((tool) => {
-        this.shell.querySelector(".image-editor-tools").appendChild(tool === "bucket" ? createBucketTool() : tool === "brush" ? createBrushTool() : createToolButton(tool));
+        if (SHAPE_TOOL_GROUP.includes(tool)) {
+          if (!shapeGroupAdded) toolsContainer.appendChild(createGroupedTool("shapes", SHAPE_TOOL_GROUP, "rectangle", "Shapes"));
+          shapeGroupAdded = true;
+          return;
+        }
+        if (GRID_TOOL_GROUP.includes(tool)) {
+          if (!gridGroupAdded) toolsContainer.appendChild(createGroupedTool("grids", GRID_TOOL_GROUP, "rectangular-grid", "Grids"));
+          gridGroupAdded = true;
+          return;
+        }
+        toolsContainer.appendChild(tool === "select" ? createSelectTool() : tool === "bucket" ? createBucketTool() : tool === "brush" ? createBrushTool() : createToolButton(tool));
       });
       const gradientColorInput = document.createElement("input");
       gradientColorInput.type = "color";
@@ -418,10 +532,17 @@
     }
 
     update(state, commandState) {
+      updateGroupedTool(this.shell, "shapes", state.tool, SHAPE_TOOL_GROUP);
+      updateGroupedTool(this.shell, "grids", state.tool, GRID_TOOL_GROUP);
       this.shell.querySelectorAll("[data-tool]").forEach((element) => {
         const active = element.dataset.tool === state.tool || (element.dataset.tool === "callout" && (state.tool === "oval-callout" || state.tool === "cloud-callout"));
         element.classList.toggle("active", active);
         element.setAttribute("aria-pressed", String(active));
+      });
+      this.shell.querySelectorAll("[data-selection-shape]").forEach((element) => {
+        const active = element.dataset.selectionShape === state.selectionShape;
+        element.classList.toggle("active", active);
+        element.setAttribute("aria-selected", String(active));
       });
       this.shell.querySelector(".image-editor-foreground").value = state.foregroundColor;
       this.shell.querySelector(".image-editor-background").value = state.backgroundColor;
@@ -439,7 +560,22 @@
       this.shell.querySelector(".image-editor-pattern-scale").value = String(state.patternScale);
       this.shell.querySelector(".image-editor-pattern-angle").value = String(state.patternAngle);
       this.shell.querySelector(".image-editor-pattern-density").value = String(state.patternDensity);
+      this.shell.querySelector(".image-editor-clone-stamp-controls").hidden = state.tool !== "clone-stamp";
+      this.shell.querySelector(".image-editor-clone-stamp-hardness").value = String(state.cloneStampHardness);
+      this.shell.querySelector(".image-editor-clone-stamp-opacity").value = String(state.cloneStampOpacity);
+      this.shell.querySelector(".image-editor-clone-stamp-aligned").checked = state.cloneStampAligned;
+      this.shell.querySelector(".image-editor-clone-stamp-sample").value = state.cloneStampSample;
       this.setActiveColorTarget(this.activeColorTarget, state);
+      this.shell.querySelector(".image-editor-smudge-controls").hidden = state.tool !== "smudge";
+      this.shell.querySelector(".image-editor-smudge-hardness").value = String(state.smudgeHardness);
+      this.shell.querySelector(".image-editor-smudge-strength").value = String(state.smudgeStrength);
+      this.shell.querySelector(".image-editor-smudge-sample-all").checked = state.smudgeSampleAllLayers;
+      this.shell.querySelector(".image-editor-eraser-controls").hidden = state.tool !== "eraser";
+      this.shell.querySelector(".image-editor-blur-controls").hidden = state.tool !== "blur";
+      this.shell.querySelector(".image-editor-blur-hardness").value = String(state.blurHardness);
+      this.shell.querySelector(".image-editor-blur-strength").value = String(state.blurStrength);
+      this.shell.querySelector(".image-editor-eraser-hardness").value = String(state.eraserHardness);
+      this.shell.querySelector(".image-editor-smudge-finger-painting").checked = state.smudgeFingerPainting;
       this.shell.querySelector(".image-editor-fill").checked = state.fillShapes;
       namespace.syncStrokeTypeSelector(this.shell.querySelector(".image-editor-stroke-type"), state.strokeType);
       this.shell.querySelector(".image-editor-corner-radius").value = String(state.cornerRadius);

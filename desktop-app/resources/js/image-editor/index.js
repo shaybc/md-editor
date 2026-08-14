@@ -48,6 +48,146 @@
       controller.documentStore.notify({ type: "edit-layer", ids: [layer.id] });
       return true;
     }
+    function appendLayerPixelReplacement(controller, layer, before, after) {
+      const replacement = changedPixelOverlay(before, after);
+      if (!replacement) return false;
+      const erasure = new ImageData(after.width, after.height);
+      for (let index = 0; index < replacement.data.length; index += 4) {
+        if (before.data[index] === after.data[index] && before.data[index + 1] === after.data[index + 1]
+          && before.data[index + 2] === after.data[index + 2] && before.data[index + 3] === after.data[index + 3]) continue;
+        erasure.data[index + 3] = 255;
+      }
+      appendLayerPixelEdit(controller, layer, erasure, "destination-out");
+      appendLayerPixelEdit(controller, layer, replacement);
+      return true;
+    }
+
+    function selectedPixelToolLayer(controller) {
+      return controller.documentStore.selectedContentLayers({ editableOnly: true, fallbackToActive: false })
+        .find((layer) => !namespace.isCanvasBackgroundLayer(layer)) || null;
+    }
+
+
+    function cloneStampTargetLayer(controller) {
+      return selectedPixelToolLayer(controller);
+    }
+
+    function drawCloneStampOverlay(controller, point = null) {
+      const { view, state, cloneStampTool } = controller;
+      const context = view.overlayContext;
+      context.clearRect(0, 0, view.overlay.width, view.overlay.height);
+      context.save();
+      context.lineWidth = 1 / Math.max(0.01, Number(state.zoom) || 1);
+      if (cloneStampTool.sourcePoint) {
+        const source = cloneStampTool.sourcePoint;
+        const marker = 7 / Math.max(0.01, Number(state.zoom) || 1);
+        context.strokeStyle = "#0a84ff";
+        context.beginPath();
+        context.moveTo(source.x - marker, source.y);
+        context.lineTo(source.x + marker, source.y);
+        context.moveTo(source.x, source.y - marker);
+        context.lineTo(source.x, source.y + marker);
+        context.stroke();
+      }
+      if (point) {
+        context.lineWidth = 3 / Math.max(0.01, Number(state.zoom) || 1);
+        context.strokeStyle = "rgba(0,0,0,.95)";
+        context.beginPath();
+        context.arc(point.x, point.y, Math.max(0.5, state.brushSize / 2), 0, Math.PI * 2);
+        context.stroke();
+        context.lineWidth = 1 / Math.max(0.01, Number(state.zoom) || 1);
+        context.strokeStyle = "rgba(255,255,255,.98)";
+        context.stroke();
+      }
+      context.restore();
+    }
+
+    function renderCloneStampPreview(controller, point) {
+      renderLayeredDocument(controller);
+      if (controller.cloneStampTool.strokeCanvas) controller.view.context.drawImage(controller.cloneStampTool.strokeCanvas, 0, 0);
+      drawCloneStampOverlay(controller, point);
+    }
+
+    function drawSmudgeOverlay(controller, point) {
+      const { view, state } = controller;
+      view.overlayContext.clearRect(0, 0, view.overlay.width, view.overlay.height);
+      if (!point) return;
+      view.overlayContext.save();
+      view.overlayContext.lineWidth = 3 / Math.max(0.01, Number(state.zoom) || 1);
+      view.overlayContext.strokeStyle = "rgba(0,0,0,.95)";
+      view.overlayContext.beginPath();
+      view.overlayContext.arc(point.x, point.y, Math.max(0.5, state.brushSize / 2), 0, Math.PI * 2);
+      view.overlayContext.stroke();
+      view.overlayContext.lineWidth = 1 / Math.max(0.01, Number(state.zoom) || 1);
+      view.overlayContext.strokeStyle = "rgba(255,255,255,.98)";
+      view.overlayContext.stroke();
+      view.overlayContext.restore();
+    }
+    function drawEraserOverlay(controller, point) {
+      const { view, state } = controller;
+      view.overlayContext.clearRect(0, 0, view.overlay.width, view.overlay.height);
+      if (!point) return;
+      view.overlayContext.save();
+      view.overlayContext.lineWidth = 3 / Math.max(0.01, Number(state.zoom) || 1);
+      view.overlayContext.strokeStyle = "rgba(0,0,0,.95)";
+      view.overlayContext.beginPath();
+      view.overlayContext.arc(point.x, point.y, Math.max(0.5, state.brushSize / 2), 0, Math.PI * 2);
+      view.overlayContext.stroke();
+      view.overlayContext.lineWidth = 1 / Math.max(0.01, Number(state.zoom) || 1);
+      view.overlayContext.strokeStyle = "rgba(255,255,255,.98)";
+      view.overlayContext.stroke();
+      view.overlayContext.restore();
+    }
+
+    function renderSmudgePreview(controller, point) {
+      renderLayeredDocument(controller);
+      const tool = controller.smudgeTool;
+      if (tool.previewCanvas && controller.smudgeLayerBefore) {
+        const after = tool.previewCanvas.getContext("2d").getImageData(0, 0, tool.previewCanvas.width, tool.previewCanvas.height);
+        const overlay = changedPixelOverlay(controller.smudgeLayerBefore, after);
+        if (overlay) {
+          const preview = document.createElement("canvas");
+          preview.width = overlay.width;
+          preview.height = overlay.height;
+          preview.getContext("2d").putImageData(overlay, 0, 0);
+          controller.view.context.drawImage(preview, 0, 0);
+        }
+      }
+      drawSmudgeOverlay(controller, point);
+    }
+
+    function drawBlurOverlay(controller, point) {
+      const { view, state } = controller;
+      view.overlayContext.clearRect(0, 0, view.overlay.width, view.overlay.height);
+      if (!point) return;
+      view.overlayContext.save();
+      view.overlayContext.lineWidth = 3 / Math.max(0.01, Number(state.zoom) || 1);
+      view.overlayContext.strokeStyle = "rgba(0,0,0,.95)";
+      view.overlayContext.beginPath();
+      view.overlayContext.arc(point.x, point.y, Math.max(0.5, state.brushSize / 2), 0, Math.PI * 2);
+      view.overlayContext.stroke();
+      view.overlayContext.lineWidth = 1 / Math.max(0.01, Number(state.zoom) || 1);
+      view.overlayContext.strokeStyle = "rgba(255,255,255,.98)";
+      view.overlayContext.stroke();
+      view.overlayContext.restore();
+    }
+
+    function renderBlurPreview(controller, point) {
+      renderLayeredDocument(controller);
+      const tool = controller.blurTool;
+      if (tool.previewCanvas && controller.blurLayerBefore) {
+        const after = tool.previewCanvas.getContext("2d").getImageData(0, 0, tool.previewCanvas.width, tool.previewCanvas.height);
+        const overlay = changedPixelOverlay(controller.blurLayerBefore, after);
+        if (overlay) {
+          const preview = document.createElement("canvas");
+          preview.width = overlay.width;
+          preview.height = overlay.height;
+          preview.getContext("2d").putImageData(overlay, 0, 0);
+          controller.view.context.drawImage(preview, 0, 0);
+        }
+      }
+      drawBlurOverlay(controller, point);
+    }
 
     function applyPresentationEditsToLayer(controller, layer, before, after) {
       return appendLayerPixelEdit(controller, layer, changedPixelOverlay(before, after));
@@ -196,6 +336,10 @@
         backgroundColor: state.backgroundColor,
         brushSize: state.brushSize,
         brushType: state.brushType,
+        cloneStampHardness: state.cloneStampHardness,
+        cloneStampOpacity: state.cloneStampOpacity,
+        cloneStampAligned: state.cloneStampAligned,
+        cloneStampSample: state.cloneStampSample,
         lineWidth: state.lineWidth,
         strokeType: state.strokeType,
         fillShapes: state.fillShapes,
@@ -207,6 +351,13 @@
         patternAngle: state.patternAngle,
         patternDensity: state.patternDensity,
         spiralDirection: state.spiralDirection,
+        smudgeHardness: state.smudgeHardness,
+        eraserHardness: state.eraserHardness,
+        blurHardness: state.blurHardness,
+        blurStrength: state.blurStrength,
+        smudgeStrength: state.smudgeStrength,
+        smudgeSampleAllLayers: state.smudgeSampleAllLayers,
+        smudgeFingerPainting: state.smudgeFingerPainting,
         spiralCapInside: state.spiralCapInside,
         rectangularGridHorizontalDividers: state.rectangularGridHorizontalDividers,
         rectangularGridVerticalDividers: state.rectangularGridVerticalDividers,
@@ -280,6 +431,14 @@
       view.overlayContext.strokeStyle = "#111111";
       selection.strokeOutline(view.overlayContext);
       view.overlayContext.restore();
+      if (selection.inverted) {
+        view.overlayContext.save();
+        view.overlayContext.setLineDash([5, 4]);
+        view.overlayContext.lineWidth = 1;
+        view.overlayContext.strokeStyle = "#1473e6";
+        view.overlayContext.strokeRect(0.5, 0.5, view.overlay.width - 1, view.overlay.height - 1);
+        view.overlayContext.restore();
+      }
       const zoom = Math.max(0.25, Number(state.zoom) || 1);
       const guideSize = 6 / zoom;
       const halfGuide = guideSize / 2;
@@ -999,7 +1158,7 @@
     }
 
     async function copySelectionToClipboard(controller) {
-      const data = controller.selection.copy(controller.view.context);
+      const data = controller.selection.copy(pixelSelectionSourceContext(controller));
       if (!data) return false;
       if (global.ClipboardItem && global.navigator?.clipboard?.write) {
         const canvas = document.createElement("canvas");
@@ -1165,6 +1324,9 @@
       }
       if (!selection.hasSelection) return;
       const rect = { ...selection.rect };
+      const regions = selection.inverted
+        ? namespace.imageEditorInverseSelectionRects(rect, { width: view.canvas.width, height: view.canvas.height })
+        : [rect];
       const documentBefore = controller.documentStore.snapshot();
       if (action === "cut") {
         await copySelectionToClipboard(controller);
@@ -1172,7 +1334,12 @@
       } else if (action === "delete") {
         selection.clear();
       }
-      const changed = (action === "cut" || action === "delete") && clearPixelRegionFromSelectedLayers(controller, rect);
+      let changed = false;
+      if (action === "cut" || action === "delete") {
+        regions.forEach((region) => {
+          if (clearPixelRegionFromSelectedLayers(controller, region)) changed = true;
+        });
+      }
       drawSelectionOverlay(controller);
       if (changed) {
         controller.history.push(documentBefore, controller.documentStore.snapshot(), action === "cut" ? "Cut pixels" : "Delete pixels");
@@ -1322,7 +1489,7 @@
       view.toolbar.addEventListener("focusin", (event) => {
         if (!view.textInput.hidden && isTextFormattingTarget(event.target)) keepTextInputLive(controller);
       });
-      view.toolbar.addEventListener("click", (event) => {
+      const handleToolbarClick = (event) => {
         if (event.target.closest("[data-layers-toggle]")) {
           controller.layerPanel?.toggle();
           syncTab(controller);
@@ -1345,6 +1512,14 @@
           syncTab(controller);
           return;
         }
+        const selectionShapeButton = event.target.closest("[data-selection-shape]");
+        if (selectionShapeButton) {
+          state.selectionShape = namespace.ImageEditorSelectionShapes.normalize(selectionShapeButton.dataset.selectionShape);
+          state.setTool("select");
+          view.shell.querySelector(".image-editor-select-mode").open = false;
+          syncTab(controller);
+          return;
+        }
         const toolButton = event.target.closest("[data-tool]");
         if (toolButton) {
           if (controller.gradientFillTool.isEditing) finishGradientFill(controller);
@@ -1363,6 +1538,7 @@
           commitText(controller);
           if (toolButton.dataset.tool !== "select") dropSelection(controller);
           state.setTool(toolButton.dataset.tool);
+          toolButton.closest(".image-editor-grouped-tool-mode")?.removeAttribute("open");
           if (state.tool === "move") drawObjectSelectionOverlay(controller);
           syncTab(controller);
           return;
@@ -1382,7 +1558,9 @@
           refreshLiveTextStyle(controller);
           if (!view.textInput.hidden) setTimeout(() => view.textInput.focus(), 0);
         }
-      });
+      };
+      view.toolbar.addEventListener("click", handleToolbarClick);
+      view.toolSidebar.addEventListener("click", handleToolbarClick);
       [["foreground", ".image-editor-foreground"], ["background", ".image-editor-background"]].forEach(([target, selector]) => {
         const input = view.shell.querySelector(selector);
         input.addEventListener("pointerdown", () => view.setActiveColorTarget(target, state));
@@ -1428,6 +1606,22 @@
         if (controller.spiralTool.isEditing) renderSpiralPreview(controller);
         if (isGridTool(state.tool) && gridToolFor(controller).isEditing) renderGridPreview(controller);
       });
+      view.shell.querySelector(".image-editor-clone-stamp-hardness").addEventListener("input", (event) => {
+        state.cloneStampHardness = Math.max(0, Math.min(100, Number(event.target.value)));
+        syncTab(controller);
+      });
+      view.shell.querySelector(".image-editor-clone-stamp-opacity").addEventListener("input", (event) => {
+        state.cloneStampOpacity = Math.max(1, Math.min(100, Number(event.target.value)));
+        syncTab(controller);
+      });
+      view.shell.querySelector(".image-editor-clone-stamp-aligned").addEventListener("change", (event) => {
+        state.cloneStampAligned = event.target.checked;
+        syncTab(controller);
+      });
+      view.shell.querySelector(".image-editor-clone-stamp-sample").addEventListener("change", (event) => {
+        state.cloneStampSample = event.target.value === "all" ? "all" : "current";
+        syncTab(controller);
+      });
       namespace.bindStrokeTypeSelector(view.shell.querySelector(".image-editor-stroke-type"), (strokeType) => {
         state.strokeType = strokeType;
         if (controller.curveTool.isEditing) renderCurvePreview(controller);
@@ -1442,6 +1636,34 @@
         if (controller.arcTool.isEditing) renderArcPreview(controller);
         if (controller.spiralTool.isEditing) renderSpiralPreview(controller);
         if (isGridTool(state.tool) && gridToolFor(controller).isEditing) renderGridPreview(controller);
+      });
+      view.shell.querySelector(".image-editor-eraser-hardness").addEventListener("input", (event) => {
+        state.eraserHardness = Math.max(0, Math.min(100, Number(event.target.value)));
+        syncTab(controller);
+      });
+      view.shell.querySelector(".image-editor-blur-hardness").addEventListener("input", (event) => {
+        state.blurHardness = Math.max(0, Math.min(100, Number(event.target.value)));
+        syncTab(controller);
+      });
+      view.shell.querySelector(".image-editor-blur-strength").addEventListener("input", (event) => {
+        state.blurStrength = Math.max(1, Math.min(100, Number(event.target.value)));
+        syncTab(controller);
+      });
+      view.shell.querySelector(".image-editor-smudge-hardness").addEventListener("input", (event) => {
+        state.smudgeHardness = Math.max(0, Math.min(100, Number(event.target.value)));
+        syncTab(controller);
+      });
+      view.shell.querySelector(".image-editor-smudge-strength").addEventListener("input", (event) => {
+        state.smudgeStrength = Math.max(1, Math.min(100, Number(event.target.value)));
+        syncTab(controller);
+      });
+      view.shell.querySelector(".image-editor-smudge-sample-all").addEventListener("change", (event) => {
+        state.smudgeSampleAllLayers = event.target.checked;
+        syncTab(controller);
+      });
+      view.shell.querySelector(".image-editor-smudge-finger-painting").addEventListener("change", (event) => {
+        state.smudgeFingerPainting = event.target.checked;
+        syncTab(controller);
       });
       view.shell.querySelector(".image-editor-spiral-direction").addEventListener("change", (event) => {
         state.spiralDirection = event.target.value === "counter-clockwise" ? "counter-clockwise" : "clockwise";
@@ -1592,6 +1814,81 @@
         const adoptedLegacyPixels = synchronizePresentationCanvas(controller);
         if (adoptedLegacyPixels && state.tool === "select") state.selectionMode = "pixel";
         const point = view.pointFromEvent(event);
+        if (state.tool === "clone-stamp") {
+          event.preventDefault();
+          event.stopPropagation();
+          if (event.altKey) {
+            controller.cloneStampTool.setSource(point);
+            drawCloneStampOverlay(controller, point);
+            return;
+          }
+          const layer = cloneStampTargetLayer(controller);
+          if (!layer || !controller.cloneStampTool.sourcePoint) {
+            drawCloneStampOverlay(controller, point);
+            return;
+          }
+          commitText(controller);
+          commitSelection(controller);
+          controller.cloneStampBefore = controller.documentStore.snapshot();
+          controller.cloneStampLayerId = layer.id;
+          const sourceCanvas = state.cloneStampSample === "all"
+            ? controller.compositor.render()
+            : controller.compositor.renderLayer(layer);
+          if (!controller.cloneStampTool.begin(point, sourceCanvas, {
+            size: state.brushSize,
+            hardness: state.cloneStampHardness / 100,
+            opacity: state.cloneStampOpacity / 100,
+            aligned: state.cloneStampAligned
+          })) return;
+          controller.dragging = true;
+          overlay.setPointerCapture?.(event.pointerId);
+          renderCloneStampPreview(controller, point);
+          return;
+        }
+        if (state.tool === "eraser") {
+          event.preventDefault();
+          event.stopPropagation();
+          const layer = selectedPixelToolLayer(controller);
+          if (!layer) {
+            drawEraserOverlay(controller, point);
+            return;
+          }
+          commitText(controller);
+          commitSelection(controller);
+          controller.eraserBefore = controller.documentStore.snapshot();
+          controller.eraserLayerId = layer.id;
+          if (!controller.eraserTool.begin(point, view.canvas.width, view.canvas.height, {
+            size: state.brushSize, hardness: state.eraserHardness / 100
+          })) return;
+          controller.dragging = true;
+          overlay.setPointerCapture?.(event.pointerId);
+          drawEraserOverlay(controller, point);
+          return;
+        }
+        if (state.tool === "blur") {
+          event.preventDefault();
+          event.stopPropagation();
+          const layer = selectedPixelToolLayer(controller);
+          if (!layer) {
+            drawBlurOverlay(controller, point);
+            return;
+          }
+          commitText(controller);
+          commitSelection(controller);
+          controller.blurBefore = controller.documentStore.snapshot();
+          controller.blurLayerId = layer.id;
+          const targetCanvas = controller.compositor.renderLayer(layer);
+          controller.blurLayerBefore = targetCanvas.getContext("2d").getImageData(0, 0, targetCanvas.width, targetCanvas.height);
+          if (!controller.blurTool.begin(point, targetCanvas, {
+            size: state.brushSize,
+            hardness: state.blurHardness / 100,
+            strength: state.blurStrength / 100
+          })) return;
+          controller.dragging = true;
+          overlay.setPointerCapture?.(event.pointerId);
+          renderBlurPreview(controller, point);
+          return;
+        }
         if (state.tool === "curve") {
           event.preventDefault();
           event.stopPropagation();
@@ -1604,6 +1901,33 @@
           controller.dragging = true;
           overlay.setPointerCapture?.(event.pointerId);
           renderCurvePreview(controller);
+          return;
+        }
+        if (state.tool === "smudge") {
+          event.preventDefault();
+          event.stopPropagation();
+          const layer = selectedPixelToolLayer(controller);
+          if (!layer) {
+            drawSmudgeOverlay(controller, point);
+            return;
+          }
+          commitText(controller);
+          commitSelection(controller);
+          controller.smudgeBefore = controller.documentStore.snapshot();
+          controller.smudgeLayerId = layer.id;
+          const targetCanvas = controller.compositor.renderLayer(layer);
+          const sourceCanvas = state.smudgeSampleAllLayers ? controller.compositor.render() : targetCanvas;
+          controller.smudgeLayerBefore = targetCanvas.getContext("2d").getImageData(0, 0, targetCanvas.width, targetCanvas.height);
+          const fingerColor = state.smudgeFingerPainting ? namespace.colorToRgba(state.foregroundColor) : null;
+          if (!controller.smudgeTool.begin(point, targetCanvas, sourceCanvas, {
+            size: state.brushSize,
+            hardness: state.smudgeHardness / 100,
+            strength: state.smudgeStrength / 100,
+            fingerColor
+          })) return;
+          controller.dragging = true;
+          overlay.setPointerCapture?.(event.pointerId);
+          renderSmudgePreview(controller, point);
           return;
         }
         if (state.tool === "path") {
@@ -1908,9 +2232,10 @@
             ctrl: event.ctrlKey,
             meta: event.metaKey,
             shift: event.shiftKey,
-            zoom: state.zoom
+            zoom: state.zoom,
+            shape: state.selectionShape
           });
-          if (gesture.sourceCleared && clearPixelRegionFromSelectedLayers(controller, selection.rect)) renderLayeredDocument(controller);
+          if (gesture.sourceCleared && clearPixelRegionFromSelectedLayers(controller, selection.region())) renderLayeredDocument(controller);
           if (gesture.action === "drop") dropSelection(controller);
           if (gesture.action === "drop" || gesture.action === "ignore") {
             controller.dragging = false;
@@ -1924,6 +2249,11 @@
       overlay.addEventListener("pointermove", (event) => {
         const point = view.pointFromEvent(event, state.tool !== "path" && !selection.isTransforming && state.tool !== "move");
         if (!controller.dragging) {
+          if (state.tool === "clone-stamp") {
+            overlay.style.cursor = event.altKey ? "crosshair" : "none";
+            drawCloneStampOverlay(controller, point);
+            return;
+          }
           if (state.tool === "move" && !selection.floating) {
             const handle = objectTransformHandleAt(controller, point);
             if (handle?.type === "rotate") overlay.style.cursor = rotationCursor;
@@ -1935,6 +2265,21 @@
             const result = controller.gradientFillTool.begin(point, state.zoom);
             controller.gradientFillTool.end();
             overlay.style.cursor = result.action === "guide" ? "move" : (result.action === "side" ? "crosshair" : "default");
+            return;
+          }
+          if (state.tool === "eraser") {
+            overlay.style.cursor = "none";
+            drawEraserOverlay(controller, point);
+            return;
+          }
+          if (state.tool === "blur") {
+            overlay.style.cursor = "none";
+            drawBlurOverlay(controller, point);
+            return;
+          }
+          if (state.tool === "smudge") {
+            overlay.style.cursor = "none";
+            drawSmudgeOverlay(controller, point);
             return;
           }
           if (state.tool === "polygon" && controller.polygonTool.isEditing) {
@@ -1955,6 +2300,16 @@
           renderGradientFill(controller);
           return;
         }
+        if (state.tool === "blur") {
+          controller.blurTool.update(point);
+          renderBlurPreview(controller, point);
+          return;
+        }
+        if (state.tool === "clone-stamp") {
+          controller.cloneStampTool.update(point);
+          renderCloneStampPreview(controller, point);
+          return;
+        }
         if (state.tool === "curve") {
           controller.curveTool.update(point);
           renderCurvePreview(controller);
@@ -1969,6 +2324,16 @@
           controller.roundedRectangleTool.update(point);
           updateRoundedRectangleRadiusControl(controller);
           renderRoundedRectanglePreview(controller);
+          return;
+        }
+        if (state.tool === "eraser") {
+          controller.eraserTool.update(point);
+          drawEraserOverlay(controller, point);
+          return;
+        }
+        if (state.tool === "smudge") {
+          controller.smudgeTool.update(point);
+          renderSmudgePreview(controller, point);
           return;
         }
         if (isCalloutTool(state.tool)) {
@@ -2065,10 +2430,60 @@
         if (!controller.dragging) return;
         controller.dragging = false;
         const point = view.pointFromEvent(event, state.tool !== "path" && state.tool !== "move");
-        if (state.tool === "bucket" && controller.gradientFillTool.isEditing) {
+        if (state.tool === "clone-stamp") {
+          const pixels = controller.cloneStampTool.finish();
+          const found = namespace.findDocumentNode(controller.documentStore.document, controller.cloneStampLayerId);
+          if (pixels && found?.node?.kind === "layer" && appendLayerPixelEdit(controller, found.node, pixels)) {
+            controller.history.push(controller.cloneStampBefore, controller.documentStore.snapshot(), "Clone stamp");
+            state.markChanged();
+          }
+          controller.cloneStampBefore = null;
+          controller.cloneStampLayerId = null;
+          renderLayeredDocument(controller);
+          drawCloneStampOverlay(controller, point);
+          syncTab(controller);
+        } else if (state.tool === "bucket" && controller.gradientFillTool.isEditing) {
           controller.gradientFillTool.update(point);
           controller.gradientFillTool.end();
           renderGradientFill(controller);
+        } else if (state.tool === "eraser") {
+          const mask = controller.eraserTool.finish();
+          const found = namespace.findDocumentNode(controller.documentStore.document, controller.eraserLayerId);
+          if (mask && found?.node?.kind === "layer" && appendLayerPixelEdit(controller, found.node, mask, "destination-out")) {
+            controller.history.push(controller.eraserBefore, controller.documentStore.snapshot(), "Eraser");
+            state.markChanged();
+          }
+          controller.eraserBefore = null;
+          controller.eraserLayerId = null;
+          renderLayeredDocument(controller);
+          drawEraserOverlay(controller, point);
+          syncTab(controller);
+        } else if (state.tool === "blur") {
+          const pixels = controller.blurTool.finish();
+          const found = namespace.findDocumentNode(controller.documentStore.document, controller.blurLayerId);
+          if (pixels && found?.node?.kind === "layer" && appendLayerPixelReplacement(controller, found.node, controller.blurLayerBefore, pixels)) {
+            controller.history.push(controller.blurBefore, controller.documentStore.snapshot(), "Blur");
+            state.markChanged();
+          }
+          controller.blurBefore = null;
+          controller.blurLayerBefore = null;
+          controller.blurLayerId = null;
+          renderLayeredDocument(controller);
+          drawBlurOverlay(controller, point);
+          syncTab(controller);
+        } else if (state.tool === "smudge") {
+          const pixels = controller.smudgeTool.finish();
+          const found = namespace.findDocumentNode(controller.documentStore.document, controller.smudgeLayerId);
+          if (pixels && found?.node?.kind === "layer" && appendLayerPixelReplacement(controller, found.node, controller.smudgeLayerBefore, pixels)) {
+            controller.history.push(controller.smudgeBefore, controller.documentStore.snapshot(), "Smudge");
+            state.markChanged();
+          }
+          controller.smudgeBefore = null;
+          controller.smudgeLayerBefore = null;
+          controller.smudgeLayerId = null;
+          renderLayeredDocument(controller);
+          drawSmudgeOverlay(controller, point);
+          syncTab(controller);
         } else if (state.tool === "curve") {
           const result = controller.curveTool.completeStage(point);
           if (result.complete) finishEditableCurve(controller);
@@ -2363,7 +2778,7 @@
         shift: event.shiftKey
       });
       if (!move.started) return true;
-      if (move.sourceCleared && clearPixelRegionFromSelectedLayers(controller, selection.rect)) renderLayeredDocument(controller);
+      if (move.sourceCleared && clearPixelRegionFromSelectedLayers(controller, selection.region())) renderLayeredDocument(controller);
       const movement = selection.moveSelection(delta.x, delta.y, state);
       selection.endMove();
       drawSelectionOverlay(controller);
@@ -2391,6 +2806,166 @@
       return true;
     }
     /** Keep editor shortcuts out of native text-entry controls and application dialogs. */
+    function pixelSelectionRegions(controller) {
+      const { selection, view } = controller;
+      if (!selection.hasSelection) return [];
+      if (selection.shape === "rectangle" && selection.inverted) {
+        return namespace.imageEditorInverseSelectionRects(selection.rect, { width: view.canvas.width, height: view.canvas.height });
+      }
+      return [selection.region()];
+    }
+
+    function deselectCanvas(controller) {
+      if (controller.selection.floating) commitSelection(controller);
+      else controller.selection.clear();
+      controller.documentStore.select([]);
+      drawSelectionOverlay(controller);
+      syncTab(controller);
+      return true;
+    }
+
+    function inverseCanvasSelection(controller) {
+      if (controller.selection.hasSelection && !controller.selection.floating) {
+        controller.selection.inverted = !controller.selection.inverted;
+        drawSelectionOverlay(controller);
+        syncTab(controller);
+        return true;
+      }
+      const selected = controller.documentStore.selectedIds;
+      const invertedIds = [];
+      namespace.walkDocumentNodes(controller.documentStore.document, (node) => {
+        if (node.kind !== "layer" || node.visible === false || node.locked) return;
+        (node.objects || []).forEach((object) => {
+          if (object.visible !== false && !object.locked && !selected.has(object.id) && !selected.has(node.id)) invertedIds.push(object.id);
+        });
+      });
+      controller.state.setTool("move");
+      controller.documentStore.select(invertedIds);
+      drawObjectSelectionOverlay(controller);
+      syncTab(controller);
+      return true;
+    }
+
+    function flipCanvasTarget(controller, horizontal) {
+      const { selection, documentStore, state } = controller;
+      if (selection.hasSelection) {
+        if (selection.floating && selection.imageData) {
+          selection.imageData = namespace.flipImageEditorImageData(selection.imageData, horizontal);
+          drawSelectionOverlay(controller);
+          syncTab(controller);
+          return true;
+        }
+        const before = documentStore.snapshot();
+        const layers = documentStore.selectedContentLayers({ editableOnly: true });
+        const changed = namespace.ImageEditorCanvasEditActions.flipSelectedLayerRegions(documentStore, layers, pixelSelectionRegions(controller), horizontal);
+        if (changed) {
+          controller.history.push(before, documentStore.snapshot(), horizontal ? "Flip pixels horizontal" : "Flip pixels vertical");
+          state.markChanged();
+          renderLayeredDocument(controller);
+          drawSelectionOverlay(controller);
+          syncTab(controller);
+        }
+        return changed;
+      }
+      const objects = selectedDocumentObjects(controller);
+      const bounds = combinedObjectBounds(objects);
+      if (!objects.length || !bounds) return false;
+      return commitDocumentMutation(controller, horizontal ? "Flip objects horizontal" : "Flip objects vertical", () => {
+        objects.forEach((object) => {
+          const display = objectDisplayBounds(object);
+          object.transform = { ...(object.transform || {}) };
+          if (horizontal) {
+            object.transform.x = bounds.x + bounds.width - (display.x - bounds.x) - display.width;
+            object.transform.scaleX = -(Number(object.transform.scaleX) || 1);
+          } else {
+            object.transform.y = bounds.y + bounds.height - (display.y - bounds.y) - display.height;
+            object.transform.scaleY = -(Number(object.transform.scaleY) || 1);
+          }
+        });
+        documentStore.notify({ type: "flip-objects", ids: objects.map((object) => object.id) });
+        return true;
+      });
+    }
+
+    function cropCanvasToSelection(controller) {
+      const { selection, documentStore, view, state } = controller;
+      if (!selection.hasSelection || selection.inverted) return false;
+      const rect = { ...selection.rect };
+      if (rect.width < 16 || rect.height < 16) return false;
+      if (selection.floating) commitSelection(controller);
+      const before = documentStore.snapshot();
+      namespace.ImageEditorCanvasEditActions.cropDocument(documentStore, rect);
+      view.setDimensions(rect.width, rect.height);
+      state.width = rect.width;
+      state.height = rect.height;
+      selection.clear();
+      controller.history.push(before, documentStore.snapshot(), "Crop image");
+      state.markChanged();
+      view.setZoom(state.zoom);
+      renderLayeredDocument(controller);
+      drawSelectionOverlay(controller);
+      syncTab(controller);
+      return true;
+    }
+
+    async function runCanvasContextAction(controller, action) {
+      const hasPixels = controller.selection.hasSelection;
+      const hasObjects = selectedDocumentObjects(controller).length > 0;
+      if (action === "paste") return runAction(controller, "paste");
+      if (action === "select-all") return selectAllCanvas(controller);
+      if (action === "deselect") return deselectCanvas(controller);
+      if (action === "inverse-select") return inverseCanvasSelection(controller);
+      if (action === "crop") return cropCanvasToSelection(controller);
+      if (action === "flip-horizontal" || action === "flip-vertical") return flipCanvasTarget(controller, action === "flip-horizontal");
+      if (action === "copy") return hasPixels ? copySelectionToClipboard(controller) : copyObjectSelectionToClipboard(controller);
+      if (action === "delete" && hasObjects && !hasPixels) return commitDocumentMutation(controller, "Delete objects", () => controller.documentStore.deleteSelected());
+      if (action === "delete" && hasPixels) {
+        const before = controller.documentStore.snapshot();
+        let changed = false;
+        pixelSelectionRegions(controller).forEach((rect) => {
+          if (clearPixelRegionFromSelectedLayers(controller, rect)) changed = true;
+        });
+        controller.selection.clear();
+        if (changed) {
+          controller.history.push(before, controller.documentStore.snapshot(), "Delete pixels");
+          controller.state.markChanged();
+          renderLayeredDocument(controller);
+        }
+        drawSelectionOverlay(controller);
+        syncTab(controller);
+        return changed;
+      }
+      return false;
+    }
+
+    function bindCanvasContextMenu(controller) {
+      const listener = (event) => {
+        event.preventDefault();
+        const point = controller.view.pointFromEvent(event);
+        const selectionAtPoint = controller.selection.hasSelection &&
+          (controller.selection.inverted ? !controller.selection.contains(point) : controller.selection.contains(point));
+        const objectId = selectionAtPoint ? null : controller.objectSelection.hitTest(point);
+        if (objectId) {
+          controller.documentStore.select(objectId);
+          if (controller.selection.hasSelection) {
+            controller.selection.clear();
+            drawSelectionOverlay(controller);
+          }
+        }
+        const hasPixels = selectionAtPoint;
+        const hasObjects = !hasPixels && !!objectId;
+        controller.canvasContextMenu.show(event.clientX, event.clientY, {
+          copy: hasPixels || hasObjects, delete: hasPixels || hasObjects,
+          crop: hasPixels && !controller.selection.inverted,
+          "flip-horizontal": hasPixels || hasObjects, "flip-vertical": hasPixels || hasObjects,
+          deselect: controller.selection.hasSelection || controller.documentStore.selectedIds.size > 0,
+          "inverse-select": controller.selection.hasSelection || controller.documentStore.selectedIds.size > 0
+        }, (action) => runCanvasContextAction(controller, action));
+        if (objectId) { drawObjectSelectionOverlay(controller); syncTab(controller); }
+      };
+      controller.view.overlay.addEventListener("contextmenu", listener);
+      controller.removeCanvasContextMenuListener = () => controller.view.overlay.removeEventListener("contextmenu", listener);
+    }
     function isNativeTextEditingTarget(target) {
       return target instanceof global.HTMLElement && !!target.closest("input, textarea, select, [contenteditable=true], [contenteditable='']");
     }
@@ -2711,10 +3286,24 @@
         selection: new namespace.ImageEditorSelection(),
         polygonPoints: [],
         polygonTool: new namespace.ImageEditorPolygonTool(),
+        cloneStampTool: new namespace.ImageEditorCloneStampTool(),
+        cloneStampBefore: null,
+        cloneStampLayerId: null,
         dragging: false,
         freehandStrokeDistance: 0,
         selectionBefore: null,
         curveTool: new namespace.ImageEditorCurveTool(),
+        smudgeTool: new namespace.ImageEditorSmudgeTool(),
+        smudgeBefore: null,
+        smudgeLayerBefore: null,
+        smudgeLayerId: null,
+        eraserTool: new namespace.ImageEditorEraserTool(),
+        eraserBefore: null,
+        eraserLayerId: null,
+        blurTool: new namespace.ImageEditorBlurTool(),
+        blurBefore: null,
+        blurLayerBefore: null,
+        blurLayerId: null,
         curveBefore: null,
         pathTool: new namespace.ImageEditorPathTool(),
         pathBefore: null,
@@ -2746,12 +3335,13 @@
         creatingTextBox: false,
         textInputOpening: false,
         keepTextInputLive: false,
-        pastedTextEditing: false
+        pastedTextEditing: false,
+        canvasContextMenu: new namespace.ImageEditorCanvasContextMenu()
       };
       if (tab.imageEditorState?.layersPanel?.selectedIds?.length) controller.documentStore.selectedIds = new Set(tab.imageEditorState.layersPanel.selectedIds);
       controller.compositor = new namespace.ImageEditorCompositor(controller.documentStore);
       controller.objectSelection = new namespace.ImageEditorObjectSelection(controller.documentStore);
-      controller.layerPanel = new namespace.ImageEditorLayerPanel(view.stage, controller.documentStore, {
+      controller.layerPanel = new namespace.ImageEditorLayerPanel(view.stageFrame, controller.documentStore, {
         state: tab.imageEditorState?.layersPanel,
         requestRename(options) {
           return deps.prompt?.(options) || Promise.resolve(null);
@@ -2784,6 +3374,7 @@
       views.set(tab.id, controller);
       bindToolbar(controller);
       bindPointerTools(controller);
+      bindCanvasContextMenu(controller);
       bindTextInputMove(controller);
       bindCanvasResize(controller);
       bindKeyboard(controller);
@@ -2837,6 +3428,8 @@
       controller.removeNativeTextPasteListener?.();
       controller.removeSelectionDismissalListener?.();
       controller.removeObjectOverlayListener?.();
+      controller.removeCanvasContextMenuListener?.();
+      controller.canvasContextMenu?.destroy?.();
       controller.layerPanel?.destroy?.();
       controller.view.destroy();
       views.delete(tabId);

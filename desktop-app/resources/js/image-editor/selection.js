@@ -1,4 +1,4 @@
-// Rectangular pixel selection operations for the raster image editor.
+// Geometric pixel selection operations for the raster image editor.
 (function(global) {
   "use strict";
 
@@ -86,6 +86,8 @@
       this.savedFloatingLayer = null;
       this.returnToolAfterPlacement = null;
       this.rotation = 0;
+      this.shape = "rectangle";
+      this.points = null;
     }
 
     get hasSelection() {
@@ -145,7 +147,7 @@
       ) || null;
     }
 
-    setRect(start, end, bounds) {
+    setRect(start, end, bounds, shape = "rectangle", points = null) {
       const left = Math.max(0, Math.floor(Math.min(start.x, end.x)));
       const top = Math.max(0, Math.floor(Math.min(start.y, end.y)));
       const right = Math.min(bounds.width, Math.ceil(Math.max(start.x, end.x)));
@@ -157,23 +159,31 @@
       this.origin = "canvas";
       this.returnToolAfterPlacement = null;
       this.rotation = 0;
+      this.shape = namespace.ImageEditorSelectionShapes.normalize(shape);
+      this.points = Array.isArray(points) ? points.map((point) => ({ ...point })) : null;
+      this.inverted = false;
       return this.rect;
     }
 
     contains(point) {
-      return !!this.rect && transform.containsPoint(this.rect, this.rotation, point);
+      return !!this.rect && namespace.ImageEditorSelectionShapes.contains(this.region(), point);
+    }
+
+    /** Return the active marquee shape as one canvas-space region. */
+    region() {
+      return this.rect ? { ...this.rect, shape: this.shape, points: this.points, rotation: this.rotation, inverted: this.inverted } : null;
     }
 
     lift(context, backgroundColor, clearSource, origin = "canvas") {
       if (!this.hasSelection) return false;
       this.imageData = context.getImageData(this.rect.x, this.rect.y, this.rect.width, this.rect.height);
+      namespace.ImageEditorSelectionShapes.maskImageData(this.imageData, this.region());
       this.floating = true;
       this.phase = "floating";
       this.origin = origin;
       this.returnToolAfterPlacement = null;
       if (clearSource) {
-        context.fillStyle = backgroundColor || "#ffffff";
-        context.fillRect(this.rect.x, this.rect.y, this.rect.width, this.rect.height);
+        namespace.ImageEditorSelectionShapes.fill(context, this.region(), backgroundColor || "#ffffff");
       }
       return true;
     }
@@ -242,7 +252,7 @@
       if (this.isPasting) return { action: "ignore" };
       if (this.hasSelection && !this.contains(point)) return { action: "drop" };
       if (!this.hasSelection) {
-        this.pointerGesture = { type: "outline", start: { ...point } };
+        this.pointerGesture = { type: "outline", start: { ...point }, shape: namespace.ImageEditorSelectionShapes.normalize(modifiers.shape), points: [{ ...point }] };
         return { action: "outline" };
       }
       const move = this.beginMove(context, backgroundColor, modifiers);
@@ -256,7 +266,17 @@
       const gesture = this.pointerGesture;
       if (!gesture) return { action: "ignore", moved: false, stamp: false };
       if (gesture.type === "outline") {
-        this.setRect(gesture.start, point, bounds);
+        if (gesture.shape === "lasso") {
+          gesture.points.push({ ...point });
+          const left = Math.min(...gesture.points.map((candidate) => candidate.x));
+          const top = Math.min(...gesture.points.map((candidate) => candidate.y));
+          const right = Math.max(...gesture.points.map((candidate) => candidate.x));
+          const bottom = Math.max(...gesture.points.map((candidate) => candidate.y));
+          const width = Math.max(1, right - left);
+          const height = Math.max(1, bottom - top);
+          const points = gesture.points.map((candidate) => ({ x: (candidate.x - left) / width, y: (candidate.y - top) / height }));
+          this.setRect({ x: left, y: top }, { x: right, y: bottom }, bounds, "lasso", points);
+        } else this.setRect(gesture.start, point, bounds, gesture.shape);
         return { action: "outline", moved: true, stamp: false };
       }
       if (gesture.type === 'resize') {
@@ -305,6 +325,8 @@
       this.pointerGesture = null;
       this.moveGesture = null;
       this.rotation = 0;
+      this.shape = "rectangle";
+      this.points = null;
       return this.pasteRevision;
     }
 
@@ -372,7 +394,7 @@
     /** Stroke the current selection boundary with its free rotation applied. */
     strokeOutline(context) {
       if (!this.hasSelection) return false;
-      transform.strokeRect(context, this.rect, this.rotation);
+      namespace.ImageEditorSelectionShapes.trace(context, this.region());
       return true;
     }
 
@@ -397,8 +419,22 @@
 
     copy(context) {
       if (!this.hasSelection) return null;
+      if (this.inverted && !this.imageData) {
+        const copied = context.getImageData(0, 0, context.canvas.width, context.canvas.height);
+        const excludedRegion = { ...this.region(), inverted: false };
+        for (let y = 0; y < copied.height; y += 1) {
+          for (let x = 0; x < copied.width; x += 1) {
+            if (!namespace.ImageEditorSelectionShapes.contains(excludedRegion, { x: x + .5, y: y + .5 })) continue;
+            const index = (y * copied.width + x) * 4;
+            copied.data[index] = copied.data[index + 1] = copied.data[index + 2] = copied.data[index + 3] = 0;
+          }
+        }
+        this.internalClipboard = copied;
+        return copied;
+      }
       this.internalClipboard = this.imageData ||
         context.getImageData(this.rect.x, this.rect.y, this.rect.width, this.rect.height);
+      if (!this.imageData) namespace.ImageEditorSelectionShapes.maskImageData(this.internalClipboard, this.region());
       return this.internalClipboard;
     }
 
@@ -435,6 +471,8 @@
       this.origin = "paste";
       this.returnToolAfterPlacement = null;
       this.rotation = 0;
+      this.shape = "rectangle";
+      this.points = null;
       return true;
     }
 
@@ -448,6 +486,8 @@
       this.origin = origin;
       this.returnToolAfterPlacement = returnToolAfterPlacement;
       this.rotation = 0;
+      this.shape = "rectangle";
+      this.points = null;
       this.pointerGesture = null;
       this.moveGesture = null;
       return true;
@@ -479,6 +519,9 @@
       this.savedFloatingLayer = null;
       this.returnToolAfterPlacement = null;
       this.rotation = 0;
+      this.shape = "rectangle";
+      this.points = null;
+      this.inverted = false;
     }
   }
 

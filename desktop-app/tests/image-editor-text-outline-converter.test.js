@@ -27,10 +27,20 @@ function glyphs() {
   ];
 }
 
+test('rendered glyph alpha is traced into a closed editable contour', () => {
+  const namespace = harness();
+  const imageData = { width: 4, height: 4, data: new Uint8ClampedArray(4 * 4 * 4) };
+  for (let y = 1; y < 3; y += 1) for (let x = 1; x < 3; x += 1) imageData.data[(y * 4 + x) * 4 + 3] = 255;
+  const contours = namespace.traceImageEditorGlyphContours(imageData, 1);
+  assert.equal(contours.length, 1);
+  assert.equal(contours[0].closed, true);
+  assert.equal(contours[0].anchors.length >= 4, true);
+});
+
 test("selected text is replaced in place by independently editable glyph paths", () => {
   const namespace = harness();
   const document = namespace.createImageDocument(200, 100, "transparent");
-  const layer = namespace.createContentLayer("Heading");
+  const layer = namespace.createContentLayer('Text');
   const neighbor = namespace.createContentObject("shape", {}, { name: "Neighbor" });
   const text = namespace.createContentObject("text", { text: "AB" }, {
     name: "Heading text", bounds: { x: 10, y: 20, width: 80, height: 30 },
@@ -46,6 +56,8 @@ test("selected text is replaced in place by independently editable glyph paths",
   assert.equal(layer.objects[0], neighbor);
   assert.deepEqual(Array.from(layer.objects.slice(1), (object) => object.name), ["A", "B"]);
   assert.equal(new Set(layer.objects.slice(1).map((object) => object.id)).size, 2);
+  assert.equal(layer.name, 'Outlines');
+  assert.equal(layer.objects.some((object) => object.type === 'text'), false);
   layer.objects.slice(1).forEach((object) => {
     assert.equal(object.type, "path");
     assert.equal(object.payload.outlinedFromText, true);
@@ -56,8 +68,9 @@ test("selected text is replaced in place by independently editable glyph paths",
     assert.equal(object.transform.scaleX, 1.5);
     assert.equal(object.transform.scaleY, 2);
   });
-  assert.equal(store.selectedIds.size, 1);
-  assert.equal(store.selectedIds.has(layer.objects[1].id), true);
+  assert.equal(store.selectedIds.size, 2);
+  assert.equal(layer.objects.slice(1).every((object) => store.selectedIds.has(object.id)), true);
+  assert.equal(namespace.ImageEditorTextOutlineConverter.canConvert(store), false);
   assert.equal(document.activeLayerId, layer.id);
   assert.equal(changes[0].type, "create-text-outlines");
   assert.deepEqual(Array.from(changes[0].ids), Array.from(layer.objects.slice(1), (object) => object.id));

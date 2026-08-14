@@ -8,12 +8,34 @@ function loadSelection() {
   const context = { window: {} };
   context.window.window = context.window;
   vm.createContext(context);
-  vm.runInContext(
-    fs.readFileSync(path.resolve(__dirname, "../resources/js/image-editor/selection.js"), "utf8"),
-    context
-  );
+  ["selection-transform.js", "selection-shapes.js", "selection.js"].forEach((file) => {
+    vm.runInContext(
+      fs.readFileSync(path.resolve(__dirname, "../resources/js/image-editor/" + file), "utf8"),
+      context
+    );
+  });
   return context.window.MarkdownViewerImageEditor.ImageEditorSelection;
 }
+
+function loadCanvasContextActions() {
+  class ImageDataStub {
+    constructor(width, height) {
+      this.width = width;
+      this.height = height;
+      this.data = new Uint8ClampedArray(width * height * 4);
+    }
+  }
+  const context = { window: {}, ImageData: ImageDataStub };
+  context.window.window = context.window;
+  context.window.ImageData = ImageDataStub;
+  vm.createContext(context);
+  vm.runInContext(
+    fs.readFileSync(path.resolve(__dirname, "../resources/js/image-editor/canvas-context-menu.js"), "utf8"),
+    context
+  );
+  return context.window.MarkdownViewerImageEditor;
+}
+
 
 function contextStub() {
   const calls = [];
@@ -77,4 +99,102 @@ test("cut retains an internal clipboard and delete uses the background color", (
   assert.equal(copied.width, 2);
   assert.equal(selection.hasSelection, false);
   assert.ok(context.calls.some((call) => call[0] === "fill" && call[5] === "#123456"));
+});
+
+test("canvas context actions calculate inverse marquee regions", () => {
+  const actions = loadCanvasContextActions();
+  const regions = actions.imageEditorInverseSelectionRects(
+    { x: 2, y: 3, width: 4, height: 2 },
+    { width: 10, height: 8 }
+  );
+  assert.deepEqual(JSON.parse(JSON.stringify(regions)), [
+    { x: 0, y: 0, width: 10, height: 3 },
+    { x: 0, y: 5, width: 10, height: 3 },
+    { x: 0, y: 3, width: 2, height: 2 },
+    { x: 6, y: 3, width: 4, height: 2 }
+  ]);
+});
+
+test("canvas context actions flip selected pixels horizontally", () => {
+  const actions = loadCanvasContextActions();
+  const pixels = {
+    width: 2,
+    height: 1,
+    data: new Uint8ClampedArray([1, 2, 3, 255, 4, 5, 6, 255])
+  };
+  const flipped = actions.flipImageEditorImageData(pixels, true);
+  assert.deepEqual([...flipped.data], [4, 5, 6, 255, 1, 2, 3, 255]);
+});
+
+test("ellipse and triangle selections use shaped hit testing", () => {
+  const Selection = loadSelection();
+  const ellipse = new Selection();
+  ellipse.setRect({ x: 0, y: 0 }, { x: 10, y: 10 }, { width: 20, height: 20 }, "ellipse");
+  assert.equal(ellipse.contains({ x: 5, y: 5 }), true);
+  assert.equal(ellipse.contains({ x: 0, y: 0 }), false);
+
+  const triangle = new Selection();
+  triangle.setRect({ x: 0, y: 0 }, { x: 10, y: 10 }, { width: 20, height: 20 }, "triangle");
+  assert.equal(triangle.contains({ x: 5, y: 2 }), true);
+  assert.equal(triangle.contains({ x: 1, y: 1 }), false);
+});
+
+test("lasso pointer gesture records a freeform selection polygon", () => {
+  const Selection = loadSelection();
+  const selection = new Selection();
+
+  selection.beginPointerGesture({ x: 2, y: 2 }, contextStub(), "#ffffff", { shape: "lasso" });
+  selection.updatePointerGesture({ x: 8, y: 2 }, { width: 20, height: 20 });
+  selection.updatePointerGesture({ x: 5, y: 8 }, { width: 20, height: 20 });
+
+  assert.equal(selection.shape, "lasso");
+  assert.equal(selection.points.length, 3);
+  assert.equal(selection.contains({ x: 5, y: 4 }), true);
+  assert.equal(selection.contains({ x: 2, y: 8 }), false);
+});
+
+test("lifting an ellipse masks bounding-box corner pixels", () => {
+  const Selection = loadSelection();
+  const selection = new Selection();
+  const pixels = new Uint8ClampedArray(4 * 4 * 4).fill(255);
+  const context = {
+    canvas: { width: 4, height: 4 },
+    getImageData() { return { width: 4, height: 4, data: pixels }; },
+    fillRect() {}
+  };
+  selection.setRect({ x: 0, y: 0 }, { x: 4, y: 4 }, { width: 4, height: 4 }, "ellipse");
+  selection.lift(context, "#ffffff", false);
+
+  assert.equal(selection.imageData.data[3], 0);
+  assert.equal(selection.imageData.data[(1 * 4 + 1) * 4 + 3], 255);
+});
+
+test("lifting a shaped selection clears only the selected shape", () => {
+  const Selection = loadSelection();
+  const selection = new Selection();
+  const calls = [];
+  const pixels = new Uint8ClampedArray(10 * 10 * 4).fill(255);
+  const context = {
+    canvas: { width: 10, height: 10 },
+    getImageData() { return { width: 10, height: 10, data: pixels }; },
+    fillRect() { calls.push("fillRect"); },
+    save() {},
+    translate() {},
+    rotate() {},
+    beginPath() {},
+    ellipse() { calls.push("ellipse"); },
+    fill() { calls.push("fill"); },
+    restore() {}
+  };
+  selection.setRect(
+    { x: 0, y: 0 },
+    { x: 10, y: 10 },
+    { width: 10, height: 10 },
+    "ellipse"
+  );
+
+  assert.equal(selection.lift(context, "#ffffff", true), true);
+  assert.equal(calls.includes("ellipse"), true);
+  assert.equal(calls.includes("fill"), true);
+  assert.equal(calls.includes("fillRect"), false);
 });
