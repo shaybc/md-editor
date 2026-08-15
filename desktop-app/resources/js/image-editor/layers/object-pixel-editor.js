@@ -183,6 +183,17 @@
     return changed;
   }
 
+  /** Erase pixels from one standalone document object without creating a detached layer. */
+  function eraseObjectRegion(store, object, rect) {
+    if (!store || !object || object.locked || object.visible === false || !rect || rect.width <= 0 || rect.height <= 0) return false;
+    const pixels = objectSourcePixels(object, store.assets);
+    if (!eraseObjectPixels(pixels, object, rect)) return false;
+    object.type = "raster";
+    object.payload = { assetId: store.addRasterAsset(pixels) };
+    store.notify({ type: "edit-object-pixels", ids: [object.id] });
+    return true;
+  }
+
   /** Erase pixels from existing content in one layer without creating a detached mask or panel item. */
   function eraseLayerRegion(store, layer, rect) {
     if (!store || !layer || layer.locked || !rect || rect.width <= 0 || rect.height <= 0) return false;
@@ -279,5 +290,5 @@
     return true;
   }
 
-  namespace.ImageEditorObjectPixelEditor = { eraseLayerRegion, fillLayerObjectAtPoint, applySelectionPatchToLayerObject, resizeCanvasBackground };
+  namespace.ImageEditorObjectPixelEditor = { eraseObjectRegion, eraseLayerRegion, fillLayerObjectAtPoint, applySelectionPatchToLayerObject, resizeCanvasBackground };
 })(typeof window !== "undefined" ? window : globalThis);

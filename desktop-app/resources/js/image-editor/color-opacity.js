@@ -54,6 +54,54 @@
     return `rgba(${red}, ${green}, ${blue}, ${formatAlpha(opacity)})`;
   }
 
+  function rgbToHsl(red, green, blue) {
+    const channels = [red, green, blue].map((channel) => clamp(channel, 0, 255) / 255);
+    const maximum = Math.max(...channels);
+    const minimum = Math.min(...channels);
+    const delta = maximum - minimum;
+    const lightness = (maximum + minimum) / 2;
+    let hue = 0;
+    if (delta) {
+      if (maximum === channels[0]) hue = 60 * (((channels[1] - channels[2]) / delta) % 6);
+      else if (maximum === channels[1]) hue = 60 * (((channels[2] - channels[0]) / delta) + 2);
+      else hue = 60 * (((channels[0] - channels[1]) / delta) + 4);
+    }
+    const saturation = delta ? delta / (1 - Math.abs(2 * lightness - 1)) : 0;
+    return { h: (hue + 360) % 360, s: saturation, l: lightness };
+  }
+
+  function rgbToLch(red, green, blue) {
+    const linear = [red, green, blue].map((channel) => {
+      const value = clamp(channel, 0, 255) / 255;
+      return value <= 0.04045 ? value / 12.92 : Math.pow((value + 0.055) / 1.055, 2.4);
+    });
+    const x = (linear[0] * 0.4124564 + linear[1] * 0.3575761 + linear[2] * 0.1804375) / 0.95047;
+    const y = linear[0] * 0.2126729 + linear[1] * 0.7151522 + linear[2] * 0.072175;
+    const z = (linear[0] * 0.0193339 + linear[1] * 0.119192 + linear[2] * 0.9503041) / 1.08883;
+    const pivot = (value) => value > 0.008856 ? Math.cbrt(value) : 7.787 * value + 16 / 116;
+    const fx = pivot(x);
+    const fy = pivot(y);
+    const fz = pivot(z);
+    const lightness = Math.max(0, 116 * fy - 16);
+    const a = 500 * (fx - fy);
+    const b = 200 * (fy - fz);
+    return { l: lightness, c: Math.sqrt(a * a + b * b), h: (Math.atan2(b, a) * 180 / Math.PI + 360) % 360 };
+  }
+
+  /** Format one opaque color for the standard picker value rows. */
+  function colorDisplayValues(hex) {
+    const normalized = rgbToHex(...hexToRgb(hex)).toUpperCase();
+    const [red, green, blue] = hexToRgb(normalized);
+    const hsl = rgbToHsl(red, green, blue);
+    const lch = rgbToLch(red, green, blue);
+    return {
+      hex: normalized,
+      hsl: `hsl(${Math.round(hsl.h)}deg ${Math.round(hsl.s * 100)}% ${Math.round(hsl.l * 100)}%)`,
+      rgb: `rgb(${red} ${green} ${blue})`,
+      lch: `lch(${Math.round(lch.l)}% ${Math.round(lch.c)} ${Math.round(lch.h)}deg)`
+    };
+  }
+
   function compositeRgb(foreground, opacity, background) {
     const alpha = clamp(opacity);
     return foreground.map((channel, index) => Math.round(channel * alpha + background[index] * (1 - alpha)));
@@ -90,12 +138,13 @@
     imageEditorHexToHsv: hexToHsv,
     imageEditorHsvToHex: hsvToHex,
     imageEditorColorWithOpacity: colorWithOpacity,
+    imageEditorColorDisplayValues: colorDisplayValues,
     imageEditorCompositeRgb: compositeRgb,
     imageEditorContrastTextColor: contrastTextColor,
     imageEditorPalettePreviewColors: palettePreviewColors
   });
 
   if (typeof module !== "undefined" && module.exports) module.exports = {
-    clamp, hexToRgb, hexToHsv, hsvToHex, formatAlpha, colorWithOpacity, compositeRgb, contrastTextColor, palettePreviewColors
+    clamp, hexToRgb, hexToHsv, hsvToHex, formatAlpha, colorWithOpacity, rgbToHsl, rgbToLch, colorDisplayValues, compositeRgb, contrastTextColor, palettePreviewColors
   };
 })(typeof window !== "undefined" ? window : globalThis);

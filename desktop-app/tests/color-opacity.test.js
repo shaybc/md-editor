@@ -33,3 +33,12 @@ test("generates fixed palette hues with shared saturation, value, and opacity", 
     assert.match(entry.rgba, /, 0\.4\)$/);
   });
 });
+
+test("formats picker colors as Hex, HSL, RGB, and LCH", () => {
+  assert.deepEqual(colors.colorDisplayValues("#579931"), {
+    hex: "#579931",
+    hsl: "hsl(98deg 51% 40%)",
+    rgb: "rgb(87 153 49)",
+    lch: "lch(57% 61 131deg)"
+  });
+});

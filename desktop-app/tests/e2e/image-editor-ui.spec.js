@@ -1035,10 +1035,92 @@ test('flatten layers uses the app-wide styled confirmation dialog', async ({ pag
 
 test('image editor color picker switches modes and remembers independent FG and BG opacity', async ({ page }) => {
   await page.goto('/');
+  await page.waitForFunction(() => !!window.MarkdownViewerImageEditor?.ImageEditorColorPicker, null, { timeout: 60000 });
+  await page.evaluate(() => {
+    window.EyeDropper = class { async open() { return { sRGBHex: '#336699' }; } };
+    const root = document.createElement('div');
+    root.className = 'image-editor-color-picker-test-root';
+    root.style.cssText = 'position:fixed;left:120px;top:120px;z-index:100000;';
+    root.innerHTML = '<button type="button" data-color-picker-target="foreground">FG</button><button type="button" data-color-picker-target="background">BG</button>';
+    document.body.appendChild(root);
+    window.__pickerChanges = [];
+    window.__pickerController = new window.MarkdownViewerImageEditor.ImageEditorColorPicker(root, {
+      onActivate() {},
+      onChange(target, color, opacity) { window.__pickerChanges.push({ target, color, opacity }); },
+      copyText(value) { window.__copiedPickerValue = value; }
+    });
+    window.__pickerController.setColor('foreground', '#579931', 1);
+    window.__pickerController.setColor('background', '#ffffff', 1);
+  });
+
+  const root = page.locator('.image-editor-color-picker-test-root');
+
+  await root.locator('[data-color-picker-target="foreground"]').click();
+  const picker = root.locator('.image-editor-color-picker');
+  await expect(picker).toBeVisible();
+  await expect(picker.locator('[data-color-picker-mode="rectangular"]')).toHaveAttribute('aria-selected', 'true');
+  await expect(picker.locator('.image-editor-color-picker-surface-rectangular')).toBeVisible();
+  await expect(picker.locator('[data-color-format]')).toHaveCount(4);
+  await expect(picker.locator('[data-copy-color-format]')).toHaveCount(4);
+  await expect(picker.locator('[data-color-format="hsl"]')).toContainText('hsl(');
+  await expect(picker.locator('[data-color-format="rgb"]')).toContainText('rgb(');
+  await expect(picker.locator('[data-color-format="lch"]')).toContainText('lch(');
+  await picker.locator('[data-copy-color-format="hsl"]').click();
+  await expect.poll(() => page.evaluate(() => window.__copiedPickerValue)).toContain('hsl(');
+  await picker.locator('[data-color-picker-sampler]').click();
+  await expect.poll(() => page.evaluate(() => window.__pickerController.colors.foreground)).toBe('#336699');
+  expect(await picker.evaluate((element) => parseFloat(getComputedStyle(element).borderTopWidth))).toBeGreaterThan(0);
+
+  await picker.locator('[data-color-picker-mode="round"]').click();
+  await expect(picker.locator('[data-color-picker-mode="round"]')).toHaveAttribute('aria-selected', 'true');
+  await expect(picker.locator('.image-editor-color-picker-surface-round')).toBeVisible();
+  await expect(picker.locator('.image-editor-color-picker-hue span')).toBeEmpty();
+  await expect(picker.locator('.image-editor-color-picker-surface-rectangular')).toBeHidden();
+  const previousColor = await page.evaluate(() => window.__pickerController.colors.foreground);
+  await picker.locator('[data-color-picker-mode="rectangular"]').click();
+  const rectangularSurface = picker.locator('.image-editor-color-picker-surface-rectangular canvas');
+  const surfaceBox = await rectangularSurface.boundingBox();
+  await page.mouse.click(surfaceBox.x + surfaceBox.width * 0.75, surfaceBox.y + surfaceBox.height * 0.25);
+  await expect.poll(() => page.evaluate(() => window.__pickerController.colors.foreground)).not.toBe(previousColor);
+
+  await picker.locator('[data-color-picker-mode="hsb"]').click();
+  await expect(picker.locator('[data-color-picker-mode="hsb"]')).toHaveAttribute('aria-selected', 'true');
+  await expect(picker.locator('.image-editor-color-picker-hsb')).toBeVisible();
+  await expect(picker.locator('.image-editor-color-picker-surface-rectangular')).toBeHidden();
+  await expect(picker.locator('.image-editor-color-picker-hue')).toBeHidden();
+  await expect(picker.locator('[data-color-slider="hue"]')).toBeVisible();
+  await expect(picker.locator('.image-editor-color-picker-palette-swatch')).toHaveCount(5);
+  await picker.locator('[data-color-slider="opacity"]').evaluate((input) => {
+    input.value = '42';
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+  });
+  await expect(picker.locator('.image-editor-color-picker-rgba')).toContainText('0.42');
+  await expect.poll(() => page.evaluate(() => window.__pickerController.opacities.foreground)).toBe(0.42);
+
+  await root.locator('[data-color-picker-target="background"]').click();
+  await expect(picker.locator('[data-color-slider="opacity"]')).toHaveValue('100');
+  await picker.locator('[data-color-slider="opacity"]').evaluate((input) => {
+    input.value = '73';
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+  });
+  await expect.poll(() => page.evaluate(() => window.__pickerController.opacities.background)).toBe(0.73);
+
+  await root.locator('[data-color-picker-target="foreground"]').click();
+  await expect(picker.locator('[data-color-slider="opacity"]')).toHaveValue('42');
+  await picker.locator('[data-color-picker-mode="round"]').click();
+  await expect(picker.locator('.image-editor-color-picker-surface-round')).toBeVisible();
+  await picker.locator('[data-color-picker-mode="hsb"]').click();
+  await expect(picker.locator('[data-color-slider="opacity"]')).toHaveValue('42');
+  await page.mouse.click(4, 4);
+  await expect(picker).toBeHidden();
+});
+
+test('palette library applies a built-in palette globally without changing FG or BG', async ({ page }) => {
+  await page.goto('/');
   await page.waitForFunction(() => !!window.markdownViewerApp?.modules?.tabs?.openBlankImageEditorInTab, null, { timeout: 60000 });
   await page.evaluate(() => {
     window.markdownViewerApp.modules.apiClient.deactivateApiClientSidebar = () => {};
-    window.markdownViewerApp.modules.tabs.openBlankImageEditorInTab({ width: 80, height: 60, name: 'Color picker modes' });
+    window.markdownViewerApp.modules.tabs.openBlankImageEditorInTab({ width: 80, height: 60, name: 'Palette library' });
   });
 
   const root = page.locator('.tab-view[data-tab-view-kind="image-editor"]').last();
@@ -1049,54 +1131,29 @@ test('image editor color picker switches modes and remembers independent FG and 
     element.classList.add('active');
   });
 
-  await root.locator('[data-color-picker-target="foreground"]').click();
-  const picker = root.locator('.image-editor-color-picker');
-  await expect(picker).toBeVisible();
-  await expect(picker.locator('[data-color-picker-mode="round"]')).toHaveAttribute('aria-selected', 'true');
-  await expect(picker.locator('.image-editor-color-picker-surface-round')).toBeVisible();
-  await expect(picker.locator('.image-editor-color-picker-hue span')).toHaveText('Value');
-  expect(await picker.evaluate((element) => parseFloat(getComputedStyle(element).borderTopWidth))).toBeGreaterThan(0);
+  const foregroundBefore = await root.locator('.image-editor-foreground').inputValue();
+  const backgroundBefore = await root.locator('.image-editor-background').inputValue();
+  await root.locator('[data-palette-library]').click();
+  const dialog = page.locator('.image-editor-palette-dialog');
+  await expect(dialog).toBeVisible();
+  await expect(dialog.locator('.image-editor-palette-card')).toHaveCount(31);
 
-  await picker.locator('[data-color-picker-mode="rectangular"]').click();
-  await expect(picker.locator('[data-color-picker-mode="rectangular"]')).toHaveAttribute('aria-selected', 'true');
-  await expect(picker.locator('.image-editor-color-picker-surface-rectangular')).toBeVisible();
-  await expect(picker.locator('.image-editor-color-picker-hue span')).toHaveText('Hue');
-  await expect(picker.locator('.image-editor-color-picker-surface-round')).toBeHidden();
-  const foregroundInput = root.locator('.image-editor-foreground');
-  const previousColor = await foregroundInput.inputValue();
-  const rectangularSurface = picker.locator('.image-editor-color-picker-surface-rectangular canvas');
-  const surfaceBox = await rectangularSurface.boundingBox();
-  await page.mouse.click(surfaceBox.x + surfaceBox.width * 0.75, surfaceBox.y + surfaceBox.height * 0.25);
-  await expect.poll(() => foregroundInput.inputValue()).not.toBe(previousColor);
+  const warmSunrise = dialog.locator('[data-palette-id="warm-sunrise"]');
+  await expect(warmSunrise.locator('.image-editor-palette-strip span')).toHaveCount(12);
+  await warmSunrise.locator('[data-palette-action="details"]').click();
+  await expect(dialog.locator('.image-editor-palette-detail-swatch')).toHaveCount(12);
+  await dialog.locator('[data-palette-action="back"]').click();
+  await warmSunrise.locator('[data-palette-action="apply"]').click();
 
-  await picker.locator('[data-color-picker-mode="hsb"]').click();
-  await expect(picker.locator('[data-color-picker-mode="hsb"]')).toHaveAttribute('aria-selected', 'true');
-  await expect(picker.locator('.image-editor-color-picker-hsb')).toBeVisible();
-  await expect(picker.locator('.image-editor-color-picker-surface-rectangular')).toBeHidden();
-  await expect(picker.locator('.image-editor-color-picker-palette-swatch')).toHaveCount(5);
-  await picker.locator('[data-color-slider="opacity"]').evaluate((input) => {
-    input.value = '42';
-    input.dispatchEvent(new Event('input', { bubbles: true }));
-  });
-  await expect(picker.locator('.image-editor-color-picker-rgba')).toContainText('0.42');
-  await expect.poll(() => root.evaluate((element) => window.markdownViewerApp.services.imageEditor.getView(element.dataset.tabId).state.foregroundOpacity)).toBe(0.42);
+  await expect(dialog).toBeHidden();
+  await expect(root.locator('.image-editor-palette-color')).toHaveCount(20);
+  await expect(root.locator('.image-editor-palette-color').first()).toHaveAttribute('data-palette-color', '#FFF3E8');
+  expect(await root.locator('.image-editor-foreground').inputValue()).toBe(foregroundBefore);
+  expect(await root.locator('.image-editor-background').inputValue()).toBe(backgroundBefore);
 
-  await root.locator('[data-color-picker-target="background"]').click();
-  await expect(picker.locator('[data-color-slider="opacity"]')).toHaveValue('100');
-  await picker.locator('[data-color-slider="opacity"]').evaluate((input) => {
-    input.value = '73';
-    input.dispatchEvent(new Event('input', { bubbles: true }));
-  });
-  await expect.poll(() => root.evaluate((element) => window.markdownViewerApp.services.imageEditor.getView(element.dataset.tabId).state.backgroundOpacity)).toBe(0.73);
-
-  await root.locator('[data-color-picker-target="foreground"]').click();
-  await expect(picker.locator('[data-color-slider="opacity"]')).toHaveValue('42');
-  await picker.locator('[data-color-picker-mode="round"]').click();
-  await expect(picker.locator('.image-editor-color-picker-surface-round')).toBeVisible();
-  await picker.locator('[data-color-picker-mode="hsb"]').click();
-  await expect(picker.locator('[data-color-slider="opacity"]')).toHaveValue('42');
-  await page.mouse.click(4, 4);
-  await expect(picker).toBeHidden();
+  await page.evaluate(() => window.markdownViewerApp.modules.tabs.openBlankImageEditorInTab({ width: 40, height: 40, name: 'Palette library second tab' }));
+  const second = page.locator('.tab-view[data-tab-view-kind="image-editor"]').last();
+  await expect(second.locator('.image-editor-palette-color').first()).toHaveAttribute('data-palette-color', '#FFF3E8');
 });
 test('layers panel keeps its screen position and size while a zoomed canvas scrolls', async ({ page }) => {
   await page.goto('/');
@@ -1806,9 +1863,8 @@ test('pixel deletion affects only the selected layer and preserves its object ro
   const root = page.locator('.tab-view.active[data-tab-view-kind=image-editor]');
   await expect(root.locator('.image-editor-shell')).toBeVisible();
   const panel = root.locator('.image-editor-layers-panel');
-  await expect(panel.locator('[data-layer-expand]')).toHaveCount(2);
+  await expect(panel.locator('[data-layer-expand]')).toHaveCount(1);
   await panel.locator('[data-layer-expand]').nth(0).click();
-  await panel.locator('[data-layer-expand]').nth(1).click();
   const initialPanelItemCount = await panel.locator('[data-layer-item]').count();
   const overlay = root.locator('.image-editor-overlay');
   const box = await overlay.boundingBox();
@@ -1824,8 +1880,26 @@ test('pixel deletion affects only the selected layer and preserves its object ro
     const pixel = (x, y) => Array.from(canvas.getImageData(x, y, 1, 1).data).slice(0, 3);
     const object = window.MarkdownViewerImageEditor.findDocumentObject(controller.documentStore.document, window.__upperLayerObjectId)?.object;
     const layer = controller.documentStore.activeLayer();
-    return { deletedArea: pixel(30, 30), untouchedArea: pixel(10, 10), objectPreserved: !!object, pixelEdits: layer.pixelEdits.length };
-  })).toEqual({ deletedArea: [0, 0, 255], untouchedArea: [255, 0, 0], objectPreserved: true, pixelEdits: 0 });
+    const overlayPixels = controller.view.overlayContext.getImageData(0, 0, controller.view.overlay.width, controller.view.overlay.height).data;
+    const overlayIsClear = !Array.from(overlayPixels).some((value, index) => index % 4 === 3 && value);
+    return { deletedArea: pixel(30, 30), untouchedArea: pixel(10, 10), objectPreserved: !!object, pixelEdits: layer.pixelEdits.length, hasSelection: controller.selection.hasSelection, overlayIsClear };
+  })).toEqual({ deletedArea: [0, 0, 255], untouchedArea: [255, 0, 0], objectPreserved: true, pixelEdits: 0, hasSelection: false, overlayIsClear: true });
+  await page.evaluate(() => {
+    Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { write() { return new Promise(() => {}); } } });
+  });
+  await page.mouse.move(box.x + 50, box.y + 20);
+  await page.mouse.down();
+  await page.mouse.move(box.x + 60, box.y + 30, { steps: 4 });
+  await page.mouse.up();
+  await page.keyboard.press('Control+X');
+  expect(await page.evaluate(() => {
+    const root = document.querySelector('.tab-view.active[data-tab-view-kind=image-editor]');
+    const controller = window.markdownViewerApp.services.imageEditor.getView(root.dataset.tabId);
+    const cutArea = Array.from(controller.view.canvas.getContext('2d').getImageData(55, 25, 1, 1).data).slice(0, 3);
+    const overlayPixels = controller.view.overlayContext.getImageData(0, 0, controller.view.overlay.width, controller.view.overlay.height).data;
+    const overlayIsClear = !Array.from(overlayPixels).some((value, index) => index % 4 === 3 && value);
+    return { cutArea, hasSelection: controller.selection.hasSelection, overlayIsClear };
+  })).toEqual({ cutArea: [0, 0, 255], hasSelection: false, overlayIsClear: true });
   const movedResult = await page.evaluate(() => {
     const root = document.querySelector('.tab-view.active[data-tab-view-kind=image-editor]');
     const controller = window.markdownViewerApp.services.imageEditor.getView(root.dataset.tabId);
@@ -2958,6 +3032,409 @@ test("selection moves with arrows and Ctrl+arrow starts a movable copy", async (
   expect(afterCommitPixels.original.slice(0, 3)).toEqual([255, 0, 0]);
   expect(afterCommitPixels.copyTarget.slice(0, 3)).toEqual([255, 0, 0]);
 });
+test("canvas context-menu Select all moves every selected object with arrow keys", async ({ page }) => {
+  await page.goto("/");
+  await page.waitForFunction(() => !!window.markdownViewerApp?.modules?.keyboardShortcuts, null, { timeout: 60000 });
+  await page.waitForFunction(() => !!window.markdownViewerApp?.modules?.tabs?.openImageEditorInTab && !!window.markdownViewerApp?.services?.imageEditor);
+  await page.evaluate(() => {
+    const sourceCanvas = document.createElement("canvas");
+    sourceCanvas.width = 80;
+    sourceCanvas.height = 60;
+    sourceCanvas.getContext("2d").fillRect(0, 0, 80, 60);
+    return new Promise((resolve) => sourceCanvas.toBlob((blob) => {
+      const sourceFile = new File([blob], "select-all-arrow-movement.png", { type: "image/png" });
+      window.markdownViewerApp.modules.apiClient.deactivateApiClientSidebar = () => {};
+      window.markdownViewerApp.modules.tabs.openImageEditorInTab({
+        name: sourceFile.name,
+        type: sourceFile.type,
+        mimeType: sourceFile.type,
+        file: sourceFile
+      });
+      resolve();
+    }, "image/png"));
+  });
+  await expect(page.locator(".image-editor-shell")).toBeVisible();
+  await page.evaluate(() => {
+    window.markdownViewerApp.modules.apiClient.deactivateApiClientSidebar = () => {};
+    const root = document.querySelector('.tab-view.active[data-tab-view-kind="image-editor"]');
+    const controller = window.markdownViewerApp.services.imageEditor.getView(root.dataset.tabId);
+    const pixels = new ImageData(8, 8);
+    pixels.data.fill(255);
+    const firstLayer = controller.documentStore.addLayer("First");
+    const first = controller.documentStore.addRasterObject(pixels, { x: 10, y: 10, width: 8, height: 8 }, { name: "First", layerId: firstLayer.id });
+    const secondLayer = controller.documentStore.addLayer("Second", firstLayer.id);
+    const second = controller.documentStore.addRasterObject(pixels, { x: 30, y: 20, width: 8, height: 8 }, { name: "Second", layerId: secondLayer.id });
+    controller.compositor.render({ canvas: controller.view.canvas });
+    window.__selectAllArrowObjectIds = [first.id, second.id];
+  });
+
+  const root = page.locator('.tab-view.active[data-tab-view-kind="image-editor"]');
+  const overlay = root.locator(".image-editor-overlay");
+  await overlay.evaluate((element) => element.dispatchEvent(new MouseEvent("contextmenu", {
+    bubbles: true,
+    clientX: 60,
+    clientY: 50
+  })));
+  const menu = page.locator(".image-editor-canvas-context-menu");
+  await expect(menu).toBeVisible();
+  await menu.locator('[data-layer-context-action="select-all"]').click();
+  await page.keyboard.press("ArrowRight");
+  await page.keyboard.press("ArrowUp");
+
+  expect(await page.evaluate(() => {
+    const root = document.querySelector('.tab-view.active[data-tab-view-kind="image-editor"]');
+    const controller = window.markdownViewerApp.services.imageEditor.getView(root.dataset.tabId);
+    return window.__selectAllArrowObjectIds.map((id) => {
+      const object = window.MarkdownViewerImageEditor.findDocumentObject(controller.documentStore.document, id).object;
+      return { x: object.transform.x, y: object.transform.y };
+    });
+  })).toEqual([{ x: 11, y: 9 }, { x: 31, y: 19 }]);
+});
+
+test("lift to new layer cuts selected layer pixels while preserving their canvas position", async ({ page }) => {
+  await page.goto("/");
+  await page.waitForFunction(() => {
+    const imageEditor = window.MarkdownViewerImageEditor;
+    return !!imageEditor?.ImageEditorCanvasEditActions?.liftSelectedLayerRegion
+      && !!imageEditor?.ImageEditorCanvasContextMenu
+      && !!imageEditor?.ImageEditorDocumentStore
+      && !!imageEditor?.createImageDocument;
+  }, null, { timeout: 60000 });
+
+  expect(await page.evaluate(() => {
+    const imageEditor = window.MarkdownViewerImageEditor;
+    const solidPixels = (width, height, red, green, blue) => {
+      const pixels = new ImageData(width, height);
+      for (let index = 0; index < pixels.data.length; index += 4) {
+        pixels.data[index] = red;
+        pixels.data[index + 1] = green;
+        pixels.data[index + 2] = blue;
+        pixels.data[index + 3] = 255;
+      }
+      return pixels;
+    };
+    const pixel = (canvas, x, y) => Array.from(canvas.getContext("2d").getImageData(x, y, 1, 1).data);
+    const store = new imageEditor.ImageEditorDocumentStore(imageEditor.createImageDocument(12, 8, "transparent"));
+    const bottom = store.addLayer("Bottom");
+    store.addRasterObject(solidPixels(10, 6, 20, 80, 220), { x: 1, y: 1, width: 10, height: 6 }, { name: "Bottom", layerId: bottom.id });
+    const top = store.addLayer("Top", bottom.id);
+    store.addRasterObject(solidPixels(6, 4, 220, 40, 30), { x: 3, y: 2, width: 6, height: 4 }, { name: "Top", layerId: top.id });
+    const before = new imageEditor.ImageEditorCompositor(store).render();
+    const region = { x: 2, y: 1, width: 5, height: 4, shape: "rectangle", inverted: false };
+    const result = imageEditor.ImageEditorCanvasEditActions.liftSelectedLayerRegion(store, [top, bottom], region);
+    const after = new imageEditor.ImageEditorCompositor(store).render();
+    const sourceTop = new imageEditor.ImageEditorCompositor(store).renderLayer(top);
+    const sourceBottom = new imageEditor.ImageEditorCompositor(store).renderLayer(bottom);
+    const menu = new imageEditor.ImageEditorCanvasContextMenu();
+    let menuAction = null;
+    menu.show(10, 10, { "lift-new-layer": true }, (action) => { menuAction = action; });
+    const menuItem = document.querySelector('[data-layer-context-action="lift-new-layer"]');
+    const menuLabel = menuItem?.textContent?.trim();
+    menuItem?.click();
+    menu.destroy();
+    return {
+      menuLabel,
+      menuAction,
+      layerName: result?.layer?.name,
+      objectName: result?.object?.name,
+      objectBounds: result?.object?.bounds,
+      selectedIds: [...store.selectedIds],
+      sourceInside: [pixel(sourceTop, 4, 3), pixel(sourceBottom, 4, 3)],
+      sourceOutside: [pixel(sourceTop, 8, 5), pixel(sourceBottom, 9, 6)],
+      beforeInside: pixel(before, 4, 3),
+      afterInside: pixel(after, 4, 3),
+      beforeOutside: pixel(before, 9, 6),
+      afterOutside: pixel(after, 9, 6)
+    };
+  })).toEqual({
+    menuLabel: "Lift to new layer",
+    menuAction: "lift-new-layer",
+    layerName: "Lifted selection",
+    objectName: "Lifted selection",
+    objectBounds: { x: 2, y: 1, width: 5, height: 4 },
+    selectedIds: [expect.any(String)],
+    sourceInside: [[0, 0, 0, 0], [0, 0, 0, 0]],
+    sourceOutside: [[220, 40, 30, 255], [20, 80, 220, 255]],
+    beforeInside: [220, 40, 30, 255],
+    afterInside: [220, 40, 30, 255],
+    beforeOutside: [20, 80, 220, 255],
+    afterOutside: [20, 80, 220, 255]
+  });
+});
+
+test("crop action trims only requested layers and supports an all-layer canvas crop", async ({ page }) => {
+  await page.goto("/");
+  await page.waitForFunction(() => {
+    const imageEditor = window.MarkdownViewerImageEditor;
+    return !!imageEditor?.ImageEditorCanvasEditActions
+      && !!imageEditor?.ImageEditorDocumentStore
+      && !!imageEditor?.createImageDocument
+      && !!imageEditor?.imageEditorContentRenderers;
+  }, null, { timeout: 60000 });
+
+  expect(await page.evaluate(() => {
+    const imageEditor = window.MarkdownViewerImageEditor;
+    const solidPixels = (width, height) => {
+      const pixels = new ImageData(width, height);
+      for (let index = 0; index < pixels.data.length; index += 4) {
+        pixels.data[index] = 40;
+        pixels.data[index + 1] = 120;
+        pixels.data[index + 2] = 220;
+        pixels.data[index + 3] = 255;
+      }
+      return pixels;
+    };
+    const boundsOf = (object) => object && { ...object.bounds };
+
+    const partialStore = new imageEditor.ImageEditorDocumentStore(imageEditor.createImageDocument(80, 60, "transparent"));
+    const firstLayer = partialStore.addLayer("First");
+    const first = partialStore.addRasterObject(solidPixels(30, 30), { x: 10, y: 10, width: 30, height: 30 }, { name: "First", layerId: firstLayer.id });
+    const secondLayer = partialStore.addLayer("Second", firstLayer.id);
+    const second = partialStore.addRasterObject(solidPixels(30, 30), { x: 40, y: 10, width: 30, height: 30 }, { name: "Second", layerId: secondLayer.id });
+    imageEditor.ImageEditorCanvasEditActions.cropSelectedLayers(partialStore, [firstLayer], { x: 15, y: 12, width: 15, height: 20 });
+
+    const allStore = new imageEditor.ImageEditorDocumentStore(imageEditor.createImageDocument(80, 60, "transparent"));
+    const allFirstLayer = allStore.addLayer("First");
+    const allFirst = allStore.addRasterObject(solidPixels(30, 30), { x: 5, y: 5, width: 30, height: 30 }, { name: "First", layerId: allFirstLayer.id });
+    const allSecondLayer = allStore.addLayer("Second", allFirstLayer.id);
+    const allSecond = allStore.addRasterObject(solidPixels(30, 30), { x: 30, y: 20, width: 30, height: 30 }, { name: "Second", layerId: allSecondLayer.id });
+    const cropRect = { x: 10, y: 10, width: 40, height: 30 };
+    imageEditor.ImageEditorCanvasEditActions.cropSelectedLayers(allStore, [allFirstLayer, allSecondLayer], cropRect);
+    imageEditor.ImageEditorCanvasEditActions.cropDocument(allStore, cropRect);
+
+    return {
+      partial: {
+        canvas: { width: partialStore.document.canvas.width, height: partialStore.document.canvas.height },
+        first: boundsOf(first),
+        second: boundsOf(second)
+      },
+      all: {
+        canvas: { width: allStore.document.canvas.width, height: allStore.document.canvas.height },
+        objects: [allFirst, allSecond].map((object) => ({
+          x: object.transform.x,
+          y: object.transform.y,
+          width: object.bounds.width,
+          height: object.bounds.height
+        }))
+      }
+    };
+  })).toEqual({
+    partial: {
+      canvas: { width: 80, height: 60 },
+      first: { x: 15, y: 12, width: 15, height: 20 },
+      second: { x: 40, y: 10, width: 30, height: 30 }
+    },
+    all: {
+      canvas: { width: 40, height: 30 },
+      objects: [{ x: 0, y: 0, width: 25, height: 25 }, { x: 20, y: 10, width: 20, height: 20 }]
+    }
+  });
+});
+
+test("flip selection changes only the selected region in explicitly selected layers", async ({ page }) => {
+  await page.goto("/");
+  await page.waitForFunction(() => {
+    const imageEditor = window.MarkdownViewerImageEditor;
+    return !!imageEditor?.ImageEditorCanvasEditActions
+      && !!imageEditor?.ImageEditorDocumentStore
+      && !!imageEditor?.createImageDocument;
+  }, null, { timeout: 60000 });
+
+  expect(await page.evaluate(() => {
+    const imageEditor = window.MarkdownViewerImageEditor;
+    const pixels = (offset) => {
+      const data = new ImageData(8, 4);
+      for (let y = 0; y < data.height; y += 1) {
+        for (let x = 0; x < data.width; x += 1) {
+          const index = (y * data.width + x) * 4;
+          data.data[index] = offset + (x + 1) * 10;
+          data.data[index + 3] = 255;
+        }
+      }
+      return data;
+    };
+    const row = (data) => Array.from({ length: data.width }, (_, x) => data.data[x * 4]);
+    const store = new imageEditor.ImageEditorDocumentStore(imageEditor.createImageDocument(8, 4, "transparent"));
+    const first = store.addLayer("First");
+    first.rasterAssetId = store.addRasterAsset(pixels(0));
+    const second = store.addLayer("Second", first.id);
+    second.pixelEdits.push({ assetId: store.addRasterAsset(pixels(80)), compositeOperation: "source-over" });
+    const untouched = store.addLayer("Untouched", second.id);
+    untouched.rasterAssetId = store.addRasterAsset(pixels(160));
+
+    imageEditor.ImageEditorCanvasEditActions.flipSelectedLayerRegions(
+      store,
+      [first, second],
+      [{ x: 2, y: 0, width: 4, height: 4 }],
+      true
+    );
+
+    return {
+      first: row(store.assets.get(first.rasterAssetId)),
+      second: row(store.assets.get(second.pixelEdits[0].assetId)),
+      untouched: row(store.assets.get(untouched.rasterAssetId))
+    };
+  })).toEqual({
+    first: [10, 20, 60, 50, 40, 30, 70, 80],
+    second: [90, 100, 140, 130, 120, 110, 150, 160],
+    untouched: [170, 180, 190, 200, 210, 220, 230, 240]
+  });
+});
+
+test("inverted selection flips only canvas-edge pixels in explicitly selected layers", async ({ page }) => {
+  await page.goto("/");
+  await page.waitForFunction(() => {
+    const imageEditor = window.MarkdownViewerImageEditor;
+    return !!imageEditor?.ImageEditorCanvasEditActions
+      && !!imageEditor?.ImageEditorDocumentStore
+      && !!imageEditor?.createImageDocument;
+  }, null, { timeout: 60000 });
+
+  expect(await page.evaluate(() => {
+    const imageEditor = window.MarkdownViewerImageEditor;
+    const pixels = (offset) => {
+      const data = new ImageData(8, 1);
+      for (let x = 0; x < data.width; x += 1) {
+        const index = x * 4;
+        data.data[index] = offset + (x + 1) * 10;
+        data.data[index + 3] = 255;
+      }
+      return data;
+    };
+    const row = (data) => Array.from({ length: data.width }, (_, x) => data.data[x * 4]);
+    const store = new imageEditor.ImageEditorDocumentStore(imageEditor.createImageDocument(8, 1, "transparent"));
+    const selected = store.addLayer("Selected");
+    selected.rasterAssetId = store.addRasterAsset(pixels(0));
+    const untouched = store.addLayer("Untouched", selected.id);
+    untouched.rasterAssetId = store.addRasterAsset(pixels(80));
+
+    imageEditor.ImageEditorCanvasEditActions.flipSelectedLayerRegions(
+      store,
+      [selected],
+      [{ x: 2, y: 0, width: 3, height: 1, shape: "rectangle", inverted: true }],
+      true
+    );
+
+    return {
+      selected: row(store.assets.get(selected.rasterAssetId)),
+      untouched: row(store.assets.get(untouched.rasterAssetId))
+    };
+  })).toEqual({
+    selected: [80, 70, 30, 40, 50, 0, 20, 10],
+    untouched: [90, 100, 110, 120, 130, 140, 150, 160]
+  });
+});
+
+test("Crop image full-editor integration uses the mounted image editor", async ({ page }) => {
+  await page.goto("/");
+  await page.waitForFunction(() => !!window.markdownViewerApp?.modules?.tabs?.openBlankImageEditorInTab && !!window.markdownViewerApp?.services?.imageEditor, null, { timeout: 60000 });
+  await page.evaluate(() => {
+    window.markdownViewerApp.modules.apiClient.deactivateApiClientSidebar = () => {};
+    const tabs = window.markdownViewerApp.modules.tabs;
+    const previousTabId = tabs.getActiveTab()?.id;
+    const tab = tabs.openBlankImageEditorInTab({ width: 80, height: 60, name: "Selected layer crop", background: { mode: "transparent" } });
+    if (previousTabId) tabs.switchTab(previousTabId);
+    tabs.switchTab(tab.id);
+    window.__cropTabId = tab.id;
+  });
+  await page.waitForFunction(() => !!window.markdownViewerApp.services.imageEditor.getView(window.__cropTabId));
+  await page.evaluate(() => {
+    const controller = window.markdownViewerApp.services.imageEditor.getView(window.__cropTabId);
+    const pixels = new ImageData(30, 30);
+    pixels.data.fill(255);
+    const firstLayer = controller.documentStore.addLayer("First");
+    const first = controller.documentStore.addRasterObject(pixels, { x: 10, y: 10, width: 30, height: 30 }, { name: "First", layerId: firstLayer.id });
+    const secondLayer = controller.documentStore.addLayer("Second", firstLayer.id);
+    const second = controller.documentStore.addRasterObject(pixels, { x: 40, y: 10, width: 30, height: 30 }, { name: "Second", layerId: secondLayer.id });
+    controller.documentStore.select(firstLayer.id);
+    controller.selection.setRect({ x: 15, y: 12 }, { x: 30, y: 32 }, controller.state);
+    controller.compositor.render({ canvas: controller.view.canvas });
+    window.__cropLayerIds = [firstLayer.id, secondLayer.id];
+    window.__cropObjectIds = [first.id, second.id];
+  });
+
+  await page.evaluate(() => {
+    const controller = window.markdownViewerApp.services.imageEditor.getView(window.__cropTabId);
+    controller.view.pointFromEvent = () => ({ x: 16, y: 13 });
+    controller.view.overlay.dispatchEvent(new MouseEvent("contextmenu", {
+      bubbles: true,
+      clientX: 16,
+      clientY: 13
+    }));
+  });
+  let menu = page.locator(".image-editor-canvas-context-menu:not(.hidden)");
+  await expect(menu).toBeVisible();
+  await menu.locator('[data-layer-context-action="crop"]').click();
+
+  expect(await page.evaluate(() => {
+    const controller = window.markdownViewerApp.services.imageEditor.getView(window.__cropTabId);
+    const objects = window.__cropObjectIds.map((id) => window.MarkdownViewerImageEditor.findDocumentObject(controller.documentStore.document, id)?.object || null);
+    return {
+      canvas: { ...controller.documentStore.document.canvas },
+      first: objects[0] && { ...objects[0].bounds },
+      second: objects[1] && { ...objects[1].bounds },
+      layers: controller.documentStore.document.nodes.filter((node) => !window.MarkdownViewerImageEditor.isCanvasBackgroundLayer(node)).map((node) => node.name)
+    };
+  })).toEqual({
+    canvas: { width: 80, height: 60, backgroundColor: "transparent" },
+    first: { x: 15, y: 12, width: 15, height: 20 },
+    second: { x: 40, y: 10, width: 30, height: 30 },
+    layers: ["Second", "First"]
+  });
+
+  await page.evaluate(() => {
+    const tabs = window.markdownViewerApp.modules.tabs;
+    const previousTabId = tabs.getActiveTab()?.id;
+    const tab = tabs.openBlankImageEditorInTab({ width: 80, height: 60, name: "All layer crop", background: { mode: "transparent" } });
+    if (previousTabId) tabs.switchTab(previousTabId);
+    tabs.switchTab(tab.id);
+    window.__allCropTabId = tab.id;
+  });
+  await page.waitForFunction(() => !!window.markdownViewerApp.services.imageEditor.getView(window.__allCropTabId));
+  await page.evaluate(() => {
+    const controller = window.markdownViewerApp.services.imageEditor.getView(window.__allCropTabId);
+    const pixels = new ImageData(30, 30);
+    pixels.data.fill(255);
+    const firstLayer = controller.documentStore.addLayer("First");
+    const first = controller.documentStore.addRasterObject(pixels, { x: 5, y: 5, width: 30, height: 30 }, { name: "First", layerId: firstLayer.id });
+    const secondLayer = controller.documentStore.addLayer("Second", firstLayer.id);
+    const second = controller.documentStore.addRasterObject(pixels, { x: 30, y: 20, width: 30, height: 30 }, { name: "Second", layerId: secondLayer.id });
+    controller.documentStore.select([firstLayer.id, secondLayer.id]);
+    controller.selection.setRect({ x: 10, y: 10 }, { x: 50, y: 40 }, controller.state);
+    controller.compositor.render({ canvas: controller.view.canvas });
+    window.__allCropObjectIds = [first.id, second.id];
+  });
+
+  await page.evaluate(() => {
+    const controller = window.markdownViewerApp.services.imageEditor.getView(window.__allCropTabId);
+    controller.view.pointFromEvent = () => ({ x: 11, y: 11 });
+    controller.view.overlay.dispatchEvent(new MouseEvent("contextmenu", {
+      bubbles: true,
+      clientX: 11,
+      clientY: 11
+    }));
+  });
+  menu = page.locator(".image-editor-canvas-context-menu:not(.hidden)");
+  await expect(menu).toBeVisible();
+  await menu.locator('[data-layer-context-action="crop"]').click();
+
+  expect(await page.evaluate(() => {
+    const controller = window.markdownViewerApp.services.imageEditor.getView(window.__allCropTabId);
+    return {
+      document: { width: controller.documentStore.document.canvas.width, height: controller.documentStore.document.canvas.height },
+      view: { width: controller.view.canvas.width, height: controller.view.canvas.height },
+      objects: window.__allCropObjectIds.map((id) => {
+        const object = window.MarkdownViewerImageEditor.findDocumentObject(controller.documentStore.document, id).object;
+        return { x: object.transform.x, y: object.transform.y, width: object.bounds.width, height: object.bounds.height };
+      })
+    };
+  })).toEqual({
+    document: { width: 40, height: 30 },
+    view: { width: 40, height: 30 },
+    objects: [{ x: 0, y: 0, width: 25, height: 25 }, { x: 20, y: 10, width: 20, height: 20 }]
+  });
+});
+
 test("selection pointer drag moves, Ctrl clones, and Shift stamps canvas content", async ({ page }) => {
   await page.goto("/");
   await page.waitForFunction(() => !!window.markdownViewerApp?.modules?.keyboardShortcuts, null, { timeout: 60000 });
@@ -3000,10 +3477,10 @@ test("selection pointer drag moves, Ctrl clones, and Shift stamps canvas content
   let pixels = await page.evaluate(() => {
     const canvas = document.querySelector(".image-editor-canvas").getContext("2d");
     const overlay = document.querySelector(".image-editor-overlay").getContext("2d");
-    const pixel = (context, x, y) => Array.from(context.getImageData(x, y, 1, 1).data).slice(0, 3);
+    const pixel = (context, x, y) => Array.from(context.getImageData(x, y, 1, 1).data);
     return { source: pixel(canvas, 20, 20), baseTarget: pixel(canvas, 31, 21), floatingTarget: pixel(overlay, 31, 21) };
   });
-  expect(pixels).toEqual({ source: [255, 255, 255], baseTarget: [255, 255, 255], floatingTarget: [0, 255, 0] });
+  expect(pixels).toEqual({ source: [0, 0, 0, 0], baseTarget: [255, 255, 255, 255], floatingTarget: [0, 255, 0, 255] });
 
   await page.mouse.click(box.x + 70, box.y + 60);
   await drag(30, 20, 34, 24);

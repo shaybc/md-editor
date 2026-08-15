@@ -71,19 +71,20 @@
   class ImageEditorColorPicker {
     /**
      * @param {HTMLElement} root - Image editor root containing the color triggers.
-     * @param {{onActivate:function(string):void,onChange:function(string,string):void}} callbacks - Existing toolbar color actions.
+     * @param {{onActivate:function(string):void,onChange:function(string,string,number):void,copyText?:function(string):Promise<void>|void}} callbacks - Existing toolbar color and clipboard actions.
      */
     constructor(root, callbacks) {
       this.root = root;
       this.callbacks = callbacks;
-      this.mode = "round";
+      this.mode = "rectangular";
       this.target = "foreground";
       this.colors = { foreground: "#111111", background: "#ffffff" };
+      this.valueSession = null;
       this.hsv = hexToHsv(this.colors.foreground);
       this.popover = this.createPopover();
       this.root.appendChild(this.popover);
       this.bind();
-      this.setMode("round");
+      this.setMode("rectangular");
     }
 
     createPopover() {
@@ -92,18 +93,21 @@
       element.hidden = true;
       element.innerHTML = `
         <div class="image-editor-color-picker-modes" role="tablist" aria-label="Color picker shape">
-          <button type="button" class="image-editor-color-picker-mode active" data-color-picker-mode="round" role="tab" aria-selected="true" title="Round color picker"><span class="image-editor-color-picker-round-icon"></span></button>
-          <button type="button" class="image-editor-color-picker-mode" data-color-picker-mode="rectangular" role="tab" aria-selected="false" title="Rectangular color picker"><span class="image-editor-color-picker-rectangular-icon"></span></button>
+          <button type="button" class="image-editor-color-picker-mode active" data-color-picker-mode="rectangular" role="tab" aria-selected="true" title="Rectangular color picker"><span class="image-editor-color-picker-rectangular-icon"></span></button>
+          <button type="button" class="image-editor-color-picker-mode" data-color-picker-mode="round" role="tab" aria-selected="false" title="Round color picker"><span class="image-editor-color-picker-round-icon"></span></button>
         </div>
         <div class="image-editor-color-picker-surface image-editor-color-picker-surface-round"><canvas width="${PICKER_SIZE}" height="${PICKER_SIZE}" aria-label="Round color picker"></canvas><span class="image-editor-color-picker-indicator"></span></div>
         <div class="image-editor-color-picker-surface image-editor-color-picker-surface-rectangular" hidden><canvas width="${PICKER_SIZE}" height="${PICKER_SIZE}" aria-label="Rectangular color picker"></canvas><span class="image-editor-color-picker-indicator"></span></div>
         <label class="image-editor-color-picker-hue"><span>Hue</span><input type="range" min="0" max="359" value="0" aria-label="Color hue"></label>
-        <output class="image-editor-color-picker-value">#111111</output>
+        <div class="image-editor-color-picker-actions"><button type="button" data-color-picker-sampler title="Sample a color" aria-label="Sample a color"><i class="bi bi-eyedropper" aria-hidden="true"></i></button></div>
+        <div class="image-editor-color-picker-values">
+          ${["hex", "hsl", "rgb", "lch"].map((format) => `<div class="image-editor-color-picker-value-row"><output data-color-format="${format}"></output><button type="button" data-copy-color-format="${format}" title="Copy ${format.toUpperCase()} value" aria-label="Copy ${format.toUpperCase()} value"><i class="bi bi-copy" aria-hidden="true"></i></button></div>`).join("")}
+        </div>
       `;
       this.roundCanvas = element.querySelector(".image-editor-color-picker-surface-round canvas");
       this.rectangularCanvas = element.querySelector(".image-editor-color-picker-surface-rectangular canvas");
       this.hueInput = element.querySelector(".image-editor-color-picker-hue input");
-      this.valueOutput = element.querySelector(".image-editor-color-picker-value");
+      this.valueOutputs = Object.fromEntries(Array.from(element.querySelectorAll("[data-color-format]")).map((output) => [output.dataset.colorFormat, output]));
       drawColorWheel(this.roundCanvas.getContext("2d"));
       return element;
     }
@@ -116,6 +120,15 @@
         this.open(trigger.dataset.colorPickerTarget, trigger);
       };
       this.onPopoverClick = (event) => {
+        const copyFormat = event.target.closest("[data-copy-color-format]")?.dataset.copyColorFormat;
+        if (copyFormat) {
+          this.copyColorValue(copyFormat);
+          return;
+        }
+        if (event.target.closest("[data-color-picker-sampler]")) {
+          this.sampleColor();
+          return;
+        }
         const mode = event.target.closest("[data-color-picker-mode]")?.dataset.colorPickerMode;
         if (mode) this.setMode(mode);
       };
@@ -178,7 +191,23 @@
       this.render();
     }
 
+    openForValue({ anchor, color, onChange }) {
+      this.valueSession = { previousTarget: this.target, onChange };
+      this.target = "value";
+      this.colors.value = color;
+      if (this.opacities) this.opacities.value = 1;
+      this.hsv = hexToHsv(color);
+      this.popover.hidden = false;
+      const rootRect = this.root.getBoundingClientRect();
+      const anchorRect = anchor.getBoundingClientRect();
+      this.popover.style.left = `${Math.max(4, anchorRect.left - rootRect.left)}px`;
+      this.popover.style.top = `${anchorRect.bottom - rootRect.top + 6}px`;
+      this.render();
+    }
+
     close() {
+      if (this.valueSession) this.target = this.valueSession.previousTarget;
+      this.valueSession = null;
       this.popover.hidden = true;
     }
 
@@ -193,8 +222,31 @@
       this.popover.querySelector(".image-editor-color-picker-surface-rectangular").hidden = this.mode !== "rectangular";
       this.hueInput.max = this.mode === "round" ? "100" : "359";
       this.hueInput.setAttribute("aria-label", this.mode === "round" ? "Color brightness" : "Color hue");
-      this.popover.querySelector(".image-editor-color-picker-hue span").textContent = this.mode === "round" ? "Value" : "Hue";
+      this.popover.querySelector(".image-editor-color-picker-hue span").textContent = this.mode === "round" ? "" : "Hue";
+      this.popover.querySelector(".image-editor-color-picker-hue").dataset.kind = this.mode === "round" ? "value" : "hue";
       this.render();
+    }
+
+    async copyColorValue(format) {
+      const value = this.valueOutputs[format]?.textContent;
+      if (!value) return;
+      if (this.callbacks.copyText) await this.callbacks.copyText(value);
+      else await navigator.clipboard?.writeText?.(value);
+    }
+
+    async sampleColor() {
+      if (typeof global.EyeDropper !== "function") return;
+      try {
+        const result = await new global.EyeDropper().open();
+        if (!result?.sRGBHex) return;
+        const color = result.sRGBHex.toLowerCase();
+        this.colors[this.target] = color;
+        this.hsv = hexToHsv(color);
+        this.render();
+        this.emitChange(color, this.opacities?.[this.target] ?? 1);
+      } catch (error) {
+        if (error?.name !== "AbortError") throw error;
+      }
     }
 
     setColor(target, color) {
@@ -212,7 +264,12 @@
       const color = hsvToHex(this.hsv.h, this.hsv.s, this.hsv.v);
       this.colors[this.target] = color;
       this.render();
-      this.callbacks.onChange(this.target, color);
+      this.emitChange(color);
+    }
+
+    emitChange(color, opacity = 1) {
+      if (this.valueSession) this.valueSession.onChange(color, opacity);
+      else this.callbacks.onChange(this.target, color, opacity);
     }
 
     render() {
@@ -220,8 +277,11 @@
       this.hueInput.style.background = this.mode === "round"
         ? `linear-gradient(to right, #000, ${hsvToHex(this.hsv.h, this.hsv.s, 1)})`
         : "linear-gradient(to right, #f00, #ff0, #0f0, #0ff, #00f, #f0f, #f00)";
-      this.valueOutput.value = this.colors[this.target];
-      this.valueOutput.textContent = this.colors[this.target];
+      const displayValues = namespace.imageEditorColorDisplayValues(this.colors[this.target]);
+      Object.entries(displayValues).forEach(([format, value]) => {
+        this.valueOutputs[format].value = value;
+        this.valueOutputs[format].textContent = value;
+      });
       const rectangularContext = this.rectangularCanvas.getContext("2d");
       rectangularContext.fillStyle = `hsl(${this.hsv.h} 100% 50%)`;
       rectangularContext.fillRect(0, 0, PICKER_SIZE, PICKER_SIZE);

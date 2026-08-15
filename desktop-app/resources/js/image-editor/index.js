@@ -7,6 +7,79 @@
     const rotationCursorSvg = '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"><g fill="none" stroke="black" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 10a7 7 0 0 1 12-4l2-2v6h-6l2-2a5 5 0 0 0-8 3"/><path d="M19 14a7 7 0 0 1-12 4l-2 2v-6h6l-2 2a5 5 0 0 0 8-3"/></g></svg>';
     const rotationCursor = `url("data:image/svg+xml,${encodeURIComponent(rotationCursorSvg)}") 12 12, grab`;
     const views = new Map();
+    let paletteStore = null;
+    let paletteDialog = null;
+    let paletteDialogController = null;
+
+    function ensurePaletteStore() {
+      if (paletteStore) return paletteStore;
+      paletteStore = new namespace.ImageEditorPaletteStore({ loadState: deps.loadGlobalState, saveState: deps.saveGlobalState });
+      paletteStore.subscribe(({ toolbarColors }) => views.forEach((controller) => controller.view.setPaletteColors(toolbarColors)));
+      return paletteStore;
+    }
+
+    function aseFileName(name) {
+      return `${String(name || "palette").replace(/[^a-z0-9._-]+/gi, "-").replace(/^-+|-+$/g, "") || "palette"}.ase`;
+    }
+
+    async function readAseFile() {
+      if (typeof deps.NL_VERSION !== "undefined" && deps.Neutralino?.os?.showOpenDialog) {
+        const selection = await deps.Neutralino.os.showOpenDialog("Import Adobe ASE palette", { multiSelections: false, filters: [{ name: "Adobe Swatch Exchange", extensions: ["ase"] }] });
+        const path = Array.isArray(selection) ? selection[0] : selection;
+        if (!path) return null;
+        return { name: path.split(/[\\/]/).pop(), bytes: await deps.Neutralino.filesystem.readBinaryFile(path) };
+      }
+      return await new Promise((resolve) => {
+        const input = document.createElement("input");
+        input.type = "file";
+        input.accept = ".ase,application/octet-stream";
+        input.addEventListener("change", async () => {
+          const file = input.files?.[0];
+          resolve(file ? { name: file.name, bytes: await file.arrayBuffer() } : null);
+        }, { once: true });
+        input.click();
+      });
+    }
+
+    async function importAsePalettes() {
+      const file = await readAseFile();
+      if (!file) return null;
+      const decoded = namespace.ImageEditorAseCodec.decode(file.bytes);
+      const baseName = file.name.replace(/\.ase$/i, "") || "Imported palette";
+      const palettes = decoded.groups.map((group) => ({ name: group.name, colors: group.colors }));
+      if (decoded.ungrouped.length) palettes.push({ name: baseName, colors: decoded.ungrouped });
+      const created = ensurePaletteStore().importCustom(palettes);
+      if (!created.length) throw new Error("The ASE file did not contain any supported colors.");
+      return `Imported ${created.length} palette${created.length === 1 ? "" : "s"}${decoded.warnings.length ? ` with ${decoded.warnings.length} skipped entr${decoded.warnings.length === 1 ? "y" : "ies"}` : ""}.`;
+    }
+
+    async function exportAsePalette(palette) {
+      const colors = namespace.ImageEditorPaletteCatalog.exportColors(palette);
+      const bytes = namespace.ImageEditorAseCodec.encode({ name: palette.name, colors: colors.map((hex, index) => ({ hex, name: palette.colorNames?.[index] || `Color ${index + 1}` })) });
+      const suggestedName = aseFileName(palette.name);
+      if (typeof deps.NL_VERSION !== "undefined" && deps.Neutralino?.os?.showSaveDialog) {
+        const path = await deps.Neutralino.os.showSaveDialog("Export Adobe ASE palette", { defaultPath: suggestedName, filters: [{ name: "Adobe Swatch Exchange", extensions: ["ase"] }] });
+        if (path) await deps.Neutralino.filesystem.writeBinaryFile(path, bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength));
+        return;
+      }
+      deps.saveAs?.(new Blob([bytes], { type: "application/octet-stream" }), suggestedName);
+    }
+
+    function openPaletteLibrary(controller) {
+      paletteDialogController = controller;
+      if (!paletteDialog) {
+        paletteDialog = new namespace.ImageEditorPaletteDialog({
+          store: ensurePaletteStore(),
+          catalog: namespace.ImageEditorPaletteCatalog,
+          preview: namespace.ImageEditorPalettePreview,
+          onCopy: (text) => deps.copyText(text),
+          onImport: importAsePalettes,
+          onExport: exportAsePalette,
+          openColorPicker: (options) => paletteDialogController?.view.colorPicker?.openForValue(options)
+        });
+      }
+      paletteDialog.open();
+    }
 
     function renderLayeredDocument(controller) {
       if (!controller.compositor) return;
@@ -465,7 +538,12 @@
     /** Provide pixel-marquee lifting with only the explicitly selected editable layers. */
     function pixelSelectionSourceContext(controller) {
       const layers = controller.documentStore.selectedContentLayers({ editableOnly: true });
-      return controller.compositor.renderLayers(layers).getContext("2d", { willReadFrequently: true });
+      const canvas = controller.compositor.renderLayers(layers);
+      const context = canvas.getContext("2d", { willReadFrequently: true });
+      selectedStandaloneObjects(controller, { editableOnly: true }).forEach((object) => {
+        namespace.imageEditorContentRenderers.render(context, object, controller.documentStore.assets);
+      });
+      return context;
     }
 
     /** Open Color Range and replace the current marquee with its sampled soft mask. */
@@ -509,6 +587,15 @@
         namespace.walkDocumentObjects({ nodes: [node] }, includeObject);
       });
       return objects;
+    }
+
+    function selectedStandaloneObjects(controller, options = {}) {
+      return selectedDocumentObjects(controller).filter((object) => {
+        const location = namespace.findDocumentObject(controller.documentStore.document, object.id);
+        if (!location || location.layer) return false;
+        if (!options.editableOnly) return true;
+        return location.visible && !location.locked && object.visible !== false && !object.locked;
+      });
     }
 
     function objectDisplayBounds(object) {
@@ -1355,11 +1442,10 @@
       if (!selection.hasSelection) return;
       const regions = pixelSelectionRegions(controller);
       const documentBefore = controller.documentStore.snapshot();
-      if (action === "cut") {
-        await copySelectionToClipboard(controller);
+      const clipboardWrite = action === "cut" ? copySelectionToClipboard(controller) : null;
+      if (action === "cut" || action === "delete") {
         selection.clear();
-      } else if (action === "delete") {
-        selection.clear();
+        drawSelectionOverlay(controller);
       }
       let changed = false;
       if (action === "cut" || action === "delete") {
@@ -1367,13 +1453,13 @@
           if (clearPixelRegionFromSelectedLayers(controller, region)) changed = true;
         });
       }
-      drawSelectionOverlay(controller);
       if (changed) {
         controller.history.push(documentBefore, controller.documentStore.snapshot(), action === "cut" ? "Cut pixels" : "Delete pixels");
         state.markChanged();
         renderLayeredDocument(controller);
       }
       syncTab(controller);
+      if (clipboardWrite) await clipboardWrite;
     }
 
     function openEditableTextBox(controller, rect, text = '') {
@@ -1586,6 +1672,10 @@
           applyToolbarColor(controller, view.activeColorTarget, paletteButton.dataset.paletteColor);
           return;
         }
+        if (event.target.closest("[data-palette-library]")) {
+          openPaletteLibrary(controller);
+          return;
+        }
         const formatButton = event.target.closest("[data-format]");
         if (formatButton) {
           const key = formatButton.dataset.format === "bold" ? "fontBold" : "fontItalic";
@@ -1599,7 +1689,8 @@
       view.toolSidebar.addEventListener("click", handleToolbarClick);
       view.colorPicker = new namespace.ImageEditorColorPicker(view.shell, {
         onActivate: (target) => view.setActiveColorTarget(target, state),
-        onChange: (target, color, opacity) => applyToolbarColor(controller, target, color, opacity)
+        onChange: (target, color, opacity) => applyToolbarColor(controller, target, color, opacity),
+        copyText: deps.copyText
       });
       view.colorPicker.setColor("foreground", state.foregroundColor, state.foregroundOpacity);
       view.colorPicker.setColor("background", state.backgroundColor, state.backgroundOpacity);
@@ -1802,6 +1893,9 @@
       let changed = false;
       controller.documentStore.selectedContentLayers({ editableOnly: true }).forEach((layer) => {
         if (namespace.ImageEditorObjectPixelEditor.eraseLayerRegion(controller.documentStore, layer, rect)) changed = true;
+      });
+      selectedStandaloneObjects(controller, { editableOnly: true }).forEach((object) => {
+        if (namespace.ImageEditorObjectPixelEditor.eraseObjectRegion(controller.documentStore, object, rect)) changed = true;
       });
       return changed;
     }
@@ -2799,6 +2893,23 @@
     function moveSelectionWithKeyboard(controller, event) {
       const delta = keyboardSelectionDelta(event);
       const { view, state, selection } = controller;
+      if (delta && state.tool === "move" && controller.documentStore.selectedIds.size) {
+        const objects = selectedDocumentObjects(controller);
+        if (!objects.length) return false;
+        event.preventDefault();
+        const before = controller.documentStore.snapshot();
+        objects.forEach((object) => {
+          object.transform.x = (Number(object.transform.x ?? object.bounds.x) || 0) + delta.x;
+          object.transform.y = (Number(object.transform.y ?? object.bounds.y) || 0) + delta.y;
+        });
+        controller.documentStore.notify({ type: "transform", ids: objects.map((object) => object.id) });
+        controller.history.push(before, controller.documentStore.snapshot(), "Move objects");
+        state.markChanged();
+        renderLayeredDocument(controller);
+        drawObjectSelectionOverlay(controller);
+        syncTab(controller);
+        return true;
+      }
       if (!delta || state.tool !== "select" || !selection.hasSelection) return false;
       event.preventDefault();
       if (!selection.floating) {
@@ -2840,11 +2951,8 @@
     }
     /** Keep editor shortcuts out of native text-entry controls and application dialogs. */
     function pixelSelectionRegions(controller) {
-      const { selection, view } = controller;
+      const { selection } = controller;
       if (!selection.hasSelection) return [];
-      if (selection.shape === "rectangle" && selection.inverted) {
-        return namespace.imageEditorInverseSelectionRects(selection.rect, { width: view.canvas.width, height: view.canvas.height });
-      }
       return [selection.region()];
     }
 
@@ -2886,8 +2994,9 @@
           return true;
         }
         const before = documentStore.snapshot();
-        const layers = documentStore.selectedContentLayers({ editableOnly: true });
-        const changed = namespace.ImageEditorCanvasEditActions.flipSelectedLayerRegions(documentStore, layers, pixelSelectionRegions(controller), horizontal);
+        const layers = documentStore.selectedContentLayers({ editableOnly: true, fallbackToActive: false });
+        const objects = selectedStandaloneObjects(controller, { editableOnly: true });
+        const changed = namespace.ImageEditorCanvasEditActions.flipSelectedLayerRegions(documentStore, layers, pixelSelectionRegions(controller), horizontal, objects);
         if (changed) {
           controller.history.push(before, documentStore.snapshot(), horizontal ? "Flip pixels horizontal" : "Flip pixels vertical");
           state.markChanged();
@@ -2921,17 +3030,55 @@
       const { selection, documentStore, view, state } = controller;
       if (!selection.hasSelection || selection.inverted) return false;
       const rect = { ...selection.rect };
-      if (rect.width < 16 || rect.height < 16) return false;
       if (selection.floating) commitSelection(controller);
+      const selectedLayers = documentStore.selectedContentLayers({ editableOnly: true, fallbackToActive: false })
+        .filter((layer) => !namespace.isCanvasBackgroundLayer(layer));
+      const selectedObjects = selectedStandaloneObjects(controller, { editableOnly: true });
+      if (!selectedLayers.length && !selectedObjects.length) return false;
+      const editableLayers = [];
+      namespace.walkDocumentNodes(documentStore.document, (node) => {
+        if (node.kind === "layer" && node.visible !== false && !node.locked && !namespace.isCanvasBackgroundLayer(node)) editableLayers.push(node);
+      });
+      const selectedLayerIds = new Set(selectedLayers.map((layer) => layer.id));
+      const editableObjectIds = [];
+      namespace.walkDocumentObjects(documentStore.document, (object, location) => {
+        if (!location.layer && location.visible && !location.locked && object.visible !== false && !object.locked) editableObjectIds.push(object.id);
+      });
+      const selectedObjectIds = new Set(selectedObjects.map((object) => object.id));
+      const hasEditableTargets = editableLayers.length > 0 || editableObjectIds.length > 0;
+      const cropCanvas = hasEditableTargets && editableLayers.every((layer) => selectedLayerIds.has(layer.id)) && editableObjectIds.every((id) => selectedObjectIds.has(id));
+      if (cropCanvas && (rect.width < 16 || rect.height < 16)) return false;
       const before = documentStore.snapshot();
-      namespace.ImageEditorCanvasEditActions.cropDocument(documentStore, rect);
-      view.setDimensions(rect.width, rect.height);
-      state.width = rect.width;
-      state.height = rect.height;
+      const changed = namespace.ImageEditorCanvasEditActions.cropSelectedLayers(documentStore, selectedLayers, selection.region(), selectedObjects);
+      if (!changed) return false;
+      if (cropCanvas) {
+        namespace.ImageEditorCanvasEditActions.cropDocument(documentStore, rect);
+        view.setDimensions(rect.width, rect.height);
+        state.width = rect.width;
+        state.height = rect.height;
+      }
       selection.clear();
       controller.history.push(before, documentStore.snapshot(), "Crop image");
       state.markChanged();
-      view.setZoom(state.zoom);
+      if (cropCanvas) view.setZoom(state.zoom);
+      renderLayeredDocument(controller);
+      drawSelectionOverlay(controller);
+      syncTab(controller);
+      return true;
+    }
+
+    function liftCanvasSelectionToNewLayer(controller) {
+      const { selection, documentStore, state } = controller;
+      if (!selection.hasSelection || selection.floating) return false;
+      const layers = documentStore.selectedContentLayers({ editableOnly: true, fallbackToActive: false })
+        .filter((layer) => !namespace.isCanvasBackgroundLayer(layer));
+      const objects = selectedStandaloneObjects(controller, { editableOnly: true });
+      if (!layers.length && !objects.length) return false;
+      const before = documentStore.snapshot();
+      const result = namespace.ImageEditorCanvasEditActions.liftSelectedLayerRegion(documentStore, layers, selection.region(), objects);
+      if (!result) return false;
+      controller.history.push(before, documentStore.snapshot(), "Lift selection to new layer");
+      state.markChanged();
       renderLayeredDocument(controller);
       drawSelectionOverlay(controller);
       syncTab(controller);
@@ -2945,6 +3092,7 @@
       if (action === "select-all") return selectAllCanvas(controller);
       if (action === "deselect") return deselectCanvas(controller);
       if (action === "inverse-select") return inverseCanvasSelection(controller);
+      if (action === "lift-new-layer") return liftCanvasSelectionToNewLayer(controller);
       if (action === "crop") return cropCanvasToSelection(controller);
       if (action === "flip-horizontal" || action === "flip-vertical") return flipCanvasTarget(controller, action === "flip-horizontal");
       if (action === "copy") return hasPixels ? copySelectionToClipboard(controller) : copyObjectSelectionToClipboard(controller);
@@ -2972,8 +3120,7 @@
       const listener = (event) => {
         event.preventDefault();
         const point = controller.view.pointFromEvent(event);
-        const selectionAtPoint = controller.selection.hasSelection &&
-          (controller.selection.inverted ? !controller.selection.contains(point) : controller.selection.contains(point));
+        const selectionAtPoint = namespace.imageEditorSelectionContainsPoint(controller.selection, point);
         const objectId = selectionAtPoint ? null : controller.objectSelection.hitTest(point);
         if (objectId) {
           controller.documentStore.select(objectId);
@@ -2984,8 +3131,13 @@
         }
         const hasPixels = selectionAtPoint;
         const hasObjects = !hasPixels && !!objectId;
+        const canLiftPixels = hasPixels && !controller.selection.floating && controller.documentStore
+          .selectedContentLayers({ editableOnly: true, fallbackToActive: false })
+          .some((layer) => !namespace.isCanvasBackgroundLayer(layer)) ||
+          (hasPixels && !controller.selection.floating && selectedStandaloneObjects(controller, { editableOnly: true }).length > 0);
         controller.canvasContextMenu.show(event.clientX, event.clientY, {
           copy: hasPixels || hasObjects, delete: hasPixels || hasObjects,
+          "lift-new-layer": canLiftPixels,
           crop: hasPixels && !controller.selection.inverted,
           "flip-horizontal": hasPixels || hasObjects, "flip-vertical": hasPixels || hasObjects,
           deselect: controller.selection.hasSelection || controller.documentStore.selectedIds.size > 0,
@@ -3251,9 +3403,10 @@
           finishGradientFill(controller);
         }
         if (event.target.closest?.('.image-editor-layers-panel')) return;
+        if (event.target.closest?.('.image-editor-canvas-context-menu')) return;
         if (event.target.closest?.('[data-tool="select"]')) return;
         if (event.target.closest?.(".image-editor-selection-actions, .image-editor-history-actions")) return;
-        if (event.target.closest?.(".image-editor-color-targets, .image-editor-color-palette, .image-editor-color-picker")) return;
+        if (event.target.closest?.(".image-editor-color-targets, .image-editor-color-palette, .image-editor-color-picker, .image-editor-palette-library-button, .image-editor-palette-modal")) return;
         if ((!controller.selection.hasSelection && !controller.selection.isPasting) || controller.view.wrap.contains(event.target)) return;
         dropSelection(controller);
       };
@@ -3272,6 +3425,7 @@
       };
       const mimeType = source.mimeType || namespace.mimeTypeForName(source.name || source.path) || "image/png";
       const view = new namespace.ImageEditorView(root);
+      view.setPaletteColors(ensurePaletteStore().toolbarColors());
       const projectCodec = new namespace.ImageEditorProjectCodec();
       let documentBundle;
       if (source.blank === true && !source.draftBytes) {

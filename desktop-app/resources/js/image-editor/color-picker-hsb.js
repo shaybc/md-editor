@@ -44,7 +44,7 @@
       if (mode !== "hsb") {
         super.setMode(mode);
         if (this.hsbPanel) this.hsbPanel.hidden = true;
-        this.popover?.querySelectorAll(".image-editor-color-picker-hue, .image-editor-color-picker-value").forEach((element) => { element.hidden = false; });
+        this.popover?.querySelectorAll(".image-editor-color-picker-hue, .image-editor-color-picker-actions, .image-editor-color-picker-values").forEach((element) => { element.hidden = false; });
         return;
       }
       this.mode = "hsb";
@@ -74,7 +74,7 @@
       const color = namespace.imageEditorHsvToHex(this.hsv.h, this.hsv.s, this.hsv.v);
       this.colors[this.target] = color;
       this.render();
-      this.callbacks.onChange(this.target, color, this.opacities[this.target]);
+      this.emitChange(color, this.opacities[this.target]);
     }
 
     render() {

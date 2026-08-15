@@ -115,6 +115,17 @@ test("canvas context actions calculate inverse marquee regions", () => {
   ]);
 });
 
+test("canvas context actions recognize the selected outer area after inversion", () => {
+  const Selection = loadSelection();
+  const actions = loadCanvasContextActions();
+  const selection = new Selection();
+  selection.setRect({ x: 2, y: 2 }, { x: 6, y: 6 }, { width: 10, height: 10 });
+  selection.inverted = true;
+
+  assert.equal(actions.imageEditorSelectionContainsPoint(selection, { x: 1, y: 1 }), true);
+  assert.equal(actions.imageEditorSelectionContainsPoint(selection, { x: 4, y: 4 }), false);
+});
+
 test("canvas context actions flip selected pixels horizontally", () => {
   const actions = loadCanvasContextActions();
   const pixels = {

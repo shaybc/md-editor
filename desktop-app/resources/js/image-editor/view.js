@@ -284,6 +284,7 @@
             <div class="image-editor-color-target" data-color-target="background" title="Background color"><span>BG</span><button type="button" class="image-editor-color-trigger" data-color-picker-target="background" aria-label="Choose background color"></button><input class="image-editor-background image-editor-color-input-proxy" type="color" value="#ffffff" tabindex="-1" aria-hidden="true"></div>
           </div>
           <div class="image-editor-color-palette image-editor-toolbar-group" role="group" aria-label="Predefined colors"></div>
+          <button type="button" class="image-editor-button image-editor-palette-library-button" data-palette-library title="Manage color palettes" aria-label="Manage color palettes"><i class="bi bi-palette"></i></button>
           <div class="image-editor-dynamic-controls">
             <div class="image-editor-rounded-rectangle-controls image-editor-toolbar-group" hidden>
               <label>Radius <input class="image-editor-corner-radius" type="range" min="0" max="100" value="16"></label>
@@ -457,7 +458,13 @@
         element.dataset.action = action;
         this.shell.querySelector(".image-editor-selection-actions").appendChild(element);
       });
-      PALETTE_COLORS.forEach((color) => this.shell.querySelector(".image-editor-color-palette").appendChild(createPaletteButton(color)));
+      this.setPaletteColors(PALETTE_COLORS);
+    }
+
+    setPaletteColors(colors) {
+      const palette = this.shell.querySelector(".image-editor-color-palette");
+      if (!palette) return;
+      palette.replaceChildren(...colors.map((color) => createPaletteButton(color)));
     }
 
     setDimensions(width, height) {

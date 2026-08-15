@@ -8,6 +8,7 @@
     { id: "copy", icon: "bi-copy", label: "Copy" },
     { id: "paste", icon: "bi-clipboard", label: "Paste" },
     { id: "delete", icon: "bi-trash", label: "Delete", danger: true },
+    { id: "lift-new-layer", icon: "bi-layer-forward", label: "Lift to new layer" },
     { separator: true },
     { id: "crop", icon: "bi-crop", label: "Crop image" },
     { id: "flip-horizontal", icon: "bi-symmetry-vertical", label: "Flip horizontal" },
@@ -50,6 +51,11 @@
     ].filter((region) => region.width > 0 && region.height > 0);
   }
 
+  /** Return whether a point belongs to the active pixel selection. */
+  function selectionContainsPoint(selection, point) {
+    return !!selection?.hasSelection && selection.contains(point);
+  }
+
   /** Flip an ImageData payload without changing its dimensions. */
   function flipImageData(imageData, horizontal) {
     if (!imageData) return null;
@@ -68,5 +74,6 @@
 
   namespace.ImageEditorCanvasContextMenu = ImageEditorCanvasContextMenu;
   namespace.imageEditorInverseSelectionRects = inverseSelectionRects;
+  namespace.imageEditorSelectionContainsPoint = selectionContainsPoint;
   namespace.flipImageEditorImageData = flipImageData;
 })(typeof window !== "undefined" ? window : globalThis);
