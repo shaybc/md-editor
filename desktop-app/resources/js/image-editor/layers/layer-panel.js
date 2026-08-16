@@ -146,6 +146,14 @@
       const styleLayers = layers.filter((layer) => !namespace.isCanvasBackgroundLayer(layer));
       const canStyle = styleLayers.length > 0 && styleLayers.every((layer) => !layer.locked);
       const hasDropShadow = styleLayers.some((layer) => namespace.ImageEditorDropShadowEffect?.get(layer));
+      const hasInnerShadow = styleLayers.some((layer) => namespace.ImageEditorInnerShadowEffect?.get(layer));
+      const hasInnerGlow = styleLayers.some((layer) => namespace.ImageEditorInnerGlowEffect?.get(layer));
+      const hasOuterGlow = styleLayers.some((layer) => namespace.ImageEditorOuterGlowEffect?.get(layer));
+      const hasColorOverlay = styleLayers.some((layer) => namespace.ImageEditorColorOverlayEffect?.get(layer));
+      const hasGradientOverlay = styleLayers.some((layer) => namespace.ImageEditorGradientOverlayEffect?.get(layer));
+      const hasPatternOverlay = styleLayers.some((layer) => namespace.ImageEditorPatternOverlayEffect?.get(layer));
+      const hasBevelEmboss = styleLayers.some((layer) => namespace.ImageEditorBevelEmbossEffect?.get(layer));
+      const hasGrayscale = styleLayers.some((layer) => namespace.ImageEditorGrayscaleEffect?.get(layer));
       this.contextMenu.show(event.clientX, event.clientY, [
         { id: "new-layer", label: "New layer", icon: "bi-plus-square" },
         { id: "new-group", label: "New group", icon: "bi-folder-plus" },
@@ -162,8 +170,31 @@
         { id: "flatten", label: "Flatten layers", icon: "bi-layers-fill", disabled: !this.store.document.nodes.some((node) => !namespace.isCanvasBackgroundLayer(node)) },
         { separator: true },
         { label: "Style", icon: "bi-stars", disabled: !canStyle, children: [
+          { id: "edit-blending-options", label: "Blending Options…", icon: "bi-layers", disabled: !canStyle },
+          { id: "edit-bevel-emboss", label: "Bevel & Emboss…", icon: "bi-badge-3d", disabled: !canStyle },
+          { separator: true },
           { id: "edit-drop-shadow", label: "Drop Shadow…", icon: "bi-square-fill", disabled: !canStyle },
-          { id: "remove-drop-shadow", label: "Remove Drop Shadow", icon: "bi-x-square", disabled: !canStyle || !hasDropShadow }
+          { id: "edit-inner-shadow", label: "Inner Shadow…", icon: "bi-square", disabled: !canStyle },
+          { separator: true },
+          { id: "edit-inner-glow", label: "Inner Glow…", icon: "bi-brightness-high", disabled: !canStyle },
+          { id: "edit-outer-glow", label: "Outer Glow…", icon: "bi-brightness-high-fill", disabled: !canStyle },
+          { separator: true },
+          { id: "edit-color-overlay", label: "Color Overlay…", icon: "bi-palette-fill", disabled: !canStyle },
+          { id: "edit-gradient-overlay", label: "Gradient Overlay…", icon: "bi-circle-half", disabled: !canStyle },
+          { id: "edit-pattern-overlay", label: "Pattern Overlay…", icon: "bi-grid-3x3-gap", disabled: !canStyle },
+          { id: "apply-grayscale", label: "Grayscale", icon: "bi-circle-half", disabled: !canStyle },
+          { separator: true },
+          { label: "Remove", icon: "bi-x-square", disabled: !canStyle, children: [
+            { id: "remove-bevel-emboss", label: "Bevel & Emboss", icon: "bi-badge-3d", disabled: !canStyle || !hasBevelEmboss },
+            { id: "remove-drop-shadow", label: "Drop Shadow", icon: "bi-square-fill", disabled: !canStyle || !hasDropShadow },
+            { id: "remove-inner-shadow", label: "Inner Shadow", icon: "bi-square", disabled: !canStyle || !hasInnerShadow },
+            { id: "remove-inner-glow", label: "Inner Glow", icon: "bi-brightness-high", disabled: !canStyle || !hasInnerGlow },
+            { id: "remove-outer-glow", label: "Outer Glow", icon: "bi-brightness-high-fill", disabled: !canStyle || !hasOuterGlow },
+            { id: "remove-color-overlay", label: "Color Overlay", icon: "bi-palette-fill", disabled: !canStyle || !hasColorOverlay },
+            { id: "remove-gradient-overlay", label: "Gradient Overlay", icon: "bi-circle-half", disabled: !canStyle || !hasGradientOverlay },
+            { id: "remove-pattern-overlay", label: "Pattern Overlay", icon: "bi-grid-3x3-gap", disabled: !canStyle || !hasPatternOverlay },
+            { id: "remove-grayscale", label: "Grayscale", icon: "bi-circle-half", disabled: !canStyle || !hasGrayscale }
+          ] }
         ] },
         { separator: true },
         { id: "toggle-lock", label: allLocked ? "Unlock layer" : "Lock layer", icon: allLocked ? "bi-unlock" : "bi-lock", disabled: targets.length === 0 },
@@ -287,7 +318,7 @@
       const layers = targets.filter((item) => item.kind === "layer");
       if (action === "rename" && targets.length === 1) { void this.renameItem(targets[0].id, targets[0].name); return; }
       if (action === "create-text-outlines") { this.onMutate(action, null); return; }
-      if (action === "edit-drop-shadow" || action === "remove-drop-shadow") { this.onMutate(action, { layerIds: layers.map((layer) => layer.id) }); return; }
+      if (["edit-blending-options", "edit-bevel-emboss", "remove-bevel-emboss", "edit-drop-shadow", "remove-drop-shadow", "edit-inner-shadow", "remove-inner-shadow", "edit-inner-glow", "remove-inner-glow", "edit-outer-glow", "remove-outer-glow", "edit-color-overlay", "remove-color-overlay", "edit-gradient-overlay", "remove-gradient-overlay", "edit-pattern-overlay", "remove-pattern-overlay", "apply-grayscale", "remove-grayscale"].includes(action)) { this.onMutate(action, { layerIds: layers.map((layer) => layer.id) }); return; }
       if (action === "export-layer-png" || action === "export-layer-as") { this.onMutate(action, { layerIds: layers.map((layer) => layer.id) }); return; }
       const operations = {
         "new-layer": () => this.store.addLayer("Layer", [...this.store.selectedIds][0]),
@@ -359,7 +390,7 @@
       row.setAttribute("role", "treeitem");
       row.style.setProperty("--layer-depth", depth);
       const safeName = String(item.name || "Item").replace(/[&<>]/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[character]));
-      const hasEffect = item.kind === "layer" && namespace.ImageEditorDropShadowEffect?.get(item);
+      const hasEffect = item.kind === "layer" && (namespace.ImageEditorDropShadowEffect?.get(item) || namespace.ImageEditorInnerShadowEffect?.get(item) || namespace.ImageEditorInnerGlowEffect?.get(item) || namespace.ImageEditorOuterGlowEffect?.get(item) || namespace.ImageEditorColorOverlayEffect?.get(item) || namespace.ImageEditorGradientOverlayEffect?.get(item) || namespace.ImageEditorPatternOverlayEffect?.get(item));
       row.innerHTML = `${expandable ? `<button data-layer-expand="${item.id}" aria-label="Expand"><i class="bi bi-chevron-${this.expandedIds.has(item.id) ? "down" : "right"}"></i></button>` : "<span></span>"}<button data-layer-visibility="${item.id}" data-visible="${item.visible !== false}" aria-label="Toggle visibility"><i class="bi bi-eye${item.visible === false ? "-slash" : ""}"></i></button><span class="image-editor-layer-thumbnail"><i class="bi ${item.kind === "group" ? "bi-folder" : item.kind === "layer" ? "bi-layers" : item.type === "text" ? "bi-fonts" : "bi-image"}"></i></span><span class="image-editor-layer-name">${safeName}</span>${hasEffect ? '<i class="bi bi-fx image-editor-layer-effect-indicator" title="Layer effects" aria-label="Layer effects"></i>' : ""}<button data-layer-lock="${item.id}" data-locked="${item.locked === true}" aria-label="Toggle lock"><i class="bi bi-${item.locked ? "lock-fill" : "unlock"}"></i></button>`;
       return row;
     }

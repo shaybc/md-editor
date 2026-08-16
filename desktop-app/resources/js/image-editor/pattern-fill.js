@@ -102,5 +102,6 @@
   }
 
   namespace.patternFillTypes = PATTERN_TYPES;
+  namespace.imageEditorPatternColorAt = patternColorAt;
   namespace.patternFill = patternFill;
 })(typeof window !== "undefined" ? window : globalThis);

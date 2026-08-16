@@ -304,11 +304,140 @@
       return layers;
     }
 
+    /** Edit blend mode, layer opacity, and fill opacity for selected layers. */
+    function openBlendingOptions(controller, requestedIds = null) {
+      const hasProvisionalContent = controller.selection.floating
+        && (controller.pendingContentDescriptor || controller.selection.origin === "paste");
+      if (hasProvisionalContent) {
+        if (!commitSelection(controller)) return false;
+        requestedIds = null;
+      }
+      const layers = resolveLayerStyleTargets(controller, requestedIds);
+      if (!layers.length) return false;
+      const originals = new Map(layers.map((layer) => [layer.id, namespace.ImageEditorBlendingOptions.normalize(layer)]));
+      const restore = () => layers.forEach((layer) => namespace.ImageEditorBlendingOptions.apply(layer, originals.get(layer.id)));
+      controller.blendingOptionsDialog.open({
+        initial: originals.get(layers[0].id),
+        targetName: layers.length === 1 ? layers[0].name : `${layers.length} selected layers`,
+        onPreview(settings, enabled) {
+          restore();
+          if (enabled) layers.forEach((layer) => namespace.ImageEditorBlendingOptions.apply(layer, settings));
+          renderLayeredDocument(controller);
+        },
+        onApply(settings) {
+          restore();
+          commitDocumentMutation(controller, "Change Blending Options", () => {
+            const changed = layers.map((layer) => namespace.ImageEditorBlendingOptions.apply(layer, settings)).some(Boolean);
+            if (changed) controller.documentStore.notify({ type: "layer-blending-options", ids: layers.map((layer) => layer.id) });
+            return changed;
+          });
+        },
+        onCancel() {
+          restore();
+          renderLayeredDocument(controller);
+        }
+      });
+      return true;
+    }
+
     /** Remove Drop Shadow from the requested layers as one undoable document change. */
     function removeDropShadowStyle(controller, requestedIds = null) {
       const layers = resolveLayerStyleTargets(controller, requestedIds);
       return commitDocumentMutation(controller, "Remove Drop Shadow", () => {
         const changed = layers.map((layer) => namespace.ImageEditorDropShadowEffect.remove(layer)).some(Boolean);
+        if (changed) controller.documentStore.notify({ type: "layer-effect", ids: layers.map((layer) => layer.id) });
+        return changed;
+      });
+    }
+
+    /** Remove Inner Shadow from the requested layers as one undoable document change. */
+    function removeInnerShadowStyle(controller, requestedIds = null) {
+      const layers = resolveLayerStyleTargets(controller, requestedIds);
+      return commitDocumentMutation(controller, "Remove Inner Shadow", () => {
+        const changed = layers.map((layer) => namespace.ImageEditorInnerShadowEffect.remove(layer)).some(Boolean);
+        if (changed) controller.documentStore.notify({ type: "layer-effect", ids: layers.map((layer) => layer.id) });
+        return changed;
+      });
+    }
+
+    /** Remove Inner Glow from the requested layers as one undoable document change. */
+    function removeInnerGlowStyle(controller, requestedIds = null) {
+      const layers = resolveLayerStyleTargets(controller, requestedIds);
+      return commitDocumentMutation(controller, "Remove Inner Glow", () => {
+        const changed = layers.map((layer) => namespace.ImageEditorInnerGlowEffect.remove(layer)).some(Boolean);
+        if (changed) controller.documentStore.notify({ type: "layer-effect", ids: layers.map((layer) => layer.id) });
+        return changed;
+      });
+    }
+
+    /** Remove Outer Glow from the requested layers as one undoable document change. */
+    function removeOuterGlowStyle(controller, requestedIds = null) {
+      const layers = resolveLayerStyleTargets(controller, requestedIds);
+      return commitDocumentMutation(controller, "Remove Outer Glow", () => {
+        const changed = layers.map((layer) => namespace.ImageEditorOuterGlowEffect.remove(layer)).some(Boolean);
+        if (changed) controller.documentStore.notify({ type: "layer-effect", ids: layers.map((layer) => layer.id) });
+        return changed;
+      });
+    }
+
+    /** Remove Color Overlay from the requested layers as one undoable document change. */
+    function removeColorOverlayStyle(controller, requestedIds = null) {
+      const layers = resolveLayerStyleTargets(controller, requestedIds);
+      return commitDocumentMutation(controller, "Remove Color Overlay", () => {
+        const changed = layers.map((layer) => namespace.ImageEditorColorOverlayEffect.remove(layer)).some(Boolean);
+        if (changed) controller.documentStore.notify({ type: "layer-effect", ids: layers.map((layer) => layer.id) });
+        return changed;
+      });
+    }
+
+    /** Remove Gradient Overlay from the requested layers as one undoable document change. */
+    function removeGradientOverlayStyle(controller, requestedIds = null) {
+      const layers = resolveLayerStyleTargets(controller, requestedIds);
+      return commitDocumentMutation(controller, "Remove Gradient Overlay", () => {
+        const changed = layers.map((layer) => namespace.ImageEditorGradientOverlayEffect.remove(layer)).some(Boolean);
+        if (changed) controller.documentStore.notify({ type: "layer-effect", ids: layers.map((layer) => layer.id) });
+        return changed;
+      });
+    }
+
+    /** Remove Pattern Overlay from the requested layers as one undoable document change. */
+    function removePatternOverlayStyle(controller, requestedIds = null) {
+      const layers = resolveLayerStyleTargets(controller, requestedIds);
+      return commitDocumentMutation(controller, "Remove Pattern Overlay", () => {
+        const changed = layers.map((layer) => namespace.ImageEditorPatternOverlayEffect.remove(layer)).some(Boolean);
+        if (changed) controller.documentStore.notify({ type: "layer-effect", ids: layers.map((layer) => layer.id) });
+        return changed;
+      });
+    }
+
+    /** Apply grayscale to the requested layers as one undoable document change. */
+    function applyGrayscaleStyle(controller, requestedIds = null) {
+      const layers = resolveLayerStyleTargets(controller, requestedIds);
+      return commitDocumentMutation(controller, "Apply Grayscale", () => {
+        const changed = layers.map((layer) => {
+          if (namespace.ImageEditorGrayscaleEffect.get(layer)) return false;
+          return namespace.ImageEditorGrayscaleEffect.upsert(layer);
+        }).some(Boolean);
+        if (changed) controller.documentStore.notify({ type: "layer-effect", ids: layers.map((layer) => layer.id) });
+        return changed;
+      });
+    }
+
+    /** Remove grayscale from the requested layers as one undoable document change. */
+    function removeGrayscaleStyle(controller, requestedIds = null) {
+      const layers = resolveLayerStyleTargets(controller, requestedIds);
+      return commitDocumentMutation(controller, "Remove Grayscale", () => {
+        const changed = layers.map((layer) => namespace.ImageEditorGrayscaleEffect.remove(layer)).some(Boolean);
+        if (changed) controller.documentStore.notify({ type: "layer-effect", ids: layers.map((layer) => layer.id) });
+        return changed;
+      });
+    }
+
+    /** Remove Bevel & Emboss from the requested layers as one undoable document change. */
+    function removeBevelEmbossStyle(controller, requestedIds = null) {
+      const layers = resolveLayerStyleTargets(controller, requestedIds);
+      return commitDocumentMutation(controller, "Remove Bevel & Emboss", () => {
+        const changed = layers.map((layer) => namespace.ImageEditorBevelEmbossEffect.remove(layer)).some(Boolean);
         if (changed) controller.documentStore.notify({ type: "layer-effect", ids: layers.map((layer) => layer.id) });
         return changed;
       });
@@ -352,6 +481,314 @@
         onRemove() {
           restore();
           removeDropShadowStyle(controller, layers.map((layer) => layer.id));
+        }
+      });
+      return true;
+    }
+
+    /** Open the app-styled Inner Shadow editor and commit one undoable effect change. */
+    function openInnerShadowStyle(controller, requestedIds = null) {
+      const hasProvisionalContent = controller.selection.floating
+        && (controller.pendingContentDescriptor || controller.selection.origin === "paste");
+      if (hasProvisionalContent) {
+        if (!commitSelection(controller)) return false;
+        requestedIds = null;
+      }
+      const layers = resolveLayerStyleTargets(controller, requestedIds);
+      if (!layers.length) return false;
+      const originals = new Map(layers.map((layer) => [layer.id, namespace.cloneImageDocument(layer.effects || [])]));
+      const restore = () => layers.forEach((layer) => { layer.effects = namespace.cloneImageDocument(originals.get(layer.id) || []); });
+      const notify = (type) => controller.documentStore.notify({ type, ids: layers.map((layer) => layer.id) });
+      const existing = layers.map((layer) => namespace.ImageEditorInnerShadowEffect.get(layer)).find(Boolean);
+      controller.layerStyleDialog.open({
+        styleType: "inner-shadow",
+        effect: existing,
+        hasEffect: !!existing,
+        targetName: layers.length === 1 ? layers[0].name : `${layers.length} selected layers`,
+        onPreview(effect, enabled) {
+          restore();
+          if (enabled) layers.forEach((layer) => namespace.ImageEditorInnerShadowEffect.upsert(layer, effect));
+          renderLayeredDocument(controller);
+        },
+        onCancel() {
+          restore();
+          renderLayeredDocument(controller);
+        },
+        onApply(effect) {
+          restore();
+          commitDocumentMutation(controller, "Change Inner Shadow", () => {
+            const changed = layers.map((layer) => namespace.ImageEditorInnerShadowEffect.upsert(layer, effect)).some(Boolean);
+            if (changed) notify("layer-effect");
+            return changed;
+          });
+        },
+        onRemove() {
+          restore();
+          removeInnerShadowStyle(controller, layers.map((layer) => layer.id));
+        }
+      });
+      return true;
+    }
+
+    /** Open the app-styled Inner Glow editor and commit one undoable effect change. */
+    function openInnerGlowStyle(controller, requestedIds = null) {
+      const hasProvisionalContent = controller.selection.floating
+        && (controller.pendingContentDescriptor || controller.selection.origin === "paste");
+      if (hasProvisionalContent) {
+        if (!commitSelection(controller)) return false;
+        requestedIds = null;
+      }
+      const layers = resolveLayerStyleTargets(controller, requestedIds);
+      if (!layers.length) return false;
+      const originals = new Map(layers.map((layer) => [layer.id, namespace.cloneImageDocument(layer.effects || [])]));
+      const restore = () => layers.forEach((layer) => { layer.effects = namespace.cloneImageDocument(originals.get(layer.id) || []); });
+      const notify = (type) => controller.documentStore.notify({ type, ids: layers.map((layer) => layer.id) });
+      const existing = layers.map((layer) => namespace.ImageEditorInnerGlowEffect.get(layer)).find(Boolean);
+      controller.layerStyleDialog.open({
+        styleType: "inner-glow",
+        effect: existing,
+        hasEffect: !!existing,
+        targetName: layers.length === 1 ? layers[0].name : layers.length + " selected layers",
+        onPreview(effect, enabled) {
+          restore();
+          if (enabled) layers.forEach((layer) => namespace.ImageEditorInnerGlowEffect.upsert(layer, effect));
+          renderLayeredDocument(controller);
+        },
+        onCancel() {
+          restore();
+          renderLayeredDocument(controller);
+        },
+        onApply(effect) {
+          restore();
+          commitDocumentMutation(controller, "Change Inner Glow", () => {
+            const changed = layers.map((layer) => namespace.ImageEditorInnerGlowEffect.upsert(layer, effect)).some(Boolean);
+            if (changed) notify("layer-effect");
+            return changed;
+          });
+        },
+        onRemove() {
+          restore();
+          removeInnerGlowStyle(controller, layers.map((layer) => layer.id));
+        }
+      });
+      return true;
+    }
+
+    /** Open the app-styled Outer Glow editor and commit one undoable effect change. */
+    function openOuterGlowStyle(controller, requestedIds = null) {
+      const hasProvisionalContent = controller.selection.floating
+        && (controller.pendingContentDescriptor || controller.selection.origin === "paste");
+      if (hasProvisionalContent) {
+        if (!commitSelection(controller)) return false;
+        requestedIds = null;
+      }
+      const layers = resolveLayerStyleTargets(controller, requestedIds);
+      if (!layers.length) return false;
+      const originals = new Map(layers.map((layer) => [layer.id, namespace.cloneImageDocument(layer.effects || [])]));
+      const restore = () => layers.forEach((layer) => { layer.effects = namespace.cloneImageDocument(originals.get(layer.id) || []); });
+      const notify = (type) => controller.documentStore.notify({ type, ids: layers.map((layer) => layer.id) });
+      const existing = layers.map((layer) => namespace.ImageEditorOuterGlowEffect.get(layer)).find(Boolean);
+      controller.layerStyleDialog.open({
+        styleType: "outer-glow",
+        effect: existing,
+        hasEffect: !!existing,
+        targetName: layers.length === 1 ? layers[0].name : layers.length + " selected layers",
+        onPreview(effect, enabled) {
+          restore();
+          if (enabled) layers.forEach((layer) => namespace.ImageEditorOuterGlowEffect.upsert(layer, effect));
+          renderLayeredDocument(controller);
+        },
+        onCancel() {
+          restore();
+          renderLayeredDocument(controller);
+        },
+        onApply(effect) {
+          restore();
+          commitDocumentMutation(controller, "Change Outer Glow", () => {
+            const changed = layers.map((layer) => namespace.ImageEditorOuterGlowEffect.upsert(layer, effect)).some(Boolean);
+            if (changed) notify("layer-effect");
+            return changed;
+          });
+        },
+        onRemove() {
+          restore();
+          removeOuterGlowStyle(controller, layers.map((layer) => layer.id));
+        }
+      });
+      return true;
+    }
+
+    /** Open the app-styled Color Overlay editor and commit one undoable effect change. */
+    function openColorOverlayStyle(controller, requestedIds = null) {
+      const hasProvisionalContent = controller.selection.floating
+        && (controller.pendingContentDescriptor || controller.selection.origin === "paste");
+      if (hasProvisionalContent) {
+        if (!commitSelection(controller)) return false;
+        requestedIds = null;
+      }
+      const layers = resolveLayerStyleTargets(controller, requestedIds);
+      if (!layers.length) return false;
+      const originals = new Map(layers.map((layer) => [layer.id, namespace.cloneImageDocument(layer.effects || [])]));
+      const restore = () => layers.forEach((layer) => { layer.effects = namespace.cloneImageDocument(originals.get(layer.id) || []); });
+      const notify = (type) => controller.documentStore.notify({ type, ids: layers.map((layer) => layer.id) });
+      const existing = layers.map((layer) => namespace.ImageEditorColorOverlayEffect.get(layer)).find(Boolean);
+      controller.layerStyleDialog.open({
+        styleType: "color-overlay",
+        effect: existing,
+        hasEffect: !!existing,
+        targetName: layers.length === 1 ? layers[0].name : layers.length + " selected layers",
+        onPreview(effect, enabled) {
+          restore();
+          if (enabled) layers.forEach((layer) => namespace.ImageEditorColorOverlayEffect.upsert(layer, effect));
+          renderLayeredDocument(controller);
+        },
+        onCancel() {
+          restore();
+          renderLayeredDocument(controller);
+        },
+        onApply(effect) {
+          restore();
+          commitDocumentMutation(controller, "Change Color Overlay", () => {
+            const changed = layers.map((layer) => namespace.ImageEditorColorOverlayEffect.upsert(layer, effect)).some(Boolean);
+            if (changed) notify("layer-effect");
+            return changed;
+          });
+        },
+        onRemove() {
+          restore();
+          removeColorOverlayStyle(controller, layers.map((layer) => layer.id));
+        }
+      });
+      return true;
+    }
+
+    /** Open the app-styled Gradient Overlay editor and commit one undoable effect change. */
+    function openGradientOverlayStyle(controller, requestedIds = null) {
+      const hasProvisionalContent = controller.selection.floating
+        && (controller.pendingContentDescriptor || controller.selection.origin === "paste");
+      if (hasProvisionalContent) {
+        if (!commitSelection(controller)) return false;
+        requestedIds = null;
+      }
+      const layers = resolveLayerStyleTargets(controller, requestedIds);
+      if (!layers.length) return false;
+      const originals = new Map(layers.map((layer) => [layer.id, namespace.cloneImageDocument(layer.effects || [])]));
+      const restore = () => layers.forEach((layer) => { layer.effects = namespace.cloneImageDocument(originals.get(layer.id) || []); });
+      const notify = (type) => controller.documentStore.notify({ type, ids: layers.map((layer) => layer.id) });
+      const existing = layers.map((layer) => namespace.ImageEditorGradientOverlayEffect.get(layer)).find(Boolean);
+      controller.layerStyleDialog.open({
+        styleType: "gradient-overlay",
+        effect: existing,
+        hasEffect: !!existing,
+        targetName: layers.length === 1 ? layers[0].name : layers.length + " selected layers",
+        onPreview(effect, enabled) {
+          restore();
+          if (enabled) layers.forEach((layer) => namespace.ImageEditorGradientOverlayEffect.upsert(layer, effect));
+          renderLayeredDocument(controller);
+        },
+        onCancel() {
+          restore();
+          renderLayeredDocument(controller);
+        },
+        onApply(effect) {
+          restore();
+          commitDocumentMutation(controller, "Change Gradient Overlay", () => {
+            const changed = layers.map((layer) => namespace.ImageEditorGradientOverlayEffect.upsert(layer, effect)).some(Boolean);
+            if (changed) notify("layer-effect");
+            return changed;
+          });
+        },
+        onRemove() {
+          restore();
+          removeGradientOverlayStyle(controller, layers.map((layer) => layer.id));
+        }
+      });
+      return true;
+    }
+
+    /** Open the app-styled Pattern Overlay editor and commit one undoable effect change. */
+    function openPatternOverlayStyle(controller, requestedIds = null) {
+      const hasProvisionalContent = controller.selection.floating
+        && (controller.pendingContentDescriptor || controller.selection.origin === "paste");
+      if (hasProvisionalContent) {
+        if (!commitSelection(controller)) return false;
+        requestedIds = null;
+      }
+      const layers = resolveLayerStyleTargets(controller, requestedIds);
+      if (!layers.length) return false;
+      const originals = new Map(layers.map((layer) => [layer.id, namespace.cloneImageDocument(layer.effects || [])]));
+      const restore = () => layers.forEach((layer) => { layer.effects = namespace.cloneImageDocument(originals.get(layer.id) || []); });
+      const notify = (type) => controller.documentStore.notify({ type, ids: layers.map((layer) => layer.id) });
+      const existing = layers.map((layer) => namespace.ImageEditorPatternOverlayEffect.get(layer)).find(Boolean);
+      controller.layerStyleDialog.open({
+        styleType: "pattern-overlay",
+        effect: existing,
+        hasEffect: !!existing,
+        targetName: layers.length === 1 ? layers[0].name : layers.length + " selected layers",
+        onPreview(effect, enabled) {
+          restore();
+          if (enabled) layers.forEach((layer) => namespace.ImageEditorPatternOverlayEffect.upsert(layer, effect));
+          renderLayeredDocument(controller);
+        },
+        onCancel() {
+          restore();
+          renderLayeredDocument(controller);
+        },
+        onApply(effect) {
+          restore();
+          commitDocumentMutation(controller, "Change Pattern Overlay", () => {
+            const changed = layers.map((layer) => namespace.ImageEditorPatternOverlayEffect.upsert(layer, effect)).some(Boolean);
+            if (changed) notify("layer-effect");
+            return changed;
+          });
+        },
+        onRemove() {
+          restore();
+          removePatternOverlayStyle(controller, layers.map((layer) => layer.id));
+        }
+      });
+      return true;
+    }
+
+    /** Open the app-styled Bevel & Emboss editor and commit one undoable effect change. */
+    function openBevelEmbossStyle(controller, requestedIds = null) {
+      const hasProvisionalContent = controller.selection.floating
+        && (controller.pendingContentDescriptor || controller.selection.origin === "paste");
+      if (hasProvisionalContent) {
+        if (!commitSelection(controller)) return false;
+        requestedIds = null;
+      }
+      const layers = resolveLayerStyleTargets(controller, requestedIds);
+      if (!layers.length) return false;
+      const originals = new Map(layers.map((layer) => [layer.id, namespace.cloneImageDocument(layer.effects || [])]));
+      const restore = () => layers.forEach((layer) => { layer.effects = namespace.cloneImageDocument(originals.get(layer.id) || []); });
+      const notify = (type) => controller.documentStore.notify({ type, ids: layers.map((layer) => layer.id) });
+      const existing = layers.map((layer) => namespace.ImageEditorBevelEmbossEffect.get(layer)).find(Boolean);
+      controller.layerStyleDialog.open({
+        styleType: "bevel-emboss",
+        effect: existing,
+        hasEffect: !!existing,
+        targetName: layers.length === 1 ? layers[0].name : layers.length + " selected layers",
+        onPreview(effect, enabled) {
+          restore();
+          if (enabled) layers.forEach((layer) => namespace.ImageEditorBevelEmbossEffect.upsert(layer, effect));
+          renderLayeredDocument(controller);
+        },
+        onCancel() {
+          restore();
+          renderLayeredDocument(controller);
+        },
+        onApply(effect) {
+          restore();
+          commitDocumentMutation(controller, "Change Bevel & Emboss", () => {
+            const changed = layers.map((layer) => namespace.ImageEditorBevelEmbossEffect.upsert(layer, effect)).some(Boolean);
+            if (changed) notify("layer-effect");
+            return changed;
+          });
+        },
+        onRemove() {
+          restore();
+          removeBevelEmbossStyle(controller, layers.map((layer) => layer.id));
         }
       });
       return true;
@@ -3156,8 +3593,25 @@
     async function runCanvasContextAction(controller, action) {
       const hasPixels = controller.selection.hasSelection;
       const hasObjects = selectedDocumentObjects(controller).length > 0;
+      if (action === "edit-blending-options") return openBlendingOptions(controller, controller.canvasLayerStyleTargetIds);
+      if (action === "edit-bevel-emboss") return openBevelEmbossStyle(controller, controller.canvasLayerStyleTargetIds);
+      if (action === "remove-bevel-emboss") return removeBevelEmbossStyle(controller, controller.canvasLayerStyleTargetIds);
       if (action === "edit-drop-shadow") return openDropShadowStyle(controller, controller.canvasLayerStyleTargetIds);
       if (action === "remove-drop-shadow") return removeDropShadowStyle(controller, controller.canvasLayerStyleTargetIds);
+      if (action === "edit-inner-shadow") return openInnerShadowStyle(controller, controller.canvasLayerStyleTargetIds);
+      if (action === "remove-inner-shadow") return removeInnerShadowStyle(controller, controller.canvasLayerStyleTargetIds);
+      if (action === "edit-inner-glow") return openInnerGlowStyle(controller, controller.canvasLayerStyleTargetIds);
+      if (action === "remove-inner-glow") return removeInnerGlowStyle(controller, controller.canvasLayerStyleTargetIds);
+      if (action === "edit-outer-glow") return openOuterGlowStyle(controller, controller.canvasLayerStyleTargetIds);
+      if (action === "remove-outer-glow") return removeOuterGlowStyle(controller, controller.canvasLayerStyleTargetIds);
+      if (action === "edit-color-overlay") return openColorOverlayStyle(controller, controller.canvasLayerStyleTargetIds);
+      if (action === "remove-color-overlay") return removeColorOverlayStyle(controller, controller.canvasLayerStyleTargetIds);
+      if (action === "edit-gradient-overlay") return openGradientOverlayStyle(controller, controller.canvasLayerStyleTargetIds);
+      if (action === "remove-gradient-overlay") return removeGradientOverlayStyle(controller, controller.canvasLayerStyleTargetIds);
+      if (action === "edit-pattern-overlay") return openPatternOverlayStyle(controller, controller.canvasLayerStyleTargetIds);
+      if (action === "remove-pattern-overlay") return removePatternOverlayStyle(controller, controller.canvasLayerStyleTargetIds);
+      if (action === "apply-grayscale") return applyGrayscaleStyle(controller, controller.canvasLayerStyleTargetIds);
+      if (action === "remove-grayscale") return removeGrayscaleStyle(controller, controller.canvasLayerStyleTargetIds);
       if (action === "paste") return runAction(controller, "paste");
       if (action === "select-all") return selectAllCanvas(controller);
       if (action === "deselect") return deselectCanvas(controller);
@@ -3204,6 +3658,14 @@
         const styleLayers = resolveLayerStyleTargets(controller);
         controller.canvasLayerStyleTargetIds = styleLayers.map((layer) => layer.id);
         const hasDropShadow = styleLayers.some((layer) => namespace.ImageEditorDropShadowEffect.get(layer));
+        const hasInnerShadow = styleLayers.some((layer) => namespace.ImageEditorInnerShadowEffect.get(layer));
+        const hasInnerGlow = styleLayers.some((layer) => namespace.ImageEditorInnerGlowEffect.get(layer));
+        const hasOuterGlow = styleLayers.some((layer) => namespace.ImageEditorOuterGlowEffect.get(layer));
+        const hasColorOverlay = styleLayers.some((layer) => namespace.ImageEditorColorOverlayEffect.get(layer));
+        const hasGradientOverlay = styleLayers.some((layer) => namespace.ImageEditorGradientOverlayEffect.get(layer));
+        const hasPatternOverlay = styleLayers.some((layer) => namespace.ImageEditorPatternOverlayEffect.get(layer));
+        const hasGrayscale = styleLayers.some((layer) => namespace.ImageEditorGrayscaleEffect.get(layer));
+        const hasBevelEmboss = styleLayers.some((layer) => namespace.ImageEditorBevelEmbossEffect.get(layer));
         const canLiftPixels = hasPixels && !controller.selection.floating && controller.documentStore
           .selectedContentLayers({ editableOnly: true, fallbackToActive: false })
           .some((layer) => !namespace.isCanvasBackgroundLayer(layer)) ||
@@ -3215,8 +3677,25 @@
           "flip-horizontal": hasPixels || hasObjects, "flip-vertical": hasPixels || hasObjects,
           deselect: controller.selection.hasSelection || controller.documentStore.selectedIds.size > 0,
           "inverse-select": controller.selection.hasSelection || controller.documentStore.selectedIds.size > 0,
+          "edit-blending-options": styleLayers.length > 0,
+          "edit-bevel-emboss": styleLayers.length > 0,
+          "remove-bevel-emboss": hasBevelEmboss,
           "edit-drop-shadow": styleLayers.length > 0,
-          "remove-drop-shadow": hasDropShadow
+          "remove-drop-shadow": hasDropShadow,
+          "edit-inner-shadow": styleLayers.length > 0,
+          "remove-inner-shadow": hasInnerShadow,
+          "edit-inner-glow": styleLayers.length > 0,
+          "remove-inner-glow": hasInnerGlow,
+          "edit-outer-glow": styleLayers.length > 0,
+          "remove-outer-glow": hasOuterGlow,
+          "edit-color-overlay": styleLayers.length > 0,
+          "remove-color-overlay": hasColorOverlay,
+          "edit-gradient-overlay": styleLayers.length > 0,
+          "remove-gradient-overlay": hasGradientOverlay,
+          "edit-pattern-overlay": styleLayers.length > 0,
+          "remove-pattern-overlay": hasPatternOverlay,
+          "apply-grayscale": styleLayers.length > 0,
+          "remove-grayscale": hasGrayscale
         }, (action) => runCanvasContextAction(controller, action));
         if (objectId) { drawObjectSelectionOverlay(controller); syncTab(controller); }
       };
@@ -3597,7 +4076,8 @@
         pastedTextEditing: false,
         canvasContextMenu: new namespace.ImageEditorCanvasContextMenu(),
         colorRangeDialog: new namespace.ImageEditorColorRangeDialog(),
-        layerStyleDialog: new namespace.ImageEditorLayerStyleDialog()
+        layerStyleDialog: new namespace.ImageEditorLayerStyleDialog(),
+        blendingOptionsDialog: new namespace.ImageEditorBlendingOptionsDialog()
       };
       if (tab.imageEditorState?.layersPanel?.selectedIds?.length) controller.documentStore.selectedIds = new Set(tab.imageEditorState.layersPanel.selectedIds);
       controller.compositor = new namespace.ImageEditorCompositor(controller.documentStore);
@@ -3620,8 +4100,25 @@
           if (label === "export") return exportFlattenedImage(tab);
           if (label === "export-layer-png") return exportLayerImage(tab, callback?.layerIds, { mimeType: "image/png" });
           if (label === "export-layer-as") return exportLayerImage(tab, callback?.layerIds);
+          if (label === "edit-blending-options") return openBlendingOptions(controller, callback?.layerIds);
+          if (label === "edit-bevel-emboss") return openBevelEmbossStyle(controller, callback?.layerIds);
+          if (label === "remove-bevel-emboss") return removeBevelEmbossStyle(controller, callback?.layerIds);
           if (label === "edit-drop-shadow") return openDropShadowStyle(controller, callback?.layerIds);
           if (label === "remove-drop-shadow") return removeDropShadowStyle(controller, callback?.layerIds);
+          if (label === "edit-inner-shadow") return openInnerShadowStyle(controller, callback?.layerIds);
+          if (label === "remove-inner-shadow") return removeInnerShadowStyle(controller, callback?.layerIds);
+          if (label === "edit-inner-glow") return openInnerGlowStyle(controller, callback?.layerIds);
+          if (label === "remove-inner-glow") return removeInnerGlowStyle(controller, callback?.layerIds);
+          if (label === "edit-outer-glow") return openOuterGlowStyle(controller, callback?.layerIds);
+          if (label === "remove-outer-glow") return removeOuterGlowStyle(controller, callback?.layerIds);
+          if (label === "edit-color-overlay") return openColorOverlayStyle(controller, callback?.layerIds);
+          if (label === "remove-color-overlay") return removeColorOverlayStyle(controller, callback?.layerIds);
+          if (label === "edit-gradient-overlay") return openGradientOverlayStyle(controller, callback?.layerIds);
+          if (label === "remove-gradient-overlay") return removeGradientOverlayStyle(controller, callback?.layerIds);
+          if (label === "edit-pattern-overlay") return openPatternOverlayStyle(controller, callback?.layerIds);
+          if (label === "remove-pattern-overlay") return removePatternOverlayStyle(controller, callback?.layerIds);
+          if (label === "apply-grayscale") return applyGrayscaleStyle(controller, callback?.layerIds);
+          if (label === "remove-grayscale") return removeGrayscaleStyle(controller, callback?.layerIds);
           if (label === "create-text-outlines") return commitDocumentMutation(controller, "Create text outlines", () => namespace.ImageEditorTextOutlineConverter.convertSelected(controller.documentStore));
           const changed = commitDocumentMutation(controller, label, callback);
           return changed;
@@ -3695,6 +4192,7 @@
       controller.canvasContextMenu?.destroy?.();
       controller.colorRangeDialog?.destroy?.();
       controller.layerStyleDialog?.destroy?.();
+      controller.blendingOptionsDialog?.destroy?.();
       controller.layerPanel?.destroy?.();
       controller.view.destroy();
       views.delete(tabId);

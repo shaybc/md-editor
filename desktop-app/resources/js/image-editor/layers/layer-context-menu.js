@@ -48,10 +48,10 @@
           panel.setAttribute("role", "menu");
           appendItems(panel, item.children);
           const positionPanel = () => {
-            panel.classList.remove("open-left", "open-up");
+            submenu.classList.remove("open-left", "open-up");
             const bounds = panel.getBoundingClientRect();
-            if (bounds.right > global.innerWidth - 4) panel.classList.add("open-left");
-            if (bounds.bottom > global.innerHeight - 4) panel.classList.add("open-up");
+            if (bounds.right > global.innerWidth - 4) submenu.classList.add("open-left");
+            if (bounds.bottom > global.innerHeight - 4) submenu.classList.add("open-up");
           };
           submenu.addEventListener("pointerenter", positionPanel);
           trigger.addEventListener("focus", positionPanel);

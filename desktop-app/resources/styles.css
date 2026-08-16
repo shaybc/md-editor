@@ -7626,6 +7626,30 @@ body.tab-style-legacy .tab-reset-btn:disabled:hover {
   gap: 16px;
 }
 
+.app-dialog-drag-handle {
+  cursor: grab;
+  user-select: none;
+  touch-action: none;
+}
+
+.app-dialog-drag-handle.app-dialog-dragging {
+  cursor: grabbing;
+}
+
+.app-dialog-drag-active,
+.app-dialog-drag-active * {
+  user-select: none !important;
+}
+
+.app-dialog-drag-positioned {
+  position: fixed !important;
+  inset: auto !important;
+  left: var(--app-dialog-left) !important;
+  top: var(--app-dialog-top) !important;
+  margin: 0 !important;
+  transform: none !important;
+}
+
 .image-editor-palette-library-button {
   align-self: center;
   margin-inline: 2px 8px;

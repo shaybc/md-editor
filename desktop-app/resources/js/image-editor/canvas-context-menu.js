@@ -19,8 +19,31 @@
     { id: "inverse-select", icon: "bi-intersect", label: "Inverse select" },
     { separator: true },
     { icon: "bi-stars", label: "Layer Style", children: [
+      { id: "edit-blending-options", icon: "bi-layers", label: "Blending Options…" },
+      { id: "edit-bevel-emboss", icon: "bi-badge-3d", label: "Bevel & Emboss…" },
+      { separator: true },
       { id: "edit-drop-shadow", icon: "bi-square-fill", label: "Drop Shadow…" },
-      { id: "remove-drop-shadow", icon: "bi-x-square", label: "Remove Drop Shadow" }
+      { id: "edit-inner-shadow", icon: "bi-square", label: "Inner Shadow…" },
+      { separator: true },
+      { id: "edit-inner-glow", icon: "bi-brightness-high", label: "Inner Glow…" },
+      { id: "edit-outer-glow", icon: "bi-brightness-high-fill", label: "Outer Glow…" },
+      { separator: true },
+      { id: "edit-color-overlay", icon: "bi-palette-fill", label: "Color Overlay…" },
+      { id: "edit-gradient-overlay", icon: "bi-circle-half", label: "Gradient Overlay…" },
+      { id: "edit-pattern-overlay", icon: "bi-grid-3x3-gap", label: "Pattern Overlay…" },
+      { id: "apply-grayscale", icon: "bi-circle-half", label: "Grayscale" },
+      { separator: true },
+      { icon: "bi-x-square", label: "Remove", children: [
+        { id: "remove-bevel-emboss", icon: "bi-badge-3d", label: "Bevel & Emboss" },
+        { id: "remove-drop-shadow", icon: "bi-square-fill", label: "Drop Shadow" },
+        { id: "remove-inner-shadow", icon: "bi-square", label: "Inner Shadow" },
+        { id: "remove-inner-glow", icon: "bi-brightness-high", label: "Inner Glow" },
+        { id: "remove-outer-glow", icon: "bi-brightness-high-fill", label: "Outer Glow" },
+        { id: "remove-color-overlay", icon: "bi-palette-fill", label: "Color Overlay" },
+        { id: "remove-gradient-overlay", icon: "bi-circle-half", label: "Gradient Overlay" },
+        { id: "remove-pattern-overlay", icon: "bi-grid-3x3-gap", label: "Pattern Overlay" },
+        { id: "remove-grayscale", icon: "bi-circle-half", label: "Grayscale" }
+      ] }
     ] }
   ];
 

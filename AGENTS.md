@@ -4,6 +4,10 @@
 
 When developing a notification, confirmation, prompt, or alert dialog, never use browser-native APIs such as `window.alert`, `window.confirm`, `window.prompt`, or their global equivalents. Always use MD-Editor's app-wide styled notification dialog service.
 
+## Application dialog controls
+
+When developing or changing an application dialog, always use MD-Editor's existing app-wide dialog button classes and visual patterns for primary, secondary, destructive, and close actions. Never use unstyled browser-default buttons in an application dialog.
+
 ## Pinned vendor package restoration
 
 When asked to restore the currently pinned vendor packages and rebuild the Kotlin ABI JAR, read and follow [`.agents/restore-pinned-vendor-packages.md`](.agents/restore-pinned-vendor-packages.md) completely before running the workflow.

@@ -21,7 +21,7 @@
 
   /** Create a named compositing layer that owns ordered content objects. */
   function createContentLayer(name = "Layer") {
-    return { ...commonNode("layer", name), rasterAssetId: null, pixelEdits: [], objects: [] };
+    return { ...commonNode("layer", name), fillOpacity: 1, rasterAssetId: null, pixelEdits: [], objects: [] };
   }
 
   /** Create a hierarchy group that owns objects, layers, or nested groups. */

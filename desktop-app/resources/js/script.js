@@ -19,6 +19,9 @@ async function startMarkdownViewer() {
         }
       });
   const nativeWindowAlert = typeof window.alert === "function" ? window.alert.bind(window) : null;
+  const draggableDialogs = typeof window.registerMarkdownViewerDraggableDialogs === "function"
+    ? window.registerMarkdownViewerDraggableDialogs(app)
+    : null;
   const notificationModal = typeof window.registerMarkdownViewerNotificationModal === "function"
     ? window.registerMarkdownViewerNotificationModal(app, { nativeAlert: nativeWindowAlert })
     : null;

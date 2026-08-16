@@ -51,7 +51,16 @@
       if (!manifestEntry) throw new Error("The .mdimage project does not contain manifest.json.");
       const document = JSON.parse(await manifestEntry.async("string"));
       namespace.normalizeCanvasBackgroundLayer(document);
+      namespace.ImageEditorBlendingOptions?.normalizeDocument(document);
       namespace.ImageEditorDropShadowEffect?.normalizeDocument(document);
+      namespace.ImageEditorInnerShadowEffect?.normalizeDocument(document);
+      namespace.ImageEditorInnerGlowEffect?.normalizeDocument(document);
+      namespace.ImageEditorOuterGlowEffect?.normalizeDocument(document);
+      namespace.ImageEditorColorOverlayEffect?.normalizeDocument(document);
+      namespace.ImageEditorGradientOverlayEffect?.normalizeDocument(document);
+      namespace.ImageEditorPatternOverlayEffect?.normalizeDocument(document);
+      namespace.ImageEditorBevelEmbossEffect?.normalizeDocument(document);
+      namespace.ImageEditorGrayscaleEffect?.normalizeDocument(document);
       namespace.validateImageDocument(document);
       const assets = new Map();
       for (const assetId of namespace.referencedAssetIds(document)) {

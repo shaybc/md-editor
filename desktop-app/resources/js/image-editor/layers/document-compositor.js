@@ -96,14 +96,18 @@
 
     /** Composite a rendered layer together with its non-destructive effects. */
     drawStyledLayer(context, layer) {
-      const source = this.renderLayer(layer);
+      const renderedSource = this.renderLayer(layer);
+      const source = namespace.ImageEditorGrayscaleRenderer?.apply(renderedSource, namespace.ImageEditorGrayscaleEffect?.get(layer)) || renderedSource;
       const opacity = Math.max(0, Math.min(1, Number(layer.opacity ?? 1)));
       namespace.ImageEditorDropShadowRenderer?.draw(context, source, namespace.ImageEditorDropShadowEffect?.get(layer), opacity);
-      context.save();
-      context.globalAlpha *= opacity;
-      context.globalCompositeOperation = layer.blendMode === "normal" ? "source-over" : "source-over";
-      context.drawImage(source, 0, 0);
-      context.restore();
+      namespace.ImageEditorOuterGlowRenderer?.draw(context, source, namespace.ImageEditorOuterGlowEffect?.get(layer), opacity);
+      namespace.ImageEditorLayerBlendRenderer.draw(context, source, layer);
+      namespace.ImageEditorPatternOverlayRenderer?.draw(context, source, namespace.ImageEditorPatternOverlayEffect?.get(layer), opacity);
+      namespace.ImageEditorGradientOverlayRenderer?.draw(context, source, namespace.ImageEditorGradientOverlayEffect?.get(layer), opacity);
+      namespace.ImageEditorColorOverlayRenderer?.draw(context, source, namespace.ImageEditorColorOverlayEffect?.get(layer), opacity);
+      namespace.ImageEditorInnerGlowRenderer?.draw(context, source, namespace.ImageEditorInnerGlowEffect?.get(layer), opacity);
+      namespace.ImageEditorInnerShadowRenderer?.draw(context, source, namespace.ImageEditorInnerShadowEffect?.get(layer), opacity);
+      namespace.ImageEditorBevelEmbossRenderer?.draw(context, source, namespace.ImageEditorBevelEmbossEffect?.get(layer), opacity);
     }
 
     /** Render only the supplied content layers for layer-scoped pixel editing. */
@@ -114,11 +118,7 @@
       const context = canvas.getContext("2d");
       [...(layers || [])].reverse().forEach((layer) => {
         if (!layer || layer.visible === false) return;
-        context.save();
-        context.globalAlpha *= Math.max(0, Math.min(1, Number(layer.opacity ?? 1)));
-        context.globalCompositeOperation = layer.blendMode === "normal" ? "source-over" : "source-over";
-        context.drawImage(this.renderLayer(layer), 0, 0);
-        context.restore();
+        namespace.ImageEditorLayerBlendRenderer.draw(context, this.renderLayer(layer), layer);
       });
       return canvas;
     }
