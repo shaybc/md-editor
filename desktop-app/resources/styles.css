@@ -1450,7 +1450,8 @@ audio.file-preview-content {
 .image-editor-layer-opacity label { display: flex; flex: 1; align-items: center; gap: 6px; }
 .image-editor-layer-opacity input { flex: 1; min-width: 0; }
 .image-editor-layer-list { position: relative; min-height: 80px; flex: 1; overflow: auto; padding: 3px; }
-.image-editor-layer-row { display: grid; grid-template-columns: 22px 22px 25px minmax(0,1fr) 24px; min-height: 29px; align-items: center; padding-left: calc(var(--layer-depth) * 15px); border-radius: 4px; font-size: .78rem; cursor: default; }
+.image-editor-layer-row { display: grid; grid-template-columns: 22px 22px 25px minmax(0,1fr) 18px 24px; min-height: 29px; align-items: center; padding-left: calc(var(--layer-depth) * 15px); border-radius: 4px; font-size: .78rem; cursor: default; }
+.image-editor-layer-row > [data-layer-lock] { grid-column: 6; }
 .image-editor-layer-row:hover { background: var(--hover-bg); }
 .image-editor-layer-row.selected { background: color-mix(in srgb, var(--accent-color) 28%, transparent); outline: 1px solid color-mix(in srgb, var(--accent-color) 65%, transparent); }
 .image-editor-layer-drop-indicator {

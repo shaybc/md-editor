@@ -60,6 +60,18 @@ test("Drop Shadow Apply persists and renders the layer effect", async ({ page })
     sourcePixel: [255, 0, 0, 255],
     shadowPixel: [0, 0, 0, 255]
   });
+
+  const layerRow = page.locator(`[data-layer-item="${target.layerId}"]`);
+  const rowAlignment = await layerRow.evaluate((row) => {
+    return {
+      tracks: getComputedStyle(row).gridTemplateColumns,
+      effectColumn: getComputedStyle(row.querySelector(".image-editor-layer-effect-indicator")).gridColumnStart,
+      lockColumn: getComputedStyle(row.querySelector("[data-layer-lock]")).gridColumnStart
+    };
+  });
+  expect(rowAlignment.tracks).toMatch(/18px 24px$/);
+  expect(rowAlignment.effectColumn).toBe("5");
+  expect(rowAlignment.lockColumn).toBe("6");
 });
 
 test("Drop Shadow Apply renders the default blurred effect", async ({ page }) => {

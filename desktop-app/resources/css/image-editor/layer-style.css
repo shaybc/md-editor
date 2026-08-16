@@ -1,4 +1,5 @@
 .image-editor-layer-effect-indicator {
+  grid-column: 5;
   color: var(--accent-color, #1473e6);
   font-size: 12px;
 }
