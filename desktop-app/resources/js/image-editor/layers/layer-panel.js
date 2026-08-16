@@ -53,6 +53,12 @@
         if (lock) { event.stopPropagation(); this.mutate("Toggle lock", () => this.store.updateItem(lock.dataset.layerLock, { locked: lock.dataset.locked !== "true" })); return; }
         const disclosure = event.target.closest("[data-layer-expand]");
         if (disclosure) { event.stopPropagation(); this.toggleExpanded(disclosure.dataset.layerExpand); return; }
+        const adjustmentPart = event.target.closest("[data-adjustment-part]");
+        if (adjustmentPart) {
+          event.stopPropagation();
+          this.store.selectAdjustmentPart(adjustmentPart.dataset.adjustmentNode, adjustmentPart.dataset.adjustmentPart);
+          return;
+        }
         const row = event.target.closest("[data-layer-item]");
         if (row) {
           const id = row.dataset.layerItem;
@@ -130,9 +136,10 @@
       }
       const targets = this.selectedTargets();
       const layers = this.selectedLayers();
-      const selectedNodes = targets.filter((item) => ["layer", "group", "object"].includes(item.kind));
+      const selectedNodes = targets.filter((item) => ["layer", "group", "object", "adjustment"].includes(item.kind));
       const singleLayer = layers.length === 1 ? layers[0] : null;
-      const mergeLocation = singleLayer ? namespace.findDocumentNode(this.store.document, singleLayer.id) : null;
+      const mergeTarget = targets.length === 1 && ["layer", "adjustment"].includes(targets[0].kind) ? targets[0] : null;
+      const mergeLocation = mergeTarget ? namespace.findDocumentNode(this.store.document, mergeTarget.id) : null;
       const below = mergeLocation?.collection?.[mergeLocation.index + 1];
       const allLocked = targets.length > 0 && targets.every((item) => item.locked);
       const allHidden = targets.length > 0 && targets.every((item) => item.visible === false);
@@ -169,7 +176,7 @@
         { id: "export-layer-png", label: "Export layer as PNG", icon: "bi-filetype-png", disabled: !singleLayer },
         { id: "export-layer-as", label: "Export as…", icon: "bi-box-arrow-up", disabled: !singleLayer },
         { separator: true },
-        { id: "merge-down", label: "Merge down", icon: "bi-layers-half", disabled: !singleLayer || singleLayer.locked || !below || below.kind !== "layer" || below.locked || namespace.isCanvasBackgroundLayer(below) },
+        { id: "merge-down", label: "Merge down", icon: "bi-layers-half", disabled: !mergeTarget || mergeTarget.locked || !below || below.kind !== "layer" || below.locked || namespace.isCanvasBackgroundLayer(below) },
         { id: "merge-visible", label: "Merge visible", icon: "bi-layers", disabled: [...layers, ...otherLayers].filter((layer) => layer.visible !== false).length < 2 },
         { id: "flatten", label: "Flatten layers", icon: "bi-layers-fill", disabled: !this.store.document.nodes.some((node) => !namespace.isCanvasBackgroundLayer(node)) },
         { separator: true },
@@ -344,7 +351,7 @@
         "toggle-other-visibility": () => {
           const selectedIds = new Set(targets.map((item) => item.id));
           const others = [];
-          namespace.walkDocumentNodes(this.store.document, (node) => { if (node.kind === "layer" && !namespace.isCanvasBackgroundLayer(node) && !selectedIds.has(node.id)) others.push(node); });
+          namespace.walkDocumentNodes(this.store.document, (node) => { if (["layer", "adjustment"].includes(node.kind) && !namespace.isCanvasBackgroundLayer(node) && !selectedIds.has(node.id)) others.push(node); });
           const visible = !others.some((layer) => layer.visible !== false);
           return others.map((layer) => this.store.updateItem(layer.id, { visible })).some(Boolean);
         }
@@ -375,7 +382,7 @@
           return;
         }
         const parent = namespace.findDocumentNode(this.store.document, node.id)?.parent;
-        this.list.appendChild(this.createRow(node, depth, true, true, parent?.id));
+        this.list.appendChild(this.createRow(node, depth, true, node.kind !== "adjustment", parent?.id));
         if (!this.expandedIds.has(node.id)) return;
         if (node.kind === "group") (node.children || []).forEach((child) => renderNode(child, depth + 1));
         else (node.objects || []).forEach((object) => this.list.appendChild(this.createRow(object, depth + 1, false, false, node.id)));
@@ -394,6 +401,7 @@
     createRow(item, depth, isNode, expandable, parentId = "") {
       const row = document.createElement("div");
       row.className = `image-editor-layer-row ${this.store.selectedIds.has(item.id) ? "selected" : ""}`;
+      if (item.kind === "adjustment") row.classList.add("image-editor-adjustment-layer-row");
       if (this.rowReflectsObjectSelection(item)) row.classList.add('selected');
       row.dataset.layerItem = item.id;
       if (isNode) row.dataset.layerNode = "true";
@@ -404,8 +412,36 @@
       row.style.setProperty("--layer-depth", depth);
       const safeName = String(item.name || "Item").replace(/[&<>]/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[character]));
       const hasEffect = item.kind === "layer" && (namespace.ImageEditorDropShadowEffect?.get(item) || namespace.ImageEditorInnerShadowEffect?.get(item) || namespace.ImageEditorInnerGlowEffect?.get(item) || namespace.ImageEditorOuterGlowEffect?.get(item) || namespace.ImageEditorColorOverlayEffect?.get(item) || namespace.ImageEditorGradientOverlayEffect?.get(item) || namespace.ImageEditorPatternOverlayEffect?.get(item));
-      row.innerHTML = `${expandable ? `<button data-layer-expand="${item.id}" aria-label="Expand"><i class="bi bi-chevron-${this.expandedIds.has(item.id) ? "down" : "right"}"></i></button>` : "<span></span>"}<button data-layer-visibility="${item.id}" data-visible="${item.visible !== false}" aria-label="Toggle visibility"><i class="bi bi-eye${item.visible === false ? "-slash" : ""}"></i></button><span class="image-editor-layer-thumbnail"><i class="bi ${item.kind === "group" ? "bi-folder" : item.kind === "layer" ? "bi-layers" : item.type === "text" ? "bi-fonts" : "bi-image"}"></i></span><span class="image-editor-layer-name">${safeName}</span>${hasEffect ? '<i class="bi bi-fx image-editor-layer-effect-indicator" title="Layer effects" aria-label="Layer effects"></i>' : ""}<button data-layer-lock="${item.id}" data-locked="${item.locked === true}" aria-label="Toggle lock"><i class="bi bi-${item.locked ? "lock-fill" : "unlock"}"></i></button>`;
+      const thumbnail = item.kind === "adjustment"
+        ? `<span class="image-editor-adjustment-thumbnails"><button type="button" data-adjustment-node="${item.id}" data-adjustment-part="adjustment" title="Edit adjustment" aria-label="Edit adjustment"><i class="bi ${item.adjustment?.type === "exposure" ? "bi-circle-half" : item.adjustment?.type === "vibrance" ? "bi-triangle-half" : item.adjustment?.type === "hue-saturation" ? "bi-rainbow" : item.adjustment?.type === "color-balance" ? "bi-sliders2" : item.adjustment?.type === "black-white" ? "bi-square-half" : item.adjustment?.type === "channel-mixer" ? "bi-shuffle" : item.adjustment?.type === "levels" ? "bi-bar-chart-fill" : item.adjustment?.type === "curves" ? "bi-graph-up" : item.adjustment?.type === "photo-filter" ? "bi-camera" : item.adjustment?.type === "invert" ? "bi-circle" : item.adjustment?.type === "selective-color" ? "bi-envelope" : item.adjustment?.type === "match-color" ? "bi-images" : item.adjustment?.type === "replace-color" ? "bi-eyedropper" : "bi-sun"}"></i></button><button type="button" data-adjustment-node="${item.id}" data-adjustment-part="mask" title="Edit adjustment mask" aria-label="Edit adjustment mask"><canvas width="20" height="20"></canvas></button></span>`
+        : `<span class="image-editor-layer-thumbnail"><i class="bi ${item.kind === "group" ? "bi-folder" : item.kind === "layer" ? "bi-layers" : item.type === "text" ? "bi-fonts" : "bi-image"}"></i></span>`;
+      row.innerHTML = `${expandable ? `<button data-layer-expand="${item.id}" aria-label="Expand"><i class="bi bi-chevron-${this.expandedIds.has(item.id) ? "down" : "right"}"></i></button>` : "<span></span>"}<button data-layer-visibility="${item.id}" data-visible="${item.visible !== false}" aria-label="Toggle visibility"><i class="bi bi-eye${item.visible === false ? "-slash" : ""}"></i></button>${thumbnail}<span class="image-editor-layer-name">${safeName}</span>${hasEffect ? '<i class="bi bi-fx image-editor-layer-effect-indicator" title="Layer effects" aria-label="Layer effects"></i>' : ""}<button data-layer-lock="${item.id}" data-locked="${item.locked === true}" aria-label="Toggle lock"><i class="bi bi-${item.locked ? "lock-fill" : "unlock"}"></i></button>`;
+      if (item.kind === "adjustment") {
+        this.drawAdjustmentMaskThumbnail(row.querySelector("canvas"), item);
+        const selectedPart = this.store.adjustmentTarget?.nodeId === item.id ? this.store.adjustmentTarget.part : "";
+        row.querySelector('[data-adjustment-part="' + selectedPart + '"]')?.classList.add("active");
+      }
       return row;
+    }
+
+    /** Draw a compact grayscale preview of an adjustment layer mask. */
+    drawAdjustmentMaskThumbnail(canvas, item) {
+      if (!canvas) return;
+      const context = canvas.getContext("2d");
+      const fallback = Number(item.mask?.defaultValue ?? 255);
+      context.fillStyle = `rgb(${fallback},${fallback},${fallback})`;
+      context.fillRect(0, 0, canvas.width, canvas.height);
+      const pixels = item.mask?.assetId ? this.store.assets.get(item.mask.assetId) : null;
+      if (!pixels) return;
+      const source = document.createElement("canvas");
+      source.width = pixels.width;
+      source.height = pixels.height;
+      source.getContext("2d").putImageData(pixels, 0, 0);
+      const bounds = item.mask?.bounds || { x: 0, y: 0, width: this.store.document.canvas.width, height: this.store.document.canvas.height };
+      const scaleX = canvas.width / this.store.document.canvas.width;
+      const scaleY = canvas.height / this.store.document.canvas.height;
+      context.imageSmoothingEnabled = false;
+      context.drawImage(source, bounds.x * scaleX, bounds.y * scaleY, bounds.width * scaleX, bounds.height * scaleY);
     }
 
     destroy() { this.unsubscribe?.(); this.contextMenu?.destroy(); this.element.remove(); }

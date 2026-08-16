@@ -138,6 +138,10 @@
           drawObject(context, node, this.store.assets);
           return;
         }
+        if (node.kind === "adjustment") {
+          namespace.ImageEditorAdjustmentRenderer?.apply(context, node, this.store.assets);
+          return;
+        }
         if (node.kind === "layer") {
           this.drawStyledLayer(context, node);
           return;

@@ -292,6 +292,67 @@
       return true;
     }
 
+    function activeAdjustmentMask(controller) {
+      const target = controller.documentStore.adjustmentTarget;
+      if (target?.part !== "mask") return null;
+      const node = namespace.findDocumentNode(controller.documentStore.document, target.nodeId)?.node;
+      return namespace.ImageEditorAdjustmentModel.isAdjustment(node) ? node : null;
+    }
+
+    function maskValueForColor(color) {
+      const rgba = namespace.colorToRgba(color) || [255, 255, 255, 255];
+      return Math.round(rgba[0] * .2126 + rgba[1] * .7152 + rgba[2] * .0722);
+    }
+
+    function deleteAdjustmentMaskSelection(controller) {
+      const node = activeAdjustmentMask(controller);
+      if (!node || !controller.selection.hasSelection || node.locked) return false;
+      const before = controller.documentStore.snapshot();
+      if (!namespace.ImageEditorAdjustmentMaskEditor.fillRegion(controller.documentStore, node.id, 0, controller.selection.region())) return false;
+      controller.selection.clear();
+      controller.documentStore.pruneAssets();
+      controller.documentStore.notify({ type: "update-adjustment-mask", ids: [node.id] });
+      controller.history.push(before, controller.documentStore.snapshot(), "Delete adjustment mask selection");
+      controller.state.markChanged();
+      renderLayeredDocument(controller);
+      drawSelectionOverlay(controller);
+      syncTab(controller);
+      return true;
+    }
+
+    function queueAdjustmentPreview(controller, nodeId, patch) {
+      controller.pendingAdjustmentPreview = {
+        nodeId,
+        patch: { ...(controller.pendingAdjustmentPreview?.patch || {}), ...patch }
+      };
+      if (controller.adjustmentPreviewFrame) return;
+      const scheduleFrame = global.requestAnimationFrame || ((callback) => global.setTimeout(callback, 0));
+      controller.adjustmentPreviewFrame = scheduleFrame(() => {
+        controller.adjustmentPreviewFrame = 0;
+        const pending = controller.pendingAdjustmentPreview;
+        controller.pendingAdjustmentPreview = null;
+        const node = namespace.findDocumentNode(controller.documentStore.document, pending?.nodeId)?.node;
+        if (!namespace.ImageEditorAdjustmentModel.isAdjustment(node) || node.locked) return;
+        node.adjustment = namespace.ImageEditorAdjustmentModel.normalizeAdjustment({ ...node.adjustment, ...pending.patch });
+        renderLayeredDocument(controller);
+      });
+    }
+
+    function flushAdjustmentPreview(controller) {
+      if (!controller.pendingAdjustmentPreview) return;
+      if (controller.adjustmentPreviewFrame) {
+        const cancelFrame = global.cancelAnimationFrame || global.clearTimeout;
+        cancelFrame(controller.adjustmentPreviewFrame);
+      }
+      controller.adjustmentPreviewFrame = 0;
+      const pending = controller.pendingAdjustmentPreview;
+      controller.pendingAdjustmentPreview = null;
+      const node = namespace.findDocumentNode(controller.documentStore.document, pending.nodeId)?.node;
+      if (!namespace.ImageEditorAdjustmentModel.isAdjustment(node) || node.locked) return;
+      node.adjustment = namespace.ImageEditorAdjustmentModel.normalizeAdjustment({ ...node.adjustment, ...pending.patch });
+      renderLayeredDocument(controller);
+    }
+
     /** Resolve distinct editable content layers represented by hierarchy selection. */
     function resolveLayerStyleTargets(controller, requestedIds = null) {
       const ids = requestedIds?.length ? requestedIds : [...controller.documentStore.selectedIds];
@@ -798,7 +859,7 @@
     function mergeSelectedLayerDown(controller) {
       const selectedId = [...controller.documentStore.selectedIds][0];
       const selected = namespace.findDocumentNode(controller.documentStore.document, selectedId);
-      if (!selected || selected.node.kind !== "layer" || selected.node.locked) return false;
+      if (!selected || !["layer", "adjustment"].includes(selected.node.kind) || selected.node.locked) return false;
       const below = selected.collection[selected.index + 1];
       if (!below || below.kind !== "layer" || below.locked) return false;
       return commitDocumentMutation(controller, "Merge down", () => {
@@ -819,6 +880,7 @@
         selected.collection.splice(selected.index, 2, mergedLayer);
         controller.documentStore.document.activeLayerId = mergedLayer.id;
         controller.documentStore.selectedIds = new Set([mergedLayer.id]);
+        controller.documentStore.adjustmentTarget = null;
         controller.documentStore.notify({ type: "merge-down", ids: [mergedLayer.id] });
         return true;
       });
@@ -959,7 +1021,9 @@
         fontBold: state.fontBold,
         fontItalic: state.fontItalic,
         zoom: state.zoom,
-        layersPanel: controller.layerPanel ? { ...controller.layerPanel.state, expandedIds: [...controller.layerPanel.expandedIds], selectedIds: [...controller.documentStore.selectedIds] } : (tab.imageEditorState?.layersPanel || { mode: "expanded", height: 360, placementMode: "new", expandedIds: [], selectedIds: [] })
+        layersPanel: controller.layerPanel ? { ...controller.layerPanel.state, expandedIds: [...controller.layerPanel.expandedIds], selectedIds: [...controller.documentStore.selectedIds] } : (tab.imageEditorState?.layersPanel || { mode: "expanded", height: 360, placementMode: "new", expandedIds: [], selectedIds: [] }),
+        adjustmentsPanel: controller.adjustmentsPanel ? { ...controller.adjustmentsPanel.state } : (tab.imageEditorState?.adjustmentsPanel || { mode: "expanded", height: 300, activeTab: "adjustments" }),
+        adjustmentTarget: controller.documentStore.adjustmentTarget ? { ...controller.documentStore.adjustmentTarget } : null
       };
       tab.imageEditorSource = {
         ...(tab.imageEditorSource || {}),
@@ -1046,6 +1110,13 @@
         namespace.imageEditorContentRenderers.render(context, object, controller.documentStore.assets);
       });
       return context;
+    }
+
+    function adjustmentMaskSelectionContext(controller) {
+      const canvas = document.createElement("canvas");
+      canvas.width = controller.documentStore.document.canvas.width;
+      canvas.height = controller.documentStore.document.canvas.height;
+      return canvas.getContext("2d", { willReadFrequently: true });
     }
 
     /** Open Color Range and replace the current marquee with its sampled soft mask. */
@@ -1896,6 +1967,7 @@
         applyZoom(controller, state.zoom * (action === "zoom-in" ? 1.25 : 0.8));
         return;
       }
+      if (action === "delete" && activeAdjustmentMask(controller) && selection.hasSelection) return deleteAdjustmentMaskSelection(controller);
       if (state.tool === "move" && !selection.floating && selectedDocumentObjects(controller).length) {
         if (action === "copy") return copyObjectSelectionToClipboard(controller);
         if (action === "cut") await copyObjectSelectionToClipboard(controller);
@@ -2114,6 +2186,11 @@
           syncTab(controller);
           return;
         }
+        if (event.target.closest("[data-adjustments-toggle]")) {
+          controller.adjustmentsPanel?.toggle();
+          syncTab(controller);
+          return;
+        }
         const bucketModeButton = event.target.closest("[data-bucket-mode]");
         if (bucketModeButton) {
           if (controller.gradientFillTool.isEditing) finishGradientFill(controller);
@@ -2160,7 +2237,7 @@
           if (state.tool === "spiral" && controller.spiralTool.isEditing) finishEditableSpiral(controller);
           if (isGridTool(state.tool) && gridToolFor(controller).isEditing) finishEditableGrid(controller);
           commitText(controller);
-          if (toolButton.dataset.tool !== "select") dropSelection(controller);
+          if (toolButton.dataset.tool !== "select" && !activeAdjustmentMask(controller)) dropSelection(controller);
           state.setTool(toolButton.dataset.tool);
           toolButton.closest(".image-editor-grouped-tool-mode")?.removeAttribute("open");
           if (state.tool === "move") drawObjectSelectionOverlay(controller);
@@ -2438,6 +2515,49 @@
         const adoptedLegacyPixels = synchronizePresentationCanvas(controller);
         if (adoptedLegacyPixels && state.tool === "select") state.selectionMode = "pixel";
         const point = view.pointFromEvent(event);
+        const adjustmentMask = activeAdjustmentMask(controller);
+        if (adjustmentMask && state.tool === "move") {
+          event.preventDefault();
+          overlay.style.cursor = "not-allowed";
+          return;
+        }
+        if (adjustmentMask && state.tool === "bucket") {
+          event.preventDefault();
+          event.stopPropagation();
+          const before = controller.documentStore.snapshot();
+          const value = maskValueForColor(state.foregroundColor);
+          if (namespace.ImageEditorAdjustmentMaskEditor.fillRegion(controller.documentStore, adjustmentMask.id, value, selection.hasSelection ? selection.region() : null)) {
+            controller.documentStore.pruneAssets();
+            controller.documentStore.notify({ type: "update-adjustment-mask", ids: [adjustmentMask.id] });
+            controller.history.push(before, controller.documentStore.snapshot(), "Fill adjustment mask");
+            state.markChanged();
+            renderLayeredDocument(controller);
+            drawSelectionOverlay(controller);
+            syncTab(controller);
+          }
+          return;
+        }
+        if (adjustmentMask && ["pencil", "brush", "eraser"].includes(state.tool)) {
+          event.preventDefault();
+          event.stopPropagation();
+          const value = state.tool === "eraser" ? 255 : maskValueForColor(state.foregroundColor);
+          const size = state.tool === "pencil" ? state.lineWidth : state.brushSize;
+          const opacity = state.tool === "eraser" ? 1 : state.foregroundOpacity;
+          controller.adjustmentMaskStroke = {
+            nodeId: adjustmentMask.id,
+            before: controller.documentStore.snapshot(),
+            point,
+            value,
+            size,
+            opacity,
+            region: selection.hasSelection ? selection.region() : null
+          };
+          namespace.ImageEditorAdjustmentMaskEditor.paintStroke(controller.documentStore, adjustmentMask.id, point, point, controller.adjustmentMaskStroke);
+          controller.dragging = true;
+          overlay.setPointerCapture?.(event.pointerId);
+          renderLayeredDocument(controller);
+          return;
+        }
         if (state.tool === "clone-stamp") {
           event.preventDefault();
           event.stopPropagation();
@@ -2856,19 +2976,20 @@
             dropSelection(controller);
             if (returnsToDrawingTool) { controller.dragging = false; return; }
           }
-          if (!selection.hasSelection) selectPixelEditingObjectAtPoint(controller, point);
+          const maskTarget = activeAdjustmentMask(controller);
+          if (!selection.hasSelection && !maskTarget) selectPixelEditingObjectAtPoint(controller, point);
           if (selection.hasSelection && !selection.floating) {
             controller.selectionBefore = snapshot(view);
             controller.pixelSelectionDocumentBefore = controller.documentStore.snapshot();
           }
-          const gesture = selection.beginPointerGesture(point, pixelSelectionSourceContext(controller), state.backgroundColor, {
+          const gesture = selection.beginPointerGesture(point, maskTarget ? adjustmentMaskSelectionContext(controller) : pixelSelectionSourceContext(controller), state.backgroundColor, {
             ctrl: event.ctrlKey,
             meta: event.metaKey,
             shift: event.shiftKey,
             zoom: state.zoom,
             shape: state.selectionShape
           });
-          if (gesture.sourceCleared && clearPixelRegionFromSelectedLayers(controller, selection.region())) renderLayeredDocument(controller);
+          if (gesture.sourceCleared && !maskTarget && clearPixelRegionFromSelectedLayers(controller, selection.region())) renderLayeredDocument(controller);
           if (gesture.action === "drop") dropSelection(controller);
           if (gesture.action === "drop" || gesture.action === "ignore") {
             controller.dragging = false;
@@ -2881,6 +3002,14 @@
       });
       overlay.addEventListener("pointermove", (event) => {
         const point = view.pointFromEvent(event, state.tool !== "path" && !selection.isTransforming && state.tool !== "move");
+        if (controller.dragging && controller.adjustmentMaskStroke) {
+          const stroke = controller.adjustmentMaskStroke;
+          namespace.ImageEditorAdjustmentMaskEditor.paintStroke(controller.documentStore, stroke.nodeId, stroke.point, point, stroke);
+          stroke.point = point;
+          renderLayeredDocument(controller);
+          drawSelectionOverlay(controller);
+          return;
+        }
         if (!controller.dragging) {
           if (state.tool === "clone-stamp") {
             overlay.style.cursor = event.altKey ? "crosshair" : "none";
@@ -3063,7 +3192,17 @@
         if (!controller.dragging) return;
         controller.dragging = false;
         const point = view.pointFromEvent(event, state.tool !== "path" && state.tool !== "move");
-        if (state.tool === "clone-stamp") {
+        if (controller.adjustmentMaskStroke) {
+          const stroke = controller.adjustmentMaskStroke;
+          controller.adjustmentMaskStroke = null;
+          controller.documentStore.pruneAssets();
+          controller.documentStore.notify({ type: "update-adjustment-mask", ids: [stroke.nodeId] });
+          controller.history.push(stroke.before, controller.documentStore.snapshot(), "Paint adjustment mask");
+          state.markChanged();
+          renderLayeredDocument(controller);
+          drawSelectionOverlay(controller);
+          syncTab(controller);
+        } else if (state.tool === "clone-stamp") {
           const pixels = controller.cloneStampTool.finish();
           const found = namespace.findDocumentNode(controller.documentStore.document, controller.cloneStampLayerId);
           if (pixels && found?.node?.kind === "layer" && appendLayerPixelEdit(controller, found.node, pixels)) {
@@ -3193,6 +3332,16 @@
           const layer = namespace.rasterizeShapeLayer(state.tool, controller.startPoint, point, state, state);
           floatGeneratedLayer(controller, layer, controller.gestureBefore);
         }
+      });
+      overlay.addEventListener("pointercancel", () => {
+        if (!controller.adjustmentMaskStroke) return;
+        const stroke = controller.adjustmentMaskStroke;
+        controller.adjustmentMaskStroke = null;
+        controller.dragging = false;
+        controller.documentStore.restore(stroke.before);
+        renderLayeredDocument(controller);
+        drawSelectionOverlay(controller);
+        syncTab(controller);
       });
       overlay.addEventListener("dblclick", (event) => {
         if (state.tool === "move") {
@@ -3593,6 +3742,7 @@
     async function runCanvasContextAction(controller, action) {
       const hasPixels = controller.selection.hasSelection;
       const hasObjects = selectedDocumentObjects(controller).length > 0;
+      if (action === "delete" && hasPixels && activeAdjustmentMask(controller)) return deleteAdjustmentMaskSelection(controller);
       if (action === "edit-blending-options") return openBlendingOptions(controller, controller.canvasLayerStyleTargetIds);
       if (action === "edit-bevel-emboss") return openBevelEmbossStyle(controller, controller.canvasLayerStyleTargetIds);
       if (action === "remove-bevel-emboss") return removeBevelEmbossStyle(controller, controller.canvasLayerStyleTargetIds);
@@ -3967,6 +4117,8 @@
           finishGradientFill(controller);
         }
         if (event.target.closest?.('.image-editor-layers-panel')) return;
+        if (event.target.closest?.('.image-editor-adjustments-panel')) return;
+        if (activeAdjustmentMask(controller) && event.target.closest?.(".image-editor-toolbar, .image-editor-tool-sidebar")) return;
         if (event.target.closest?.('.image-editor-canvas-context-menu')) return;
         if (event.target.closest?.('[data-tool="select"]')) return;
         if (event.target.closest?.(".image-editor-selection-actions, .image-editor-history-actions")) return;
@@ -4090,6 +4242,10 @@
         blendingOptionsDialog: new namespace.ImageEditorBlendingOptionsDialog()
       };
       if (tab.imageEditorState?.layersPanel?.selectedIds?.length) controller.documentStore.selectedIds = new Set(tab.imageEditorState.layersPanel.selectedIds);
+      const savedAdjustmentTarget = tab.imageEditorState?.adjustmentTarget;
+      if (savedAdjustmentTarget && namespace.ImageEditorAdjustmentModel.isAdjustment(namespace.findDocumentNode(controller.documentStore.document, savedAdjustmentTarget.nodeId)?.node)) {
+        controller.documentStore.adjustmentTarget = { nodeId: savedAdjustmentTarget.nodeId, part: savedAdjustmentTarget.part === "mask" ? "mask" : "adjustment" };
+      }
       controller.compositor = new namespace.ImageEditorCompositor(controller.documentStore);
       controller.objectSelection = new namespace.ImageEditorObjectSelection(controller.documentStore);
       controller.layerPanel = new namespace.ImageEditorLayerPanel(view.stageFrame, controller.documentStore, {
@@ -4141,6 +4297,68 @@
           syncTab(controller);
         }
       });
+      controller.adjustmentsPanel = new namespace.ImageEditorAdjustmentsPanel(view.stageFrame, controller.documentStore, {
+        state: tab.imageEditorState?.adjustmentsPanel,
+        onCreate(type) {
+          commitDocumentMutation(controller, "Add " + namespace.ImageEditorAdjustmentModel.nameForType(type), () => controller.documentStore.addAdjustmentLayer(type, {
+            selectionRegion: controller.selection.hasSelection ? controller.selection.region() : null
+          }));
+        },
+        onBeginEdit() {
+          return controller.documentStore.snapshot();
+        },
+        onPreview(nodeId, patch) {
+          queueAdjustmentPreview(controller, nodeId, patch);
+        },
+        getHistogram(channel) {
+          if (!view.canvas.width || !view.canvas.height) return null;
+          try {
+            return namespace.ImageEditorLevelsAdjustment.histogram(view.context.getImageData(0, 0, view.canvas.width, view.canvas.height), channel);
+          } catch {
+            return null;
+          }
+        },
+        getMatchColorSources() {
+          const sources = [];
+          namespace.walkDocumentNodes(controller.documentStore.document, (node) => {
+            if (node.kind === "layer" && node.visible !== false) sources.push({ id: node.id, name: node.name || "Layer" });
+          });
+          return sources;
+        },
+        getMatchColorStatistics(sourceId) {
+          const source = namespace.findDocumentNode(controller.documentStore.document, sourceId)?.node;
+          if (source?.kind !== "layer") return null;
+          const canvas = controller.compositor.renderLayer(source);
+          return namespace.ImageEditorMatchColorAdjustment.statistics(canvas.getContext("2d", { willReadFrequently: true }).getImageData(0, 0, canvas.width, canvas.height));
+        },
+        onCommitEdit(before, label, cancel) {
+          flushAdjustmentPreview(controller);
+          if (cancel) {
+            controller.documentStore.restore(before);
+            renderLayeredDocument(controller);
+            syncTab(controller);
+            return;
+          }
+          controller.documentStore.notify({ type: "update-adjustment", ids: [controller.documentStore.adjustmentTarget?.nodeId].filter(Boolean) });
+          controller.history.push(before, controller.documentStore.snapshot(), label);
+          controller.state.markChanged();
+          renderLayeredDocument(controller);
+          syncTab(controller);
+        },
+        onMutate(label, nodeId, operation) {
+          commitDocumentMutation(controller, label, () => operation.type === "properties"
+            ? controller.documentStore.updateAdjustment(nodeId, operation.patch)
+            : controller.documentStore.updateAdjustmentMask(nodeId, operation));
+        },
+        onStateChanged(panelState) {
+          tab.imageEditorState = { ...(tab.imageEditorState || {}), adjustmentsPanel: panelState };
+          syncTab(controller);
+        },
+        onLayoutChanged(height) {
+          if (controller.layerPanel?.element) controller.layerPanel.element.style.setProperty("--image-editor-layers-top", (height ? height + 20 : 12) + "px");
+        }
+      });
+      controller.layerPanel.element.style.setProperty("--image-editor-layers-top", (controller.adjustmentsPanel.occupiedHeight() ? controller.adjustmentsPanel.occupiedHeight() + 20 : 12) + "px");
       controller.removeObjectOverlayListener = controller.documentStore.subscribe((change) => {
         if (change.type === "selection" && controller.state.tool === "move") drawObjectSelectionOverlay(controller);
       });
@@ -4206,6 +4424,7 @@
       controller.colorRangeDialog?.destroy?.();
       controller.layerStyleDialog?.destroy?.();
       controller.blendingOptionsDialog?.destroy?.();
+      controller.adjustmentsPanel?.destroy?.();
       controller.layerPanel?.destroy?.();
       controller.view.destroy();
       views.delete(tabId);

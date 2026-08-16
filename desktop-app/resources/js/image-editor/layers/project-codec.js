@@ -50,7 +50,9 @@
       const manifestEntry = zip.file("manifest.json");
       if (!manifestEntry) throw new Error("The .mdimage project does not contain manifest.json.");
       const document = JSON.parse(await manifestEntry.async("string"));
+      namespace.migrateImageDocument(document);
       namespace.normalizeCanvasBackgroundLayer(document);
+      namespace.ImageEditorAdjustmentModel?.normalizeDocument(document);
       namespace.ImageEditorBlendingOptions?.normalizeDocument(document);
       namespace.ImageEditorDropShadowEffect?.normalizeDocument(document);
       namespace.ImageEditorInnerShadowEffect?.normalizeDocument(document);

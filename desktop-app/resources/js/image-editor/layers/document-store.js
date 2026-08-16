@@ -30,10 +30,13 @@
     /** Own a validated document, immutable raster assets, selection, and render revisions. */
     constructor(document, assets = new Map()) {
       this.document = namespace.cloneImageDocument(document);
+      namespace.migrateImageDocument(this.document);
       namespace.normalizeCanvasBackgroundLayer(this.document);
+      namespace.ImageEditorAdjustmentModel?.normalizeDocument(this.document);
       namespace.validateImageDocument(this.document);
       this.assets = new Map(assets);
       this.selectedIds = new Set([this.document.activeLayerId].filter(Boolean));
+      this.adjustmentTarget = null;
       this.revision = 0;
       this.listeners = new Set();
     }
@@ -115,7 +118,18 @@
       const node = namespace.findDocumentNode(this.document, selected)?.node;
       if (object?.layer) this.document.activeLayerId = object.layer.id;
       else if (node?.kind === "layer") this.document.activeLayerId = node.id;
+      this.adjustmentTarget = node?.kind === "adjustment" ? { nodeId: node.id, part: "adjustment" } : null;
       this.notify({ type: "selection" });
+    }
+
+    /** Select an adjustment's properties or mask without changing hierarchy selection. */
+    selectAdjustmentPart(nodeId, part = "adjustment") {
+      const node = namespace.findDocumentNode(this.document, nodeId)?.node;
+      if (!namespace.ImageEditorAdjustmentModel.isAdjustment(node) || !["adjustment", "mask"].includes(part)) return false;
+      this.selectedIds = new Set([nodeId]);
+      this.adjustmentTarget = { nodeId, part };
+      this.notify({ type: "selection", ids: [nodeId], adjustmentPart: part });
+      return true;
     }
 
     /** Register immutable raster pixels and return their asset identifier. */
@@ -149,6 +163,21 @@
       return group;
     }
 
+    /** Add a supported adjustment layer above the active hierarchy anchor. */
+    addAdjustmentLayer(type, options = {}) {
+      return namespace.ImageEditorAdjustmentOperations.add(this, type, options);
+    }
+
+    /** Update an adjustment descriptor through its type normalizer. */
+    updateAdjustment(id, patch) {
+      return namespace.ImageEditorAdjustmentOperations.update(this, id, patch);
+    }
+
+    /** Update an adjustment mask through a named mask operation. */
+    updateAdjustmentMask(id, operation) {
+      return namespace.ImageEditorAdjustmentOperations.updateMask(this, id, operation);
+    }
+
     /** Duplicate selected sibling nodes or objects with fresh stable identifiers. */
     duplicateSelected() {
       const selected = [...this.selectedIds];
@@ -173,6 +202,8 @@
       });
       if (!duplicated.length) return false;
       this.selectedIds = new Set(duplicated);
+      const duplicatedAdjustment = duplicated.map((id) => namespace.findDocumentNode(this.document, id)?.node).find((node) => node?.kind === "adjustment");
+      this.adjustmentTarget = duplicatedAdjustment ? { nodeId: duplicatedAdjustment.id, part: "adjustment" } : null;
       this.notify({ type: "duplicate", ids: duplicated });
       return true;
     }
@@ -385,6 +416,7 @@
       const active = this.activeLayer();
       this.document.activeLayerId = active?.id || this.document.nodes[0]?.id;
       this.selectedIds = new Set([this.document.activeLayerId].filter(Boolean));
+      this.adjustmentTarget = null;
       if (changed) {
         this.pruneAssets();
         this.notify({ type: "delete" });
@@ -413,12 +445,13 @@
       this.document = namespace.cloneImageDocument(snapshot.document);
       this.assets = new Map(snapshot.assets);
       this.selectedIds = new Set(snapshot.selectedIds || [this.document.activeLayerId]);
+      this.adjustmentTarget = snapshot.adjustmentTarget ? { ...snapshot.adjustmentTarget } : null;
       this.notify({ type: "restore" });
     }
 
     /** Capture metadata and asset references for transactional history. */
     snapshot() {
-      return { document: namespace.cloneImageDocument(this.document), assets: new Map(this.assets), selectedIds: [...this.selectedIds] };
+      return { document: namespace.cloneImageDocument(this.document), assets: new Map(this.assets), selectedIds: [...this.selectedIds], adjustmentTarget: this.adjustmentTarget ? { ...this.adjustmentTarget } : null };
     }
   }
 

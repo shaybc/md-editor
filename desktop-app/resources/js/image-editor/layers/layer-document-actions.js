@@ -10,7 +10,7 @@
     const document = namespace.createImageDocument(source.canvas.width, source.canvas.height, "transparent");
     const background = document.nodes.find((node) => namespace.isCanvasBackgroundLayer(node));
     const layers = (layerIds || []).map((id) => namespace.findDocumentNode(source, id)?.node)
-      .filter((node) => node?.kind === "layer")
+      .filter((node) => ["layer", "adjustment"].includes(node?.kind))
       .map((node) => namespace.cloneImageDocument(node));
     document.nodes = [...layers, background].filter(Boolean);
     document.activeLayerId = layers[0]?.id || background?.id;
@@ -21,7 +21,7 @@
     return (nodes || []).flatMap((node) => {
       if (namespace.isCanvasBackgroundLayer(node)) return [node];
       const visible = ancestorVisible && node.visible !== false;
-      if (node.kind === "layer") return visible ? [] : [node];
+      if (node.kind === "layer" || node.kind === "adjustment") return visible ? [] : [node];
       if (!visible) return [node];
       const children = retainHiddenNodes(node.children || [], true);
       if (!children.length) return [];
@@ -30,11 +30,20 @@
     });
   }
 
+  /** Render the visible hierarchy with its original group scoping but without baking the permanent canvas background. */
+  function renderVisibleUserContent(store) {
+    const document = namespace.cloneImageDocument(store.document);
+    document.canvas.backgroundColor = "transparent";
+    const background = namespace.findDocumentNode(document, document.nodes.find((node) => namespace.isCanvasBackgroundLayer(node))?.id)?.node;
+    if (background) background.objects = [];
+    return new namespace.ImageEditorCompositor(new namespace.ImageEditorDocumentStore(document, store.assets)).render();
+  }
+
   /** Merge all visible user layers into one raster layer while retaining hidden content. */
   function mergeVisible(store) {
     const visibleLayerIds = [];
     namespace.walkDocumentNodes(store.document, (node, parent) => {
-      if (node.kind !== "layer" || namespace.isCanvasBackgroundLayer(node)) return;
+      if (!["layer", "adjustment"].includes(node.kind) || namespace.isCanvasBackgroundLayer(node)) return;
       let visible = node.visible !== false;
       let ancestor = parent;
       while (visible && ancestor) {
@@ -44,7 +53,7 @@
       if (visible) visibleLayerIds.push(node.id);
     });
     if (visibleLayerIds.length < 2) return false;
-    const canvas = renderLayers(store, visibleLayerIds);
+    const canvas = renderVisibleUserContent(store);
     const imageData = canvas.getContext("2d").getImageData(0, 0, canvas.width, canvas.height);
     const mergedLayer = namespace.createContentLayer("Merged visible");
     const assetId = store.addRasterAsset(imageData);

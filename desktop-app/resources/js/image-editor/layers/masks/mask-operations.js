@@ -38,9 +38,10 @@
   function getState(store, ids = [...store.selectedIds]) {
     const locations = selectedLocations(store, ids);
     const sameCollection = locations.length > 1 && locations.every((item) => item.collection === locations[0].collection);
+    const maskCandidate = sameCollection ? [...locations].sort((left, right) => right.index - left.index)[0]?.node : null;
     const groups = selectedMaskGroups(store, ids);
     return {
-      canCreate: sameCollection && locations.every((item) => !item.node.locked && !namespace.ImageEditorMaskModel.isMaskGroup(item.node)),
+      canCreate: sameCollection && maskCandidate?.kind !== "adjustment" && locations.every((item) => !item.node.locked && !namespace.ImageEditorMaskModel.isMaskGroup(item.node)),
       canChangeType: groups.length > 0 && groups.every((group) => !group.locked),
       canRemove: groups.length > 0 && groups.every((group) => !group.locked),
       groups

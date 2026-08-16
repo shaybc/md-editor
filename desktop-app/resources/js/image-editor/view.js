@@ -450,6 +450,9 @@
       const layersButton = button("bi-layers", "Layers", "image-editor-layers-toggle");
       layersButton.dataset.layersToggle = "true";
       this.shell.querySelector(".image-editor-history-actions").appendChild(layersButton);
+      const adjustmentsButton = button("bi-sliders", "Adjustments", "image-editor-adjustments-toggle");
+      adjustmentsButton.dataset.adjustmentsToggle = "true";
+      this.shell.querySelector(".image-editor-history-actions").appendChild(adjustmentsButton);
       [
         ["bi-scissors", "Cut", "cut"], ["bi-copy", "Copy", "copy"],
         ["bi-clipboard", "Paste", "paste"], ["bi-trash", "Delete", "delete"]

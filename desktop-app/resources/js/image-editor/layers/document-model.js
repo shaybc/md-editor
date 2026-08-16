@@ -4,7 +4,7 @@
 
   const namespace = global.MarkdownViewerImageEditor = global.MarkdownViewerImageEditor || {};
   const DOCUMENT_FORMAT = "md-editor-image";
-  const DOCUMENT_VERSION = 1;
+  const DOCUMENT_VERSION = 2;
 
   function createId(prefix = "node") {
     if (global.crypto?.randomUUID) return `${prefix}_${global.crypto.randomUUID()}`;
@@ -39,6 +39,15 @@
       bounds: { x: 0, y: 0, width: 1, height: 1, ...(options.bounds || {}) },
       payload: structuredCloneValue(payload), effects: [], mask: null, extensions: {}
     };
+  }
+
+  /** Upgrade older layered documents without changing their visible content. */
+  function migrateImageDocument(document) {
+    if (document?.format !== DOCUMENT_FORMAT) throw new Error("Unsupported layered image document.");
+    const version = Number(document.version);
+    if (version === 1) document.version = DOCUMENT_VERSION;
+    if (Number(document.version) !== DOCUMENT_VERSION) throw new Error("Unsupported layered image document.");
+    return document;
   }
 
   /** Create an empty versioned layered document. */
@@ -147,6 +156,7 @@
         if (node.rasterAssetId) ids.add(node.rasterAssetId);
         (node.pixelEdits || []).forEach((edit) => { if (edit.assetId) ids.add(edit.assetId); });
       }
+      if (node.kind === "adjustment" && node.mask?.assetId) ids.add(node.mask.assetId);
     });
     return ids;
   }
@@ -161,8 +171,12 @@
       if (ancestors.has(node)) throw new Error("The layered image hierarchy contains a cycle.");
       if (!node?.id || ids.has(node.id)) throw new Error("The layered image contains duplicate or missing node identifiers.");
       ids.add(node.id);
-      if (node.kind !== "layer" && node.kind !== "group" && node.kind !== "object") throw new Error("The layered image contains an unsupported hierarchy node.");
+      if (node.kind !== "layer" && node.kind !== "group" && node.kind !== "object" && node.kind !== "adjustment") throw new Error("The layered image contains an unsupported hierarchy node.");
       if (node.kind === "object") return;
+      if (node.kind === "adjustment") {
+        if (!namespace.ImageEditorAdjustmentModel?.validate(node)) throw new Error("The layered image contains an invalid adjustment layer.");
+        return;
+      }
       (node.objects || []).forEach((object) => {
         if (!object?.id || ids.has(object.id)) throw new Error("The layered image contains duplicate or missing object identifiers.");
         ids.add(object.id);
@@ -188,6 +202,7 @@
     createContentLayer,
     createLayerGroup,
     createContentObject,
+    migrateImageDocument,
     cloneImageDocument,
     walkDocumentNodes,
     walkDocumentObjects,

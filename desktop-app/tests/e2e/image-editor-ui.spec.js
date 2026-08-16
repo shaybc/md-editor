@@ -3935,6 +3935,813 @@ test("selection stamps repeated copies with Shift+arrow", async ({ page }) => {
   expect(pixels.firstStamp).toEqual([0, 255, 0]);
   expect(pixels.laterStamp).toEqual([0, 255, 0]);
 });
+test("brightness contrast adjustment stays fixed, previews live, and edits its mask transactionally", async ({ page }) => {
+  await page.goto("/");
+  await page.waitForFunction(() => !!window.markdownViewerApp?.modules?.keyboardShortcuts && !!window.markdownViewerApp?.modules?.tabs?.openBlankImageEditorInTab && !!window.markdownViewerApp?.services?.imageEditor, null, { timeout: 60000 });
+  await page.evaluate(() => {
+    window.markdownViewerApp.modules.apiClient.deactivateApiClientSidebar = () => {};
+    window.markdownViewerApp.modules.tabs.openBlankImageEditorInTab({
+      width: 48,
+      height: 36,
+      name: "Adjustment test",
+      background: { mode: "solid", color: "#404040" }
+    });
+  });
+
+  const root = page.locator('.tab-view.active[data-tab-view-kind="image-editor"]');
+  await expect(root.locator(".image-editor-shell")).toBeVisible();
+  const panel = root.locator(".image-editor-adjustments-panel");
+  await expect(panel).toBeVisible();
+  await expect(panel.locator('[data-adjustment-tab="adjustments"]')).toHaveAttribute("aria-selected", "true");
+  const panelBeforeZoom = await panel.boundingBox();
+  await page.locator(".image-editor-status-zoom-slider").fill("200");
+  const panelAfterZoom = await panel.boundingBox();
+  expect({ x: panelAfterZoom.x, y: panelAfterZoom.y, width: panelAfterZoom.width }).toEqual({ x: panelBeforeZoom.x, y: panelBeforeZoom.y, width: panelBeforeZoom.width });
+
+  await panel.locator('[data-adjustment-panel-action="create-brightness-contrast"]').click();
+  await expect(panel.locator('[data-adjustment-tab="properties"]')).toHaveAttribute("aria-selected", "true");
+  await expect(root.locator(".image-editor-adjustment-layer-row")).toHaveCount(1);
+  await expect(panel.locator('[data-adjustment-property="brightness"][type="range"]')).toHaveAttribute("min", "-150");
+  await expect(panel.locator('[data-adjustment-property="contrast"][type="range"]')).toHaveAttribute("max", "100");
+
+  const historyBefore = await page.evaluate(() => {
+    const tab = document.querySelector('.tab-view.active[data-tab-view-kind="image-editor"]');
+    return window.markdownViewerApp.services.imageEditor.getView(tab.dataset.tabId).history.undoStack.length;
+  });
+  const brightness = panel.locator('[data-adjustment-property="brightness"][type="range"]');
+  await brightness.fill("100");
+  await brightness.press("Tab");
+  await expect.poll(() => root.locator(".image-editor-canvas").evaluate((canvas) => canvas.getContext("2d").getImageData(10, 10, 1, 1).data[0])).toBeGreaterThan(64);
+  const historyAfter = await page.evaluate(() => {
+    const tab = document.querySelector('.tab-view.active[data-tab-view-kind="image-editor"]');
+    return window.markdownViewerApp.services.imageEditor.getView(tab.dataset.tabId).history.undoStack.length;
+  });
+  expect(historyAfter).toBe(historyBefore + 1);
+
+  await panel.locator('[data-adjustment-mask-action="black"]').click();
+  await expect.poll(() => root.locator(".image-editor-canvas").evaluate((canvas) => Array.from(canvas.getContext("2d").getImageData(10, 10, 1, 1).data).slice(0, 3))).toEqual([64, 64, 64]);
+  await panel.locator('[data-adjustment-mask-action="white"]').click();
+  await expect.poll(() => root.locator(".image-editor-canvas").evaluate((canvas) => canvas.getContext("2d").getImageData(10, 10, 1, 1).data[0])).toBeGreaterThan(64);
+
+  await root.locator('[data-adjustment-part="mask"]').click();
+  expect(await page.evaluate(() => {
+    const tab = document.querySelector('.tab-view.active[data-tab-view-kind="image-editor"]');
+    return window.markdownViewerApp.services.imageEditor.getView(tab.dataset.tabId).documentStore.adjustmentTarget.part;
+  })).toBe("mask");
+  expect(await page.evaluate(async () => {
+    const tab = document.querySelector('.tab-view.active[data-tab-view-kind="image-editor"]');
+    const imageEditor = window.markdownViewerApp.services.imageEditor;
+    const controller = imageEditor.getView(tab.dataset.tabId);
+    const decoded = await controller.projectCodec.decode(await imageEditor.getDraftBinary(controller.tab));
+    const adjustment = decoded.document.nodes.find((node) => node.kind === "adjustment");
+    return {
+      version: decoded.document.version,
+      kind: adjustment.kind,
+      brightness: adjustment.adjustment.brightness,
+      maskDefault: adjustment.mask.defaultValue
+    };
+  })).toEqual({ version: 2, kind: "adjustment", brightness: 100, maskDefault: 255 });
+});
+test("exposure adjustment edits stops, offset, and gamma non-destructively", async ({ page }) => {
+  await page.goto("/");
+  await page.waitForFunction(() => !!window.markdownViewerApp?.modules?.keyboardShortcuts && !!window.markdownViewerApp?.modules?.tabs?.openBlankImageEditorInTab && !!window.markdownViewerApp?.services?.imageEditor, null, { timeout: 60000 });
+  await page.evaluate(() => {
+    window.markdownViewerApp.modules.apiClient.deactivateApiClientSidebar = () => {};
+    window.markdownViewerApp.modules.tabs.openBlankImageEditorInTab({
+      width: 48,
+      height: 36,
+      name: "Exposure test",
+      background: { mode: "solid", color: "#404040" }
+    });
+  });
+
+  const root = page.locator('.tab-view.active[data-tab-view-kind="image-editor"]');
+  await expect(root.locator(".image-editor-shell")).toBeVisible();
+  const panel = root.locator(".image-editor-adjustments-panel");
+  await panel.locator('[data-adjustment-panel-action="create-exposure"]').click();
+  await expect(root.locator(".image-editor-adjustment-layer-row .image-editor-layer-name")).toHaveText("Exposure");
+  await expect(panel.locator('[data-adjustment-property="exposure"][type="range"]')).toHaveAttribute("min", "-20");
+  await expect(panel.locator('[data-adjustment-property="offset"][type="number"]')).toHaveAttribute("step", "0.0001");
+  await expect(panel.locator('[data-adjustment-property="gamma"][type="range"]')).toHaveAttribute("max", "9.99");
+
+  const exposure = panel.locator('[data-adjustment-property="exposure"][type="range"]');
+  await exposure.fill("1");
+  await exposure.press("Tab");
+  await expect.poll(() => root.locator(".image-editor-canvas").evaluate((canvas) => canvas.getContext("2d").getImageData(10, 10, 1, 1).data[0])).toBe(128);
+
+  const gamma = panel.locator('[data-adjustment-property="gamma"][type="number"]');
+  await gamma.fill("2");
+  await gamma.press("Enter");
+  await gamma.press("Tab");
+  await expect.poll(() => root.locator(".image-editor-canvas").evaluate((canvas) => canvas.getContext("2d").getImageData(10, 10, 1, 1).data[0])).toBe(181);
+
+  await panel.locator('[data-adjustment-panel-action="reset"]').click();
+  await expect.poll(() => root.locator(".image-editor-canvas").evaluate((canvas) => canvas.getContext("2d").getImageData(10, 10, 1, 1).data[0])).toBe(64);
+  expect(await page.evaluate(async () => {
+    const tab = document.querySelector('.tab-view.active[data-tab-view-kind="image-editor"]');
+    const imageEditor = window.markdownViewerApp.services.imageEditor;
+    const controller = imageEditor.getView(tab.dataset.tabId);
+    const decoded = await controller.projectCodec.decode(await imageEditor.getDraftBinary(controller.tab));
+    const adjustment = decoded.document.nodes.find((node) => node.kind === "adjustment");
+    return { name: adjustment.name, adjustment: adjustment.adjustment };
+  })).toEqual({ name: "Exposure", adjustment: { type: "exposure", exposure: 0, offset: 0, gamma: 1 } });
+});
+test("vibrance adjustment emphasizes muted colors and supports full desaturation", async ({ page }) => {
+  await page.goto("/");
+  await page.waitForFunction(() => !!window.markdownViewerApp?.modules?.keyboardShortcuts && !!window.markdownViewerApp?.modules?.tabs?.openBlankImageEditorInTab && !!window.markdownViewerApp?.services?.imageEditor, null, { timeout: 60000 });
+  await page.evaluate(() => {
+    window.markdownViewerApp.modules.apiClient.deactivateApiClientSidebar = () => {};
+    window.markdownViewerApp.modules.tabs.openBlankImageEditorInTab({
+      width: 48,
+      height: 36,
+      name: "Vibrance test",
+      background: { mode: "solid", color: "#6482a0" }
+    });
+  });
+
+  const root = page.locator('.tab-view.active[data-tab-view-kind="image-editor"]');
+  await expect(root.locator(".image-editor-shell")).toBeVisible();
+  const panel = root.locator(".image-editor-adjustments-panel");
+  await panel.locator('[data-adjustment-panel-action="create-vibrance"]').click();
+  await expect(root.locator(".image-editor-adjustment-layer-row .image-editor-layer-name")).toHaveText("Vibrance");
+  await expect(panel.locator('[data-adjustment-property="vibrance"][type="range"]')).toHaveAttribute("min", "-100");
+  await expect(panel.locator('[data-adjustment-property="saturation"][type="range"]')).toHaveAttribute("max", "100");
+
+  const vibrance = panel.locator('[data-adjustment-property="vibrance"][type="range"]');
+  await vibrance.fill("100");
+  await vibrance.press("Tab");
+  await expect.poll(() => root.locator(".image-editor-canvas").evaluate((canvas) => {
+    const pixel = canvas.getContext("2d").getImageData(10, 10, 1, 1).data;
+    return pixel[2] - pixel[0];
+  })).toBeGreaterThan(60);
+
+  await panel.locator('[data-adjustment-panel-action="reset"]').click();
+  const saturation = panel.locator('[data-adjustment-property="saturation"][type="range"]');
+  await saturation.fill("-100");
+  await saturation.press("Tab");
+  await expect.poll(() => root.locator(".image-editor-canvas").evaluate((canvas) => {
+    const pixel = Array.from(canvas.getContext("2d").getImageData(10, 10, 1, 1).data).slice(0, 3);
+    return pixel[0] === pixel[1] && pixel[1] === pixel[2];
+  })).toBe(true);
+
+  expect(await page.evaluate(async () => {
+    const tab = document.querySelector('.tab-view.active[data-tab-view-kind="image-editor"]');
+    const imageEditor = window.markdownViewerApp.services.imageEditor;
+    const controller = imageEditor.getView(tab.dataset.tabId);
+    const decoded = await controller.projectCodec.decode(await imageEditor.getDraftBinary(controller.tab));
+    const adjustment = decoded.document.nodes.find((node) => node.kind === "adjustment");
+    return { name: adjustment.name, adjustment: adjustment.adjustment };
+  })).toEqual({ name: "Vibrance", adjustment: { type: "vibrance", vibrance: 0, saturation: -100 } });
+});
+test("hue and saturation adjustment supports color ranges and colorize", async ({ page }) => {
+  await page.goto("/");
+  await page.waitForFunction(() => !!window.markdownViewerApp?.modules?.keyboardShortcuts && !!window.markdownViewerApp?.modules?.tabs?.openBlankImageEditorInTab && !!window.markdownViewerApp?.services?.imageEditor, null, { timeout: 60000 });
+  await page.evaluate(() => {
+    window.markdownViewerApp.modules.apiClient.deactivateApiClientSidebar = () => {};
+    window.markdownViewerApp.modules.tabs.openBlankImageEditorInTab({
+      width: 48,
+      height: 36,
+      name: "Hue saturation test",
+      background: { mode: "solid", color: "#ff0000" }
+    });
+  });
+
+  const root = page.locator('.tab-view.active[data-tab-view-kind="image-editor"]');
+  await expect(root.locator(".image-editor-shell")).toBeVisible();
+  const panel = root.locator(".image-editor-adjustments-panel");
+  await panel.locator('[data-adjustment-panel-action="create-hue-saturation"]').click();
+  await expect(root.locator(".image-editor-adjustment-layer-row .image-editor-layer-name")).toHaveText("Hue/Saturation");
+  await expect(panel.locator('[data-adjustment-property="hue"][type="range"]')).toHaveAttribute("min", "-180");
+  await expect(panel.locator('[data-adjustment-property="lightness"][type="number"]')).toHaveAttribute("max", "100");
+  await expect(panel.locator("[data-adjustment-range]")).toHaveCount(7);
+
+  const hue = panel.locator('[data-adjustment-property="hue"][type="range"]');
+  await hue.fill("120");
+  await hue.press("Tab");
+  await expect.poll(() => root.locator(".image-editor-canvas").evaluate((canvas) => Array.from(canvas.getContext("2d").getImageData(10, 10, 1, 1).data).slice(0, 3))).toEqual([0, 255, 0]);
+
+  await panel.locator('[data-adjustment-panel-action="reset"]').click();
+  await panel.locator('[data-adjustment-range="blues"]').click();
+  await hue.fill("120");
+  await hue.press("Tab");
+  await expect.poll(() => root.locator(".image-editor-canvas").evaluate((canvas) => Array.from(canvas.getContext("2d").getImageData(10, 10, 1, 1).data).slice(0, 3))).toEqual([255, 0, 0]);
+
+  await panel.locator('[data-adjustment-range="reds"]').click();
+  await expect.poll(() => root.locator(".image-editor-canvas").evaluate((canvas) => Array.from(canvas.getContext("2d").getImageData(10, 10, 1, 1).data).slice(0, 3))).toEqual([0, 255, 0]);
+
+  await panel.locator('[data-adjustment-panel-action="reset"]').click();
+  await panel.locator('[data-adjustment-toggle="colorize"]').check();
+  await hue.fill("120");
+  await hue.press("Tab");
+  await expect.poll(() => root.locator(".image-editor-canvas").evaluate((canvas) => {
+    const color = canvas.getContext("2d").getImageData(10, 10, 1, 1).data;
+    return color[1] > color[0] && color[1] > color[2];
+  })).toBe(true);
+
+  expect(await page.evaluate(async () => {
+    const tab = document.querySelector('.tab-view.active[data-tab-view-kind="image-editor"]');
+    const imageEditor = window.markdownViewerApp.services.imageEditor;
+    const controller = imageEditor.getView(tab.dataset.tabId);
+    const decoded = await controller.projectCodec.decode(await imageEditor.getDraftBinary(controller.tab));
+    const adjustment = decoded.document.nodes.find((node) => node.kind === "adjustment");
+    return { name: adjustment.name, adjustment: adjustment.adjustment };
+  })).toEqual({
+    name: "Hue/Saturation",
+    adjustment: { type: "hue-saturation", hue: 120, saturation: 0, lightness: 0, colorize: true, range: "master" }
+  });
+});
+test("color balance adjustment preserves independent tone settings and luminosity choice", async ({ page }) => {
+  await page.goto("/");
+  await page.waitForFunction(() => !!window.markdownViewerApp?.modules?.keyboardShortcuts && !!window.markdownViewerApp?.modules?.tabs?.openBlankImageEditorInTab && !!window.markdownViewerApp?.services?.imageEditor, null, { timeout: 60000 });
+  await page.evaluate(() => {
+    window.markdownViewerApp.modules.apiClient.deactivateApiClientSidebar = () => {};
+    window.markdownViewerApp.modules.tabs.openBlankImageEditorInTab({
+      width: 48,
+      height: 36,
+      name: "Color balance test",
+      background: { mode: "solid", color: "#808080" }
+    });
+  });
+
+  const root = page.locator('.tab-view.active[data-tab-view-kind="image-editor"]');
+  await expect(root.locator(".image-editor-shell")).toBeVisible();
+  const panel = root.locator(".image-editor-adjustments-panel");
+  await panel.locator('[data-adjustment-panel-action="create-color-balance"]').click();
+  await expect(root.locator(".image-editor-adjustment-layer-row .image-editor-layer-name")).toHaveText("Color Balance");
+  const tone = panel.locator('[data-adjustment-select="tone"]');
+  await expect(tone).toHaveValue("midtones");
+  await expect(panel.locator('[data-adjustment-toggle="preserveLuminosity"]')).toBeChecked();
+
+  const midtoneRed = panel.locator('[data-adjustment-property="midtonesCyanRed"][type="range"]');
+  await expect(midtoneRed).toHaveAttribute("min", "-100");
+  await midtoneRed.fill("40");
+  await midtoneRed.press("Tab");
+  await expect.poll(() => root.locator(".image-editor-canvas").evaluate((canvas) => {
+    const color = canvas.getContext("2d").getImageData(10, 10, 1, 1).data;
+    return color[0] > color[1] && color[1] === color[2];
+  })).toBe(true);
+
+  await tone.selectOption("highlights");
+  const highlightBlue = panel.locator('[data-adjustment-property="highlightsYellowBlue"][type="range"]');
+  await expect(highlightBlue).toHaveValue("0");
+  await highlightBlue.fill("50");
+  await highlightBlue.press("Tab");
+  await tone.selectOption("midtones");
+  await expect(panel.locator('[data-adjustment-property="midtonesCyanRed"][type="range"]')).toHaveValue("40");
+  await panel.locator('[data-adjustment-toggle="preserveLuminosity"]').uncheck();
+
+  expect(await page.evaluate(async () => {
+    const tab = document.querySelector('.tab-view.active[data-tab-view-kind="image-editor"]');
+    const imageEditor = window.markdownViewerApp.services.imageEditor;
+    const controller = imageEditor.getView(tab.dataset.tabId);
+    const decoded = await controller.projectCodec.decode(await imageEditor.getDraftBinary(controller.tab));
+    const adjustment = decoded.document.nodes.find((node) => node.kind === "adjustment");
+    return {
+      name: adjustment.name,
+      tone: adjustment.adjustment.tone,
+      midtonesCyanRed: adjustment.adjustment.midtonesCyanRed,
+      highlightsYellowBlue: adjustment.adjustment.highlightsYellowBlue,
+      preserveLuminosity: adjustment.adjustment.preserveLuminosity
+    };
+  })).toEqual({
+    name: "Color Balance",
+    tone: "midtones",
+    midtonesCyanRed: 40,
+    highlightsYellowBlue: 50,
+    preserveLuminosity: false
+  });
+});
+test("black and white adjustment mixes colors, tints output, and restores its automatic mix", async ({ page }) => {
+  await page.goto("/");
+  await page.waitForFunction(() => !!window.markdownViewerApp?.modules?.keyboardShortcuts && !!window.markdownViewerApp?.modules?.tabs?.openBlankImageEditorInTab && !!window.markdownViewerApp?.services?.imageEditor, null, { timeout: 60000 });
+  await page.evaluate(() => {
+    window.markdownViewerApp.modules.apiClient.deactivateApiClientSidebar = () => {};
+    window.markdownViewerApp.modules.tabs.openBlankImageEditorInTab({
+      width: 48,
+      height: 36,
+      name: "Black and white test",
+      background: { mode: "solid", color: "#ff0000" }
+    });
+  });
+
+  const root = page.locator('.tab-view.active[data-tab-view-kind="image-editor"]');
+  await expect(root.locator(".image-editor-shell")).toBeVisible();
+  const panel = root.locator(".image-editor-adjustments-panel");
+  await panel.locator('[data-adjustment-panel-action="create-black-white"]').click();
+  await expect(root.locator(".image-editor-adjustment-layer-row .image-editor-layer-name")).toHaveText("Black & White");
+  await expect(panel.locator('[data-adjustment-property="reds"][type="range"]')).toHaveValue("40");
+  await expect(panel.locator('[data-adjustment-property="magentas"][type="number"]')).toHaveValue("80");
+  await expect.poll(() => root.locator(".image-editor-canvas").evaluate((canvas) => Array.from(canvas.getContext("2d").getImageData(10, 10, 1, 1).data).slice(0, 3))).toEqual([102, 102, 102]);
+
+  const reds = panel.locator('[data-adjustment-property="reds"][type="range"]');
+  await reds.fill("80");
+  await reds.press("Tab");
+  await expect.poll(() => root.locator(".image-editor-canvas").evaluate((canvas) => Array.from(canvas.getContext("2d").getImageData(10, 10, 1, 1).data).slice(0, 3))).toEqual([204, 204, 204]);
+
+  const tint = panel.locator('[data-adjustment-toggle="blackWhiteTint"]');
+  await tint.check();
+  const tintColor = panel.locator('[data-adjustment-color="tintColor"]');
+  await expect(tintColor).toBeEnabled();
+  await tintColor.fill("#0000ff");
+  await expect.poll(() => root.locator(".image-editor-canvas").evaluate((canvas) => {
+    const color = canvas.getContext("2d").getImageData(10, 10, 1, 1).data;
+    return color[2] > color[0] && color[0] === color[1];
+  })).toBe(true);
+
+  await panel.locator('[data-adjustment-panel-action="black-white-auto"]').click();
+  await expect(panel.locator('[data-adjustment-property="reds"][type="range"]')).toHaveValue("40");
+  await tint.uncheck();
+  await expect.poll(() => root.locator(".image-editor-canvas").evaluate((canvas) => Array.from(canvas.getContext("2d").getImageData(10, 10, 1, 1).data).slice(0, 3))).toEqual([102, 102, 102]);
+
+  expect(await page.evaluate(async () => {
+    const tab = document.querySelector('.tab-view.active[data-tab-view-kind="image-editor"]');
+    const imageEditor = window.markdownViewerApp.services.imageEditor;
+    const controller = imageEditor.getView(tab.dataset.tabId);
+    const decoded = await controller.projectCodec.decode(await imageEditor.getDraftBinary(controller.tab));
+    const adjustment = decoded.document.nodes.find((node) => node.kind === "adjustment");
+    return { name: adjustment.name, adjustment: adjustment.adjustment };
+  })).toEqual({
+    name: "Black & White",
+    adjustment: { type: "black-white", reds: 40, yellows: 60, greens: 40, cyans: 60, blues: 20, magentas: 80, tint: false, tintColor: "#0000ff" }
+  });
+});
+test("channel mixer adjustment keeps per-output matrices and supports monochrome mixing", async ({ page }) => {
+  await page.goto("/");
+  await page.waitForFunction(() => !!window.markdownViewerApp?.modules?.keyboardShortcuts && !!window.markdownViewerApp?.modules?.tabs?.openBlankImageEditorInTab && !!window.markdownViewerApp?.services?.imageEditor, null, { timeout: 60000 });
+  await page.evaluate(() => {
+    window.markdownViewerApp.modules.apiClient.deactivateApiClientSidebar = () => {};
+    window.markdownViewerApp.modules.tabs.openBlankImageEditorInTab({
+      width: 48,
+      height: 36,
+      name: "Channel mixer test",
+      background: { mode: "solid", color: "#406080" }
+    });
+  });
+
+  const root = page.locator('.tab-view.active[data-tab-view-kind="image-editor"]');
+  await expect(root.locator(".image-editor-shell")).toBeVisible();
+  const panel = root.locator(".image-editor-adjustments-panel");
+  await panel.locator('[data-adjustment-panel-action="create-channel-mixer"]').click();
+  await expect(root.locator(".image-editor-adjustment-layer-row .image-editor-layer-name")).toHaveText("Channel Mixer");
+  const outputChannel = panel.locator('[data-adjustment-select="outputChannel"]');
+  await expect(outputChannel).toHaveValue("red");
+  await expect(panel.locator("[data-channel-mixer-total]")).toHaveText("+100%");
+  await expect.poll(() => root.locator(".image-editor-canvas").evaluate((canvas) => Array.from(canvas.getContext("2d").getImageData(10, 10, 1, 1).data).slice(0, 3))).toEqual([64, 96, 128]);
+
+  const redInput = panel.locator('[data-adjustment-property="redOutputRed"][type="range"]');
+  await redInput.fill("0");
+  await panel.locator('[data-adjustment-property="redOutputGreen"][type="range"]').fill("100");
+  await panel.locator('[data-adjustment-property="redOutputGreen"][type="range"]').press("Tab");
+  await expect(panel.locator("[data-channel-mixer-total]")).toHaveText("+100%");
+  await expect.poll(() => root.locator(".image-editor-canvas").evaluate((canvas) => Array.from(canvas.getContext("2d").getImageData(10, 10, 1, 1).data).slice(0, 3))).toEqual([96, 96, 128]);
+
+  await outputChannel.selectOption("blue");
+  await panel.locator('[data-adjustment-property="blueOutputBlue"][type="range"]').fill("0");
+  await panel.locator('[data-adjustment-property="blueOutputRed"][type="range"]').fill("100");
+  await panel.locator('[data-adjustment-property="blueOutputRed"][type="range"]').press("Tab");
+  await expect.poll(() => root.locator(".image-editor-canvas").evaluate((canvas) => Array.from(canvas.getContext("2d").getImageData(10, 10, 1, 1).data).slice(0, 3))).toEqual([96, 96, 64]);
+
+  await outputChannel.selectOption("red");
+  await expect(panel.locator('[data-adjustment-property="redOutputRed"][type="range"]')).toHaveValue("0");
+  await expect(panel.locator('[data-adjustment-property="redOutputGreen"][type="range"]')).toHaveValue("100");
+
+  await panel.locator('[data-adjustment-toggle="channelMixerMonochrome"]').check();
+  await expect(panel.locator('[data-adjustment-select="outputChannel"]')).toBeDisabled();
+  await expect(panel.locator('[data-adjustment-select="outputChannel"]')).toHaveValue("gray");
+  await expect.poll(() => root.locator(".image-editor-canvas").evaluate((canvas) => Array.from(canvas.getContext("2d").getImageData(10, 10, 1, 1).data).slice(0, 3))).toEqual([90, 90, 90]);
+  await panel.locator('[data-adjustment-property="monochromeRed"][type="range"]').fill("100");
+  await panel.locator('[data-adjustment-property="monochromeGreen"][type="range"]').fill("0");
+  await panel.locator('[data-adjustment-property="monochromeBlue"][type="range"]').fill("0");
+  await panel.locator('[data-adjustment-property="monochromeBlue"][type="range"]').press("Tab");
+  await expect(panel.locator("[data-channel-mixer-total]")).toHaveText("+100%");
+  await expect.poll(() => root.locator(".image-editor-canvas").evaluate((canvas) => Array.from(canvas.getContext("2d").getImageData(10, 10, 1, 1).data).slice(0, 3))).toEqual([64, 64, 64]);
+
+  expect(await page.evaluate(async () => {
+    const tab = document.querySelector('.tab-view.active[data-tab-view-kind="image-editor"]');
+    const imageEditor = window.markdownViewerApp.services.imageEditor;
+    const controller = imageEditor.getView(tab.dataset.tabId);
+    const decoded = await controller.projectCodec.decode(await imageEditor.getDraftBinary(controller.tab));
+    const adjustment = decoded.document.nodes.find((node) => node.kind === "adjustment");
+    return {
+      name: adjustment.name,
+      outputChannel: adjustment.adjustment.outputChannel,
+      monochrome: adjustment.adjustment.monochrome,
+      redOutputRed: adjustment.adjustment.redOutputRed,
+      redOutputGreen: adjustment.adjustment.redOutputGreen,
+      blueOutputRed: adjustment.adjustment.blueOutputRed,
+      blueOutputBlue: adjustment.adjustment.blueOutputBlue,
+      monochromeRed: adjustment.adjustment.monochromeRed,
+      monochromeGreen: adjustment.adjustment.monochromeGreen,
+      monochromeBlue: adjustment.adjustment.monochromeBlue
+    };
+  })).toEqual({
+    name: "Channel Mixer",
+    outputChannel: "red",
+    monochrome: true,
+    redOutputRed: 0,
+    redOutputGreen: 100,
+    blueOutputRed: 100,
+    blueOutputBlue: 0,
+    monochromeRed: 100,
+    monochromeGreen: 0,
+    monochromeBlue: 0
+  });
+});
+test("levels adjustment edits composite and individual channels with histogram and auto", async ({ page }) => {
+  await page.goto("/");
+  await page.waitForFunction(() => !!window.markdownViewerApp?.modules?.keyboardShortcuts && !!window.markdownViewerApp?.modules?.tabs?.openBlankImageEditorInTab && !!window.markdownViewerApp?.services?.imageEditor, null, { timeout: 60000 });
+  await page.evaluate(() => {
+    window.markdownViewerApp.modules.apiClient.deactivateApiClientSidebar = () => {};
+    window.markdownViewerApp.modules.tabs.openBlankImageEditorInTab({
+      width: 48,
+      height: 36,
+      name: "Levels test",
+      background: { mode: "solid", color: "#4080c0" }
+    });
+  });
+
+  const root = page.locator('.tab-view.active[data-tab-view-kind="image-editor"]');
+  await expect(root.locator(".image-editor-shell")).toBeVisible();
+  const panel = root.locator(".image-editor-adjustments-panel");
+  await panel.locator('[data-adjustment-panel-action="create-levels"]').click();
+  await expect(root.locator(".image-editor-adjustment-layer-row .image-editor-layer-name")).toHaveText("Levels");
+  const channel = panel.locator('[data-adjustment-select="levelsChannel"]');
+  await expect(channel).toHaveValue("rgb");
+  await expect(panel.locator(".image-editor-levels-histogram")).toBeVisible();
+  await expect.poll(() => panel.locator(".image-editor-levels-histogram").evaluate((canvas) => {
+    return Array.from(canvas.getContext("2d").getImageData(0, 0, canvas.width, canvas.height).data).some((value) => value !== 0);
+  })).toBe(true);
+  await expect.poll(() => root.locator(".image-editor-canvas").evaluate((canvas) => Array.from(canvas.getContext("2d").getImageData(10, 10, 1, 1).data).slice(0, 3))).toEqual([64, 128, 192]);
+
+  await channel.selectOption("red");
+  await panel.locator('[data-adjustment-property="redInputBlack"][type="range"]').fill("64");
+  await panel.locator('[data-adjustment-property="redInputBlack"][type="range"]').press("Tab");
+  await expect.poll(() => root.locator(".image-editor-canvas").evaluate((canvas) => Array.from(canvas.getContext("2d").getImageData(10, 10, 1, 1).data).slice(0, 3))).toEqual([0, 128, 192]);
+  await channel.selectOption("blue");
+  await expect(panel.locator('[data-adjustment-property="blueInputBlack"][type="range"]')).toHaveValue("0");
+  await channel.selectOption("red");
+  await expect(panel.locator('[data-adjustment-property="redInputBlack"][type="range"]')).toHaveValue("64");
+
+  await panel.locator('[data-adjustment-panel-action="reset"]').click();
+  const gamma = panel.locator('[data-adjustment-property="rgbGamma"][type="range"]');
+  await gamma.fill("2");
+  await gamma.press("Tab");
+  await expect.poll(() => root.locator(".image-editor-canvas").evaluate((canvas) => Array.from(canvas.getContext("2d").getImageData(10, 10, 1, 1).data).slice(0, 3))).toEqual([128, 181, 221]);
+  await panel.locator('[data-adjustment-panel-action="levels-auto"]').click();
+  await expect(panel.locator('[data-adjustment-property="rgbGamma"][type="range"]')).toHaveValue("1");
+  await expect.poll(() => root.locator(".image-editor-canvas").evaluate((canvas) => Array.from(canvas.getContext("2d").getImageData(10, 10, 1, 1).data).slice(0, 3))).toEqual([64, 128, 192]);
+
+  await channel.selectOption("red");
+  await panel.locator('[data-adjustment-property="redInputBlack"][type="range"]').fill("32");
+  await panel.locator('[data-adjustment-property="redInputBlack"][type="range"]').press("Tab");
+  await channel.selectOption("blue");
+  await panel.locator('[data-adjustment-property="blueOutputWhite"][type="range"]').fill("128");
+  await panel.locator('[data-adjustment-property="blueOutputWhite"][type="range"]').press("Tab");
+  await expect.poll(() => root.locator(".image-editor-canvas").evaluate((canvas) => Array.from(canvas.getContext("2d").getImageData(10, 10, 1, 1).data).slice(0, 3))).toEqual([37, 128, 96]);
+
+  expect(await page.evaluate(async () => {
+    const tab = document.querySelector('.tab-view.active[data-tab-view-kind="image-editor"]');
+    const imageEditor = window.markdownViewerApp.services.imageEditor;
+    const controller = imageEditor.getView(tab.dataset.tabId);
+    const decoded = await controller.projectCodec.decode(await imageEditor.getDraftBinary(controller.tab));
+    const adjustment = decoded.document.nodes.find((node) => node.kind === "adjustment");
+    return {
+      name: adjustment.name,
+      channel: adjustment.adjustment.channel,
+      rgbGamma: adjustment.adjustment.rgbGamma,
+      redInputBlack: adjustment.adjustment.redInputBlack,
+      blueOutputWhite: adjustment.adjustment.blueOutputWhite
+    };
+  })).toEqual({ name: "Levels", channel: "blue", rgbGamma: 1, redInputBlack: 32, blueOutputWhite: 128 });
+});
+test("curves adjustment edits graph points independently for composite and color channels", async ({ page }) => {
+  await page.goto("/");
+  await page.waitForFunction(() => !!window.markdownViewerApp?.modules?.keyboardShortcuts && !!window.markdownViewerApp?.modules?.tabs?.openBlankImageEditorInTab && !!window.markdownViewerApp?.services?.imageEditor, null, { timeout: 60000 });
+  await page.evaluate(() => {
+    window.markdownViewerApp.modules.apiClient.deactivateApiClientSidebar = () => {};
+    window.markdownViewerApp.modules.tabs.openBlankImageEditorInTab({
+      width: 48,
+      height: 36,
+      name: "Curves test",
+      background: { mode: "solid", color: "#808080" }
+    });
+  });
+
+  const root = page.locator('.tab-view.active[data-tab-view-kind="image-editor"]');
+  await expect(root.locator(".image-editor-shell")).toBeVisible();
+  const panel = root.locator(".image-editor-adjustments-panel");
+  await panel.locator('[data-adjustment-panel-action="create-curves"]').click();
+  await expect(root.locator(".image-editor-adjustment-layer-row .image-editor-layer-name")).toHaveText("Curves");
+  const channel = panel.locator("[data-curves-channel]");
+  const graph = panel.locator(".image-editor-curves-graph");
+  await expect(channel).toHaveValue("rgb");
+  await expect(graph).toBeVisible();
+  await expect.poll(() => root.locator(".image-editor-canvas").evaluate((canvas) => Array.from(canvas.getContext("2d").getImageData(10, 10, 1, 1).data).slice(0, 3))).toEqual([128, 128, 128]);
+
+  const graphBox = await graph.boundingBox();
+  await page.mouse.click(graphBox.x + graphBox.width / 2, graphBox.y + graphBox.height / 2);
+  await expect(panel.locator('[data-curves-coordinate="input"]')).toHaveValue("128");
+  await panel.locator('[data-curves-coordinate="output"]').fill("192");
+  await panel.locator('[data-curves-coordinate="output"]').press("Tab");
+  await expect.poll(() => root.locator(".image-editor-canvas").evaluate((canvas) => Array.from(canvas.getContext("2d").getImageData(10, 10, 1, 1).data).slice(0, 3))).toEqual([192, 192, 192]);
+
+  await channel.selectOption("red");
+  const redGraphBox = await graph.boundingBox();
+  await page.mouse.click(redGraphBox.x + redGraphBox.width * .75, redGraphBox.y + redGraphBox.height * .75);
+  await panel.locator('[data-curves-coordinate="input"]').fill("192");
+  await panel.locator('[data-curves-coordinate="input"]').press("Tab");
+  await panel.locator('[data-curves-coordinate="output"]').fill("64");
+  await panel.locator('[data-curves-coordinate="output"]').press("Tab");
+  await expect.poll(() => root.locator(".image-editor-canvas").evaluate((canvas) => Array.from(canvas.getContext("2d").getImageData(10, 10, 1, 1).data).slice(0, 3))).toEqual([64, 192, 192]);
+
+  await channel.selectOption("rgb");
+  await expect(panel.locator('[data-curves-coordinate="input"]')).toHaveValue("0");
+  expect(await page.evaluate(() => {
+    const tab = document.querySelector('.tab-view.active[data-tab-view-kind="image-editor"]');
+    const adjustment = window.markdownViewerApp.services.imageEditor.getView(tab.dataset.tabId).documentStore.document.nodes.find((node) => node.kind === "adjustment");
+    return { rgbPoints: adjustment.adjustment.rgbPoints, redPoints: adjustment.adjustment.redPoints };
+  })).toEqual({
+    rgbPoints: [{ x: 0, y: 0 }, { x: 128, y: 192 }, { x: 255, y: 255 }],
+    redPoints: [{ x: 0, y: 0 }, { x: 192, y: 64 }, { x: 255, y: 255 }]
+  });
+
+  await panel.locator('[data-adjustment-panel-action="curves-auto"]').click();
+  expect(await page.evaluate(() => {
+    const tab = document.querySelector('.tab-view.active[data-tab-view-kind="image-editor"]');
+    const adjustment = window.markdownViewerApp.services.imageEditor.getView(tab.dataset.tabId).documentStore.document.nodes.find((node) => node.kind === "adjustment");
+    return adjustment.adjustment.rgbPoints;
+  })).toEqual([{ x: 0, y: 0 }, { x: 255, y: 255 }]);
+
+  const finalGraphBox = await graph.boundingBox();
+  await page.mouse.click(finalGraphBox.x + finalGraphBox.width / 2, finalGraphBox.y + finalGraphBox.height / 2);
+  await panel.locator('[data-curves-coordinate="output"]').fill("180");
+  await panel.locator('[data-curves-coordinate="output"]').press("Tab");
+  expect(await page.evaluate(async () => {
+    const tab = document.querySelector('.tab-view.active[data-tab-view-kind="image-editor"]');
+    const imageEditor = window.markdownViewerApp.services.imageEditor;
+    const controller = imageEditor.getView(tab.dataset.tabId);
+    const decoded = await controller.projectCodec.decode(await imageEditor.getDraftBinary(controller.tab));
+    const adjustment = decoded.document.nodes.find((node) => node.kind === "adjustment");
+    return { name: adjustment.name, channel: adjustment.adjustment.channel, rgbPoints: adjustment.adjustment.rgbPoints, redPoints: adjustment.adjustment.redPoints };
+  })).toEqual({
+    name: "Curves",
+    channel: "rgb",
+    rgbPoints: [{ x: 0, y: 0 }, { x: 128, y: 180 }, { x: 255, y: 255 }],
+    redPoints: [{ x: 0, y: 0 }, { x: 192, y: 64 }, { x: 255, y: 255 }]
+  });
+});
+test("photo filter adjustment supports presets, custom color, density, and luminosity preservation", async ({ page }) => {
+  await page.goto("/");
+  await page.waitForFunction(() => !!window.markdownViewerApp?.modules?.keyboardShortcuts && !!window.markdownViewerApp?.modules?.tabs?.openBlankImageEditorInTab && !!window.markdownViewerApp?.services?.imageEditor, null, { timeout: 60000 });
+  await page.evaluate(() => {
+    window.markdownViewerApp.modules.apiClient.deactivateApiClientSidebar = () => {};
+    window.markdownViewerApp.modules.tabs.openBlankImageEditorInTab({
+      width: 40,
+      height: 30,
+      name: "Photo Filter test",
+      background: { mode: "solid", color: "#808080" }
+    });
+  });
+
+  const root = page.locator('.tab-view.active[data-tab-view-kind="image-editor"]');
+  await expect(root.locator(".image-editor-shell")).toBeVisible();
+  const panel = root.locator(".image-editor-adjustments-panel");
+  await panel.locator('[data-adjustment-panel-action="create-photo-filter"]').click();
+  await expect(root.locator(".image-editor-adjustment-layer-row .image-editor-layer-name")).toHaveText("Photo Filter");
+  await expect(panel.locator('[data-photo-filter-mode][value="filter"]')).toBeChecked();
+  await expect(panel.locator("[data-photo-filter-preset]")).toHaveValue("warming-85");
+  await expect(panel.locator('[data-adjustment-property="density"][type="range"]')).toHaveValue("25");
+  await expect(panel.locator("[data-photo-filter-preserve]")).toBeChecked();
+
+  await panel.locator("[data-photo-filter-preset]").selectOption("green");
+  await panel.locator('[data-photo-filter-mode][value="color"]').check();
+  await panel.locator("[data-photo-filter-color]").fill("#ff0000");
+  await panel.locator("[data-photo-filter-preserve]").uncheck();
+  const density = panel.locator('[data-adjustment-property="density"][type="range"]');
+  await density.fill("100");
+  await density.press("Tab");
+  await expect.poll(() => root.locator(".image-editor-canvas").evaluate((canvas) => Array.from(canvas.getContext("2d").getImageData(10, 10, 1, 1).data).slice(0, 3))).toEqual([255, 0, 0]);
+
+  await panel.locator("[data-photo-filter-preserve]").check();
+  await expect.poll(() => root.locator(".image-editor-canvas").evaluate((canvas) => Array.from(canvas.getContext("2d").getImageData(10, 10, 1, 1).data).slice(0, 3))).toEqual([255, 94, 94]);
+
+  expect(await page.evaluate(async () => {
+    const tab = document.querySelector('.tab-view.active[data-tab-view-kind="image-editor"]');
+    const imageEditor = window.markdownViewerApp.services.imageEditor;
+    const controller = imageEditor.getView(tab.dataset.tabId);
+    const decoded = await controller.projectCodec.decode(await imageEditor.getDraftBinary(controller.tab));
+    const adjustment = decoded.document.nodes.find((node) => node.kind === "adjustment");
+    return adjustment.adjustment;
+  })).toEqual({
+    type: "photo-filter",
+    filterMode: "color",
+    filter: "green",
+    color: "#ff0000",
+    density: 100,
+    preserveLuminosity: true
+  });
+});
+
+test("invert adjustment reverses visible RGB content and persists without editable parameters", async ({ page }) => {
+  await page.goto("/");
+  await page.waitForFunction(() => !!window.markdownViewerApp?.modules?.keyboardShortcuts && !!window.markdownViewerApp?.modules?.tabs?.openBlankImageEditorInTab && !!window.markdownViewerApp?.services?.imageEditor, null, { timeout: 60000 });
+  await page.evaluate(() => {
+    window.markdownViewerApp.modules.apiClient.deactivateApiClientSidebar = () => {};
+    window.markdownViewerApp.modules.tabs.openBlankImageEditorInTab({
+      width: 40,
+      height: 30,
+      name: "Invert test",
+      background: { mode: "solid", color: "#204060" }
+    });
+  });
+
+  const root = page.locator('.tab-view.active[data-tab-view-kind="image-editor"]');
+  await expect(root.locator(".image-editor-shell")).toBeVisible();
+  const panel = root.locator(".image-editor-adjustments-panel");
+  await panel.locator('[data-adjustment-panel-action="create-invert"]').click();
+  await expect(root.locator(".image-editor-adjustment-layer-row .image-editor-layer-name")).toHaveText("Invert");
+  await expect(panel.locator(".image-editor-invert-properties-note")).toBeVisible();
+  await expect(panel.locator('[data-adjustment-panel-action="reset"]')).toHaveCount(0);
+  await expect.poll(() => root.locator(".image-editor-canvas").evaluate((canvas) => Array.from(canvas.getContext("2d").getImageData(10, 10, 1, 1).data).slice(0, 3))).toEqual([223, 191, 159]);
+
+  expect(await page.evaluate(async () => {
+    const tab = document.querySelector('.tab-view.active[data-tab-view-kind="image-editor"]');
+    const imageEditor = window.markdownViewerApp.services.imageEditor;
+    const controller = imageEditor.getView(tab.dataset.tabId);
+    const decoded = await controller.projectCodec.decode(await imageEditor.getDraftBinary(controller.tab));
+    const adjustment = decoded.document.nodes.find((node) => node.kind === "adjustment");
+    return { name: adjustment.name, adjustment: adjustment.adjustment, mask: adjustment.mask };
+  })).toEqual({
+    name: "Invert",
+    adjustment: { type: "invert" },
+    mask: { type: "raster", enabled: true, assetId: null, bounds: null, defaultValue: 255 }
+  });
+});
+
+
+test("selective color adjustment keeps independent family values and calculation method", async ({ page }) => {
+  await page.goto("/");
+  await page.waitForFunction(() => !!window.markdownViewerApp?.modules?.keyboardShortcuts && !!window.markdownViewerApp?.modules?.tabs?.openBlankImageEditorInTab && !!window.markdownViewerApp?.services?.imageEditor, null, { timeout: 60000 });
+  await page.evaluate(() => {
+    window.markdownViewerApp.modules.apiClient.deactivateApiClientSidebar = () => {};
+    window.markdownViewerApp.modules.tabs.openBlankImageEditorInTab({
+      width: 40,
+      height: 30,
+      name: "Selective Color test",
+      background: { mode: "solid", color: "#0000ff" }
+    });
+  });
+
+  const root = page.locator('.tab-view.active[data-tab-view-kind="image-editor"]');
+  await expect(root.locator(".image-editor-shell")).toBeVisible();
+  const panel = root.locator(".image-editor-adjustments-panel");
+  await panel.locator('[data-adjustment-panel-action="create-selective-color"]').click();
+  await expect(root.locator(".image-editor-adjustment-layer-row .image-editor-layer-name")).toHaveText("Selective Color");
+  await expect(panel.locator("[data-selective-color-range]")).toHaveValue("reds");
+  await expect(panel.locator('[data-selective-color-method][value="relative"]')).toBeChecked();
+
+  await panel.locator("[data-selective-color-range]").selectOption("blues");
+  const blueYellow = panel.locator('[data-adjustment-property="bluesYellow"][type="range"]');
+  await blueYellow.fill("100");
+  await blueYellow.press("Tab");
+  await expect.poll(() => root.locator(".image-editor-canvas").evaluate((canvas) => Array.from(canvas.getContext("2d").getImageData(10, 10, 1, 1).data).slice(0, 3))).toEqual([0, 0, 0]);
+
+  await panel.locator("[data-selective-color-range]").selectOption("reds");
+  const redCyan = panel.locator('[data-adjustment-property="redsCyan"][type="range"]');
+  await redCyan.fill("-20");
+  await redCyan.press("Tab");
+  await panel.locator("[data-selective-color-range]").selectOption("blues");
+  await expect(panel.locator('[data-adjustment-property="bluesYellow"][type="range"]')).toHaveValue("100");
+  await panel.locator('[data-selective-color-method][value="absolute"]').check();
+
+  expect(await page.evaluate(async () => {
+    const tab = document.querySelector('.tab-view.active[data-tab-view-kind="image-editor"]');
+    const imageEditor = window.markdownViewerApp.services.imageEditor;
+    const controller = imageEditor.getView(tab.dataset.tabId);
+    const decoded = await controller.projectCodec.decode(await imageEditor.getDraftBinary(controller.tab));
+    const adjustment = decoded.document.nodes.find((node) => node.kind === "adjustment");
+    return {
+      name: adjustment.name,
+      selectedColor: adjustment.adjustment.selectedColor,
+      relative: adjustment.adjustment.relative,
+      bluesYellow: adjustment.adjustment.bluesYellow,
+      redsCyan: adjustment.adjustment.redsCyan
+    };
+  })).toEqual({
+    name: "Selective Color",
+    selectedColor: "blues",
+    relative: false,
+    bluesYellow: 100,
+    redsCyan: -20
+  });
+});
+
+
+test("match color adjustment samples a source layer and retains image options", async ({ page }) => {
+  await page.goto("/");
+  await page.waitForFunction(() => !!window.markdownViewerApp?.modules?.keyboardShortcuts && !!window.markdownViewerApp?.modules?.tabs?.openBlankImageEditorInTab && !!window.markdownViewerApp?.services?.imageEditor, null, { timeout: 60000 });
+  const sourceId = await page.evaluate(() => {
+    window.markdownViewerApp.modules.apiClient.deactivateApiClientSidebar = () => {};
+    window.markdownViewerApp.modules.tabs.openBlankImageEditorInTab({
+      width: 40,
+      height: 30,
+      name: "Match Color test",
+      background: { mode: "solid", color: "#808080" }
+    });
+    const root = document.querySelector('.tab-view.active[data-tab-view-kind="image-editor"]');
+    const controller = window.markdownViewerApp.services.imageEditor.getView(root.dataset.tabId);
+    const background = controller.documentStore.activeLayer();
+    const source = controller.documentStore.addLayer("Source palette", background.id);
+    const pixels = new ImageData(2, 1);
+    for (let index = 0; index < pixels.data.length; index += 4) {
+      pixels.data[index] = 200;
+      pixels.data[index + 1] = 100;
+      pixels.data[index + 2] = 50;
+      pixels.data[index + 3] = 255;
+    }
+    controller.documentStore.addRasterObject(pixels, { x: 38, y: 29, width: 2, height: 1 }, { name: "Source pixels", layerId: source.id });
+    controller.documentStore.select(background.id);
+    controller.compositor.render({ canvas: controller.view.canvas });
+    return source.id;
+  });
+
+  const root = page.locator('.tab-view.active[data-tab-view-kind="image-editor"]');
+  await expect(root.locator(".image-editor-shell")).toBeVisible();
+  const panel = root.locator(".image-editor-adjustments-panel");
+  await panel.locator('[data-adjustment-panel-action="create-match-color"]').click();
+  await expect(root.locator(".image-editor-adjustment-layer-row .image-editor-layer-name")).toHaveText("Match Color");
+  await expect(panel.locator("[data-match-color-source]")).toHaveValue("");
+  await expect(panel.locator('[data-adjustment-property="luminance"][type="range"]')).toHaveValue("100");
+  await expect(panel.locator('[data-adjustment-property="colorIntensity"][type="range"]')).toHaveValue("100");
+  await expect(panel.locator('[data-adjustment-property="fade"][type="range"]')).toHaveValue("0");
+
+  await panel.locator("[data-match-color-source]").selectOption(sourceId);
+  await expect.poll(() => root.locator(".image-editor-canvas").evaluate((canvas) => Array.from(canvas.getContext("2d").getImageData(10, 10, 1, 1).data).slice(0, 3))).toEqual([200, 100, 50]);
+
+  const fade = panel.locator('[data-adjustment-property="fade"][type="range"]');
+  await fade.fill("50");
+  await fade.press("Tab");
+  await expect.poll(() => root.locator(".image-editor-canvas").evaluate((canvas) => Array.from(canvas.getContext("2d").getImageData(10, 10, 1, 1).data).slice(0, 3))).toEqual([164, 114, 89]);
+  await panel.locator("[data-match-color-neutralize]").check();
+
+  expect(await page.evaluate(async () => {
+    const tab = document.querySelector('.tab-view.active[data-tab-view-kind="image-editor"]');
+    const imageEditor = window.markdownViewerApp.services.imageEditor;
+    const controller = imageEditor.getView(tab.dataset.tabId);
+    const decoded = await controller.projectCodec.decode(await imageEditor.getDraftBinary(controller.tab));
+    const adjustment = decoded.document.nodes.find((node) => node.kind === "adjustment");
+    return {
+      name: adjustment.name,
+      sourceNodeId: adjustment.adjustment.sourceNodeId,
+      sourceName: adjustment.adjustment.sourceName,
+      sourceMeans: [adjustment.adjustment.sourceRedMean, adjustment.adjustment.sourceGreenMean, adjustment.adjustment.sourceBlueMean],
+      fade: adjustment.adjustment.fade,
+      neutralize: adjustment.adjustment.neutralize
+    };
+  })).toEqual({
+    name: "Match Color",
+    sourceNodeId: sourceId,
+    sourceName: "Source palette",
+    sourceMeans: [0.784314, 0.392157, 0.196078],
+    fade: 50,
+    neutralize: true
+  });
+});
+
+test("replace color adjustment samples a color and changes matching pixels non-destructively", async ({ page }) => {
+  await page.goto("/");
+  await page.waitForFunction(() => !!window.markdownViewerApp?.modules?.keyboardShortcuts && !!window.markdownViewerApp?.modules?.tabs?.openBlankImageEditorInTab && !!window.markdownViewerApp?.services?.imageEditor, null, { timeout: 60000 });
+  await page.evaluate(() => {
+    window.markdownViewerApp.modules.apiClient.deactivateApiClientSidebar = () => {};
+    window.markdownViewerApp.modules.tabs.openBlankImageEditorInTab({ width: 30, height: 20, name: "Replace Color test", background: { mode: "solid", color: "#ff0000" } });
+  });
+
+  const root = page.locator('.tab-view.active[data-tab-view-kind="image-editor"]');
+  await expect(root.locator(".image-editor-shell")).toBeVisible();
+  const panel = root.locator(".image-editor-adjustments-panel");
+  await panel.locator('[data-adjustment-panel-action="create-replace-color"]').click();
+  await expect(root.locator(".image-editor-adjustment-layer-row .image-editor-layer-name")).toHaveText("Replace Color");
+  await expect(panel.locator('[data-adjustment-property="fuzziness"][type="range"]')).toHaveValue("40");
+
+  await panel.locator("[data-replace-color-source]").evaluate((input) => {
+    input.value = "#ff0000";
+    input.dispatchEvent(new Event("change", { bubbles: true }));
+  });
+  const hue = panel.locator('[data-adjustment-property="hue"][type="range"]');
+  await hue.fill("120");
+  await hue.press("Tab");
+  await expect.poll(() => root.locator(".image-editor-canvas").evaluate((canvas) => Array.from(canvas.getContext("2d").getImageData(10, 10, 1, 1).data).slice(0, 3))).toEqual([0, 255, 0]);
+
+  expect(await page.evaluate(async () => {
+    const tab = document.querySelector('.tab-view.active[data-tab-view-kind="image-editor"]');
+    const imageEditor = window.markdownViewerApp.services.imageEditor;
+    const controller = imageEditor.getView(tab.dataset.tabId);
+    const decoded = await controller.projectCodec.decode(await imageEditor.getDraftBinary(controller.tab));
+    return decoded.document.nodes.find((node) => node.kind === "adjustment").adjustment;
+  })).toEqual({ type: "replace-color", sourceColor: "#ff0000", fuzziness: 40, hue: 120, saturation: 0, lightness: 0 });
+});
+
+
 test("image preview zooms beyond 100 percent and supports drag panning", async ({ page }) => {
   await page.goto("/");
   await page.waitForFunction(() => !!window.markdownViewerApp?.modules?.keyboardShortcuts, null, { timeout: 60000 });

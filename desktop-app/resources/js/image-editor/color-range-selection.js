@@ -86,6 +86,7 @@
     normalizeFuzziness,
     colorDistance,
     samplePixel,
+    sampleStrength,
     buildMask: buildColorRangeMask
   };
 })(typeof window !== "undefined" ? window : globalThis);
