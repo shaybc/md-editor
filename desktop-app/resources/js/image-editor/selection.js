@@ -71,6 +71,40 @@
     return resized.getContext('2d').getImageData(0, 0, width, height);
   }
 
+  function skewSelectionRect(rect, handle, startSkew, startPoint, point, rotation) {
+    const center = transform.centerOfRect(rect);
+    const localStart = transform.rotatePoint(startPoint, center, -rotation);
+    const localPoint = transform.rotatePoint(point, center, -rotation);
+    const deltaX = localPoint.x - localStart.x;
+    const deltaY = localPoint.y - localStart.y;
+    const skew = { ...startSkew };
+    let centerOffsetX = 0;
+    let centerOffsetY = 0;
+    if (handle.includes('n') || handle.includes('s')) {
+      skew.x += deltaX / (handle.includes('n') ? -rect.height : rect.height);
+      centerOffsetX = deltaX / 2;
+    }
+    if (handle.includes('w') || handle.includes('e')) {
+      skew.y += deltaY / (handle.includes('w') ? -rect.width : rect.width);
+      centerOffsetY = deltaY / 2;
+    }
+    skew.x = Math.max(-4, Math.min(4, skew.x));
+    skew.y = Math.max(-4, Math.min(4, skew.y));
+    if (Math.abs(1 - skew.x * skew.y) < .05) return null;
+    const movedCenter = transform.rotatePoint({
+      x: center.x + centerOffsetX,
+      y: center.y + centerOffsetY
+    }, center, rotation);
+    return {
+      rect: {
+        ...rect,
+        x: rect.x + movedCenter.x - center.x,
+        y: rect.y + movedCenter.y - center.y
+      },
+      skew
+    };
+  }
+
   /** Owns the complete outlined, pending-paste, and floating pixel selection lifecycle. */
   class ImageEditorSelection {
     constructor() {
@@ -86,6 +120,7 @@
       this.savedFloatingLayer = null;
       this.returnToolAfterPlacement = null;
       this.rotation = 0;
+      this.skew = { x: 0, y: 0 };
       this.shape = "rectangle";
       this.points = null;
       this.mask = null;
@@ -108,12 +143,12 @@
 
     get isTransforming() {
       return this.pointerGesture?.type === 'move' || this.pointerGesture?.type === 'resize' ||
-        this.pointerGesture?.type === 'rotate';
+        this.pointerGesture?.type === 'rotate' || this.pointerGesture?.type === 'skew';
     }
 
     /** Return the canvas positions of all corner and edge resize guides. */
     resizeGuidePoints(offset = 0) {
-      return this.rect ? transform.selectionGuidePoints(this.rect, this.rotation, offset) : {};
+      return this.rect ? transform.selectionGuidePoints(this.rect, this.rotation, offset, this.skew) : {};
     }
 
     /** Find the resize guide under a canvas point at the current zoom. */
@@ -163,6 +198,7 @@
       this.origin = "canvas";
       this.returnToolAfterPlacement = null;
       this.rotation = 0;
+      this.skew = { x: 0, y: 0 };
       this.shape = namespace.ImageEditorSelectionShapes.normalize(shape);
       this.points = Array.isArray(points) ? points.map((point) => ({ ...point })) : null;
       this.mask = null;
@@ -182,6 +218,7 @@
       this.origin = "canvas";
       this.returnToolAfterPlacement = null;
       this.rotation = 0;
+      this.skew = { x: 0, y: 0 };
       this.shape = "color-range";
       this.points = null;
       this.mask = new Uint8ClampedArray(mask.data);
@@ -192,12 +229,14 @@
     }
 
     contains(point) {
-      return !!this.rect && namespace.ImageEditorSelectionShapes.contains(this.region(), point);
+      if (!this.rect) return false;
+      const localPoint = transform.pointInSelectionSpace(this.rect, this.rotation, this.skew, point);
+      return namespace.ImageEditorSelectionShapes.contains({ ...this.region(), rotation: 0 }, localPoint);
     }
 
     /** Return the active marquee shape as one canvas-space region. */
     region() {
-      return this.rect ? { ...this.rect, shape: this.shape, points: this.points, mask: this.mask, maskWidth: this.maskWidth, maskHeight: this.maskHeight, rotation: this.rotation, inverted: this.inverted } : null;
+      return this.rect ? { ...this.rect, shape: this.shape, points: this.points, mask: this.mask, maskWidth: this.maskWidth, maskHeight: this.maskHeight, rotation: this.rotation, skew: { ...this.skew }, inverted: this.inverted } : null;
     }
 
     lift(context, backgroundColor, clearSource, origin = "canvas") {
@@ -254,13 +293,16 @@
         const visualPoint = this.resizeGuidePoints(4 / normalizedZoom)[resizeHandle];
         const grabbedPoint = Math.hypot(visualPoint.x - point.x, visualPoint.y - point.y) <
           Math.hypot(boundaryPoint.x - point.x, boundaryPoint.y - point.y) ? visualPoint : boundaryPoint;
+        const skew = !!(modifiers.ctrl || modifiers.meta);
         this.pointerGesture = {
-          type: 'resize',
+          type: skew ? 'skew' : 'resize',
           handle: resizeHandle,
           startRect: { ...this.rect },
+          startSkew: { ...this.skew },
+          startPoint: { ...boundaryPoint },
           pointerOffset: { x: grabbedPoint.x - boundaryPoint.x, y: grabbedPoint.y - boundaryPoint.y }
         };
-        return { action: 'resize', sourceCleared: !wasFloating };
+        return { action: skew ? 'skew' : 'resize', sourceCleared: !wasFloating };
       }
       const rotationHandle = this.findRotationHandle(point, modifiers.zoom);
       if (rotationHandle) {
@@ -317,6 +359,25 @@
         this.rect = transform.positionResizedRect(gesture.startRect, resizedRect, this.rotation);
         return { action: 'resize', moved: true, stamp: false };
       }
+      if (gesture.type === 'skew') {
+        const canvasPoint = {
+          x: point.x - gesture.pointerOffset.x,
+          y: point.y - gesture.pointerOffset.y
+        };
+        const result = skewSelectionRect(
+          gesture.startRect,
+          gesture.handle,
+          gesture.startSkew,
+          gesture.startPoint,
+          canvasPoint,
+          this.rotation
+        );
+        if (result) {
+          this.rect = result.rect;
+          this.skew = result.skew;
+        }
+        return { action: 'skew', moved: !!result, stamp: false };
+      }
       if (gesture.type === 'rotate') {
         const pointerAngle = Math.atan2(point.y - gesture.center.y, point.x - gesture.center.x);
         this.rotation = gesture.startRotation + pointerAngle - gesture.startPointerAngle;
@@ -336,6 +397,23 @@
       if (gesture.type === 'resize' && this.imageData) {
         this.imageData = resizeImageData(this.imageData, this.rect.width, this.rect.height);
       }
+      if (gesture.type === 'skew' && this.imageData) {
+        const center = transform.centerOfRect(this.rect);
+        const rasterized = transform.rasterizeSkewedImageData(this.imageData, this.skew);
+        this.imageData = rasterized.imageData;
+        this.rect = {
+          x: center.x - rasterized.width / 2,
+          y: center.y - rasterized.height / 2,
+          width: rasterized.width,
+          height: rasterized.height
+        };
+        this.skew = { x: 0, y: 0 };
+        this.shape = 'rectangle';
+        this.points = null;
+        this.mask = null;
+        this.maskWidth = 0;
+        this.maskHeight = 0;
+      }
       return { action: gesture.type };
     }
 
@@ -351,6 +429,7 @@
       this.pointerGesture = null;
       this.moveGesture = null;
       this.rotation = 0;
+      this.skew = { x: 0, y: 0 };
       this.shape = "rectangle";
       this.points = null;
       this.mask = null;
@@ -372,7 +451,9 @@
         y: this.rect.y,
         width: this.rect.width,
         height: this.rect.height,
-        rotation: this.rotation
+        rotation: this.rotation,
+        skewX: this.skew.x,
+        skewY: this.skew.y
       } : null;
     }
 
@@ -382,7 +463,7 @@
       return !!saved && this.floating && saved.imageData === this.imageData &&
         saved.x === this.rect?.x && saved.y === this.rect?.y &&
         saved.width === this.rect?.width && saved.height === this.rect?.height &&
-        saved.rotation === this.rotation;
+        saved.rotation === this.rotation && saved.skewX === this.skew.x && saved.skewY === this.skew.y;
     }
 
     moveBy(deltaX, deltaY, bounds, allowOutsideCanvas = false) {
@@ -416,14 +497,17 @@
       layer.width = this.imageData.width;
       layer.height = this.imageData.height;
       layer.getContext('2d').putImageData(this.imageData, 0, 0);
-      transform.drawImage(context, layer, this.rect, this.rotation);
+      transform.drawImage(context, layer, this.rect, this.rotation, this.skew);
       return true;
     }
 
     /** Stroke the current selection boundary with its free rotation applied. */
     strokeOutline(context) {
       if (!this.hasSelection) return false;
-      namespace.ImageEditorSelectionShapes.trace(context, this.region());
+      context.save();
+      transform.applyContextTransform(context, this.rect, this.rotation, this.skew);
+      namespace.ImageEditorSelectionShapes.trace(context, { ...this.region(), rotation: 0 });
+      context.restore();
       return true;
     }
 
@@ -501,6 +585,7 @@
       this.origin = "paste";
       this.returnToolAfterPlacement = null;
       this.rotation = 0;
+      this.skew = { x: 0, y: 0 };
       this.shape = "rectangle";
       this.points = null;
       this.mask = null;
@@ -527,6 +612,7 @@
       this.origin = origin;
       this.returnToolAfterPlacement = returnToolAfterPlacement;
       this.rotation = 0;
+      this.skew = { x: 0, y: 0 };
       this.shape = "rectangle";
       this.points = null;
       this.mask = null;
@@ -565,6 +651,7 @@
       this.savedFloatingLayer = null;
       this.returnToolAfterPlacement = null;
       this.rotation = 0;
+      this.skew = { x: 0, y: 0 };
       this.shape = "rectangle";
       this.points = null;
       this.mask = null;

@@ -2039,6 +2039,66 @@ test('deleting a marquee never imports flattened presentation pixels', async ({ 
   });
 });
 
+test('pixel selection guides resize and Ctrl-drag skews without starting a new marquee', async ({ page }) => {
+  await page.goto('/');
+  await page.waitForFunction(() => !!window.markdownViewerApp?.modules?.tabs?.openBlankImageEditorInTab, null, { timeout: 60000 });
+  await page.waitForFunction(() => !!window.markdownViewerApp?.modules?.keyboardShortcuts && !!window.markdownViewerApp?.services?.imageEditor, null, { timeout: 60000 });
+  await page.evaluate(() => {
+    window.markdownViewerApp.modules.apiClient.deactivateApiClientSidebar = () => {};
+    window.markdownViewerApp.modules.tabs.openBlankImageEditorInTab({ width: 100, height: 100, name: 'Selection guide transform' });
+  });
+  await page.waitForFunction(() => {
+    const root = document.querySelector('.tab-view.active[data-tab-view-kind=image-editor]');
+    return !!root && !!window.markdownViewerApp?.services?.imageEditor?.getView(root.dataset.tabId);
+  }, null, { timeout: 60000 });
+  await page.evaluate(() => {
+    const root = document.querySelector('.tab-view.active[data-tab-view-kind=image-editor]');
+    const controller = window.markdownViewerApp.services.imageEditor.getView(root.dataset.tabId);
+    const layer = controller.documentStore.addLayer('Guide target');
+    const pixels = new ImageData(60, 60);
+    for (let index = 0; index < pixels.data.length; index += 4) { pixels.data[index + 2] = 255; pixels.data[index + 3] = 255; }
+    const object = controller.documentStore.addRasterObject(pixels, { x: 20, y: 20, width: 60, height: 60 }, { name: 'Guide target', layerId: layer.id });
+    controller.documentStore.select(object.id);
+    controller.compositor.render({ canvas: controller.view.canvas });
+    controller.selection.setRect({ x: 20, y: 20 }, { x: 60, y: 60 }, controller.state);
+  });
+
+  const root = page.locator('.tab-view.active[data-tab-view-kind=image-editor]');
+  await expect(root.locator('.image-editor-shell')).toBeVisible();
+  await root.locator('[data-tool=select]').click();
+  const overlay = root.locator('.image-editor-overlay');
+  const box = await overlay.boundingBox();
+  const guide = async (handle) => page.evaluate((requestedHandle) => {
+    const root = document.querySelector('.tab-view.active[data-tab-view-kind=image-editor]');
+    const controller = window.markdownViewerApp.services.imageEditor.getView(root.dataset.tabId);
+    return controller.selection.resizeGuidePoints(4 / controller.state.zoom)[requestedHandle];
+  }, handle);
+
+  const southeast = await guide('se');
+  await page.mouse.move(box.x + southeast.x, box.y + southeast.y);
+  await page.mouse.down();
+  await page.mouse.move(box.x + southeast.x + 10, box.y + southeast.y + 10, { steps: 2 });
+  await page.mouse.up();
+  expect(await page.evaluate(() => {
+    const root = document.querySelector('.tab-view.active[data-tab-view-kind=image-editor]');
+    const selection = window.markdownViewerApp.services.imageEditor.getView(root.dataset.tabId).selection;
+    return { width: selection.rect.width, height: selection.rect.height, shape: selection.shape };
+  })).toEqual({ width: 50, height: 50, shape: 'rectangle' });
+
+  const north = await guide('n');
+  await page.keyboard.down('Control');
+  await page.mouse.move(box.x + north.x, box.y + north.y);
+  await page.mouse.down();
+  await page.mouse.move(box.x + north.x + 10, box.y + north.y, { steps: 2 });
+  expect(await page.evaluate(() => {
+    const root = document.querySelector('.tab-view.active[data-tab-view-kind=image-editor]');
+    const selection = window.markdownViewerApp.services.imageEditor.getView(root.dataset.tabId).selection;
+    return { gesture: selection.pointerGesture?.type, skewed: Math.abs(selection.skew.x) > 0.01 };
+  })).toEqual({ gesture: 'skew', skewed: true });
+  await page.mouse.up();
+  await page.keyboard.up('Control');
+});
+
 test('pixel marquee lifts only the selected layer above a filled background', async ({ page }) => {
   await page.goto('/');
   await page.waitForFunction(() => !!window.markdownViewerApp?.modules?.tabs?.openBlankImageEditorInTab, null, { timeout: 60000 });

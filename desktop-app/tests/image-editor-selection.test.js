@@ -209,3 +209,36 @@ test("lifting a shaped selection clears only the selected shape", () => {
   assert.equal(calls.includes("fill"), true);
   assert.equal(calls.includes("fillRect"), false);
 });
+
+test("Ctrl-dragging a selection guide skews while keeping the opposite guide anchored", () => {
+  const Selection = loadSelection();
+  const selection = new Selection();
+  const context = contextStub();
+  selection.setRect({ x: 10, y: 10 }, { x: 30, y: 30 }, { width: 100, height: 100 });
+  const northGuide = selection.resizeGuidePoints().n;
+
+  const started = selection.beginPointerGesture(northGuide, context, "#ffffff", { ctrl: true, zoom: 1 });
+  const updated = selection.updatePointerGesture({ x: northGuide.x + 10, y: northGuide.y }, { width: 100, height: 100 });
+  const guides = selection.resizeGuidePoints();
+
+  assert.equal(started.action, "skew");
+  assert.equal(updated.action, "skew");
+  assert.equal(selection.skew.x, -.5);
+  assert.equal(guides.n.x, 30);
+  assert.equal(guides.s.x, 20);
+});
+
+test("dragging a selection guide without Ctrl keeps the existing resize behavior", () => {
+  const Selection = loadSelection();
+  const selection = new Selection();
+  selection.setRect({ x: 10, y: 10 }, { x: 30, y: 30 }, { width: 100, height: 100 });
+  const northGuide = selection.resizeGuidePoints().n;
+
+  const started = selection.beginPointerGesture(northGuide, contextStub(), "#ffffff", { zoom: 1 });
+  const updated = selection.updatePointerGesture({ x: northGuide.x, y: northGuide.y - 5 }, { width: 100, height: 100 });
+
+  assert.equal(started.action, "resize");
+  assert.equal(updated.action, "resize");
+  assert.equal(selection.skew.x, 0);
+  assert.equal(selection.skew.y, 0);
+});

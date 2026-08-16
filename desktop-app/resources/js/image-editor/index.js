@@ -2346,7 +2346,10 @@
             void openColorRangeSelection(controller);
             return;
           }
-          if (selection.hasSelection && !selection.contains(point) && !selection.isPasting) {
+          const selectionTransformHandle = selection.hasSelection && (
+            selection.findResizeHandle(point, state.zoom) || selection.findRotationHandle(point, state.zoom)
+          );
+          if (selection.hasSelection && !selectionTransformHandle && !selection.contains(point) && !selection.isPasting) {
             const returnsToDrawingTool = !!selection.returnToolAfterPlacement;
             dropSelection(controller);
             if (returnsToDrawingTool) { controller.dragging = false; return; }
