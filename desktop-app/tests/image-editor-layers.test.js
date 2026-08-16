@@ -20,7 +20,7 @@ function loadLayers() {
   context.window.structuredClone = structuredClone;
   context.window.crypto = context.crypto;
   vm.createContext(context);
-  ["document-model.js", "document-store.js", "document-history.js", "object-selection.js"].forEach((name) => {
+  ["document-model.js", "document-store.js", "document-history.js", "object-selection.js", "masks/mask-model.js", "masks/mask-operations.js"].forEach((name) => {
     vm.runInContext(fs.readFileSync(path.resolve(__dirname, `../resources/js/image-editor/layers/${name}`), "utf8"), context);
   });
   return context.window.MarkdownViewerImageEditor;
@@ -162,4 +162,28 @@ test("validated commands publish changes and roll back invalid hierarchy mutatio
   }, () => {});
   assert.throws(() => store.applyCommand(invalid), /cycle/);
   assert.equal(store.document.nodes[0].name, "Renamed");
+});
+
+test("selected sibling layers become a reversible mask group", () => {
+  const layers = loadLayers();
+  const store = new layers.ImageEditorDocumentStore(layers.createImageDocument(100, 80));
+  const content = store.addLayer("Content");
+  const mask = store.addLayer("Mask");
+  store.select([content.id, mask.id]);
+
+  assert.equal(layers.ImageEditorMaskOperations.getState(store).canCreate, true);
+  assert.equal(layers.ImageEditorMaskOperations.create(store), true);
+  const group = store.document.nodes[0];
+  assert.equal(layers.ImageEditorMaskModel.isMaskGroup(group), true);
+  assert.equal(layers.ImageEditorMaskModel.getMaskNode(group).id, content.id);
+  assert.deepEqual(JSON.parse(JSON.stringify(group.children.map((node) => node.name))), ["Mask", "Content"]);
+
+  const object = store.addRasterObject(pixels(), { x: 0, y: 0, width: 2, height: 2 }, { layerId: mask.id });
+  store.select(object.id);
+  assert.equal(layers.ImageEditorMaskOperations.getState(store).canChangeType, true);
+
+  assert.equal(layers.ImageEditorMaskOperations.setType(store, "luminance"), true);
+  assert.equal(layers.ImageEditorMaskModel.getDescriptor(group).type, "luminance");
+  assert.equal(layers.ImageEditorMaskOperations.remove(store), true);
+  assert.deepEqual(JSON.parse(JSON.stringify(store.document.nodes.map((node) => node.name))), ["Mask", "Content", "Background"]);
 });

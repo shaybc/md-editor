@@ -126,6 +126,14 @@
     renderNodes(context, nodes) {
       [...nodes].reverse().forEach((node) => {
         if (!node.visible) return;
+        if (node.kind === "group" && namespace.ImageEditorMaskModel?.isMaskGroup(node)) {
+          const rendered = namespace.ImageEditorMaskRenderer?.draw(context, node, {
+            width: this.store.document.canvas.width,
+            height: this.store.document.canvas.height,
+            renderNodes: (childContext, children) => this.renderNodes(childContext, children)
+          });
+          if (rendered) return;
+        }
         if (node.kind === "object") {
           drawObject(context, node, this.store.assets);
           return;

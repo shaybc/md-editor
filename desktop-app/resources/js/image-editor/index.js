@@ -3612,6 +3612,9 @@
       if (action === "remove-pattern-overlay") return removePatternOverlayStyle(controller, controller.canvasLayerStyleTargetIds);
       if (action === "apply-grayscale") return applyGrayscaleStyle(controller, controller.canvasLayerStyleTargetIds);
       if (action === "remove-grayscale") return removeGrayscaleStyle(controller, controller.canvasLayerStyleTargetIds);
+      if (action === "use-as-mask") return commitDocumentMutation(controller, "Use as mask", () => namespace.ImageEditorMaskOperations.create(controller.documentStore));
+      if (action.startsWith("set-mask-type-")) return commitDocumentMutation(controller, "Change mask type", () => namespace.ImageEditorMaskOperations.setType(controller.documentStore, action.slice("set-mask-type-".length)));
+      if (action === "remove-mask") return commitDocumentMutation(controller, "Remove mask", () => namespace.ImageEditorMaskOperations.remove(controller.documentStore));
       if (action === "paste") return runAction(controller, "paste");
       if (action === "select-all") return selectAllCanvas(controller);
       if (action === "deselect") return deselectCanvas(controller);
@@ -3647,7 +3650,7 @@
         const selectionAtPoint = namespace.imageEditorSelectionContainsPoint(controller.selection, point);
         const objectId = selectionAtPoint ? null : controller.objectSelection.hitTest(point);
         if (objectId) {
-          controller.documentStore.select(objectId);
+          if (!controller.documentStore.selectedIds.has(objectId)) controller.documentStore.select(objectId);
           if (controller.selection.hasSelection) {
             controller.selection.clear();
             drawSelectionOverlay(controller);
@@ -3666,6 +3669,7 @@
         const hasPatternOverlay = styleLayers.some((layer) => namespace.ImageEditorPatternOverlayEffect.get(layer));
         const hasGrayscale = styleLayers.some((layer) => namespace.ImageEditorGrayscaleEffect.get(layer));
         const hasBevelEmboss = styleLayers.some((layer) => namespace.ImageEditorBevelEmbossEffect.get(layer));
+        const maskState = namespace.ImageEditorMaskOperations.getState(controller.documentStore);
         const canLiftPixels = hasPixels && !controller.selection.floating && controller.documentStore
           .selectedContentLayers({ editableOnly: true, fallbackToActive: false })
           .some((layer) => !namespace.isCanvasBackgroundLayer(layer)) ||
@@ -3675,6 +3679,12 @@
           "lift-new-layer": canLiftPixels,
           crop: hasPixels && !controller.selection.inverted,
           "flip-horizontal": hasPixels || hasObjects, "flip-vertical": hasPixels || hasObjects,
+          "use-as-mask": maskState.canCreate,
+          "set-mask-type": maskState.canChangeType,
+          "set-mask-type-alpha": maskState.canChangeType,
+          "set-mask-type-vector": maskState.canChangeType,
+          "set-mask-type-luminance": maskState.canChangeType,
+          "remove-mask": maskState.canRemove,
           deselect: controller.selection.hasSelection || controller.documentStore.selectedIds.size > 0,
           "inverse-select": controller.selection.hasSelection || controller.documentStore.selectedIds.size > 0,
           "edit-blending-options": styleLayers.length > 0,
@@ -4119,6 +4129,9 @@
           if (label === "remove-pattern-overlay") return removePatternOverlayStyle(controller, callback?.layerIds);
           if (label === "apply-grayscale") return applyGrayscaleStyle(controller, callback?.layerIds);
           if (label === "remove-grayscale") return removeGrayscaleStyle(controller, callback?.layerIds);
+          if (label === "use-as-mask") return commitDocumentMutation(controller, "Use as mask", () => namespace.ImageEditorMaskOperations.create(controller.documentStore));
+          if (label.startsWith("set-mask-type-")) return commitDocumentMutation(controller, "Change mask type", () => namespace.ImageEditorMaskOperations.setType(controller.documentStore, label.slice("set-mask-type-".length)));
+          if (label === "remove-mask") return commitDocumentMutation(controller, "Remove mask", () => namespace.ImageEditorMaskOperations.remove(controller.documentStore));
           if (label === "create-text-outlines") return commitDocumentMutation(controller, "Create text outlines", () => namespace.ImageEditorTextOutlineConverter.convertSelected(controller.documentStore));
           const changed = commitDocumentMutation(controller, label, callback);
           return changed;

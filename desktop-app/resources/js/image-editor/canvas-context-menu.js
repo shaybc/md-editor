@@ -14,6 +14,14 @@
     { id: "flip-horizontal", icon: "bi-symmetry-vertical", label: "Flip horizontal" },
     { id: "flip-vertical", icon: "bi-symmetry-horizontal", label: "Flip vertical" },
     { separator: true },
+    { id: "use-as-mask", icon: "bi-layers-half", label: "Use as mask" },
+    { id: "set-mask-type", icon: "bi-sliders", label: "Set mask type", children: [
+      { id: "set-mask-type-alpha", icon: "bi-circle", label: "Alpha" },
+      { id: "set-mask-type-vector", icon: "bi-vector-pen", label: "Vector" },
+      { id: "set-mask-type-luminance", icon: "bi-brightness-high", label: "Luminance" }
+    ] },
+    { id: "remove-mask", icon: "bi-x-square", label: "Remove mask" },
+    { separator: true },
     { id: "select-all", icon: "bi-bounding-box", label: "Select all" },
     { id: "deselect", icon: "bi-x-square", label: "Deselect" },
     { id: "inverse-select", icon: "bi-intersect", label: "Inverse select" },

@@ -154,6 +154,10 @@
       const hasPatternOverlay = styleLayers.some((layer) => namespace.ImageEditorPatternOverlayEffect?.get(layer));
       const hasBevelEmboss = styleLayers.some((layer) => namespace.ImageEditorBevelEmbossEffect?.get(layer));
       const hasGrayscale = styleLayers.some((layer) => namespace.ImageEditorGrayscaleEffect?.get(layer));
+      const maskState = namespace.ImageEditorMaskOperations?.getState(this.store) || {};
+      const canCreateMask = maskState.canCreate === true;
+      const canSetMaskType = maskState.canChangeType === true;
+      const canRemoveMask = maskState.canRemove === true;
       this.contextMenu.show(event.clientX, event.clientY, [
         { id: "new-layer", label: "New layer", icon: "bi-plus-square" },
         { id: "new-group", label: "New group", icon: "bi-folder-plus" },
@@ -168,6 +172,14 @@
         { id: "merge-down", label: "Merge down", icon: "bi-layers-half", disabled: !singleLayer || singleLayer.locked || !below || below.kind !== "layer" || below.locked || namespace.isCanvasBackgroundLayer(below) },
         { id: "merge-visible", label: "Merge visible", icon: "bi-layers", disabled: [...layers, ...otherLayers].filter((layer) => layer.visible !== false).length < 2 },
         { id: "flatten", label: "Flatten layers", icon: "bi-layers-fill", disabled: !this.store.document.nodes.some((node) => !namespace.isCanvasBackgroundLayer(node)) },
+        { separator: true },
+        { id: "use-as-mask", label: "Use as mask", icon: "bi-layers-half", disabled: !canCreateMask },
+        { id: "set-mask-type", label: "Set mask type", icon: "bi-sliders", disabled: !canSetMaskType, children: [
+          { id: "set-mask-type-alpha", label: "Alpha", icon: "bi-circle", disabled: !canSetMaskType },
+          { id: "set-mask-type-vector", label: "Vector", icon: "bi-vector-pen", disabled: !canSetMaskType },
+          { id: "set-mask-type-luminance", label: "Luminance", icon: "bi-brightness-high", disabled: !canSetMaskType }
+        ] },
+        { id: "remove-mask", label: "Remove mask", icon: "bi-x-square", disabled: !canRemoveMask },
         { separator: true },
         { label: "Style", icon: "bi-stars", disabled: !canStyle, children: [
           { id: "edit-blending-options", label: "Blending Options…", icon: "bi-layers", disabled: !canStyle },
@@ -318,6 +330,7 @@
       const layers = targets.filter((item) => item.kind === "layer");
       if (action === "rename" && targets.length === 1) { void this.renameItem(targets[0].id, targets[0].name); return; }
       if (action === "create-text-outlines") { this.onMutate(action, null); return; }
+      if (["use-as-mask", "set-mask-type-alpha", "set-mask-type-vector", "set-mask-type-luminance", "remove-mask"].includes(action)) { this.onMutate(action, null); return; }
       if (["edit-blending-options", "edit-bevel-emboss", "remove-bevel-emboss", "edit-drop-shadow", "remove-drop-shadow", "edit-inner-shadow", "remove-inner-shadow", "edit-inner-glow", "remove-inner-glow", "edit-outer-glow", "remove-outer-glow", "edit-color-overlay", "remove-color-overlay", "edit-gradient-overlay", "remove-gradient-overlay", "edit-pattern-overlay", "remove-pattern-overlay", "apply-grayscale", "remove-grayscale"].includes(action)) { this.onMutate(action, { layerIds: layers.map((layer) => layer.id) }); return; }
       if (action === "export-layer-png" || action === "export-layer-as") { this.onMutate(action, { layerIds: layers.map((layer) => layer.id) }); return; }
       const operations = {
