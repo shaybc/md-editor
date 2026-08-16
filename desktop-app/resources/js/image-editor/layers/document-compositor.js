@@ -94,6 +94,18 @@
       return canvas;
     }
 
+    /** Composite a rendered layer together with its non-destructive effects. */
+    drawStyledLayer(context, layer) {
+      const source = this.renderLayer(layer);
+      const opacity = Math.max(0, Math.min(1, Number(layer.opacity ?? 1)));
+      namespace.ImageEditorDropShadowRenderer?.draw(context, source, namespace.ImageEditorDropShadowEffect?.get(layer), opacity);
+      context.save();
+      context.globalAlpha *= opacity;
+      context.globalCompositeOperation = layer.blendMode === "normal" ? "source-over" : "source-over";
+      context.drawImage(source, 0, 0);
+      context.restore();
+    }
+
     /** Render only the supplied content layers for layer-scoped pixel editing. */
     renderLayers(layers) {
       const canvas = document.createElement("canvas");
@@ -118,12 +130,15 @@
           drawObject(context, node, this.store.assets);
           return;
         }
+        if (node.kind === "layer") {
+          this.drawStyledLayer(context, node);
+          return;
+        }
         const canvas = document.createElement("canvas");
         canvas.width = this.store.document.canvas.width;
         canvas.height = this.store.document.canvas.height;
         const childContext = canvas.getContext("2d");
-        if (node.kind === "group") this.renderNodes(childContext, node.children || []);
-        else childContext.drawImage(this.renderLayer(node), 0, 0);
+        this.renderNodes(childContext, node.children || []);
         context.save();
         context.globalAlpha *= Math.max(0, Math.min(1, Number(node.opacity ?? 1)));
         context.globalCompositeOperation = node.blendMode === "normal" ? "source-over" : "source-over";

@@ -24,12 +24,39 @@
     /** Show semantic layer actions at a pointer position. */
     show(x, y, items, onAction) {
       this.element.replaceChildren();
-      items.forEach((item) => {
+      const appendItems = (container, menuItems) => menuItems.forEach((item) => {
         if (item.separator) {
           const separator = document.createElement("div");
           separator.className = "graph-context-menu-separator";
           separator.setAttribute("role", "separator");
-          this.element.appendChild(separator);
+          container.appendChild(separator);
+          return;
+        }
+        if (Array.isArray(item.children)) {
+          const submenu = document.createElement("div");
+          submenu.className = "graph-context-menu-submenu";
+          const trigger = document.createElement("button");
+          trigger.type = "button";
+          trigger.className = "graph-context-menu-item";
+          trigger.disabled = item.disabled === true;
+          trigger.setAttribute("role", "menuitem");
+          trigger.setAttribute("aria-haspopup", "menu");
+          trigger.innerHTML = `<i class="bi ${item.icon}" aria-hidden="true"></i><span class="graph-context-menu-item-label"></span><i class="bi bi-chevron-right graph-context-menu-submenu-arrow" aria-hidden="true"></i>`;
+          trigger.querySelector("span").textContent = item.label;
+          const panel = document.createElement("div");
+          panel.className = "graph-context-menu-submenu-panel";
+          panel.setAttribute("role", "menu");
+          appendItems(panel, item.children);
+          const positionPanel = () => {
+            panel.classList.remove("open-left", "open-up");
+            const bounds = panel.getBoundingClientRect();
+            if (bounds.right > global.innerWidth - 4) panel.classList.add("open-left");
+            if (bounds.bottom > global.innerHeight - 4) panel.classList.add("open-up");
+          };
+          submenu.addEventListener("pointerenter", positionPanel);
+          trigger.addEventListener("focus", positionPanel);
+          submenu.append(trigger, panel);
+          container.appendChild(submenu);
           return;
         }
         const button = document.createElement("button");
@@ -45,8 +72,9 @@
           this.hide();
           onAction(item.id);
         });
-        this.element.appendChild(button);
+        container.appendChild(button);
       });
+      appendItems(this.element, items);
       this.element.classList.remove("hidden");
       const bounds = this.element.getBoundingClientRect();
       const viewportWidth = Math.max(document.documentElement?.clientWidth || 0, global.innerWidth || 0);

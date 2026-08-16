@@ -143,6 +143,9 @@
       });
       const hideOthers = otherLayers.some((layer) => layer.visible !== false);
       const canCreateTextOutlines = namespace.ImageEditorTextOutlineConverter?.canConvert(this.store) === true;
+      const styleLayers = layers.filter((layer) => !namespace.isCanvasBackgroundLayer(layer));
+      const canStyle = styleLayers.length > 0 && styleLayers.every((layer) => !layer.locked);
+      const hasDropShadow = styleLayers.some((layer) => namespace.ImageEditorDropShadowEffect?.get(layer));
       this.contextMenu.show(event.clientX, event.clientY, [
         { id: "new-layer", label: "New layer", icon: "bi-plus-square" },
         { id: "new-group", label: "New group", icon: "bi-folder-plus" },
@@ -157,6 +160,11 @@
         { id: "merge-down", label: "Merge down", icon: "bi-layers-half", disabled: !singleLayer || singleLayer.locked || !below || below.kind !== "layer" || below.locked || namespace.isCanvasBackgroundLayer(below) },
         { id: "merge-visible", label: "Merge visible", icon: "bi-layers", disabled: [...layers, ...otherLayers].filter((layer) => layer.visible !== false).length < 2 },
         { id: "flatten", label: "Flatten layers", icon: "bi-layers-fill", disabled: !this.store.document.nodes.some((node) => !namespace.isCanvasBackgroundLayer(node)) },
+        { separator: true },
+        { label: "Style", icon: "bi-stars", disabled: !canStyle, children: [
+          { id: "edit-drop-shadow", label: "Drop Shadow…", icon: "bi-square-fill", disabled: !canStyle },
+          { id: "remove-drop-shadow", label: "Remove Drop Shadow", icon: "bi-x-square", disabled: !canStyle || !hasDropShadow }
+        ] },
         { separator: true },
         { id: "toggle-lock", label: allLocked ? "Unlock layer" : "Lock layer", icon: allLocked ? "bi-unlock" : "bi-lock", disabled: targets.length === 0 },
         { id: "rename", label: "Rename layer", icon: "bi-pencil", disabled: targets.length !== 1 },
@@ -279,6 +287,7 @@
       const layers = targets.filter((item) => item.kind === "layer");
       if (action === "rename" && targets.length === 1) { void this.renameItem(targets[0].id, targets[0].name); return; }
       if (action === "create-text-outlines") { this.onMutate(action, null); return; }
+      if (action === "edit-drop-shadow" || action === "remove-drop-shadow") { this.onMutate(action, { layerIds: layers.map((layer) => layer.id) }); return; }
       if (action === "export-layer-png" || action === "export-layer-as") { this.onMutate(action, { layerIds: layers.map((layer) => layer.id) }); return; }
       const operations = {
         "new-layer": () => this.store.addLayer("Layer", [...this.store.selectedIds][0]),
@@ -350,7 +359,8 @@
       row.setAttribute("role", "treeitem");
       row.style.setProperty("--layer-depth", depth);
       const safeName = String(item.name || "Item").replace(/[&<>]/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[character]));
-      row.innerHTML = `${expandable ? `<button data-layer-expand="${item.id}" aria-label="Expand"><i class="bi bi-chevron-${this.expandedIds.has(item.id) ? "down" : "right"}"></i></button>` : "<span></span>"}<button data-layer-visibility="${item.id}" data-visible="${item.visible !== false}" aria-label="Toggle visibility"><i class="bi bi-eye${item.visible === false ? "-slash" : ""}"></i></button><span class="image-editor-layer-thumbnail"><i class="bi ${item.kind === "group" ? "bi-folder" : item.kind === "layer" ? "bi-layers" : item.type === "text" ? "bi-fonts" : "bi-image"}"></i></span><span class="image-editor-layer-name">${safeName}</span><button data-layer-lock="${item.id}" data-locked="${item.locked === true}" aria-label="Toggle lock"><i class="bi bi-${item.locked ? "lock-fill" : "unlock"}"></i></button>`;
+      const hasEffect = item.kind === "layer" && namespace.ImageEditorDropShadowEffect?.get(item);
+      row.innerHTML = `${expandable ? `<button data-layer-expand="${item.id}" aria-label="Expand"><i class="bi bi-chevron-${this.expandedIds.has(item.id) ? "down" : "right"}"></i></button>` : "<span></span>"}<button data-layer-visibility="${item.id}" data-visible="${item.visible !== false}" aria-label="Toggle visibility"><i class="bi bi-eye${item.visible === false ? "-slash" : ""}"></i></button><span class="image-editor-layer-thumbnail"><i class="bi ${item.kind === "group" ? "bi-folder" : item.kind === "layer" ? "bi-layers" : item.type === "text" ? "bi-fonts" : "bi-image"}"></i></span><span class="image-editor-layer-name">${safeName}</span>${hasEffect ? '<i class="bi bi-fx image-editor-layer-effect-indicator" title="Layer effects" aria-label="Layer effects"></i>' : ""}<button data-layer-lock="${item.id}" data-locked="${item.locked === true}" aria-label="Toggle lock"><i class="bi bi-${item.locked ? "lock-fill" : "unlock"}"></i></button>`;
       return row;
     }
 

@@ -292,6 +292,71 @@
       return true;
     }
 
+    /** Resolve distinct editable content layers represented by hierarchy selection. */
+    function resolveLayerStyleTargets(controller, requestedIds = null) {
+      const ids = requestedIds?.length ? requestedIds : [...controller.documentStore.selectedIds];
+      const layers = [];
+      ids.forEach((id) => {
+        const node = namespace.findDocumentNode(controller.documentStore.document, id)?.node;
+        const layer = node?.kind === "layer" ? node : namespace.findDocumentObject(controller.documentStore.document, id)?.layer;
+        if (layer && !layer.locked && !namespace.isCanvasBackgroundLayer(layer) && !layers.some((item) => item.id === layer.id)) layers.push(layer);
+      });
+      return layers;
+    }
+
+    /** Remove Drop Shadow from the requested layers as one undoable document change. */
+    function removeDropShadowStyle(controller, requestedIds = null) {
+      const layers = resolveLayerStyleTargets(controller, requestedIds);
+      return commitDocumentMutation(controller, "Remove Drop Shadow", () => {
+        const changed = layers.map((layer) => namespace.ImageEditorDropShadowEffect.remove(layer)).some(Boolean);
+        if (changed) controller.documentStore.notify({ type: "layer-effect", ids: layers.map((layer) => layer.id) });
+        return changed;
+      });
+    }
+
+    /** Open the app-styled editor and commit one undoable non-destructive effect change. */
+    function openDropShadowStyle(controller, requestedIds = null) {
+      const hasProvisionalContent = controller.selection.floating
+        && (controller.pendingContentDescriptor || controller.selection.origin === "paste");
+      if (hasProvisionalContent) {
+        if (!commitSelection(controller)) return false;
+        requestedIds = null;
+      }
+      const layers = resolveLayerStyleTargets(controller, requestedIds);
+      if (!layers.length) return false;
+      const originals = new Map(layers.map((layer) => [layer.id, namespace.cloneImageDocument(layer.effects || [])]));
+      const restore = () => layers.forEach((layer) => { layer.effects = namespace.cloneImageDocument(originals.get(layer.id) || []); });
+      const notify = (type) => controller.documentStore.notify({ type, ids: layers.map((layer) => layer.id) });
+      const existing = layers.map((layer) => namespace.ImageEditorDropShadowEffect.get(layer)).find(Boolean);
+      controller.layerStyleDialog.open({
+        effect: existing,
+        hasEffect: !!existing,
+        targetName: layers.length === 1 ? layers[0].name : `${layers.length} selected layers`,
+        onPreview(effect, enabled) {
+          restore();
+          if (enabled) layers.forEach((layer) => namespace.ImageEditorDropShadowEffect.upsert(layer, effect));
+          renderLayeredDocument(controller);
+        },
+        onCancel() {
+          restore();
+          renderLayeredDocument(controller);
+        },
+        onApply(effect) {
+          restore();
+          commitDocumentMutation(controller, "Change Drop Shadow", () => {
+            const changed = layers.map((layer) => namespace.ImageEditorDropShadowEffect.upsert(layer, effect)).some(Boolean);
+            if (changed) notify("layer-effect");
+            return changed;
+          });
+        },
+        onRemove() {
+          restore();
+          removeDropShadowStyle(controller, layers.map((layer) => layer.id));
+        }
+      });
+      return true;
+    }
+
     /** Rasterize a selected layer with the immediate panel sibling below it. */
     function mergeSelectedLayerDown(controller) {
       const selectedId = [...controller.documentStore.selectedIds][0];
@@ -3091,6 +3156,8 @@
     async function runCanvasContextAction(controller, action) {
       const hasPixels = controller.selection.hasSelection;
       const hasObjects = selectedDocumentObjects(controller).length > 0;
+      if (action === "edit-drop-shadow") return openDropShadowStyle(controller, controller.canvasLayerStyleTargetIds);
+      if (action === "remove-drop-shadow") return removeDropShadowStyle(controller, controller.canvasLayerStyleTargetIds);
       if (action === "paste") return runAction(controller, "paste");
       if (action === "select-all") return selectAllCanvas(controller);
       if (action === "deselect") return deselectCanvas(controller);
@@ -3134,6 +3201,9 @@
         }
         const hasPixels = selectionAtPoint;
         const hasObjects = !hasPixels && !!objectId;
+        const styleLayers = resolveLayerStyleTargets(controller);
+        controller.canvasLayerStyleTargetIds = styleLayers.map((layer) => layer.id);
+        const hasDropShadow = styleLayers.some((layer) => namespace.ImageEditorDropShadowEffect.get(layer));
         const canLiftPixels = hasPixels && !controller.selection.floating && controller.documentStore
           .selectedContentLayers({ editableOnly: true, fallbackToActive: false })
           .some((layer) => !namespace.isCanvasBackgroundLayer(layer)) ||
@@ -3144,7 +3214,9 @@
           crop: hasPixels && !controller.selection.inverted,
           "flip-horizontal": hasPixels || hasObjects, "flip-vertical": hasPixels || hasObjects,
           deselect: controller.selection.hasSelection || controller.documentStore.selectedIds.size > 0,
-          "inverse-select": controller.selection.hasSelection || controller.documentStore.selectedIds.size > 0
+          "inverse-select": controller.selection.hasSelection || controller.documentStore.selectedIds.size > 0,
+          "edit-drop-shadow": styleLayers.length > 0,
+          "remove-drop-shadow": hasDropShadow
         }, (action) => runCanvasContextAction(controller, action));
         if (objectId) { drawObjectSelectionOverlay(controller); syncTab(controller); }
       };
@@ -3524,7 +3596,8 @@
         keepTextInputLive: false,
         pastedTextEditing: false,
         canvasContextMenu: new namespace.ImageEditorCanvasContextMenu(),
-        colorRangeDialog: new namespace.ImageEditorColorRangeDialog()
+        colorRangeDialog: new namespace.ImageEditorColorRangeDialog(),
+        layerStyleDialog: new namespace.ImageEditorLayerStyleDialog()
       };
       if (tab.imageEditorState?.layersPanel?.selectedIds?.length) controller.documentStore.selectedIds = new Set(tab.imageEditorState.layersPanel.selectedIds);
       controller.compositor = new namespace.ImageEditorCompositor(controller.documentStore);
@@ -3547,6 +3620,8 @@
           if (label === "export") return exportFlattenedImage(tab);
           if (label === "export-layer-png") return exportLayerImage(tab, callback?.layerIds, { mimeType: "image/png" });
           if (label === "export-layer-as") return exportLayerImage(tab, callback?.layerIds);
+          if (label === "edit-drop-shadow") return openDropShadowStyle(controller, callback?.layerIds);
+          if (label === "remove-drop-shadow") return removeDropShadowStyle(controller, callback?.layerIds);
           if (label === "create-text-outlines") return commitDocumentMutation(controller, "Create text outlines", () => namespace.ImageEditorTextOutlineConverter.convertSelected(controller.documentStore));
           const changed = commitDocumentMutation(controller, label, callback);
           return changed;
@@ -3619,6 +3694,7 @@
       controller.removeCanvasContextMenuListener?.();
       controller.canvasContextMenu?.destroy?.();
       controller.colorRangeDialog?.destroy?.();
+      controller.layerStyleDialog?.destroy?.();
       controller.layerPanel?.destroy?.();
       controller.view.destroy();
       views.delete(tabId);

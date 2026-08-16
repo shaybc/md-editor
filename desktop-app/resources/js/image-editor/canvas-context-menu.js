@@ -16,7 +16,12 @@
     { separator: true },
     { id: "select-all", icon: "bi-bounding-box", label: "Select all" },
     { id: "deselect", icon: "bi-x-square", label: "Deselect" },
-    { id: "inverse-select", icon: "bi-intersect", label: "Inverse select" }
+    { id: "inverse-select", icon: "bi-intersect", label: "Inverse select" },
+    { separator: true },
+    { icon: "bi-stars", label: "Layer Style", children: [
+      { id: "edit-drop-shadow", icon: "bi-square-fill", label: "Drop Shadow…" },
+      { id: "remove-drop-shadow", icon: "bi-x-square", label: "Remove Drop Shadow" }
+    ] }
   ];
 
   /** Reuse the application context-menu surface with canvas-specific actions. */
@@ -27,10 +32,16 @@
     }
 
     show(x, y, capabilities, onAction) {
-      const items = MENU_ITEMS.map((item) => item.separator ? item : {
-        ...item,
-        disabled: capabilities?.[item.id] === false
+      const resolveItems = (items) => items.map((item) => {
+        if (item.separator) return item;
+        const children = Array.isArray(item.children) ? resolveItems(item.children) : undefined;
+        return {
+          ...item,
+          ...(children ? { children } : {}),
+          disabled: capabilities?.[item.id] === false || (children && children.every((child) => child.disabled))
+        };
       });
+      const items = resolveItems(MENU_ITEMS);
       this.menu.show(x, y, items, onAction);
     }
 
