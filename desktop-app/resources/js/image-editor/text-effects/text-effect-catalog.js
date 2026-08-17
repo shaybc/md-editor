@@ -22,6 +22,7 @@
     { id: "heat-cutout", label: "Heat", fill: ["#fff0f3", "#ff7195", "#d92d5a"], stroke: ["#fff6ed", 2], outlineLayers: [["#e1375f", 4], ["#842044", 6]], extrusions: [["#681735", 10, 1, 1], ["#ec5a76", 5, 1, 1]], shadow: ["#3e0d25", 6, 8, 10], texture: "noise" },
     { id: "paper-print", label: "Paper Print", fill: ["#ffffff", "#e8e5ff"], stroke: ["#fefcff", 2], outlineLayers: [["#9e78ed", 4], ["#49308d", 6]], extrusions: [["#342071", 11, 1, 1], ["#8359d1", 5, 1, 1]], shadow: ["#25164f", 6, 8, 11], texture: "dots" },
     { id: "curve", label: "Curve", kind: "curve", defaults: Object.freeze({ curve: 33 }), fill: ["#9b4dff"] },
+    { id: "transparent", label: "Transparent", transparentFill: true, fill: ["transparent"], stroke: ["#ffffff", 4], shadow: ["rgba(0,0,0,.72)", 7, 4, 5] },
     { id: "neon-lights", label: "Neon Lights", fill: ["#fff0ff", "#ff4de1"], stroke: ["#ff8cf0", 1], glow: ["#ff3cda", 13], shadow: ["#7c2cff", 8, 0, 0] },
     { id: "tv-static", label: "TV Static", fill: ["#ffffff", "#d9fbff"], stroke: ["#101827", 1], glitch: true, texture: "scanlines", shadow: ["#00e5ff", 0, -3, 0] },
     { id: "retro-70s", label: "Retro 70s", fill: ["#fff06a", "#f59e0b"], stroke: ["#8a3b12", 2], shadow: ["#7c2d12", 1, 4, 4], highlight: "#fff7bd" },
@@ -64,9 +65,14 @@
   }));
 
   const BY_ID = new Map(PRESETS.map((preset) => [preset.id, preset]));
+  const DISPLAY_PRESETS = Object.freeze([
+    BY_ID.get("curve"),
+    BY_ID.get("transparent"),
+    ...PRESETS.filter((preset) => preset.id !== "curve" && preset.id !== "transparent")
+  ]);
 
   /** Return all built-in text-effect presets in display order. */
-  function all() { return PRESETS; }
+  function all() { return DISPLAY_PRESETS; }
 
   /** Resolve one persisted preset identifier. */
   function get(id) { return BY_ID.get(String(id || "")) || null; }

@@ -305,8 +305,15 @@
       .forEach((outline) => drawOutline(context, mask, outline[0], outline[1]));
     if (preset.stroke) drawOutline(context, mask, preset.stroke[0], preset.stroke[1]);
     if (preset.highlight) context.drawImage(coloredMask(mask, preset.highlight), -1, -1);
-    context.drawImage(filledMask(mask, preset), 0, 0);
-    if (preset.innerGlow) drawInnerGlow(context, mask, ...preset.innerGlow);
+    if (preset.transparentFill) {
+      context.save();
+      context.globalCompositeOperation = "destination-out";
+      context.drawImage(mask, 0, 0);
+      context.restore();
+    } else {
+      context.drawImage(filledMask(mask, preset), 0, 0);
+      if (preset.innerGlow) drawInnerGlow(context, mask, ...preset.innerGlow);
+    }
     return { canvas: output, padding };
   }
 

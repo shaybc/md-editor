@@ -26,12 +26,22 @@
     ["edit-grain", "grain", "Grain"],
     ["edit-newspaper", "newspaper", "Newspaper"],
     ["edit-painted-texture", "painted-texture", "Painted<br>Texture"],
+    ["edit-paint-edge", "paint-edge", "Paint Edge"],
+    ["edit-collage", "collage", "Collage"],
+    ["edit-dots", "dots", "Dots"],
+    ["edit-points", "points", "Points"],
+    ["edit-watercolor", "watercolor", "Watercolor"],
     ["edit-retro-3d", "retro-3d", "Retro 3D"],
     ["edit-snow", "snow", "Snow"],
     ["edit-rain", "rain", "Rain"],
     ["edit-rainbow", "rainbow", "Rainbow"],
     ["edit-spotlight", "spotlight", "Spotlight"],
     ["edit-vignette", "vignette", "Vignette"],
+    ["edit-posterize", "posterize", "Posterize"],
+    ["edit-contrast-bw", "contrast-bw", "Contrast<br>B&amp;W"],
+    ["edit-monochromatic", "monochromatic", "Monochromatic"],
+    ["edit-pencil-sketch", "pencil-sketch", "Pencil-Sketch"],
+    ["edit-pic-in-pic", "pic-in-pic", "Pic-in-Pic"],
     ["edit-vortex", "vortex", "Vortex"],
     ["edit-ripple-field", "ripple-field", "Ripple<br>Field"],
     ["edit-flare", "flare", "Flare"],
@@ -183,7 +193,7 @@
           }
           return;
         }
-        if (["edit-blur", "edit-grain", "edit-newspaper", "edit-painted-texture", "edit-retro-3d", "edit-snow", "edit-rain", "edit-rainbow", "edit-spotlight", "edit-vignette", "edit-vortex", "edit-ripple-field", "edit-flare", "edit-gust"].includes(action)) {
+        if (["edit-blur", "edit-grain", "edit-newspaper", "edit-painted-texture", "edit-paint-edge", "edit-collage", "edit-dots", "edit-points", "edit-watercolor", "edit-retro-3d", "edit-snow", "edit-rain", "edit-rainbow", "edit-spotlight", "edit-vignette", "edit-posterize", "edit-contrast-bw", "edit-monochromatic", "edit-pencil-sketch", "edit-pic-in-pic", "edit-vortex", "edit-ripple-field", "edit-flare", "edit-gust"].includes(action)) {
           this.onLayerEffect(action);
           return;
         }

@@ -121,5 +121,20 @@
     })];
   }));
 
+  profiles.transparent = Object.freeze({
+    typography: Object.freeze({
+      fontFamily: "Arial Black",
+      fontSize: 52,
+      fontBold: true,
+      fontItalic: false,
+      textCase: "normal",
+      textAlign: "center",
+      textLetterSpacing: 0,
+      textLineSpacing: 1,
+      rotationDegrees: 0,
+      previewSize: 27
+    })
+  });
+
   namespace.ImageEditorTextEffectPresetStyles = Object.freeze(profiles);
 })(typeof window !== "undefined" ? window : globalThis);

@@ -1077,6 +1077,271 @@
       return true;
     }
 
+    /** Remove Posterize from the requested layers as one undoable document change. */
+    function removePosterizeStyle(controller, requestedIds = null) {
+      const layers = resolveLayerStyleTargets(controller, requestedIds);
+      return commitDocumentMutation(controller, "Remove Posterize", () => {
+        const changed = layers.map((layer) => namespace.ImageEditorPosterizeEffect.remove(layer)).some(Boolean);
+        if (changed) controller.documentStore.notify({ type: "layer-effect", ids: layers.map((layer) => layer.id) });
+        return changed;
+      });
+    }
+
+    /** Open the app-styled Posterize editor and commit one undoable effect change. */
+    function openPosterizeStyle(controller, requestedIds = null) {
+      const hasProvisionalContent = controller.selection.floating
+        && (controller.pendingContentDescriptor || controller.selection.origin === "paste");
+      if (hasProvisionalContent) {
+        if (!commitSelection(controller)) return false;
+        requestedIds = null;
+      }
+      const layers = resolveLayerStyleTargets(controller, requestedIds);
+      if (!layers.length) return false;
+      const originals = new Map(layers.map((layer) => [layer.id, namespace.cloneImageDocument(layer.effects || [])]));
+      const restore = () => layers.forEach((layer) => { layer.effects = namespace.cloneImageDocument(originals.get(layer.id) || []); });
+      const existing = layers.map((layer) => namespace.ImageEditorPosterizeEffect.get(layer)).find(Boolean);
+      controller.layerStyleDialog.open({
+        styleType: "posterize",
+        effect: existing,
+        hasEffect: !!existing,
+        targetName: layers.length === 1 ? layers[0].name : layers.length + " selected layers",
+        onPreview(effect, enabled) {
+          restore();
+          if (enabled) layers.forEach((layer) => namespace.ImageEditorPosterizeEffect.upsert(layer, effect));
+          renderLayeredDocument(controller);
+        },
+        onCancel() {
+          restore();
+          renderLayeredDocument(controller);
+        },
+        onApply(effect) {
+          restore();
+          commitDocumentMutation(controller, "Change Posterize", () => {
+            const changed = layers.map((layer) => namespace.ImageEditorPosterizeEffect.upsert(layer, effect)).some(Boolean);
+            if (changed) controller.documentStore.notify({ type: "layer-effect", ids: layers.map((layer) => layer.id) });
+            return changed;
+          });
+        },
+        onRemove() {
+          restore();
+          removePosterizeStyle(controller, layers.map((layer) => layer.id));
+        }
+      });
+      return true;
+    }
+
+    /** Remove Contrast B&W from the requested layers as one undoable document change. */
+    function removeContrastBwStyle(controller, requestedIds = null) {
+      const layers = resolveLayerStyleTargets(controller, requestedIds);
+      return commitDocumentMutation(controller, "Remove Contrast B&W", () => {
+        const changed = layers.map((layer) => namespace.ImageEditorContrastBwEffect.remove(layer)).some(Boolean);
+        if (changed) controller.documentStore.notify({ type: "layer-effect", ids: layers.map((layer) => layer.id) });
+        return changed;
+      });
+    }
+
+    /** Open the app-styled Contrast B&W editor and commit one undoable effect change. */
+    function openContrastBwStyle(controller, requestedIds = null) {
+      const hasProvisionalContent = controller.selection.floating
+        && (controller.pendingContentDescriptor || controller.selection.origin === "paste");
+      if (hasProvisionalContent) {
+        if (!commitSelection(controller)) return false;
+        requestedIds = null;
+      }
+      const layers = resolveLayerStyleTargets(controller, requestedIds);
+      if (!layers.length) return false;
+      const originals = new Map(layers.map((layer) => [layer.id, namespace.cloneImageDocument(layer.effects || [])]));
+      const restore = () => layers.forEach((layer) => { layer.effects = namespace.cloneImageDocument(originals.get(layer.id) || []); });
+      const existing = layers.map((layer) => namespace.ImageEditorContrastBwEffect.get(layer)).find(Boolean);
+      controller.layerStyleDialog.open({
+        styleType: "contrast-bw",
+        effect: existing,
+        hasEffect: !!existing,
+        targetName: layers.length === 1 ? layers[0].name : layers.length + " selected layers",
+        onPreview(effect, enabled) {
+          restore();
+          if (enabled) layers.forEach((layer) => namespace.ImageEditorContrastBwEffect.upsert(layer, effect));
+          renderLayeredDocument(controller);
+        },
+        onCancel() {
+          restore();
+          renderLayeredDocument(controller);
+        },
+        onApply(effect) {
+          restore();
+          commitDocumentMutation(controller, "Change Contrast B&W", () => {
+            const changed = layers.map((layer) => namespace.ImageEditorContrastBwEffect.upsert(layer, effect)).some(Boolean);
+            if (changed) controller.documentStore.notify({ type: "layer-effect", ids: layers.map((layer) => layer.id) });
+            return changed;
+          });
+        },
+        onRemove() {
+          restore();
+          removeContrastBwStyle(controller, layers.map((layer) => layer.id));
+        }
+      });
+      return true;
+    }
+
+    /** Remove Monochromatic from the requested layers as one undoable document change. */
+    function removeMonochromaticStyle(controller, requestedIds = null) {
+      const layers = resolveLayerStyleTargets(controller, requestedIds);
+      return commitDocumentMutation(controller, "Remove Monochromatic", () => {
+        const changed = layers.map((layer) => namespace.ImageEditorMonochromaticEffect.remove(layer)).some(Boolean);
+        if (changed) controller.documentStore.notify({ type: "layer-effect", ids: layers.map((layer) => layer.id) });
+        return changed;
+      });
+    }
+
+    /** Open the app-styled Monochromatic editor and commit one undoable effect change. */
+    function openMonochromaticStyle(controller, requestedIds = null) {
+      const hasProvisionalContent = controller.selection.floating
+        && (controller.pendingContentDescriptor || controller.selection.origin === "paste");
+      if (hasProvisionalContent) {
+        if (!commitSelection(controller)) return false;
+        requestedIds = null;
+      }
+      const layers = resolveLayerStyleTargets(controller, requestedIds);
+      if (!layers.length) return false;
+      const originals = new Map(layers.map((layer) => [layer.id, namespace.cloneImageDocument(layer.effects || [])]));
+      const restore = () => layers.forEach((layer) => { layer.effects = namespace.cloneImageDocument(originals.get(layer.id) || []); });
+      const existing = layers.map((layer) => namespace.ImageEditorMonochromaticEffect.get(layer)).find(Boolean);
+      controller.layerStyleDialog.open({
+        styleType: "monochromatic",
+        effect: existing,
+        hasEffect: !!existing,
+        targetName: layers.length === 1 ? layers[0].name : layers.length + " selected layers",
+        onPreview(effect, enabled) {
+          restore();
+          if (enabled) layers.forEach((layer) => namespace.ImageEditorMonochromaticEffect.upsert(layer, effect));
+          renderLayeredDocument(controller);
+        },
+        onCancel() {
+          restore();
+          renderLayeredDocument(controller);
+        },
+        onApply(effect) {
+          restore();
+          commitDocumentMutation(controller, "Change Monochromatic", () => {
+            const changed = layers.map((layer) => namespace.ImageEditorMonochromaticEffect.upsert(layer, effect)).some(Boolean);
+            if (changed) controller.documentStore.notify({ type: "layer-effect", ids: layers.map((layer) => layer.id) });
+            return changed;
+          });
+        },
+        onRemove() {
+          restore();
+          removeMonochromaticStyle(controller, layers.map((layer) => layer.id));
+        }
+      });
+      return true;
+    }
+
+    /** Remove Pencil-Sketch from the requested layers as one undoable document change. */
+    function removePencilSketchStyle(controller, requestedIds = null) {
+      const layers = resolveLayerStyleTargets(controller, requestedIds);
+      return commitDocumentMutation(controller, "Remove Pencil-Sketch", () => {
+        const changed = layers.map((layer) => namespace.ImageEditorPencilSketchEffect.remove(layer)).some(Boolean);
+        if (changed) controller.documentStore.notify({ type: "layer-effect", ids: layers.map((layer) => layer.id) });
+        return changed;
+      });
+    }
+
+    /** Open the app-styled Pencil-Sketch editor and commit one undoable effect change. */
+    function openPencilSketchStyle(controller, requestedIds = null) {
+      const hasProvisionalContent = controller.selection.floating
+        && (controller.pendingContentDescriptor || controller.selection.origin === "paste");
+      if (hasProvisionalContent) {
+        if (!commitSelection(controller)) return false;
+        requestedIds = null;
+      }
+      const layers = resolveLayerStyleTargets(controller, requestedIds);
+      if (!layers.length) return false;
+      const originals = new Map(layers.map((layer) => [layer.id, namespace.cloneImageDocument(layer.effects || [])]));
+      const restore = () => layers.forEach((layer) => { layer.effects = namespace.cloneImageDocument(originals.get(layer.id) || []); });
+      const existing = layers.map((layer) => namespace.ImageEditorPencilSketchEffect.get(layer)).find(Boolean);
+      controller.layerStyleDialog.open({
+        styleType: "pencil-sketch",
+        effect: existing,
+        hasEffect: !!existing,
+        targetName: layers.length === 1 ? layers[0].name : layers.length + " selected layers",
+        onPreview(effect, enabled) {
+          restore();
+          if (enabled) layers.forEach((layer) => namespace.ImageEditorPencilSketchEffect.upsert(layer, effect));
+          renderLayeredDocument(controller);
+        },
+        onCancel() {
+          restore();
+          renderLayeredDocument(controller);
+        },
+        onApply(effect) {
+          restore();
+          commitDocumentMutation(controller, "Change Pencil-Sketch", () => {
+            const changed = layers.map((layer) => namespace.ImageEditorPencilSketchEffect.upsert(layer, effect)).some(Boolean);
+            if (changed) controller.documentStore.notify({ type: "layer-effect", ids: layers.map((layer) => layer.id) });
+            return changed;
+          });
+        },
+        onRemove() {
+          restore();
+          removePencilSketchStyle(controller, layers.map((layer) => layer.id));
+        }
+      });
+      return true;
+    }
+
+    /** Remove Pic-in-Pic from the requested layers as one undoable document change. */
+    function removePicInPicStyle(controller, requestedIds = null) {
+      const layers = resolveLayerStyleTargets(controller, requestedIds);
+      return commitDocumentMutation(controller, "Remove Pic-in-Pic", () => {
+        const changed = layers.map((layer) => namespace.ImageEditorPicInPicEffect.remove(layer)).some(Boolean);
+        if (changed) controller.documentStore.notify({ type: "layer-effect", ids: layers.map((layer) => layer.id) });
+        return changed;
+      });
+    }
+
+    /** Open the app-styled Pic-in-Pic editor and commit one undoable effect change. */
+    function openPicInPicStyle(controller, requestedIds = null) {
+      const hasProvisionalContent = controller.selection.floating
+        && (controller.pendingContentDescriptor || controller.selection.origin === "paste");
+      if (hasProvisionalContent) {
+        if (!commitSelection(controller)) return false;
+        requestedIds = null;
+      }
+      const layers = resolveLayerStyleTargets(controller, requestedIds);
+      if (!layers.length) return false;
+      const originals = new Map(layers.map((layer) => [layer.id, namespace.cloneImageDocument(layer.effects || [])]));
+      const restore = () => layers.forEach((layer) => { layer.effects = namespace.cloneImageDocument(originals.get(layer.id) || []); });
+      const existing = layers.map((layer) => namespace.ImageEditorPicInPicEffect.get(layer)).find(Boolean);
+      controller.layerStyleDialog.open({
+        styleType: "pic-in-pic",
+        effect: existing,
+        hasEffect: !!existing,
+        targetName: layers.length === 1 ? layers[0].name : layers.length + " selected layers",
+        onPreview(effect, enabled) {
+          restore();
+          if (enabled) layers.forEach((layer) => namespace.ImageEditorPicInPicEffect.upsert(layer, effect));
+          renderLayeredDocument(controller);
+        },
+        onCancel() {
+          restore();
+          renderLayeredDocument(controller);
+        },
+        onApply(effect) {
+          restore();
+          commitDocumentMutation(controller, "Change Pic-in-Pic", () => {
+            const changed = layers.map((layer) => namespace.ImageEditorPicInPicEffect.upsert(layer, effect)).some(Boolean);
+            if (changed) controller.documentStore.notify({ type: "layer-effect", ids: layers.map((layer) => layer.id) });
+            return changed;
+          });
+        },
+        onRemove() {
+          restore();
+          removePicInPicStyle(controller, layers.map((layer) => layer.id));
+        }
+      });
+      return true;
+    }
+
     /** Remove Painted Texture from the requested layers as one undoable document change. */
     function removePaintedTextureStyle(controller, requestedIds = null) {
       const layers = resolveLayerStyleTargets(controller, requestedIds);
@@ -1125,6 +1390,271 @@
         onRemove() {
           restore();
           removePaintedTextureStyle(controller, layers.map((layer) => layer.id));
+        }
+      });
+      return true;
+    }
+
+    /** Remove Paint Edge from the requested layers as one undoable document change. */
+    function removePaintEdgeStyle(controller, requestedIds = null) {
+      const layers = resolveLayerStyleTargets(controller, requestedIds);
+      return commitDocumentMutation(controller, "Remove Paint Edge", () => {
+        const changed = layers.map((layer) => namespace.ImageEditorPaintEdgeEffect.remove(layer)).some(Boolean);
+        if (changed) controller.documentStore.notify({ type: "layer-effect", ids: layers.map((layer) => layer.id) });
+        return changed;
+      });
+    }
+
+    /** Open the app-styled Paint Edge editor and commit one undoable effect change. */
+    function openPaintEdgeStyle(controller, requestedIds = null) {
+      const hasProvisionalContent = controller.selection.floating
+        && (controller.pendingContentDescriptor || controller.selection.origin === "paste");
+      if (hasProvisionalContent) {
+        if (!commitSelection(controller)) return false;
+        requestedIds = null;
+      }
+      const layers = resolveLayerStyleTargets(controller, requestedIds);
+      if (!layers.length) return false;
+      const originals = new Map(layers.map((layer) => [layer.id, namespace.cloneImageDocument(layer.effects || [])]));
+      const restore = () => layers.forEach((layer) => { layer.effects = namespace.cloneImageDocument(originals.get(layer.id) || []); });
+      const existing = layers.map((layer) => namespace.ImageEditorPaintEdgeEffect.get(layer)).find(Boolean);
+      controller.layerStyleDialog.open({
+        styleType: "paint-edge",
+        effect: existing,
+        hasEffect: !!existing,
+        targetName: layers.length === 1 ? layers[0].name : layers.length + " selected layers",
+        onPreview(effect, enabled) {
+          restore();
+          if (enabled) layers.forEach((layer) => namespace.ImageEditorPaintEdgeEffect.upsert(layer, effect));
+          renderLayeredDocument(controller);
+        },
+        onCancel() {
+          restore();
+          renderLayeredDocument(controller);
+        },
+        onApply(effect) {
+          restore();
+          commitDocumentMutation(controller, "Change Paint Edge", () => {
+            const changed = layers.map((layer) => namespace.ImageEditorPaintEdgeEffect.upsert(layer, effect)).some(Boolean);
+            if (changed) controller.documentStore.notify({ type: "layer-effect", ids: layers.map((layer) => layer.id) });
+            return changed;
+          });
+        },
+        onRemove() {
+          restore();
+          removePaintEdgeStyle(controller, layers.map((layer) => layer.id));
+        }
+      });
+      return true;
+    }
+
+    /** Remove Collage from the requested layers as one undoable document change. */
+    function removeCollageStyle(controller, requestedIds = null) {
+      const layers = resolveLayerStyleTargets(controller, requestedIds);
+      return commitDocumentMutation(controller, "Remove Collage", () => {
+        const changed = layers.map((layer) => namespace.ImageEditorCollageEffect.remove(layer)).some(Boolean);
+        if (changed) controller.documentStore.notify({ type: "layer-effect", ids: layers.map((layer) => layer.id) });
+        return changed;
+      });
+    }
+
+    /** Open the app-styled Collage editor and commit one undoable effect change. */
+    function openCollageStyle(controller, requestedIds = null) {
+      const hasProvisionalContent = controller.selection.floating
+        && (controller.pendingContentDescriptor || controller.selection.origin === "paste");
+      if (hasProvisionalContent) {
+        if (!commitSelection(controller)) return false;
+        requestedIds = null;
+      }
+      const layers = resolveLayerStyleTargets(controller, requestedIds);
+      if (!layers.length) return false;
+      const originals = new Map(layers.map((layer) => [layer.id, namespace.cloneImageDocument(layer.effects || [])]));
+      const restore = () => layers.forEach((layer) => { layer.effects = namespace.cloneImageDocument(originals.get(layer.id) || []); });
+      const existing = layers.map((layer) => namespace.ImageEditorCollageEffect.get(layer)).find(Boolean);
+      controller.layerStyleDialog.open({
+        styleType: "collage",
+        effect: existing,
+        hasEffect: !!existing,
+        targetName: layers.length === 1 ? layers[0].name : layers.length + " selected layers",
+        onPreview(effect, enabled) {
+          restore();
+          if (enabled) layers.forEach((layer) => namespace.ImageEditorCollageEffect.upsert(layer, effect));
+          renderLayeredDocument(controller);
+        },
+        onCancel() {
+          restore();
+          renderLayeredDocument(controller);
+        },
+        onApply(effect) {
+          restore();
+          commitDocumentMutation(controller, "Change Collage", () => {
+            const changed = layers.map((layer) => namespace.ImageEditorCollageEffect.upsert(layer, effect)).some(Boolean);
+            if (changed) controller.documentStore.notify({ type: "layer-effect", ids: layers.map((layer) => layer.id) });
+            return changed;
+          });
+        },
+        onRemove() {
+          restore();
+          removeCollageStyle(controller, layers.map((layer) => layer.id));
+        }
+      });
+      return true;
+    }
+
+    /** Remove Dots from the requested layers as one undoable document change. */
+    function removeDotsStyle(controller, requestedIds = null) {
+      const layers = resolveLayerStyleTargets(controller, requestedIds);
+      return commitDocumentMutation(controller, "Remove Dots", () => {
+        const changed = layers.map((layer) => namespace.ImageEditorDotsEffect.remove(layer)).some(Boolean);
+        if (changed) controller.documentStore.notify({ type: "layer-effect", ids: layers.map((layer) => layer.id) });
+        return changed;
+      });
+    }
+
+    /** Open the app-styled Dots editor and commit one undoable effect change. */
+    function openDotsStyle(controller, requestedIds = null) {
+      const hasProvisionalContent = controller.selection.floating
+        && (controller.pendingContentDescriptor || controller.selection.origin === "paste");
+      if (hasProvisionalContent) {
+        if (!commitSelection(controller)) return false;
+        requestedIds = null;
+      }
+      const layers = resolveLayerStyleTargets(controller, requestedIds);
+      if (!layers.length) return false;
+      const originals = new Map(layers.map((layer) => [layer.id, namespace.cloneImageDocument(layer.effects || [])]));
+      const restore = () => layers.forEach((layer) => { layer.effects = namespace.cloneImageDocument(originals.get(layer.id) || []); });
+      const existing = layers.map((layer) => namespace.ImageEditorDotsEffect.get(layer)).find(Boolean);
+      controller.layerStyleDialog.open({
+        styleType: "dots",
+        effect: existing,
+        hasEffect: !!existing,
+        targetName: layers.length === 1 ? layers[0].name : layers.length + " selected layers",
+        onPreview(effect, enabled) {
+          restore();
+          if (enabled) layers.forEach((layer) => namespace.ImageEditorDotsEffect.upsert(layer, effect));
+          renderLayeredDocument(controller);
+        },
+        onCancel() {
+          restore();
+          renderLayeredDocument(controller);
+        },
+        onApply(effect) {
+          restore();
+          commitDocumentMutation(controller, "Change Dots", () => {
+            const changed = layers.map((layer) => namespace.ImageEditorDotsEffect.upsert(layer, effect)).some(Boolean);
+            if (changed) controller.documentStore.notify({ type: "layer-effect", ids: layers.map((layer) => layer.id) });
+            return changed;
+          });
+        },
+        onRemove() {
+          restore();
+          removeDotsStyle(controller, layers.map((layer) => layer.id));
+        }
+      });
+      return true;
+    }
+
+    /** Remove Points from the requested layers as one undoable document change. */
+    function removePointsStyle(controller, requestedIds = null) {
+      const layers = resolveLayerStyleTargets(controller, requestedIds);
+      return commitDocumentMutation(controller, "Remove Points", () => {
+        const changed = layers.map((layer) => namespace.ImageEditorPointsEffect.remove(layer)).some(Boolean);
+        if (changed) controller.documentStore.notify({ type: "layer-effect", ids: layers.map((layer) => layer.id) });
+        return changed;
+      });
+    }
+
+    /** Open the app-styled Points editor and commit one undoable effect change. */
+    function openPointsStyle(controller, requestedIds = null) {
+      const hasProvisionalContent = controller.selection.floating
+        && (controller.pendingContentDescriptor || controller.selection.origin === "paste");
+      if (hasProvisionalContent) {
+        if (!commitSelection(controller)) return false;
+        requestedIds = null;
+      }
+      const layers = resolveLayerStyleTargets(controller, requestedIds);
+      if (!layers.length) return false;
+      const originals = new Map(layers.map((layer) => [layer.id, namespace.cloneImageDocument(layer.effects || [])]));
+      const restore = () => layers.forEach((layer) => { layer.effects = namespace.cloneImageDocument(originals.get(layer.id) || []); });
+      const existing = layers.map((layer) => namespace.ImageEditorPointsEffect.get(layer)).find(Boolean);
+      controller.layerStyleDialog.open({
+        styleType: "points",
+        effect: existing,
+        hasEffect: !!existing,
+        targetName: layers.length === 1 ? layers[0].name : layers.length + " selected layers",
+        onPreview(effect, enabled) {
+          restore();
+          if (enabled) layers.forEach((layer) => namespace.ImageEditorPointsEffect.upsert(layer, effect));
+          renderLayeredDocument(controller);
+        },
+        onCancel() {
+          restore();
+          renderLayeredDocument(controller);
+        },
+        onApply(effect) {
+          restore();
+          commitDocumentMutation(controller, "Change Points", () => {
+            const changed = layers.map((layer) => namespace.ImageEditorPointsEffect.upsert(layer, effect)).some(Boolean);
+            if (changed) controller.documentStore.notify({ type: "layer-effect", ids: layers.map((layer) => layer.id) });
+            return changed;
+          });
+        },
+        onRemove() {
+          restore();
+          removePointsStyle(controller, layers.map((layer) => layer.id));
+        }
+      });
+      return true;
+    }
+
+    /** Remove Watercolor from the requested layers as one undoable document change. */
+    function removeWatercolorStyle(controller, requestedIds = null) {
+      const layers = resolveLayerStyleTargets(controller, requestedIds);
+      return commitDocumentMutation(controller, "Remove Watercolor", () => {
+        const changed = layers.map((layer) => namespace.ImageEditorWatercolorEffect.remove(layer)).some(Boolean);
+        if (changed) controller.documentStore.notify({ type: "layer-effect", ids: layers.map((layer) => layer.id) });
+        return changed;
+      });
+    }
+
+    /** Open the app-styled Watercolor editor and commit one undoable effect change. */
+    function openWatercolorStyle(controller, requestedIds = null) {
+      const hasProvisionalContent = controller.selection.floating
+        && (controller.pendingContentDescriptor || controller.selection.origin === "paste");
+      if (hasProvisionalContent) {
+        if (!commitSelection(controller)) return false;
+        requestedIds = null;
+      }
+      const layers = resolveLayerStyleTargets(controller, requestedIds);
+      if (!layers.length) return false;
+      const originals = new Map(layers.map((layer) => [layer.id, namespace.cloneImageDocument(layer.effects || [])]));
+      const restore = () => layers.forEach((layer) => { layer.effects = namespace.cloneImageDocument(originals.get(layer.id) || []); });
+      const existing = layers.map((layer) => namespace.ImageEditorWatercolorEffect.get(layer)).find(Boolean);
+      controller.layerStyleDialog.open({
+        styleType: "watercolor",
+        effect: existing,
+        hasEffect: !!existing,
+        targetName: layers.length === 1 ? layers[0].name : layers.length + " selected layers",
+        onPreview(effect, enabled) {
+          restore();
+          if (enabled) layers.forEach((layer) => namespace.ImageEditorWatercolorEffect.upsert(layer, effect));
+          renderLayeredDocument(controller);
+        },
+        onCancel() {
+          restore();
+          renderLayeredDocument(controller);
+        },
+        onApply(effect) {
+          restore();
+          commitDocumentMutation(controller, "Change Watercolor", () => {
+            const changed = layers.map((layer) => namespace.ImageEditorWatercolorEffect.upsert(layer, effect)).some(Boolean);
+            if (changed) controller.documentStore.notify({ type: "layer-effect", ids: layers.map((layer) => layer.id) });
+            return changed;
+          });
+        },
+        onRemove() {
+          restore();
+          removeWatercolorStyle(controller, layers.map((layer) => layer.id));
         }
       });
       return true;
@@ -4675,6 +5205,16 @@
       if (action === "remove-newspaper") return removeNewspaperStyle(controller, controller.canvasLayerStyleTargetIds);
       if (action === "edit-painted-texture") return openPaintedTextureStyle(controller, controller.canvasLayerStyleTargetIds);
       if (action === "remove-painted-texture") return removePaintedTextureStyle(controller, controller.canvasLayerStyleTargetIds);
+      if (action === "edit-paint-edge") return openPaintEdgeStyle(controller, controller.canvasLayerStyleTargetIds);
+      if (action === "remove-paint-edge") return removePaintEdgeStyle(controller, controller.canvasLayerStyleTargetIds);
+      if (action === "edit-collage") return openCollageStyle(controller, controller.canvasLayerStyleTargetIds);
+      if (action === "remove-collage") return removeCollageStyle(controller, controller.canvasLayerStyleTargetIds);
+      if (action === "edit-dots") return openDotsStyle(controller, controller.canvasLayerStyleTargetIds);
+      if (action === "remove-dots") return removeDotsStyle(controller, controller.canvasLayerStyleTargetIds);
+      if (action === "edit-points") return openPointsStyle(controller, controller.canvasLayerStyleTargetIds);
+      if (action === "remove-points") return removePointsStyle(controller, controller.canvasLayerStyleTargetIds);
+      if (action === "edit-watercolor") return openWatercolorStyle(controller, controller.canvasLayerStyleTargetIds);
+      if (action === "remove-watercolor") return removeWatercolorStyle(controller, controller.canvasLayerStyleTargetIds);
       if (action === "edit-retro-3d") return openRetro3DStyle(controller, controller.canvasLayerStyleTargetIds);
       if (action === "remove-retro-3d") return removeRetro3DStyle(controller, controller.canvasLayerStyleTargetIds);
       if (action === "edit-snow") return openSnowStyle(controller, controller.canvasLayerStyleTargetIds);
@@ -4687,6 +5227,16 @@
       if (action === "remove-spotlight") return removeSpotlightStyle(controller, controller.canvasLayerStyleTargetIds);
       if (action === "edit-vignette") return openVignetteStyle(controller, controller.canvasLayerStyleTargetIds);
       if (action === "remove-vignette") return removeVignetteStyle(controller, controller.canvasLayerStyleTargetIds);
+      if (action === "edit-posterize") return openPosterizeStyle(controller, controller.canvasLayerStyleTargetIds);
+      if (action === "remove-posterize") return removePosterizeStyle(controller, controller.canvasLayerStyleTargetIds);
+      if (action === "edit-contrast-bw") return openContrastBwStyle(controller, controller.canvasLayerStyleTargetIds);
+      if (action === "remove-contrast-bw") return removeContrastBwStyle(controller, controller.canvasLayerStyleTargetIds);
+      if (action === "edit-monochromatic") return openMonochromaticStyle(controller, controller.canvasLayerStyleTargetIds);
+      if (action === "remove-monochromatic") return removeMonochromaticStyle(controller, controller.canvasLayerStyleTargetIds);
+      if (action === "edit-pencil-sketch") return openPencilSketchStyle(controller, controller.canvasLayerStyleTargetIds);
+      if (action === "remove-pencil-sketch") return removePencilSketchStyle(controller, controller.canvasLayerStyleTargetIds);
+      if (action === "edit-pic-in-pic") return openPicInPicStyle(controller, controller.canvasLayerStyleTargetIds);
+      if (action === "remove-pic-in-pic") return removePicInPicStyle(controller, controller.canvasLayerStyleTargetIds);
       if (action === "edit-vortex") return openVortexStyle(controller, controller.canvasLayerStyleTargetIds);
       if (action === "remove-vortex") return removeVortexStyle(controller, controller.canvasLayerStyleTargetIds);
       if (action === "edit-ripple-field") return openRippleFieldStyle(controller, controller.canvasLayerStyleTargetIds);
@@ -4756,12 +5306,22 @@
         const hasGrain = styleLayers.some((layer) => namespace.ImageEditorGrainEffect.get(layer));
         const hasNewspaper = styleLayers.some((layer) => namespace.ImageEditorNewspaperEffect.get(layer));
         const hasPaintedTexture = styleLayers.some((layer) => namespace.ImageEditorPaintedTextureEffect.get(layer));
+        const hasPaintEdge = styleLayers.some((layer) => namespace.ImageEditorPaintEdgeEffect.get(layer));
+        const hasCollage = styleLayers.some((layer) => namespace.ImageEditorCollageEffect.get(layer));
+        const hasDots = styleLayers.some((layer) => namespace.ImageEditorDotsEffect.get(layer));
+        const hasPoints = styleLayers.some((layer) => namespace.ImageEditorPointsEffect.get(layer));
+        const hasWatercolor = styleLayers.some((layer) => namespace.ImageEditorWatercolorEffect.get(layer));
         const hasRetro3D = styleLayers.some((layer) => namespace.ImageEditorRetro3DEffect.get(layer));
         const hasSnow = styleLayers.some((layer) => namespace.ImageEditorSnowEffect.get(layer));
         const hasRain = styleLayers.some((layer) => namespace.ImageEditorRainEffect.get(layer));
         const hasRainbow = styleLayers.some((layer) => namespace.ImageEditorRainbowEffect.get(layer));
         const hasSpotlight = styleLayers.some((layer) => namespace.ImageEditorSpotlightEffect.get(layer));
         const hasVignette = styleLayers.some((layer) => namespace.ImageEditorVignetteEffect.get(layer));
+        const hasPosterize = styleLayers.some((layer) => namespace.ImageEditorPosterizeEffect.get(layer));
+        const hasContrastBw = styleLayers.some((layer) => namespace.ImageEditorContrastBwEffect.get(layer));
+        const hasMonochromatic = styleLayers.some((layer) => namespace.ImageEditorMonochromaticEffect.get(layer));
+        const hasPencilSketch = styleLayers.some((layer) => namespace.ImageEditorPencilSketchEffect.get(layer));
+        const hasPicInPic = styleLayers.some((layer) => namespace.ImageEditorPicInPicEffect.get(layer));
         const hasVortex = styleLayers.some((layer) => namespace.ImageEditorVortexEffect.get(layer));
         const hasRippleField = styleLayers.some((layer) => namespace.ImageEditorRippleFieldEffect.get(layer));
         const hasFlare = styleLayers.some((layer) => namespace.ImageEditorFlareEffect.get(layer));
@@ -4811,6 +5371,16 @@
           "remove-newspaper": hasNewspaper,
           "edit-painted-texture": styleLayers.length > 0,
           "remove-painted-texture": hasPaintedTexture,
+          "edit-paint-edge": styleLayers.length > 0,
+          "remove-paint-edge": hasPaintEdge,
+          "edit-collage": styleLayers.length > 0,
+          "remove-collage": hasCollage,
+          "edit-dots": styleLayers.length > 0,
+          "remove-dots": hasDots,
+          "edit-points": styleLayers.length > 0,
+          "remove-points": hasPoints,
+          "edit-watercolor": styleLayers.length > 0,
+          "remove-watercolor": hasWatercolor,
           "edit-retro-3d": styleLayers.length > 0,
           "remove-retro-3d": hasRetro3D,
           "edit-snow": styleLayers.length > 0,
@@ -4823,6 +5393,16 @@
           "remove-spotlight": hasSpotlight,
           "edit-vignette": styleLayers.length > 0,
           "remove-vignette": hasVignette,
+          "edit-posterize": styleLayers.length > 0,
+          "remove-posterize": hasPosterize,
+          "edit-contrast-bw": styleLayers.length > 0,
+          "remove-contrast-bw": hasContrastBw,
+          "edit-monochromatic": styleLayers.length > 0,
+          "remove-monochromatic": hasMonochromatic,
+          "edit-pencil-sketch": styleLayers.length > 0,
+          "remove-pencil-sketch": hasPencilSketch,
+          "edit-pic-in-pic": styleLayers.length > 0,
+          "remove-pic-in-pic": hasPicInPic,
           "edit-vortex": styleLayers.length > 0,
           "remove-vortex": hasVortex,
           "edit-ripple-field": styleLayers.length > 0,
@@ -5268,6 +5848,16 @@
           if (label === "remove-newspaper") return removeNewspaperStyle(controller, callback?.layerIds);
           if (label === "edit-painted-texture") return openPaintedTextureStyle(controller, callback?.layerIds);
           if (label === "remove-painted-texture") return removePaintedTextureStyle(controller, callback?.layerIds);
+          if (label === "edit-paint-edge") return openPaintEdgeStyle(controller, callback?.layerIds);
+          if (label === "remove-paint-edge") return removePaintEdgeStyle(controller, callback?.layerIds);
+          if (label === "edit-collage") return openCollageStyle(controller, callback?.layerIds);
+          if (label === "remove-collage") return removeCollageStyle(controller, callback?.layerIds);
+          if (label === "edit-dots") return openDotsStyle(controller, callback?.layerIds);
+          if (label === "remove-dots") return removeDotsStyle(controller, callback?.layerIds);
+          if (label === "edit-points") return openPointsStyle(controller, callback?.layerIds);
+          if (label === "remove-points") return removePointsStyle(controller, callback?.layerIds);
+          if (label === "edit-watercolor") return openWatercolorStyle(controller, callback?.layerIds);
+          if (label === "remove-watercolor") return removeWatercolorStyle(controller, callback?.layerIds);
           if (label === "edit-retro-3d") return openRetro3DStyle(controller, callback?.layerIds);
           if (label === "remove-retro-3d") return removeRetro3DStyle(controller, callback?.layerIds);
           if (label === "edit-snow") return openSnowStyle(controller, callback?.layerIds);
@@ -5280,6 +5870,16 @@
           if (label === "remove-spotlight") return removeSpotlightStyle(controller, callback?.layerIds);
           if (label === "edit-vignette") return openVignetteStyle(controller, callback?.layerIds);
           if (label === "remove-vignette") return removeVignetteStyle(controller, callback?.layerIds);
+          if (label === "edit-posterize") return openPosterizeStyle(controller, callback?.layerIds);
+          if (label === "remove-posterize") return removePosterizeStyle(controller, callback?.layerIds);
+          if (label === "edit-contrast-bw") return openContrastBwStyle(controller, callback?.layerIds);
+          if (label === "remove-contrast-bw") return removeContrastBwStyle(controller, callback?.layerIds);
+          if (label === "edit-monochromatic") return openMonochromaticStyle(controller, callback?.layerIds);
+          if (label === "remove-monochromatic") return removeMonochromaticStyle(controller, callback?.layerIds);
+          if (label === "edit-pencil-sketch") return openPencilSketchStyle(controller, callback?.layerIds);
+          if (label === "remove-pencil-sketch") return removePencilSketchStyle(controller, callback?.layerIds);
+          if (label === "edit-pic-in-pic") return openPicInPicStyle(controller, callback?.layerIds);
+          if (label === "remove-pic-in-pic") return removePicInPicStyle(controller, callback?.layerIds);
           if (label === "edit-vortex") return openVortexStyle(controller, callback?.layerIds);
           if (label === "remove-vortex") return removeVortexStyle(controller, callback?.layerIds);
           if (label === "edit-ripple-field") return openRippleFieldStyle(controller, callback?.layerIds);
@@ -5314,12 +5914,22 @@
           if (action === "edit-grain") return openGrainStyle(controller);
           if (action === "edit-newspaper") return openNewspaperStyle(controller);
           if (action === "edit-painted-texture") return openPaintedTextureStyle(controller);
+          if (action === "edit-paint-edge") return openPaintEdgeStyle(controller);
+          if (action === "edit-collage") return openCollageStyle(controller);
+          if (action === "edit-dots") return openDotsStyle(controller);
+          if (action === "edit-points") return openPointsStyle(controller);
+          if (action === "edit-watercolor") return openWatercolorStyle(controller);
           if (action === "edit-retro-3d") return openRetro3DStyle(controller);
           if (action === "edit-snow") return openSnowStyle(controller);
           if (action === "edit-rain") return openRainStyle(controller);
           if (action === "edit-rainbow") return openRainbowStyle(controller);
           if (action === "edit-spotlight") return openSpotlightStyle(controller);
           if (action === "edit-vignette") return openVignetteStyle(controller);
+          if (action === "edit-posterize") return openPosterizeStyle(controller);
+          if (action === "edit-contrast-bw") return openContrastBwStyle(controller);
+          if (action === "edit-monochromatic") return openMonochromaticStyle(controller);
+          if (action === "edit-pencil-sketch") return openPencilSketchStyle(controller);
+          if (action === "edit-pic-in-pic") return openPicInPicStyle(controller);
           if (action === "edit-vortex") return openVortexStyle(controller);
           if (action === "edit-ripple-field") return openRippleFieldStyle(controller);
           if (action === "edit-flare") return openFlareStyle(controller);
