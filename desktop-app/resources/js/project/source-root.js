@@ -46,6 +46,69 @@
       return root ? joinLocalPath(joinLocalPath(root, MD_EDITOR_DIR), PROJECT_METADATA_FILE) : "";
     }
 
+    function normalizeComparablePath(value) {
+      const normalized = normalizeLocalPath(value).replace(/\/+$/, "");
+      return /^[a-zA-Z]:\//.test(normalized) ? normalized.toLowerCase() : normalized;
+    }
+
+    function getGeneratedMarkdownRootPath(metadata) {
+      return normalizeLocalPath(metadata?.generatedMarkdownRootPath || "");
+    }
+
+    async function loadCodeProjectMetadata(codeProjectRoot) {
+      const metadataPath = getProjectMetadataPath(codeProjectRoot);
+      if (!metadataPath || !isNeutralinoRuntime?.() || !Neutralino?.filesystem?.readFile) return {};
+      try {
+        const parsed = JSON.parse(await Neutralino.filesystem.readFile(metadataPath));
+        return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {};
+      } catch (error) {
+        if (await localPathExists(metadataPath)) throw error;
+        return {};
+      }
+    }
+
+    async function linkCodeProjectToGeneratedMarkdown(codeProjectRoot, generatedMarkdownRoot, options = {}) {
+      const normalizedCodeProjectRoot = normalizeLocalPath(codeProjectRoot);
+      const normalizedMarkdownRoot = normalizeLocalPath(generatedMarkdownRoot);
+      if (!normalizedCodeProjectRoot) throw new Error("No source code project root was provided.");
+      if (!normalizedMarkdownRoot) throw new Error("No generated Markdown project root was provided.");
+      if (!isNeutralinoRuntime?.() || !Neutralino?.filesystem?.writeFile) {
+        throw new Error("Linking generated Markdown projects is available only in the desktop app.");
+      }
+
+      const previous = await loadCodeProjectMetadata(normalizedCodeProjectRoot);
+      const existingRoot = getGeneratedMarkdownRootPath(previous);
+      const pointsToGeneratedRoot = normalizeComparablePath(existingRoot) === normalizeComparablePath(normalizedMarkdownRoot);
+      if (existingRoot && !pointsToGeneratedRoot) {
+        const shouldReplace = typeof options.confirmReplace === "function"
+          ? await options.confirmReplace({ existingRoot, generatedMarkdownRoot: normalizedMarkdownRoot })
+          : false;
+        if (!shouldReplace) {
+          return { status: "kept-existing", metadata: previous, generatedMarkdownRootPath: existingRoot };
+        }
+      }
+      if (pointsToGeneratedRoot) {
+        return { status: "unchanged", metadata: previous, generatedMarkdownRootPath: existingRoot };
+      }
+
+      const now = new Date().toISOString();
+      const next = Object.assign({}, previous, {
+        schemaVersion: Math.max(1, Number(previous.schemaVersion) || 1),
+        type: previous.type || "md-editor-code-project",
+        generatedMarkdownRootPath: normalizedMarkdownRoot,
+        createdAt: previous.createdAt || now,
+        updatedAt: now
+      });
+      const metadataDirectory = joinLocalPath(normalizedCodeProjectRoot, MD_EDITOR_DIR);
+      try {
+        await Neutralino.filesystem.createDirectory?.(metadataDirectory);
+      } catch (_error) {
+        // Directory creation is best-effort because some Neutralino versions fail if it already exists.
+      }
+      await Neutralino.filesystem.writeFile(getProjectMetadataPath(normalizedCodeProjectRoot), JSON.stringify(next, null, 2) + "\n");
+      return { status: existingRoot ? "replaced" : "created", metadata: next, generatedMarkdownRootPath: normalizedMarkdownRoot };
+    }
+
     async function ensureProjectMetadataDirectory(folderPath = getActiveGeneratedFolderPath()) {
       if (!folderPath || !isNeutralinoRuntime?.() || !Neutralino?.filesystem?.createDirectory) return;
       const metadataDir = joinLocalPath(folderPath, MD_EDITOR_DIR);
@@ -219,11 +282,14 @@
         findGeneratedProjectFolderFromPath,
         getActiveGeneratedFolderPath,
         getCachedSourceRootMetadata,
+        getGeneratedMarkdownRootPath,
         getOriginalSourceRootPath,
         getProjectMetadataPath,
         isAbsolutePath,
         joinLocalPath,
         loadSourceRootMetadata,
+        loadCodeProjectMetadata,
+        linkCodeProjectToGeneratedMarkdown,
         normalizeLocalPath,
         normalizeSourceRootMetadata,
         promptForSourceRoot,

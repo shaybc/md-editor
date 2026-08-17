@@ -31,6 +31,13 @@
     ["edit-dots", "dots", "Dots"],
     ["edit-points", "points", "Points"],
     ["edit-watercolor", "watercolor", "Watercolor"],
+    ["edit-sunset", "sunset", "Sunset"],
+    ["edit-color-grid", "color-grid", "ColorGrid"],
+    ["edit-vertical-panels", "vertical-panels", "Vertical Panels"],
+    ["edit-polaroids", "polaroids", "Polaroids"],
+    ["edit-miniature", "miniature", "Miniature"],
+    ["edit-puzzle", "puzzle", "Puzzle"],
+    ["edit-texturize", "texturize", "Texturize"],
     ["edit-retro-3d", "retro-3d", "Retro 3D"],
     ["edit-snow", "snow", "Snow"],
     ["edit-rain", "rain", "Rain"],
@@ -47,6 +54,11 @@
     ["edit-flare", "flare", "Flare"],
     ["edit-gust", "gust", "Gust"]
   ]);
+
+  namespace.ImageEditorAdjustmentCatalogs = Object.freeze({
+    tune: TUNE_CATALOG,
+    layerEffects: LAYER_EFFECT_CATALOG
+  });
 
   function effectIcon(name, className = "") {
     return namespace.ImageEditorEffectIcons.markup(name, className);
@@ -193,7 +205,7 @@
           }
           return;
         }
-        if (["edit-blur", "edit-grain", "edit-newspaper", "edit-painted-texture", "edit-paint-edge", "edit-collage", "edit-dots", "edit-points", "edit-watercolor", "edit-retro-3d", "edit-snow", "edit-rain", "edit-rainbow", "edit-spotlight", "edit-vignette", "edit-posterize", "edit-contrast-bw", "edit-monochromatic", "edit-pencil-sketch", "edit-pic-in-pic", "edit-vortex", "edit-ripple-field", "edit-flare", "edit-gust"].includes(action)) {
+        if (["edit-blur", "edit-grain", "edit-newspaper", "edit-painted-texture", "edit-paint-edge", "edit-collage", "edit-dots", "edit-points", "edit-watercolor", "edit-sunset", "edit-color-grid", "edit-vertical-panels", "edit-polaroids", "edit-miniature", "edit-puzzle", "edit-texturize", "edit-retro-3d", "edit-snow", "edit-rain", "edit-rainbow", "edit-spotlight", "edit-vignette", "edit-posterize", "edit-contrast-bw", "edit-monochromatic", "edit-pencil-sketch", "edit-pic-in-pic", "edit-vortex", "edit-ripple-field", "edit-flare", "edit-gust"].includes(action)) {
           this.onLayerEffect(action);
           return;
         }

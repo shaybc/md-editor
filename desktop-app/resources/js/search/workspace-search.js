@@ -247,6 +247,11 @@
     const previewButton = document.getElementById("workspace-search-preview-replace");
     const applyButton = document.getElementById("workspace-search-apply-replace");
     const folderTreeRoot = document.getElementById("folder-tree-root");
+    global.registerMarkdownViewerWorkspaceSearchResultCopy?.({
+      container: resultsList,
+      getResults: () => lastResults,
+      copyText: deps.copyTextToClipboard
+    });
 
     function confirmWorkspaceSearchAction(message) {
       if (typeof app?.services?.confirm === "function") return app.services.confirm(message);

@@ -13691,6 +13691,36 @@ Markdown content is processed client-side in your browser and sanitized before p
       .map(([, flag]) => flag);
   }
 
+  async function linkCompletedCodeConversion(sourceCodeRoot, destinationRoot) {
+    if (typeof sourceCodeRoot?.trim !== "function" || typeof destinationRoot?.trim !== "function") return null;
+    try {
+      const result = await sourceRoot.linkCodeProjectToGeneratedMarkdown(sourceCodeRoot, destinationRoot, {
+        confirmReplace: ({ existingRoot, generatedMarkdownRoot }) => app.services?.confirm
+          ? app.services.confirm({
+              title: "Replace Markdown project link?",
+              message: `This code project is linked to a different generated Markdown project.\n\nCurrent: ${existingRoot}\n\nNew: ${generatedMarkdownRoot}\n\nReplace the existing link?`,
+              confirmLabel: "Replace link",
+              cancelLabel: "Keep current link"
+            })
+          : Promise.resolve(false)
+      });
+      if (result?.status === "kept-existing") {
+        appendCodeConverterConsole(`Markdown project link kept at ${result.generatedMarkdownRootPath}.`);
+      } else if (result?.status === "created" || result?.status === "replaced") {
+        appendCodeConverterConsole(`Code project linked to generated Markdown project: ${result.generatedMarkdownRootPath}`);
+      }
+      return result;
+    } catch (error) {
+      console.error("Failed to link code project to generated Markdown project:", error);
+      appendCodeConverterConsole(`Warning: Markdown project link was not saved: ${error?.message || String(error)}`);
+      await app.services?.alert?.({
+        title: "Markdown project link not saved",
+        message: `The conversion completed, but MD-Editor could not save the generated Markdown project link.\n\n${error?.message || String(error)}`
+      });
+      return null;
+    }
+  }
+
   async function runCodeConverter() {
     if (codeConverterIsRunning) return;
     if (typeof Neutralino === "undefined" || (!Neutralino.os?.spawnProcess && !Neutralino.os?.execCommand)) {
@@ -13776,6 +13806,7 @@ Markdown content is processed client-side in your browser and sanitized before p
       setCodeConverterTaskState("complete", `Markdown files created in ${getLocalPathName(destinationRoot)}.`, { exitCode, attention: true });
       setCodeConverterConsoleState("complete");
       completedCodeConverterDestinationRoot = normalizeLocalPath(destinationRoot);
+      await linkCompletedCodeConversion(sourceRoot, completedCodeConverterDestinationRoot);
       setCodeConverterCompleteStatus(completedCodeConverterDestinationRoot);
       setCodeConverterTerminalState(true);
       codeConverterOpenFolderButton?.focus();
@@ -15462,7 +15493,8 @@ async function* collectWorkspaceSearchFilesFromNeutralinoDirectory(parentPath, p
     isTextDocumentPath,
     isSupportedFolderTreeDocumentNode,
     isSidebarVisible,
-    setSidebarVisible
+    setSidebarVisible,
+    copyTextToClipboard: copyTextToSystemClipboard
   });
   const openWorkspaceSearchModal = workspaceSearch.openWorkspaceSearchModal;
   const workspaceGit = window.registerMarkdownViewerWorkspaceGit?.(app, {
@@ -16292,6 +16324,7 @@ async function* collectWorkspaceSearchFilesFromNeutralinoDirectory(parentPath, p
     selectEditorTextRange,
     getFileName,
     isTextDocumentPath,
+    isSupportedFolderTreeDocumentPath,
     isNeutralinoRuntime,
     bottomPanel: bottomPanelTabs,
     closeMobileMenu: function() { return closeMobileMenu?.(); },
@@ -19313,6 +19346,10 @@ async function* collectWorkspaceSearchFilesFromNeutralinoDirectory(parentPath, p
     shortcuts: keyboardShortcuts
   }) || null;
   if (settingsModal?.style.display !== "none") keyboardShortcutsSettings?.open?.(loadGlobalState().keyboardShortcutOverrides);
+
+  window.registerMarkdownViewerDefaultContextMenu?.(app, {
+    openExternalUrl: openExternalWebLink
+  });
 
   document.getElementById('tab-reset-btn').addEventListener('click', function() {
     resetAllTabs();

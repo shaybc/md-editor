@@ -58,6 +58,19 @@ test("find in files parses file type patterns from editor-style input", () => {
   assert.equal(api.matchesFileType("src/App.jsx", api.parseFileTypePatterns("*.*")), true);
 });
 
+test("find in files default wildcard follows workspace-supported file types", () => {
+  const api = loadFindInFilesApi({
+    deps: {
+      isSupportedFolderTreeDocumentPath: (filePath) => /\.(jsx|md)$/i.test(filePath || "")
+    }
+  })._test;
+  const defaultPatterns = api.parseFileTypePatterns(api.DEFAULT_FILE_TYPES);
+
+  assert.equal(api.DEFAULT_FILE_TYPES, "*.*");
+  assert.equal(api.isSearchableFile({ path: "src/App.jsx" }, defaultPatterns), true);
+  assert.equal(api.isSearchableFile({ path: "assets/archive.bin" }, defaultPatterns), false);
+});
+
 test("find in files supports literal case whole-word and regex matches", () => {
   const api = loadFindInFilesTestApi();
   const content = "spring springs\nSpring bean\nthing";

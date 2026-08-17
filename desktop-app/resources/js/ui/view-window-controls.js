@@ -14,6 +14,7 @@
     var appZoomPercentElement = deps.appZoomPercentElement || null;
     var currentZoomPercent = normalizeZoomPercent(deps.loadGlobalState?.().appZoomPercent);
     var wasMaximizedBeforeNeutralinoFullscreen = false;
+    var windowBoundsBeforeNeutralinoFullscreen = null;
 
     function normalizeZoomPercent(value) {
       var numericValue = Number(value);
@@ -101,6 +102,44 @@
         && typeof deps.Neutralino.window.exitFullScreen === "function";
     }
 
+    async function captureNeutralinoWindowBounds() {
+      var neutralinoWindow = deps.Neutralino?.window;
+      if (typeof neutralinoWindow?.getPosition !== "function" || typeof neutralinoWindow?.getSize !== "function") return null;
+      try {
+        var values = await Promise.all([neutralinoWindow.getPosition(), neutralinoWindow.getSize()]);
+        var position = values[0] || {};
+        var size = values[1] || {};
+        var bounds = {
+          x: Number(position.x),
+          y: Number(position.y),
+          width: Number(size.width),
+          height: Number(size.height)
+        };
+        return Object.values(bounds).every(Number.isFinite) && bounds.width > 0 && bounds.height > 0 ? bounds : null;
+      } catch (error) {
+        console.warn("Could not capture window bounds before full screen:", error);
+        return null;
+      }
+    }
+
+    async function restoreNeutralinoWindowBounds(bounds) {
+      var neutralinoWindow = deps.Neutralino?.window;
+      try {
+        if (bounds && typeof neutralinoWindow?.setSize === "function" && typeof neutralinoWindow?.move === "function") {
+          await neutralinoWindow.setSize({ width: bounds.width, height: bounds.height });
+          await neutralinoWindow.move(bounds.x, bounds.y);
+        } else if (typeof neutralinoWindow?.center === "function") {
+          await neutralinoWindow.center();
+        }
+        if (typeof neutralinoWindow?.focus === "function") await neutralinoWindow.focus();
+      } catch (error) {
+        console.warn("Could not restore window bounds after full screen:", error);
+        if (typeof neutralinoWindow?.center === "function") {
+          try { await neutralinoWindow.center(); } catch (centerError) { console.warn("Could not center restored window:", centerError); }
+        }
+      }
+    }
+
     async function toggleFullscreen() {
       try {
         if (isNeutralinoFullscreenSupported()) {
@@ -108,11 +147,17 @@
             await deps.Neutralino.window.exitFullScreen();
             if (wasMaximizedBeforeNeutralinoFullscreen && typeof deps.Neutralino.window.maximize === "function") {
               await deps.Neutralino.window.maximize();
+            } else {
+              await restoreNeutralinoWindowBounds(windowBoundsBeforeNeutralinoFullscreen);
             }
             wasMaximizedBeforeNeutralinoFullscreen = false;
+            windowBoundsBeforeNeutralinoFullscreen = null;
           } else {
             wasMaximizedBeforeNeutralinoFullscreen = typeof deps.Neutralino.window.isMaximized === "function"
               && await deps.Neutralino.window.isMaximized();
+            windowBoundsBeforeNeutralinoFullscreen = wasMaximizedBeforeNeutralinoFullscreen
+              ? null
+              : await captureNeutralinoWindowBounds();
             if (wasMaximizedBeforeNeutralinoFullscreen && typeof deps.Neutralino.window.unmaximize === "function") {
               await deps.Neutralino.window.unmaximize();
             }

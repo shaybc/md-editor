@@ -72,6 +72,13 @@
       namespace.ImageEditorDotsEffect?.normalizeDocument(document);
       namespace.ImageEditorPointsEffect?.normalizeDocument(document);
       namespace.ImageEditorWatercolorEffect?.normalizeDocument(document);
+      namespace.ImageEditorSunsetEffect?.normalizeDocument(document);
+      namespace.ImageEditorColorGridEffect?.normalizeDocument(document);
+      namespace.ImageEditorVerticalPanelsEffect?.normalizeDocument(document);
+      namespace.ImageEditorPolaroidsEffect?.normalizeDocument(document);
+      namespace.ImageEditorMiniatureEffect?.normalizeDocument(document);
+      namespace.ImageEditorPuzzleEffect?.normalizeDocument(document);
+      namespace.ImageEditorTexturizeEffect?.normalizeDocument(document);
       namespace.ImageEditorRetro3DEffect?.normalizeDocument(document);
       namespace.ImageEditorSnowEffect?.normalizeDocument(document);
       namespace.ImageEditorRainEffect?.normalizeDocument(document);

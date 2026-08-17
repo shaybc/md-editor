@@ -168,6 +168,13 @@
       const hasDots = styleLayers.some((layer) => namespace.ImageEditorDotsEffect?.get(layer));
       const hasPoints = styleLayers.some((layer) => namespace.ImageEditorPointsEffect?.get(layer));
       const hasWatercolor = styleLayers.some((layer) => namespace.ImageEditorWatercolorEffect?.get(layer));
+      const hasSunset = styleLayers.some((layer) => namespace.ImageEditorSunsetEffect?.get(layer));
+      const hasColorGrid = styleLayers.some((layer) => namespace.ImageEditorColorGridEffect?.get(layer));
+      const hasVerticalPanels = styleLayers.some((layer) => namespace.ImageEditorVerticalPanelsEffect?.get(layer));
+      const hasPolaroids = styleLayers.some((layer) => namespace.ImageEditorPolaroidsEffect?.get(layer));
+      const hasMiniature = styleLayers.some((layer) => namespace.ImageEditorMiniatureEffect?.get(layer));
+      const hasPuzzle = styleLayers.some((layer) => namespace.ImageEditorPuzzleEffect?.get(layer));
+      const hasTexturize = styleLayers.some((layer) => namespace.ImageEditorTexturizeEffect?.get(layer));
       const hasRetro3D = styleLayers.some((layer) => namespace.ImageEditorRetro3DEffect?.get(layer));
       const hasSnow = styleLayers.some((layer) => namespace.ImageEditorSnowEffect?.get(layer));
       const hasRain = styleLayers.some((layer) => namespace.ImageEditorRainEffect?.get(layer));
@@ -185,6 +192,36 @@
       const hasGust = styleLayers.some((layer) => namespace.ImageEditorGustEffect?.get(layer));
       const hasBevelEmboss = styleLayers.some((layer) => namespace.ImageEditorBevelEmbossEffect?.get(layer));
       const hasGrayscale = styleLayers.some((layer) => namespace.ImageEditorGrayscaleEffect?.get(layer));
+      const catalogLabel = (label) => String(label || "").replace(/<br\s*\/?\s*>/gi, " ").replace(/&amp;/g, "&");
+      const catalogs = namespace.ImageEditorAdjustmentCatalogs || { tune: [], layerEffects: [] };
+      const tuneMenuItems = catalogs.tune.map(([action, type, label]) => ({
+        id: action,
+        label: catalogLabel(label),
+        effectIcon: type,
+        disabled: !canStyle
+      }));
+      const effectMenuItems = catalogs.layerEffects.map(([action, type, label]) => ({
+        id: action,
+        label: catalogLabel(label) + "…",
+        effectIcon: type,
+        disabled: !canStyle
+      }));
+      const effectRemoveMenuItems = catalogs.layerEffects.map(([action, type, label]) => ({
+        id: action.replace(/^edit-/, "remove-"),
+        label: catalogLabel(label),
+        effectIcon: type,
+        disabled: !canStyle || !styleLayers.some((layer) => (layer.effects || []).some((effect) => effect?.type === type))
+      })).filter((item) => !item.disabled);
+      const styleRemoveMenuItems = [
+        { id: "remove-bevel-emboss", label: "Raised Edge", effectIcon: "raised-edge", disabled: !canStyle || !hasBevelEmboss },
+        { id: "remove-drop-shadow", label: "Cast Shadow", effectIcon: "cast-shadow", disabled: !canStyle || !hasDropShadow },
+        { id: "remove-inner-shadow", label: "Inset Shadow", effectIcon: "inset-shadow", disabled: !canStyle || !hasInnerShadow },
+        { id: "remove-inner-glow", label: "Inner Aura", effectIcon: "inner-aura", disabled: !canStyle || !hasInnerGlow },
+        { id: "remove-outer-glow", label: "Outer Aura", effectIcon: "outer-aura", disabled: !canStyle || !hasOuterGlow },
+        { id: "remove-color-overlay", label: "Color Coat", effectIcon: "color-coat", disabled: !canStyle || !hasColorOverlay },
+        { id: "remove-gradient-overlay", label: "Gradient Coat", effectIcon: "gradient-coat", disabled: !canStyle || !hasGradientOverlay },
+        { id: "remove-pattern-overlay", label: "Pattern Coat", effectIcon: "pattern-coat", disabled: !canStyle || !hasPatternOverlay }
+      ].filter((item) => !item.disabled);
       const maskState = namespace.ImageEditorMaskOperations?.getState(this.store) || {};
       const canCreateMask = maskState.canCreate === true;
       const canSetMaskType = maskState.canChangeType === true;
@@ -225,67 +262,28 @@
           { id: "edit-color-overlay", label: "Color Coat…", effectIcon: "color-coat", disabled: !canStyle },
           { id: "edit-gradient-overlay", label: "Gradient Coat…", effectIcon: "gradient-coat", disabled: !canStyle },
           { id: "edit-pattern-overlay", label: "Pattern Coat…", effectIcon: "pattern-coat", disabled: !canStyle },
-          { id: "edit-blur", label: "Blur\u2026", effectIcon: "blur", disabled: !canStyle },
-          { id: "edit-grain", label: "Grain\u2026", effectIcon: "grain", disabled: !canStyle },
-          { id: "edit-newspaper", label: "Newspaper\u2026", effectIcon: "newspaper", disabled: !canStyle },
-          { id: "edit-painted-texture", label: "Painted Texture\u2026", effectIcon: "painted-texture", disabled: !canStyle },
-          { id: "edit-paint-edge", label: "Paint Edge\u2026", effectIcon: "paint-edge", disabled: !canStyle },
-          { id: "edit-collage", label: "Collage\u2026", effectIcon: "collage", disabled: !canStyle },
-          { id: "edit-dots", label: "Dots\u2026", effectIcon: "dots", disabled: !canStyle },
-          { id: "edit-points", label: "Points\u2026", effectIcon: "points", disabled: !canStyle },
-          { id: "edit-watercolor", label: "Watercolor\u2026", effectIcon: "watercolor", disabled: !canStyle },
-          { id: "edit-retro-3d", label: "Retro 3D\u2026", effectIcon: "retro-3d", disabled: !canStyle },
-          { id: "edit-snow", label: "Snow\u2026", effectIcon: "snow", disabled: !canStyle },
-          { id: "edit-rain", label: "Rain\u2026", effectIcon: "rain", disabled: !canStyle },
-          { id: "edit-rainbow", label: "Rainbow\u2026", effectIcon: "rainbow", disabled: !canStyle },
-          { id: "edit-spotlight", label: "Spotlight\u2026", effectIcon: "spotlight", disabled: !canStyle },
-          { id: "edit-vignette", label: "Vignette\u2026", effectIcon: "vignette", disabled: !canStyle },
-          { id: "edit-posterize", label: "Posterize\u2026", effectIcon: "posterize", disabled: !canStyle },
-          { id: "edit-contrast-bw", label: "Contrast B&W\u2026", effectIcon: "contrast-bw", disabled: !canStyle },
-          { id: "edit-monochromatic", label: "Monochromatic\u2026", effectIcon: "monochromatic", disabled: !canStyle },
-          { id: "edit-pencil-sketch", label: "Pencil-Sketch\u2026", effectIcon: "pencil-sketch", disabled: !canStyle },
-          { id: "edit-pic-in-pic", label: "Pic-in-Pic\u2026", effectIcon: "pic-in-pic", disabled: !canStyle },
-          { id: "edit-vortex", label: "Vortex\u2026", effectIcon: "vortex", disabled: !canStyle },
-          { id: "edit-ripple-field", label: "Ripple Field\u2026", effectIcon: "ripple-field", disabled: !canStyle },
-          { id: "edit-flare", label: "Flare\u2026", effectIcon: "flare", disabled: !canStyle },
-          { id: "edit-gust", label: "Gust\u2026", effectIcon: "gust", disabled: !canStyle },
-          { id: "apply-grayscale", label: "Grayscale", effectIcon: "grayscale", disabled: !canStyle },
+          ...(styleRemoveMenuItems.length ? [
+            { separator: true },
+            { label: "Remove", icon: "bi-x-square", children: styleRemoveMenuItems }
+          ] : [])
+        ] },
+        { label: "Tune", icon: "bi-sliders", disabled: !canStyle, children: [
+          ...tuneMenuItems,
           { separator: true },
-          { label: "Remove", icon: "bi-x-square", disabled: !canStyle, children: [
-            { id: "remove-bevel-emboss", label: "Raised Edge", effectIcon: "raised-edge", disabled: !canStyle || !hasBevelEmboss },
-            { id: "remove-drop-shadow", label: "Cast Shadow", effectIcon: "cast-shadow", disabled: !canStyle || !hasDropShadow },
-            { id: "remove-inner-shadow", label: "Inset Shadow", effectIcon: "inset-shadow", disabled: !canStyle || !hasInnerShadow },
-            { id: "remove-inner-glow", label: "Inner Aura", effectIcon: "inner-aura", disabled: !canStyle || !hasInnerGlow },
-            { id: "remove-outer-glow", label: "Outer Aura", effectIcon: "outer-aura", disabled: !canStyle || !hasOuterGlow },
-            { id: "remove-color-overlay", label: "Color Coat", effectIcon: "color-coat", disabled: !canStyle || !hasColorOverlay },
-            { id: "remove-gradient-overlay", label: "Gradient Coat", effectIcon: "gradient-coat", disabled: !canStyle || !hasGradientOverlay },
-            { id: "remove-pattern-overlay", label: "Pattern Coat", effectIcon: "pattern-coat", disabled: !canStyle || !hasPatternOverlay },
-            { id: "remove-blur", label: "Blur", effectIcon: "blur", disabled: !canStyle || !hasBlur },
-            { id: "remove-grain", label: "Grain", effectIcon: "grain", disabled: !canStyle || !hasGrain },
-            { id: "remove-newspaper", label: "Newspaper", effectIcon: "newspaper", disabled: !canStyle || !hasNewspaper },
-            { id: "remove-painted-texture", label: "Painted Texture", effectIcon: "painted-texture", disabled: !canStyle || !hasPaintedTexture },
-            { id: "remove-paint-edge", label: "Paint Edge", effectIcon: "paint-edge", disabled: !canStyle || !hasPaintEdge },
-            { id: "remove-collage", label: "Collage", effectIcon: "collage", disabled: !canStyle || !hasCollage },
-            { id: "remove-dots", label: "Dots", effectIcon: "dots", disabled: !canStyle || !hasDots },
-            { id: "remove-points", label: "Points", effectIcon: "points", disabled: !canStyle || !hasPoints },
-            { id: "remove-watercolor", label: "Watercolor", effectIcon: "watercolor", disabled: !canStyle || !hasWatercolor },
-            { id: "remove-retro-3d", label: "Retro 3D", effectIcon: "retro-3d", disabled: !canStyle || !hasRetro3D },
-            { id: "remove-snow", label: "Snow", effectIcon: "snow", disabled: !canStyle || !hasSnow },
-            { id: "remove-rain", label: "Rain", effectIcon: "rain", disabled: !canStyle || !hasRain },
-            { id: "remove-rainbow", label: "Rainbow", effectIcon: "rainbow", disabled: !canStyle || !hasRainbow },
-            { id: "remove-spotlight", label: "Spotlight", effectIcon: "spotlight", disabled: !canStyle || !hasSpotlight },
-            { id: "remove-vignette", label: "Vignette", effectIcon: "vignette", disabled: !canStyle || !hasVignette },
-            { id: "remove-posterize", label: "Posterize", effectIcon: "posterize", disabled: !canStyle || !hasPosterize },
-            { id: "remove-contrast-bw", label: "Contrast B&W", effectIcon: "contrast-bw", disabled: !canStyle || !hasContrastBw },
-            { id: "remove-monochromatic", label: "Monochromatic", effectIcon: "monochromatic", disabled: !canStyle || !hasMonochromatic },
-            { id: "remove-pencil-sketch", label: "Pencil-Sketch", effectIcon: "pencil-sketch", disabled: !canStyle || !hasPencilSketch },
-            { id: "remove-pic-in-pic", label: "Pic-in-Pic", effectIcon: "pic-in-pic", disabled: !canStyle || !hasPicInPic },
-            { id: "remove-vortex", label: "Vortex", effectIcon: "vortex", disabled: !canStyle || !hasVortex },
-            { id: "remove-ripple-field", label: "Ripple Field", effectIcon: "ripple-field", disabled: !canStyle || !hasRippleField },
-            { id: "remove-flare", label: "Flare", effectIcon: "flare", disabled: !canStyle || !hasFlare },
-            { id: "remove-gust", label: "Gust", effectIcon: "gust", disabled: !canStyle || !hasGust },
-            { id: "remove-grayscale", label: "Grayscale", effectIcon: "grayscale", disabled: !canStyle || !hasGrayscale }
-          ] }
+          { id: "apply-grayscale", label: "Grayscale", effectIcon: "grayscale", disabled: !canStyle },
+          ...(hasGrayscale ? [
+            { separator: true },
+            { label: "Remove", icon: "bi-x-square", children: [
+              { id: "remove-grayscale", label: "Grayscale", effectIcon: "grayscale" }
+            ] }
+          ] : [])
+        ] },
+        { label: "Effects", effectIcon: "effects", disabled: !canStyle, children: [
+          ...effectMenuItems,
+          ...(effectRemoveMenuItems.length ? [
+            { separator: true },
+            { label: "Remove", icon: "bi-x-square", children: effectRemoveMenuItems }
+          ] : [])
         ] },
         { separator: true },
         { id: "toggle-lock", label: allLocked ? "Unlock layer" : "Lock layer", icon: allLocked ? "bi-unlock" : "bi-lock", disabled: targets.length === 0 },
@@ -410,7 +408,7 @@
       if (action === "rename" && targets.length === 1) { void this.renameItem(targets[0].id, targets[0].name); return; }
       if (action === "create-text-outlines") { this.onMutate(action, null); return; }
       if (["use-as-mask", "set-mask-type-alpha", "set-mask-type-vector", "set-mask-type-luminance", "remove-mask"].includes(action)) { this.onMutate(action, null); return; }
-      if (["edit-blending-options", "edit-bevel-emboss", "remove-bevel-emboss", "edit-drop-shadow", "remove-drop-shadow", "edit-inner-shadow", "remove-inner-shadow", "edit-inner-glow", "remove-inner-glow", "edit-outer-glow", "remove-outer-glow", "edit-color-overlay", "remove-color-overlay", "edit-gradient-overlay", "remove-gradient-overlay", "edit-pattern-overlay", "remove-pattern-overlay", "edit-blur", "remove-blur", "edit-grain", "remove-grain", "edit-newspaper", "remove-newspaper", "edit-paint-edge", "remove-paint-edge", "edit-collage", "remove-collage", "edit-dots", "remove-dots", "edit-points", "remove-points", "edit-watercolor", "remove-watercolor", "edit-rainbow", "remove-rainbow", "edit-spotlight", "remove-spotlight", "edit-vignette", "remove-vignette", "edit-posterize", "remove-posterize", "edit-contrast-bw", "remove-contrast-bw", "edit-monochromatic", "remove-monochromatic", "edit-pencil-sketch", "remove-pencil-sketch", "edit-pic-in-pic", "remove-pic-in-pic", "edit-vortex", "remove-vortex", "edit-ripple-field", "remove-ripple-field", "edit-flare", "remove-flare", "edit-gust", "remove-gust", "apply-grayscale", "remove-grayscale"].includes(action)) { this.onMutate(action, { layerIds: layers.map((layer) => layer.id) }); return; }
+      if (["edit-blending-options", "edit-bevel-emboss", "remove-bevel-emboss", "edit-drop-shadow", "remove-drop-shadow", "edit-inner-shadow", "remove-inner-shadow", "edit-inner-glow", "remove-inner-glow", "edit-outer-glow", "remove-outer-glow", "edit-color-overlay", "remove-color-overlay", "edit-gradient-overlay", "remove-gradient-overlay", "edit-pattern-overlay", "remove-pattern-overlay", "edit-blur", "remove-blur", "edit-grain", "remove-grain", "edit-newspaper", "remove-newspaper", "edit-paint-edge", "remove-paint-edge", "edit-collage", "remove-collage", "edit-dots", "remove-dots", "edit-points", "remove-points", "edit-watercolor", "remove-watercolor", "edit-sunset", "remove-sunset", "edit-color-grid", "remove-color-grid", "edit-vertical-panels", "remove-vertical-panels", "edit-polaroids", "remove-polaroids", "edit-miniature", "remove-miniature", "edit-puzzle", "remove-puzzle", "edit-texturize", "remove-texturize", "edit-rainbow", "remove-rainbow", "edit-spotlight", "remove-spotlight", "edit-vignette", "remove-vignette", "edit-posterize", "remove-posterize", "edit-contrast-bw", "remove-contrast-bw", "edit-monochromatic", "remove-monochromatic", "edit-pencil-sketch", "remove-pencil-sketch", "edit-pic-in-pic", "remove-pic-in-pic", "edit-vortex", "remove-vortex", "edit-ripple-field", "remove-ripple-field", "edit-flare", "remove-flare", "edit-gust", "remove-gust", "apply-grayscale", "remove-grayscale"].includes(action)) { this.onMutate(action, { layerIds: layers.map((layer) => layer.id) }); return; }
       if (action === "export-layer-png" || action === "export-layer-as") { this.onMutate(action, { layerIds: layers.map((layer) => layer.id) }); return; }
       const operations = {
         "new-layer": () => this.store.addLayer("Layer", [...this.store.selectedIds][0]),
@@ -483,7 +481,7 @@
       row.setAttribute("role", "treeitem");
       row.style.setProperty("--layer-depth", depth);
       const safeName = String(item.name || "Item").replace(/[&<>]/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[character]));
-      const hasEffect = item.kind === "layer" && (namespace.ImageEditorDropShadowEffect?.get(item) || namespace.ImageEditorInnerShadowEffect?.get(item) || namespace.ImageEditorInnerGlowEffect?.get(item) || namespace.ImageEditorOuterGlowEffect?.get(item) || namespace.ImageEditorColorOverlayEffect?.get(item) || namespace.ImageEditorGradientOverlayEffect?.get(item) || namespace.ImageEditorPatternOverlayEffect?.get(item) || namespace.ImageEditorBlurEffect?.get(item) || namespace.ImageEditorGrainEffect?.get(item) || namespace.ImageEditorNewspaperEffect?.get(item) || namespace.ImageEditorPaintedTextureEffect?.get(item) || namespace.ImageEditorPaintEdgeEffect?.get(item) || namespace.ImageEditorCollageEffect?.get(item) || namespace.ImageEditorDotsEffect?.get(item) || namespace.ImageEditorPointsEffect?.get(item) || namespace.ImageEditorWatercolorEffect?.get(item) || namespace.ImageEditorRetro3DEffect?.get(item) || namespace.ImageEditorSnowEffect?.get(item) || namespace.ImageEditorRainEffect?.get(item) || namespace.ImageEditorRainbowEffect?.get(item) || namespace.ImageEditorSpotlightEffect?.get(item) || namespace.ImageEditorVignetteEffect?.get(item) || namespace.ImageEditorPosterizeEffect?.get(item) || namespace.ImageEditorContrastBwEffect?.get(item) || namespace.ImageEditorMonochromaticEffect?.get(item) || namespace.ImageEditorPencilSketchEffect?.get(item) || namespace.ImageEditorPicInPicEffect?.get(item) || namespace.ImageEditorVortexEffect?.get(item) || namespace.ImageEditorRippleFieldEffect?.get(item) || namespace.ImageEditorFlareEffect?.get(item) || namespace.ImageEditorGustEffect?.get(item));
+      const hasEffect = item.kind === "layer" && (namespace.ImageEditorDropShadowEffect?.get(item) || namespace.ImageEditorInnerShadowEffect?.get(item) || namespace.ImageEditorInnerGlowEffect?.get(item) || namespace.ImageEditorOuterGlowEffect?.get(item) || namespace.ImageEditorColorOverlayEffect?.get(item) || namespace.ImageEditorGradientOverlayEffect?.get(item) || namespace.ImageEditorPatternOverlayEffect?.get(item) || namespace.ImageEditorBlurEffect?.get(item) || namespace.ImageEditorGrainEffect?.get(item) || namespace.ImageEditorNewspaperEffect?.get(item) || namespace.ImageEditorPaintedTextureEffect?.get(item) || namespace.ImageEditorPaintEdgeEffect?.get(item) || namespace.ImageEditorCollageEffect?.get(item) || namespace.ImageEditorDotsEffect?.get(item) || namespace.ImageEditorPointsEffect?.get(item) || namespace.ImageEditorWatercolorEffect?.get(item) || namespace.ImageEditorSunsetEffect?.get(item) || namespace.ImageEditorColorGridEffect?.get(item) || namespace.ImageEditorVerticalPanelsEffect?.get(item) || namespace.ImageEditorPolaroidsEffect?.get(item) || namespace.ImageEditorMiniatureEffect?.get(item) || namespace.ImageEditorPuzzleEffect?.get(item) || namespace.ImageEditorTexturizeEffect?.get(item) || namespace.ImageEditorRetro3DEffect?.get(item) || namespace.ImageEditorSnowEffect?.get(item) || namespace.ImageEditorRainEffect?.get(item) || namespace.ImageEditorRainbowEffect?.get(item) || namespace.ImageEditorSpotlightEffect?.get(item) || namespace.ImageEditorVignetteEffect?.get(item) || namespace.ImageEditorPosterizeEffect?.get(item) || namespace.ImageEditorContrastBwEffect?.get(item) || namespace.ImageEditorMonochromaticEffect?.get(item) || namespace.ImageEditorPencilSketchEffect?.get(item) || namespace.ImageEditorPicInPicEffect?.get(item) || namespace.ImageEditorVortexEffect?.get(item) || namespace.ImageEditorRippleFieldEffect?.get(item) || namespace.ImageEditorFlareEffect?.get(item) || namespace.ImageEditorGustEffect?.get(item));
       const thumbnail = item.kind === "adjustment"
         ? `<span class="image-editor-adjustment-thumbnails"><button type="button" data-adjustment-node="${item.id}" data-adjustment-part="adjustment" title="Edit adjustment" aria-label="Edit adjustment"><i class="bi ${item.adjustment?.type === "exposure" ? "bi-circle-half" : item.adjustment?.type === "vibrance" ? "bi-triangle-half" : item.adjustment?.type === "hue-saturation" ? "bi-rainbow" : item.adjustment?.type === "color-balance" ? "bi-sliders2" : item.adjustment?.type === "black-white" ? "bi-square-half" : item.adjustment?.type === "channel-mixer" ? "bi-shuffle" : item.adjustment?.type === "levels" ? "bi-bar-chart-fill" : item.adjustment?.type === "curves" ? "bi-graph-up" : item.adjustment?.type === "photo-filter" ? "bi-camera" : item.adjustment?.type === "invert" ? "bi-circle" : item.adjustment?.type === "selective-color" ? "bi-envelope" : item.adjustment?.type === "match-color" ? "bi-images" : item.adjustment?.type === "replace-color" ? "bi-eyedropper" : "bi-sun"}"></i></button><button type="button" data-adjustment-node="${item.id}" data-adjustment-part="mask" title="Edit adjustment mask" aria-label="Edit adjustment mask"><canvas width="20" height="20"></canvas></button></span>`
         : `<span class="image-editor-layer-thumbnail"><i class="bi ${item.kind === "group" ? "bi-folder" : item.kind === "layer" ? "bi-layers" : item.type === "text" ? "bi-fonts" : "bi-image"}"></i></span>`;

@@ -4072,7 +4072,7 @@
               </label>
               <label class="find-in-files-field" for="find-in-files-types">
                 <span>File types</span>
-                <input id="find-in-files-types" class="find-in-files-input" type="text" list="find-in-files-types-history" autocomplete="off" value="*.md;*.markdown;*.txt;*.js;*.ts;*.java;*.cs;*.json;*.css;*.html;*.xml;*.yml;*.yaml">
+                <input id="find-in-files-types" class="find-in-files-input" type="text" list="find-in-files-types-history" autocomplete="off" value="*.*">
                 <datalist id="find-in-files-types-history"></datalist>
               </label>
               <label class="find-in-files-field find-in-files-folder-field" for="find-in-files-folder">
@@ -5134,6 +5134,7 @@
     <script src="js/image-editor/color-opacity.js"></script>
     <script src="js/image-editor/brush-presets.js"></script>
     <script src="js/image-editor/brush-stroke-effects.js"></script>
+    <script src="js/image-editor/bubble-brush.js"></script>
     <script src="js/image-editor/clone-stamp-tool.js"></script>
     <script src="js/image-editor/smudge-tool.js"></script>
     <script src="js/image-editor/eraser-tool.js"></script>
@@ -5205,6 +5206,20 @@
     <script src="js/image-editor/layers/points-renderer.js"></script>
     <script src="js/image-editor/layers/watercolor-effect.js"></script>
     <script src="js/image-editor/layers/watercolor-renderer.js"></script>
+    <script src="js/image-editor/layers/sunset-effect.js"></script>
+    <script src="js/image-editor/layers/sunset-renderer.js"></script>
+    <script src="js/image-editor/layers/color-grid-effect.js"></script>
+    <script src="js/image-editor/layers/color-grid-renderer.js"></script>
+    <script src="js/image-editor/layers/vertical-panels-effect.js"></script>
+    <script src="js/image-editor/layers/vertical-panels-renderer.js"></script>
+    <script src="js/image-editor/layers/polaroids-effect.js"></script>
+    <script src="js/image-editor/layers/polaroids-renderer.js"></script>
+    <script src="js/image-editor/layers/miniature-effect.js"></script>
+    <script src="js/image-editor/layers/miniature-renderer.js"></script>
+    <script src="js/image-editor/layers/puzzle-effect.js"></script>
+    <script src="js/image-editor/layers/puzzle-renderer.js"></script>
+    <script src="js/image-editor/layers/texturize-effect.js"></script>
+    <script src="js/image-editor/layers/texturize-renderer.js"></script>
     <script src="js/image-editor/layers/retro-3d-effect.js"></script>
     <script src="js/image-editor/layers/retro-3d-renderer.js"></script>
     <script src="js/image-editor/layers/snow-effect.js"></script>
@@ -5352,6 +5367,7 @@
     <script src="js/ui/draggable-dialogs.js"></script>
     <script src="js/ui/notification-modal.js"></script>
     <script src="js/ui/foreground-wait-indicator.js"></script>
+    <script src="js/ui/default-context-menu.js"></script>
     <script src="js/logging/rotation.js"></script>
     <script src="js/recent/index.js"></script>
     <script src="js/recent/actions.js"></script>
@@ -5697,6 +5713,7 @@
     <script src="js/import/github.js"></script>
     <script src="js/git/workspace-git.js"></script>
     <script src="js/git/ai-commit-summary.js"></script>
+    <script src="js/search/workspace-search-result-copy.js"></script>
     <script src="js/search/workspace-search.js"></script>
     <script src="js/search/find-in-files.js"></script>
     <script src="js/search/open-file-by-name.js"></script>

@@ -15,7 +15,7 @@ function loadSourceRootApi(overrides = {}) {
     alert() {}
   };
   vm.runInNewContext(source, context);
-  return context.window.registerMarkdownViewerSourceRoot({}, {
+  const api = context.window.registerMarkdownViewerSourceRoot({}, {
     activeFolderPath: "C:/vault",
     isNeutralinoRuntime() { return true; },
     Neutralino: {
@@ -30,6 +30,8 @@ function loadSourceRootApi(overrides = {}) {
         },
         async writeFile(filePath, content) {
           files.set(filePath, content);
+        },
+        async createDirectory() {
         }
       },
       os: {
@@ -47,6 +49,8 @@ function loadSourceRootApi(overrides = {}) {
     },
     ...overrides
   });
+  api.__testFiles = files;
+  return api;
 }
 
 test("source root resolves relative original paths through project metadata", async () => {
@@ -95,4 +99,86 @@ test("source root finds generated project folder from nested file path", async (
   const projectFolder = await api.findGeneratedProjectFolderFromPath("C:/vault/src/app/Main.java.md");
 
   assert.equal(projectFolder, "C:/vault");
+});
+
+test("code project metadata links to a newly generated Markdown project", async () => {
+  const api = loadSourceRootApi();
+
+  const result = await api.linkCodeProjectToGeneratedMarkdown("C:/workspace/project", "C:/vault");
+  const metadata = JSON.parse(api.__testFiles.get("C:/workspace/project/.md-editor/_md_editor_project.json"));
+
+  assert.equal(result.status, "created");
+  assert.equal(metadata.type, "md-editor-code-project");
+  assert.equal(metadata.generatedMarkdownRootPath, "C:/vault");
+});
+
+test("matching generated Markdown project link does not prompt or rewrite metadata", async () => {
+  let prompted = false;
+  const metadataPath = "C:/workspace/project/.md-editor/_md_editor_project.json";
+  const original = JSON.stringify({
+    schemaVersion: 1,
+    type: "md-editor-code-project",
+    generatedMarkdownRootPath: "C:/Vault"
+  });
+  const api = loadSourceRootApi({ files: { [metadataPath]: original } });
+
+  const result = await api.linkCodeProjectToGeneratedMarkdown("C:/workspace/project", "c:/vault/", {
+    confirmReplace() {
+      prompted = true;
+      return true;
+    }
+  });
+
+  assert.equal(result.status, "unchanged");
+  assert.equal(prompted, false);
+  assert.equal(api.__testFiles.get(metadataPath), original);
+});
+
+test("different generated Markdown project link is replaced after confirmation", async () => {
+  let confirmation = null;
+  const metadataPath = "C:/workspace/project/.md-editor/_md_editor_project.json";
+  const api = loadSourceRootApi({
+    files: {
+      [metadataPath]: JSON.stringify({
+        schemaVersion: 1,
+        type: "md-editor-code-project",
+        generatedMarkdownRootPath: "C:/old-vault",
+        customSetting: true
+      })
+    }
+  });
+
+  const result = await api.linkCodeProjectToGeneratedMarkdown("C:/workspace/project", "C:/new-vault", {
+    confirmReplace(details) {
+      confirmation = details;
+      return true;
+    }
+  });
+  const metadata = JSON.parse(api.__testFiles.get(metadataPath));
+
+  assert.equal(result.status, "replaced");
+  assert.equal(confirmation.existingRoot, "C:/old-vault");
+  assert.equal(confirmation.generatedMarkdownRoot, "C:/new-vault");
+  assert.equal(metadata.generatedMarkdownRootPath, "C:/new-vault");
+  assert.equal(metadata.customSetting, true);
+});
+
+test("different generated Markdown project link remains unchanged when replacement is declined", async () => {
+  const metadataPath = "C:/workspace/project/.md-editor/_md_editor_project.json";
+  const original = JSON.stringify({
+    schemaVersion: 1,
+    type: "md-editor-code-project",
+    generatedMarkdownRootPath: "C:/old-vault"
+  });
+  const api = loadSourceRootApi({ files: { [metadataPath]: original } });
+
+  const result = await api.linkCodeProjectToGeneratedMarkdown("C:/workspace/project", "C:/new-vault", {
+    confirmReplace() {
+      return false;
+    }
+  });
+
+  assert.equal(result.status, "kept-existing");
+  assert.equal(result.generatedMarkdownRootPath, "C:/old-vault");
+  assert.equal(api.__testFiles.get(metadataPath), original);
 });

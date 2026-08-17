@@ -2,7 +2,7 @@
   "use strict";
 
   const HISTORY_LIMIT = 20;
-  const DEFAULT_FILE_TYPES = "*.md;*.markdown;*.txt;*.js;*.ts;*.java;*.cs;*.json;*.css;*.html;*.xml;*.yml;*.yaml";
+  const DEFAULT_FILE_TYPES = "*.*";
   const DEFAULT_PANEL_HEIGHT = 220;
   const DEFAULT_PANEL_HEIGHT_RATIO = 0.25;
   const DEFAULT_PANEL_SEPARATOR_HEIGHT = 8;
@@ -600,9 +600,15 @@
 
     function isSearchableFile(file, patterns) {
       const path = file.relativePath || file.path || file.name || "";
+      if (patterns.includes("*")) {
+        if (typeof deps.isSupportedFolderTreeDocumentPath === "function") {
+          return deps.isSupportedFolderTreeDocumentPath(path) === true;
+        }
+        return deps.isTextDocumentPath?.(path) === true;
+      }
       if (!matchesFileType(path, patterns)) return false;
       if (deps.isTextDocumentPath?.(path)) return true;
-      return patterns.includes("*");
+      return false;
     }
 
     async function runFindInFiles() {
@@ -764,6 +770,7 @@
         addHistoryValue,
         createSearchRegex,
         findContentMatches,
+        isSearchableFile,
         matchesFileType,
         normalizeHistoryList,
         parseFileTypePatterns

@@ -1660,6 +1660,377 @@
       return true;
     }
 
+    /** Remove Sunset from the requested layers as one undoable document change. */
+    function removeSunsetStyle(controller, requestedIds = null) {
+      const layers = resolveLayerStyleTargets(controller, requestedIds);
+      return commitDocumentMutation(controller, "Remove Sunset", () => {
+        const changed = layers.map((layer) => namespace.ImageEditorSunsetEffect.remove(layer)).some(Boolean);
+        if (changed) controller.documentStore.notify({ type: "layer-effect", ids: layers.map((layer) => layer.id) });
+        return changed;
+      });
+    }
+
+    /** Open the app-styled Sunset editor and commit one undoable effect change. */
+    function openSunsetStyle(controller, requestedIds = null) {
+      const hasProvisionalContent = controller.selection.floating
+        && (controller.pendingContentDescriptor || controller.selection.origin === "paste");
+      if (hasProvisionalContent) {
+        if (!commitSelection(controller)) return false;
+        requestedIds = null;
+      }
+      const layers = resolveLayerStyleTargets(controller, requestedIds);
+      if (!layers.length) return false;
+      const originals = new Map(layers.map((layer) => [layer.id, namespace.cloneImageDocument(layer.effects || [])]));
+      const restore = () => layers.forEach((layer) => { layer.effects = namespace.cloneImageDocument(originals.get(layer.id) || []); });
+      const existing = layers.map((layer) => namespace.ImageEditorSunsetEffect.get(layer)).find(Boolean);
+      controller.layerStyleDialog.open({
+        styleType: "sunset",
+        effect: existing,
+        hasEffect: !!existing,
+        targetName: layers.length === 1 ? layers[0].name : layers.length + " selected layers",
+        onPreview(effect, enabled) {
+          restore();
+          if (enabled) layers.forEach((layer) => namespace.ImageEditorSunsetEffect.upsert(layer, effect));
+          renderLayeredDocument(controller);
+        },
+        onCancel() {
+          restore();
+          renderLayeredDocument(controller);
+        },
+        onApply(effect) {
+          restore();
+          commitDocumentMutation(controller, "Change Sunset", () => {
+            const changed = layers.map((layer) => namespace.ImageEditorSunsetEffect.upsert(layer, effect)).some(Boolean);
+            if (changed) controller.documentStore.notify({ type: "layer-effect", ids: layers.map((layer) => layer.id) });
+            return changed;
+          });
+        },
+        onRemove() {
+          restore();
+          removeSunsetStyle(controller, layers.map((layer) => layer.id));
+        }
+      });
+      return true;
+    }
+
+    /** Remove ColorGrid from the requested layers as one undoable document change. */
+    function removeColorGridStyle(controller, requestedIds = null) {
+      const layers = resolveLayerStyleTargets(controller, requestedIds);
+      return commitDocumentMutation(controller, "Remove ColorGrid", () => {
+        const changed = layers.map((layer) => namespace.ImageEditorColorGridEffect.remove(layer)).some(Boolean);
+        if (changed) controller.documentStore.notify({ type: "layer-effect", ids: layers.map((layer) => layer.id) });
+        return changed;
+      });
+    }
+
+    /** Open the app-styled ColorGrid editor and commit one undoable effect change. */
+    function openColorGridStyle(controller, requestedIds = null) {
+      const hasProvisionalContent = controller.selection.floating
+        && (controller.pendingContentDescriptor || controller.selection.origin === "paste");
+      if (hasProvisionalContent) {
+        if (!commitSelection(controller)) return false;
+        requestedIds = null;
+      }
+      const layers = resolveLayerStyleTargets(controller, requestedIds);
+      if (!layers.length) return false;
+      const originals = new Map(layers.map((layer) => [layer.id, namespace.cloneImageDocument(layer.effects || [])]));
+      const restore = () => layers.forEach((layer) => { layer.effects = namespace.cloneImageDocument(originals.get(layer.id) || []); });
+      const existing = layers.map((layer) => namespace.ImageEditorColorGridEffect.get(layer)).find(Boolean);
+      controller.layerStyleDialog.open({
+        styleType: "color-grid",
+        effect: existing,
+        hasEffect: !!existing,
+        targetName: layers.length === 1 ? layers[0].name : layers.length + " selected layers",
+        onPreview(effect, enabled) {
+          restore();
+          if (enabled) layers.forEach((layer) => namespace.ImageEditorColorGridEffect.upsert(layer, effect));
+          renderLayeredDocument(controller);
+        },
+        onCancel() {
+          restore();
+          renderLayeredDocument(controller);
+        },
+        onApply(effect) {
+          restore();
+          commitDocumentMutation(controller, "Change ColorGrid", () => {
+            const changed = layers.map((layer) => namespace.ImageEditorColorGridEffect.upsert(layer, effect)).some(Boolean);
+            if (changed) controller.documentStore.notify({ type: "layer-effect", ids: layers.map((layer) => layer.id) });
+            return changed;
+          });
+        },
+        onRemove() {
+          restore();
+          removeColorGridStyle(controller, layers.map((layer) => layer.id));
+        }
+      });
+      return true;
+    }
+
+    /** Remove Vertical Panels from the requested layers as one undoable document change. */
+    function removeVerticalPanelsStyle(controller, requestedIds = null) {
+      const layers = resolveLayerStyleTargets(controller, requestedIds);
+      return commitDocumentMutation(controller, "Remove Vertical Panels", () => {
+        const changed = layers.map((layer) => namespace.ImageEditorVerticalPanelsEffect.remove(layer)).some(Boolean);
+        if (changed) controller.documentStore.notify({ type: "layer-effect", ids: layers.map((layer) => layer.id) });
+        return changed;
+      });
+    }
+
+    /** Open the app-styled Vertical Panels editor and commit one undoable effect change. */
+    function openVerticalPanelsStyle(controller, requestedIds = null) {
+      const hasProvisionalContent = controller.selection.floating
+        && (controller.pendingContentDescriptor || controller.selection.origin === "paste");
+      if (hasProvisionalContent) {
+        if (!commitSelection(controller)) return false;
+        requestedIds = null;
+      }
+      const layers = resolveLayerStyleTargets(controller, requestedIds);
+      if (!layers.length) return false;
+      const originals = new Map(layers.map((layer) => [layer.id, namespace.cloneImageDocument(layer.effects || [])]));
+      const restore = () => layers.forEach((layer) => { layer.effects = namespace.cloneImageDocument(originals.get(layer.id) || []); });
+      const existing = layers.map((layer) => namespace.ImageEditorVerticalPanelsEffect.get(layer)).find(Boolean);
+      controller.layerStyleDialog.open({
+        styleType: "vertical-panels",
+        effect: existing,
+        hasEffect: !!existing,
+        targetName: layers.length === 1 ? layers[0].name : layers.length + " selected layers",
+        onPreview(effect, enabled) {
+          restore();
+          if (enabled) layers.forEach((layer) => namespace.ImageEditorVerticalPanelsEffect.upsert(layer, effect));
+          renderLayeredDocument(controller);
+        },
+        onCancel() {
+          restore();
+          renderLayeredDocument(controller);
+        },
+        onApply(effect) {
+          restore();
+          commitDocumentMutation(controller, "Change Vertical Panels", () => {
+            const changed = layers.map((layer) => namespace.ImageEditorVerticalPanelsEffect.upsert(layer, effect)).some(Boolean);
+            if (changed) controller.documentStore.notify({ type: "layer-effect", ids: layers.map((layer) => layer.id) });
+            return changed;
+          });
+        },
+        onRemove() {
+          restore();
+          removeVerticalPanelsStyle(controller, layers.map((layer) => layer.id));
+        }
+      });
+      return true;
+    }
+
+    /** Remove Polaroids from the requested layers as one undoable document change. */
+    function removePolaroidsStyle(controller, requestedIds = null) {
+      const layers = resolveLayerStyleTargets(controller, requestedIds);
+      return commitDocumentMutation(controller, "Remove Polaroids", () => {
+        const changed = layers.map((layer) => namespace.ImageEditorPolaroidsEffect.remove(layer)).some(Boolean);
+        if (changed) controller.documentStore.notify({ type: "layer-effect", ids: layers.map((layer) => layer.id) });
+        return changed;
+      });
+    }
+
+    /** Open the app-styled Polaroids editor and commit one undoable effect change. */
+    function openPolaroidsStyle(controller, requestedIds = null) {
+      const hasProvisionalContent = controller.selection.floating
+        && (controller.pendingContentDescriptor || controller.selection.origin === "paste");
+      if (hasProvisionalContent) {
+        if (!commitSelection(controller)) return false;
+        requestedIds = null;
+      }
+      const layers = resolveLayerStyleTargets(controller, requestedIds);
+      if (!layers.length) return false;
+      const originals = new Map(layers.map((layer) => [layer.id, namespace.cloneImageDocument(layer.effects || [])]));
+      const restore = () => layers.forEach((layer) => { layer.effects = namespace.cloneImageDocument(originals.get(layer.id) || []); });
+      const existing = layers.map((layer) => namespace.ImageEditorPolaroidsEffect.get(layer)).find(Boolean);
+      controller.layerStyleDialog.open({
+        styleType: "polaroids",
+        effect: existing,
+        hasEffect: !!existing,
+        targetName: layers.length === 1 ? layers[0].name : layers.length + " selected layers",
+        onPreview(effect, enabled) {
+          restore();
+          if (enabled) layers.forEach((layer) => namespace.ImageEditorPolaroidsEffect.upsert(layer, effect));
+          renderLayeredDocument(controller);
+        },
+        onCancel() {
+          restore();
+          renderLayeredDocument(controller);
+        },
+        onApply(effect) {
+          restore();
+          commitDocumentMutation(controller, "Change Polaroids", () => {
+            const changed = layers.map((layer) => namespace.ImageEditorPolaroidsEffect.upsert(layer, effect)).some(Boolean);
+            if (changed) controller.documentStore.notify({ type: "layer-effect", ids: layers.map((layer) => layer.id) });
+            return changed;
+          });
+        },
+        onRemove() {
+          restore();
+          removePolaroidsStyle(controller, layers.map((layer) => layer.id));
+        }
+      });
+      return true;
+    }
+
+    /** Remove Miniature from the requested layers as one undoable document change. */
+    function removeMiniatureStyle(controller, requestedIds = null) {
+      const layers = resolveLayerStyleTargets(controller, requestedIds);
+      return commitDocumentMutation(controller, "Remove Miniature", () => {
+        const changed = layers.map((layer) => namespace.ImageEditorMiniatureEffect.remove(layer)).some(Boolean);
+        if (changed) controller.documentStore.notify({ type: "layer-effect", ids: layers.map((layer) => layer.id) });
+        return changed;
+      });
+    }
+
+    /** Open the app-styled Miniature editor and commit one undoable effect change. */
+    function openMiniatureStyle(controller, requestedIds = null) {
+      const hasProvisionalContent = controller.selection.floating
+        && (controller.pendingContentDescriptor || controller.selection.origin === "paste");
+      if (hasProvisionalContent) {
+        if (!commitSelection(controller)) return false;
+        requestedIds = null;
+      }
+      const layers = resolveLayerStyleTargets(controller, requestedIds);
+      if (!layers.length) return false;
+      const originals = new Map(layers.map((layer) => [layer.id, namespace.cloneImageDocument(layer.effects || [])]));
+      const restore = () => layers.forEach((layer) => { layer.effects = namespace.cloneImageDocument(originals.get(layer.id) || []); });
+      const existing = layers.map((layer) => namespace.ImageEditorMiniatureEffect.get(layer)).find(Boolean);
+      controller.layerStyleDialog.open({
+        styleType: "miniature",
+        effect: existing,
+        hasEffect: !!existing,
+        targetName: layers.length === 1 ? layers[0].name : layers.length + " selected layers",
+        onPreview(effect, enabled) {
+          restore();
+          if (enabled) layers.forEach((layer) => namespace.ImageEditorMiniatureEffect.upsert(layer, effect));
+          renderLayeredDocument(controller);
+        },
+        onCancel() {
+          restore();
+          renderLayeredDocument(controller);
+        },
+        onApply(effect) {
+          restore();
+          commitDocumentMutation(controller, "Change Miniature", () => {
+            const changed = layers.map((layer) => namespace.ImageEditorMiniatureEffect.upsert(layer, effect)).some(Boolean);
+            if (changed) controller.documentStore.notify({ type: "layer-effect", ids: layers.map((layer) => layer.id) });
+            return changed;
+          });
+        },
+        onRemove() {
+          restore();
+          removeMiniatureStyle(controller, layers.map((layer) => layer.id));
+        }
+      });
+      return true;
+    }
+
+    /** Remove Puzzle from the requested layers as one undoable document change. */
+    function removePuzzleStyle(controller, requestedIds = null) {
+      const layers = resolveLayerStyleTargets(controller, requestedIds);
+      return commitDocumentMutation(controller, "Remove Puzzle", () => {
+        const changed = layers.map((layer) => namespace.ImageEditorPuzzleEffect.remove(layer)).some(Boolean);
+        if (changed) controller.documentStore.notify({ type: "layer-effect", ids: layers.map((layer) => layer.id) });
+        return changed;
+      });
+    }
+
+    /** Open the app-styled Puzzle editor and commit one undoable effect change. */
+    function openPuzzleStyle(controller, requestedIds = null) {
+      const hasProvisionalContent = controller.selection.floating
+        && (controller.pendingContentDescriptor || controller.selection.origin === "paste");
+      if (hasProvisionalContent) {
+        if (!commitSelection(controller)) return false;
+        requestedIds = null;
+      }
+      const layers = resolveLayerStyleTargets(controller, requestedIds);
+      if (!layers.length) return false;
+      const originals = new Map(layers.map((layer) => [layer.id, namespace.cloneImageDocument(layer.effects || [])]));
+      const restore = () => layers.forEach((layer) => { layer.effects = namespace.cloneImageDocument(originals.get(layer.id) || []); });
+      const existing = layers.map((layer) => namespace.ImageEditorPuzzleEffect.get(layer)).find(Boolean);
+      controller.layerStyleDialog.open({
+        styleType: "puzzle",
+        effect: existing,
+        hasEffect: !!existing,
+        targetName: layers.length === 1 ? layers[0].name : layers.length + " selected layers",
+        onPreview(effect, enabled) {
+          restore();
+          if (enabled) layers.forEach((layer) => namespace.ImageEditorPuzzleEffect.upsert(layer, effect));
+          renderLayeredDocument(controller);
+        },
+        onCancel() {
+          restore();
+          renderLayeredDocument(controller);
+        },
+        onApply(effect) {
+          restore();
+          commitDocumentMutation(controller, "Change Puzzle", () => {
+            const changed = layers.map((layer) => namespace.ImageEditorPuzzleEffect.upsert(layer, effect)).some(Boolean);
+            if (changed) controller.documentStore.notify({ type: "layer-effect", ids: layers.map((layer) => layer.id) });
+            return changed;
+          });
+        },
+        onRemove() {
+          restore();
+          removePuzzleStyle(controller, layers.map((layer) => layer.id));
+        }
+      });
+      return true;
+    }
+
+    /** Remove Texturize from the requested layers as one undoable document change. */
+    function removeTexturizeStyle(controller, requestedIds = null) {
+      const layers = resolveLayerStyleTargets(controller, requestedIds);
+      return commitDocumentMutation(controller, "Remove Texturize", () => {
+        const changed = layers.map((layer) => namespace.ImageEditorTexturizeEffect.remove(layer)).some(Boolean);
+        if (changed) controller.documentStore.notify({ type: "layer-effect", ids: layers.map((layer) => layer.id) });
+        return changed;
+      });
+    }
+
+    /** Open the app-styled Texturize editor and commit one undoable effect change. */
+    function openTexturizeStyle(controller, requestedIds = null) {
+      const hasProvisionalContent = controller.selection.floating
+        && (controller.pendingContentDescriptor || controller.selection.origin === "paste");
+      if (hasProvisionalContent) {
+        if (!commitSelection(controller)) return false;
+        requestedIds = null;
+      }
+      const layers = resolveLayerStyleTargets(controller, requestedIds);
+      if (!layers.length) return false;
+      const originals = new Map(layers.map((layer) => [layer.id, namespace.cloneImageDocument(layer.effects || [])]));
+      const restore = () => layers.forEach((layer) => { layer.effects = namespace.cloneImageDocument(originals.get(layer.id) || []); });
+      const existing = layers.map((layer) => namespace.ImageEditorTexturizeEffect.get(layer)).find(Boolean);
+      controller.layerStyleDialog.open({
+        styleType: "texturize",
+        effect: existing,
+        hasEffect: !!existing,
+        targetName: layers.length === 1 ? layers[0].name : layers.length + " selected layers",
+        onPreview(effect, enabled) {
+          restore();
+          if (enabled) layers.forEach((layer) => namespace.ImageEditorTexturizeEffect.upsert(layer, effect));
+          renderLayeredDocument(controller);
+        },
+        onCancel() {
+          restore();
+          renderLayeredDocument(controller);
+        },
+        onApply(effect) {
+          restore();
+          commitDocumentMutation(controller, "Change Texturize", () => {
+            const changed = layers.map((layer) => namespace.ImageEditorTexturizeEffect.upsert(layer, effect)).some(Boolean);
+            if (changed) controller.documentStore.notify({ type: "layer-effect", ids: layers.map((layer) => layer.id) });
+            return changed;
+          });
+        },
+        onRemove() {
+          restore();
+          removeTexturizeStyle(controller, layers.map((layer) => layer.id));
+        }
+      });
+      return true;
+    }
+
     /** Remove Retro 3D from the requested layers as one undoable document change. */
     function removeRetro3DStyle(controller, requestedIds = null) {
       const layers = resolveLayerStyleTargets(controller, requestedIds);
@@ -5215,6 +5586,20 @@
       if (action === "remove-points") return removePointsStyle(controller, controller.canvasLayerStyleTargetIds);
       if (action === "edit-watercolor") return openWatercolorStyle(controller, controller.canvasLayerStyleTargetIds);
       if (action === "remove-watercolor") return removeWatercolorStyle(controller, controller.canvasLayerStyleTargetIds);
+      if (action === "edit-sunset") return openSunsetStyle(controller, controller.canvasLayerStyleTargetIds);
+      if (action === "remove-sunset") return removeSunsetStyle(controller, controller.canvasLayerStyleTargetIds);
+      if (action === "edit-color-grid") return openColorGridStyle(controller, controller.canvasLayerStyleTargetIds);
+      if (action === "remove-color-grid") return removeColorGridStyle(controller, controller.canvasLayerStyleTargetIds);
+      if (action === "edit-vertical-panels") return openVerticalPanelsStyle(controller, controller.canvasLayerStyleTargetIds);
+      if (action === "remove-vertical-panels") return removeVerticalPanelsStyle(controller, controller.canvasLayerStyleTargetIds);
+      if (action === "edit-polaroids") return openPolaroidsStyle(controller, controller.canvasLayerStyleTargetIds);
+      if (action === "remove-polaroids") return removePolaroidsStyle(controller, controller.canvasLayerStyleTargetIds);
+      if (action === "edit-miniature") return openMiniatureStyle(controller, controller.canvasLayerStyleTargetIds);
+      if (action === "remove-miniature") return removeMiniatureStyle(controller, controller.canvasLayerStyleTargetIds);
+      if (action === "edit-puzzle") return openPuzzleStyle(controller, controller.canvasLayerStyleTargetIds);
+      if (action === "remove-puzzle") return removePuzzleStyle(controller, controller.canvasLayerStyleTargetIds);
+      if (action === "edit-texturize") return openTexturizeStyle(controller, controller.canvasLayerStyleTargetIds);
+      if (action === "remove-texturize") return removeTexturizeStyle(controller, controller.canvasLayerStyleTargetIds);
       if (action === "edit-retro-3d") return openRetro3DStyle(controller, controller.canvasLayerStyleTargetIds);
       if (action === "remove-retro-3d") return removeRetro3DStyle(controller, controller.canvasLayerStyleTargetIds);
       if (action === "edit-snow") return openSnowStyle(controller, controller.canvasLayerStyleTargetIds);
@@ -5311,6 +5696,13 @@
         const hasDots = styleLayers.some((layer) => namespace.ImageEditorDotsEffect.get(layer));
         const hasPoints = styleLayers.some((layer) => namespace.ImageEditorPointsEffect.get(layer));
         const hasWatercolor = styleLayers.some((layer) => namespace.ImageEditorWatercolorEffect.get(layer));
+        const hasSunset = styleLayers.some((layer) => namespace.ImageEditorSunsetEffect.get(layer));
+        const hasColorGrid = styleLayers.some((layer) => namespace.ImageEditorColorGridEffect.get(layer));
+        const hasVerticalPanels = styleLayers.some((layer) => namespace.ImageEditorVerticalPanelsEffect.get(layer));
+        const hasPolaroids = styleLayers.some((layer) => namespace.ImageEditorPolaroidsEffect.get(layer));
+        const hasMiniature = styleLayers.some((layer) => namespace.ImageEditorMiniatureEffect.get(layer));
+        const hasPuzzle = styleLayers.some((layer) => namespace.ImageEditorPuzzleEffect.get(layer));
+        const hasTexturize = styleLayers.some((layer) => namespace.ImageEditorTexturizeEffect.get(layer));
         const hasRetro3D = styleLayers.some((layer) => namespace.ImageEditorRetro3DEffect.get(layer));
         const hasSnow = styleLayers.some((layer) => namespace.ImageEditorSnowEffect.get(layer));
         const hasRain = styleLayers.some((layer) => namespace.ImageEditorRainEffect.get(layer));
@@ -5381,6 +5773,20 @@
           "remove-points": hasPoints,
           "edit-watercolor": styleLayers.length > 0,
           "remove-watercolor": hasWatercolor,
+          "edit-sunset": styleLayers.length > 0,
+          "remove-sunset": hasSunset,
+          "edit-color-grid": styleLayers.length > 0,
+          "remove-color-grid": hasColorGrid,
+          "edit-vertical-panels": styleLayers.length > 0,
+          "remove-vertical-panels": hasVerticalPanels,
+          "edit-polaroids": styleLayers.length > 0,
+          "remove-polaroids": hasPolaroids,
+          "edit-miniature": styleLayers.length > 0,
+          "remove-miniature": hasMiniature,
+          "edit-puzzle": styleLayers.length > 0,
+          "remove-puzzle": hasPuzzle,
+          "edit-texturize": styleLayers.length > 0,
+          "remove-texturize": hasTexturize,
           "edit-retro-3d": styleLayers.length > 0,
           "remove-retro-3d": hasRetro3D,
           "edit-snow": styleLayers.length > 0,
@@ -5823,6 +6229,14 @@
           if (label === "export") return exportFlattenedImage(tab);
           if (label === "export-layer-png") return exportLayerImage(tab, callback?.layerIds, { mimeType: "image/png" });
           if (label === "export-layer-as") return exportLayerImage(tab, callback?.layerIds);
+          if (label.startsWith("create-")) {
+            const type = label.slice("create-".length);
+            if (namespace.ImageEditorAdjustmentModel.TYPES.includes(type)) {
+              return commitDocumentMutation(controller, "Add " + namespace.ImageEditorAdjustmentModel.nameForType(type), () => controller.documentStore.addAdjustmentLayer(type, {
+                selectionRegion: controller.selection.hasSelection ? controller.selection.region() : null
+              }));
+            }
+          }
           if (label === "edit-blending-options") return openBlendingOptions(controller, callback?.layerIds);
           if (label === "edit-bevel-emboss") return openBevelEmbossStyle(controller, callback?.layerIds);
           if (label === "remove-bevel-emboss") return removeBevelEmbossStyle(controller, callback?.layerIds);
@@ -5858,6 +6272,20 @@
           if (label === "remove-points") return removePointsStyle(controller, callback?.layerIds);
           if (label === "edit-watercolor") return openWatercolorStyle(controller, callback?.layerIds);
           if (label === "remove-watercolor") return removeWatercolorStyle(controller, callback?.layerIds);
+          if (label === "edit-sunset") return openSunsetStyle(controller, callback?.layerIds);
+          if (label === "remove-sunset") return removeSunsetStyle(controller, callback?.layerIds);
+          if (label === "edit-color-grid") return openColorGridStyle(controller, callback?.layerIds);
+          if (label === "remove-color-grid") return removeColorGridStyle(controller, callback?.layerIds);
+          if (label === "edit-vertical-panels") return openVerticalPanelsStyle(controller, callback?.layerIds);
+          if (label === "remove-vertical-panels") return removeVerticalPanelsStyle(controller, callback?.layerIds);
+          if (label === "edit-polaroids") return openPolaroidsStyle(controller, callback?.layerIds);
+          if (label === "remove-polaroids") return removePolaroidsStyle(controller, callback?.layerIds);
+          if (label === "edit-miniature") return openMiniatureStyle(controller, callback?.layerIds);
+          if (label === "remove-miniature") return removeMiniatureStyle(controller, callback?.layerIds);
+          if (label === "edit-puzzle") return openPuzzleStyle(controller, callback?.layerIds);
+          if (label === "remove-puzzle") return removePuzzleStyle(controller, callback?.layerIds);
+          if (label === "edit-texturize") return openTexturizeStyle(controller, callback?.layerIds);
+          if (label === "remove-texturize") return removeTexturizeStyle(controller, callback?.layerIds);
           if (label === "edit-retro-3d") return openRetro3DStyle(controller, callback?.layerIds);
           if (label === "remove-retro-3d") return removeRetro3DStyle(controller, callback?.layerIds);
           if (label === "edit-snow") return openSnowStyle(controller, callback?.layerIds);
@@ -5919,6 +6347,13 @@
           if (action === "edit-dots") return openDotsStyle(controller);
           if (action === "edit-points") return openPointsStyle(controller);
           if (action === "edit-watercolor") return openWatercolorStyle(controller);
+          if (action === "edit-sunset") return openSunsetStyle(controller);
+          if (action === "edit-color-grid") return openColorGridStyle(controller);
+          if (action === "edit-vertical-panels") return openVerticalPanelsStyle(controller);
+          if (action === "edit-polaroids") return openPolaroidsStyle(controller);
+          if (action === "edit-miniature") return openMiniatureStyle(controller);
+          if (action === "edit-puzzle") return openPuzzleStyle(controller);
+          if (action === "edit-texturize") return openTexturizeStyle(controller);
           if (action === "edit-retro-3d") return openRetro3DStyle(controller);
           if (action === "edit-snow") return openSnowStyle(controller);
           if (action === "edit-rain") return openRainStyle(controller);

@@ -10,6 +10,7 @@
     { id: "ink", label: "Inking brush", category: "Inking" },
     { id: "calligraphy", label: "Calligraphy", category: "Calligraphy" },
     { id: "airbrush", label: "Airbrush", category: "Airbrushing" },
+    { id: "bubble", label: "Bubble brush", category: "Special effects" },
     { id: "charcoal", label: "Charcoal", category: "Charcoals" },
     { id: "watercolor", label: "Watercolor", category: "Painting" },
     { id: "spray", label: "Spray paint", category: "Spraypaints" },
@@ -68,6 +69,11 @@
     const distance = Math.hypot(to.x - from.x, to.y - from.y);
     context.save();
     namespace.configureStroke(context, state, width, pathDistance);
+    const registeredRenderer = namespace.ImageEditorBrushPresetRenderers?.[preset];
+    if (registeredRenderer?.(context, from, to, state, pathDistance, distance, { line, scatter, seededNoise })) {
+      context.restore();
+      return pathDistance + distance;
+    }
     const specialtyRendered = namespace.drawSpecialtyBrushPresetSegment?.(
       context, from, to, state, preset, pathDistance, distance, { line, scatter, seededNoise }
     );

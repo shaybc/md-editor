@@ -166,6 +166,69 @@
               <label data-watercolor-effect-field hidden>Edge definition <output data-output="watercolorEdgeDefinition"></output><input name="watercolorEdgeDefinition" type="range" min="0" max="100" step="1"></label>
               <label data-watercolor-effect-field hidden>Paper texture <output data-output="watercolorPaperTexture"></output><input name="watercolorPaperTexture" type="range" min="0" max="100" step="1"></label>
               <label data-watercolor-effect-field hidden>Paper color<input name="watercolorPaperColor" type="color"></label>
+              <label data-sunset-effect-field hidden>Shadow color<input name="sunsetShadowColor" type="color"></label>
+              <label data-sunset-effect-field hidden>Highlight color<input name="sunsetHighlightColor" type="color"></label>
+              <label data-sunset-effect-field hidden>Strength <output data-output="sunsetStrength"></output><input name="sunsetStrength" type="range" min="0" max="100" step="1"></label>
+              <label data-sunset-effect-field hidden>Tonal balance <output data-output="sunsetBalance"></output><input name="sunsetBalance" type="range" min="10" max="90" step="1"></label>
+              <label data-sunset-effect-field hidden>Contrast <output data-output="sunsetContrast"></output><input name="sunsetContrast" type="range" min="0" max="100" step="1"></label>
+              <label data-sunset-effect-field hidden>Color intensity <output data-output="sunsetSaturation"></output><input name="sunsetSaturation" type="range" min="0" max="100" step="1"></label>
+              <label data-color-grid-effect-field hidden>Columns <output data-output="colorGridColumns"></output><input name="colorGridColumns" type="range" min="2" max="24" step="1"></label>
+              <label data-color-grid-effect-field hidden>Rows <output data-output="colorGridRows"></output><input name="colorGridRows" type="range" min="2" max="24" step="1"></label>
+              <label data-color-grid-effect-field hidden>Grid width <output data-output="colorGridLineWidth"></output><input name="colorGridLineWidth" type="range" min="0" max="20" step="0.5"></label>
+              <label data-color-grid-effect-field hidden>Grid color<input name="colorGridLineColor" type="color"></label>
+              <label data-color-grid-effect-field hidden>Color strength <output data-output="colorGridColorStrength"></output><input name="colorGridColorStrength" type="range" min="0" max="100" step="1"></label>
+              <label data-color-grid-effect-field hidden>Colored cells <output data-output="colorGridColorCoverage"></output><input name="colorGridColorCoverage" type="range" min="0" max="100" step="1"></label>
+              <label data-color-grid-effect-field hidden>Border lightening <output data-output="colorGridBorderLightening"></output><input name="colorGridBorderLightening" type="range" min="0" max="100" step="1"></label>
+              <label data-vertical-panels-effect-field hidden>Panels <output data-output="verticalPanelsCount"></output><input name="verticalPanelsCount" type="range" min="2" max="12" step="1"></label>
+              <label data-vertical-panels-effect-field hidden>Gap <output data-output="verticalPanelsGap"></output><input name="verticalPanelsGap" type="range" min="0" max="40" step="1"></label>
+              <label data-vertical-panels-effect-field hidden>Vertical stagger <output data-output="verticalPanelsStagger"></output><input name="verticalPanelsStagger" type="range" min="0" max="80" step="1"></label>
+              <label data-vertical-panels-effect-field hidden>Rotation variation <output data-output="verticalPanelsRotation"></output><input name="verticalPanelsRotation" type="range" min="0" max="15" step="0.5"></label>
+              <label data-vertical-panels-effect-field hidden>Border width <output data-output="verticalPanelsBorderWidth"></output><input name="verticalPanelsBorderWidth" type="range" min="0" max="24" step="0.5"></label>
+              <label data-vertical-panels-effect-field hidden>Border color<input name="verticalPanelsBorderColor" type="color"></label>
+              <label data-vertical-panels-effect-field hidden>Shadow strength <output data-output="verticalPanelsShadowStrength"></output><input name="verticalPanelsShadowStrength" type="range" min="0" max="100" step="1"></label>
+              <label data-vertical-panels-effect-field hidden>Shadow softness <output data-output="verticalPanelsShadowBlur"></output><input name="verticalPanelsShadowBlur" type="range" min="0" max="40" step="1"></label>
+              <label data-vertical-panels-effect-field hidden>Background color<input name="verticalPanelsBackgroundColor" type="color"></label>
+              <label data-polaroids-effect-field hidden>Photos <output data-output="polaroidsCardCount"></output><input name="polaroidsCardCount" type="range" min="3" max="20" step="1"></label>
+              <label data-polaroids-effect-field hidden>Photo size <output data-output="polaroidsCardSize"></output><input name="polaroidsCardSize" type="range" min="12" max="45" step="1"></label>
+              <label data-polaroids-effect-field hidden>Scatter <output data-output="polaroidsScatter"></output><input name="polaroidsScatter" type="range" min="0" max="100" step="1"></label>
+              <label data-polaroids-effect-field hidden>Rotation variation <output data-output="polaroidsRotation"></output><input name="polaroidsRotation" type="range" min="0" max="25" step="0.5"></label>
+              <label data-polaroids-effect-field hidden>Frame width <output data-output="polaroidsFrameWidth"></output><input name="polaroidsFrameWidth" type="range" min="2" max="24" step="0.5"></label>
+              <label data-polaroids-effect-field hidden>Bottom border <output data-output="polaroidsBottomBorder"></output><input name="polaroidsBottomBorder" type="range" min="2" max="36" step="0.5"></label>
+              <label data-polaroids-effect-field hidden>Frame color<input name="polaroidsFrameColor" type="color"></label>
+              <label data-polaroids-effect-field hidden>Shadow strength <output data-output="polaroidsShadowStrength"></output><input name="polaroidsShadowStrength" type="range" min="0" max="100" step="1"></label>
+              <label data-polaroids-effect-field hidden>Shadow softness <output data-output="polaroidsShadowBlur"></output><input name="polaroidsShadowBlur" type="range" min="0" max="40" step="1"></label>
+              <label data-polaroids-effect-field hidden>Background color<input name="polaroidsBackgroundColor" type="color"></label>
+              <label data-miniature-effect-field hidden>Focus position <output data-output="miniatureFocusPosition"></output><input name="miniatureFocusPosition" type="range" min="0" max="100" step="1"></label>
+              <label data-miniature-effect-field hidden>Sharp area <output data-output="miniatureFocusWidth"></output><input name="miniatureFocusWidth" type="range" min="2" max="80" step="1"></label>
+              <label data-miniature-effect-field hidden>Transition <output data-output="miniatureTransition"></output><input name="miniatureTransition" type="range" min="1" max="60" step="1"></label>
+              <label data-miniature-effect-field hidden>Focus angle <output data-output="miniatureAngle"></output><input name="miniatureAngle" type="range" min="-45" max="45" step="1"></label>
+              <label data-miniature-effect-field hidden>Blur <output data-output="miniatureBlurRadius"></output><input name="miniatureBlurRadius" type="range" min="0" max="40" step="0.5"></label>
+              <label data-miniature-effect-field hidden>Distortion <output data-output="miniatureDistortion"></output><input name="miniatureDistortion" type="range" min="-100" max="100" step="1"></label>
+              <label data-miniature-effect-field hidden>Saturation <output data-output="miniatureSaturation"></output><input name="miniatureSaturation" type="range" min="-100" max="100" step="1"></label>
+              <label data-miniature-effect-field hidden><input name="miniatureSymmetricDistortion" type="checkbox"> Symmetric distortion</label>
+              <label data-puzzle-effect-field hidden>Columns <output data-output="puzzleColumns"></output><input name="puzzleColumns" type="range" min="2" max="16" step="1"></label>
+              <label data-puzzle-effect-field hidden>Rows <output data-output="puzzleRows"></output><input name="puzzleRows" type="range" min="2" max="16" step="1"></label>
+              <label data-puzzle-effect-field hidden>Relief <output data-output="puzzleRelief"></output><input name="puzzleRelief" type="range" min="0" max="12" step="0.5"></label>
+              <label data-puzzle-effect-field hidden>Seam strength <output data-output="puzzleSeamStrength"></output><input name="puzzleSeamStrength" type="range" min="0" max="100" step="1"></label>
+              <label data-puzzle-effect-field hidden>Missing pieces <output data-output="puzzleMissingPieces"></output><input name="puzzleMissingPieces" type="range" min="0" max="50" step="1"></label>
+              <label data-puzzle-effect-field hidden>Lifted pieces <output data-output="puzzleLiftedPieces"></output><input name="puzzleLiftedPieces" type="range" min="0" max="30" step="1"></label>
+              <label data-puzzle-effect-field hidden>Scatter <output data-output="puzzleScatter"></output><input name="puzzleScatter" type="range" min="0" max="40" step="1"></label>
+              <label data-puzzle-effect-field hidden>Rotation <output data-output="puzzleRotation"></output><input name="puzzleRotation" type="range" min="0" max="30" step="0.5"></label>
+              <label data-puzzle-effect-field hidden>Shadow strength <output data-output="puzzleShadowStrength"></output><input name="puzzleShadowStrength" type="range" min="0" max="100" step="1"></label>
+              <label data-puzzle-effect-field hidden>Shadow softness <output data-output="puzzleShadowBlur"></output><input name="puzzleShadowBlur" type="range" min="0" max="30" step="1"></label>
+              <label data-puzzle-effect-field hidden>Background color<input name="puzzleBackgroundColor" type="color"></label>
+              <label data-texturize-effect-field hidden>Repeated text<input name="texturizeText" type="text" maxlength="500"></label>
+              <label data-texturize-effect-field hidden>Font family<input name="texturizeFontFamily" type="text" maxlength="120"></label>
+              <label data-texturize-effect-field hidden>Font size <output data-output="texturizeFontSize"></output><input name="texturizeFontSize" type="range" min="4" max="48" step="1"></label>
+              <label data-texturize-effect-field hidden>Line spacing <output data-output="texturizeLineSpacing"></output><input name="texturizeLineSpacing" type="range" min="70" max="200" step="1"></label>
+              <label data-texturize-effect-field hidden>Line stagger <output data-output="texturizeStagger"></output><input name="texturizeStagger" type="range" min="0" max="100" step="1"></label>
+              <label data-texturize-effect-field hidden>Brightness <output data-output="texturizeBrightness"></output><input name="texturizeBrightness" type="range" min="-100" max="100" step="1"></label>
+              <label data-texturize-effect-field hidden>Contrast <output data-output="texturizeContrast"></output><input name="texturizeContrast" type="range" min="-100" max="100" step="1"></label>
+              <label data-texturize-effect-field hidden>Text color<input name="texturizeTextColor" type="color"></label>
+              <label data-texturize-effect-field hidden>Background color<input name="texturizeBackgroundColor" type="color"></label>
+              <label data-texturize-effect-field hidden>Background opacity <output data-output="texturizeBackgroundOpacity"></output><input name="texturizeBackgroundOpacity" type="range" min="0" max="100" step="1"></label>
+              <label data-texturize-effect-field hidden><input name="texturizeUseSourceColor" type="checkbox"> Color text from source</label>
+              <label data-texturize-effect-field hidden><input name="texturizeInvert" type="checkbox"> Invert source tones</label>
               <label data-retro-3d-effect-field hidden>Separation <output data-output="retro3DSeparation"></output><input name="retro3DSeparation" type="range" min="0" max="100" step="1"></label>
               <label data-retro-3d-effect-field hidden>Direction <output data-output="retro3DAngle"></output><input name="retro3DAngle" type="range" min="-180" max="180" step="1"></label>
               <label data-retro-3d-effect-field hidden>Strength <output data-output="retro3DStrength"></output><input name="retro3DStrength" type="range" min="0" max="100" step="1"></label>
@@ -491,6 +554,111 @@
           paperColor: data.get("watercolorPaperColor")
         });
       }
+      if (this.styleType === "sunset") {
+        return this.effectModel.normalize({
+          ...this.effect,
+          enabled: data.get("enabled") === "on",
+          shadowColor: data.get("sunsetShadowColor"),
+          highlightColor: data.get("sunsetHighlightColor"),
+          strength: Number(data.get("sunsetStrength")) / 100,
+          balance: Number(data.get("sunsetBalance")) / 100,
+          contrast: Number(data.get("sunsetContrast")) / 100,
+          saturation: Number(data.get("sunsetSaturation")) / 100
+        });
+      }
+      if (this.styleType === "color-grid") {
+        return this.effectModel.normalize({
+          ...this.effect,
+          enabled: data.get("enabled") === "on",
+          columns: Number(data.get("colorGridColumns")),
+          rows: Number(data.get("colorGridRows")),
+          lineWidth: Number(data.get("colorGridLineWidth")),
+          lineColor: data.get("colorGridLineColor"),
+          colorStrength: Number(data.get("colorGridColorStrength")) / 100,
+          colorCoverage: Number(data.get("colorGridColorCoverage")) / 100,
+          borderLightening: Number(data.get("colorGridBorderLightening")) / 100
+        });
+      }
+      if (this.styleType === "vertical-panels") {
+        return this.effectModel.normalize({
+          ...this.effect,
+          enabled: data.get("enabled") === "on",
+          panelCount: Number(data.get("verticalPanelsCount")),
+          gap: Number(data.get("verticalPanelsGap")),
+          stagger: Number(data.get("verticalPanelsStagger")),
+          rotation: Number(data.get("verticalPanelsRotation")),
+          borderWidth: Number(data.get("verticalPanelsBorderWidth")),
+          borderColor: data.get("verticalPanelsBorderColor"),
+          shadowStrength: Number(data.get("verticalPanelsShadowStrength")) / 100,
+          shadowBlur: Number(data.get("verticalPanelsShadowBlur")),
+          backgroundColor: data.get("verticalPanelsBackgroundColor")
+        });
+      }
+      if (this.styleType === "polaroids") {
+        return this.effectModel.normalize({
+          ...this.effect,
+          enabled: data.get("enabled") === "on",
+          cardCount: Number(data.get("polaroidsCardCount")),
+          cardSize: Number(data.get("polaroidsCardSize")),
+          scatter: Number(data.get("polaroidsScatter")),
+          rotation: Number(data.get("polaroidsRotation")),
+          frameWidth: Number(data.get("polaroidsFrameWidth")),
+          bottomBorder: Number(data.get("polaroidsBottomBorder")),
+          frameColor: data.get("polaroidsFrameColor"),
+          shadowStrength: Number(data.get("polaroidsShadowStrength")) / 100,
+          shadowBlur: Number(data.get("polaroidsShadowBlur")),
+          backgroundColor: data.get("polaroidsBackgroundColor")
+        });
+      }
+      if (this.styleType === "miniature") {
+        return this.effectModel.normalize({
+          ...this.effect,
+          enabled: data.get("enabled") === "on",
+          focusPosition: Number(data.get("miniatureFocusPosition")),
+          focusWidth: Number(data.get("miniatureFocusWidth")),
+          transition: Number(data.get("miniatureTransition")),
+          angle: Number(data.get("miniatureAngle")),
+          blurRadius: Number(data.get("miniatureBlurRadius")),
+          distortion: Number(data.get("miniatureDistortion")),
+          symmetricDistortion: data.get("miniatureSymmetricDistortion") === "on",
+          saturation: Number(data.get("miniatureSaturation"))
+        });
+      }
+      if (this.styleType === "puzzle") {
+        return this.effectModel.normalize({
+          ...this.effect,
+          enabled: data.get("enabled") === "on",
+          columns: Number(data.get("puzzleColumns")),
+          rows: Number(data.get("puzzleRows")),
+          relief: Number(data.get("puzzleRelief")),
+          seamStrength: Number(data.get("puzzleSeamStrength")) / 100,
+          missingPieces: Number(data.get("puzzleMissingPieces")),
+          liftedPieces: Number(data.get("puzzleLiftedPieces")),
+          scatter: Number(data.get("puzzleScatter")),
+          rotation: Number(data.get("puzzleRotation")),
+          shadowStrength: Number(data.get("puzzleShadowStrength")) / 100,
+          shadowBlur: Number(data.get("puzzleShadowBlur")),
+          backgroundColor: data.get("puzzleBackgroundColor")
+        });
+      }
+      if (this.styleType === "texturize") {
+        return this.effectModel.normalize({
+          ...this.effect,
+          enabled: data.get("enabled") === "on",
+          text: data.get("texturizeText"),
+          fontFamily: data.get("texturizeFontFamily"),
+          fontSize: Number(data.get("texturizeFontSize")),
+          lineSpacing: Number(data.get("texturizeLineSpacing")),
+          stagger: Number(data.get("texturizeStagger")),
+          brightness: Number(data.get("texturizeBrightness")),
+          contrast: Number(data.get("texturizeContrast")),
+          textColor: data.get("texturizeTextColor"),
+          backgroundColor: data.get("texturizeBackgroundColor"),
+          backgroundOpacity: Number(data.get("texturizeBackgroundOpacity")) / 100,
+          useSourceColor: data.get("texturizeUseSourceColor") === "on",
+          invert: data.get("texturizeInvert") === "on"
+        });
+      }
       if (this.styleType === "retro-3d") {
         return this.effectModel.normalize({
           ...this.effect,
@@ -606,6 +774,20 @@
         ? ["pointsCellSize", "pointsPasses", "pointsDensity", "pointsVariation", "pointsSoftness", "pointsSaturation"]
         : this.styleType === "watercolor"
         ? ["watercolorColorLevels", "watercolorWashRadius", "watercolorBrushDetail", "watercolorPigment", "watercolorEdgeDefinition", "watercolorPaperTexture"]
+        : this.styleType === "sunset"
+        ? ["sunsetStrength", "sunsetBalance", "sunsetContrast", "sunsetSaturation"]
+        : this.styleType === "color-grid"
+        ? ["colorGridColumns", "colorGridRows", "colorGridLineWidth", "colorGridColorStrength", "colorGridColorCoverage", "colorGridBorderLightening"]
+        : this.styleType === "vertical-panels"
+        ? ["verticalPanelsCount", "verticalPanelsGap", "verticalPanelsStagger", "verticalPanelsRotation", "verticalPanelsBorderWidth", "verticalPanelsShadowStrength", "verticalPanelsShadowBlur"]
+        : this.styleType === "polaroids"
+        ? ["polaroidsCardCount", "polaroidsCardSize", "polaroidsScatter", "polaroidsRotation", "polaroidsFrameWidth", "polaroidsBottomBorder", "polaroidsShadowStrength", "polaroidsShadowBlur"]
+        : this.styleType === "miniature"
+        ? ["miniatureFocusPosition", "miniatureFocusWidth", "miniatureTransition", "miniatureAngle", "miniatureBlurRadius", "miniatureDistortion", "miniatureSaturation"]
+        : this.styleType === "puzzle"
+        ? ["puzzleColumns", "puzzleRows", "puzzleRelief", "puzzleSeamStrength", "puzzleMissingPieces", "puzzleLiftedPieces", "puzzleScatter", "puzzleRotation", "puzzleShadowStrength", "puzzleShadowBlur"]
+        : this.styleType === "texturize"
+        ? ["texturizeFontSize", "texturizeLineSpacing", "texturizeStagger", "texturizeBrightness", "texturizeContrast", "texturizeBackgroundOpacity"]
         : this.styleType === "snow"
         ? ["snowDensity", "snowFlakeSize", "snowDepth", "snowAngle", "snowMotion", "snowBrightness"]
         : this.styleType === "flare"
@@ -633,9 +815,13 @@
         : ["opacity", "angle", "distance", this.styleType === "inner-shadow" ? "choke" : "spread", "blur"];
       names.forEach((name) => {
         const input = this.form.elements[name];
-        const suffix = ["rippleGenerators", "posterizeLevels", "collageGridSize", "pointsPasses", "watercolorColorLevels"].includes(name) ? "" : ["angle", "patternAngle", "gradientAngle", "bevelAngle", "altitude", "vortexAngle", "newspaperAngle", "snowAngle", "paintedAngle", "retro3DAngle", "rainAngle", "picInPicRotation", "picInPicShadowAngle", "collageRotation"].includes(name) ? "°" : ["opacity", "spread", "choke", "scale", "density", "gradientScale", "depth", "highlightOpacity", "shadowOpacity", "grainAmount", "newspaperContrast", "paintEdgeRoughness", "paintEdgeSplatter", "paintEdgeTexture", "rippleHorizontalScale", "rippleVerticalScale", "flareBrightness", "flarePositionX", "flarePositionY", "snowDensity", "snowDepth", "snowBrightness", "retro3DStrength", "rainAmount", "rainBrightness", "rainbowPositionX", "rainbowPositionY", "rainbowScale", "rainbowThickness", "rainbowSoftness", "rainbowFade", "rainbowIntensity", "spotlightPositionX", "spotlightPositionY", "spotlightWidth", "spotlightHeight", "spotlightFeather", "spotlightBrightness", "vignettePositionX", "vignettePositionY", "vignetteWidth", "vignetteHeight", "vignetteClearCenter", "vignetteFeather", "vignetteAmount", "vignetteHighlightProtection", "contrastBwSmoothness", "contrastBwStrength", "monochromaticStrength", "pencilSketchDarkness", "pencilSketchStrength", "picInPicPositionX", "picInPicPositionY", "picInPicWidth", "picInPicHeight", "picInPicCropX", "picInPicCropY", "picInPicZoom", "picInPicBackgroundBw", "picInPicShadowOpacity", "collageShadowOpacity", "dotsScale", "dotsSaturation", "dotsBrightness", "pointsDensity", "pointsVariation", "pointsSaturation", "watercolorBrushDetail", "watercolorPigment", "watercolorEdgeDefinition", "watercolorPaperTexture"].includes(name) ? "%" : ["paintedStylization", "paintedCleanliness", "paintedScale", "paintedBristleDetail", "paintedShine"].includes(name) ? "" : " px";
+        const suffix = ["rippleGenerators", "posterizeLevels", "collageGridSize", "pointsPasses", "watercolorColorLevels", "colorGridColumns", "colorGridRows", "verticalPanelsCount"].includes(name) ? "" : ["angle", "patternAngle", "gradientAngle", "bevelAngle", "altitude", "vortexAngle", "newspaperAngle", "snowAngle", "paintedAngle", "retro3DAngle", "rainAngle", "picInPicRotation", "picInPicShadowAngle", "collageRotation", "verticalPanelsRotation"].includes(name) ? "°" : ["opacity", "spread", "choke", "scale", "density", "gradientScale", "depth", "highlightOpacity", "shadowOpacity", "grainAmount", "newspaperContrast", "paintEdgeRoughness", "paintEdgeSplatter", "paintEdgeTexture", "rippleHorizontalScale", "rippleVerticalScale", "flareBrightness", "flarePositionX", "flarePositionY", "snowDensity", "snowDepth", "snowBrightness", "retro3DStrength", "rainAmount", "rainBrightness", "rainbowPositionX", "rainbowPositionY", "rainbowScale", "rainbowThickness", "rainbowSoftness", "rainbowFade", "rainbowIntensity", "spotlightPositionX", "spotlightPositionY", "spotlightWidth", "spotlightHeight", "spotlightFeather", "spotlightBrightness", "vignettePositionX", "vignettePositionY", "vignetteWidth", "vignetteHeight", "vignetteClearCenter", "vignetteFeather", "vignetteAmount", "vignetteHighlightProtection", "contrastBwSmoothness", "contrastBwStrength", "monochromaticStrength", "pencilSketchDarkness", "pencilSketchStrength", "picInPicPositionX", "picInPicPositionY", "picInPicWidth", "picInPicHeight", "picInPicCropX", "picInPicCropY", "picInPicZoom", "picInPicBackgroundBw", "picInPicShadowOpacity", "collageShadowOpacity", "dotsScale", "dotsSaturation", "dotsBrightness", "pointsDensity", "pointsVariation", "pointsSaturation", "watercolorBrushDetail", "watercolorPigment", "watercolorEdgeDefinition", "watercolorPaperTexture", "sunsetStrength", "sunsetBalance", "sunsetContrast", "sunsetSaturation", "colorGridColorStrength", "colorGridColorCoverage", "colorGridBorderLightening", "verticalPanelsShadowStrength"].includes(name) ? "%" : ["paintedStylization", "paintedCleanliness", "paintedScale", "paintedBristleDetail", "paintedShine"].includes(name) ? "" : " px";
+        const displayedSuffix = name === "polaroidsCardCount" ? "" : name === "polaroidsRotation" ? "°" : ["polaroidsCardSize", "polaroidsScatter", "polaroidsShadowStrength"].includes(name) ? "%" : suffix;
+        const finalSuffix = name === "miniatureAngle" ? "°" : ["miniatureFocusPosition", "miniatureFocusWidth", "miniatureTransition", "miniatureDistortion", "miniatureSaturation"].includes(name) ? "%" : displayedSuffix;
+        const puzzleSuffix = ["puzzleColumns", "puzzleRows"].includes(name) ? "" : name === "puzzleRotation" ? "°" : ["puzzleSeamStrength", "puzzleMissingPieces", "puzzleLiftedPieces", "puzzleShadowStrength"].includes(name) ? "%" : finalSuffix;
+        const texturizeSuffix = name === "texturizeFontSize" ? " px" : ["texturizeLineSpacing", "texturizeStagger", "texturizeBrightness", "texturizeContrast", "texturizeBackgroundOpacity"].includes(name) ? "%" : puzzleSuffix;
         const value = ["radius", "grainAmount", "snowFlakeSize", "paintedStylization", "paintedCleanliness", "paintedScale", "paintedBristleDetail", "paintedShine", "rainThickness"].includes(name) ? Number(input.value).toFixed(1).replace(/\.0$/, "") : input.value;
-        this.overlay.querySelector(`[data-output="${name}"]`).textContent = `${value}${suffix}`;
+        this.overlay.querySelector(`[data-output="${name}"]`).textContent = `${value}${texturizeSuffix}`;
       });
     }
 
@@ -647,7 +833,7 @@
     /** Open the requested shadow editor for one or more layers. */
     open(options) {
       this.options = options;
-      this.styleType = ["inner-shadow", "inner-glow", "outer-glow", "color-overlay", "gradient-overlay", "pattern-overlay", "bevel-emboss", "blur", "grain", "newspaper", "painted-texture", "paint-edge", "collage", "dots", "points", "watercolor", "retro-3d", "snow", "rain", "rainbow", "spotlight", "vignette", "posterize", "contrast-bw", "monochromatic", "pencil-sketch", "pic-in-pic", "vortex", "ripple-field", "flare", "gust"].includes(options.styleType) ? options.styleType : "drop-shadow";
+      this.styleType = ["inner-shadow", "inner-glow", "outer-glow", "color-overlay", "gradient-overlay", "pattern-overlay", "bevel-emboss", "blur", "grain", "newspaper", "painted-texture", "paint-edge", "collage", "dots", "points", "watercolor", "sunset", "color-grid", "vertical-panels", "polaroids", "miniature", "puzzle", "texturize", "retro-3d", "snow", "rain", "rainbow", "spotlight", "vignette", "posterize", "contrast-bw", "monochromatic", "pencil-sketch", "pic-in-pic", "vortex", "ripple-field", "flare", "gust"].includes(options.styleType) ? options.styleType : "drop-shadow";
       this.effectModel = this.styleType === "inner-shadow"
         ? namespace.ImageEditorInnerShadowEffect
         : this.styleType === "inner-glow" ? namespace.ImageEditorInnerGlowEffect
@@ -665,6 +851,13 @@
                           : this.styleType === "dots" ? namespace.ImageEditorDotsEffect
                           : this.styleType === "points" ? namespace.ImageEditorPointsEffect
                           : this.styleType === "watercolor" ? namespace.ImageEditorWatercolorEffect
+                          : this.styleType === "sunset" ? namespace.ImageEditorSunsetEffect
+                          : this.styleType === "color-grid" ? namespace.ImageEditorColorGridEffect
+                          : this.styleType === "vertical-panels" ? namespace.ImageEditorVerticalPanelsEffect
+                          : this.styleType === "polaroids" ? namespace.ImageEditorPolaroidsEffect
+                          : this.styleType === "miniature" ? namespace.ImageEditorMiniatureEffect
+                          : this.styleType === "puzzle" ? namespace.ImageEditorPuzzleEffect
+                          : this.styleType === "texturize" ? namespace.ImageEditorTexturizeEffect
                           : this.styleType === "retro-3d" ? namespace.ImageEditorRetro3DEffect
                           : this.styleType === "snow" ? namespace.ImageEditorSnowEffect
                           : this.styleType === "rain" ? namespace.ImageEditorRainEffect
@@ -680,18 +873,18 @@
                           : this.styleType === "ripple-field" ? namespace.ImageEditorRippleFieldEffect
                             : this.styleType === "flare" ? namespace.ImageEditorFlareEffect
                               : this.styleType === "gust" ? namespace.ImageEditorGustEffect : namespace.ImageEditorDropShadowEffect;
-      const styleName = this.styleType === "inner-shadow" ? "Inset Shadow" : this.styleType === "inner-glow" ? "Inner Aura" : this.styleType === "outer-glow" ? "Outer Aura" : this.styleType === "color-overlay" ? "Color Coat" : this.styleType === "gradient-overlay" ? "Gradient Coat" : this.styleType === "pattern-overlay" ? "Pattern Coat" : this.styleType === "bevel-emboss" ? "Raised Edge" : this.styleType === "blur" ? "Blur" : this.styleType === "grain" ? "Grain" : this.styleType === "newspaper" ? "Newspaper" : this.styleType === "painted-texture" ? "Painted Texture" : this.styleType === "paint-edge" ? "Paint Edge" : this.styleType === "collage" ? "Collage" : this.styleType === "dots" ? "Dots" : this.styleType === "points" ? "Points" : this.styleType === "watercolor" ? "Watercolor" : this.styleType === "retro-3d" ? "Retro 3D" : this.styleType === "snow" ? "Snow" : this.styleType === "rain" ? "Rain" : this.styleType === "rainbow" ? "Rainbow" : this.styleType === "spotlight" ? "Spotlight" : this.styleType === "vignette" ? "Vignette" : this.styleType === "posterize" ? "Posterize" : this.styleType === "contrast-bw" ? "Contrast B&W" : this.styleType === "monochromatic" ? "Monochromatic" : this.styleType === "pencil-sketch" ? "Pencil-Sketch" : this.styleType === "pic-in-pic" ? "Pic-in-Pic" : this.styleType === "vortex" ? "Vortex" : this.styleType === "ripple-field" ? "Ripple Field" : this.styleType === "flare" ? "Flare" : this.styleType === "gust" ? "Gust" : "Cast Shadow";
+      const styleName = this.styleType === "inner-shadow" ? "Inset Shadow" : this.styleType === "inner-glow" ? "Inner Aura" : this.styleType === "outer-glow" ? "Outer Aura" : this.styleType === "color-overlay" ? "Color Coat" : this.styleType === "gradient-overlay" ? "Gradient Coat" : this.styleType === "pattern-overlay" ? "Pattern Coat" : this.styleType === "bevel-emboss" ? "Raised Edge" : this.styleType === "blur" ? "Blur" : this.styleType === "grain" ? "Grain" : this.styleType === "newspaper" ? "Newspaper" : this.styleType === "painted-texture" ? "Painted Texture" : this.styleType === "paint-edge" ? "Paint Edge" : this.styleType === "collage" ? "Collage" : this.styleType === "dots" ? "Dots" : this.styleType === "points" ? "Points" : this.styleType === "watercolor" ? "Watercolor" : this.styleType === "sunset" ? "Sunset" : this.styleType === "color-grid" ? "ColorGrid" : this.styleType === "vertical-panels" ? "Vertical Panels" : this.styleType === "polaroids" ? "Polaroids" : this.styleType === "miniature" ? "Miniature" : this.styleType === "puzzle" ? "Puzzle" : this.styleType === "texturize" ? "Texturize" : this.styleType === "retro-3d" ? "Retro 3D" : this.styleType === "snow" ? "Snow" : this.styleType === "rain" ? "Rain" : this.styleType === "rainbow" ? "Rainbow" : this.styleType === "spotlight" ? "Spotlight" : this.styleType === "vignette" ? "Vignette" : this.styleType === "posterize" ? "Posterize" : this.styleType === "contrast-bw" ? "Contrast B&W" : this.styleType === "monochromatic" ? "Monochromatic" : this.styleType === "pencil-sketch" ? "Pencil-Sketch" : this.styleType === "pic-in-pic" ? "Pic-in-Pic" : this.styleType === "vortex" ? "Vortex" : this.styleType === "ripple-field" ? "Ripple Field" : this.styleType === "flare" ? "Flare" : this.styleType === "gust" ? "Gust" : "Cast Shadow";
       this.effect = this.effectModel.normalize(options.effect || {});
       this.overlay.querySelector(".image-editor-layer-style-target").textContent = options.targetName || "Selected layers";
       this.overlay.querySelector(".image-editor-layer-style-name").textContent = styleName;
       this.overlay.querySelector(".image-editor-layer-style-enabled-name").textContent = `Enable ${styleName}`;
       ["blendMode", "color", "opacity", "angle", "distance", "spread", "choke", "blur", "useGlobalLight"].forEach((name) => {
-        this.form.elements[name].closest("label").hidden = ["blur", "grain", "newspaper", "painted-texture", "paint-edge", "collage", "dots", "points", "watercolor", "retro-3d", "snow", "rain", "rainbow", "spotlight", "vignette", "posterize", "contrast-bw", "monochromatic", "pencil-sketch", "pic-in-pic", "vortex", "ripple-field", "flare", "gust"].includes(this.styleType);
+        this.form.elements[name].closest("label").hidden = ["blur", "grain", "newspaper", "painted-texture", "paint-edge", "collage", "dots", "points", "watercolor", "sunset", "color-grid", "vertical-panels", "retro-3d", "snow", "rain", "rainbow", "spotlight", "vignette", "posterize", "contrast-bw", "monochromatic", "pencil-sketch", "pic-in-pic", "vortex", "ripple-field", "flare", "gust"].includes(this.styleType);
       });
       this.form.elements.spread.closest("label").hidden = !["drop-shadow", "outer-glow"].includes(this.styleType);
       this.overlay.querySelector("[data-choke-field]").hidden = !["inner-shadow", "inner-glow"].includes(this.styleType);
-      this.overlay.querySelector("[data-size-field]").hidden = ["color-overlay", "gradient-overlay", "pattern-overlay", "blur", "grain", "newspaper", "painted-texture", "paint-edge", "collage", "dots", "points", "watercolor", "retro-3d", "snow", "rain", "rainbow", "spotlight", "vignette", "posterize", "contrast-bw", "monochromatic", "pencil-sketch", "pic-in-pic", "vortex", "ripple-field", "flare", "gust"].includes(this.styleType);
-      this.overlay.querySelector("[data-color-field]").hidden = ["gradient-overlay", "pattern-overlay", "blur", "grain", "newspaper", "painted-texture", "paint-edge", "collage", "dots", "points", "watercolor", "retro-3d", "snow", "rain", "rainbow", "spotlight", "vignette", "posterize", "contrast-bw", "monochromatic", "pencil-sketch", "pic-in-pic", "vortex", "ripple-field", "flare", "gust"].includes(this.styleType);
+      this.overlay.querySelector("[data-size-field]").hidden = ["color-overlay", "gradient-overlay", "pattern-overlay", "blur", "grain", "newspaper", "painted-texture", "paint-edge", "collage", "dots", "points", "watercolor", "sunset", "color-grid", "vertical-panels", "retro-3d", "snow", "rain", "rainbow", "spotlight", "vignette", "posterize", "contrast-bw", "monochromatic", "pencil-sketch", "pic-in-pic", "vortex", "ripple-field", "flare", "gust"].includes(this.styleType);
+      this.overlay.querySelector("[data-color-field]").hidden = ["gradient-overlay", "pattern-overlay", "blur", "grain", "newspaper", "painted-texture", "paint-edge", "collage", "dots", "points", "watercolor", "sunset", "color-grid", "vertical-panels", "retro-3d", "snow", "rain", "rainbow", "spotlight", "vignette", "posterize", "contrast-bw", "monochromatic", "pencil-sketch", "pic-in-pic", "vortex", "ripple-field", "flare", "gust"].includes(this.styleType);
       this.overlay.querySelectorAll("[data-gradient-field]").forEach((field) => { field.hidden = this.styleType !== "gradient-overlay"; });
       this.overlay.querySelectorAll("[data-pattern-field]").forEach((field) => { field.hidden = this.styleType !== "pattern-overlay"; });
       this.overlay.querySelectorAll("[data-bevel-field]").forEach((field) => { field.hidden = this.styleType !== "bevel-emboss"; });
@@ -704,6 +897,13 @@
       this.overlay.querySelectorAll("[data-dots-effect-field]").forEach((field) => { field.hidden = this.styleType !== "dots"; });
       this.overlay.querySelectorAll("[data-points-effect-field]").forEach((field) => { field.hidden = this.styleType !== "points"; });
       this.overlay.querySelectorAll("[data-watercolor-effect-field]").forEach((field) => { field.hidden = this.styleType !== "watercolor"; });
+      this.overlay.querySelectorAll("[data-sunset-effect-field]").forEach((field) => { field.hidden = this.styleType !== "sunset"; });
+      this.overlay.querySelectorAll("[data-color-grid-effect-field]").forEach((field) => { field.hidden = this.styleType !== "color-grid"; });
+      this.overlay.querySelectorAll("[data-vertical-panels-effect-field]").forEach((field) => { field.hidden = this.styleType !== "vertical-panels"; });
+      this.overlay.querySelectorAll("[data-polaroids-effect-field]").forEach((field) => { field.hidden = this.styleType !== "polaroids"; });
+      this.overlay.querySelectorAll("[data-miniature-effect-field]").forEach((field) => { field.hidden = this.styleType !== "miniature"; });
+      this.overlay.querySelectorAll("[data-puzzle-effect-field]").forEach((field) => { field.hidden = this.styleType !== "puzzle"; });
+      this.overlay.querySelectorAll("[data-texturize-effect-field]").forEach((field) => { field.hidden = this.styleType !== "texturize"; });
       this.overlay.querySelectorAll("[data-retro-3d-effect-field]").forEach((field) => { field.hidden = this.styleType !== "retro-3d"; });
       this.overlay.querySelectorAll("[data-snow-effect-field]").forEach((field) => { field.hidden = this.styleType !== "snow"; });
       this.overlay.querySelectorAll("[data-rain-effect-field]").forEach((field) => { field.hidden = this.styleType !== "rain"; });
@@ -719,7 +919,31 @@
       this.overlay.querySelectorAll("[data-ripple-effect-field]").forEach((field) => { field.hidden = this.styleType !== "ripple-field"; });
       this.overlay.querySelectorAll("[data-flare-effect-field]").forEach((field) => { field.hidden = this.styleType !== "flare"; });
       this.overlay.querySelectorAll("[data-gust-effect-field]").forEach((field) => { field.hidden = this.styleType !== "gust"; });
-      this.overlay.querySelectorAll("[data-directional-shadow-field]").forEach((field) => { field.hidden = ["inner-glow", "outer-glow", "color-overlay", "gradient-overlay", "pattern-overlay", "blur", "grain", "newspaper", "painted-texture", "paint-edge", "collage", "dots", "points", "watercolor", "retro-3d", "snow", "rain", "rainbow", "spotlight", "vignette", "posterize", "contrast-bw", "monochromatic", "pencil-sketch", "pic-in-pic", "vortex", "ripple-field", "flare", "gust"].includes(this.styleType); });
+      this.overlay.querySelectorAll("[data-directional-shadow-field]").forEach((field) => { field.hidden = ["inner-glow", "outer-glow", "color-overlay", "gradient-overlay", "pattern-overlay", "blur", "grain", "newspaper", "painted-texture", "paint-edge", "collage", "dots", "points", "watercolor", "sunset", "color-grid", "vertical-panels", "retro-3d", "snow", "rain", "rainbow", "spotlight", "vignette", "posterize", "contrast-bw", "monochromatic", "pencil-sketch", "pic-in-pic", "vortex", "ripple-field", "flare", "gust"].includes(this.styleType); });
+      if (this.styleType === "polaroids") {
+        ["blendMode", "color", "opacity", "angle", "distance", "spread", "choke", "blur", "useGlobalLight"].forEach((name) => { this.form.elements[name].closest("label").hidden = true; });
+        this.overlay.querySelector("[data-size-field]").hidden = true;
+        this.overlay.querySelector("[data-color-field]").hidden = true;
+        this.overlay.querySelectorAll("[data-directional-shadow-field]").forEach((field) => { field.hidden = true; });
+      }
+      if (this.styleType === "miniature") {
+        ["blendMode", "color", "opacity", "angle", "distance", "spread", "choke", "blur", "useGlobalLight"].forEach((name) => { this.form.elements[name].closest("label").hidden = true; });
+        this.overlay.querySelector("[data-size-field]").hidden = true;
+        this.overlay.querySelector("[data-color-field]").hidden = true;
+        this.overlay.querySelectorAll("[data-directional-shadow-field]").forEach((field) => { field.hidden = true; });
+      }
+      if (this.styleType === "puzzle") {
+        ["blendMode", "color", "opacity", "angle", "distance", "spread", "choke", "blur", "useGlobalLight"].forEach((name) => { this.form.elements[name].closest("label").hidden = true; });
+        this.overlay.querySelector("[data-size-field]").hidden = true;
+        this.overlay.querySelector("[data-color-field]").hidden = true;
+        this.overlay.querySelectorAll("[data-directional-shadow-field]").forEach((field) => { field.hidden = true; });
+      }
+      if (this.styleType === "texturize") {
+        ["blendMode", "color", "opacity", "angle", "distance", "spread", "choke", "blur", "useGlobalLight"].forEach((name) => { this.form.elements[name].closest("label").hidden = true; });
+        this.overlay.querySelector("[data-size-field]").hidden = true;
+        this.overlay.querySelector("[data-color-field]").hidden = true;
+        this.overlay.querySelectorAll("[data-directional-shadow-field]").forEach((field) => { field.hidden = true; });
+      }
       const screenBlendOption = this.form.elements.blendMode.querySelector('option[value="screen"]');
       screenBlendOption.hidden = !["inner-glow", "outer-glow", "color-overlay", "gradient-overlay", "pattern-overlay"].includes(this.styleType);
       screenBlendOption.disabled = !["inner-glow", "outer-glow", "color-overlay", "gradient-overlay", "pattern-overlay"].includes(this.styleType);
@@ -780,6 +1004,69 @@
       this.form.elements.watercolorEdgeDefinition.value = Math.round((values.edgeDefinition ?? 0.32) * 100);
       this.form.elements.watercolorPaperTexture.value = Math.round((values.paperTexture ?? 0.22) * 100);
       this.form.elements.watercolorPaperColor.value = values.paperColor || "#F7F2E7";
+      this.form.elements.sunsetShadowColor.value = values.shadowColor || "#F00F0F";
+      this.form.elements.sunsetHighlightColor.value = values.highlightColor || "#F5DC0A";
+      this.form.elements.sunsetStrength.value = Math.round((values.strength ?? 0.5) * 100);
+      this.form.elements.sunsetBalance.value = Math.round((values.balance ?? 0.5) * 100);
+      this.form.elements.sunsetContrast.value = Math.round((values.contrast ?? 0.3) * 100);
+      this.form.elements.sunsetSaturation.value = Math.round((values.saturation ?? 0.25) * 100);
+      this.form.elements.colorGridColumns.value = values.columns ?? 10;
+      this.form.elements.colorGridRows.value = values.rows ?? 10;
+      this.form.elements.colorGridLineWidth.value = values.lineWidth ?? 2;
+      this.form.elements.colorGridLineColor.value = values.lineColor || "#FFFFFF";
+      this.form.elements.colorGridColorStrength.value = Math.round((values.colorStrength ?? 0.62) * 100);
+      this.form.elements.colorGridColorCoverage.value = Math.round((values.colorCoverage ?? 0.58) * 100);
+      this.form.elements.colorGridBorderLightening.value = Math.round((values.borderLightening ?? 0.72) * 100);
+      this.form.elements.verticalPanelsCount.value = values.panelCount ?? 7;
+      this.form.elements.verticalPanelsGap.value = values.gap ?? 8;
+      this.form.elements.verticalPanelsStagger.value = values.stagger ?? 22;
+      this.form.elements.verticalPanelsRotation.value = values.rotation ?? 4;
+      this.form.elements.verticalPanelsBorderWidth.value = values.borderWidth ?? 5;
+      this.form.elements.verticalPanelsBorderColor.value = values.borderColor || "#FFFFFF";
+      this.form.elements.verticalPanelsShadowStrength.value = Math.round((values.shadowStrength ?? 0.55) * 100);
+      this.form.elements.verticalPanelsShadowBlur.value = values.shadowBlur ?? 12;
+      this.form.elements.verticalPanelsBackgroundColor.value = values.backgroundColor || "#FFFFFF";
+      this.form.elements.polaroidsCardCount.value = values.cardCount ?? 10;
+      this.form.elements.polaroidsCardSize.value = values.cardSize ?? 27;
+      this.form.elements.polaroidsScatter.value = values.scatter ?? 34;
+      this.form.elements.polaroidsRotation.value = values.rotation ?? 9;
+      this.form.elements.polaroidsFrameWidth.value = values.frameWidth ?? 8;
+      this.form.elements.polaroidsBottomBorder.value = values.bottomBorder ?? 16;
+      this.form.elements.polaroidsFrameColor.value = values.frameColor || "#FFFFFF";
+      this.form.elements.polaroidsShadowStrength.value = Math.round((values.shadowStrength ?? 0.42) * 100);
+      this.form.elements.polaroidsShadowBlur.value = values.shadowBlur ?? 12;
+      this.form.elements.polaroidsBackgroundColor.value = values.backgroundColor || "#1F1F1F";
+      this.form.elements.miniatureFocusPosition.value = values.focusPosition ?? 50;
+      this.form.elements.miniatureFocusWidth.value = values.focusWidth ?? 20;
+      this.form.elements.miniatureTransition.value = values.transition ?? 18;
+      this.form.elements.miniatureAngle.value = values.angle ?? 0;
+      this.form.elements.miniatureBlurRadius.value = values.blurRadius ?? 12;
+      this.form.elements.miniatureDistortion.value = values.distortion ?? 0;
+      this.form.elements.miniatureSaturation.value = values.saturation ?? 20;
+      this.form.elements.miniatureSymmetricDistortion.checked = values.symmetricDistortion !== false;
+      this.form.elements.puzzleColumns.value = values.columns ?? 8;
+      this.form.elements.puzzleRows.value = values.rows ?? 6;
+      this.form.elements.puzzleRelief.value = values.relief ?? 3;
+      this.form.elements.puzzleSeamStrength.value = Math.round((values.seamStrength ?? 0.62) * 100);
+      this.form.elements.puzzleMissingPieces.value = values.missingPieces ?? 8;
+      this.form.elements.puzzleLiftedPieces.value = values.liftedPieces ?? 5;
+      this.form.elements.puzzleScatter.value = values.scatter ?? 10;
+      this.form.elements.puzzleRotation.value = values.rotation ?? 8;
+      this.form.elements.puzzleShadowStrength.value = Math.round((values.shadowStrength ?? 0.55) * 100);
+      this.form.elements.puzzleShadowBlur.value = values.shadowBlur ?? 9;
+      this.form.elements.puzzleBackgroundColor.value = values.backgroundColor || "#111111";
+      this.form.elements.texturizeText.value = values.text || "CREATE • INSPIRE • IMAGINE • DESIGN • ";
+      this.form.elements.texturizeFontFamily.value = values.fontFamily || "Arial, sans-serif";
+      this.form.elements.texturizeFontSize.value = values.fontSize ?? 12;
+      this.form.elements.texturizeLineSpacing.value = values.lineSpacing ?? 112;
+      this.form.elements.texturizeStagger.value = values.stagger ?? 50;
+      this.form.elements.texturizeBrightness.value = values.brightness ?? 5;
+      this.form.elements.texturizeContrast.value = values.contrast ?? 35;
+      this.form.elements.texturizeTextColor.value = values.textColor || "#FFFFFF";
+      this.form.elements.texturizeBackgroundColor.value = values.backgroundColor || "#000000";
+      this.form.elements.texturizeBackgroundOpacity.value = Math.round((values.backgroundOpacity ?? 1) * 100);
+      this.form.elements.texturizeUseSourceColor.checked = values.useSourceColor === true;
+      this.form.elements.texturizeInvert.checked = values.invert === true;
       this.form.elements.retro3DSeparation.value = values.separation ?? 8;
       this.form.elements.retro3DAngle.value = values.angle ?? 0;
       this.form.elements.retro3DStrength.value = Math.round((values.strength ?? 1) * 100);
@@ -869,7 +1156,11 @@
       this.overlay.querySelector('[data-layer-style-action="remove"]').disabled = options.hasEffect !== true;
       this.updateOutputs();
       this.overlay.classList.remove("hidden");
-      (this.styleType === "gradient-overlay" ? this.form.elements.gradientStyle : this.styleType === "pattern-overlay" ? this.form.elements.patternType : this.styleType === "bevel-emboss" ? this.form.elements.bevelStyle : this.styleType === "blur" ? this.form.elements.radius : this.styleType === "grain" ? this.form.elements.grainAmount : this.styleType === "newspaper" ? this.form.elements.newspaperDotSize : this.styleType === "painted-texture" ? this.form.elements.paintedStylization : this.styleType === "paint-edge" ? this.form.elements.paintEdgeWidth : this.styleType === "collage" ? this.form.elements.collageGridSize : this.styleType === "dots" ? this.form.elements.dotsCellSize : this.styleType === "points" ? this.form.elements.pointsCellSize : this.styleType === "watercolor" ? this.form.elements.watercolorColorLevels : this.styleType === "retro-3d" ? this.form.elements.retro3DSeparation : this.styleType === "snow" ? this.form.elements.snowDensity : this.styleType === "rain" ? this.form.elements.rainAmount : this.styleType === "rainbow" ? this.form.elements.rainbowPositionX : this.styleType === "spotlight" ? this.form.elements.spotlightPositionX : this.styleType === "vignette" ? this.form.elements.vignettePositionX : this.styleType === "posterize" ? this.form.elements.posterizeLevels : this.styleType === "contrast-bw" ? this.form.elements.contrastBwSmoothness : this.styleType === "monochromatic" ? this.form.elements.monochromaticColor : this.styleType === "pencil-sketch" ? this.form.elements.pencilSketchRadius : this.styleType === "pic-in-pic" ? this.form.elements.picInPicPositionX : this.styleType === "vortex" ? this.form.elements.vortexAngle : this.styleType === "ripple-field" ? this.form.elements.rippleGenerators : this.styleType === "flare" ? this.form.elements.flareBrightness : this.styleType === "gust" ? this.form.elements.gustMethod : this.form.elements.opacity).focus({ preventScroll: true });
+      (this.styleType === "gradient-overlay" ? this.form.elements.gradientStyle : this.styleType === "pattern-overlay" ? this.form.elements.patternType : this.styleType === "bevel-emboss" ? this.form.elements.bevelStyle : this.styleType === "blur" ? this.form.elements.radius : this.styleType === "grain" ? this.form.elements.grainAmount : this.styleType === "newspaper" ? this.form.elements.newspaperDotSize : this.styleType === "painted-texture" ? this.form.elements.paintedStylization : this.styleType === "paint-edge" ? this.form.elements.paintEdgeWidth : this.styleType === "collage" ? this.form.elements.collageGridSize : this.styleType === "dots" ? this.form.elements.dotsCellSize : this.styleType === "points" ? this.form.elements.pointsCellSize : this.styleType === "watercolor" ? this.form.elements.watercolorColorLevels : this.styleType === "sunset" ? this.form.elements.sunsetStrength : this.styleType === "color-grid" ? this.form.elements.colorGridColumns : this.styleType === "vertical-panels" ? this.form.elements.verticalPanelsCount : this.styleType === "retro-3d" ? this.form.elements.retro3DSeparation : this.styleType === "snow" ? this.form.elements.snowDensity : this.styleType === "rain" ? this.form.elements.rainAmount : this.styleType === "rainbow" ? this.form.elements.rainbowPositionX : this.styleType === "spotlight" ? this.form.elements.spotlightPositionX : this.styleType === "vignette" ? this.form.elements.vignettePositionX : this.styleType === "posterize" ? this.form.elements.posterizeLevels : this.styleType === "contrast-bw" ? this.form.elements.contrastBwSmoothness : this.styleType === "monochromatic" ? this.form.elements.monochromaticColor : this.styleType === "pencil-sketch" ? this.form.elements.pencilSketchRadius : this.styleType === "pic-in-pic" ? this.form.elements.picInPicPositionX : this.styleType === "vortex" ? this.form.elements.vortexAngle : this.styleType === "ripple-field" ? this.form.elements.rippleGenerators : this.styleType === "flare" ? this.form.elements.flareBrightness : this.styleType === "gust" ? this.form.elements.gustMethod : this.form.elements.opacity).focus({ preventScroll: true });
+      if (this.styleType === "polaroids") this.form.elements.polaroidsCardCount.focus({ preventScroll: true });
+      if (this.styleType === "miniature") this.form.elements.miniatureFocusPosition.focus({ preventScroll: true });
+      if (this.styleType === "puzzle") this.form.elements.puzzleColumns.focus({ preventScroll: true });
+      if (this.styleType === "texturize") this.form.elements.texturizeText.focus({ preventScroll: true });
       this.options.onPreview?.(this.effect, true);
     }
 

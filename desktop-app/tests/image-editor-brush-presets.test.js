@@ -8,7 +8,7 @@ function loadBrushPresets() {
   const context = { window: {} };
   context.window.window = context.window;
   vm.createContext(context);
-  ["color-opacity.js", "drawing-tools.js", "brush-presets.js", "brush-stroke-effects.js"].forEach((file) => vm.runInContext(
+  ["color-opacity.js", "drawing-tools.js", "brush-presets.js", "brush-stroke-effects.js", "bubble-brush.js"].forEach((file) => vm.runInContext(
     fs.readFileSync(path.resolve(__dirname, `../resources/js/image-editor/${file}`), "utf8"), context
   ));
   return context.window.MarkdownViewerImageEditor;
@@ -27,7 +27,7 @@ function fakeContext() {
 test("brush library exposes named visual presets and normalizes unknown selections", () => {
   const brush = loadBrushPresets();
   assert.deepEqual(Array.from(brush.ImageEditorBrushPresets, (preset) => preset.id), [
-    "round", "flat", "marker", "ink", "calligraphy", "airbrush", "charcoal", "watercolor", "spray",
+    "round", "flat", "marker", "ink", "calligraphy", "airbrush", "bubble", "charcoal", "watercolor", "spray",
     "wet-paint", "oil-paint", "paint-splatter", "graphite-pencil", "wax-crayon", "chalk", "pastel", "pattern"
   ]);
   assert.equal(brush.normalizeBrushPreset("watercolor"), "watercolor");
@@ -43,6 +43,17 @@ test("textured presets use their dedicated raster rendering", () => {
   assert.equal(distance, 12);
   assert.ok(context.calls.includes("arc"));
   assert.ok(context.calls.includes("fill"));
+});
+
+test("bubble brush scatters transparent outlined bubbles without filling their centers", () => {
+  const brush = loadBrushPresets();
+  const context = fakeContext();
+  brush.drawBrushPresetSegment(context, { x: 0, y: 0 }, { x: 24, y: 0 }, {
+    brushSize: 12, brushType: "bubble", foregroundColor: "#ffffff", backgroundColor: "#000000", strokeType: "solid"
+  });
+  assert.ok(context.calls.includes("arc"));
+  assert.ok(context.calls.filter((call) => call === "stroke").length >= 3);
+  assert.equal(context.calls.includes("fill"), false);
 });
 
 test("wet paint samples existing pixels and pattern brush stamps a repeated motif", () => {

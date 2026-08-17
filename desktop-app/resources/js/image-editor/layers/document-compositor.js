@@ -110,7 +110,14 @@
       const dotsSource = namespace.ImageEditorDotsRenderer?.apply(collageSource, namespace.ImageEditorDotsEffect?.get(layer)) || collageSource;
       const pointsSource = namespace.ImageEditorPointsRenderer?.apply(dotsSource, namespace.ImageEditorPointsEffect?.get(layer)) || dotsSource;
       const watercolorSource = namespace.ImageEditorWatercolorRenderer?.apply(pointsSource, namespace.ImageEditorWatercolorEffect?.get(layer)) || pointsSource;
-      const retro3DSource = namespace.ImageEditorRetro3DRenderer?.apply(watercolorSource, namespace.ImageEditorRetro3DEffect?.get(layer)) || watercolorSource;
+      const sunsetSource = namespace.ImageEditorSunsetRenderer?.apply(watercolorSource, namespace.ImageEditorSunsetEffect?.get(layer)) || watercolorSource;
+      const colorGridSource = namespace.ImageEditorColorGridRenderer?.apply(sunsetSource, namespace.ImageEditorColorGridEffect?.get(layer)) || sunsetSource;
+      const verticalPanelsSource = namespace.ImageEditorVerticalPanelsRenderer?.apply(colorGridSource, namespace.ImageEditorVerticalPanelsEffect?.get(layer)) || colorGridSource;
+      const polaroidsSource = namespace.ImageEditorPolaroidsRenderer?.apply(verticalPanelsSource, namespace.ImageEditorPolaroidsEffect?.get(layer)) || verticalPanelsSource;
+      const miniatureSource = namespace.ImageEditorMiniatureRenderer?.apply(polaroidsSource, namespace.ImageEditorMiniatureEffect?.get(layer)) || polaroidsSource;
+      const puzzleSource = namespace.ImageEditorPuzzleRenderer?.apply(miniatureSource, namespace.ImageEditorPuzzleEffect?.get(layer)) || miniatureSource;
+      const texturizeSource = namespace.ImageEditorTexturizeRenderer?.apply(puzzleSource, namespace.ImageEditorTexturizeEffect?.get(layer)) || puzzleSource;
+      const retro3DSource = namespace.ImageEditorRetro3DRenderer?.apply(texturizeSource, namespace.ImageEditorRetro3DEffect?.get(layer)) || texturizeSource;
       const snowSource = namespace.ImageEditorSnowRenderer?.apply(retro3DSource, namespace.ImageEditorSnowEffect?.get(layer)) || retro3DSource;
       const rainSource = namespace.ImageEditorRainRenderer?.apply(snowSource, namespace.ImageEditorRainEffect?.get(layer)) || snowSource;
       const rainbowSource = namespace.ImageEditorRainbowRenderer?.apply(rainSource, namespace.ImageEditorRainbowEffect?.get(layer)) || rainSource;

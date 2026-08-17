@@ -242,6 +242,8 @@ test("Style submenu stays inside the viewport beside the right-aligned Layers pa
     const root = document.querySelector(`.tab-view[data-tab-id="${createdTabId}"]`);
     const controller = window.markdownViewerApp.services.imageEditor.getView(root.dataset.tabId);
     const layer = controller.documentStore.addLayer("Style target");
+    window.MarkdownViewerImageEditor.ImageEditorDropShadowEffect.upsert(layer);
+    window.MarkdownViewerImageEditor.ImageEditorBlurEffect.upsert(layer);
     controller.documentStore.select(layer.id);
     controller.layerPanel.reveal();
     controller.layerPanel.render();
@@ -263,13 +265,31 @@ test("Style submenu stays inside the viewport beside the right-aligned Layers pa
   await expect(stylePanel).toBeAttached();
   await expect(stylePanel.locator(':scope > [data-layer-context-action="edit-drop-shadow"] > .image-editor-effect-icon')).toHaveCount(1);
   await expect(stylePanel.locator(':scope > [data-layer-context-action="edit-gradient-overlay"] > .image-editor-effect-icon')).toHaveCount(1);
+  await expect(stylePanel.locator(':scope > [data-layer-context-action="edit-blur"]')).toHaveCount(0);
   const removeSubmenu = stylePanel.locator(":scope > .graph-context-menu-submenu").filter({ hasText: "Remove" });
   await expect(removeSubmenu).toBeAttached();
   await expect(removeSubmenu.locator(":scope > button .graph-context-menu-item-label")).toHaveText("Remove");
   const removePanel = removeSubmenu.locator(":scope > .graph-context-menu-submenu-panel");
   await expect(removePanel.locator('[data-layer-context-action="remove-drop-shadow"]')).toHaveText("Cast Shadow");
-  await expect(removePanel.locator('[data-layer-context-action="remove-pattern-overlay"]')).toHaveText("Pattern Coat");
+  await expect(removePanel.locator('[data-layer-context-action="remove-pattern-overlay"]')).toHaveCount(0);
   await expect(stylePanel.locator(':scope > [data-layer-context-action="remove-drop-shadow"]')).toHaveCount(0);
+
+  const tuneSubmenu = menu.locator(":scope > .graph-context-menu-submenu").filter({ hasText: "Tune" });
+  await tuneSubmenu.locator(":scope > button").focus();
+  const tunePanel = tuneSubmenu.locator(":scope > .graph-context-menu-submenu-panel");
+  await expect(tunePanel.locator(':scope > [data-layer-context-action="create-brightness-contrast"]')).toHaveCount(1);
+  await expect(tunePanel.locator(':scope > [data-layer-context-action="apply-grayscale"]')).toHaveCount(1);
+  await expect(tunePanel.locator(':scope > [data-layer-context-action="edit-blur"]')).toHaveCount(0);
+
+  const effectsSubmenu = menu.locator(":scope > .graph-context-menu-submenu").filter({ hasText: "Effects" });
+  await effectsSubmenu.locator(":scope > button").focus();
+  const effectsPanel = effectsSubmenu.locator(":scope > .graph-context-menu-submenu-panel");
+  await expect(effectsPanel.locator(':scope > [data-layer-context-action="edit-blur"]')).toHaveCount(1);
+  await expect(effectsPanel.locator(':scope > [data-layer-context-action="edit-drop-shadow"]')).toHaveCount(0);
+  const effectsRemoveSubmenu = effectsPanel.locator(":scope > .graph-context-menu-submenu").filter({ hasText: "Remove" });
+  await expect(effectsRemoveSubmenu).toBeAttached();
+  await expect(effectsRemoveSubmenu.locator('[data-layer-context-action="remove-blur"]')).toHaveText("Blur");
+  await expect(effectsRemoveSubmenu.locator('[data-layer-context-action="remove-grain"]')).toHaveCount(0);
 
   const position = await styleSubmenu.evaluate((submenu) => {
     const panel = submenu.querySelector(":scope > .graph-context-menu-submenu-panel");
