@@ -865,6 +865,218 @@
       return true;
     }
 
+    /** Remove Rain from the requested layers as one undoable document change. */
+    function removeRainStyle(controller, requestedIds = null) {
+      const layers = resolveLayerStyleTargets(controller, requestedIds);
+      return commitDocumentMutation(controller, "Remove Rain", () => {
+        const changed = layers.map((layer) => namespace.ImageEditorRainEffect.remove(layer)).some(Boolean);
+        if (changed) controller.documentStore.notify({ type: "layer-effect", ids: layers.map((layer) => layer.id) });
+        return changed;
+      });
+    }
+
+    /** Open the app-styled Rain editor and commit one undoable effect change. */
+    function openRainStyle(controller, requestedIds = null) {
+      const hasProvisionalContent = controller.selection.floating
+        && (controller.pendingContentDescriptor || controller.selection.origin === "paste");
+      if (hasProvisionalContent) {
+        if (!commitSelection(controller)) return false;
+        requestedIds = null;
+      }
+      const layers = resolveLayerStyleTargets(controller, requestedIds);
+      if (!layers.length) return false;
+      const originals = new Map(layers.map((layer) => [layer.id, namespace.cloneImageDocument(layer.effects || [])]));
+      const restore = () => layers.forEach((layer) => { layer.effects = namespace.cloneImageDocument(originals.get(layer.id) || []); });
+      const existing = layers.map((layer) => namespace.ImageEditorRainEffect.get(layer)).find(Boolean);
+      controller.layerStyleDialog.open({
+        styleType: "rain",
+        effect: existing,
+        hasEffect: !!existing,
+        targetName: layers.length === 1 ? layers[0].name : layers.length + " selected layers",
+        onPreview(effect, enabled) {
+          restore();
+          if (enabled) layers.forEach((layer) => namespace.ImageEditorRainEffect.upsert(layer, effect));
+          renderLayeredDocument(controller);
+        },
+        onCancel() {
+          restore();
+          renderLayeredDocument(controller);
+        },
+        onApply(effect) {
+          restore();
+          commitDocumentMutation(controller, "Change Rain", () => {
+            const changed = layers.map((layer) => namespace.ImageEditorRainEffect.upsert(layer, effect)).some(Boolean);
+            if (changed) controller.documentStore.notify({ type: "layer-effect", ids: layers.map((layer) => layer.id) });
+            return changed;
+          });
+        },
+        onRemove() {
+          restore();
+          removeRainStyle(controller, layers.map((layer) => layer.id));
+        }
+      });
+      return true;
+    }
+
+    /** Remove Rainbow from the requested layers as one undoable document change. */
+    function removeRainbowStyle(controller, requestedIds = null) {
+      const layers = resolveLayerStyleTargets(controller, requestedIds);
+      return commitDocumentMutation(controller, "Remove Rainbow", () => {
+        const changed = layers.map((layer) => namespace.ImageEditorRainbowEffect.remove(layer)).some(Boolean);
+        if (changed) controller.documentStore.notify({ type: "layer-effect", ids: layers.map((layer) => layer.id) });
+        return changed;
+      });
+    }
+
+    /** Open the app-styled Rainbow editor and commit one undoable effect change. */
+    function openRainbowStyle(controller, requestedIds = null) {
+      const hasProvisionalContent = controller.selection.floating
+        && (controller.pendingContentDescriptor || controller.selection.origin === "paste");
+      if (hasProvisionalContent) {
+        if (!commitSelection(controller)) return false;
+        requestedIds = null;
+      }
+      const layers = resolveLayerStyleTargets(controller, requestedIds);
+      if (!layers.length) return false;
+      const originals = new Map(layers.map((layer) => [layer.id, namespace.cloneImageDocument(layer.effects || [])]));
+      const restore = () => layers.forEach((layer) => { layer.effects = namespace.cloneImageDocument(originals.get(layer.id) || []); });
+      const existing = layers.map((layer) => namespace.ImageEditorRainbowEffect.get(layer)).find(Boolean);
+      controller.layerStyleDialog.open({
+        styleType: "rainbow",
+        effect: existing,
+        hasEffect: !!existing,
+        targetName: layers.length === 1 ? layers[0].name : layers.length + " selected layers",
+        onPreview(effect, enabled) {
+          restore();
+          if (enabled) layers.forEach((layer) => namespace.ImageEditorRainbowEffect.upsert(layer, effect));
+          renderLayeredDocument(controller);
+        },
+        onCancel() {
+          restore();
+          renderLayeredDocument(controller);
+        },
+        onApply(effect) {
+          restore();
+          commitDocumentMutation(controller, "Change Rainbow", () => {
+            const changed = layers.map((layer) => namespace.ImageEditorRainbowEffect.upsert(layer, effect)).some(Boolean);
+            if (changed) controller.documentStore.notify({ type: "layer-effect", ids: layers.map((layer) => layer.id) });
+            return changed;
+          });
+        },
+        onRemove() {
+          restore();
+          removeRainbowStyle(controller, layers.map((layer) => layer.id));
+        }
+      });
+      return true;
+    }
+
+    /** Remove Spotlight from the requested layers as one undoable document change. */
+    function removeSpotlightStyle(controller, requestedIds = null) {
+      const layers = resolveLayerStyleTargets(controller, requestedIds);
+      return commitDocumentMutation(controller, "Remove Spotlight", () => {
+        const changed = layers.map((layer) => namespace.ImageEditorSpotlightEffect.remove(layer)).some(Boolean);
+        if (changed) controller.documentStore.notify({ type: "layer-effect", ids: layers.map((layer) => layer.id) });
+        return changed;
+      });
+    }
+
+    /** Open the app-styled Spotlight editor and commit one undoable effect change. */
+    function openSpotlightStyle(controller, requestedIds = null) {
+      const hasProvisionalContent = controller.selection.floating
+        && (controller.pendingContentDescriptor || controller.selection.origin === "paste");
+      if (hasProvisionalContent) {
+        if (!commitSelection(controller)) return false;
+        requestedIds = null;
+      }
+      const layers = resolveLayerStyleTargets(controller, requestedIds);
+      if (!layers.length) return false;
+      const originals = new Map(layers.map((layer) => [layer.id, namespace.cloneImageDocument(layer.effects || [])]));
+      const restore = () => layers.forEach((layer) => { layer.effects = namespace.cloneImageDocument(originals.get(layer.id) || []); });
+      const existing = layers.map((layer) => namespace.ImageEditorSpotlightEffect.get(layer)).find(Boolean);
+      controller.layerStyleDialog.open({
+        styleType: "spotlight",
+        effect: existing,
+        hasEffect: !!existing,
+        targetName: layers.length === 1 ? layers[0].name : layers.length + " selected layers",
+        onPreview(effect, enabled) {
+          restore();
+          if (enabled) layers.forEach((layer) => namespace.ImageEditorSpotlightEffect.upsert(layer, effect));
+          renderLayeredDocument(controller);
+        },
+        onCancel() {
+          restore();
+          renderLayeredDocument(controller);
+        },
+        onApply(effect) {
+          restore();
+          commitDocumentMutation(controller, "Change Spotlight", () => {
+            const changed = layers.map((layer) => namespace.ImageEditorSpotlightEffect.upsert(layer, effect)).some(Boolean);
+            if (changed) controller.documentStore.notify({ type: "layer-effect", ids: layers.map((layer) => layer.id) });
+            return changed;
+          });
+        },
+        onRemove() {
+          restore();
+          removeSpotlightStyle(controller, layers.map((layer) => layer.id));
+        }
+      });
+      return true;
+    }
+
+    /** Remove Vignette from the requested layers as one undoable document change. */
+    function removeVignetteStyle(controller, requestedIds = null) {
+      const layers = resolveLayerStyleTargets(controller, requestedIds);
+      return commitDocumentMutation(controller, "Remove Vignette", () => {
+        const changed = layers.map((layer) => namespace.ImageEditorVignetteEffect.remove(layer)).some(Boolean);
+        if (changed) controller.documentStore.notify({ type: "layer-effect", ids: layers.map((layer) => layer.id) });
+        return changed;
+      });
+    }
+
+    /** Open the app-styled Vignette editor and commit one undoable effect change. */
+    function openVignetteStyle(controller, requestedIds = null) {
+      const hasProvisionalContent = controller.selection.floating
+        && (controller.pendingContentDescriptor || controller.selection.origin === "paste");
+      if (hasProvisionalContent) {
+        if (!commitSelection(controller)) return false;
+        requestedIds = null;
+      }
+      const layers = resolveLayerStyleTargets(controller, requestedIds);
+      if (!layers.length) return false;
+      const originals = new Map(layers.map((layer) => [layer.id, namespace.cloneImageDocument(layer.effects || [])]));
+      const restore = () => layers.forEach((layer) => { layer.effects = namespace.cloneImageDocument(originals.get(layer.id) || []); });
+      const existing = layers.map((layer) => namespace.ImageEditorVignetteEffect.get(layer)).find(Boolean);
+      controller.layerStyleDialog.open({
+        styleType: "vignette",
+        effect: existing,
+        hasEffect: !!existing,
+        targetName: layers.length === 1 ? layers[0].name : layers.length + " selected layers",
+        onPreview(effect, enabled) {
+          restore();
+          if (enabled) layers.forEach((layer) => namespace.ImageEditorVignetteEffect.upsert(layer, effect));
+          renderLayeredDocument(controller);
+        },
+        onCancel() {
+          restore();
+          renderLayeredDocument(controller);
+        },
+        onApply(effect) {
+          restore();
+          commitDocumentMutation(controller, "Change Vignette", () => {
+            const changed = layers.map((layer) => namespace.ImageEditorVignetteEffect.upsert(layer, effect)).some(Boolean);
+            if (changed) controller.documentStore.notify({ type: "layer-effect", ids: layers.map((layer) => layer.id) });
+            return changed;
+          });
+        },
+        onRemove() {
+          restore();
+          removeVignetteStyle(controller, layers.map((layer) => layer.id));
+        }
+      });
+      return true;
+    }
+
     /** Remove Painted Texture from the requested layers as one undoable document change. */
     function removePaintedTextureStyle(controller, requestedIds = null) {
       const layers = resolveLayerStyleTargets(controller, requestedIds);
@@ -913,6 +1125,59 @@
         onRemove() {
           restore();
           removePaintedTextureStyle(controller, layers.map((layer) => layer.id));
+        }
+      });
+      return true;
+    }
+
+    /** Remove Retro 3D from the requested layers as one undoable document change. */
+    function removeRetro3DStyle(controller, requestedIds = null) {
+      const layers = resolveLayerStyleTargets(controller, requestedIds);
+      return commitDocumentMutation(controller, "Remove Retro 3D", () => {
+        const changed = layers.map((layer) => namespace.ImageEditorRetro3DEffect.remove(layer)).some(Boolean);
+        if (changed) controller.documentStore.notify({ type: "layer-effect", ids: layers.map((layer) => layer.id) });
+        return changed;
+      });
+    }
+
+    /** Open the app-styled Retro 3D editor and commit one undoable effect change. */
+    function openRetro3DStyle(controller, requestedIds = null) {
+      const hasProvisionalContent = controller.selection.floating
+        && (controller.pendingContentDescriptor || controller.selection.origin === "paste");
+      if (hasProvisionalContent) {
+        if (!commitSelection(controller)) return false;
+        requestedIds = null;
+      }
+      const layers = resolveLayerStyleTargets(controller, requestedIds);
+      if (!layers.length) return false;
+      const originals = new Map(layers.map((layer) => [layer.id, namespace.cloneImageDocument(layer.effects || [])]));
+      const restore = () => layers.forEach((layer) => { layer.effects = namespace.cloneImageDocument(originals.get(layer.id) || []); });
+      const existing = layers.map((layer) => namespace.ImageEditorRetro3DEffect.get(layer)).find(Boolean);
+      controller.layerStyleDialog.open({
+        styleType: "retro-3d",
+        effect: existing,
+        hasEffect: !!existing,
+        targetName: layers.length === 1 ? layers[0].name : layers.length + " selected layers",
+        onPreview(effect, enabled) {
+          restore();
+          if (enabled) layers.forEach((layer) => namespace.ImageEditorRetro3DEffect.upsert(layer, effect));
+          renderLayeredDocument(controller);
+        },
+        onCancel() {
+          restore();
+          renderLayeredDocument(controller);
+        },
+        onApply(effect) {
+          restore();
+          commitDocumentMutation(controller, "Change Retro 3D", () => {
+            const changed = layers.map((layer) => namespace.ImageEditorRetro3DEffect.upsert(layer, effect)).some(Boolean);
+            if (changed) controller.documentStore.notify({ type: "layer-effect", ids: layers.map((layer) => layer.id) });
+            return changed;
+          });
+        },
+        onRemove() {
+          restore();
+          removeRetro3DStyle(controller, layers.map((layer) => layer.id));
         }
       });
       return true;
@@ -4410,8 +4675,18 @@
       if (action === "remove-newspaper") return removeNewspaperStyle(controller, controller.canvasLayerStyleTargetIds);
       if (action === "edit-painted-texture") return openPaintedTextureStyle(controller, controller.canvasLayerStyleTargetIds);
       if (action === "remove-painted-texture") return removePaintedTextureStyle(controller, controller.canvasLayerStyleTargetIds);
+      if (action === "edit-retro-3d") return openRetro3DStyle(controller, controller.canvasLayerStyleTargetIds);
+      if (action === "remove-retro-3d") return removeRetro3DStyle(controller, controller.canvasLayerStyleTargetIds);
       if (action === "edit-snow") return openSnowStyle(controller, controller.canvasLayerStyleTargetIds);
       if (action === "remove-snow") return removeSnowStyle(controller, controller.canvasLayerStyleTargetIds);
+      if (action === "edit-rain") return openRainStyle(controller, controller.canvasLayerStyleTargetIds);
+      if (action === "remove-rain") return removeRainStyle(controller, controller.canvasLayerStyleTargetIds);
+      if (action === "edit-rainbow") return openRainbowStyle(controller, controller.canvasLayerStyleTargetIds);
+      if (action === "remove-rainbow") return removeRainbowStyle(controller, controller.canvasLayerStyleTargetIds);
+      if (action === "edit-spotlight") return openSpotlightStyle(controller, controller.canvasLayerStyleTargetIds);
+      if (action === "remove-spotlight") return removeSpotlightStyle(controller, controller.canvasLayerStyleTargetIds);
+      if (action === "edit-vignette") return openVignetteStyle(controller, controller.canvasLayerStyleTargetIds);
+      if (action === "remove-vignette") return removeVignetteStyle(controller, controller.canvasLayerStyleTargetIds);
       if (action === "edit-vortex") return openVortexStyle(controller, controller.canvasLayerStyleTargetIds);
       if (action === "remove-vortex") return removeVortexStyle(controller, controller.canvasLayerStyleTargetIds);
       if (action === "edit-ripple-field") return openRippleFieldStyle(controller, controller.canvasLayerStyleTargetIds);
@@ -4481,7 +4756,12 @@
         const hasGrain = styleLayers.some((layer) => namespace.ImageEditorGrainEffect.get(layer));
         const hasNewspaper = styleLayers.some((layer) => namespace.ImageEditorNewspaperEffect.get(layer));
         const hasPaintedTexture = styleLayers.some((layer) => namespace.ImageEditorPaintedTextureEffect.get(layer));
+        const hasRetro3D = styleLayers.some((layer) => namespace.ImageEditorRetro3DEffect.get(layer));
         const hasSnow = styleLayers.some((layer) => namespace.ImageEditorSnowEffect.get(layer));
+        const hasRain = styleLayers.some((layer) => namespace.ImageEditorRainEffect.get(layer));
+        const hasRainbow = styleLayers.some((layer) => namespace.ImageEditorRainbowEffect.get(layer));
+        const hasSpotlight = styleLayers.some((layer) => namespace.ImageEditorSpotlightEffect.get(layer));
+        const hasVignette = styleLayers.some((layer) => namespace.ImageEditorVignetteEffect.get(layer));
         const hasVortex = styleLayers.some((layer) => namespace.ImageEditorVortexEffect.get(layer));
         const hasRippleField = styleLayers.some((layer) => namespace.ImageEditorRippleFieldEffect.get(layer));
         const hasFlare = styleLayers.some((layer) => namespace.ImageEditorFlareEffect.get(layer));
@@ -4531,8 +4811,18 @@
           "remove-newspaper": hasNewspaper,
           "edit-painted-texture": styleLayers.length > 0,
           "remove-painted-texture": hasPaintedTexture,
+          "edit-retro-3d": styleLayers.length > 0,
+          "remove-retro-3d": hasRetro3D,
           "edit-snow": styleLayers.length > 0,
           "remove-snow": hasSnow,
+          "edit-rain": styleLayers.length > 0,
+          "remove-rain": hasRain,
+          "edit-rainbow": styleLayers.length > 0,
+          "remove-rainbow": hasRainbow,
+          "edit-spotlight": styleLayers.length > 0,
+          "remove-spotlight": hasSpotlight,
+          "edit-vignette": styleLayers.length > 0,
+          "remove-vignette": hasVignette,
           "edit-vortex": styleLayers.length > 0,
           "remove-vortex": hasVortex,
           "edit-ripple-field": styleLayers.length > 0,
@@ -4978,8 +5268,18 @@
           if (label === "remove-newspaper") return removeNewspaperStyle(controller, callback?.layerIds);
           if (label === "edit-painted-texture") return openPaintedTextureStyle(controller, callback?.layerIds);
           if (label === "remove-painted-texture") return removePaintedTextureStyle(controller, callback?.layerIds);
+          if (label === "edit-retro-3d") return openRetro3DStyle(controller, callback?.layerIds);
+          if (label === "remove-retro-3d") return removeRetro3DStyle(controller, callback?.layerIds);
           if (label === "edit-snow") return openSnowStyle(controller, callback?.layerIds);
           if (label === "remove-snow") return removeSnowStyle(controller, callback?.layerIds);
+          if (label === "edit-rain") return openRainStyle(controller, callback?.layerIds);
+          if (label === "remove-rain") return removeRainStyle(controller, callback?.layerIds);
+          if (label === "edit-rainbow") return openRainbowStyle(controller, callback?.layerIds);
+          if (label === "remove-rainbow") return removeRainbowStyle(controller, callback?.layerIds);
+          if (label === "edit-spotlight") return openSpotlightStyle(controller, callback?.layerIds);
+          if (label === "remove-spotlight") return removeSpotlightStyle(controller, callback?.layerIds);
+          if (label === "edit-vignette") return openVignetteStyle(controller, callback?.layerIds);
+          if (label === "remove-vignette") return removeVignetteStyle(controller, callback?.layerIds);
           if (label === "edit-vortex") return openVortexStyle(controller, callback?.layerIds);
           if (label === "remove-vortex") return removeVortexStyle(controller, callback?.layerIds);
           if (label === "edit-ripple-field") return openRippleFieldStyle(controller, callback?.layerIds);
@@ -5014,7 +5314,12 @@
           if (action === "edit-grain") return openGrainStyle(controller);
           if (action === "edit-newspaper") return openNewspaperStyle(controller);
           if (action === "edit-painted-texture") return openPaintedTextureStyle(controller);
+          if (action === "edit-retro-3d") return openRetro3DStyle(controller);
           if (action === "edit-snow") return openSnowStyle(controller);
+          if (action === "edit-rain") return openRainStyle(controller);
+          if (action === "edit-rainbow") return openRainbowStyle(controller);
+          if (action === "edit-spotlight") return openSpotlightStyle(controller);
+          if (action === "edit-vignette") return openVignetteStyle(controller);
           if (action === "edit-vortex") return openVortexStyle(controller);
           if (action === "edit-ripple-field") return openRippleFieldStyle(controller);
           if (action === "edit-flare") return openFlareStyle(controller);

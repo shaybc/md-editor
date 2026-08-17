@@ -12,7 +12,7 @@ Use a disposable test environment to prove the solution, then apply only the ver
 When the solution is not obvious and safely verifiable from existing evidence:
 
 1. Explain briefly why an isolated experiment would reduce uncertainty.
-2. Ask the user for permission to create and use a temporary test environment.
+2. Ask the user for permission to create and use a temporary test environment - using the ask user a question tool, supply 2 options as user answers.
 3. State that temporary artifacts will be deleted after the experiment.
 4. Do not create the environment until the user approves.
 

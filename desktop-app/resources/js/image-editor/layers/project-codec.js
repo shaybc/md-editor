@@ -67,7 +67,12 @@
       namespace.ImageEditorGrainEffect?.normalizeDocument(document);
       namespace.ImageEditorNewspaperEffect?.normalizeDocument(document);
       namespace.ImageEditorPaintedTextureEffect?.normalizeDocument(document);
+      namespace.ImageEditorRetro3DEffect?.normalizeDocument(document);
       namespace.ImageEditorSnowEffect?.normalizeDocument(document);
+      namespace.ImageEditorRainEffect?.normalizeDocument(document);
+      namespace.ImageEditorRainbowEffect?.normalizeDocument(document);
+      namespace.ImageEditorSpotlightEffect?.normalizeDocument(document);
+      namespace.ImageEditorVignetteEffect?.normalizeDocument(document);
       namespace.ImageEditorVortexEffect?.normalizeDocument(document);
       namespace.ImageEditorRippleFieldEffect?.normalizeDocument(document);
       namespace.ImageEditorFlareEffect?.normalizeDocument(document);

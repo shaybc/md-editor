@@ -26,7 +26,12 @@
     ["edit-grain", "grain", "Grain"],
     ["edit-newspaper", "newspaper", "Newspaper"],
     ["edit-painted-texture", "painted-texture", "Painted<br>Texture"],
+    ["edit-retro-3d", "retro-3d", "Retro 3D"],
     ["edit-snow", "snow", "Snow"],
+    ["edit-rain", "rain", "Rain"],
+    ["edit-rainbow", "rainbow", "Rainbow"],
+    ["edit-spotlight", "spotlight", "Spotlight"],
+    ["edit-vignette", "vignette", "Vignette"],
     ["edit-vortex", "vortex", "Vortex"],
     ["edit-ripple-field", "ripple-field", "Ripple<br>Field"],
     ["edit-flare", "flare", "Flare"],
@@ -178,7 +183,7 @@
           }
           return;
         }
-        if (["edit-blur", "edit-grain", "edit-newspaper", "edit-painted-texture", "edit-snow", "edit-vortex", "edit-ripple-field", "edit-flare", "edit-gust"].includes(action)) {
+        if (["edit-blur", "edit-grain", "edit-newspaper", "edit-painted-texture", "edit-retro-3d", "edit-snow", "edit-rain", "edit-rainbow", "edit-spotlight", "edit-vignette", "edit-vortex", "edit-ripple-field", "edit-flare", "edit-gust"].includes(action)) {
           this.onLayerEffect(action);
           return;
         }

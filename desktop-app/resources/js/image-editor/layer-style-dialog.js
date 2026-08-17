@@ -68,6 +68,36 @@
               <label data-snow-effect-field hidden>Fall angle <output data-output="snowAngle"></output><input name="snowAngle" type="range" min="-90" max="90" step="1"></label>
               <label data-snow-effect-field hidden>Motion <output data-output="snowMotion"></output><input name="snowMotion" type="range" min="0" max="40" step="1"></label>
               <label data-snow-effect-field hidden>Brightness <output data-output="snowBrightness"></output><input name="snowBrightness" type="range" min="0" max="100" step="1"></label>
+              <label data-rain-effect-field hidden>Amount <output data-output="rainAmount"></output><input name="rainAmount" type="range" min="0" max="100" step="1"></label>
+              <label data-rain-effect-field hidden>Drop length <output data-output="rainLength"></output><input name="rainLength" type="range" min="1" max="250" step="1"></label>
+              <label data-rain-effect-field hidden>Thickness <output data-output="rainThickness"></output><input name="rainThickness" type="range" min="0.25" max="8" step="0.25"></label>
+              <label data-rain-effect-field hidden>Direction <output data-output="rainAngle"></output><input name="rainAngle" type="range" min="-180" max="180" step="1"></label>
+              <label data-rain-effect-field hidden>Brightness <output data-output="rainBrightness"></output><input name="rainBrightness" type="range" min="0" max="100" step="1"></label>
+              <input data-rain-effect-field name="rainSeed" type="hidden">
+              <button class="image-editor-ripple-randomize" data-rain-effect-field data-layer-style-action="randomize-rain" type="button" hidden>Randomize</button>
+              <label data-rainbow-effect-field hidden>Horizontal position <output data-output="rainbowPositionX"></output><input name="rainbowPositionX" type="range" min="0" max="100" step="1"></label>
+              <label data-rainbow-effect-field hidden>Vertical position <output data-output="rainbowPositionY"></output><input name="rainbowPositionY" type="range" min="0" max="140" step="1"></label>
+              <label data-rainbow-effect-field hidden>Scale <output data-output="rainbowScale"></output><input name="rainbowScale" type="range" min="20" max="200" step="1"></label>
+              <label data-rainbow-effect-field hidden>Band thickness <output data-output="rainbowThickness"></output><input name="rainbowThickness" type="range" min="2" max="50" step="1"></label>
+              <label data-rainbow-effect-field hidden>Softness <output data-output="rainbowSoftness"></output><input name="rainbowSoftness" type="range" min="0" max="50" step="1"></label>
+              <label data-rainbow-effect-field hidden>Horizon fade <output data-output="rainbowFade"></output><input name="rainbowFade" type="range" min="0" max="100" step="1"></label>
+              <label data-rainbow-effect-field hidden>Intensity <output data-output="rainbowIntensity"></output><input name="rainbowIntensity" type="range" min="0" max="100" step="1"></label>
+              <label data-spotlight-effect-field hidden>Horizontal position <output data-output="spotlightPositionX"></output><input name="spotlightPositionX" type="range" min="0" max="100" step="1"></label>
+              <label data-spotlight-effect-field hidden>Vertical position <output data-output="spotlightPositionY"></output><input name="spotlightPositionY" type="range" min="0" max="100" step="1"></label>
+              <label data-spotlight-effect-field hidden>Width <output data-output="spotlightWidth"></output><input name="spotlightWidth" type="range" min="5" max="200" step="1"></label>
+              <label data-spotlight-effect-field hidden>Height <output data-output="spotlightHeight"></output><input name="spotlightHeight" type="range" min="5" max="200" step="1"></label>
+              <label data-spotlight-effect-field hidden>Feather <output data-output="spotlightFeather"></output><input name="spotlightFeather" type="range" min="0" max="100" step="1"></label>
+              <label data-spotlight-effect-field hidden>Brightness <output data-output="spotlightBrightness"></output><input name="spotlightBrightness" type="range" min="0" max="200" step="1"></label>
+              <label data-spotlight-effect-field hidden>Light color<input name="spotlightColor" type="color"></label>
+              <label data-vignette-effect-field hidden>Horizontal position <output data-output="vignettePositionX"></output><input name="vignettePositionX" type="range" min="0" max="100" step="1"></label>
+              <label data-vignette-effect-field hidden>Vertical position <output data-output="vignettePositionY"></output><input name="vignettePositionY" type="range" min="0" max="100" step="1"></label>
+              <label data-vignette-effect-field hidden>Width <output data-output="vignetteWidth"></output><input name="vignetteWidth" type="range" min="10" max="200" step="1"></label>
+              <label data-vignette-effect-field hidden>Height <output data-output="vignetteHeight"></output><input name="vignetteHeight" type="range" min="10" max="200" step="1"></label>
+              <label data-vignette-effect-field hidden>Clear center <output data-output="vignetteClearCenter"></output><input name="vignetteClearCenter" type="range" min="0" max="95" step="1"></label>
+              <label data-vignette-effect-field hidden>Feather <output data-output="vignetteFeather"></output><input name="vignetteFeather" type="range" min="0" max="100" step="1"></label>
+              <label data-vignette-effect-field hidden>Amount <output data-output="vignetteAmount"></output><input name="vignetteAmount" type="range" min="0" max="100" step="1"></label>
+              <label data-vignette-effect-field hidden>Protect highlights <output data-output="vignetteHighlightProtection"></output><input name="vignetteHighlightProtection" type="range" min="0" max="100" step="1"></label>
+              <label data-vignette-effect-field hidden>Edge color<input name="vignetteColor" type="color"></label>
               <label data-painted-texture-effect-field hidden>Stylization <output data-output="paintedStylization"></output><input name="paintedStylization" type="range" min="0" max="10" step="0.1"></label>
               <label data-painted-texture-effect-field hidden>Cleanliness <output data-output="paintedCleanliness"></output><input name="paintedCleanliness" type="range" min="0" max="10" step="0.1"></label>
               <label data-painted-texture-effect-field hidden>Scale <output data-output="paintedScale"></output><input name="paintedScale" type="range" min="0.1" max="10" step="0.1"></label>
@@ -75,6 +105,10 @@
               <label class="image-editor-grain-monochromatic" data-painted-texture-effect-field hidden><input name="paintedLighting" type="checkbox"> Lighting</label>
               <label data-painted-texture-effect-field hidden>Light angle <output data-output="paintedAngle"></output><input name="paintedAngle" type="range" min="-180" max="180" step="1"></label>
               <label data-painted-texture-effect-field hidden>Shine <output data-output="paintedShine"></output><input name="paintedShine" type="range" min="0" max="10" step="0.1"></label>
+              <label data-retro-3d-effect-field hidden>Separation <output data-output="retro3DSeparation"></output><input name="retro3DSeparation" type="range" min="0" max="100" step="1"></label>
+              <label data-retro-3d-effect-field hidden>Direction <output data-output="retro3DAngle"></output><input name="retro3DAngle" type="range" min="-180" max="180" step="1"></label>
+              <label data-retro-3d-effect-field hidden>Strength <output data-output="retro3DStrength"></output><input name="retro3DStrength" type="range" min="0" max="100" step="1"></label>
+              <label data-retro-3d-effect-field hidden>Color pair<select name="retro3DColorPair"><option value="red-cyan">Red / Cyan</option><option value="green-magenta">Green / Magenta</option><option value="blue-yellow">Blue / Yellow</option></select></label>
               <label data-vortex-effect-field hidden>Angle <output data-output="vortexAngle"></output><input name="vortexAngle" type="range" min="-999" max="999" step="1"></label>
               <label data-ripple-effect-field hidden>Generators <output data-output="rippleGenerators"></output><input name="rippleGenerators" type="range" min="1" max="999" step="1"></label>
               <label data-ripple-effect-field hidden>Minimum wavelength <output data-output="rippleWavelengthMinimum"></output><input name="rippleWavelengthMinimum" type="range" min="1" max="999" step="1"></label>
@@ -121,11 +155,11 @@
           this.form.elements.gradientOffsetX.value = 0;
           this.form.elements.gradientOffsetY.value = 0;
           this.refreshPreview();
-        } else if (action === "randomize-ripple") {
+        } else if (action === "randomize-ripple" || action === "randomize-rain") {
           const seed = new Uint32Array(1);
           if (global.crypto?.getRandomValues) global.crypto.getRandomValues(seed);
           else seed[0] = (Date.now() ^ Math.floor(Math.random() * 0xFFFFFFFF)) >>> 0;
-          this.form.elements.rippleSeed.value = seed[0];
+          this.form.elements[action === "randomize-rain" ? "rainSeed" : "rippleSeed"].value = seed[0];
           this.refreshPreview();
         } else if (action) this.finish(action);
         else if (event.target === this.overlay) this.finish("cancel");
@@ -209,6 +243,59 @@
           brightness: Number(data.get("snowBrightness")) / 100
         });
       }
+      if (this.styleType === "rain") {
+        return this.effectModel.normalize({
+          ...this.effect,
+          enabled: data.get("enabled") === "on",
+          amount: Number(data.get("rainAmount")) / 100,
+          length: Number(data.get("rainLength")),
+          thickness: Number(data.get("rainThickness")),
+          angle: Number(data.get("rainAngle")),
+          brightness: Number(data.get("rainBrightness")) / 100,
+          seed: Number(data.get("rainSeed"))
+        });
+      }
+      if (this.styleType === "rainbow") {
+        return this.effectModel.normalize({
+          ...this.effect,
+          enabled: data.get("enabled") === "on",
+          positionX: Number(data.get("rainbowPositionX")),
+          positionY: Number(data.get("rainbowPositionY")),
+          scale: Number(data.get("rainbowScale")),
+          thickness: Number(data.get("rainbowThickness")),
+          softness: Number(data.get("rainbowSoftness")),
+          fade: Number(data.get("rainbowFade")),
+          intensity: Number(data.get("rainbowIntensity")) / 100
+        });
+      }
+      if (this.styleType === "spotlight") {
+        return this.effectModel.normalize({
+          ...this.effect,
+          enabled: data.get("enabled") === "on",
+          positionX: Number(data.get("spotlightPositionX")),
+          positionY: Number(data.get("spotlightPositionY")),
+          width: Number(data.get("spotlightWidth")),
+          height: Number(data.get("spotlightHeight")),
+          feather: Number(data.get("spotlightFeather")),
+          brightness: Number(data.get("spotlightBrightness")) / 100,
+          color: data.get("spotlightColor")
+        });
+      }
+      if (this.styleType === "vignette") {
+        return this.effectModel.normalize({
+          ...this.effect,
+          enabled: data.get("enabled") === "on",
+          positionX: Number(data.get("vignettePositionX")),
+          positionY: Number(data.get("vignettePositionY")),
+          width: Number(data.get("vignetteWidth")),
+          height: Number(data.get("vignetteHeight")),
+          clearCenter: Number(data.get("vignetteClearCenter")),
+          feather: Number(data.get("vignetteFeather")),
+          amount: Number(data.get("vignetteAmount")) / 100,
+          highlightProtection: Number(data.get("vignetteHighlightProtection")) / 100,
+          color: data.get("vignetteColor")
+        });
+      }
       if (this.styleType === "painted-texture") {
         return this.effectModel.normalize({
           ...this.effect,
@@ -220,6 +307,16 @@
           lighting: data.get("paintedLighting") === "on",
           angle: Number(data.get("paintedAngle")),
           shine: Number(data.get("paintedShine"))
+        });
+      }
+      if (this.styleType === "retro-3d") {
+        return this.effectModel.normalize({
+          ...this.effect,
+          enabled: data.get("enabled") === "on",
+          separation: Number(data.get("retro3DSeparation")),
+          angle: Number(data.get("retro3DAngle")),
+          strength: Number(data.get("retro3DStrength")) / 100,
+          colorPair: data.get("retro3DColorPair")
         });
       }
       if (this.styleType === "blur") {
@@ -295,6 +392,16 @@
     updateOutputs() {
       const names = this.styleType === "gust"
         ? []
+        : this.styleType === "vignette"
+        ? ["vignettePositionX", "vignettePositionY", "vignetteWidth", "vignetteHeight", "vignetteClearCenter", "vignetteFeather", "vignetteAmount", "vignetteHighlightProtection"]
+        : this.styleType === "spotlight"
+        ? ["spotlightPositionX", "spotlightPositionY", "spotlightWidth", "spotlightHeight", "spotlightFeather", "spotlightBrightness"]
+        : this.styleType === "rainbow"
+        ? ["rainbowPositionX", "rainbowPositionY", "rainbowScale", "rainbowThickness", "rainbowSoftness", "rainbowFade", "rainbowIntensity"]
+        : this.styleType === "rain"
+        ? ["rainAmount", "rainLength", "rainThickness", "rainAngle", "rainBrightness"]
+        : this.styleType === "retro-3d"
+        ? ["retro3DSeparation", "retro3DAngle", "retro3DStrength"]
         : this.styleType === "painted-texture"
         ? ["paintedStylization", "paintedCleanliness", "paintedScale", "paintedBristleDetail", "paintedAngle", "paintedShine"]
         : this.styleType === "snow"
@@ -324,8 +431,8 @@
         : ["opacity", "angle", "distance", this.styleType === "inner-shadow" ? "choke" : "spread", "blur"];
       names.forEach((name) => {
         const input = this.form.elements[name];
-        const suffix = name === "rippleGenerators" ? "" : ["angle", "patternAngle", "gradientAngle", "bevelAngle", "altitude", "vortexAngle", "newspaperAngle", "snowAngle", "paintedAngle"].includes(name) ? "°" : ["opacity", "spread", "choke", "scale", "density", "gradientScale", "depth", "highlightOpacity", "shadowOpacity", "grainAmount", "newspaperContrast", "rippleHorizontalScale", "rippleVerticalScale", "flareBrightness", "flarePositionX", "flarePositionY", "snowDensity", "snowDepth", "snowBrightness"].includes(name) ? "%" : ["paintedStylization", "paintedCleanliness", "paintedScale", "paintedBristleDetail", "paintedShine"].includes(name) ? "" : " px";
-        const value = ["radius", "grainAmount", "snowFlakeSize", "paintedStylization", "paintedCleanliness", "paintedScale", "paintedBristleDetail", "paintedShine"].includes(name) ? Number(input.value).toFixed(1).replace(/\.0$/, "") : input.value;
+        const suffix = name === "rippleGenerators" ? "" : ["angle", "patternAngle", "gradientAngle", "bevelAngle", "altitude", "vortexAngle", "newspaperAngle", "snowAngle", "paintedAngle", "retro3DAngle", "rainAngle"].includes(name) ? "°" : ["opacity", "spread", "choke", "scale", "density", "gradientScale", "depth", "highlightOpacity", "shadowOpacity", "grainAmount", "newspaperContrast", "rippleHorizontalScale", "rippleVerticalScale", "flareBrightness", "flarePositionX", "flarePositionY", "snowDensity", "snowDepth", "snowBrightness", "retro3DStrength", "rainAmount", "rainBrightness", "rainbowPositionX", "rainbowPositionY", "rainbowScale", "rainbowThickness", "rainbowSoftness", "rainbowFade", "rainbowIntensity", "spotlightPositionX", "spotlightPositionY", "spotlightWidth", "spotlightHeight", "spotlightFeather", "spotlightBrightness", "vignettePositionX", "vignettePositionY", "vignetteWidth", "vignetteHeight", "vignetteClearCenter", "vignetteFeather", "vignetteAmount", "vignetteHighlightProtection"].includes(name) ? "%" : ["paintedStylization", "paintedCleanliness", "paintedScale", "paintedBristleDetail", "paintedShine"].includes(name) ? "" : " px";
+        const value = ["radius", "grainAmount", "snowFlakeSize", "paintedStylization", "paintedCleanliness", "paintedScale", "paintedBristleDetail", "paintedShine", "rainThickness"].includes(name) ? Number(input.value).toFixed(1).replace(/\.0$/, "") : input.value;
         this.overlay.querySelector(`[data-output="${name}"]`).textContent = `${value}${suffix}`;
       });
     }
@@ -338,7 +445,7 @@
     /** Open the requested shadow editor for one or more layers. */
     open(options) {
       this.options = options;
-      this.styleType = ["inner-shadow", "inner-glow", "outer-glow", "color-overlay", "gradient-overlay", "pattern-overlay", "bevel-emboss", "blur", "grain", "newspaper", "painted-texture", "snow", "vortex", "ripple-field", "flare", "gust"].includes(options.styleType) ? options.styleType : "drop-shadow";
+      this.styleType = ["inner-shadow", "inner-glow", "outer-glow", "color-overlay", "gradient-overlay", "pattern-overlay", "bevel-emboss", "blur", "grain", "newspaper", "painted-texture", "retro-3d", "snow", "rain", "rainbow", "spotlight", "vignette", "vortex", "ripple-field", "flare", "gust"].includes(options.styleType) ? options.styleType : "drop-shadow";
       this.effectModel = this.styleType === "inner-shadow"
         ? namespace.ImageEditorInnerShadowEffect
         : this.styleType === "inner-glow" ? namespace.ImageEditorInnerGlowEffect
@@ -351,23 +458,28 @@
                       : this.styleType === "grain" ? namespace.ImageEditorGrainEffect
                         : this.styleType === "newspaper" ? namespace.ImageEditorNewspaperEffect
                           : this.styleType === "painted-texture" ? namespace.ImageEditorPaintedTextureEffect
+                          : this.styleType === "retro-3d" ? namespace.ImageEditorRetro3DEffect
                           : this.styleType === "snow" ? namespace.ImageEditorSnowEffect
+                          : this.styleType === "rain" ? namespace.ImageEditorRainEffect
+                          : this.styleType === "rainbow" ? namespace.ImageEditorRainbowEffect
+                          : this.styleType === "spotlight" ? namespace.ImageEditorSpotlightEffect
+                          : this.styleType === "vignette" ? namespace.ImageEditorVignetteEffect
                           : this.styleType === "vortex" ? namespace.ImageEditorVortexEffect
                           : this.styleType === "ripple-field" ? namespace.ImageEditorRippleFieldEffect
                             : this.styleType === "flare" ? namespace.ImageEditorFlareEffect
                               : this.styleType === "gust" ? namespace.ImageEditorGustEffect : namespace.ImageEditorDropShadowEffect;
-      const styleName = this.styleType === "inner-shadow" ? "Inset Shadow" : this.styleType === "inner-glow" ? "Inner Aura" : this.styleType === "outer-glow" ? "Outer Aura" : this.styleType === "color-overlay" ? "Color Coat" : this.styleType === "gradient-overlay" ? "Gradient Coat" : this.styleType === "pattern-overlay" ? "Pattern Coat" : this.styleType === "bevel-emboss" ? "Raised Edge" : this.styleType === "blur" ? "Blur" : this.styleType === "grain" ? "Grain" : this.styleType === "newspaper" ? "Newspaper" : this.styleType === "painted-texture" ? "Painted Texture" : this.styleType === "snow" ? "Snow" : this.styleType === "vortex" ? "Vortex" : this.styleType === "ripple-field" ? "Ripple Field" : this.styleType === "flare" ? "Flare" : this.styleType === "gust" ? "Gust" : "Cast Shadow";
+      const styleName = this.styleType === "inner-shadow" ? "Inset Shadow" : this.styleType === "inner-glow" ? "Inner Aura" : this.styleType === "outer-glow" ? "Outer Aura" : this.styleType === "color-overlay" ? "Color Coat" : this.styleType === "gradient-overlay" ? "Gradient Coat" : this.styleType === "pattern-overlay" ? "Pattern Coat" : this.styleType === "bevel-emboss" ? "Raised Edge" : this.styleType === "blur" ? "Blur" : this.styleType === "grain" ? "Grain" : this.styleType === "newspaper" ? "Newspaper" : this.styleType === "painted-texture" ? "Painted Texture" : this.styleType === "retro-3d" ? "Retro 3D" : this.styleType === "snow" ? "Snow" : this.styleType === "rain" ? "Rain" : this.styleType === "rainbow" ? "Rainbow" : this.styleType === "spotlight" ? "Spotlight" : this.styleType === "vignette" ? "Vignette" : this.styleType === "vortex" ? "Vortex" : this.styleType === "ripple-field" ? "Ripple Field" : this.styleType === "flare" ? "Flare" : this.styleType === "gust" ? "Gust" : "Cast Shadow";
       this.effect = this.effectModel.normalize(options.effect || {});
       this.overlay.querySelector(".image-editor-layer-style-target").textContent = options.targetName || "Selected layers";
       this.overlay.querySelector(".image-editor-layer-style-name").textContent = styleName;
       this.overlay.querySelector(".image-editor-layer-style-enabled-name").textContent = `Enable ${styleName}`;
       ["blendMode", "color", "opacity", "angle", "distance", "spread", "choke", "blur", "useGlobalLight"].forEach((name) => {
-        this.form.elements[name].closest("label").hidden = ["blur", "grain", "newspaper", "painted-texture", "snow", "vortex", "ripple-field", "flare", "gust"].includes(this.styleType);
+        this.form.elements[name].closest("label").hidden = ["blur", "grain", "newspaper", "painted-texture", "retro-3d", "snow", "rain", "rainbow", "spotlight", "vignette", "vortex", "ripple-field", "flare", "gust"].includes(this.styleType);
       });
       this.form.elements.spread.closest("label").hidden = !["drop-shadow", "outer-glow"].includes(this.styleType);
       this.overlay.querySelector("[data-choke-field]").hidden = !["inner-shadow", "inner-glow"].includes(this.styleType);
-      this.overlay.querySelector("[data-size-field]").hidden = ["color-overlay", "gradient-overlay", "pattern-overlay", "blur", "grain", "newspaper", "painted-texture", "snow", "vortex", "ripple-field", "flare", "gust"].includes(this.styleType);
-      this.overlay.querySelector("[data-color-field]").hidden = ["gradient-overlay", "pattern-overlay", "blur", "grain", "newspaper", "painted-texture", "snow", "vortex", "ripple-field", "flare", "gust"].includes(this.styleType);
+      this.overlay.querySelector("[data-size-field]").hidden = ["color-overlay", "gradient-overlay", "pattern-overlay", "blur", "grain", "newspaper", "painted-texture", "retro-3d", "snow", "rain", "rainbow", "spotlight", "vignette", "vortex", "ripple-field", "flare", "gust"].includes(this.styleType);
+      this.overlay.querySelector("[data-color-field]").hidden = ["gradient-overlay", "pattern-overlay", "blur", "grain", "newspaper", "painted-texture", "retro-3d", "snow", "rain", "rainbow", "spotlight", "vignette", "vortex", "ripple-field", "flare", "gust"].includes(this.styleType);
       this.overlay.querySelectorAll("[data-gradient-field]").forEach((field) => { field.hidden = this.styleType !== "gradient-overlay"; });
       this.overlay.querySelectorAll("[data-pattern-field]").forEach((field) => { field.hidden = this.styleType !== "pattern-overlay"; });
       this.overlay.querySelectorAll("[data-bevel-field]").forEach((field) => { field.hidden = this.styleType !== "bevel-emboss"; });
@@ -375,12 +487,17 @@
       this.overlay.querySelectorAll("[data-grain-effect-field]").forEach((field) => { field.hidden = this.styleType !== "grain"; });
       this.overlay.querySelectorAll("[data-newspaper-effect-field]").forEach((field) => { field.hidden = this.styleType !== "newspaper"; });
       this.overlay.querySelectorAll("[data-painted-texture-effect-field]").forEach((field) => { field.hidden = this.styleType !== "painted-texture"; });
+      this.overlay.querySelectorAll("[data-retro-3d-effect-field]").forEach((field) => { field.hidden = this.styleType !== "retro-3d"; });
       this.overlay.querySelectorAll("[data-snow-effect-field]").forEach((field) => { field.hidden = this.styleType !== "snow"; });
+      this.overlay.querySelectorAll("[data-rain-effect-field]").forEach((field) => { field.hidden = this.styleType !== "rain"; });
+      this.overlay.querySelectorAll("[data-rainbow-effect-field]").forEach((field) => { field.hidden = this.styleType !== "rainbow"; });
+      this.overlay.querySelectorAll("[data-spotlight-effect-field]").forEach((field) => { field.hidden = this.styleType !== "spotlight"; });
+      this.overlay.querySelectorAll("[data-vignette-effect-field]").forEach((field) => { field.hidden = this.styleType !== "vignette"; });
       this.overlay.querySelectorAll("[data-vortex-effect-field]").forEach((field) => { field.hidden = this.styleType !== "vortex"; });
       this.overlay.querySelectorAll("[data-ripple-effect-field]").forEach((field) => { field.hidden = this.styleType !== "ripple-field"; });
       this.overlay.querySelectorAll("[data-flare-effect-field]").forEach((field) => { field.hidden = this.styleType !== "flare"; });
       this.overlay.querySelectorAll("[data-gust-effect-field]").forEach((field) => { field.hidden = this.styleType !== "gust"; });
-      this.overlay.querySelectorAll("[data-directional-shadow-field]").forEach((field) => { field.hidden = ["inner-glow", "outer-glow", "color-overlay", "gradient-overlay", "pattern-overlay", "blur", "grain", "newspaper", "painted-texture", "snow", "vortex", "ripple-field", "flare", "gust"].includes(this.styleType); });
+      this.overlay.querySelectorAll("[data-directional-shadow-field]").forEach((field) => { field.hidden = ["inner-glow", "outer-glow", "color-overlay", "gradient-overlay", "pattern-overlay", "blur", "grain", "newspaper", "painted-texture", "retro-3d", "snow", "rain", "rainbow", "spotlight", "vignette", "vortex", "ripple-field", "flare", "gust"].includes(this.styleType); });
       const screenBlendOption = this.form.elements.blendMode.querySelector('option[value="screen"]');
       screenBlendOption.hidden = !["inner-glow", "outer-glow", "color-overlay", "gradient-overlay", "pattern-overlay"].includes(this.styleType);
       screenBlendOption.disabled = !["inner-glow", "outer-glow", "color-overlay", "gradient-overlay", "pattern-overlay"].includes(this.styleType);
@@ -405,12 +522,45 @@
       this.form.elements.paintedLighting.checked = values.lighting !== false;
       this.form.elements.paintedAngle.value = values.angle ?? -60;
       this.form.elements.paintedShine.value = values.shine ?? 1.3;
+      this.form.elements.retro3DSeparation.value = values.separation ?? 8;
+      this.form.elements.retro3DAngle.value = values.angle ?? 0;
+      this.form.elements.retro3DStrength.value = Math.round((values.strength ?? 1) * 100);
+      this.form.elements.retro3DColorPair.value = values.colorPair || "red-cyan";
       this.form.elements.snowDensity.value = Math.round((values.density ?? 0.35) * 100);
       this.form.elements.snowFlakeSize.value = values.flakeSize ?? 4;
       this.form.elements.snowDepth.value = Math.round((values.depth ?? 0.45) * 100);
       this.form.elements.snowAngle.value = values.angle ?? -65;
       this.form.elements.snowMotion.value = values.motion ?? 10;
       this.form.elements.snowBrightness.value = Math.round((values.brightness ?? 0.9) * 100);
+      this.form.elements.rainAmount.value = Math.round((values.amount ?? 0.35) * 100);
+      this.form.elements.rainLength.value = values.length ?? 75;
+      this.form.elements.rainThickness.value = values.thickness ?? 1.25;
+      this.form.elements.rainAngle.value = values.angle ?? 65;
+      this.form.elements.rainBrightness.value = Math.round((values.brightness ?? 0.75) * 100);
+      this.form.elements.rainSeed.value = values.seed >>> 0;
+      this.form.elements.rainbowPositionX.value = values.positionX ?? 50;
+      this.form.elements.rainbowPositionY.value = values.positionY ?? 88;
+      this.form.elements.rainbowScale.value = values.scale ?? 85;
+      this.form.elements.rainbowThickness.value = values.thickness ?? 14;
+      this.form.elements.rainbowSoftness.value = values.softness ?? 12;
+      this.form.elements.rainbowFade.value = values.fade ?? 28;
+      this.form.elements.rainbowIntensity.value = Math.round((values.intensity ?? 0.72) * 100);
+      this.form.elements.spotlightPositionX.value = values.positionX ?? 50;
+      this.form.elements.spotlightPositionY.value = values.positionY ?? 45;
+      this.form.elements.spotlightWidth.value = values.width ?? 70;
+      this.form.elements.spotlightHeight.value = values.height ?? 75;
+      this.form.elements.spotlightFeather.value = values.feather ?? 65;
+      this.form.elements.spotlightBrightness.value = Math.round((values.brightness ?? 0.75) * 100);
+      this.form.elements.spotlightColor.value = values.color || "#FFD6A0";
+      this.form.elements.vignettePositionX.value = values.positionX ?? 50;
+      this.form.elements.vignettePositionY.value = values.positionY ?? 50;
+      this.form.elements.vignetteWidth.value = values.width ?? 115;
+      this.form.elements.vignetteHeight.value = values.height ?? 115;
+      this.form.elements.vignetteClearCenter.value = values.clearCenter ?? 38;
+      this.form.elements.vignetteFeather.value = values.feather ?? 85;
+      this.form.elements.vignetteAmount.value = Math.round((values.amount ?? 0.8) * 100);
+      this.form.elements.vignetteHighlightProtection.value = Math.round((values.highlightProtection ?? 0.35) * 100);
+      this.form.elements.vignetteColor.value = values.color || "#17100E";
       this.form.elements.vortexAngle.value = values.angle ?? 120;
       this.form.elements.rippleGenerators.value = values.generators ?? 5;
       this.form.elements.rippleWavelengthMinimum.value = values.wavelengthMinimum ?? 10;
@@ -436,7 +586,7 @@
       this.overlay.querySelector('[data-layer-style-action="remove"]').disabled = options.hasEffect !== true;
       this.updateOutputs();
       this.overlay.classList.remove("hidden");
-      (this.styleType === "gradient-overlay" ? this.form.elements.gradientStyle : this.styleType === "pattern-overlay" ? this.form.elements.patternType : this.styleType === "bevel-emboss" ? this.form.elements.bevelStyle : this.styleType === "blur" ? this.form.elements.radius : this.styleType === "grain" ? this.form.elements.grainAmount : this.styleType === "newspaper" ? this.form.elements.newspaperDotSize : this.styleType === "painted-texture" ? this.form.elements.paintedStylization : this.styleType === "snow" ? this.form.elements.snowDensity : this.styleType === "vortex" ? this.form.elements.vortexAngle : this.styleType === "ripple-field" ? this.form.elements.rippleGenerators : this.styleType === "flare" ? this.form.elements.flareBrightness : this.styleType === "gust" ? this.form.elements.gustMethod : this.form.elements.opacity).focus({ preventScroll: true });
+      (this.styleType === "gradient-overlay" ? this.form.elements.gradientStyle : this.styleType === "pattern-overlay" ? this.form.elements.patternType : this.styleType === "bevel-emboss" ? this.form.elements.bevelStyle : this.styleType === "blur" ? this.form.elements.radius : this.styleType === "grain" ? this.form.elements.grainAmount : this.styleType === "newspaper" ? this.form.elements.newspaperDotSize : this.styleType === "painted-texture" ? this.form.elements.paintedStylization : this.styleType === "retro-3d" ? this.form.elements.retro3DSeparation : this.styleType === "snow" ? this.form.elements.snowDensity : this.styleType === "rain" ? this.form.elements.rainAmount : this.styleType === "rainbow" ? this.form.elements.rainbowPositionX : this.styleType === "spotlight" ? this.form.elements.spotlightPositionX : this.styleType === "vignette" ? this.form.elements.vignettePositionX : this.styleType === "vortex" ? this.form.elements.vortexAngle : this.styleType === "ripple-field" ? this.form.elements.rippleGenerators : this.styleType === "flare" ? this.form.elements.flareBrightness : this.styleType === "gust" ? this.form.elements.gustMethod : this.form.elements.opacity).focus({ preventScroll: true });
       this.options.onPreview?.(this.effect, true);
     }
 

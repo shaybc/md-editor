@@ -105,8 +105,13 @@
       const grayscaleSource = namespace.ImageEditorGrayscaleRenderer?.apply(flaredSource, namespace.ImageEditorGrayscaleEffect?.get(layer)) || flaredSource;
       const newspaperSource = namespace.ImageEditorNewspaperRenderer?.apply(grayscaleSource, namespace.ImageEditorNewspaperEffect?.get(layer)) || grayscaleSource;
       const paintedSource = namespace.ImageEditorPaintedTextureRenderer?.apply(newspaperSource, namespace.ImageEditorPaintedTextureEffect?.get(layer)) || newspaperSource;
-      const snowSource = namespace.ImageEditorSnowRenderer?.apply(paintedSource, namespace.ImageEditorSnowEffect?.get(layer)) || paintedSource;
-      const source = namespace.ImageEditorGrainRenderer?.apply(snowSource, namespace.ImageEditorGrainEffect?.get(layer)) || snowSource;
+      const retro3DSource = namespace.ImageEditorRetro3DRenderer?.apply(paintedSource, namespace.ImageEditorRetro3DEffect?.get(layer)) || paintedSource;
+      const snowSource = namespace.ImageEditorSnowRenderer?.apply(retro3DSource, namespace.ImageEditorSnowEffect?.get(layer)) || retro3DSource;
+      const rainSource = namespace.ImageEditorRainRenderer?.apply(snowSource, namespace.ImageEditorRainEffect?.get(layer)) || snowSource;
+      const rainbowSource = namespace.ImageEditorRainbowRenderer?.apply(rainSource, namespace.ImageEditorRainbowEffect?.get(layer)) || rainSource;
+      const spotlightSource = namespace.ImageEditorSpotlightRenderer?.apply(rainbowSource, namespace.ImageEditorSpotlightEffect?.get(layer)) || rainbowSource;
+      const vignetteSource = namespace.ImageEditorVignetteRenderer?.apply(spotlightSource, namespace.ImageEditorVignetteEffect?.get(layer)) || spotlightSource;
+      const source = namespace.ImageEditorGrainRenderer?.apply(vignetteSource, namespace.ImageEditorGrainEffect?.get(layer)) || vignetteSource;
       const opacity = Math.max(0, Math.min(1, Number(layer.opacity ?? 1)));
       namespace.ImageEditorDropShadowRenderer?.draw(context, source, namespace.ImageEditorDropShadowEffect?.get(layer), opacity);
       namespace.ImageEditorOuterGlowRenderer?.draw(context, source, namespace.ImageEditorOuterGlowEffect?.get(layer), opacity);
