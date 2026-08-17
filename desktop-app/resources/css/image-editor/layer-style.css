@@ -92,6 +92,22 @@
 .image-editor-layer-style-grid input[type="color"] { width: 46px; height: 30px; padding: 2px; }
 .image-editor-layer-style-grid select { min-height: 30px; }
 
+.image-editor-layer-style-grid .image-editor-grain-distribution {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+}
+
+.image-editor-layer-style-grid .image-editor-grain-distribution[hidden] { display: none; }
+.image-editor-layer-style-grid .image-editor-grain-distribution label,
+.image-editor-layer-style-grid .image-editor-grain-monochromatic { display: flex; grid-template-columns: none; gap: 7px; }
+.image-editor-layer-style-grid .image-editor-ripple-randomize { grid-column: 1 / -1; justify-self: start; }
+
 @media (max-width: 640px) {
   .image-editor-layer-style-body { grid-template-columns: 1fr; }
   .image-editor-layer-style-body nav { border-right: 0; border-bottom: 1px solid var(--border-color); }

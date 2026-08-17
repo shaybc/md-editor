@@ -387,7 +387,7 @@
         },
         onApply(settings) {
           restore();
-          commitDocumentMutation(controller, "Change Blending Options", () => {
+          commitDocumentMutation(controller, "Change Layer Compositing", () => {
             const changed = layers.map((layer) => namespace.ImageEditorBlendingOptions.apply(layer, settings)).some(Boolean);
             if (changed) controller.documentStore.notify({ type: "layer-blending-options", ids: layers.map((layer) => layer.id) });
             return changed;
@@ -404,7 +404,7 @@
     /** Remove Drop Shadow from the requested layers as one undoable document change. */
     function removeDropShadowStyle(controller, requestedIds = null) {
       const layers = resolveLayerStyleTargets(controller, requestedIds);
-      return commitDocumentMutation(controller, "Remove Drop Shadow", () => {
+      return commitDocumentMutation(controller, "Remove Cast Shadow", () => {
         const changed = layers.map((layer) => namespace.ImageEditorDropShadowEffect.remove(layer)).some(Boolean);
         if (changed) controller.documentStore.notify({ type: "layer-effect", ids: layers.map((layer) => layer.id) });
         return changed;
@@ -414,7 +414,7 @@
     /** Remove Inner Shadow from the requested layers as one undoable document change. */
     function removeInnerShadowStyle(controller, requestedIds = null) {
       const layers = resolveLayerStyleTargets(controller, requestedIds);
-      return commitDocumentMutation(controller, "Remove Inner Shadow", () => {
+      return commitDocumentMutation(controller, "Remove Inset Shadow", () => {
         const changed = layers.map((layer) => namespace.ImageEditorInnerShadowEffect.remove(layer)).some(Boolean);
         if (changed) controller.documentStore.notify({ type: "layer-effect", ids: layers.map((layer) => layer.id) });
         return changed;
@@ -424,7 +424,7 @@
     /** Remove Inner Glow from the requested layers as one undoable document change. */
     function removeInnerGlowStyle(controller, requestedIds = null) {
       const layers = resolveLayerStyleTargets(controller, requestedIds);
-      return commitDocumentMutation(controller, "Remove Inner Glow", () => {
+      return commitDocumentMutation(controller, "Remove Inner Aura", () => {
         const changed = layers.map((layer) => namespace.ImageEditorInnerGlowEffect.remove(layer)).some(Boolean);
         if (changed) controller.documentStore.notify({ type: "layer-effect", ids: layers.map((layer) => layer.id) });
         return changed;
@@ -434,7 +434,7 @@
     /** Remove Outer Glow from the requested layers as one undoable document change. */
     function removeOuterGlowStyle(controller, requestedIds = null) {
       const layers = resolveLayerStyleTargets(controller, requestedIds);
-      return commitDocumentMutation(controller, "Remove Outer Glow", () => {
+      return commitDocumentMutation(controller, "Remove Outer Aura", () => {
         const changed = layers.map((layer) => namespace.ImageEditorOuterGlowEffect.remove(layer)).some(Boolean);
         if (changed) controller.documentStore.notify({ type: "layer-effect", ids: layers.map((layer) => layer.id) });
         return changed;
@@ -444,7 +444,7 @@
     /** Remove Color Overlay from the requested layers as one undoable document change. */
     function removeColorOverlayStyle(controller, requestedIds = null) {
       const layers = resolveLayerStyleTargets(controller, requestedIds);
-      return commitDocumentMutation(controller, "Remove Color Overlay", () => {
+      return commitDocumentMutation(controller, "Remove Color Coat", () => {
         const changed = layers.map((layer) => namespace.ImageEditorColorOverlayEffect.remove(layer)).some(Boolean);
         if (changed) controller.documentStore.notify({ type: "layer-effect", ids: layers.map((layer) => layer.id) });
         return changed;
@@ -454,7 +454,7 @@
     /** Remove Gradient Overlay from the requested layers as one undoable document change. */
     function removeGradientOverlayStyle(controller, requestedIds = null) {
       const layers = resolveLayerStyleTargets(controller, requestedIds);
-      return commitDocumentMutation(controller, "Remove Gradient Overlay", () => {
+      return commitDocumentMutation(controller, "Remove Gradient Coat", () => {
         const changed = layers.map((layer) => namespace.ImageEditorGradientOverlayEffect.remove(layer)).some(Boolean);
         if (changed) controller.documentStore.notify({ type: "layer-effect", ids: layers.map((layer) => layer.id) });
         return changed;
@@ -464,7 +464,7 @@
     /** Remove Pattern Overlay from the requested layers as one undoable document change. */
     function removePatternOverlayStyle(controller, requestedIds = null) {
       const layers = resolveLayerStyleTargets(controller, requestedIds);
-      return commitDocumentMutation(controller, "Remove Pattern Overlay", () => {
+      return commitDocumentMutation(controller, "Remove Pattern Coat", () => {
         const changed = layers.map((layer) => namespace.ImageEditorPatternOverlayEffect.remove(layer)).some(Boolean);
         if (changed) controller.documentStore.notify({ type: "layer-effect", ids: layers.map((layer) => layer.id) });
         return changed;
@@ -494,10 +494,487 @@
       });
     }
 
+    /** Remove Blur from the requested layers as one undoable document change. */
+    function removeBlurStyle(controller, requestedIds = null) {
+      const layers = resolveLayerStyleTargets(controller, requestedIds);
+      return commitDocumentMutation(controller, "Remove Blur", () => {
+        const changed = layers.map((layer) => namespace.ImageEditorBlurEffect.remove(layer)).some(Boolean);
+        if (changed) controller.documentStore.notify({ type: "layer-effect", ids: layers.map((layer) => layer.id) });
+        return changed;
+      });
+    }
+
+    /** Open the app-styled Blur editor and commit one undoable effect change. */
+    function openBlurStyle(controller, requestedIds = null) {
+      const hasProvisionalContent = controller.selection.floating
+        && (controller.pendingContentDescriptor || controller.selection.origin === "paste");
+      if (hasProvisionalContent) {
+        if (!commitSelection(controller)) return false;
+        requestedIds = null;
+      }
+      const layers = resolveLayerStyleTargets(controller, requestedIds);
+      if (!layers.length) return false;
+      const originals = new Map(layers.map((layer) => [layer.id, namespace.cloneImageDocument(layer.effects || [])]));
+      const restore = () => layers.forEach((layer) => { layer.effects = namespace.cloneImageDocument(originals.get(layer.id) || []); });
+      const existing = layers.map((layer) => namespace.ImageEditorBlurEffect.get(layer)).find(Boolean);
+      controller.layerStyleDialog.open({
+        styleType: "blur",
+        effect: existing,
+        hasEffect: !!existing,
+        targetName: layers.length === 1 ? layers[0].name : layers.length + " selected layers",
+        onPreview(effect, enabled) {
+          restore();
+          if (enabled) layers.forEach((layer) => namespace.ImageEditorBlurEffect.upsert(layer, effect));
+          renderLayeredDocument(controller);
+        },
+        onCancel() {
+          restore();
+          renderLayeredDocument(controller);
+        },
+        onApply(effect) {
+          restore();
+          commitDocumentMutation(controller, "Change Blur", () => {
+            const changed = layers.map((layer) => namespace.ImageEditorBlurEffect.upsert(layer, effect)).some(Boolean);
+            if (changed) controller.documentStore.notify({ type: "layer-effect", ids: layers.map((layer) => layer.id) });
+            return changed;
+          });
+        },
+        onRemove() {
+          restore();
+          removeBlurStyle(controller, layers.map((layer) => layer.id));
+        }
+      });
+      return true;
+    }
+
+    /** Remove Grain from the requested layers as one undoable document change. */
+    function removeGrainStyle(controller, requestedIds = null) {
+      const layers = resolveLayerStyleTargets(controller, requestedIds);
+      return commitDocumentMutation(controller, "Remove Grain", () => {
+        const changed = layers.map((layer) => namespace.ImageEditorGrainEffect.remove(layer)).some(Boolean);
+        if (changed) controller.documentStore.notify({ type: "layer-effect", ids: layers.map((layer) => layer.id) });
+        return changed;
+      });
+    }
+
+    /** Open the app-styled Grain editor and commit one undoable effect change. */
+    function openGrainStyle(controller, requestedIds = null) {
+      const hasProvisionalContent = controller.selection.floating
+        && (controller.pendingContentDescriptor || controller.selection.origin === "paste");
+      if (hasProvisionalContent) {
+        if (!commitSelection(controller)) return false;
+        requestedIds = null;
+      }
+      const layers = resolveLayerStyleTargets(controller, requestedIds);
+      if (!layers.length) return false;
+      const originals = new Map(layers.map((layer) => [layer.id, namespace.cloneImageDocument(layer.effects || [])]));
+      const restore = () => layers.forEach((layer) => { layer.effects = namespace.cloneImageDocument(originals.get(layer.id) || []); });
+      const existing = layers.map((layer) => namespace.ImageEditorGrainEffect.get(layer)).find(Boolean);
+      controller.layerStyleDialog.open({
+        styleType: "grain",
+        effect: existing,
+        hasEffect: !!existing,
+        targetName: layers.length === 1 ? layers[0].name : layers.length + " selected layers",
+        onPreview(effect, enabled) {
+          restore();
+          if (enabled) layers.forEach((layer) => namespace.ImageEditorGrainEffect.upsert(layer, effect));
+          renderLayeredDocument(controller);
+        },
+        onCancel() {
+          restore();
+          renderLayeredDocument(controller);
+        },
+        onApply(effect) {
+          restore();
+          commitDocumentMutation(controller, "Change Grain", () => {
+            const changed = layers.map((layer) => namespace.ImageEditorGrainEffect.upsert(layer, effect)).some(Boolean);
+            if (changed) controller.documentStore.notify({ type: "layer-effect", ids: layers.map((layer) => layer.id) });
+            return changed;
+          });
+        },
+        onRemove() {
+          restore();
+          removeGrainStyle(controller, layers.map((layer) => layer.id));
+        }
+      });
+      return true;
+    }
+
+    /** Remove Vortex from the requested layers as one undoable document change. */
+    function removeVortexStyle(controller, requestedIds = null) {
+      const layers = resolveLayerStyleTargets(controller, requestedIds);
+      return commitDocumentMutation(controller, "Remove Vortex", () => {
+        const changed = layers.map((layer) => namespace.ImageEditorVortexEffect.remove(layer)).some(Boolean);
+        if (changed) controller.documentStore.notify({ type: "layer-effect", ids: layers.map((layer) => layer.id) });
+        return changed;
+      });
+    }
+
+    /** Open the app-styled Vortex editor and commit one undoable effect change. */
+    function openVortexStyle(controller, requestedIds = null) {
+      const hasProvisionalContent = controller.selection.floating
+        && (controller.pendingContentDescriptor || controller.selection.origin === "paste");
+      if (hasProvisionalContent) {
+        if (!commitSelection(controller)) return false;
+        requestedIds = null;
+      }
+      const layers = resolveLayerStyleTargets(controller, requestedIds);
+      if (!layers.length) return false;
+      const originals = new Map(layers.map((layer) => [layer.id, namespace.cloneImageDocument(layer.effects || [])]));
+      const restore = () => layers.forEach((layer) => { layer.effects = namespace.cloneImageDocument(originals.get(layer.id) || []); });
+      const existing = layers.map((layer) => namespace.ImageEditorVortexEffect.get(layer)).find(Boolean);
+      controller.layerStyleDialog.open({
+        styleType: "vortex",
+        effect: existing,
+        hasEffect: !!existing,
+        targetName: layers.length === 1 ? layers[0].name : layers.length + " selected layers",
+        onPreview(effect, enabled) {
+          restore();
+          if (enabled) layers.forEach((layer) => namespace.ImageEditorVortexEffect.upsert(layer, effect));
+          renderLayeredDocument(controller);
+        },
+        onCancel() {
+          restore();
+          renderLayeredDocument(controller);
+        },
+        onApply(effect) {
+          restore();
+          commitDocumentMutation(controller, "Change Vortex", () => {
+            const changed = layers.map((layer) => namespace.ImageEditorVortexEffect.upsert(layer, effect)).some(Boolean);
+            if (changed) controller.documentStore.notify({ type: "layer-effect", ids: layers.map((layer) => layer.id) });
+            return changed;
+          });
+        },
+        onRemove() {
+          restore();
+          removeVortexStyle(controller, layers.map((layer) => layer.id));
+        }
+      });
+      return true;
+    }
+
+    /** Remove Ripple Field from the requested layers as one undoable document change. */
+    function removeRippleFieldStyle(controller, requestedIds = null) {
+      const layers = resolveLayerStyleTargets(controller, requestedIds);
+      return commitDocumentMutation(controller, "Remove Ripple Field", () => {
+        const changed = layers.map((layer) => namespace.ImageEditorRippleFieldEffect.remove(layer)).some(Boolean);
+        if (changed) controller.documentStore.notify({ type: "layer-effect", ids: layers.map((layer) => layer.id) });
+        return changed;
+      });
+    }
+
+    /** Open the app-styled Ripple Field editor and commit one undoable effect change. */
+    function openRippleFieldStyle(controller, requestedIds = null) {
+      const hasProvisionalContent = controller.selection.floating
+        && (controller.pendingContentDescriptor || controller.selection.origin === "paste");
+      if (hasProvisionalContent) {
+        if (!commitSelection(controller)) return false;
+        requestedIds = null;
+      }
+      const layers = resolveLayerStyleTargets(controller, requestedIds);
+      if (!layers.length) return false;
+      const originals = new Map(layers.map((layer) => [layer.id, namespace.cloneImageDocument(layer.effects || [])]));
+      const restore = () => layers.forEach((layer) => { layer.effects = namespace.cloneImageDocument(originals.get(layer.id) || []); });
+      const existing = layers.map((layer) => namespace.ImageEditorRippleFieldEffect.get(layer)).find(Boolean);
+      controller.layerStyleDialog.open({
+        styleType: "ripple-field",
+        effect: existing,
+        hasEffect: !!existing,
+        targetName: layers.length === 1 ? layers[0].name : layers.length + " selected layers",
+        onPreview(effect, enabled) {
+          restore();
+          if (enabled) layers.forEach((layer) => namespace.ImageEditorRippleFieldEffect.upsert(layer, effect));
+          renderLayeredDocument(controller);
+        },
+        onCancel() {
+          restore();
+          renderLayeredDocument(controller);
+        },
+        onApply(effect) {
+          restore();
+          commitDocumentMutation(controller, "Change Ripple Field", () => {
+            const changed = layers.map((layer) => namespace.ImageEditorRippleFieldEffect.upsert(layer, effect)).some(Boolean);
+            if (changed) controller.documentStore.notify({ type: "layer-effect", ids: layers.map((layer) => layer.id) });
+            return changed;
+          });
+        },
+        onRemove() {
+          restore();
+          removeRippleFieldStyle(controller, layers.map((layer) => layer.id));
+        }
+      });
+      return true;
+    }
+
+    /** Remove Flare from the requested layers as one undoable document change. */
+    function removeFlareStyle(controller, requestedIds = null) {
+      const layers = resolveLayerStyleTargets(controller, requestedIds);
+      return commitDocumentMutation(controller, "Remove Flare", () => {
+        const changed = layers.map((layer) => namespace.ImageEditorFlareEffect.remove(layer)).some(Boolean);
+        if (changed) controller.documentStore.notify({ type: "layer-effect", ids: layers.map((layer) => layer.id) });
+        return changed;
+      });
+    }
+
+    /** Open the app-styled Flare editor and commit one undoable effect change. */
+    function openFlareStyle(controller, requestedIds = null) {
+      const hasProvisionalContent = controller.selection.floating
+        && (controller.pendingContentDescriptor || controller.selection.origin === "paste");
+      if (hasProvisionalContent) {
+        if (!commitSelection(controller)) return false;
+        requestedIds = null;
+      }
+      const layers = resolveLayerStyleTargets(controller, requestedIds);
+      if (!layers.length) return false;
+      const originals = new Map(layers.map((layer) => [layer.id, namespace.cloneImageDocument(layer.effects || [])]));
+      const restore = () => layers.forEach((layer) => { layer.effects = namespace.cloneImageDocument(originals.get(layer.id) || []); });
+      const existing = layers.map((layer) => namespace.ImageEditorFlareEffect.get(layer)).find(Boolean);
+      controller.layerStyleDialog.open({
+        styleType: "flare",
+        effect: existing,
+        hasEffect: !!existing,
+        targetName: layers.length === 1 ? layers[0].name : layers.length + " selected layers",
+        onPreview(effect, enabled) {
+          restore();
+          if (enabled) layers.forEach((layer) => namespace.ImageEditorFlareEffect.upsert(layer, effect));
+          renderLayeredDocument(controller);
+        },
+        onCancel() {
+          restore();
+          renderLayeredDocument(controller);
+        },
+        onApply(effect) {
+          restore();
+          commitDocumentMutation(controller, "Change Flare", () => {
+            const changed = layers.map((layer) => namespace.ImageEditorFlareEffect.upsert(layer, effect)).some(Boolean);
+            if (changed) controller.documentStore.notify({ type: "layer-effect", ids: layers.map((layer) => layer.id) });
+            return changed;
+          });
+        },
+        onRemove() {
+          restore();
+          removeFlareStyle(controller, layers.map((layer) => layer.id));
+        }
+      });
+      return true;
+    }
+
+    /** Remove Gust from the requested layers as one undoable document change. */
+    function removeGustStyle(controller, requestedIds = null) {
+      const layers = resolveLayerStyleTargets(controller, requestedIds);
+      return commitDocumentMutation(controller, "Remove Gust", () => {
+        const changed = layers.map((layer) => namespace.ImageEditorGustEffect.remove(layer)).some(Boolean);
+        if (changed) controller.documentStore.notify({ type: "layer-effect", ids: layers.map((layer) => layer.id) });
+        return changed;
+      });
+    }
+
+    /** Open the app-styled Gust editor and commit one undoable effect change. */
+    function openGustStyle(controller, requestedIds = null) {
+      const hasProvisionalContent = controller.selection.floating
+        && (controller.pendingContentDescriptor || controller.selection.origin === "paste");
+      if (hasProvisionalContent) {
+        if (!commitSelection(controller)) return false;
+        requestedIds = null;
+      }
+      const layers = resolveLayerStyleTargets(controller, requestedIds);
+      if (!layers.length) return false;
+      const originals = new Map(layers.map((layer) => [layer.id, namespace.cloneImageDocument(layer.effects || [])]));
+      const restore = () => layers.forEach((layer) => { layer.effects = namespace.cloneImageDocument(originals.get(layer.id) || []); });
+      const existing = layers.map((layer) => namespace.ImageEditorGustEffect.get(layer)).find(Boolean);
+      controller.layerStyleDialog.open({
+        styleType: "gust",
+        effect: existing,
+        hasEffect: !!existing,
+        targetName: layers.length === 1 ? layers[0].name : layers.length + " selected layers",
+        onPreview(effect, enabled) {
+          restore();
+          if (enabled) layers.forEach((layer) => namespace.ImageEditorGustEffect.upsert(layer, effect));
+          renderLayeredDocument(controller);
+        },
+        onCancel() {
+          restore();
+          renderLayeredDocument(controller);
+        },
+        onApply(effect) {
+          restore();
+          commitDocumentMutation(controller, "Change Gust", () => {
+            const changed = layers.map((layer) => namespace.ImageEditorGustEffect.upsert(layer, effect)).some(Boolean);
+            if (changed) controller.documentStore.notify({ type: "layer-effect", ids: layers.map((layer) => layer.id) });
+            return changed;
+          });
+        },
+        onRemove() {
+          restore();
+          removeGustStyle(controller, layers.map((layer) => layer.id));
+        }
+      });
+      return true;
+    }
+
+    /** Remove Snow from the requested layers as one undoable document change. */
+    function removeSnowStyle(controller, requestedIds = null) {
+      const layers = resolveLayerStyleTargets(controller, requestedIds);
+      return commitDocumentMutation(controller, "Remove Snow", () => {
+        const changed = layers.map((layer) => namespace.ImageEditorSnowEffect.remove(layer)).some(Boolean);
+        if (changed) controller.documentStore.notify({ type: "layer-effect", ids: layers.map((layer) => layer.id) });
+        return changed;
+      });
+    }
+
+    /** Open the app-styled Snow editor and commit one undoable effect change. */
+    function openSnowStyle(controller, requestedIds = null) {
+      const hasProvisionalContent = controller.selection.floating
+        && (controller.pendingContentDescriptor || controller.selection.origin === "paste");
+      if (hasProvisionalContent) {
+        if (!commitSelection(controller)) return false;
+        requestedIds = null;
+      }
+      const layers = resolveLayerStyleTargets(controller, requestedIds);
+      if (!layers.length) return false;
+      const originals = new Map(layers.map((layer) => [layer.id, namespace.cloneImageDocument(layer.effects || [])]));
+      const restore = () => layers.forEach((layer) => { layer.effects = namespace.cloneImageDocument(originals.get(layer.id) || []); });
+      const existing = layers.map((layer) => namespace.ImageEditorSnowEffect.get(layer)).find(Boolean);
+      controller.layerStyleDialog.open({
+        styleType: "snow",
+        effect: existing,
+        hasEffect: !!existing,
+        targetName: layers.length === 1 ? layers[0].name : layers.length + " selected layers",
+        onPreview(effect, enabled) {
+          restore();
+          if (enabled) layers.forEach((layer) => namespace.ImageEditorSnowEffect.upsert(layer, effect));
+          renderLayeredDocument(controller);
+        },
+        onCancel() {
+          restore();
+          renderLayeredDocument(controller);
+        },
+        onApply(effect) {
+          restore();
+          commitDocumentMutation(controller, "Change Snow", () => {
+            const changed = layers.map((layer) => namespace.ImageEditorSnowEffect.upsert(layer, effect)).some(Boolean);
+            if (changed) controller.documentStore.notify({ type: "layer-effect", ids: layers.map((layer) => layer.id) });
+            return changed;
+          });
+        },
+        onRemove() {
+          restore();
+          removeSnowStyle(controller, layers.map((layer) => layer.id));
+        }
+      });
+      return true;
+    }
+
+    /** Remove Painted Texture from the requested layers as one undoable document change. */
+    function removePaintedTextureStyle(controller, requestedIds = null) {
+      const layers = resolveLayerStyleTargets(controller, requestedIds);
+      return commitDocumentMutation(controller, "Remove Painted Texture", () => {
+        const changed = layers.map((layer) => namespace.ImageEditorPaintedTextureEffect.remove(layer)).some(Boolean);
+        if (changed) controller.documentStore.notify({ type: "layer-effect", ids: layers.map((layer) => layer.id) });
+        return changed;
+      });
+    }
+
+    /** Open the app-styled Painted Texture editor and commit one undoable effect change. */
+    function openPaintedTextureStyle(controller, requestedIds = null) {
+      const hasProvisionalContent = controller.selection.floating
+        && (controller.pendingContentDescriptor || controller.selection.origin === "paste");
+      if (hasProvisionalContent) {
+        if (!commitSelection(controller)) return false;
+        requestedIds = null;
+      }
+      const layers = resolveLayerStyleTargets(controller, requestedIds);
+      if (!layers.length) return false;
+      const originals = new Map(layers.map((layer) => [layer.id, namespace.cloneImageDocument(layer.effects || [])]));
+      const restore = () => layers.forEach((layer) => { layer.effects = namespace.cloneImageDocument(originals.get(layer.id) || []); });
+      const existing = layers.map((layer) => namespace.ImageEditorPaintedTextureEffect.get(layer)).find(Boolean);
+      controller.layerStyleDialog.open({
+        styleType: "painted-texture",
+        effect: existing,
+        hasEffect: !!existing,
+        targetName: layers.length === 1 ? layers[0].name : layers.length + " selected layers",
+        onPreview(effect, enabled) {
+          restore();
+          if (enabled) layers.forEach((layer) => namespace.ImageEditorPaintedTextureEffect.upsert(layer, effect));
+          renderLayeredDocument(controller);
+        },
+        onCancel() {
+          restore();
+          renderLayeredDocument(controller);
+        },
+        onApply(effect) {
+          restore();
+          commitDocumentMutation(controller, "Change Painted Texture", () => {
+            const changed = layers.map((layer) => namespace.ImageEditorPaintedTextureEffect.upsert(layer, effect)).some(Boolean);
+            if (changed) controller.documentStore.notify({ type: "layer-effect", ids: layers.map((layer) => layer.id) });
+            return changed;
+          });
+        },
+        onRemove() {
+          restore();
+          removePaintedTextureStyle(controller, layers.map((layer) => layer.id));
+        }
+      });
+      return true;
+    }
+
+    /** Remove Newspaper from the requested layers as one undoable document change. */
+    function removeNewspaperStyle(controller, requestedIds = null) {
+      const layers = resolveLayerStyleTargets(controller, requestedIds);
+      return commitDocumentMutation(controller, "Remove Newspaper", () => {
+        const changed = layers.map((layer) => namespace.ImageEditorNewspaperEffect.remove(layer)).some(Boolean);
+        if (changed) controller.documentStore.notify({ type: "layer-effect", ids: layers.map((layer) => layer.id) });
+        return changed;
+      });
+    }
+
+    /** Open the app-styled Newspaper editor and commit one undoable effect change. */
+    function openNewspaperStyle(controller, requestedIds = null) {
+      const hasProvisionalContent = controller.selection.floating
+        && (controller.pendingContentDescriptor || controller.selection.origin === "paste");
+      if (hasProvisionalContent) {
+        if (!commitSelection(controller)) return false;
+        requestedIds = null;
+      }
+      const layers = resolveLayerStyleTargets(controller, requestedIds);
+      if (!layers.length) return false;
+      const originals = new Map(layers.map((layer) => [layer.id, namespace.cloneImageDocument(layer.effects || [])]));
+      const restore = () => layers.forEach((layer) => { layer.effects = namespace.cloneImageDocument(originals.get(layer.id) || []); });
+      const existing = layers.map((layer) => namespace.ImageEditorNewspaperEffect.get(layer)).find(Boolean);
+      controller.layerStyleDialog.open({
+        styleType: "newspaper",
+        effect: existing,
+        hasEffect: !!existing,
+        targetName: layers.length === 1 ? layers[0].name : layers.length + " selected layers",
+        onPreview(effect, enabled) {
+          restore();
+          if (enabled) layers.forEach((layer) => namespace.ImageEditorNewspaperEffect.upsert(layer, effect));
+          renderLayeredDocument(controller);
+        },
+        onCancel() {
+          restore();
+          renderLayeredDocument(controller);
+        },
+        onApply(effect) {
+          restore();
+          commitDocumentMutation(controller, "Change Newspaper", () => {
+            const changed = layers.map((layer) => namespace.ImageEditorNewspaperEffect.upsert(layer, effect)).some(Boolean);
+            if (changed) controller.documentStore.notify({ type: "layer-effect", ids: layers.map((layer) => layer.id) });
+            return changed;
+          });
+        },
+        onRemove() {
+          restore();
+          removeNewspaperStyle(controller, layers.map((layer) => layer.id));
+        }
+      });
+      return true;
+    }
+
     /** Remove Bevel & Emboss from the requested layers as one undoable document change. */
     function removeBevelEmbossStyle(controller, requestedIds = null) {
       const layers = resolveLayerStyleTargets(controller, requestedIds);
-      return commitDocumentMutation(controller, "Remove Bevel & Emboss", () => {
+      return commitDocumentMutation(controller, "Remove Raised Edge", () => {
         const changed = layers.map((layer) => namespace.ImageEditorBevelEmbossEffect.remove(layer)).some(Boolean);
         if (changed) controller.documentStore.notify({ type: "layer-effect", ids: layers.map((layer) => layer.id) });
         return changed;
@@ -533,7 +1010,7 @@
         },
         onApply(effect) {
           restore();
-          commitDocumentMutation(controller, "Change Drop Shadow", () => {
+          commitDocumentMutation(controller, "Change Cast Shadow", () => {
             const changed = layers.map((layer) => namespace.ImageEditorDropShadowEffect.upsert(layer, effect)).some(Boolean);
             if (changed) notify("layer-effect");
             return changed;
@@ -577,7 +1054,7 @@
         },
         onApply(effect) {
           restore();
-          commitDocumentMutation(controller, "Change Inner Shadow", () => {
+          commitDocumentMutation(controller, "Change Inset Shadow", () => {
             const changed = layers.map((layer) => namespace.ImageEditorInnerShadowEffect.upsert(layer, effect)).some(Boolean);
             if (changed) notify("layer-effect");
             return changed;
@@ -621,7 +1098,7 @@
         },
         onApply(effect) {
           restore();
-          commitDocumentMutation(controller, "Change Inner Glow", () => {
+          commitDocumentMutation(controller, "Change Inner Aura", () => {
             const changed = layers.map((layer) => namespace.ImageEditorInnerGlowEffect.upsert(layer, effect)).some(Boolean);
             if (changed) notify("layer-effect");
             return changed;
@@ -665,7 +1142,7 @@
         },
         onApply(effect) {
           restore();
-          commitDocumentMutation(controller, "Change Outer Glow", () => {
+          commitDocumentMutation(controller, "Change Outer Aura", () => {
             const changed = layers.map((layer) => namespace.ImageEditorOuterGlowEffect.upsert(layer, effect)).some(Boolean);
             if (changed) notify("layer-effect");
             return changed;
@@ -709,7 +1186,7 @@
         },
         onApply(effect) {
           restore();
-          commitDocumentMutation(controller, "Change Color Overlay", () => {
+          commitDocumentMutation(controller, "Change Color Coat", () => {
             const changed = layers.map((layer) => namespace.ImageEditorColorOverlayEffect.upsert(layer, effect)).some(Boolean);
             if (changed) notify("layer-effect");
             return changed;
@@ -753,7 +1230,7 @@
         },
         onApply(effect) {
           restore();
-          commitDocumentMutation(controller, "Change Gradient Overlay", () => {
+          commitDocumentMutation(controller, "Change Gradient Coat", () => {
             const changed = layers.map((layer) => namespace.ImageEditorGradientOverlayEffect.upsert(layer, effect)).some(Boolean);
             if (changed) notify("layer-effect");
             return changed;
@@ -797,7 +1274,7 @@
         },
         onApply(effect) {
           restore();
-          commitDocumentMutation(controller, "Change Pattern Overlay", () => {
+          commitDocumentMutation(controller, "Change Pattern Coat", () => {
             const changed = layers.map((layer) => namespace.ImageEditorPatternOverlayEffect.upsert(layer, effect)).some(Boolean);
             if (changed) notify("layer-effect");
             return changed;
@@ -841,7 +1318,7 @@
         },
         onApply(effect) {
           restore();
-          commitDocumentMutation(controller, "Change Bevel & Emboss", () => {
+          commitDocumentMutation(controller, "Change Raised Edge", () => {
             const changed = layers.map((layer) => namespace.ImageEditorBevelEmbossEffect.upsert(layer, effect)).some(Boolean);
             if (changed) notify("layer-effect");
             return changed;
@@ -1020,6 +1497,18 @@
         fontSize: state.fontSize,
         fontBold: state.fontBold,
         fontItalic: state.fontItalic,
+        fontUnderline: state.fontUnderline,
+        fontStrikethrough: state.fontStrikethrough,
+        textCase: state.textCase,
+        textAlign: state.textAlign,
+        textListStyle: state.textListStyle,
+        textDirection: state.textDirection,
+        textLetterSpacing: state.textLetterSpacing,
+        textLineSpacing: state.textLineSpacing,
+        textAnchor: state.textAnchor,
+        textPosition: state.textPosition,
+        textKerning: state.textKerning,
+        textLigatures: state.textLigatures,
         zoom: state.zoom,
         layersPanel: controller.layerPanel ? { ...controller.layerPanel.state, expandedIds: [...controller.layerPanel.expandedIds], selectedIds: [...controller.documentStore.selectedIds] } : (tab.imageEditorState?.layersPanel || { mode: "expanded", height: 360, placementMode: "new", expandedIds: [], selectedIds: [] }),
         adjustmentsPanel: controller.adjustmentsPanel ? { ...controller.adjustmentsPanel.state } : (tab.imageEditorState?.adjustmentsPanel || { mode: "expanded", height: 300, activeTab: "adjustments" }),
@@ -1192,6 +1681,16 @@
       return { x: left, y: top, width: right - left, height: bottom - top };
     }
 
+    function objectAlignmentTargets(controller, selectedObjects) {
+      const excludedIds = new Set(selectedObjects.map((object) => object.id));
+      const targets = [];
+      namespace.walkDocumentObjects(controller.documentStore.document, (object, location) => {
+        if (excludedIds.has(object.id) || !location.visible || object.visible === false) return;
+        targets.push(objectDisplayBounds(object));
+      });
+      return targets;
+    }
+
     function objectTransformHandleAt(controller, point) {
       const rect = combinedObjectBounds(selectedDocumentObjects(controller));
       if (!rect) return null;
@@ -1267,6 +1766,7 @@
       const rect = marquee || combinedObjectBounds(selectedDocumentObjects(controller));
       if (!rect) return;
       const zoom = Math.max(0.25, Number(state.zoom) || 1);
+      namespace.drawObjectAlignmentGuides(view.overlayContext, controller.objectAlignmentGuides || [], zoom);
       const guideSize = 6 / zoom;
       const points = [
         [rect.x, rect.y], [rect.x + rect.width / 2, rect.y], [rect.x + rect.width, rect.y],
@@ -1763,6 +2263,14 @@
       calloutTool.drawPreview(view.overlayContext, state);
     }
 
+    function updateCalloutRadiusControl(controller) {
+      const model = controller.calloutTool.model;
+      if (!controller.calloutTool.isEditing || !model) return;
+      const corner = controller.calloutTool.activeCorner;
+      controller.state.cornerRadius = model.radii[corner];
+      controller.view.shell.querySelector(".image-editor-corner-radius").value = String(controller.state.cornerRadius);
+    }
+
     function cancelEditableCallout(controller) {
       (editingCalloutTool(controller) || calloutToolFor(controller)).reset();
       controller.calloutBefore = null;
@@ -1791,7 +2299,7 @@
     function createCompositeCanvas(controller) {
       const { view, selection, state } = controller;
       const hasFloatingSelection = selection.floating && selection.imageData && selection.rect;
-      const editableText = view.textInput.hidden ? '' : view.textInput.value;
+      const editableText = view.textInput.hidden ? '' : namespace.prepareImageEditorTextForStorage(view.textInput.value, state);
       const editableTextRect = editableText
         ? (view.getTextContentRect() || view.getTextInputRect() || controller.textRect)
         : null;
@@ -1820,7 +2328,7 @@
           rotation: selection.rotation || 0
         });
       }
-      const editableText = view.textInput.hidden ? "" : view.textInput.value;
+      const editableText = view.textInput.hidden ? "" : namespace.prepareImageEditorTextForStorage(view.textInput.value, state);
       const editableTextRect = editableText
         ? (view.getTextContentRect() || view.getTextInputRect() || controller.textRect)
         : null;
@@ -1828,11 +2336,7 @@
         draftStore.addObject(namespace.createContentObject("text", {
           text: editableText,
           box: { width: editableTextRect.width, height: editableTextRect.height },
-          font: state.fontFamily,
-          size: state.fontSize,
-          bold: state.fontBold,
-          italic: state.fontItalic,
-          color: state.foregroundColor
+          style: namespace.imageEditorTextStyleFromState(state)
         }, {
           name: "Text",
           bounds: { ...editableTextRect },
@@ -2040,18 +2544,39 @@
       controller.textRect = rect;
       controller.textInputOpening = true;
       controller.view.showTextInput(rect, controller.state);
-      controller.view.textInput.value = text;
+      controller.view.textInput.value = controller.state.textListStyle === "bullet"
+        ? namespace.addImageEditorBulletPrefixes(text)
+        : text;
       setTimeout(() => { controller.textInputOpening = false; }, 150);
     }
 
     /** Insert clipboard text at the cursor without ending the current text edit. */
+    /*
     function pasteTextIntoActiveEditor(controller, text) {
       const input = controller.view.textInput;
       if (input.hidden) return false;
       const start = input.selectionStart ?? input.value.length;
       const end = input.selectionEnd ?? start;
-      input.setRangeText(text, start, end, 'end');
+      const insertion = controller.state.textListStyle === "bullet"
+        ? String(text).split(/\r?\n/).join("\k�u���b ")
+        : text;
+      input.setRangeText(insertion, start, end, 'end');
       input.dispatchEvent(new Event('input', { bubbles: true }));
+      input.focus();
+      return true;
+    }
+
+    */
+    function pasteTextIntoActiveEditor(controller, text) {
+      const input = controller.view.textInput;
+      if (input.hidden) return false;
+      const start = input.selectionStart ?? input.value.length;
+      const end = input.selectionEnd ?? start;
+      const insertion = controller.state.textListStyle === "bullet"
+        ? String(text).split(/\r?\n/).join("\n\u2022 ")
+        : text;
+      input.setRangeText(insertion, start, end, "end");
+      input.dispatchEvent(new Event("input", { bubbles: true }));
       input.focus();
       return true;
     }
@@ -2078,7 +2603,7 @@
       const input = controller.view.textInput;
       if (input.hidden) return false;
       controller.pastedTextEditing = false;
-      const text = input.value;
+      const text = namespace.prepareImageEditorTextForStorage(input.value, controller.state);
       const textRect = controller.view.getTextContentRect() || controller.view.getTextInputRect() || controller.textRect;
       controller.view.hideTextInput();
       controller.textRect = null;
@@ -2091,7 +2616,7 @@
           ...editing.object.payload,
           text,
           box: { ...textRect },
-          style: { fontFamily: controller.state.fontFamily, fontSize: controller.state.fontSize, fontBold: controller.state.fontBold, fontItalic: controller.state.fontItalic, foregroundColor: controller.state.foregroundColor, foregroundOpacity: controller.state.foregroundOpacity }
+          style: namespace.imageEditorTextStyleFromState(controller.state)
         };
         editing.object.bounds = { ...textRect };
         editing.object.transform = { ...editing.object.transform, x: textRect.x, y: textRect.y, scaleX: 1, scaleY: 1 };
@@ -2105,7 +2630,7 @@
       const layer = selectedPlacementLayer(controller, "Text");
       const object = namespace.createContentObject("text", {
         text, box: { ...textRect },
-        style: { fontFamily: controller.state.fontFamily, fontSize: controller.state.fontSize, fontBold: controller.state.fontBold, fontItalic: controller.state.fontItalic, foregroundColor: controller.state.foregroundColor, foregroundOpacity: controller.state.foregroundOpacity }
+        style: namespace.imageEditorTextStyleFromState(controller.state)
       }, { name: "Text", bounds: { ...textRect }, transform: { x: textRect.x, y: textRect.y, scaleX: 1, scaleY: 1, rotation: 0 } });
       controller.documentStore.addObject(object, layer.id);
       controller.history.push(before, controller.documentStore.snapshot(), "Text");
@@ -2128,7 +2653,7 @@
     }
 
     function isTextFormattingTarget(target) {
-      return Boolean(target?.closest?.(".image-editor-text-controls, .image-editor-color-picker, .image-editor-foreground, .image-editor-background, [data-palette-color], [data-color-target], [data-format]"));
+      return Boolean(target?.closest?.(".image-editor-text-controls, .image-editor-text-advanced-panel, .image-editor-color-picker, .image-editor-foreground, .image-editor-background, [data-palette-color], [data-color-target], [data-format]"));
     }
 
     function keepTextInputLive(controller) {
@@ -2174,6 +2699,19 @@
 
     function bindToolbar(controller) {
       const { view, state } = controller;
+      void namespace.ImageEditorSystemFonts.listInstalledFontFamilies()
+        .then((families) => view.setFontFamilies(families, state.fontFamily))
+        .catch(() => view.setFontFamilies(namespace.ImageEditorSystemFonts.DEFAULT_FONT_FAMILIES, state.fontFamily));
+      view.textAdvancedSettings = new namespace.ImageEditorTextAdvancedSettings(view.toolbar, {
+        onChange(key, value) {
+          state[key] = value;
+          refreshLiveTextStyle(controller);
+          syncTab(controller);
+        },
+        onClose() {
+          if (!view.textInput.hidden) setTimeout(() => view.textInput.focus(), 0);
+        }
+      });
       view.toolbar.addEventListener("pointerdown", (event) => {
         if (!view.textInput.hidden && isTextFormattingTarget(event.target)) keepTextInputLive(controller);
       }, true);
@@ -2255,13 +2793,60 @@
           openPaletteLibrary(controller);
           return;
         }
+        const textCaseButton = event.target.closest("[data-text-case]");
+        if (textCaseButton) {
+          state.textCase = textCaseButton.dataset.textCase;
+          textCaseButton.closest("details")?.removeAttribute("open");
+          refreshLiveTextStyle(controller);
+          syncTab(controller);
+          if (!view.textInput.hidden) setTimeout(() => view.textInput.focus(), 0);
+          return;
+        }
+        const textAlignButton = event.target.closest("[data-text-align]");
+        if (textAlignButton) {
+          state.textAlign = textAlignButton.dataset.textAlign;
+          textAlignButton.closest("details")?.removeAttribute("open");
+          refreshLiveTextStyle(controller);
+          syncTab(controller);
+          if (!view.textInput.hidden) setTimeout(() => view.textInput.focus(), 0);
+          return;
+        }
+        const textDirectionButton = event.target.closest("[data-text-direction]");
+        if (textDirectionButton) {
+          state.textDirection = textDirectionButton.dataset.textDirection;
+          textDirectionButton.closest("details")?.removeAttribute("open");
+          refreshLiveTextStyle(controller);
+          syncTab(controller);
+          if (!view.textInput.hidden) setTimeout(() => view.textInput.focus(), 0);
+          return;
+        }
+        const advancedTextButton = event.target.closest("[data-text-advanced]");
+        if (advancedTextButton) {
+          view.textAdvancedSettings.toggle(advancedTextButton, state);
+          return;
+        }
         const formatButton = event.target.closest("[data-format]");
         if (formatButton) {
-          const key = formatButton.dataset.format === "bold" ? "fontBold" : "fontItalic";
-          state[key] = !state[key];
-          formatButton.classList.toggle("active", state[key]);
+          const format = formatButton.dataset.format;
+          const key = {
+            bold: "fontBold",
+            italic: "fontItalic",
+            underline: "fontUnderline",
+            strikethrough: "fontStrikethrough"
+          }[format];
+          if (format === "bullets") {
+            state.textListStyle = state.textListStyle === "bullet" ? "none" : "bullet";
+            if (!view.textInput.hidden) {
+              view.textInput.value = state.textListStyle === "bullet"
+                ? namespace.addImageEditorBulletPrefixes(view.textInput.value)
+                : namespace.stripImageEditorBulletPrefixes(view.textInput.value);
+              view.textInput.setSelectionRange(view.textInput.value.length, view.textInput.value.length);
+            }
+          } else if (key) state[key] = !state[key];
           refreshLiveTextStyle(controller);
+          syncTab(controller);
           if (!view.textInput.hidden) setTimeout(() => view.textInput.focus(), 0);
+          return;
         }
       };
       view.toolbar.addEventListener("click", handleToolbarClick);
@@ -2438,6 +3023,10 @@
       view.shell.querySelector(".image-editor-corner-radius").addEventListener("input", (event) => {
         state.cornerRadius = Number(event.target.value);
         if (controller.roundedRectangleTool.setRadius(state.cornerRadius, state.adjustAllCorners)) renderRoundedRectanglePreview(controller);
+        if (controller.calloutTool.setRadius(state.cornerRadius, state.adjustAllCorners)) {
+          updateCalloutRadiusControl(controller);
+          renderCalloutPreview(controller);
+        }
       });
       view.shell.querySelector(".image-editor-all-corners").addEventListener("change", (event) => {
         state.adjustAllCorners = event.target.checked;
@@ -2446,14 +3035,21 @@
           updateRoundedRectangleRadiusControl(controller);
           renderRoundedRectanglePreview(controller);
         }
+        if (state.adjustAllCorners && controller.calloutTool.isEditing) {
+          controller.calloutTool.unifyCorners();
+          updateCalloutRadiusControl(controller);
+          renderCalloutPreview(controller);
+        }
       });
       view.shell.querySelector(".image-editor-font").addEventListener("change", (event) => {
         state.fontFamily = event.target.value;
         refreshLiveTextStyle(controller);
+        syncTab(controller);
       });
       view.shell.querySelector(".image-editor-font-size").addEventListener("input", (event) => {
         state.fontSize = Number(event.target.value);
         refreshLiveTextStyle(controller);
+        syncTab(controller);
       });
     }
 
@@ -2735,6 +3331,7 @@
           if (!result.started) return;
           controller.dragging = true;
           overlay.setPointerCapture?.(event.pointerId);
+          updateCalloutRadiusControl(controller);
           renderCalloutPreview(controller);
           return;
         }
@@ -2940,8 +3537,10 @@
             : controller.objectSelection.selectPoint(point, { additive: event.shiftKey, cycle: event.altKey }));
           const objects = selectedDocumentObjects(controller);
           const bounds = combinedObjectBounds(objects);
+          const mode = transformHandle?.type || (hit ? "move" : "marquee");
+          controller.objectAlignmentGuides = [];
           controller.objectGesture = {
-            mode: transformHandle?.type || (hit ? "move" : "marquee"),
+            mode,
             handle: transformHandle?.handle || "",
             start: point,
             point,
@@ -2950,6 +3549,7 @@
             bounds,
             center: bounds ? { x: bounds.x + bounds.width / 2, y: bounds.y + bounds.height / 2 } : null,
             startAngle: bounds ? Math.atan2(point.y - (bounds.y + bounds.height / 2), point.x - (bounds.x + bounds.width / 2)) : 0,
+            alignmentTargets: mode === "move" ? objectAlignmentTargets(controller, objects) : [],
             transforms: new Map(objects.map((object) => [object.id, { transform: { ...object.transform }, displayBounds: objectDisplayBounds(object) }]))
           };
           controller.dragging = true;
@@ -3100,6 +3700,7 @@
         }
         if (isCalloutTool(state.tool)) {
           calloutToolFor(controller).update(point);
+          updateCalloutRadiusControl(controller);
           renderCalloutPreview(controller);
           return;
         }
@@ -3158,8 +3759,15 @@
           const gesture = controller.objectGesture;
           gesture.point = point;
           if (gesture.mode === "move") {
-            const deltaX = point.x - gesture.start.x;
-            const deltaY = point.y - gesture.start.y;
+            const alignment = namespace.resolveObjectAlignment(
+              gesture.bounds,
+              { x: point.x - gesture.start.x, y: point.y - gesture.start.y },
+              gesture.alignmentTargets,
+              6 / Math.max(0.25, Number(state.zoom) || 1)
+            );
+            const deltaX = alignment.deltaX;
+            const deltaY = alignment.deltaY;
+            controller.objectAlignmentGuides = alignment.guides;
             selectedDocumentObjects(controller).forEach((object) => {
               const original = gesture.transforms.get(object.id);
               if (!original) return;
@@ -3169,10 +3777,12 @@
             renderLayeredDocument(controller);
             drawObjectSelectionOverlay(controller);
           } else if (gesture.mode === "resize") {
+            controller.objectAlignmentGuides = [];
             resizeObjectGesture(controller, gesture, point);
             renderLayeredDocument(controller);
             drawObjectSelectionOverlay(controller);
           } else if (gesture.mode === "rotate") {
+            controller.objectAlignmentGuides = [];
             rotateObjectGesture(controller, gesture, point);
             renderLayeredDocument(controller);
             drawObjectSelectionOverlay(controller);
@@ -3234,7 +3844,7 @@
           const pixels = controller.blurTool.finish();
           const found = namespace.findDocumentNode(controller.documentStore.document, controller.blurLayerId);
           if (pixels && found?.node?.kind === "layer" && appendLayerPixelReplacement(controller, found.node, controller.blurLayerBefore, pixels)) {
-            controller.history.push(controller.blurBefore, controller.documentStore.snapshot(), "Blur");
+            controller.history.push(controller.blurBefore, controller.documentStore.snapshot(), "Soften Brush");
             state.markChanged();
           }
           controller.blurBefore = null;
@@ -3247,7 +3857,7 @@
           const pixels = controller.smudgeTool.finish();
           const found = namespace.findDocumentNode(controller.documentStore.document, controller.smudgeLayerId);
           if (pixels && found?.node?.kind === "layer" && appendLayerPixelReplacement(controller, found.node, controller.smudgeLayerBefore, pixels)) {
-            controller.history.push(controller.smudgeBefore, controller.documentStore.snapshot(), "Smudge");
+            controller.history.push(controller.smudgeBefore, controller.documentStore.snapshot(), "Color Smear");
             state.markChanged();
           }
           controller.smudgeBefore = null;
@@ -3269,6 +3879,7 @@
           renderRoundedRectanglePreview(controller);
         } else if (isCalloutTool(state.tool)) {
           calloutToolFor(controller).completeStage(point);
+          updateCalloutRadiusControl(controller);
           renderCalloutPreview(controller);
         } else if (state.tool === "heart") {
           controller.heartTool.completeStage(point);
@@ -3312,6 +3923,7 @@
         } else if (state.tool === "move" && controller.objectGesture) {
           const gesture = controller.objectGesture;
           controller.objectGesture = null;
+          controller.objectAlignmentGuides = [];
           if (gesture.mode === "marquee") {
             controller.objectSelection.selectMarquee(view.rectFromPoints(gesture.start, point), gesture.additive);
           } else if (Math.abs(point.x - gesture.start.x) > 0.01 || Math.abs(point.y - gesture.start.y) > 0.01) {
@@ -3334,6 +3946,10 @@
         }
       });
       overlay.addEventListener("pointercancel", () => {
+        if (controller.objectAlignmentGuides?.length) {
+          controller.objectAlignmentGuides = [];
+          drawObjectSelectionOverlay(controller);
+        }
         if (!controller.adjustmentMaskStroke) return;
         const stroke = controller.adjustmentMaskStroke;
         controller.adjustmentMaskStroke = null;
@@ -3351,7 +3967,7 @@
             event.preventDefault();
             controller.documentStore.select(objectId);
             const style = found.object.payload?.style || {};
-            ["fontFamily", "fontSize", "fontBold", "fontItalic", "foregroundColor"].forEach((key) => { if (style[key] != null) state[key] = style[key]; });
+            namespace.applyImageEditorTextStyleToState(state, style);
             controller.editingTextObjectId = objectId;
             state.setTool("text");
             openEditableTextBox(controller, objectDisplayBounds(found.object), found.object.payload?.text || "");
@@ -3470,6 +4086,32 @@
       textBox.addEventListener("pointercancel", finishDrag);
     }
 
+    /** Continue semantic bullet lists when Enter is pressed in the live text editor. */
+    /*
+    function bindTextInputFormatting(controller) {
+      controller.view.textInput.addEventListener("keydown", (event) => {
+        if (event.key !== "Enter" || event.shiftKey || controller.state.textListStyle !== "bullet") return;
+        event.preventDefault();
+        const input = controller.view.textInput;
+        const start = input.selectionStart ?? input.value.length;
+        const end = input.selectionEnd ?? start;
+        input.setRangeText("\n��y��y� ", start, end, "end");
+        input.dispatchEvent(new Event("input", { bubbles: true }));
+      });
+    }
+
+    */
+    function bindTextInputFormatting(controller) {
+      controller.view.textInput.addEventListener("keydown", (event) => {
+        if (event.key !== "Enter" || event.shiftKey || controller.state.textListStyle !== "bullet") return;
+        event.preventDefault();
+        const input = controller.view.textInput;
+        const start = input.selectionStart ?? input.value.length;
+        const end = input.selectionEnd ?? start;
+        input.setRangeText("\n\u2022 ", start, end, "end");
+        input.dispatchEvent(new Event("input", { bubbles: true }));
+      });
+    }
 
     function bindCanvasResize(controller) {
       const { view } = controller;
@@ -3760,6 +4402,24 @@
       if (action === "remove-gradient-overlay") return removeGradientOverlayStyle(controller, controller.canvasLayerStyleTargetIds);
       if (action === "edit-pattern-overlay") return openPatternOverlayStyle(controller, controller.canvasLayerStyleTargetIds);
       if (action === "remove-pattern-overlay") return removePatternOverlayStyle(controller, controller.canvasLayerStyleTargetIds);
+      if (action === "edit-blur") return openBlurStyle(controller, controller.canvasLayerStyleTargetIds);
+      if (action === "remove-blur") return removeBlurStyle(controller, controller.canvasLayerStyleTargetIds);
+      if (action === "edit-grain") return openGrainStyle(controller, controller.canvasLayerStyleTargetIds);
+      if (action === "remove-grain") return removeGrainStyle(controller, controller.canvasLayerStyleTargetIds);
+      if (action === "edit-newspaper") return openNewspaperStyle(controller, controller.canvasLayerStyleTargetIds);
+      if (action === "remove-newspaper") return removeNewspaperStyle(controller, controller.canvasLayerStyleTargetIds);
+      if (action === "edit-painted-texture") return openPaintedTextureStyle(controller, controller.canvasLayerStyleTargetIds);
+      if (action === "remove-painted-texture") return removePaintedTextureStyle(controller, controller.canvasLayerStyleTargetIds);
+      if (action === "edit-snow") return openSnowStyle(controller, controller.canvasLayerStyleTargetIds);
+      if (action === "remove-snow") return removeSnowStyle(controller, controller.canvasLayerStyleTargetIds);
+      if (action === "edit-vortex") return openVortexStyle(controller, controller.canvasLayerStyleTargetIds);
+      if (action === "remove-vortex") return removeVortexStyle(controller, controller.canvasLayerStyleTargetIds);
+      if (action === "edit-ripple-field") return openRippleFieldStyle(controller, controller.canvasLayerStyleTargetIds);
+      if (action === "remove-ripple-field") return removeRippleFieldStyle(controller, controller.canvasLayerStyleTargetIds);
+      if (action === "edit-flare") return openFlareStyle(controller, controller.canvasLayerStyleTargetIds);
+      if (action === "remove-flare") return removeFlareStyle(controller, controller.canvasLayerStyleTargetIds);
+      if (action === "edit-gust") return openGustStyle(controller, controller.canvasLayerStyleTargetIds);
+      if (action === "remove-gust") return removeGustStyle(controller, controller.canvasLayerStyleTargetIds);
       if (action === "apply-grayscale") return applyGrayscaleStyle(controller, controller.canvasLayerStyleTargetIds);
       if (action === "remove-grayscale") return removeGrayscaleStyle(controller, controller.canvasLayerStyleTargetIds);
       if (action === "use-as-mask") return commitDocumentMutation(controller, "Use as mask", () => namespace.ImageEditorMaskOperations.create(controller.documentStore));
@@ -3817,6 +4477,15 @@
         const hasColorOverlay = styleLayers.some((layer) => namespace.ImageEditorColorOverlayEffect.get(layer));
         const hasGradientOverlay = styleLayers.some((layer) => namespace.ImageEditorGradientOverlayEffect.get(layer));
         const hasPatternOverlay = styleLayers.some((layer) => namespace.ImageEditorPatternOverlayEffect.get(layer));
+        const hasBlur = styleLayers.some((layer) => namespace.ImageEditorBlurEffect.get(layer));
+        const hasGrain = styleLayers.some((layer) => namespace.ImageEditorGrainEffect.get(layer));
+        const hasNewspaper = styleLayers.some((layer) => namespace.ImageEditorNewspaperEffect.get(layer));
+        const hasPaintedTexture = styleLayers.some((layer) => namespace.ImageEditorPaintedTextureEffect.get(layer));
+        const hasSnow = styleLayers.some((layer) => namespace.ImageEditorSnowEffect.get(layer));
+        const hasVortex = styleLayers.some((layer) => namespace.ImageEditorVortexEffect.get(layer));
+        const hasRippleField = styleLayers.some((layer) => namespace.ImageEditorRippleFieldEffect.get(layer));
+        const hasFlare = styleLayers.some((layer) => namespace.ImageEditorFlareEffect.get(layer));
+        const hasGust = styleLayers.some((layer) => namespace.ImageEditorGustEffect.get(layer));
         const hasGrayscale = styleLayers.some((layer) => namespace.ImageEditorGrayscaleEffect.get(layer));
         const hasBevelEmboss = styleLayers.some((layer) => namespace.ImageEditorBevelEmbossEffect.get(layer));
         const maskState = namespace.ImageEditorMaskOperations.getState(controller.documentStore);
@@ -3854,6 +4523,24 @@
           "remove-gradient-overlay": hasGradientOverlay,
           "edit-pattern-overlay": styleLayers.length > 0,
           "remove-pattern-overlay": hasPatternOverlay,
+          "edit-blur": styleLayers.length > 0,
+          "remove-blur": hasBlur,
+          "edit-grain": styleLayers.length > 0,
+          "remove-grain": hasGrain,
+          "edit-newspaper": styleLayers.length > 0,
+          "remove-newspaper": hasNewspaper,
+          "edit-painted-texture": styleLayers.length > 0,
+          "remove-painted-texture": hasPaintedTexture,
+          "edit-snow": styleLayers.length > 0,
+          "remove-snow": hasSnow,
+          "edit-vortex": styleLayers.length > 0,
+          "remove-vortex": hasVortex,
+          "edit-ripple-field": styleLayers.length > 0,
+          "remove-ripple-field": hasRippleField,
+          "edit-flare": styleLayers.length > 0,
+          "remove-flare": hasFlare,
+          "edit-gust": styleLayers.length > 0,
+          "remove-gust": hasGust,
           "apply-grayscale": styleLayers.length > 0,
           "remove-grayscale": hasGrayscale
         }, (action) => runCanvasContextAction(controller, action));
@@ -4283,6 +4970,24 @@
           if (label === "remove-gradient-overlay") return removeGradientOverlayStyle(controller, callback?.layerIds);
           if (label === "edit-pattern-overlay") return openPatternOverlayStyle(controller, callback?.layerIds);
           if (label === "remove-pattern-overlay") return removePatternOverlayStyle(controller, callback?.layerIds);
+          if (label === "edit-blur") return openBlurStyle(controller, callback?.layerIds);
+          if (label === "remove-blur") return removeBlurStyle(controller, callback?.layerIds);
+          if (label === "edit-grain") return openGrainStyle(controller, callback?.layerIds);
+          if (label === "remove-grain") return removeGrainStyle(controller, callback?.layerIds);
+          if (label === "edit-newspaper") return openNewspaperStyle(controller, callback?.layerIds);
+          if (label === "remove-newspaper") return removeNewspaperStyle(controller, callback?.layerIds);
+          if (label === "edit-painted-texture") return openPaintedTextureStyle(controller, callback?.layerIds);
+          if (label === "remove-painted-texture") return removePaintedTextureStyle(controller, callback?.layerIds);
+          if (label === "edit-snow") return openSnowStyle(controller, callback?.layerIds);
+          if (label === "remove-snow") return removeSnowStyle(controller, callback?.layerIds);
+          if (label === "edit-vortex") return openVortexStyle(controller, callback?.layerIds);
+          if (label === "remove-vortex") return removeVortexStyle(controller, callback?.layerIds);
+          if (label === "edit-ripple-field") return openRippleFieldStyle(controller, callback?.layerIds);
+          if (label === "remove-ripple-field") return removeRippleFieldStyle(controller, callback?.layerIds);
+          if (label === "edit-flare") return openFlareStyle(controller, callback?.layerIds);
+          if (label === "remove-flare") return removeFlareStyle(controller, callback?.layerIds);
+          if (label === "edit-gust") return openGustStyle(controller, callback?.layerIds);
+          if (label === "remove-gust") return removeGustStyle(controller, callback?.layerIds);
           if (label === "apply-grayscale") return applyGrayscaleStyle(controller, callback?.layerIds);
           if (label === "remove-grayscale") return removeGrayscaleStyle(controller, callback?.layerIds);
           if (label === "use-as-mask") return commitDocumentMutation(controller, "Use as mask", () => namespace.ImageEditorMaskOperations.create(controller.documentStore));
@@ -4303,6 +5008,46 @@
           commitDocumentMutation(controller, "Add " + namespace.ImageEditorAdjustmentModel.nameForType(type), () => controller.documentStore.addAdjustmentLayer(type, {
             selectionRegion: controller.selection.hasSelection ? controller.selection.region() : null
           }));
+        },
+        onLayerEffect(action) {
+          if (action === "edit-blur") return openBlurStyle(controller);
+          if (action === "edit-grain") return openGrainStyle(controller);
+          if (action === "edit-newspaper") return openNewspaperStyle(controller);
+          if (action === "edit-painted-texture") return openPaintedTextureStyle(controller);
+          if (action === "edit-snow") return openSnowStyle(controller);
+          if (action === "edit-vortex") return openVortexStyle(controller);
+          if (action === "edit-ripple-field") return openRippleFieldStyle(controller);
+          if (action === "edit-flare") return openFlareStyle(controller);
+          if (action === "edit-gust") return openGustStyle(controller);
+          return false;
+        },
+        onApplyTextEffect(objectId, effectId) {
+          const preset = namespace.ImageEditorTextEffectCatalog.get(effectId);
+          if (!preset) return false;
+          return commitDocumentMutation(controller, "Apply " + preset.label + " text effect", () =>
+            namespace.ImageEditorTextEffectActions.apply(controller.documentStore, objectId, effectId));
+        },
+        onTextEffectPreview(objectId, patch) {
+          const changed = namespace.ImageEditorTextEffectActions.update(controller.documentStore, objectId, patch, { notify: false });
+          if (changed) renderLayeredDocument(controller);
+          return changed;
+        },
+        onTextEffectCommit(before, label, cancel, objectId) {
+          if (cancel) {
+            controller.documentStore.restore(before);
+            renderLayeredDocument(controller);
+            syncTab(controller);
+            return;
+          }
+          controller.documentStore.notify({ type: "update-text-effect", ids: [objectId] });
+          controller.history.push(before, controller.documentStore.snapshot(), label);
+          controller.state.markChanged();
+          renderLayeredDocument(controller);
+          syncTab(controller);
+        },
+        onTextEffectMutate(label, objectId, patch) {
+          return commitDocumentMutation(controller, label, () =>
+            namespace.ImageEditorTextEffectActions.update(controller.documentStore, objectId, patch));
         },
         onBeginEdit() {
           return controller.documentStore.snapshot();
@@ -4350,6 +5095,15 @@
             ? controller.documentStore.updateAdjustment(nodeId, operation.patch)
             : controller.documentStore.updateAdjustmentMask(nodeId, operation));
         },
+        onObjectMutate(label, mutation) {
+          const changed = commitDocumentMutation(controller, label, () => {
+            const result = mutation();
+            if (result) controller.documentStore.notify({ type: "transform", ids: [...controller.documentStore.selectedIds] });
+            return result;
+          });
+          if (changed) drawObjectSelectionOverlay(controller);
+          return changed;
+        },
         onStateChanged(panelState) {
           tab.imageEditorState = { ...(tab.imageEditorState || {}), adjustmentsPanel: panelState };
           syncTab(controller);
@@ -4367,6 +5121,7 @@
       bindPointerTools(controller);
       bindCanvasContextMenu(controller);
       bindTextInputMove(controller);
+      bindTextInputFormatting(controller);
       bindCanvasResize(controller);
       bindKeyboard(controller);
       bindNativeTextPaste(controller);

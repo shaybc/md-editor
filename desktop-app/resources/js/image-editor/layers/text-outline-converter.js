@@ -7,11 +7,9 @@
   const styleOf = (object) => {
     const payload = object.payload || {};
     const style = payload.style || {};
+    const normalized = namespace.normalizeImageEditorTextStyle({ ...payload, ...style });
     return {
-      fontFamily: style.fontFamily || payload.font || "Arial",
-      fontSize: Number(style.fontSize || payload.size || 24),
-      fontBold: style.fontBold === true || payload.bold === true,
-      fontItalic: style.fontItalic === true || payload.italic === true,
+      ...normalized,
       fill: style.foregroundColor || payload.color || "#000000",
       stroke: style.strokeColor || null,
       strokeWidth: Math.max(0, Number(style.strokeWidth) || 0)
@@ -129,23 +127,27 @@
     const width = Math.max(1, Number(object.bounds?.width) || 1);
     const height = Math.max(1, Number(object.bounds?.height) || 1);
     const context = document.createElement("canvas").getContext("2d");
-    context.font = `${style.fontItalic ? "italic " : ""}${style.fontBold ? "bold " : ""}${style.fontSize}px ${style.fontFamily}`;
-    const lineHeight = Number(payload.box?.lineHeight) || style.fontSize * 1.2;
-    const reference = context.measureText("Mg");
-    const ascent = reference.actualBoundingBoxAscent || style.fontSize * 0.8;
-    const descent = reference.actualBoundingBoxDescent || style.fontSize * 0.2;
-    const baselineOffset = Math.max(ascent, ((lineHeight - ascent - descent) / 2) + ascent);
+    const lineHeight = Number(payload.box?.lineHeight) || style.fontSize * style.textLineSpacing;
+    const layout = namespace.createImageEditorTextLayout(context, { x: 0, y: 0, width, height, lineHeight }, payload.text || "", style);
     const result = [];
-    namespace.wrapImageEditorText(context, payload.text || "", width).forEach((line, lineIndex) => {
-      const baseline = baselineOffset + lineIndex * lineHeight;
-      if (baseline - ascent >= height) return;
-      graphemes(line).forEach((part) => {
+    layout.lines.forEach((line, lineIndex) => {
+      const baseline = layout.anchorOffset + layout.baselineOffset + lineIndex * layout.lineHeight + layout.positionOffset;
+      if (baseline - layout.ascent >= height) return;
+      const spaces = (line.text.match(/\s/g) || []).length;
+      const renderedWidth = line.width + spaces * line.wordSpacing;
+      let cursor = layout.lineX(line) + (style.textDirection === "rtl" ? renderedWidth : 0);
+      graphemes(line.text).forEach((part) => {
+        const glyphWidth = context.measureText(part.text).width;
+        const advance = glyphWidth + layout.letterSpacing + (/\s/.test(part.text) ? line.wordSpacing : 0);
+        if (style.textDirection === "rtl") cursor -= advance;
+        const glyphX = cursor;
+        if (style.textDirection !== "rtl") cursor += advance;
         if (!part.text.trim()) return;
         const rendered = renderGlyph(context, part.text, style);
         if (!rendered.contours.length) return;
         result.push({
           name: part.text,
-          x: context.measureText(line.slice(0, part.index)).width - rendered.left - rendered.padding,
+          x: glyphX - rendered.left - rendered.padding,
           y: baseline - rendered.ascent - rendered.padding,
           width: rendered.width,
           height: rendered.height,

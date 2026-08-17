@@ -464,7 +464,7 @@ test('rounded rectangle adjusts all corners or one corner before commit', async 
   expect(afterUndoPixels).toBe(0);
 });
 
-test('rounded callout guide changes tail direction length and attachment shape before placement', async ({ page }) => {
+test('rectangle callout guides change independent corners and tail geometry before placement', async ({ page }) => {
   await page.goto('/');
   await page.waitForFunction(() => !!window.markdownViewerApp?.modules?.tabs?.openBlankImageEditorInTab, null, { timeout: 60000 });
   await page.waitForFunction(() => !!window.markdownViewerApp?.modules?.keyboardShortcuts && !!window.markdownViewerApp?.services?.imageEditor, null, { timeout: 60000 });
@@ -475,10 +475,12 @@ test('rounded callout guide changes tail direction length and attachment shape b
   await expect(page.locator('.tab-view.active[data-tab-view-kind=image-editor] .image-editor-shell')).toBeVisible();
   await page.evaluate(() => {
     const root = document.querySelector('.tab-view.active[data-tab-view-kind=image-editor]');
-    window.markdownViewerApp.services.imageEditor.getView(root.dataset.tabId).state.cornerRadius = 0;
+    window.markdownViewerApp.services.imageEditor.getView(root.dataset.tabId).state.cornerRadius = 16;
   });
   const calloutMain = page.locator('[data-tool-group="callouts"] .image-editor-grouped-tool-main');
+  await expect(page.locator('[data-tool-group="callouts"] .image-editor-grouped-tool-menu [data-tool="callout"]')).toContainText('Rectangle callout');
   await calloutMain.click();
+  await expect(page.locator('.image-editor-rounded-rectangle-controls')).toBeVisible();
   const overlay = page.locator('.image-editor-overlay');
   const box = await overlay.boundingBox();
   await page.mouse.move(box.x + 40, box.y + 20);
@@ -494,10 +496,28 @@ test('rounded callout guide changes tail direction length and attachment shape b
   expect(initialModel.phase).toBe('editing');
   expect(initialModel.tool).toBe('callout');
   expect(initialModel.model.side).toBe('bottom');
-  expect(initialModel.model.radius).toBeGreaterThanOrEqual(12);
+  expect(initialModel.model.radii).toEqual({ topLeft: 16, topRight: 16, bottomRight: 16, bottomLeft: 16 });
   expect(initialModel.model.tip.y).toBeGreaterThan(initialModel.model.rect.y + initialModel.model.rect.height);
   const initialLength = initialModel.model.tip.y - (initialModel.model.rect.y + initialModel.model.rect.height);
   const initialAttachmentSpan = Math.abs(initialModel.model.attachmentEnd.x - initialModel.model.attachmentStart.x);
+  await page.locator('.image-editor-corner-radius').fill('24');
+  expect(await page.evaluate(() => {
+    const root = document.querySelector('.tab-view.active[data-tab-view-kind=image-editor]');
+    return window.markdownViewerApp.services.imageEditor.getView(root.dataset.tabId).calloutTool.model.radii;
+  })).toEqual({ topLeft: 24, topRight: 24, bottomRight: 24, bottomLeft: 24 });
+  await page.locator('.image-editor-all-corners').uncheck();
+  const topRightHandle = await page.evaluate(() => {
+    const root = document.querySelector('.tab-view.active[data-tab-view-kind=image-editor]');
+    return window.markdownViewerApp.services.imageEditor.getView(root.dataset.tabId).calloutTool.getCornerHandlePoint('topRight');
+  });
+  await page.mouse.move(box.x + topRightHandle.x, box.y + topRightHandle.y);
+  await page.mouse.down();
+  await page.mouse.move(box.x + topRightHandle.x + 14, box.y + topRightHandle.y, { steps: 4 });
+  await page.mouse.up();
+  expect(await page.evaluate(() => {
+    const root = document.querySelector('.tab-view.active[data-tab-view-kind=image-editor]');
+    return window.markdownViewerApp.services.imageEditor.getView(root.dataset.tabId).calloutTool.model.radii;
+  })).toEqual({ topLeft: 24, topRight: 10, bottomRight: 24, bottomLeft: 24 });
   const guideWidthAtZoom = async (zoom) => page.evaluate((requestedZoom) => {
     const root = document.querySelector('.tab-view.active[data-tab-view-kind=image-editor]');
     const controller = window.markdownViewerApp.services.imageEditor.getView(root.dataset.tabId);
@@ -550,6 +570,7 @@ test('rounded callout guide changes tail direction length and attachment shape b
   const reshapedAttachmentSpan = Math.abs(reshapedModel.attachmentEnd.y - reshapedModel.attachmentStart.y);
   expect(reshapedAttachmentSpan).toBeLessThan(initialAttachmentSpan);
 
+  await page.evaluate(() => document.activeElement?.blur());
   await page.keyboard.press('Enter');
   expect(await page.evaluate(() => {
     const root = document.querySelector('.tab-view.active[data-tab-view-kind=image-editor]');
@@ -565,6 +586,11 @@ test('rounded callout guide changes tail direction length and attachment shape b
   })).toBe(true);
   await page.keyboard.press('Escape');
   await expect(calloutMain).toHaveClass(/active/);
+  expect(await page.evaluate(() => {
+    const root = document.querySelector('.tab-view.active[data-tab-view-kind=image-editor]');
+    const layer = window.markdownViewerApp.services.imageEditor.getView(root.dataset.tabId).documentStore.activeLayer();
+    return { layerName: layer.name, objectNames: layer.objects.map((object) => object.name) };
+  })).toEqual({ layerName: 'Rectangle callout', objectNames: ['Rectangle callout'] });
   expect(await page.locator('.image-editor-canvas').evaluate((canvas) => {
     const pixels = canvas.getContext('2d').getImageData(0, 0, canvas.width, canvas.height).data;
     let count = 0;
@@ -814,6 +840,71 @@ test('diamond and line tools return after each floating shape is placed', async 
   await expect(page.locator('[data-tool=select]')).toHaveClass(/active/);
   await page.keyboard.press('Escape');
   await expect(page.locator('[data-tool=line]')).toHaveClass(/active/);
+});
+
+test('cloud and teardrop silhouettes draw from the Shapes dropdown', async ({ page }) => {
+  await page.goto('/');
+  await page.waitForFunction(() => !!window.markdownViewerApp?.modules?.tabs?.openBlankImageEditorInTab, null, { timeout: 60000 });
+  await page.waitForFunction(() => !!window.markdownViewerApp?.modules?.keyboardShortcuts && !!window.markdownViewerApp?.services?.imageEditor, null, { timeout: 60000 });
+  await page.evaluate(() => {
+    window.markdownViewerApp.modules.apiClient.deactivateApiClientSidebar = () => {};
+    window.markdownViewerApp.modules.tabs.openBlankImageEditorInTab({ width: 180, height: 140, name: 'Organic Shapes' });
+  });
+  const root = page.locator('.tab-view.active[data-tab-view-kind=image-editor]');
+  await expect(root.locator('.image-editor-shell')).toBeVisible();
+  await root.locator('.image-editor-fill').check();
+  await page.evaluate(() => {
+    const root = document.querySelector('.tab-view.active[data-tab-view-kind=image-editor]');
+    window.markdownViewerApp.services.imageEditor.getView(root.dataset.tabId).state.backgroundColor = '#ff0000';
+  });
+  const group = root.locator('[data-tool-group="shapes"]');
+  const trigger = group.locator('.image-editor-grouped-tool-trigger');
+  const main = group.locator('.image-editor-grouped-tool-main');
+  const overlay = root.locator('.image-editor-overlay');
+  const box = await overlay.boundingBox();
+  const shapes = [
+    { tool: 'cloud-cluster', label: 'Cloud cluster', start: [8, 8], end: [78, 55], center: [43, 31] },
+    { tool: 'cloud', label: 'Cloud', start: [95, 8], end: [170, 55], center: [132, 31] },
+    { tool: 'teardrop', label: 'Teardrop', start: [18, 70], end: [70, 130], center: [44, 100] },
+    { tool: 'curved-teardrop', label: 'Curved teardrop', start: [105, 70], end: [160, 130], center: [132, 100] }
+  ];
+
+  for (const shape of shapes) {
+    await trigger.click();
+    const option = group.locator(`[data-tool="${shape.tool}"]`);
+    await expect(option).toContainText(shape.label);
+    await option.click();
+    await expect(main).toHaveAttribute('data-tool', shape.tool);
+    await page.mouse.move(box.x + shape.start[0], box.y + shape.start[1]);
+    await page.mouse.down();
+    await page.mouse.move(box.x + shape.end[0], box.y + shape.end[1], { steps: 4 });
+    await page.mouse.up();
+    expect(await page.evaluate(() => {
+      const root = document.querySelector('.tab-view.active[data-tab-view-kind=image-editor]');
+      const controller = window.markdownViewerApp.services.imageEditor.getView(root.dataset.tabId);
+      return { tool: controller.state.tool, floating: controller.selection.floating, origin: controller.selection.origin };
+    })).toEqual({ tool: 'select', floating: true, origin: 'shape' });
+    await page.keyboard.press('Escape');
+    await expect(main).toHaveAttribute('data-tool', shape.tool);
+    expect(await page.evaluate((tool) => {
+      const root = document.querySelector('.tab-view.active[data-tab-view-kind=image-editor]');
+      const controller = window.markdownViewerApp.services.imageEditor.getView(root.dataset.tabId);
+      const object = controller.documentStore.document.nodes
+        .flatMap((node) => node.kind === 'layer' ? node.objects : node.kind === 'object' ? [node] : [])
+        .find((candidate) => candidate.payload?.tool === tool);
+      return object?.name;
+    }, shape.tool)).toBe(shape.label);
+  }
+
+  const centers = await root.locator('.image-editor-canvas').evaluate((canvas, points) => {
+    const context = canvas.getContext('2d');
+    return points.map(([x, y]) => Array.from(context.getImageData(x, y, 1, 1).data));
+  }, shapes.map((shape) => shape.center));
+  centers.forEach((pixel) => {
+    expect(pixel[0]).toBeGreaterThan(200);
+    expect(pixel[1]).toBeLessThan(80);
+    expect(pixel[2]).toBeLessThan(80);
+  });
 });
 
 test('placing an unfilled shape preserves transparency and names new or existing layers correctly', async ({ page }) => {
@@ -1269,7 +1360,7 @@ test('image tools are arranged in a narrow scrollable sidebar left of the canvas
       triggerTop: trigger.top
     };
   }));
-  expect(splitToolGeometry).toHaveLength(7);
+  expect(splitToolGeometry).toHaveLength(8);
   splitToolGeometry.forEach((geometry) => {
     expect(geometry.groupWidth).toBeCloseTo(28, 0);
     expect(geometry.mainRight).toBeCloseTo(geometry.triggerLeft, 0);
@@ -1302,6 +1393,9 @@ test('image tools are arranged in a narrow scrollable sidebar left of the canvas
   expect(closedShapeGeometry.menuDisplay).toBe('none');
   await shapeGroup.locator('.image-editor-grouped-tool-trigger').click();
   await expect(shapeMenu).toBeVisible();
+  await expect(shapeMenu.locator('[data-tool="diamond"]')).toHaveCount(1);
+  await expect(shapeMenu.locator('[data-tool="star"]')).toHaveCount(1);
+  await expect(toolContainer.locator(':scope > [data-tool="diamond"], :scope > [data-tool="star"]')).toHaveCount(0);
   const shapeMenuBox = await shapeMenu.boundingBox();
   const flyoutGeometry = await shapeGroup.evaluate((element) => {
     const trigger = element.querySelector('.image-editor-grouped-tool-trigger').getBoundingClientRect();
@@ -1316,6 +1410,14 @@ test('image tools are arranged in a narrow scrollable sidebar left of the canvas
   await expect(shapeMain).toHaveAttribute('data-tool', 'triangle');
   await expect(shapeMain.locator('.bi-triangle')).toBeVisible();
   await expect(shapeMain).toHaveClass(/active/);
+  await shapeGroup.locator('.image-editor-grouped-tool-trigger').click();
+  await shapeMenu.locator('[data-tool="diamond"]').click();
+  await expect(shapeMain).toHaveAttribute('data-tool', 'diamond');
+  await expect(shapeMain.locator('.bi-diamond')).toBeVisible();
+  await shapeGroup.locator('.image-editor-grouped-tool-trigger').click();
+  await shapeMenu.locator('[data-tool="star"]').click();
+  await expect(shapeMain).toHaveAttribute('data-tool', 'star');
+  await expect(shapeMain.locator('.bi-star')).toBeVisible();
   await expect(shapeMenu.locator('[data-tool="callout"]')).toHaveCount(0);
 
   const calloutGroup = root.locator('[data-tool-group="callouts"]');
@@ -2931,6 +3033,117 @@ test("text tool creates a dragged text box and moves populated text from its bor
   expect(committedTextBounds.minY).toBeGreaterThanOrEqual(Math.floor(textContentRect.y) - 1);
   await expect(page.locator("#tab-list .tab-item.active")).toHaveClass(/unsaved/);
 });
+test("text tool applies extended formatting and persists advanced settings", async ({ page }) => {
+  await page.goto("/");
+  await page.waitForFunction(() => !!window.markdownViewerApp?.modules?.tabs?.openBlankImageEditorInTab, null, { timeout: 60000 });
+  await page.waitForFunction(() => !!window.markdownViewerApp?.modules?.keyboardShortcuts && !!window.markdownViewerApp?.services?.imageEditor, null, { timeout: 60000 });
+  await page.evaluate(() => {
+    window.markdownViewerApp.modules.tabs.openBlankImageEditorInTab({ width: 320, height: 180, name: "Formatted text" });
+  });
+
+  const root = page.locator('.tab-view.active[data-tab-view-kind="image-editor"]');
+  await expect(root.locator(".image-editor-shell")).toBeVisible();
+  await root.locator('[data-tool="text"]').click();
+  const controls = root.locator(".image-editor-text-controls");
+  await expect(controls).toBeVisible();
+  await expect(controls.locator('[data-format="italic"]')).toHaveText("I");
+  await expect(controls.locator('[data-format="underline"]')).toHaveCount(1);
+  await expect(controls.locator('[data-format="strikethrough"]')).toHaveCount(1);
+  await expect(controls.locator('[data-format="bullets"]')).toHaveCount(1);
+  await expect(controls.locator("[data-text-case]")).toHaveCount(3);
+  await expect(controls.locator("[data-text-align]")).toHaveCount(4);
+  await expect(controls.locator("[data-text-direction]")).toHaveCount(2);
+
+  const overlay = root.locator(".image-editor-overlay");
+  const canvasBox = await overlay.boundingBox();
+  await page.mouse.move(canvasBox.x + 20, canvasBox.y + 20);
+  await page.mouse.down();
+  await page.mouse.move(canvasBox.x + 260, canvasBox.y + 145, { steps: 5 });
+  await page.mouse.up();
+  const input = root.locator(".image-editor-text-input");
+  await input.fill("Alpha\nBeta");
+
+  for (const format of ["bold", "italic", "underline", "strikethrough"]) {
+    await controls.locator(`[data-format="${format}"]`).click();
+  }
+  await controls.locator('[data-text-case="uppercase"]').evaluate((button) => { button.closest("details").open = true; });
+  await controls.locator('[data-text-case="uppercase"]').click();
+  await controls.locator('[data-text-align="center"]').evaluate((button) => { button.closest("details").open = true; });
+  await controls.locator('[data-text-align="center"]').click();
+  await controls.locator('[data-text-direction="rtl"]').evaluate((button) => { button.closest("details").open = true; });
+  await controls.locator('[data-text-direction="rtl"]').click();
+  await controls.locator('[data-format="bullets"]').click();
+  await expect(input).toHaveValue("\u2022 Alpha\n\u2022 Beta");
+
+  await controls.locator("[data-text-advanced]").click();
+  const advanced = root.locator(".image-editor-text-advanced-panel");
+  await expect(advanced).toBeVisible();
+  await advanced.locator('[data-text-setting="textLetterSpacing"]').evaluate((element) => {
+    element.value = "2";
+    element.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+  await advanced.locator('[data-text-setting="textLineSpacing"]').evaluate((element) => {
+    element.value = "1.6";
+    element.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+  await advanced.locator('[data-text-choice="textAnchor"][data-value="bottom"]').click();
+  await advanced.locator('[data-text-choice="textPosition"][data-value="superscript"]').click();
+  await advanced.locator('[data-text-choice="textKerning"][data-value="none"]').click();
+  await advanced.locator('[data-text-choice="textLigatures"][data-value="none"]').click();
+
+  const liveStyle = await input.evaluate((element) => {
+    const style = getComputedStyle(element);
+    return {
+      weight: Number.parseInt(style.fontWeight, 10),
+      italic: style.fontStyle,
+      decoration: style.textDecorationLine,
+      transform: style.textTransform,
+      align: style.textAlign,
+      direction: style.direction,
+      spacing: style.letterSpacing,
+      kerning: style.fontKerning,
+      ligatures: style.fontVariantLigatures
+    };
+  });
+  expect(liveStyle.weight).toBeGreaterThan(500);
+  expect(liveStyle.italic).toBe("italic");
+  expect(liveStyle.decoration).toContain("underline");
+  expect(liveStyle.decoration).toContain("line-through");
+  expect(liveStyle.transform).toBe("uppercase");
+  expect(liveStyle.align).toBe("center");
+  expect(liveStyle.direction).toBe("rtl");
+  expect(liveStyle.spacing).toBe("2px");
+  expect(liveStyle.kerning).toBe("none");
+  expect(liveStyle.ligatures).toBe("none");
+
+  await input.focus();
+  await page.keyboard.press("Control+Enter");
+  await expect(input).toBeHidden();
+  const stored = await root.evaluate((element) => {
+    const controller = window.markdownViewerApp.services.imageEditor.getView(element.dataset.tabId);
+    const object = controller.documentStore.document.nodes
+      .flatMap((node) => node.objects || [])
+      .find((candidate) => candidate.type === "text");
+    return { text: object.payload.text, style: object.payload.style };
+  });
+  expect(stored.text).toBe("Alpha\nBeta");
+  expect(stored.style).toMatchObject({
+    fontBold: true,
+    fontItalic: true,
+    fontUnderline: true,
+    fontStrikethrough: true,
+    textCase: "uppercase",
+    textAlign: "center",
+    textListStyle: "bullet",
+    textDirection: "rtl",
+    textLetterSpacing: 2,
+    textLineSpacing: 1.6,
+    textAnchor: "bottom",
+    textPosition: "superscript",
+    textKerning: "none",
+    textLigatures: "none"
+  });
+});
 test("bucket fill recolors both sides of an antialiased curved edge and undo restores it", async ({ page }) => {
   await page.goto("/");
   await page.waitForFunction(() => !!window.markdownViewerApp?.modules?.keyboardShortcuts, null, { timeout: 60000 });
@@ -3022,6 +3235,82 @@ test("bucket fill recolors both sides of an antialiased curved edge and undo res
   expect(outsideFill.center).toEqual([255, 255, 255]);
   expect(outsideFill.outside).toEqual([128, 128, 128]);
 });
+test("Move tool snaps a multi-object drag to visible object guides", async ({ page }) => {
+  await page.goto("/");
+  await page.waitForFunction(() => !!window.markdownViewerApp?.modules?.tabs?.openBlankImageEditorInTab, null, { timeout: 60000 });
+  await page.waitForFunction(() => !!window.markdownViewerApp?.modules?.keyboardShortcuts && !!window.markdownViewerApp?.services?.imageEditor, null, { timeout: 60000 });
+  await page.evaluate(() => {
+    window.markdownViewerApp.modules.apiClient.deactivateApiClientSidebar = () => {};
+    window.markdownViewerApp.modules.tabs.openBlankImageEditorInTab({ width: 220, height: 130, name: "Alignment Guides" });
+  });
+  const root = page.locator(".tab-view.active[data-tab-view-kind=image-editor]");
+  await expect(root.locator(".image-editor-shell")).toBeVisible();
+  await root.locator(".image-editor-fill").check();
+  await page.evaluate(() => {
+    const root = document.querySelector(".tab-view.active[data-tab-view-kind=image-editor]");
+    window.markdownViewerApp.services.imageEditor.getView(root.dataset.tabId).state.backgroundColor = "#ff0000";
+  });
+  const shapeGroup = root.locator('[data-tool-group="shapes"]');
+  await shapeGroup.locator(".image-editor-grouped-tool-trigger").click();
+  await shapeGroup.locator('.image-editor-grouped-tool-menu [data-tool="rectangle"]').click();
+  const overlay = root.locator(".image-editor-overlay");
+  const box = await overlay.boundingBox();
+  const drawRectangle = async (start, end) => {
+    await page.mouse.move(box.x + start[0], box.y + start[1]);
+    await page.mouse.down();
+    await page.mouse.move(box.x + end[0], box.y + end[1], { steps: 4 });
+    await page.mouse.up();
+    await page.keyboard.press("Escape");
+  };
+  await drawRectangle([20, 20], [70, 50]);
+  await drawRectangle([100, 60], [130, 90]);
+  await drawRectangle([140, 60], [170, 90]);
+
+  await root.locator('[data-tool="move"]').click();
+  await page.mouse.click(box.x + 115, box.y + 75);
+  await page.keyboard.down("Shift");
+  await page.mouse.click(box.x + 155, box.y + 75);
+  await page.keyboard.up("Shift");
+  await page.mouse.move(box.x + 115, box.y + 75);
+  await page.mouse.down();
+  await page.mouse.move(box.x + 26, box.y + 75, { steps: 5 });
+
+  const duringDrag = await page.evaluate(() => {
+    const root = document.querySelector(".tab-view.active[data-tab-view-kind=image-editor]");
+    const controller = window.markdownViewerApp.services.imageEditor.getView(root.dataset.tabId);
+    const selected = [...controller.documentStore.selectedIds]
+      .map((id) => window.MarkdownViewerImageEditor.findDocumentObject(controller.documentStore.document, id)?.object)
+      .filter(Boolean);
+    const left = Math.min(...selected.map((object) => object.transform.x));
+    const right = Math.max(...selected.map((object) => object.transform.x + object.bounds.width * object.transform.scaleX));
+    const overlay = controller.view.overlayContext;
+    const pixels = overlay.getImageData(43, 0, 5, overlay.canvas.height).data;
+    let magentaPixels = 0;
+    for (let index = 0; index < pixels.length; index += 4) {
+      if (pixels[index] > 180 && pixels[index + 1] < 80 && pixels[index + 2] > 140 && pixels[index + 3] > 0) magentaPixels += 1;
+    }
+    return {
+      selectedCount: selected.length,
+      centerX: (left + right) / 2,
+      guides: controller.objectAlignmentGuides,
+      magentaPixels
+    };
+  });
+  expect(duringDrag.selectedCount).toBe(2);
+  expect(duringDrag.centerX).toBe(45);
+  expect(duringDrag.guides).toEqual(expect.arrayContaining([
+    expect.objectContaining({ orientation: "vertical", position: 45 })
+  ]));
+  expect(duringDrag.magentaPixels).toBeGreaterThan(0);
+
+  await page.mouse.up();
+  expect(await page.evaluate(() => {
+    const root = document.querySelector(".tab-view.active[data-tab-view-kind=image-editor]");
+    const controller = window.markdownViewerApp.services.imageEditor.getView(root.dataset.tabId);
+    return controller.objectAlignmentGuides;
+  })).toEqual([]);
+});
+
 test("selection moves with arrows and Ctrl+arrow starts a movable copy", async ({ page }) => {
   await page.goto("/");
   await page.waitForFunction(() => !!window.markdownViewerApp?.modules?.keyboardShortcuts, null, { timeout: 60000 });
@@ -3935,6 +4224,73 @@ test("selection stamps repeated copies with Shift+arrow", async ({ page }) => {
   expect(pixels.firstStamp).toEqual([0, 255, 0]);
   expect(pixels.laterStamp).toEqual([0, 255, 0]);
 });
+test("selected objects expose stacking, page alignment, and advanced transform properties", async ({ page }) => {
+  await page.goto("/");
+  await page.waitForFunction(() => !!window.markdownViewerApp?.modules?.keyboardShortcuts && !!window.markdownViewerApp?.modules?.tabs?.openBlankImageEditorInTab && !!window.markdownViewerApp?.services?.imageEditor, null, { timeout: 60000 });
+  await page.evaluate(() => {
+    window.markdownViewerApp.modules.apiClient.deactivateApiClientSidebar = () => {};
+    window.markdownViewerApp.modules.tabs.openBlankImageEditorInTab({ width: 100, height: 80, name: "Object properties test" });
+  });
+
+  const root = page.locator('.tab-view.active[data-tab-view-kind="image-editor"]');
+  const panel = root.locator(".image-editor-adjustments-panel");
+  expect(page.errors).toEqual([]);
+  await expect(root.locator(".image-editor-shell")).toBeVisible();
+  await page.evaluate(() => {
+    const tab = document.querySelector('.tab-view.active[data-tab-view-kind="image-editor"]');
+    const controller = window.markdownViewerApp.services.imageEditor.getView(tab.dataset.tabId);
+    const layer = controller.documentStore.addLayer("Objects");
+    const pixels = new ImageData(20, 10);
+    pixels.data.fill(255);
+    const first = controller.documentStore.addRasterObject(pixels, { x: 10, y: 15, width: 20, height: 10 }, { name: "First", layerId: layer.id });
+    const second = controller.documentStore.addRasterObject(pixels, { x: 40, y: 20, width: 20, height: 10 }, { name: "Second", layerId: layer.id });
+    controller.documentStore.select(first.id);
+    controller.compositor.render({ canvas: controller.view.canvas });
+    window.__objectPropertiesIds = { layerId: layer.id, firstId: first.id, secondId: second.id };
+  });
+  await expect(panel.locator('[data-adjustment-tab="properties"]')).toHaveAttribute("aria-selected", "true");
+  await expect(panel.locator(".image-editor-object-stacking button")).toHaveCount(4);
+  await expect(panel.locator(".image-editor-object-alignment button")).toHaveCount(6);
+  await expect(panel.locator("[data-object-property-field]")).toHaveCount(5);
+
+  await panel.locator('[data-object-property-action="forward"]').click();
+  await panel.locator('[data-object-property-action="align-right"]').click();
+  await panel.locator('[data-object-property-action="align-bottom"]').click();
+  await panel.locator('[data-object-property-field="width"]').fill("40");
+  await panel.locator('[data-object-property-field="width"]').press("Tab");
+  await panel.locator("[data-object-ratio-lock]").click();
+  await panel.locator('[data-object-property-field="height"]').fill("30");
+  await panel.locator('[data-object-property-field="height"]').press("Tab");
+  await panel.locator('[data-object-property-field="x"]').fill("12");
+  await panel.locator('[data-object-property-field="x"]').press("Tab");
+  await panel.locator('[data-object-property-field="y"]').fill("8");
+  await panel.locator('[data-object-property-field="y"]').press("Tab");
+  await panel.locator('[data-object-property-field="rotation"]').fill("90");
+  await panel.locator('[data-object-property-field="rotation"]').press("Tab");
+
+  expect(await page.evaluate(() => {
+    const tab = document.querySelector('.tab-view.active[data-tab-view-kind="image-editor"]');
+    const controller = window.markdownViewerApp.services.imageEditor.getView(tab.dataset.tabId);
+    const layer = window.MarkdownViewerImageEditor.findDocumentNode(controller.documentStore.document, window.__objectPropertiesIds.layerId).node;
+    const object = window.MarkdownViewerImageEditor.findDocumentObject(controller.documentStore.document, window.__objectPropertiesIds.firstId).object;
+    return {
+      order: layer.objects.map((item) => item.name),
+      x: object.transform.x,
+      y: object.transform.y,
+      width: object.bounds.width * object.transform.scaleX,
+      height: object.bounds.height * object.transform.scaleY,
+      rotationDegrees: Math.round(object.transform.rotation * 180 / Math.PI)
+    };
+  })).toEqual({
+    order: ["First", "Second"],
+    x: 12,
+    y: 8,
+    width: 40,
+    height: 30,
+    rotationDegrees: 90
+  });
+});
+
 test("brightness contrast adjustment stays fixed, previews live, and edits its mask transactionally", async ({ page }) => {
   await page.goto("/");
   await page.waitForFunction(() => !!window.markdownViewerApp?.modules?.keyboardShortcuts && !!window.markdownViewerApp?.modules?.tabs?.openBlankImageEditorInTab && !!window.markdownViewerApp?.services?.imageEditor, null, { timeout: 60000 });
@@ -3952,12 +4308,18 @@ test("brightness contrast adjustment stays fixed, previews live, and edits its m
   await expect(root.locator(".image-editor-shell")).toBeVisible();
   const panel = root.locator(".image-editor-adjustments-panel");
   await expect(panel).toBeVisible();
-  await expect(panel.locator('[data-adjustment-tab="adjustments"]')).toHaveAttribute("aria-selected", "true");
+  const effectsTab = panel.locator('[data-adjustment-tab="effects"]');
+  await expect(effectsTab).toHaveText("Effects");
+  await expect(effectsTab).toHaveAttribute("aria-selected", "true");
+  await expect(panel.locator(".image-editor-adjustment-catalog .image-editor-effect-icon")).toHaveCount(7);
+  const catalogColumns = await panel.locator(".image-editor-adjustment-catalog").evaluate((catalog) => getComputedStyle(catalog).gridTemplateColumns.split(" ").length);
+  expect(catalogColumns).toBe(3);
   const panelBeforeZoom = await panel.boundingBox();
   await page.locator(".image-editor-status-zoom-slider").fill("200");
   const panelAfterZoom = await panel.boundingBox();
   expect({ x: panelAfterZoom.x, y: panelAfterZoom.y, width: panelAfterZoom.width }).toEqual({ x: panelBeforeZoom.x, y: panelBeforeZoom.y, width: panelBeforeZoom.width });
 
+  await panel.locator('[data-adjustment-tab="tune"]').click();
   await panel.locator('[data-adjustment-panel-action="create-brightness-contrast"]').click();
   await expect(panel.locator('[data-adjustment-tab="properties"]')).toHaveAttribute("aria-selected", "true");
   await expect(root.locator(".image-editor-adjustment-layer-row")).toHaveCount(1);
@@ -4019,7 +4381,7 @@ test("exposure adjustment edits stops, offset, and gamma non-destructively", asy
   await expect(root.locator(".image-editor-shell")).toBeVisible();
   const panel = root.locator(".image-editor-adjustments-panel");
   await panel.locator('[data-adjustment-panel-action="create-exposure"]').click();
-  await expect(root.locator(".image-editor-adjustment-layer-row .image-editor-layer-name")).toHaveText("Exposure");
+  await expect(root.locator(".image-editor-adjustment-layer-row .image-editor-layer-name")).toHaveText("Exposure Control");
   await expect(panel.locator('[data-adjustment-property="exposure"][type="range"]')).toHaveAttribute("min", "-20");
   await expect(panel.locator('[data-adjustment-property="offset"][type="number"]')).toHaveAttribute("step", "0.0001");
   await expect(panel.locator('[data-adjustment-property="gamma"][type="range"]')).toHaveAttribute("max", "9.99");
@@ -4044,7 +4406,7 @@ test("exposure adjustment edits stops, offset, and gamma non-destructively", asy
     const decoded = await controller.projectCodec.decode(await imageEditor.getDraftBinary(controller.tab));
     const adjustment = decoded.document.nodes.find((node) => node.kind === "adjustment");
     return { name: adjustment.name, adjustment: adjustment.adjustment };
-  })).toEqual({ name: "Exposure", adjustment: { type: "exposure", exposure: 0, offset: 0, gamma: 1 } });
+  })).toEqual({ name: "Exposure Control", adjustment: { type: "exposure", exposure: 0, offset: 0, gamma: 1 } });
 });
 test("vibrance adjustment emphasizes muted colors and supports full desaturation", async ({ page }) => {
   await page.goto("/");
@@ -4063,7 +4425,7 @@ test("vibrance adjustment emphasizes muted colors and supports full desaturation
   await expect(root.locator(".image-editor-shell")).toBeVisible();
   const panel = root.locator(".image-editor-adjustments-panel");
   await panel.locator('[data-adjustment-panel-action="create-vibrance"]').click();
-  await expect(root.locator(".image-editor-adjustment-layer-row .image-editor-layer-name")).toHaveText("Vibrance");
+  await expect(root.locator(".image-editor-adjustment-layer-row .image-editor-layer-name")).toHaveText("Smart Saturation");
   await expect(panel.locator('[data-adjustment-property="vibrance"][type="range"]')).toHaveAttribute("min", "-100");
   await expect(panel.locator('[data-adjustment-property="saturation"][type="range"]')).toHaveAttribute("max", "100");
 
@@ -4091,7 +4453,7 @@ test("vibrance adjustment emphasizes muted colors and supports full desaturation
     const decoded = await controller.projectCodec.decode(await imageEditor.getDraftBinary(controller.tab));
     const adjustment = decoded.document.nodes.find((node) => node.kind === "adjustment");
     return { name: adjustment.name, adjustment: adjustment.adjustment };
-  })).toEqual({ name: "Vibrance", adjustment: { type: "vibrance", vibrance: 0, saturation: -100 } });
+  })).toEqual({ name: "Smart Saturation", adjustment: { type: "vibrance", vibrance: 0, saturation: -100 } });
 });
 test("hue and saturation adjustment supports color ranges and colorize", async ({ page }) => {
   await page.goto("/");
@@ -4228,7 +4590,7 @@ test("black and white adjustment mixes colors, tints output, and restores its au
   await expect(root.locator(".image-editor-shell")).toBeVisible();
   const panel = root.locator(".image-editor-adjustments-panel");
   await panel.locator('[data-adjustment-panel-action="create-black-white"]').click();
-  await expect(root.locator(".image-editor-adjustment-layer-row .image-editor-layer-name")).toHaveText("Black & White");
+  await expect(root.locator(".image-editor-adjustment-layer-row .image-editor-layer-name")).toHaveText("Monochrome Mixer");
   await expect(panel.locator('[data-adjustment-property="reds"][type="range"]')).toHaveValue("40");
   await expect(panel.locator('[data-adjustment-property="magentas"][type="number"]')).toHaveValue("80");
   await expect.poll(() => root.locator(".image-editor-canvas").evaluate((canvas) => Array.from(canvas.getContext("2d").getImageData(10, 10, 1, 1).data).slice(0, 3))).toEqual([102, 102, 102]);
@@ -4261,7 +4623,7 @@ test("black and white adjustment mixes colors, tints output, and restores its au
     const adjustment = decoded.document.nodes.find((node) => node.kind === "adjustment");
     return { name: adjustment.name, adjustment: adjustment.adjustment };
   })).toEqual({
-    name: "Black & White",
+    name: "Monochrome Mixer",
     adjustment: { type: "black-white", reds: 40, yellows: 60, greens: 40, cyans: 60, blues: 20, magentas: 80, tint: false, tintColor: "#0000ff" }
   });
 });
@@ -4282,7 +4644,7 @@ test("channel mixer adjustment keeps per-output matrices and supports monochrome
   await expect(root.locator(".image-editor-shell")).toBeVisible();
   const panel = root.locator(".image-editor-adjustments-panel");
   await panel.locator('[data-adjustment-panel-action="create-channel-mixer"]').click();
-  await expect(root.locator(".image-editor-adjustment-layer-row .image-editor-layer-name")).toHaveText("Channel Mixer");
+  await expect(root.locator(".image-editor-adjustment-layer-row .image-editor-layer-name")).toHaveText("Channel Blend");
   const outputChannel = panel.locator('[data-adjustment-select="outputChannel"]');
   await expect(outputChannel).toHaveValue("red");
   await expect(panel.locator("[data-channel-mixer-total]")).toHaveText("+100%");
@@ -4335,7 +4697,7 @@ test("channel mixer adjustment keeps per-output matrices and supports monochrome
       monochromeBlue: adjustment.adjustment.monochromeBlue
     };
   })).toEqual({
-    name: "Channel Mixer",
+    name: "Channel Blend",
     outputChannel: "red",
     monochrome: true,
     redOutputRed: 0,
@@ -4364,7 +4726,7 @@ test("levels adjustment edits composite and individual channels with histogram a
   await expect(root.locator(".image-editor-shell")).toBeVisible();
   const panel = root.locator(".image-editor-adjustments-panel");
   await panel.locator('[data-adjustment-panel-action="create-levels"]').click();
-  await expect(root.locator(".image-editor-adjustment-layer-row .image-editor-layer-name")).toHaveText("Levels");
+  await expect(root.locator(".image-editor-adjustment-layer-row .image-editor-layer-name")).toHaveText("Tonal Range");
   const channel = panel.locator('[data-adjustment-select="levelsChannel"]');
   await expect(channel).toHaveValue("rgb");
   await expect(panel.locator(".image-editor-levels-histogram")).toBeVisible();
@@ -4412,7 +4774,7 @@ test("levels adjustment edits composite and individual channels with histogram a
       redInputBlack: adjustment.adjustment.redInputBlack,
       blueOutputWhite: adjustment.adjustment.blueOutputWhite
     };
-  })).toEqual({ name: "Levels", channel: "blue", rgbGamma: 1, redInputBlack: 32, blueOutputWhite: 128 });
+  })).toEqual({ name: "Tonal Range", channel: "blue", rgbGamma: 1, redInputBlack: 32, blueOutputWhite: 128 });
 });
 test("curves adjustment edits graph points independently for composite and color channels", async ({ page }) => {
   await page.goto("/");
@@ -4431,7 +4793,7 @@ test("curves adjustment edits graph points independently for composite and color
   await expect(root.locator(".image-editor-shell")).toBeVisible();
   const panel = root.locator(".image-editor-adjustments-panel");
   await panel.locator('[data-adjustment-panel-action="create-curves"]').click();
-  await expect(root.locator(".image-editor-adjustment-layer-row .image-editor-layer-name")).toHaveText("Curves");
+  await expect(root.locator(".image-editor-adjustment-layer-row .image-editor-layer-name")).toHaveText("Tone Curve");
   const channel = panel.locator("[data-curves-channel]");
   const graph = panel.locator(".image-editor-curves-graph");
   await expect(channel).toHaveValue("rgb");
@@ -4484,7 +4846,7 @@ test("curves adjustment edits graph points independently for composite and color
     const adjustment = decoded.document.nodes.find((node) => node.kind === "adjustment");
     return { name: adjustment.name, channel: adjustment.adjustment.channel, rgbPoints: adjustment.adjustment.rgbPoints, redPoints: adjustment.adjustment.redPoints };
   })).toEqual({
-    name: "Curves",
+    name: "Tone Curve",
     channel: "rgb",
     rgbPoints: [{ x: 0, y: 0 }, { x: 128, y: 180 }, { x: 255, y: 255 }],
     redPoints: [{ x: 0, y: 0 }, { x: 192, y: 64 }, { x: 255, y: 255 }]
@@ -4507,7 +4869,7 @@ test("photo filter adjustment supports presets, custom color, density, and lumin
   await expect(root.locator(".image-editor-shell")).toBeVisible();
   const panel = root.locator(".image-editor-adjustments-panel");
   await panel.locator('[data-adjustment-panel-action="create-photo-filter"]').click();
-  await expect(root.locator(".image-editor-adjustment-layer-row .image-editor-layer-name")).toHaveText("Photo Filter");
+  await expect(root.locator(".image-editor-adjustment-layer-row .image-editor-layer-name")).toHaveText("Lens Tint");
   await expect(panel.locator('[data-photo-filter-mode][value="filter"]')).toBeChecked();
   await expect(panel.locator("[data-photo-filter-preset]")).toHaveValue("warming-85");
   await expect(panel.locator('[data-adjustment-property="density"][type="range"]')).toHaveValue("25");
@@ -4596,7 +4958,7 @@ test("selective color adjustment keeps independent family values and calculation
   await expect(root.locator(".image-editor-shell")).toBeVisible();
   const panel = root.locator(".image-editor-adjustments-panel");
   await panel.locator('[data-adjustment-panel-action="create-selective-color"]').click();
-  await expect(root.locator(".image-editor-adjustment-layer-row .image-editor-layer-name")).toHaveText("Selective Color");
+  await expect(root.locator(".image-editor-adjustment-layer-row .image-editor-layer-name")).toHaveText("Color Components");
   await expect(panel.locator("[data-selective-color-range]")).toHaveValue("reds");
   await expect(panel.locator('[data-selective-color-method][value="relative"]')).toBeChecked();
 
@@ -4628,7 +4990,7 @@ test("selective color adjustment keeps independent family values and calculation
       redsCyan: adjustment.adjustment.redsCyan
     };
   })).toEqual({
-    name: "Selective Color",
+    name: "Color Components",
     selectedColor: "blues",
     relative: false,
     bluesYellow: 100,
@@ -4669,7 +5031,7 @@ test("match color adjustment samples a source layer and retains image options", 
   await expect(root.locator(".image-editor-shell")).toBeVisible();
   const panel = root.locator(".image-editor-adjustments-panel");
   await panel.locator('[data-adjustment-panel-action="create-match-color"]').click();
-  await expect(root.locator(".image-editor-adjustment-layer-row .image-editor-layer-name")).toHaveText("Match Color");
+  await expect(root.locator(".image-editor-adjustment-layer-row .image-editor-layer-name")).toHaveText("Palette Match");
   await expect(panel.locator("[data-match-color-source]")).toHaveValue("");
   await expect(panel.locator('[data-adjustment-property="luminance"][type="range"]')).toHaveValue("100");
   await expect(panel.locator('[data-adjustment-property="colorIntensity"][type="range"]')).toHaveValue("100");
@@ -4699,7 +5061,7 @@ test("match color adjustment samples a source layer and retains image options", 
       neutralize: adjustment.adjustment.neutralize
     };
   })).toEqual({
-    name: "Match Color",
+    name: "Palette Match",
     sourceNodeId: sourceId,
     sourceName: "Source palette",
     sourceMeans: [0.784314, 0.392157, 0.196078],
@@ -4720,7 +5082,7 @@ test("replace color adjustment samples a color and changes matching pixels non-d
   await expect(root.locator(".image-editor-shell")).toBeVisible();
   const panel = root.locator(".image-editor-adjustments-panel");
   await panel.locator('[data-adjustment-panel-action="create-replace-color"]').click();
-  await expect(root.locator(".image-editor-adjustment-layer-row .image-editor-layer-name")).toHaveText("Replace Color");
+  await expect(root.locator(".image-editor-adjustment-layer-row .image-editor-layer-name")).toHaveText("Color Swap");
   await expect(panel.locator('[data-adjustment-property="fuzziness"][type="range"]')).toHaveValue("40");
 
   await panel.locator("[data-replace-color-source]").evaluate((input) => {

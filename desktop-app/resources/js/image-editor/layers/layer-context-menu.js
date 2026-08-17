@@ -4,6 +4,11 @@
 
   const namespace = global.MarkdownViewerImageEditor = global.MarkdownViewerImageEditor || {};
 
+  function itemIcon(item) {
+    if (item.effectIcon && namespace.ImageEditorEffectIcons) return namespace.ImageEditorEffectIcons.markup(item.effectIcon);
+    return '<i class="bi ' + item.icon + '" aria-hidden="true"></i>';
+  }
+
   class ImageEditorLayerContextMenu {
     /** Create one viewport-positioned menu that can be reused by a layers panel. */
     constructor() {
@@ -41,7 +46,7 @@
           trigger.disabled = item.disabled === true;
           trigger.setAttribute("role", "menuitem");
           trigger.setAttribute("aria-haspopup", "menu");
-          trigger.innerHTML = `<i class="bi ${item.icon}" aria-hidden="true"></i><span class="graph-context-menu-item-label"></span><i class="bi bi-chevron-right graph-context-menu-submenu-arrow" aria-hidden="true"></i>`;
+          trigger.innerHTML = itemIcon(item) + '<span class="graph-context-menu-item-label"></span><i class="bi bi-chevron-right graph-context-menu-submenu-arrow" aria-hidden="true"></i>';
           trigger.querySelector("span").textContent = item.label;
           const panel = document.createElement("div");
           panel.className = "graph-context-menu-submenu-panel";
@@ -65,7 +70,7 @@
         button.dataset.layerContextAction = item.id;
         button.disabled = item.disabled === true;
         button.setAttribute("role", "menuitem");
-        button.innerHTML = `<i class="bi ${item.icon}" aria-hidden="true"></i><span class="graph-context-menu-item-label"></span>`;
+        button.innerHTML = itemIcon(item) + '<span class="graph-context-menu-item-label"></span>';
         button.querySelector("span").textContent = item.label;
         button.addEventListener("click", () => {
           if (button.disabled) return;

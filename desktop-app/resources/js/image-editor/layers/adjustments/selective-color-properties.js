@@ -31,10 +31,10 @@
     /** Bind family and Relative/Absolute selection after the Properties panel renders. */
     bind(container, node) {
       const range = container.querySelector("[data-selective-color-range]");
-      range?.addEventListener("change", () => this.onMutate("Change Selective Color family", node.id, { type: "properties", patch: { selectedColor: range.value } }));
+      range?.addEventListener("change", () => this.onMutate("Change Color Components family", node.id, { type: "properties", patch: { selectedColor: range.value } }));
       container.querySelectorAll("[data-selective-color-method]").forEach((radio) => {
         radio.addEventListener("change", () => {
-          if (radio.checked) this.onMutate("Change Selective Color method", node.id, { type: "properties", patch: { relative: radio.value === "relative" } });
+          if (radio.checked) this.onMutate("Change Color Components method", node.id, { type: "properties", patch: { relative: radio.value === "relative" } });
         });
       });
     }

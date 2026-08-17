@@ -63,6 +63,15 @@
       namespace.ImageEditorPatternOverlayEffect?.normalizeDocument(document);
       namespace.ImageEditorBevelEmbossEffect?.normalizeDocument(document);
       namespace.ImageEditorGrayscaleEffect?.normalizeDocument(document);
+      namespace.ImageEditorBlurEffect?.normalizeDocument(document);
+      namespace.ImageEditorGrainEffect?.normalizeDocument(document);
+      namespace.ImageEditorNewspaperEffect?.normalizeDocument(document);
+      namespace.ImageEditorPaintedTextureEffect?.normalizeDocument(document);
+      namespace.ImageEditorSnowEffect?.normalizeDocument(document);
+      namespace.ImageEditorVortexEffect?.normalizeDocument(document);
+      namespace.ImageEditorRippleFieldEffect?.normalizeDocument(document);
+      namespace.ImageEditorFlareEffect?.normalizeDocument(document);
+      namespace.ImageEditorGustEffect?.normalizeDocument(document);
       namespace.validateImageDocument(document);
       const assets = new Map();
       for (const assetId of namespace.referencedAssetIds(document)) {

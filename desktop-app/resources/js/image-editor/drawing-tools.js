@@ -146,6 +146,10 @@
       namespace.traceArrow(context, start, end, state.arrowDirection, state.arrowHeadAngle);
     } else if (tool === "lightning") {
       namespace.traceLightning(context, start, end);
+    } else if (namespace.organicShapeTools?.includes(tool)) {
+      namespace.traceOrganicShape(context, tool, start, end);
+    } else if (namespace.flowchartShapeTools?.includes(tool)) {
+      namespace.traceFlowchartShape(context, tool, start, end);
     }
     if (state.fillShapes && tool !== "line") context.fill();
     context.stroke();
@@ -405,30 +409,7 @@
   }
 
   function drawText(context, box, text, state) {
-    if (!String(text || "")) return;
-    const fontSize = box.fontSize || state.fontSize;
-    const font = `${state.fontItalic ? "italic " : ""}${state.fontBold ? "bold " : ""}${fontSize}px ${state.fontFamily}`;
-    context.font = font;
-    context.textBaseline = "alphabetic";
-    context.fillStyle = namespace.imageEditorColorWithOpacity(state.foregroundColor, state.foregroundOpacity);
-    const width = Math.max(1, box.width || context.canvas.width - box.x);
-    const height = Math.max(1, box.height || context.canvas.height - box.y);
-    const lineHeight = box.lineHeight || fontSize * 1.2;
-    const metrics = context.measureText("Mg");
-    const ascent = metrics.actualBoundingBoxAscent || fontSize * 0.8;
-    const descent = metrics.actualBoundingBoxDescent || fontSize * 0.2;
-    const baselineOffset = Math.max(ascent, ((lineHeight - ascent - descent) / 2) + ascent);
-    const lines = wrapText(context, text, width);
-    context.save();
-    context.beginPath();
-    context.rect(box.x, box.y, width, height);
-    context.clip();
-    lines.forEach((line, index) => {
-      const baselineY = box.y + baselineOffset + index * lineHeight;
-      if (baselineY - ascent >= box.y + height) return;
-      context.fillText(line, box.x, baselineY);
-    });
-    context.restore();
+    namespace.drawFormattedImageEditorText(context, box, text, state);
   }
 
   Object.assign(namespace, { configureStroke, drawFreehand, curvePointAt, drawCurve, drawShape, drawRoundedRectangle, drawPolygon, colorToRgba, createFloodFillRegion, paintFloodFillRegion, floodFill, drawText, wrapImageEditorText: wrapText });

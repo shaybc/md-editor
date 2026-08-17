@@ -36,6 +36,17 @@ function loadCanvasContextActions() {
   return context.window.MarkdownViewerImageEditor;
 }
 
+function loadObjectAlignmentGuides() {
+  const context = { window: {} };
+  context.window.window = context.window;
+  vm.createContext(context);
+  vm.runInContext(
+    fs.readFileSync(path.resolve(__dirname, "../resources/js/image-editor/object-alignment-guides.js"), "utf8"),
+    context
+  );
+  return context.window.MarkdownViewerImageEditor.resolveObjectAlignment;
+}
+
 
 function contextStub() {
   const calls = [];
@@ -241,4 +252,41 @@ test("dragging a selection guide without Ctrl keeps the existing resize behavior
   assert.equal(updated.action, "resize");
   assert.equal(selection.skew.x, 0);
   assert.equal(selection.skew.y, 0);
+});
+
+test("object alignment snaps edges and leaves movement beyond the threshold unchanged", () => {
+  const resolveAlignment = loadObjectAlignmentGuides();
+  const bounds = { x: 0, y: 30, width: 20, height: 20 };
+  const targets = [{ x: 50, y: 0, width: 20, height: 20 }];
+
+  const snapped = resolveAlignment(bounds, { x: 27, y: 0 }, targets, 3);
+  assert.equal(snapped.deltaX, 30);
+  assert.deepEqual(JSON.parse(JSON.stringify(snapped.guides)), [
+    { orientation: "vertical", position: 50, start: 0, end: 50 }
+  ]);
+
+  const free = resolveAlignment(bounds, { x: 26, y: 0 }, targets, 3);
+  assert.equal(free.deltaX, 26);
+  assert.deepEqual(JSON.parse(JSON.stringify(free.guides)), []);
+});
+
+test("object alignment snaps axes independently and shows every coincident edge and center", () => {
+  const resolveAlignment = loadObjectAlignmentGuides();
+  const result = resolveAlignment(
+    { x: 30, y: 30, width: 20, height: 20 },
+    { x: 17, y: -27 },
+    [{ x: 50, y: 0, width: 20, height: 20 }],
+    3
+  );
+
+  assert.equal(result.deltaX, 20);
+  assert.equal(result.deltaY, -30);
+  assert.deepEqual(
+    JSON.parse(JSON.stringify(result.guides.filter((guide) => guide.orientation === "horizontal"))),
+    [
+      { orientation: "horizontal", position: 0, start: 50, end: 70 },
+      { orientation: "horizontal", position: 10, start: 50, end: 70 },
+      { orientation: "horizontal", position: 20, start: 50, end: 70 }
+    ]
+  );
 });

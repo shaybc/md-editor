@@ -4,8 +4,48 @@
 
   const namespace = global.MarkdownViewerImageEditor = global.MarkdownViewerImageEditor || {};
 
+  const TUNE_CATALOG = Object.freeze([
+    ["create-brightness-contrast", "brightness-contrast", "Brightness/<br>Contrast"],
+    ["create-exposure", "exposure", "Exposure<br>Control"],
+    ["create-vibrance", "vibrance", "Smart<br>Saturation"],
+    ["create-hue-saturation", "hue-saturation", "Hue/<br>Saturation"],
+    ["create-color-balance", "color-balance", "Color<br>Balance"],
+    ["create-black-white", "black-white", "Monochrome<br>Mixer"],
+    ["create-channel-mixer", "channel-mixer", "Channel<br>Blend"],
+    ["create-levels", "levels", "Tonal<br>Range"],
+    ["create-curves", "curves", "Tone<br>Curve"],
+    ["create-photo-filter", "photo-filter", "Lens<br>Tint"],
+    ["create-invert", "invert", "Invert"],
+    ["create-selective-color", "selective-color", "Color<br>Components"],
+    ["create-match-color", "match-color", "Palette<br>Match"],
+    ["create-replace-color", "replace-color", "Color<br>Swap"]
+  ]);
+
+  const LAYER_EFFECT_CATALOG = Object.freeze([
+    ["edit-blur", "blur", "Blur"],
+    ["edit-grain", "grain", "Grain"],
+    ["edit-newspaper", "newspaper", "Newspaper"],
+    ["edit-painted-texture", "painted-texture", "Painted<br>Texture"],
+    ["edit-snow", "snow", "Snow"],
+    ["edit-vortex", "vortex", "Vortex"],
+    ["edit-ripple-field", "ripple-field", "Ripple<br>Field"],
+    ["edit-flare", "flare", "Flare"],
+    ["edit-gust", "gust", "Gust"]
+  ]);
+
+  function effectIcon(name, className = "") {
+    return namespace.ImageEditorEffectIcons.markup(name, className);
+  }
+
   function button(icon, label, action) {
     return '<button type="button" data-adjustment-panel-action="' + action + '" title="' + label + '" aria-label="' + label + '"><i class="bi ' + icon + '" aria-hidden="true"></i></button>';
+  }
+
+  function curveTuneButton(textTarget) {
+    const active = textTarget?.object?.payload?.textEffect?.id === "curve";
+    const disabled = !textTarget || textTarget.locked ? " disabled" : "";
+    return '<button type="button" class="image-editor-adjustment-tile' + (active ? " active" : "") + '" data-text-effect="curve" title="Curve text" aria-label="Curve text" aria-pressed="' + String(active) + '"' + disabled + '>' +
+      '<span class="image-editor-text-effect-curve-preview" aria-hidden="true"><i>A</i><i>B</i><i>C</i><i>D</i></span><span>Curve</span></button>';
   }
 
   class ImageEditorAdjustmentsPanel {
@@ -18,6 +58,11 @@
     constructor(stage, store, options = {}) {
       this.store = store;
       this.onCreate = options.onCreate || (() => {});
+      this.onLayerEffect = options.onLayerEffect || (() => false);
+      this.onApplyTextEffect = options.onApplyTextEffect || (() => false);
+      this.onTextEffectPreview = options.onTextEffectPreview || (() => false);
+      this.onTextEffectCommit = options.onTextEffectCommit || (() => {});
+      this.onTextEffectMutate = options.onTextEffectMutate || (() => false);
       this.onBeginEdit = options.onBeginEdit || (() => null);
       this.onPreview = options.onPreview || (() => {});
       this.onCommitEdit = options.onCommitEdit || (() => {});
@@ -44,18 +89,27 @@
       this.replaceColorProperties = new namespace.ImageEditorReplaceColorProperties({
         onMutate: (label, nodeId, operation) => this.onMutate(label, nodeId, operation)
       });
+      this.objectProperties = new namespace.ImageEditorObjectProperties(store, {
+        onMutate: options.onObjectMutate || (() => false)
+      });
+      this.textEffectProperties = new namespace.ImageEditorTextEffectProperties({
+        onBeginEdit: () => this.onBeginEdit(),
+        onPreview: (objectId, patch) => this.onTextEffectPreview(objectId, patch),
+        onCommitEdit: (before, label, cancel, objectId) => this.onTextEffectCommit(before, label, cancel, objectId),
+        onMutate: (label, objectId, patch) => this.onTextEffectMutate(label, objectId, patch)
+      });
       this.onStateChanged = options.onStateChanged || (() => {});
       this.onLayoutChanged = options.onLayoutChanged || (() => {});
       this.state = {
         mode: ["expanded", "minimized", "hidden"].includes(options.state?.mode) ? options.state.mode : "expanded",
         height: Math.max(220, Number(options.state?.height || 300)),
-        activeTab: options.state?.activeTab === "properties" ? "properties" : "adjustments"
+        activeTab: ["properties", "tune", "effects"].includes(options.state?.activeTab) ? options.state.activeTab : "effects"
       };
       this.editSnapshot = null;
       this.element = document.createElement("aside");
       this.element.className = "image-editor-adjustments-panel";
-      this.element.setAttribute("aria-label", "Image adjustments");
-      this.element.innerHTML = '<header><div class="image-editor-adjustment-tabs" role="tablist"><button type="button" role="tab" data-adjustment-tab="properties">Properties</button><button type="button" role="tab" data-adjustment-tab="adjustments">Adjustments</button></div><span class="image-editor-adjustment-panel-actions">' + button("bi-dash-lg", "Minimize adjustments", "minimize") + button("bi-x-lg", "Hide adjustments", "hide") + '</span></header><div class="image-editor-adjustment-panel-content"></div><div class="image-editor-adjustment-panel-resize" title="Resize adjustments panel"></div>';
+      this.element.setAttribute("aria-label", "Image properties, tune, and effects");
+      this.element.innerHTML = '<header><div class="image-editor-adjustment-tabs" role="tablist"><button type="button" role="tab" data-adjustment-tab="properties">Properties</button><button type="button" role="tab" data-adjustment-tab="tune">Tune</button><button type="button" role="tab" data-adjustment-tab="effects">Effects</button></div><span class="image-editor-adjustment-panel-actions">' + button("bi-dash-lg", "Minimize adjustments", "minimize") + button("bi-x-lg", "Hide adjustments", "hide") + '</span></header><div class="image-editor-adjustment-panel-content"></div><div class="image-editor-adjustment-panel-resize" title="Resize adjustments panel"></div>';
       stage.appendChild(this.element);
       this.content = this.element.querySelector(".image-editor-adjustment-panel-content");
       this.bind();
@@ -64,7 +118,7 @@
       this.unsubscribe = store.subscribe((change) => {
         if (["selection", "add-adjustment"].includes(change.type)) {
           const target = this.selectedAdjustment();
-          if (target) {
+          if (target || this.objectProperties.hasSelection()) {
             this.state.activeTab = "properties";
             this.reveal();
           }
@@ -77,6 +131,14 @@
       const targetId = this.store.adjustmentTarget?.nodeId || [...this.store.selectedIds][0];
       const node = namespace.findDocumentNode(this.store.document, targetId)?.node;
       return namespace.ImageEditorAdjustmentModel.isAdjustment(node) ? node : null;
+    }
+
+    /** Resolve a text object only when its own hierarchy row is the sole selection. */
+    selectedTextTarget() {
+      const selected = [...this.store.selectedIds];
+      if (selected.length !== 1) return null;
+      const target = namespace.findDocumentObject(this.store.document, selected[0]);
+      return target?.object?.id === selected[0] && target.object.type === "text" ? target : null;
     }
 
     bind() {
@@ -101,6 +163,23 @@
           this.state.mode = "hidden";
           this.applyState();
           this.reportState();
+          return;
+        }
+        const textEffectId = event.target.closest("[data-text-effect]")?.dataset.textEffect;
+        const textTarget = this.selectedTextTarget();
+        if (textEffectId && textTarget && !textTarget.locked) {
+          this.onApplyTextEffect(textTarget.object.id, textEffectId);
+          const appliedPreset = namespace.ImageEditorTextEffectCatalog.get(textEffectId);
+          if (textEffectId === "curve" || Number.isFinite(appliedPreset?.typography?.curve)) {
+            this.state.activeTab = "properties";
+            this.reveal();
+            this.render();
+            this.reportState();
+          }
+          return;
+        }
+        if (["edit-blur", "edit-grain", "edit-newspaper", "edit-painted-texture", "edit-snow", "edit-vortex", "edit-ripple-field", "edit-flare", "edit-gust"].includes(action)) {
+          this.onLayerEffect(action);
           return;
         }
         const adjustmentType = {
@@ -140,16 +219,16 @@
         }
         if (action === "black-white-auto" && node?.adjustment?.type === "black-white" && !node.locked) {
           const defaults = namespace.ImageEditorAdjustmentModel.defaultsForType("black-white");
-          this.onMutate("Auto Black & White", node.id, {
+          this.onMutate("Auto Monochrome Mixer", node.id, {
             type: "properties",
             patch: { reds: defaults.reds, yellows: defaults.yellows, greens: defaults.greens, cyans: defaults.cyans, blues: defaults.blues, magentas: defaults.magentas }
           });
         }
         if (action === "levels-auto" && node?.adjustment?.type === "levels" && !node.locked) {
-          this.onMutate("Auto Levels", node.id, { type: "properties", patch: this.autoLevelsPatch(node.adjustment) });
+          this.onMutate("Auto Tonal Range", node.id, { type: "properties", patch: this.autoLevelsPatch(node.adjustment) });
         }
         if (action === "curves-auto" && node?.adjustment?.type === "curves" && !node.locked) {
-          this.onMutate("Auto Curves", node.id, { type: "properties", patch: this.curvesProperties.autoPatch(node.adjustment) });
+          this.onMutate("Auto Tone Curve", node.id, { type: "properties", patch: this.curvesProperties.autoPatch(node.adjustment) });
         }
       });
       this.element.addEventListener("pointerdown", (event) => {
@@ -226,13 +305,38 @@
         tab.classList.toggle("active", active);
         tab.setAttribute("aria-selected", String(active));
       });
-      if (this.state.activeTab === "adjustments") {
-        this.content.innerHTML = '<section class="image-editor-adjustment-catalog"><h3>Single adjustments</h3><button type="button" class="image-editor-adjustment-tile" data-adjustment-panel-action="create-brightness-contrast"><i class="bi bi-sun" aria-hidden="true"></i><span>Brightness/<br>Contrast</span></button><button type="button" class="image-editor-adjustment-tile" data-adjustment-panel-action="create-exposure"><i class="bi bi-circle-half" aria-hidden="true"></i><span>Exposure</span></button><button type="button" class="image-editor-adjustment-tile" data-adjustment-panel-action="create-vibrance"><i class="bi bi-triangle-half" aria-hidden="true"></i><span>Vibrance</span></button><button type="button" class="image-editor-adjustment-tile" data-adjustment-panel-action="create-hue-saturation"><i class="bi bi-rainbow" aria-hidden="true"></i><span>Hue/<br>Saturation</span></button><button type="button" class="image-editor-adjustment-tile" data-adjustment-panel-action="create-color-balance"><i class="bi bi-sliders2" aria-hidden="true"></i><span>Color<br>Balance</span></button><button type="button" class="image-editor-adjustment-tile" data-adjustment-panel-action="create-black-white"><i class="bi bi-square-half" aria-hidden="true"></i><span>Black &amp;<br>White</span></button><button type="button" class="image-editor-adjustment-tile" data-adjustment-panel-action="create-channel-mixer"><i class="bi bi-shuffle" aria-hidden="true"></i><span>Channel<br>Mixer</span></button><button type="button" class="image-editor-adjustment-tile" data-adjustment-panel-action="create-levels"><i class="bi bi-bar-chart-fill" aria-hidden="true"></i><span>Levels</span></button><button type="button" class="image-editor-adjustment-tile" data-adjustment-panel-action="create-curves"><i class="bi bi-graph-up" aria-hidden="true"></i><span>Curves</span></button><button type="button" class="image-editor-adjustment-tile" data-adjustment-panel-action="create-photo-filter"><i class="bi bi-camera" aria-hidden="true"></i><span>Photo<br>Filter</span></button><button type="button" class="image-editor-adjustment-tile" data-adjustment-panel-action="create-invert"><i class="bi bi-circle" aria-hidden="true"></i><span>Invert</span></button><button type="button" class="image-editor-adjustment-tile" data-adjustment-panel-action="create-selective-color"><i class="bi bi-envelope" aria-hidden="true"></i><span>Selective<br>Color</span></button><button type="button" class="image-editor-adjustment-tile" data-adjustment-panel-action="create-match-color"><i class="bi bi-images" aria-hidden="true"></i><span>Match<br>Color</span></button><button type="button" class="image-editor-adjustment-tile" data-adjustment-panel-action="create-replace-color"><i class="bi bi-eyedropper" aria-hidden="true"></i><span>Replace<br>Color</span></button></section>';
+      if (this.state.activeTab === "effects") {
+        const textTarget = this.selectedTextTarget();
+        if (textTarget) {
+          const selectedEffect = textTarget.object.payload?.textEffect?.id || "";
+          const disabled = textTarget.locked ? " disabled" : "";
+          const tools = namespace.ImageEditorTextEffectCatalog.all().filter((preset) => preset.id !== "curve").map((preset) => {
+            const active = selectedEffect === preset.id;
+            return '<button type="button" class="image-editor-text-effect-tile' + (active ? " active" : "") + '" data-text-effect="' + preset.id + '" title="' + preset.label + '" aria-label="Apply ' + preset.label + ' text effect" aria-pressed="' + String(active) + '"' + disabled + '>' +
+              '<span class="image-editor-text-effect-preview" style="' + namespace.ImageEditorTextEffectCatalog.previewStyle(preset) + '"><span>Ag</span></span><span class="image-editor-text-effect-label">' + preset.label + '</span></button>';
+          }).join("");
+          this.content.innerHTML = '<section class="image-editor-text-effect-catalog"><h3>Text effects</h3>' + tools + '</section>';
+          return;
+        }
+        const tools = LAYER_EFFECT_CATALOG.map(([action, type, label]) =>
+          '<button type="button" class="image-editor-adjustment-tile" data-adjustment-panel-action="' + action + '">' + effectIcon(type) + '<span>' + label + '</span></button>'
+        ).join("");
+        this.content.innerHTML = '<section class="image-editor-adjustment-catalog"><h3>Layer effects</h3>' + tools + '</section>';
+        return;
+      }
+      if (this.state.activeTab === "tune") {
+        const textTarget = this.selectedTextTarget();
+        const tools = TUNE_CATALOG.map(([action, type, label]) =>
+          '<button type="button" class="image-editor-adjustment-tile" data-adjustment-panel-action="' + action + '">' + effectIcon(type) + '<span>' + label + '</span></button>'
+        ).join("");
+        this.content.innerHTML = '<section class="image-editor-adjustment-catalog"><h3>Tune</h3>' + curveTuneButton(textTarget) + tools + '</section>';
         return;
       }
       const node = this.selectedAdjustment();
       if (!node) {
-        this.content.innerHTML = '<div class="image-editor-adjustment-empty"><i class="bi bi-sliders"></i><p>Select an adjustment layer to edit its properties.</p></div>';
+        if (this.textEffectProperties.render(this.content, this.selectedTextTarget())) return;
+        if (this.objectProperties.render(this.content)) return;
+        this.content.innerHTML = '<div class="image-editor-adjustment-empty"><i class="bi bi-sliders"></i><p>Select an object or adjustment layer to edit its properties.</p></div>';
         return;
       }
       const adjustment = node.adjustment;
@@ -252,7 +356,7 @@
       const isMatchColor = adjustment.type === "match-color";
       const isReplaceColor = adjustment.type === "replace-color";
       const name = namespace.ImageEditorAdjustmentModel.nameForType(adjustment.type);
-      const icon = isExposure ? "bi-circle-half" : isVibrance ? "bi-triangle-half" : isHueSaturation ? "bi-rainbow" : isColorBalance ? "bi-sliders2" : isBlackWhite ? "bi-square-half" : isChannelMixer ? "bi-shuffle" : isLevels ? "bi-bar-chart-fill" : isCurves ? "bi-graph-up" : isPhotoFilter ? "bi-camera" : isInvert ? "bi-circle" : isSelectiveColor ? "bi-envelope" : isMatchColor ? "bi-images" : isReplaceColor ? "bi-eyedropper" : "bi-sun";
+      const icon = effectIcon(adjustment.type);
       const controls = isExposure
         ? this.propertyControl("Exposure", "exposure", -20, 20, adjustment.exposure, disabled, .01) +
           this.propertyControl("Offset", "offset", -.5, .5, adjustment.offset, disabled, .0001) +
@@ -288,7 +392,7 @@
           ? this.replaceColorProperties.controls(adjustment, disabled, (...args) => this.propertyControl(...args))
         : this.propertyControl("Brightness", "brightness", -150, 150, adjustment.brightness, disabled) +
           this.propertyControl("Contrast", "contrast", -50, 100, adjustment.contrast, disabled);
-      this.content.innerHTML = '<section class="image-editor-brightness-contrast-properties"><div class="image-editor-adjustment-property-heading"><span><i class="bi ' + icon + '"></i> ' + name + '</span>' + (isInvert ? "" : button("bi-arrow-counterclockwise", "Reset adjustment", "reset")) + '</div>' +
+      this.content.innerHTML = '<section class="image-editor-brightness-contrast-properties"><div class="image-editor-adjustment-property-heading"><span>' + icon + name + '</span>' + (isInvert ? "" : button("bi-arrow-counterclockwise", "Reset adjustment", "reset")) + '</div>' +
         controls +
         '<fieldset class="image-editor-adjustment-mask-controls"' + disabled + '><legend>Layer mask</legend><label><input type="checkbox" data-adjustment-mask-action="enabled"' + (maskEnabled ? " checked" : "") + disabled + '> Enabled</label><div><button type="button" data-adjustment-mask-action="invert"' + disabled + '>Invert</button><button type="button" data-adjustment-mask-action="white"' + disabled + '>Reset white</button><button type="button" data-adjustment-mask-action="black"' + disabled + '>Fill black</button></div><p>Paint black to conceal, white to reveal, or gray for partial strength.</p></fieldset>' +
         (node.locked ? '<p class="image-editor-adjustment-locked"><i class="bi bi-lock-fill"></i> Unlock this adjustment layer to edit it.</p>' : "") +
@@ -310,15 +414,15 @@
       const preserveLuminosity = this.content.querySelector('[data-adjustment-toggle="preserveLuminosity"]');
       preserveLuminosity?.addEventListener("change", () => this.onMutate("Toggle Color Balance luminosity preservation", node.id, { type: "properties", patch: { preserveLuminosity: preserveLuminosity.checked } }));
       const tint = this.content.querySelector('[data-adjustment-toggle="blackWhiteTint"]');
-      tint?.addEventListener("change", () => this.onMutate("Toggle Black & White tint", node.id, { type: "properties", patch: { tint: tint.checked } }));
+      tint?.addEventListener("change", () => this.onMutate("Toggle Monochrome Mixer tint", node.id, { type: "properties", patch: { tint: tint.checked } }));
       const tintColor = this.content.querySelector('[data-adjustment-color="tintColor"]');
-      tintColor?.addEventListener("change", () => this.onMutate("Change Black & White tint color", node.id, { type: "properties", patch: { tintColor: tintColor.value } }));
+      tintColor?.addEventListener("change", () => this.onMutate("Change Monochrome Mixer tint color", node.id, { type: "properties", patch: { tintColor: tintColor.value } }));
       const outputChannel = this.content.querySelector('[data-adjustment-select="outputChannel"]');
-      outputChannel?.addEventListener("change", () => this.onMutate("Change Channel Mixer output", node.id, { type: "properties", patch: { outputChannel: outputChannel.value } }));
+      outputChannel?.addEventListener("change", () => this.onMutate("Change Channel Blend output", node.id, { type: "properties", patch: { outputChannel: outputChannel.value } }));
       const monochrome = this.content.querySelector('[data-adjustment-toggle="channelMixerMonochrome"]');
-      monochrome?.addEventListener("change", () => this.onMutate("Toggle Channel Mixer monochrome", node.id, { type: "properties", patch: { monochrome: monochrome.checked } }));
+      monochrome?.addEventListener("change", () => this.onMutate("Toggle Channel Blend monochrome", node.id, { type: "properties", patch: { monochrome: monochrome.checked } }));
       const levelsChannel = this.content.querySelector('[data-adjustment-select="levelsChannel"]');
-      levelsChannel?.addEventListener("change", () => this.onMutate("Change Levels channel", node.id, { type: "properties", patch: { channel: levelsChannel.value } }));
+      levelsChannel?.addEventListener("change", () => this.onMutate("Change Tonal Range channel", node.id, { type: "properties", patch: { channel: levelsChannel.value } }));
     }
 
     hueRangeControls(adjustment, disabled) {
@@ -449,7 +553,7 @@
     }
 
     toggle() {
-      if (this.state.mode === "hidden") this.reveal("adjustments");
+      if (this.state.mode === "hidden") this.reveal("effects");
       else {
         this.state.mode = "hidden";
         this.applyState();

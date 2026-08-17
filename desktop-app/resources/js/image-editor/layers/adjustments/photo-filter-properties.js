@@ -28,15 +28,15 @@
     bind(container, node) {
       container.querySelectorAll("[data-photo-filter-mode]").forEach((radio) => {
         radio.addEventListener("change", () => {
-          if (radio.checked) this.onMutate("Change Photo Filter source", node.id, { type: "properties", patch: { filterMode: radio.value } });
+          if (radio.checked) this.onMutate("Change Lens Tint source", node.id, { type: "properties", patch: { filterMode: radio.value } });
         });
       });
       const preset = container.querySelector("[data-photo-filter-preset]");
-      preset?.addEventListener("change", () => this.onMutate("Change Photo Filter preset", node.id, { type: "properties", patch: { filterMode: "filter", filter: preset.value } }));
+      preset?.addEventListener("change", () => this.onMutate("Change Lens Tint preset", node.id, { type: "properties", patch: { filterMode: "filter", filter: preset.value } }));
       const color = container.querySelector("[data-photo-filter-color]");
-      color?.addEventListener("change", () => this.onMutate("Change Photo Filter color", node.id, { type: "properties", patch: { filterMode: "color", color: color.value } }));
+      color?.addEventListener("change", () => this.onMutate("Change Lens Tint color", node.id, { type: "properties", patch: { filterMode: "color", color: color.value } }));
       const preserve = container.querySelector("[data-photo-filter-preserve]");
-      preserve?.addEventListener("change", () => this.onMutate("Toggle Photo Filter luminosity preservation", node.id, { type: "properties", patch: { preserveLuminosity: preserve.checked } }));
+      preserve?.addEventListener("change", () => this.onMutate("Toggle Lens Tint luminosity preservation", node.id, { type: "properties", patch: { preserveLuminosity: preserve.checked } }));
     }
   }
 

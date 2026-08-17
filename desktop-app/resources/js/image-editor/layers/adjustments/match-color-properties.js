@@ -33,10 +33,10 @@
         const selected = this.getSources().find((candidate) => candidate.id === source.value);
         const statistics = selected ? this.getStatistics(selected.id) : null;
         const patch = namespace.ImageEditorMatchColorAdjustment.sourcePatch(selected?.id, selected?.name, statistics);
-        this.onMutate("Change Match Color source", node.id, { type: "properties", patch });
+        this.onMutate("Change Palette Match source", node.id, { type: "properties", patch });
       });
       const neutralize = container.querySelector("[data-match-color-neutralize]");
-      neutralize?.addEventListener("change", () => this.onMutate("Toggle Match Color neutralization", node.id, { type: "properties", patch: { neutralize: neutralize.checked } }));
+      neutralize?.addEventListener("change", () => this.onMutate("Toggle Palette Match neutralization", node.id, { type: "properties", patch: { neutralize: neutralize.checked } }));
     }
   }
 

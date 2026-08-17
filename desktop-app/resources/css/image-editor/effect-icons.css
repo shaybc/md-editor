@@ -1,0 +1,25 @@
+/* Original MD-Editor iconography shared by effect catalogs and layer-style menus. */
+.image-editor-effect-icon {
+  display: inline-block;
+  width: 1em;
+  height: 1em;
+  flex: 0 0 auto;
+  overflow: visible;
+  vertical-align: -0.125em;
+}
+
+.image-editor-adjustment-tile .image-editor-effect-icon {
+  width: 18px;
+  height: 18px;
+}
+
+.image-editor-adjustment-property-heading .image-editor-effect-icon {
+  width: 17px;
+  height: 17px;
+  margin-right: 4px;
+}
+
+.graph-context-menu-item > .image-editor-effect-icon {
+  width: 16px;
+  height: 16px;
+}

@@ -39,6 +39,65 @@ test("image editor state restores independently clamped foreground and backgroun
   assert.equal(state.backgroundOpacity, 1);
 });
 
+test("image editor state restores extended text formatting with legacy-safe defaults", () => {
+  const { ImageEditorState } = loadState();
+  const defaults = new ImageEditorState();
+  assert.deepEqual({
+    underline: defaults.fontUnderline,
+    strikethrough: defaults.fontStrikethrough,
+    textCase: defaults.textCase,
+    align: defaults.textAlign,
+    list: defaults.textListStyle,
+    direction: defaults.textDirection,
+    letterSpacing: defaults.textLetterSpacing,
+    lineSpacing: defaults.textLineSpacing,
+    anchor: defaults.textAnchor,
+    position: defaults.textPosition,
+    kerning: defaults.textKerning,
+    ligatures: defaults.textLigatures
+  }, {
+    underline: false,
+    strikethrough: false,
+    textCase: "normal",
+    align: "left",
+    list: "none",
+    direction: "ltr",
+    letterSpacing: 0,
+    lineSpacing: 1.2,
+    anchor: "top",
+    position: "normal",
+    kerning: "auto",
+    ligatures: "normal"
+  });
+
+  const restored = new ImageEditorState({
+    fontUnderline: true,
+    fontStrikethrough: true,
+    textCase: "uppercase",
+    textAlign: "justify",
+    textListStyle: "bullet",
+    textDirection: "rtl",
+    textLetterSpacing: 99,
+    textLineSpacing: 0.2,
+    textAnchor: "bottom",
+    textPosition: "subscript",
+    textKerning: "none",
+    textLigatures: "none"
+  });
+  assert.equal(restored.fontUnderline, true);
+  assert.equal(restored.fontStrikethrough, true);
+  assert.equal(restored.textCase, "uppercase");
+  assert.equal(restored.textAlign, "justify");
+  assert.equal(restored.textListStyle, "bullet");
+  assert.equal(restored.textDirection, "rtl");
+  assert.equal(restored.textLetterSpacing, 20);
+  assert.equal(restored.textLineSpacing, 0.8);
+  assert.equal(restored.textAnchor, "bottom");
+  assert.equal(restored.textPosition, "subscript");
+  assert.equal(restored.textKerning, "none");
+  assert.equal(restored.textLigatures, "none");
+});
+
 test("image editor state tracks dirty and saved revisions", () => {
   const { ImageEditorState } = loadState();
   const state = new ImageEditorState();

@@ -32,11 +32,16 @@
     arrow: "bi-arrow-right",
     lightning: "bi-lightning",
     heart: "bi-heart",
+    "cloud-cluster": "bi-clouds",
+    cloud: "bi-cloud",
+    teardrop: "bi-droplet",
+    "curved-teardrop": "bi-droplet-half",
     bucket: "bi-paint-bucket",
     text: "bi-fonts"
   };
-  const TOOL_LABELS = { move: "Move", eraser: "Eraser", blur: "Blur", "clone-stamp": "Clone Stamp", smudge: "Smudge", "rounded-rectangle": "Rounded rectangle", "rectangular-grid": "Rectangular grid", "polar-grid": "Polar grid", callout: "Rounded rectangular callout", "oval-callout": "Oval callout", "cloud-callout": "Cloud callout" };
-  const SHAPE_TOOL_GROUP = Object.freeze(["rectangle", "ellipse", "triangle", "rounded-rectangle", "lightning", "heart"]);
+  const TOOL_LABELS = { move: "Move", eraser: "Eraser", blur: "Soften Brush", "clone-stamp": "Source Clone", smudge: "Color Smear", "rounded-rectangle": "Rounded rectangle", "rectangular-grid": "Rectangular grid", "polar-grid": "Polar grid", callout: "Rectangle callout", "oval-callout": "Oval callout", "cloud-callout": "Cloud callout", "cloud-cluster": "Cloud cluster", cloud: "Cloud", teardrop: "Teardrop", "curved-teardrop": "Curved teardrop" };
+  const FLOWCHART_SHAPE_TOOL_GROUP = Object.freeze([...(namespace.flowchartShapeTools || [])]);
+  const SHAPE_TOOL_GROUP = Object.freeze(["rectangle", "ellipse", "triangle", "rounded-rectangle", "diamond", "star", "lightning", "heart", "cloud-cluster", "cloud", "teardrop", "curved-teardrop"]);
   const CALLOUT_TOOL_GROUP = Object.freeze(["callout", "oval-callout", "cloud-callout"]);
   const GRID_TOOL_GROUP = Object.freeze(["rectangular-grid", "polar-grid"]);
   const ARROW_DIRECTIONS = Object.freeze(["up", "down", "left", "right"]);
@@ -63,9 +68,31 @@
   }
 
   function createToolButton(tool) {
-    const element = button(TOOL_ICONS[tool], TOOL_LABELS[tool] || tool[0].toUpperCase() + tool.slice(1), "image-editor-tool");
+    const element = button(TOOL_ICONS[tool], toolLabel(tool), "image-editor-tool");
     element.dataset.tool = tool;
     return element;
+  }
+
+  function toolLabel(tool) {
+    return namespace.flowchartShapeLabel?.(tool) || TOOL_LABELS[tool] || tool[0].toUpperCase() + tool.slice(1);
+  }
+
+  function toolIconMarkup(tool) {
+    return namespace.flowchartShapeIcon?.(tool) || `<i class="bi ${TOOL_ICONS[tool]}" aria-hidden="true"></i>`;
+  }
+
+  function groupedToolOption(tool) {
+    return `<button type="button" data-tool="${tool}" role="option">${toolIconMarkup(tool)}${toolLabel(tool)}</button>`;
+  }
+
+  function flowchartShapeSubmenu() {
+    if (!FLOWCHART_SHAPE_TOOL_GROUP.length) return "";
+    return `<details class="image-editor-flowchart-shape-submenu">
+      <summary aria-label="Choose a flowchart shape"><i class="bi bi-diagram-3" aria-hidden="true"></i><span>Flowchart shapes</span><i class="bi bi-caret-right-fill image-editor-flowchart-shape-submenu-arrow" aria-hidden="true"></i></summary>
+      <span class="image-editor-flowchart-shape-submenu-menu" role="listbox" aria-label="Flowchart shapes">
+        ${FLOWCHART_SHAPE_TOOL_GROUP.map(groupedToolOption).join("")}
+      </span>
+    </details>`;
   }
 
   function closeOtherToolFlyouts(current) {
@@ -132,7 +159,7 @@
           <button type="button" data-selection-shape="ellipse" role="option">${selectionShapeIcon("ellipse")}Ellipse</button>
           <button type="button" data-selection-shape="triangle" role="option">${selectionShapeIcon("triangle")}Triangle</button>
           <button type="button" data-selection-shape="lasso" role="option">${selectionShapeIcon("lasso")}Lasso</button>
-          <button type="button" data-selection-shape="color-range" role="option">${selectionShapeIcon("color-range")}Color range…</button>
+          <button type="button" data-selection-shape="color-range" role="option">${selectionShapeIcon("color-range")}Similar color select…</button>
         </span>
       </details>`;
     const modeSelector = wrapper.querySelector(".image-editor-select-mode");
@@ -178,15 +205,17 @@
     const wrapper = document.createElement("div");
     wrapper.className = "image-editor-grouped-tool";
     wrapper.dataset.toolGroup = groupName;
+    const options = tools.map(groupedToolOption).join("");
     wrapper.innerHTML = `
-      <button type="button" class="image-editor-button image-editor-tool image-editor-grouped-tool-main" data-tool="${initialTool}" title="${label}" aria-label="${label}"><i class="bi ${TOOL_ICONS[initialTool]}" aria-hidden="true"></i></button>
+      <button type="button" class="image-editor-button image-editor-tool image-editor-grouped-tool-main" data-tool="${initialTool}" title="${label}" aria-label="${label}">${toolIconMarkup(initialTool)}</button>
       <details class="image-editor-grouped-tool-mode">
         <summary class="image-editor-grouped-tool-trigger" title="Choose ${label.toLowerCase()}" aria-label="Choose ${label.toLowerCase()}"><i class="bi bi-caret-down-fill"></i></summary>
         <span class="image-editor-grouped-tool-menu" role="listbox" aria-label="${label} options">
-          ${tools.map((tool) => `<button type="button" data-tool="${tool}" role="option"><i class="bi ${TOOL_ICONS[tool]}"></i>${TOOL_LABELS[tool] || tool[0].toUpperCase() + tool.slice(1)}</button>`).join("")}
+          ${options}
         </span>
       </details>`;
-    positionToolFlyout(wrapper.querySelector(".image-editor-grouped-tool-mode"), ".image-editor-grouped-tool-trigger", ".image-editor-grouped-tool-menu");
+    const flyout = wrapper.querySelector(".image-editor-grouped-tool-mode");
+    positionToolFlyout(flyout, ".image-editor-grouped-tool-trigger", ".image-editor-grouped-tool-menu");
     return wrapper;
   }
 
@@ -196,9 +225,9 @@
     const main = wrapper?.querySelector(".image-editor-grouped-tool-main");
     if (!main) return;
     main.dataset.tool = activeTool;
-    main.title = TOOL_LABELS[activeTool] || activeTool[0].toUpperCase() + activeTool.slice(1);
+    main.title = toolLabel(activeTool);
     main.setAttribute("aria-label", main.title);
-    main.innerHTML = `<i class="bi ${TOOL_ICONS[activeTool]}" aria-hidden="true"></i>`;
+    main.innerHTML = toolIconMarkup(activeTool);
   }
 
   /** Build the Arrow tool and its direction chooser. */
@@ -349,7 +378,7 @@
               <label>Opacity <input class="image-editor-clone-stamp-opacity" type="range" min="1" max="100" value="100"></label>
               <label><input class="image-editor-clone-stamp-aligned" type="checkbox" checked> Aligned</label>
               <label>Sample
-                <select class="image-editor-clone-stamp-sample" aria-label="Clone stamp sample">
+                <select class="image-editor-clone-stamp-sample" aria-label="Source Clone sample">
                   <option value="current">Current layer</option>
                   <option value="all">All visible layers</option>
                 </select>
@@ -371,8 +400,45 @@
             <div class="image-editor-text-controls image-editor-toolbar-group">
               <select class="image-editor-font" aria-label="Font family"><option>Arial</option><option>Georgia</option><option>Courier New</option></select>
               <input class="image-editor-font-size" type="number" min="8" max="144" value="24" aria-label="Font size">
-              <button type="button" class="image-editor-format" data-format="bold" title="Bold"><strong>B</strong></button>
-              <button type="button" class="image-editor-format" data-format="italic" title="Italic"><em>I</em></button>
+              <button type="button" class="image-editor-format" data-format="bold" title="Bold" aria-label="Bold"><strong>B</strong></button>
+              <button type="button" class="image-editor-format" data-format="italic" title="Italic" aria-label="Italic"><span class="image-editor-italic-icon">I</span></button>
+              <button type="button" class="image-editor-format" data-format="underline" title="Underline" aria-label="Underline"><span class="image-editor-underline-icon">U</span></button>
+              <button type="button" class="image-editor-format" data-format="strikethrough" title="Strikethrough" aria-label="Strikethrough"><span class="image-editor-strikethrough-icon">S</span></button>
+              <details class="image-editor-text-option-menu image-editor-tool-flyout">
+                <summary class="image-editor-format" title="Letter case" aria-label="Choose letter case"><span class="image-editor-case-icon">aA</span></summary>
+                <span class="image-editor-text-option-menu-list" role="listbox" aria-label="Letter case">
+                  <button type="button" data-text-case="normal" role="option">As typed</button>
+                  <button type="button" data-text-case="lowercase" role="option">lowercase</button>
+                  <button type="button" data-text-case="uppercase" role="option">UPPERCASE</button>
+                </span>
+              </details>
+              <details class="image-editor-text-option-menu image-editor-tool-flyout">
+                <summary class="image-editor-format image-editor-text-align-trigger" title="Text alignment" aria-label="Choose text alignment"><i class="bi bi-text-left"></i></summary>
+                <span class="image-editor-text-option-menu-list image-editor-text-icon-menu" role="listbox" aria-label="Text alignment">
+                  <button type="button" data-text-align="left" role="option" title="Align left" aria-label="Align left"><i class="bi bi-text-left"></i></button>
+                  <button type="button" data-text-align="center" role="option" title="Align center" aria-label="Align center"><i class="bi bi-text-center"></i></button>
+                  <button type="button" data-text-align="right" role="option" title="Align right" aria-label="Align right"><i class="bi bi-text-right"></i></button>
+                  <button type="button" data-text-align="justify" role="option" title="Block alignment" aria-label="Block alignment"><i class="bi bi-justify"></i></button>
+                </span>
+              </details>
+              <button type="button" class="image-editor-format" data-format="bullets" title="Bulleted list" aria-label="Bulleted list"><i class="bi bi-list-ul"></i></button>
+              <button type="button" class="image-editor-format" data-text-advanced title="Advanced settings" aria-label="Advanced settings" aria-haspopup="dialog" aria-expanded="false"><i class="bi bi-paragraph"></i></button>
+              <!--
+              <details class="image-editor-text-option-menu image-editor-tool-flyout">
+                <summary class="image-editor-format image-editor-text-direction-trigger" title="Text direction" aria-label="Choose text direction"><span class="image-editor-direction-icon">T�w^~)�v</span></summary>
+                <span class="image-editor-text-option-menu-list image-editor-text-direction-menu" role="listbox" aria-label="Text direction">
+                  <button type="button" data-text-direction="ltr" role="option"><span>V��y��y�</span>Left to right</button>
+                  <button type="button" data-text-direction="rtl" role="option"><span;�u���PT</span>Right to left</button>
+                </span>
+              </details>
+              -->
+              <details class="image-editor-text-option-menu image-editor-tool-flyout">
+                <summary class="image-editor-format image-editor-text-direction-trigger" title="Text direction" aria-label="Choose text direction"><span class="image-editor-direction-icon">T&amp;rarr;</span></summary>
+                <span class="image-editor-text-option-menu-list image-editor-text-direction-menu" role="listbox" aria-label="Text direction">
+                  <button type="button" data-text-direction="ltr" role="option"><span>T&amp;rarr;</span>Left to right</button>
+                  <button type="button" data-text-direction="rtl" role="option"><span>&amp;larr;T</span>Right to left</button>
+                </span>
+              </details>
             </div>
           </div>
         </div>
@@ -415,6 +481,7 @@
       installFlyoutDismissal();
       const toolsContainer = this.shell.querySelector(".image-editor-tools");
       let shapeGroupAdded = false;
+      let flowchartShapeGroupAdded = false;
       let calloutGroupAdded = false;
       let gridGroupAdded = false;
       namespace.tools.filter((tool) => tool !== "oval-callout" && tool !== "cloud-callout").forEach((tool) => {
@@ -426,6 +493,11 @@
         if (SHAPE_TOOL_GROUP.includes(tool)) {
           if (!shapeGroupAdded) toolsContainer.appendChild(createGroupedTool("shapes", SHAPE_TOOL_GROUP, "rectangle", "Shapes"));
           shapeGroupAdded = true;
+          return;
+        }
+        if (FLOWCHART_SHAPE_TOOL_GROUP.includes(tool)) {
+          if (!flowchartShapeGroupAdded) toolsContainer.appendChild(createGroupedTool("flowchart-shapes", FLOWCHART_SHAPE_TOOL_GROUP, FLOWCHART_SHAPE_TOOL_GROUP[0], "Flowchart shapes"));
+          flowchartShapeGroupAdded = true;
           return;
         }
         if (GRID_TOOL_GROUP.includes(tool)) {
@@ -468,6 +540,34 @@
       const palette = this.shell.querySelector(".image-editor-color-palette");
       if (!palette) return;
       palette.replaceChildren(...colors.map((color) => createPaletteButton(color)));
+    }
+
+    /**
+     * Populate the text tool with installed font families without changing its current selection.
+     * @param {string[]} families - Available operating-system font family names.
+     * @param {string} selectedFamily - Font family currently stored in editor state.
+     */
+    setFontFamilies(families, selectedFamily) {
+      const select = this.shell.querySelector(".image-editor-font");
+      if (!select) return;
+      const current = String(selectedFamily || select.value || "Arial");
+      const available = [];
+      const seen = new Set();
+      [current, ...(families || [])].forEach((family) => {
+        const name = String(family || "").trim();
+        const key = name.toLocaleLowerCase();
+        if (!name || seen.has(key)) return;
+        seen.add(key);
+        available.push(name);
+      });
+      select.replaceChildren(...available.map((family) => {
+        const option = document.createElement("option");
+        option.value = family;
+        option.textContent = family;
+        option.style.fontFamily = family;
+        return option;
+      }));
+      select.value = current;
     }
 
     setDimensions(width, height) {
@@ -596,6 +696,7 @@
 
     update(state, commandState) {
       updateGroupedTool(this.shell, "shapes", state.tool, SHAPE_TOOL_GROUP);
+      updateGroupedTool(this.shell, "flowchart-shapes", state.tool, FLOWCHART_SHAPE_TOOL_GROUP);
       updateGroupedTool(this.shell, "callouts", state.tool, CALLOUT_TOOL_GROUP);
       updateGroupedTool(this.shell, "grids", state.tool, GRID_TOOL_GROUP);
       updateSelectionShapeIcon(this.shell, state.selectionShape);
@@ -648,7 +749,7 @@
       namespace.syncStrokeTypeSelector(this.shell.querySelector(".image-editor-stroke-type"), state.strokeType);
       this.shell.querySelector(".image-editor-corner-radius").value = String(state.cornerRadius);
       this.shell.querySelector(".image-editor-all-corners").checked = state.adjustAllCorners;
-      this.shell.querySelector(".image-editor-rounded-rectangle-controls").hidden = state.tool !== "rounded-rectangle";
+      this.shell.querySelector(".image-editor-rounded-rectangle-controls").hidden = state.tool !== "rounded-rectangle" && state.tool !== "callout";
       this.shell.querySelector(".image-editor-star-controls").hidden = state.tool !== "star";
       this.shell.querySelector(".image-editor-star-points").value = String(state.starPoints);
       this.shell.querySelector(".image-editor-arrow-controls").hidden = state.tool !== "arrow";
@@ -665,6 +766,42 @@
       this.shell.querySelector(".image-editor-polar-grid-radial").value = String(state.polarGridRadialDividers);
       this.shell.querySelector(".image-editor-polar-grid-compound").checked = state.polarGridCompoundRings;
       this.shell.querySelector(".image-editor-text-controls").hidden = state.tool !== "text";
+      if (state.tool !== "text" && this.textAdvancedSettings && !this.textAdvancedSettings.element.hidden) this.textAdvancedSettings.close();
+      this.shell.querySelector(".image-editor-font").value = state.fontFamily;
+      this.shell.querySelector(".image-editor-font-size").value = String(state.fontSize);
+      this.shell.querySelectorAll("[data-format]").forEach((element) => {
+        const active = {
+          bold: state.fontBold,
+          italic: state.fontItalic,
+          underline: state.fontUnderline,
+          strikethrough: state.fontStrikethrough,
+          bullets: state.textListStyle === "bullet"
+        }[element.dataset.format] === true;
+        element.classList.toggle("active", active);
+        element.setAttribute("aria-pressed", String(active));
+      });
+      this.shell.querySelectorAll("[data-text-case]").forEach((element) => {
+        const active = element.dataset.textCase === state.textCase;
+        element.classList.toggle("active", active);
+        element.setAttribute("aria-selected", String(active));
+      });
+      this.shell.querySelectorAll("[data-text-align]").forEach((element) => {
+        const active = element.dataset.textAlign === state.textAlign;
+        element.classList.toggle("active", active);
+        element.setAttribute("aria-selected", String(active));
+      });
+      const alignmentIcons = { left: "bi-text-left", center: "bi-text-center", right: "bi-text-right", justify: "bi-justify" };
+      this.shell.querySelector(".image-editor-text-align-trigger i").className = `bi ${alignmentIcons[state.textAlign] || alignmentIcons.left}`;
+      this.shell.querySelectorAll("[data-text-direction]").forEach((element) => {
+        const active = element.dataset.textDirection === state.textDirection;
+        element.classList.toggle("active", active);
+        element.setAttribute("aria-selected", String(active));
+      });
+      /*
+      this.shell.querySelector(".image-editor-direction-icon").textContent = state.textDirection === "rtl" ? +�u���PT" : "V��y��y�";
+      */
+      this.shell.querySelector(".image-editor-direction-icon").textContent = state.textDirection === "rtl" ? "\u2190T" : "T\u2192";
+      this.textAdvancedSettings?.update(state);
       ["undo", "redo", "cut", "copy", "delete"].forEach((action) => {
         const key = `can${action[0].toUpperCase()}${action.slice(1)}`;
         const element = this.shell.querySelector(`[data-action="${action}"]`);
@@ -690,9 +827,7 @@
 
     applyTextInputStyle(state) {
       if (this.textInput.hidden) return;
-      const scale = this.getScale();
-      this.textInput.style.font = `${state.fontItalic ? "italic " : ""}${state.fontBold ? "bold " : ""}${state.fontSize * scale.y}px ${state.fontFamily}`;
-      this.textInput.style.color = namespace.imageEditorColorWithOpacity(state.foregroundColor, state.foregroundOpacity);
+      namespace.applyImageEditorTextInputStyle(this.textInput, state, this.getScale());
     }
 
     showTextInput(rect, state) {
@@ -756,6 +891,7 @@
     destroy() {
       this.endCanvasResizePreview();
       this.colorPicker?.destroy();
+      this.textAdvancedSettings?.destroy();
       this.root.classList.remove("image-editor-root");
       this.root.innerHTML = "";
     }

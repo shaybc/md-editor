@@ -24,7 +24,7 @@
       modal.hidden = true;
       modal.innerHTML = `<div class="reset-modal-box image-editor-color-range-box">
         <header class="image-editor-color-range-header">
-          <div><h2 id="image-editor-color-range-title">Color Range</h2><p>Select pixels by sampling colors from the visible image.</p></div>
+          <div><h2 id="image-editor-color-range-title">Similar Color Select</h2><p>Select pixels by sampling colors from the visible image.</p></div>
           <button type="button" data-color-range-cancel aria-label="Close">&times;</button>
         </header>
         <div class="image-editor-color-range-content">

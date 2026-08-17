@@ -159,6 +159,15 @@
       const hasColorOverlay = styleLayers.some((layer) => namespace.ImageEditorColorOverlayEffect?.get(layer));
       const hasGradientOverlay = styleLayers.some((layer) => namespace.ImageEditorGradientOverlayEffect?.get(layer));
       const hasPatternOverlay = styleLayers.some((layer) => namespace.ImageEditorPatternOverlayEffect?.get(layer));
+      const hasBlur = styleLayers.some((layer) => namespace.ImageEditorBlurEffect?.get(layer));
+      const hasGrain = styleLayers.some((layer) => namespace.ImageEditorGrainEffect?.get(layer));
+      const hasNewspaper = styleLayers.some((layer) => namespace.ImageEditorNewspaperEffect?.get(layer));
+      const hasPaintedTexture = styleLayers.some((layer) => namespace.ImageEditorPaintedTextureEffect?.get(layer));
+      const hasSnow = styleLayers.some((layer) => namespace.ImageEditorSnowEffect?.get(layer));
+      const hasVortex = styleLayers.some((layer) => namespace.ImageEditorVortexEffect?.get(layer));
+      const hasRippleField = styleLayers.some((layer) => namespace.ImageEditorRippleFieldEffect?.get(layer));
+      const hasFlare = styleLayers.some((layer) => namespace.ImageEditorFlareEffect?.get(layer));
+      const hasGust = styleLayers.some((layer) => namespace.ImageEditorGustEffect?.get(layer));
       const hasBevelEmboss = styleLayers.some((layer) => namespace.ImageEditorBevelEmbossEffect?.get(layer));
       const hasGrayscale = styleLayers.some((layer) => namespace.ImageEditorGrayscaleEffect?.get(layer));
       const maskState = namespace.ImageEditorMaskOperations?.getState(this.store) || {};
@@ -188,31 +197,49 @@
         ] },
         { id: "remove-mask", label: "Remove mask", icon: "bi-x-square", disabled: !canRemoveMask },
         { separator: true },
-        { label: "Style", icon: "bi-stars", disabled: !canStyle, children: [
-          { id: "edit-blending-options", label: "Blending Options…", icon: "bi-layers", disabled: !canStyle },
-          { id: "edit-bevel-emboss", label: "Bevel & Emboss…", icon: "bi-badge-3d", disabled: !canStyle },
+        { label: "Style", effectIcon: "effects", disabled: !canStyle, children: [
+          { id: "edit-blending-options", label: "Layer Compositing…", effectIcon: "compositing", disabled: !canStyle },
+          { id: "edit-bevel-emboss", label: "Raised Edge…", effectIcon: "raised-edge", disabled: !canStyle },
           { separator: true },
-          { id: "edit-drop-shadow", label: "Drop Shadow…", icon: "bi-square-fill", disabled: !canStyle },
-          { id: "edit-inner-shadow", label: "Inner Shadow…", icon: "bi-square", disabled: !canStyle },
+          { id: "edit-drop-shadow", label: "Cast Shadow…", effectIcon: "cast-shadow", disabled: !canStyle },
+          { id: "edit-inner-shadow", label: "Inset Shadow…", effectIcon: "inset-shadow", disabled: !canStyle },
           { separator: true },
-          { id: "edit-inner-glow", label: "Inner Glow…", icon: "bi-brightness-high", disabled: !canStyle },
-          { id: "edit-outer-glow", label: "Outer Glow…", icon: "bi-brightness-high-fill", disabled: !canStyle },
+          { id: "edit-inner-glow", label: "Inner Aura…", effectIcon: "inner-aura", disabled: !canStyle },
+          { id: "edit-outer-glow", label: "Outer Aura…", effectIcon: "outer-aura", disabled: !canStyle },
           { separator: true },
-          { id: "edit-color-overlay", label: "Color Overlay…", icon: "bi-palette-fill", disabled: !canStyle },
-          { id: "edit-gradient-overlay", label: "Gradient Overlay…", icon: "bi-circle-half", disabled: !canStyle },
-          { id: "edit-pattern-overlay", label: "Pattern Overlay…", icon: "bi-grid-3x3-gap", disabled: !canStyle },
-          { id: "apply-grayscale", label: "Grayscale", icon: "bi-circle-half", disabled: !canStyle },
+          { id: "edit-color-overlay", label: "Color Coat…", effectIcon: "color-coat", disabled: !canStyle },
+          { id: "edit-gradient-overlay", label: "Gradient Coat…", effectIcon: "gradient-coat", disabled: !canStyle },
+          { id: "edit-pattern-overlay", label: "Pattern Coat…", effectIcon: "pattern-coat", disabled: !canStyle },
+          { id: "edit-blur", label: "Blur\u2026", effectIcon: "blur", disabled: !canStyle },
+          { id: "edit-grain", label: "Grain\u2026", effectIcon: "grain", disabled: !canStyle },
+          { id: "edit-newspaper", label: "Newspaper\u2026", effectIcon: "newspaper", disabled: !canStyle },
+          { id: "edit-painted-texture", label: "Painted Texture\u2026", effectIcon: "painted-texture", disabled: !canStyle },
+          { id: "edit-snow", label: "Snow\u2026", effectIcon: "snow", disabled: !canStyle },
+          { id: "edit-vortex", label: "Vortex\u2026", effectIcon: "vortex", disabled: !canStyle },
+          { id: "edit-ripple-field", label: "Ripple Field\u2026", effectIcon: "ripple-field", disabled: !canStyle },
+          { id: "edit-flare", label: "Flare\u2026", effectIcon: "flare", disabled: !canStyle },
+          { id: "edit-gust", label: "Gust\u2026", effectIcon: "gust", disabled: !canStyle },
+          { id: "apply-grayscale", label: "Grayscale", effectIcon: "grayscale", disabled: !canStyle },
           { separator: true },
           { label: "Remove", icon: "bi-x-square", disabled: !canStyle, children: [
-            { id: "remove-bevel-emboss", label: "Bevel & Emboss", icon: "bi-badge-3d", disabled: !canStyle || !hasBevelEmboss },
-            { id: "remove-drop-shadow", label: "Drop Shadow", icon: "bi-square-fill", disabled: !canStyle || !hasDropShadow },
-            { id: "remove-inner-shadow", label: "Inner Shadow", icon: "bi-square", disabled: !canStyle || !hasInnerShadow },
-            { id: "remove-inner-glow", label: "Inner Glow", icon: "bi-brightness-high", disabled: !canStyle || !hasInnerGlow },
-            { id: "remove-outer-glow", label: "Outer Glow", icon: "bi-brightness-high-fill", disabled: !canStyle || !hasOuterGlow },
-            { id: "remove-color-overlay", label: "Color Overlay", icon: "bi-palette-fill", disabled: !canStyle || !hasColorOverlay },
-            { id: "remove-gradient-overlay", label: "Gradient Overlay", icon: "bi-circle-half", disabled: !canStyle || !hasGradientOverlay },
-            { id: "remove-pattern-overlay", label: "Pattern Overlay", icon: "bi-grid-3x3-gap", disabled: !canStyle || !hasPatternOverlay },
-            { id: "remove-grayscale", label: "Grayscale", icon: "bi-circle-half", disabled: !canStyle || !hasGrayscale }
+            { id: "remove-bevel-emboss", label: "Raised Edge", effectIcon: "raised-edge", disabled: !canStyle || !hasBevelEmboss },
+            { id: "remove-drop-shadow", label: "Cast Shadow", effectIcon: "cast-shadow", disabled: !canStyle || !hasDropShadow },
+            { id: "remove-inner-shadow", label: "Inset Shadow", effectIcon: "inset-shadow", disabled: !canStyle || !hasInnerShadow },
+            { id: "remove-inner-glow", label: "Inner Aura", effectIcon: "inner-aura", disabled: !canStyle || !hasInnerGlow },
+            { id: "remove-outer-glow", label: "Outer Aura", effectIcon: "outer-aura", disabled: !canStyle || !hasOuterGlow },
+            { id: "remove-color-overlay", label: "Color Coat", effectIcon: "color-coat", disabled: !canStyle || !hasColorOverlay },
+            { id: "remove-gradient-overlay", label: "Gradient Coat", effectIcon: "gradient-coat", disabled: !canStyle || !hasGradientOverlay },
+            { id: "remove-pattern-overlay", label: "Pattern Coat", effectIcon: "pattern-coat", disabled: !canStyle || !hasPatternOverlay },
+            { id: "remove-blur", label: "Blur", effectIcon: "blur", disabled: !canStyle || !hasBlur },
+            { id: "remove-grain", label: "Grain", effectIcon: "grain", disabled: !canStyle || !hasGrain },
+            { id: "remove-newspaper", label: "Newspaper", effectIcon: "newspaper", disabled: !canStyle || !hasNewspaper },
+            { id: "remove-painted-texture", label: "Painted Texture", effectIcon: "painted-texture", disabled: !canStyle || !hasPaintedTexture },
+            { id: "remove-snow", label: "Snow", effectIcon: "snow", disabled: !canStyle || !hasSnow },
+            { id: "remove-vortex", label: "Vortex", effectIcon: "vortex", disabled: !canStyle || !hasVortex },
+            { id: "remove-ripple-field", label: "Ripple Field", effectIcon: "ripple-field", disabled: !canStyle || !hasRippleField },
+            { id: "remove-flare", label: "Flare", effectIcon: "flare", disabled: !canStyle || !hasFlare },
+            { id: "remove-gust", label: "Gust", effectIcon: "gust", disabled: !canStyle || !hasGust },
+            { id: "remove-grayscale", label: "Grayscale", effectIcon: "grayscale", disabled: !canStyle || !hasGrayscale }
           ] }
         ] },
         { separator: true },
@@ -338,7 +365,7 @@
       if (action === "rename" && targets.length === 1) { void this.renameItem(targets[0].id, targets[0].name); return; }
       if (action === "create-text-outlines") { this.onMutate(action, null); return; }
       if (["use-as-mask", "set-mask-type-alpha", "set-mask-type-vector", "set-mask-type-luminance", "remove-mask"].includes(action)) { this.onMutate(action, null); return; }
-      if (["edit-blending-options", "edit-bevel-emboss", "remove-bevel-emboss", "edit-drop-shadow", "remove-drop-shadow", "edit-inner-shadow", "remove-inner-shadow", "edit-inner-glow", "remove-inner-glow", "edit-outer-glow", "remove-outer-glow", "edit-color-overlay", "remove-color-overlay", "edit-gradient-overlay", "remove-gradient-overlay", "edit-pattern-overlay", "remove-pattern-overlay", "apply-grayscale", "remove-grayscale"].includes(action)) { this.onMutate(action, { layerIds: layers.map((layer) => layer.id) }); return; }
+      if (["edit-blending-options", "edit-bevel-emboss", "remove-bevel-emboss", "edit-drop-shadow", "remove-drop-shadow", "edit-inner-shadow", "remove-inner-shadow", "edit-inner-glow", "remove-inner-glow", "edit-outer-glow", "remove-outer-glow", "edit-color-overlay", "remove-color-overlay", "edit-gradient-overlay", "remove-gradient-overlay", "edit-pattern-overlay", "remove-pattern-overlay", "edit-blur", "remove-blur", "edit-grain", "remove-grain", "edit-newspaper", "remove-newspaper", "edit-vortex", "remove-vortex", "edit-ripple-field", "remove-ripple-field", "edit-flare", "remove-flare", "edit-gust", "remove-gust", "apply-grayscale", "remove-grayscale"].includes(action)) { this.onMutate(action, { layerIds: layers.map((layer) => layer.id) }); return; }
       if (action === "export-layer-png" || action === "export-layer-as") { this.onMutate(action, { layerIds: layers.map((layer) => layer.id) }); return; }
       const operations = {
         "new-layer": () => this.store.addLayer("Layer", [...this.store.selectedIds][0]),
@@ -411,7 +438,7 @@
       row.setAttribute("role", "treeitem");
       row.style.setProperty("--layer-depth", depth);
       const safeName = String(item.name || "Item").replace(/[&<>]/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[character]));
-      const hasEffect = item.kind === "layer" && (namespace.ImageEditorDropShadowEffect?.get(item) || namespace.ImageEditorInnerShadowEffect?.get(item) || namespace.ImageEditorInnerGlowEffect?.get(item) || namespace.ImageEditorOuterGlowEffect?.get(item) || namespace.ImageEditorColorOverlayEffect?.get(item) || namespace.ImageEditorGradientOverlayEffect?.get(item) || namespace.ImageEditorPatternOverlayEffect?.get(item));
+      const hasEffect = item.kind === "layer" && (namespace.ImageEditorDropShadowEffect?.get(item) || namespace.ImageEditorInnerShadowEffect?.get(item) || namespace.ImageEditorInnerGlowEffect?.get(item) || namespace.ImageEditorOuterGlowEffect?.get(item) || namespace.ImageEditorColorOverlayEffect?.get(item) || namespace.ImageEditorGradientOverlayEffect?.get(item) || namespace.ImageEditorPatternOverlayEffect?.get(item) || namespace.ImageEditorBlurEffect?.get(item) || namespace.ImageEditorGrainEffect?.get(item) || namespace.ImageEditorNewspaperEffect?.get(item) || namespace.ImageEditorPaintedTextureEffect?.get(item) || namespace.ImageEditorSnowEffect?.get(item) || namespace.ImageEditorVortexEffect?.get(item) || namespace.ImageEditorRippleFieldEffect?.get(item) || namespace.ImageEditorFlareEffect?.get(item) || namespace.ImageEditorGustEffect?.get(item));
       const thumbnail = item.kind === "adjustment"
         ? `<span class="image-editor-adjustment-thumbnails"><button type="button" data-adjustment-node="${item.id}" data-adjustment-part="adjustment" title="Edit adjustment" aria-label="Edit adjustment"><i class="bi ${item.adjustment?.type === "exposure" ? "bi-circle-half" : item.adjustment?.type === "vibrance" ? "bi-triangle-half" : item.adjustment?.type === "hue-saturation" ? "bi-rainbow" : item.adjustment?.type === "color-balance" ? "bi-sliders2" : item.adjustment?.type === "black-white" ? "bi-square-half" : item.adjustment?.type === "channel-mixer" ? "bi-shuffle" : item.adjustment?.type === "levels" ? "bi-bar-chart-fill" : item.adjustment?.type === "curves" ? "bi-graph-up" : item.adjustment?.type === "photo-filter" ? "bi-camera" : item.adjustment?.type === "invert" ? "bi-circle" : item.adjustment?.type === "selective-color" ? "bi-envelope" : item.adjustment?.type === "match-color" ? "bi-images" : item.adjustment?.type === "replace-color" ? "bi-eyedropper" : "bi-sun"}"></i></button><button type="button" data-adjustment-node="${item.id}" data-adjustment-part="mask" title="Edit adjustment mask" aria-label="Edit adjustment mask"><canvas width="20" height="20"></canvas></button></span>`
         : `<span class="image-editor-layer-thumbnail"><i class="bi ${item.kind === "group" ? "bi-folder" : item.kind === "layer" ? "bi-layers" : item.type === "text" ? "bi-fonts" : "bi-image"}"></i></span>`;

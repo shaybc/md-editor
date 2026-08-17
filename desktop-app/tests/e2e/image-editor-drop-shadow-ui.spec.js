@@ -149,7 +149,7 @@ test("Inner Shadow Apply persists and renders inside the layer pixels", async ({
 
   const dialog = page.locator(".image-editor-layer-style-dialog");
   await expect(dialog).toBeVisible();
-  await expect(dialog.locator(".image-editor-layer-style-name")).toHaveText("Inner Shadow");
+  await expect(dialog.locator(".image-editor-layer-style-name")).toHaveText("Inset Shadow");
   await expect(dialog.locator('[name="choke"]')).toBeVisible();
   await expect(dialog.locator('[name="spread"]')).toBeHidden();
   await dialog.locator('[name="opacity"]').fill("100");
@@ -198,7 +198,7 @@ test("Inner Glow Apply persists and renders inside the layer pixels", async ({ p
 
   const dialog = page.locator(".image-editor-layer-style-dialog");
   await expect(dialog).toBeVisible();
-  await expect(dialog.locator(".image-editor-layer-style-name")).toHaveText("Inner Glow");
+  await expect(dialog.locator(".image-editor-layer-style-name")).toHaveText("Inner Aura");
   await expect(dialog.locator('[name="choke"]')).toBeVisible();
   await expect(dialog.locator('[name="spread"]')).toBeHidden();
   await expect(dialog.locator('[name="angle"]')).toBeHidden();
@@ -261,12 +261,14 @@ test("Style submenu stays inside the viewport beside the right-aligned Layers pa
   await styleSubmenu.locator(":scope > button").focus();
   const stylePanel = styleSubmenu.locator(":scope > .graph-context-menu-submenu-panel");
   await expect(stylePanel).toBeAttached();
+  await expect(stylePanel.locator(':scope > [data-layer-context-action="edit-drop-shadow"] > .image-editor-effect-icon')).toHaveCount(1);
+  await expect(stylePanel.locator(':scope > [data-layer-context-action="edit-gradient-overlay"] > .image-editor-effect-icon')).toHaveCount(1);
   const removeSubmenu = stylePanel.locator(":scope > .graph-context-menu-submenu").filter({ hasText: "Remove" });
   await expect(removeSubmenu).toBeAttached();
   await expect(removeSubmenu.locator(":scope > button .graph-context-menu-item-label")).toHaveText("Remove");
   const removePanel = removeSubmenu.locator(":scope > .graph-context-menu-submenu-panel");
-  await expect(removePanel.locator('[data-layer-context-action="remove-drop-shadow"]')).toHaveText("Drop Shadow");
-  await expect(removePanel.locator('[data-layer-context-action="remove-pattern-overlay"]')).toHaveText("Pattern Overlay");
+  await expect(removePanel.locator('[data-layer-context-action="remove-drop-shadow"]')).toHaveText("Cast Shadow");
+  await expect(removePanel.locator('[data-layer-context-action="remove-pattern-overlay"]')).toHaveText("Pattern Coat");
   await expect(stylePanel.locator(':scope > [data-layer-context-action="remove-drop-shadow"]')).toHaveCount(0);
 
   const position = await styleSubmenu.evaluate((submenu) => {

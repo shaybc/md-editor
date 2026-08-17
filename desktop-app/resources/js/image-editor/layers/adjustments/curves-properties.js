@@ -38,7 +38,7 @@
       const channel = container.querySelector("[data-curves-channel]");
       channel?.addEventListener("change", () => {
         this.selected = { channel: channel.value, index: 0 };
-        this.onMutate("Change Curves channel", node.id, { type: "properties", patch: { channel: channel.value } });
+        this.onMutate("Change Tone Curve channel", node.id, { type: "properties", patch: { channel: channel.value } });
       });
       const canvas = container.querySelector(".image-editor-curves-graph");
       if (canvas) {
@@ -62,7 +62,7 @@
         const next = points.map((point) => ({ ...point }));
         next.splice(this.selected.index, 1);
         this.selected.index = Math.max(0, this.selected.index - 1);
-        this.onMutate("Delete Curves point", node.id, { type: "properties", patch: { [node.adjustment.channel + "Points"]: next } });
+        this.onMutate("Delete Tone Curve point", node.id, { type: "properties", patch: { [node.adjustment.channel + "Points"]: next } });
         event.preventDefault();
       });
     }
@@ -110,7 +110,7 @@
       if (!this.drag || event.pointerId !== this.drag.pointerId) return;
       const before = this.drag.before;
       this.drag = null;
-      this.onCommitEdit(before, cancel ? "" : "Adjust Curves", cancel);
+      this.onCommitEdit(before, cancel ? "" : "Adjust Tone Curve", cancel);
     }
 
     previewPoints(canvas, node, points) {
@@ -126,7 +126,7 @@
       const index = this.selected.index;
       if (axis === "input" && index > 0 && index < points.length - 1) points[index].x = clamp(Math.round(value), points[index - 1].x + 1, points[index + 1].x - 1);
       if (axis === "output") points[index].y = clamp(Math.round(value), 0, 255);
-      this.onMutate("Edit Curves point", node.id, { type: "properties", patch: { [property]: points } });
+      this.onMutate("Edit Tone Curve point", node.id, { type: "properties", patch: { [property]: points } });
     }
 
     /** Return an automatic endpoint curve based on clipped histogram bounds. */

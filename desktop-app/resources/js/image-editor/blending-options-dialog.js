@@ -13,7 +13,7 @@
       this.overlay.innerHTML = `
         <section class="image-editor-blending-options-dialog" role="dialog" aria-modal="true" aria-labelledby="image-editor-blending-title">
           <header class="image-editor-blending-options-header">
-            <div><h2 id="image-editor-blending-title">Blending Options</h2><small class="image-editor-blending-options-target"></small></div>
+            <div><h2 id="image-editor-blending-title">Layer Compositing</h2><small class="image-editor-blending-options-target"></small></div>
             <button type="button" class="image-editor-blending-options-close settings-modal-close" aria-label="Close"><i class="bi bi-x-lg"></i></button>
           </header>
           <div class="image-editor-blending-options-body">

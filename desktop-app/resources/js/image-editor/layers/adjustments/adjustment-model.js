@@ -14,8 +14,8 @@
 
   const DEFINITIONS = Object.freeze({
     "brightness-contrast": Object.freeze({ name: "Brightness/Contrast", defaults: Object.freeze({ brightness: 0, contrast: 0 }) }),
-    exposure: Object.freeze({ name: "Exposure", defaults: Object.freeze({ exposure: 0, offset: 0, gamma: 1 }) }),
-    vibrance: Object.freeze({ name: "Vibrance", defaults: Object.freeze({ vibrance: 0, saturation: 0 }) }),
+    exposure: Object.freeze({ name: "Exposure Control", defaults: Object.freeze({ exposure: 0, offset: 0, gamma: 1 }) }),
+    vibrance: Object.freeze({ name: "Smart Saturation", defaults: Object.freeze({ vibrance: 0, saturation: 0 }) }),
     "hue-saturation": Object.freeze({ name: "Hue/Saturation", defaults: Object.freeze({ hue: 0, saturation: 0, lightness: 0, colorize: false, range: "master" }) }),
     "color-balance": Object.freeze({
       name: "Color Balance",
@@ -28,11 +28,11 @@
       })
     }),
     "black-white": Object.freeze({
-      name: "Black & White",
+      name: "Monochrome Mixer",
       defaults: Object.freeze({ reds: 40, yellows: 60, greens: 40, cyans: 60, blues: 20, magentas: 80, tint: false, tintColor: "#d8c5a0" })
     }),
     "channel-mixer": Object.freeze({
-      name: "Channel Mixer",
+      name: "Channel Blend",
       defaults: Object.freeze({
         outputChannel: "red", monochrome: false,
         redOutputRed: 100, redOutputGreen: 0, redOutputBlue: 0, redOutputConstant: 0,
@@ -42,7 +42,7 @@
       })
     }),
     levels: Object.freeze({
-      name: "Levels",
+      name: "Tonal Range",
       defaults: Object.freeze({
         channel: "rgb",
         rgbInputBlack: 0, rgbGamma: 1, rgbInputWhite: 255, rgbOutputBlack: 0, rgbOutputWhite: 255,
@@ -52,7 +52,7 @@
       })
     }),
     curves: Object.freeze({
-      name: "Curves",
+      name: "Tone Curve",
       defaults: Object.freeze({
         channel: "rgb",
         rgbPoints: Object.freeze([{ x: 0, y: 0 }, { x: 255, y: 255 }]),
@@ -62,13 +62,13 @@
       })
     }),
     "photo-filter": Object.freeze({
-      name: "Photo Filter",
+      name: "Lens Tint",
       defaults: Object.freeze({ filterMode: "filter", filter: "warming-85", color: "#ec8a00", density: 25, preserveLuminosity: true })
     }),
     invert: Object.freeze({ name: "Invert", defaults: Object.freeze({}) }),
-    "selective-color": Object.freeze({ name: "Selective Color", defaults: Object.freeze(createSelectiveColorDefaults()) }),
+    "selective-color": Object.freeze({ name: "Color Components", defaults: Object.freeze(createSelectiveColorDefaults()) }),
     "match-color": Object.freeze({
-      name: "Match Color",
+      name: "Palette Match",
       defaults: Object.freeze({
         sourceNodeId: null, sourceName: "None",
         sourceRedMean: 0, sourceGreenMean: 0, sourceBlueMean: 0,
@@ -77,7 +77,7 @@
       })
     }),
     "replace-color": Object.freeze({
-      name: "Replace Color",
+      name: "Color Swap",
       defaults: Object.freeze({ sourceColor: "#000000", fuzziness: 40, hue: 0, saturation: 0, lightness: 0 })
     })
   });
@@ -89,6 +89,11 @@
   const CHANNEL_MIXER_INPUTS = Object.freeze(["Red", "Green", "Blue", "Constant"]);
   const LEVELS_CHANNELS = Object.freeze(["rgb", "red", "green", "blue"]);
   const LEVELS_PROPERTIES = Object.freeze(["InputBlack", "Gamma", "InputWhite", "OutputBlack", "OutputWhite"]);
+  const LEGACY_DEFAULT_NAMES = Object.freeze({
+    exposure: "Exposure", vibrance: "Vibrance", "black-white": "Black & White", "channel-mixer": "Channel Mixer",
+    levels: "Levels", curves: "Curves", "photo-filter": "Photo Filter", "selective-color": "Selective Color",
+    "match-color": "Match Color", "replace-color": "Replace Color"
+  });
 
   function clamp(value, minimum, maximum, fallback = 0) {
     const number = Number(value);
@@ -322,6 +327,7 @@
     namespace.walkDocumentNodes(document, (node) => {
       if (node.kind !== "adjustment") return;
       node.adjustment = normalizeAdjustment(node.adjustment);
+      if (node.name === LEGACY_DEFAULT_NAMES[node.adjustment.type]) node.name = nameForType(node.adjustment.type);
       node.mask = normalizeMask(node.mask);
       node.opacity = clamp(node.opacity, 0, 1, 1);
       node.visible = node.visible !== false;

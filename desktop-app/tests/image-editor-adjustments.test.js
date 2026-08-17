@@ -84,6 +84,17 @@ test("version-one documents migrate and adjustment layers validate in version tw
   assert.equal(editor.validateImageDocument(store.document), true);
 });
 
+test("legacy automatic adjustment names migrate while custom names remain unchanged", () => {
+  const editor = loadAdjustments();
+  const document = editor.createImageDocument(4, 4);
+  const legacy = editor.ImageEditorAdjustmentModel.create("levels", { name: "Levels" });
+  const custom = editor.ImageEditorAdjustmentModel.create("curves", { name: "My custom curve" });
+  document.nodes.push(legacy, custom);
+  editor.ImageEditorAdjustmentModel.normalizeDocument(document);
+  assert.equal(legacy.name, "Tonal Range");
+  assert.equal(custom.name, "My custom curve");
+});
+
 test("selection-aware adjustment creation preserves hierarchy placement and mask assets", () => {
   const editor = loadAdjustments();
   const store = new editor.ImageEditorDocumentStore(editor.createImageDocument(4, 4, "transparent"));
@@ -125,7 +136,7 @@ test("exposure adjustment applies stops, offset, and gamma without changing tran
   const editor = loadAdjustments();
   const store = new editor.ImageEditorDocumentStore(editor.createImageDocument(2, 1));
   const adjustment = store.addAdjustmentLayer("exposure");
-  assert.equal(adjustment.name, "Exposure");
+  assert.equal(adjustment.name, "Exposure Control");
   assert.deepEqual(JSON.parse(JSON.stringify(adjustment.adjustment)), { type: "exposure", exposure: 0, offset: 0, gamma: 1 });
 
   const exposed = new TestImageData(new Uint8ClampedArray([64, 64, 64, 255, 40, 60, 80, 0]), 2, 1);
@@ -146,7 +157,7 @@ test("vibrance favors muted colors while saturation can remove all chroma", () =
   const editor = loadAdjustments();
   const store = new editor.ImageEditorDocumentStore(editor.createImageDocument(1, 1));
   const adjustment = store.addAdjustmentLayer("vibrance");
-  assert.equal(adjustment.name, "Vibrance");
+  assert.equal(adjustment.name, "Smart Saturation");
   assert.deepEqual(JSON.parse(JSON.stringify(adjustment.adjustment)), { type: "vibrance", vibrance: 0, saturation: 0 });
 
   const muted = pixel(80, 100, 120);
@@ -230,7 +241,7 @@ test("black and white mixes hue families, supports tinting, and preserves transp
   const editor = loadAdjustments();
   const store = new editor.ImageEditorDocumentStore(editor.createImageDocument(1, 1));
   const adjustment = store.addAdjustmentLayer("black-white");
-  assert.equal(adjustment.name, "Black & White");
+  assert.equal(adjustment.name, "Monochrome Mixer");
   assert.deepEqual(JSON.parse(JSON.stringify(adjustment.adjustment)), {
     type: "black-white", reds: 40, yellows: 60, greens: 40, cyans: 60, blues: 20, magentas: 80, tint: false, tintColor: "#d8c5a0"
   });
@@ -254,7 +265,7 @@ test("channel mixer applies independent RGB matrices, constants, and monochrome 
   const editor = loadAdjustments();
   const store = new editor.ImageEditorDocumentStore(editor.createImageDocument(1, 1));
   const adjustment = store.addAdjustmentLayer("channel-mixer");
-  assert.equal(adjustment.name, "Channel Mixer");
+  assert.equal(adjustment.name, "Channel Blend");
   assert.equal(adjustment.adjustment.outputChannel, "red");
   assert.equal(adjustment.adjustment.redOutputRed, 100);
   assert.equal(adjustment.adjustment.greenOutputGreen, 100);
@@ -283,7 +294,7 @@ test("levels applies composite and channel mappings and calculates opaque histog
   const editor = loadAdjustments();
   const store = new editor.ImageEditorDocumentStore(editor.createImageDocument(1, 1));
   const adjustment = store.addAdjustmentLayer("levels");
-  assert.equal(adjustment.name, "Levels");
+  assert.equal(adjustment.name, "Tonal Range");
   assert.equal(adjustment.adjustment.channel, "rgb");
   assert.equal(adjustment.adjustment.rgbInputBlack, 0);
   assert.equal(adjustment.adjustment.rgbGamma, 1);
@@ -316,7 +327,7 @@ test("curves creates smooth composite and channel mappings with normalized contr
   const editor = loadAdjustments();
   const store = new editor.ImageEditorDocumentStore(editor.createImageDocument(1, 1));
   const adjustment = store.addAdjustmentLayer("curves");
-  assert.equal(adjustment.name, "Curves");
+  assert.equal(adjustment.name, "Tone Curve");
   assert.equal(adjustment.adjustment.channel, "rgb");
   assert.deepEqual(JSON.parse(JSON.stringify(adjustment.adjustment.rgbPoints)), [{ x: 0, y: 0 }, { x: 255, y: 255 }]);
 
@@ -341,7 +352,7 @@ test("photo filter supports presets, custom colors, density, and luminosity pres
   const editor = loadAdjustments();
   const store = new editor.ImageEditorDocumentStore(editor.createImageDocument(1, 1));
   const adjustment = store.addAdjustmentLayer("photo-filter");
-  assert.equal(adjustment.name, "Photo Filter");
+  assert.equal(adjustment.name, "Lens Tint");
   assert.deepEqual(JSON.parse(JSON.stringify(adjustment.adjustment)), {
     type: "photo-filter", filterMode: "filter", filter: "warming-85", color: "#ec8a00", density: 25, preserveLuminosity: true
   });
@@ -378,7 +389,7 @@ test("selective color retains independent family corrections and supports relati
   const editor = loadAdjustments();
   const store = new editor.ImageEditorDocumentStore(editor.createImageDocument(1, 1));
   const adjustment = store.addAdjustmentLayer("selective-color");
-  assert.equal(adjustment.name, "Selective Color");
+  assert.equal(adjustment.name, "Color Components");
   assert.equal(adjustment.adjustment.selectedColor, "reds");
   assert.equal(adjustment.adjustment.relative, true);
   assert.equal(adjustment.adjustment.redsCyan, 0);
@@ -411,7 +422,7 @@ test("match color transfers stored source statistics with luminance, intensity, 
   const editor = loadAdjustments();
   const store = new editor.ImageEditorDocumentStore(editor.createImageDocument(1, 1));
   const adjustment = store.addAdjustmentLayer("match-color");
-  assert.equal(adjustment.name, "Match Color");
+  assert.equal(adjustment.name, "Palette Match");
   assert.equal(adjustment.adjustment.sourceNodeId, null);
   assert.equal(adjustment.adjustment.luminance, 100);
   assert.equal(adjustment.adjustment.colorIntensity, 100);
@@ -441,7 +452,7 @@ test("replace color limits HSL changes to colors within the configured fuzziness
   const editor = loadAdjustments();
   const store = new editor.ImageEditorDocumentStore(editor.createImageDocument(1, 1));
   const adjustment = store.addAdjustmentLayer("replace-color");
-  assert.equal(adjustment.name, "Replace Color");
+  assert.equal(adjustment.name, "Color Swap");
   assert.deepEqual(JSON.parse(JSON.stringify(adjustment.adjustment)), {
     type: "replace-color", sourceColor: "#000000", fuzziness: 40, hue: 0, saturation: 0, lightness: 0
   });

@@ -3,7 +3,7 @@
   "use strict";
 
   const namespace = global.MarkdownViewerImageEditor = global.MarkdownViewerImageEditor || {};
-  const MINIMUM_CALLOUT_CORNER_RADIUS = 12;
+  const CORNERS = Object.freeze(["topLeft", "topRight", "bottomRight", "bottomLeft"]);
   const GUIDE_HANDLE_SCREEN_SIZE = 5;
   const GUIDE_HIT_TARGET_SCREEN_RADIUS = 7;
   const MINIMUM_ATTACHMENT_GAP = 4;
@@ -33,9 +33,11 @@
 
     get model() {
       if (!this.rect || this.phase === "drawing") return null;
+      const radii = this.currentRadii();
       return {
         rect: { ...this.rect },
-        radius: this.radius,
+        radii,
+        radius: radii.topLeft,
         side: this.side,
         attachmentStart: this.pointOnSide(this.attachmentStart),
         attachmentEnd: this.pointOnSide(this.attachmentEnd),
@@ -48,7 +50,9 @@
       if (this.phase === "idle") {
         this.start = { ...point };
         this.rect = rectFromPoints(point, point);
-        this.radius = Math.max(MINIMUM_CALLOUT_CORNER_RADIUS, Number(defaultRadius) || 0);
+        const radius = Math.max(0, Number(defaultRadius) || 0);
+        this.radii = Object.fromEntries(CORNERS.map((corner) => [corner, radius]));
+        this.adjustAllCorners = bounds.adjustAllCorners !== false;
         this.bounds = { width: bounds.width, height: bounds.height };
         this.zoom = Math.max(0.25, Number(bounds.zoom) || 1);
         this.phase = "drawing";
@@ -58,6 +62,8 @@
       const handle = this.findHandle(point);
       if (handle) {
         this.activeHandle = handle;
+        this.adjustAllCorners = bounds.adjustAllCorners !== false;
+        if (handle.startsWith("corner:")) this.activeCorner = handle.slice("corner:".length);
         this.phase = "adjusting";
         return { action: "adjusting", started: true, handle };
       }
@@ -71,7 +77,8 @@
         return;
       }
       if (this.phase !== "adjusting") return;
-      if (this.activeHandle === "tip") this.moveTip(point);
+      if (this.activeHandle.startsWith("corner:")) this.setRadius(this.radiusFromPoint(this.activeCorner, point), this.adjustAllCorners);
+      else if (this.activeHandle === "tip") this.moveTip(point);
       else this.moveAttachment(this.activeHandle, point);
     }
 
@@ -80,7 +87,7 @@
       this.update(point);
       if (this.phase === "drawing") {
         if (!this.rect.width || !this.rect.height) return false;
-        this.normalizeRadius();
+        this.normalizeRadii();
         this.initializeTail();
         this.phase = "editing";
         return true;
@@ -125,14 +132,20 @@
         context.fillRect(point.x - halfHandle, point.y - halfHandle, handleSize, handleSize);
         context.strokeRect(point.x - halfHandle, point.y - halfHandle, handleSize, handleSize);
       });
+      CORNERS.forEach((corner) => {
+        const point = this.getCornerHandlePoint(corner);
+        const active = this.activeHandle === "corner:" + corner;
+        context.fillStyle = active ? "rgba(255, 255, 255, 0.88)" : "rgba(20, 115, 230, 0.72)";
+        context.strokeStyle = "rgba(20, 115, 230, 0.72)";
+        context.fillRect(point.x - halfHandle, point.y - halfHandle, handleSize, handleSize);
+        context.strokeRect(point.x - halfHandle, point.y - halfHandle, handleSize, handleSize);
+      });
       context.restore();
     }
 
     /** Draw the body while its initial bounds are being dragged. */
     drawBodyPreview(context, state) {
-      const radius = Math.min(this.radius, this.rect.width / 2, this.rect.height / 2);
-      const radii = { topLeft: radius, topRight: radius, bottomRight: radius, bottomLeft: radius };
-      namespace.drawRoundedRectangle(context, this.rect, radii, state);
+      namespace.drawRoundedRectangle(context, this.rect, this.currentRadii(), state);
     }
 
     /** Rasterize the accepted callout into a tightly bounded transparent layer. */
@@ -166,7 +179,9 @@
       this.phase = "idle";
       this.start = null;
       this.rect = null;
-      this.radius = 0;
+      this.radii = Object.fromEntries(CORNERS.map((corner) => [corner, 0]));
+      this.activeCorner = "topLeft";
+      this.adjustAllCorners = true;
       this.bounds = null;
       this.zoom = 1;
       this.side = "bottom";
@@ -207,8 +222,9 @@
     moveAttachment(handle, point) {
       const range = this.sideRange(this.side);
       const value = clamp(this.side === "top" || this.side === "bottom" ? point.x : point.y, range.minimum, range.maximum);
-      if (handle === "attachmentStart") this.attachmentStart = Math.min(value, this.attachmentEnd - MINIMUM_ATTACHMENT_GAP);
-      else this.attachmentEnd = Math.max(value, this.attachmentStart + MINIMUM_ATTACHMENT_GAP);
+      const gap = Math.min(MINIMUM_ATTACHMENT_GAP, range.maximum - range.minimum);
+      if (handle === "attachmentStart") this.attachmentStart = Math.min(value, this.attachmentEnd - gap);
+      else this.attachmentEnd = Math.max(value, this.attachmentStart + gap);
     }
 
     sideFacingPoint(point) {
@@ -231,9 +247,14 @@
     }
 
     sideRange(side) {
-      const horizontal = side === "top" || side === "bottom";
-      const minimum = horizontal ? this.rect.x + this.radius : this.rect.y + this.radius;
-      const maximum = horizontal ? this.rect.x + this.rect.width - this.radius : this.rect.y + this.rect.height - this.radius;
+      const radii = this.currentRadii();
+      const values = {
+        top: [this.rect.x + radii.topLeft, this.rect.x + this.rect.width - radii.topRight],
+        right: [this.rect.y + radii.topRight, this.rect.y + this.rect.height - radii.bottomRight],
+        bottom: [this.rect.x + radii.bottomLeft, this.rect.x + this.rect.width - radii.bottomRight],
+        left: [this.rect.y + radii.topLeft, this.rect.y + this.rect.height - radii.bottomLeft]
+      }[side];
+      const [minimum, maximum] = values;
       return { minimum: Math.min(minimum, maximum), maximum: Math.max(minimum, maximum) };
     }
 
@@ -254,23 +275,23 @@
     }
 
     tracePath(context, model) {
-      const { rect, radius, side, attachmentStart, attachmentEnd, tip } = model;
+      const { rect, radii, side, attachmentStart, attachmentEnd, tip } = model;
       const right = rect.x + rect.width;
       const bottom = rect.y + rect.height;
       context.beginPath();
-      context.moveTo(rect.x + radius, rect.y);
+      context.moveTo(rect.x + radii.topLeft, rect.y);
       if (side === "top") this.traceTail(context, attachmentStart, tip, attachmentEnd);
-      context.lineTo(right - radius, rect.y);
-      context.quadraticCurveTo(right, rect.y, right, rect.y + radius);
+      context.lineTo(right - radii.topRight, rect.y);
+      context.quadraticCurveTo(right, rect.y, right, rect.y + radii.topRight);
       if (side === "right") this.traceTail(context, attachmentStart, tip, attachmentEnd);
-      context.lineTo(right, bottom - radius);
-      context.quadraticCurveTo(right, bottom, right - radius, bottom);
+      context.lineTo(right, bottom - radii.bottomRight);
+      context.quadraticCurveTo(right, bottom, right - radii.bottomRight, bottom);
       if (side === "bottom") this.traceTail(context, attachmentEnd, tip, attachmentStart);
-      context.lineTo(rect.x + radius, bottom);
-      context.quadraticCurveTo(rect.x, bottom, rect.x, bottom - radius);
+      context.lineTo(rect.x + radii.bottomLeft, bottom);
+      context.quadraticCurveTo(rect.x, bottom, rect.x, bottom - radii.bottomLeft);
       if (side === "left") this.traceTail(context, attachmentEnd, tip, attachmentStart);
-      context.lineTo(rect.x, rect.y + radius);
-      context.quadraticCurveTo(rect.x, rect.y, rect.x + radius, rect.y);
+      context.lineTo(rect.x, rect.y + radii.topLeft);
+      context.quadraticCurveTo(rect.x, rect.y, rect.x + radii.topLeft, rect.y);
       context.closePath();
     }
 
@@ -280,8 +301,59 @@
       context.lineTo(second.x, second.y);
     }
 
-    normalizeRadius() {
-      this.radius = Math.min(this.radius, this.rect.width / 2, this.rect.height / 2);
+    /** Set every body corner radius or only the active corner. */
+    setRadius(radius, adjustAllCorners) {
+      if (!this.rect) return false;
+      const value = clamp(Number(radius) || 0, 0, this.maximumRadius());
+      if (adjustAllCorners) CORNERS.forEach((corner) => { this.radii[corner] = value; });
+      else this.radii[this.activeCorner] = value;
+      this.normalizeAttachments();
+      return true;
+    }
+
+    /** Make all callout corners match the active corner. */
+    unifyCorners() {
+      return this.setRadius(this.radii[this.activeCorner], true);
+    }
+
+    /** Return the on-canvas radius guide for one body corner. */
+    getCornerHandlePoint(corner) {
+      const model = this.model;
+      if (!model) return null;
+      const { rect, radii } = model;
+      if (corner === "topLeft") return { x: rect.x + radii.topLeft, y: rect.y };
+      if (corner === "topRight") return { x: rect.x + rect.width - radii.topRight, y: rect.y };
+      if (corner === "bottomRight") return { x: rect.x + rect.width - radii.bottomRight, y: rect.y + rect.height };
+      return { x: rect.x + radii.bottomLeft, y: rect.y + rect.height };
+    }
+
+    maximumRadius() {
+      return this.rect ? Math.max(0, Math.min(this.rect.width, this.rect.height) / 2) : 0;
+    }
+
+    currentRadii() {
+      const maximum = this.maximumRadius();
+      return Object.fromEntries(CORNERS.map((corner) => [corner, Math.min(maximum, Math.max(0, this.radii[corner]))]));
+    }
+
+    normalizeRadii() {
+      const normalized = this.currentRadii();
+      CORNERS.forEach((corner) => { this.radii[corner] = normalized[corner]; });
+    }
+
+    normalizeAttachments() {
+      if (!this.tip) return;
+      const range = this.sideRange(this.side);
+      const gap = Math.min(MINIMUM_ATTACHMENT_GAP, range.maximum - range.minimum);
+      const center = clamp((this.attachmentStart + this.attachmentEnd) / 2, range.minimum + gap / 2, range.maximum - gap / 2);
+      const halfWidth = Math.min(Math.max(gap / 2, (this.attachmentEnd - this.attachmentStart) / 2), (range.maximum - range.minimum) / 2);
+      this.attachmentStart = center - halfWidth;
+      this.attachmentEnd = center + halfWidth;
+    }
+
+    radiusFromPoint(corner, point) {
+      if (corner === "topRight" || corner === "bottomRight") return this.rect.x + this.rect.width - point.x;
+      return point.x - this.rect.x;
     }
 
     contains(point) {
@@ -292,6 +364,11 @@
     findHandle(point) {
       const model = this.model;
       if (!model) return null;
+      const corner = CORNERS.find((name) => {
+        const handle = this.getCornerHandlePoint(name);
+        return Math.hypot(handle.x - point.x, handle.y - point.y) <= GUIDE_HIT_TARGET_SCREEN_RADIUS / this.zoom;
+      });
+      if (corner) return "corner:" + corner;
       return ["tip", "attachmentStart", "attachmentEnd"].find((handle) =>
         Math.hypot(model[handle].x - point.x, model[handle].y - point.y) <= GUIDE_HIT_TARGET_SCREEN_RADIUS / this.zoom) || null;
     }

@@ -4,7 +4,7 @@
 
   const namespace = global.MarkdownViewerImageEditor = global.MarkdownViewerImageEditor || {};
   const TOOL_CONTENT_NAMES = Object.freeze({
-    callout: "Rounded rectangular callout",
+    callout: "Rectangle callout",
     "oval-callout": "Oval callout",
     "cloud-callout": "Cloud callout"
   });
@@ -13,6 +13,8 @@
   function toolContentName(tool) {
     const identifier = String(tool || "shape");
     if (TOOL_CONTENT_NAMES[identifier]) return TOOL_CONTENT_NAMES[identifier];
+    const flowchartName = namespace.flowchartShapeLabel?.(identifier);
+    if (flowchartName) return flowchartName;
     const words = identifier.replace(/-/g, " ");
     return words[0].toUpperCase() + words.slice(1);
   }

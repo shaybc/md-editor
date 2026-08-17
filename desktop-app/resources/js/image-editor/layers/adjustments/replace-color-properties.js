@@ -25,7 +25,7 @@
     /** Bind source-color editing and screen sampling after Properties renders. */
     bind(container, node) {
       const color = container.querySelector("[data-replace-color-source]");
-      color?.addEventListener("change", () => this.onMutate("Change Replace Color sample", node.id, { type: "properties", patch: { sourceColor: color.value } }));
+      color?.addEventListener("change", () => this.onMutate("Change Color Swap sample", node.id, { type: "properties", patch: { sourceColor: color.value } }));
       const refreshResult = () => {
         const preview = container.querySelector("[data-replace-color-result]");
         if (!preview) return;
@@ -38,7 +38,7 @@
         if (typeof global.EyeDropper !== "function") return;
         try {
           const sample = await new global.EyeDropper().open();
-          if (sample?.sRGBHex) this.onMutate("Sample Replace Color", node.id, { type: "properties", patch: { sourceColor: sample.sRGBHex } });
+          if (sample?.sRGBHex) this.onMutate("Sample Color Swap", node.id, { type: "properties", patch: { sourceColor: sample.sRGBHex } });
         } catch (_error) {
           // Cancelling the operating-system eyedropper leaves the adjustment unchanged.
         }

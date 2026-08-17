@@ -2,16 +2,32 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
 const test = require("node:test");
+const vm = require("node:vm");
 
 const resources = path.resolve(__dirname, "../resources");
 const panelSource = fs.readFileSync(path.join(resources, "js/image-editor/layers/adjustments/adjustments-panel.js"), "utf8");
+const objectPropertiesSource = fs.readFileSync(path.join(resources, "js/image-editor/layers/object-properties.js"), "utf8");
+const effectIconsSource = fs.readFileSync(path.join(resources, "js/image-editor/effect-icons.js"), "utf8");
+const effectIconsStyles = fs.readFileSync(path.join(resources, "css/image-editor/effect-icons.css"), "utf8");
+const layerContextMenuSource = fs.readFileSync(path.join(resources, "js/image-editor/layers/layer-context-menu.js"), "utf8");
+const canvasContextMenuSource = fs.readFileSync(path.join(resources, "js/image-editor/canvas-context-menu.js"), "utf8");
+const layerPanelSource = fs.readFileSync(path.join(resources, "js/image-editor/layers/layer-panel.js"), "utf8");
 const viewSource = fs.readFileSync(path.join(resources, "js/image-editor/view.js"), "utf8");
 const stylesSource = fs.readFileSync(path.join(resources, "styles.css"), "utf8");
 const htmlSource = fs.readFileSync(path.join(resources, "index.html"), "utf8");
 
 test("adjustment inspector exposes the requested tabs, catalog item, and property bounds", () => {
   assert.match(panelSource, /data-adjustment-tab="properties">Properties/);
-  assert.match(panelSource, /data-adjustment-tab="adjustments">Adjustments/);
+  assert.match(panelSource, /data-adjustment-tab="tune">Tune/);
+  assert.match(panelSource, /data-adjustment-tab="effects">Effects/);
+  assert.match(panelSource, /data-adjustment-tab="properties">Properties.*data-adjustment-tab="tune">Tune.*data-adjustment-tab="effects">Effects/);
+  assert.match(panelSource, /const TUNE_CATALOG/);
+  assert.match(panelSource, /const LAYER_EFFECT_CATALOG/);
+  assert.match(panelSource, /filter\(\(preset\) => preset\.id !== "curve"\)/);
+  assert.match(panelSource, /function curveTuneButton\(textTarget\)/);
+  assert.match(panelSource, /data-text-effect="curve"/);
+  assert.match(panelSource, /!textTarget \|\| textTarget\.locked \? " disabled"/);
+  assert.match(panelSource, /curveTuneButton\(textTarget\) \+ tools/);
   assert.match(panelSource, /create-brightness-contrast/);
   assert.match(panelSource, /create-exposure/);
   assert.match(panelSource, /create-vibrance/);
@@ -61,7 +77,7 @@ test("adjustment inspector exposes the requested tabs, catalog item, and propert
   const curvesSource = fs.readFileSync(path.join(resources, "js/image-editor/layers/adjustments/curves-properties.js"), "utf8");
   assert.match(curvesSource, /image-editor-curves-graph/);
   assert.match(curvesSource, /data-curves-coordinate="input"/);
-  assert.match(curvesSource, /Delete Curves point/);
+  assert.match(curvesSource, /Delete Tone Curve point/);
   const photoFilterSource = fs.readFileSync(path.join(resources, "js/image-editor/layers/adjustments/photo-filter-properties.js"), "utf8");
   assert.match(photoFilterSource, /data-photo-filter-mode/);
   assert.match(photoFilterSource, /data-photo-filter-preset/);
@@ -87,6 +103,66 @@ test("adjustment inspector exposes the requested tabs, catalog item, and propert
   assert.match(panelSource, /data-adjustment-mask-action="invert"/);
   assert.match(panelSource, /data-adjustment-mask-action="white"/);
   assert.match(panelSource, /data-adjustment-mask-action="black"/);
+});
+
+test("effects use original application icons in a compact three-column catalog", () => {
+  assert.match(effectIconsSource, /Original MD-Editor vector iconography/);
+  assert.match(effectIconsSource, /ImageEditorEffectIcons/);
+  assert.match(effectIconsStyles, /\.image-editor-adjustment-tile \.image-editor-effect-icon/);
+  assert.match(stylesSource, /\.image-editor-adjustment-catalog\s*\{[^}]*grid-template-columns:\s*repeat\(3,/);
+  assert.match(panelSource, /ImageEditorEffectIcons\.markup/);
+  assert.doesNotMatch(panelSource, /class="bi bi-(sun|circle-half|triangle-half|rainbow|sliders2|square-half|shuffle|bar-chart-fill|graph-up|camera|envelope|images|eyedropper)"/);
+  assert.match(layerContextMenuSource, /item\.effectIcon/);
+  assert.match(canvasContextMenuSource, /effectIcon:\s*"cast-shadow"/);
+  assert.match(layerPanelSource, /effectIcon:\s*"raised-edge"/);
+  assert.match(htmlSource, /css\/image-editor\/effect-icons\.css/);
+  assert.match(htmlSource, /js\/image-editor\/effect-icons\.js/);
+});
+
+test("properties tab exposes selected-object stacking, alignment, and transform controls", () => {
+  ["forward", "backward", "to-front", "to-back", "align-top", "align-left", "align-middle", "align-center", "align-bottom", "align-right"].forEach((action) => {
+    assert.match(objectPropertiesSource, new RegExp('actionButton\\("' + action + '"'));
+  });
+  ["width", "height", "x", "y", "rotation"].forEach((fieldName) => assert.match(objectPropertiesSource, new RegExp('field\\("' + fieldName + '"')));
+  assert.match(objectPropertiesSource, /data-object-ratio-lock/);
+  assert.match(objectPropertiesSource, /Math\.PI \/ 180/);
+  assert.match(panelSource, /this\.objectProperties\.render\(this\.content\)/);
+  assert.match(htmlSource, /layers\/object-properties\.js/);
+  assert.match(stylesSource, /\.image-editor-object-transform-grid/);
+});
+
+test("selected-object property operations reorder, align, resize, position, and rotate transactionally", () => {
+  const context = vm.createContext({ console });
+  vm.runInContext(fs.readFileSync(path.join(resources, "js/image-editor/layers/document-model.js"), "utf8"), context);
+  vm.runInContext(objectPropertiesSource, context);
+  const imageEditor = context.MarkdownViewerImageEditor;
+  const layer = imageEditor.createContentLayer("Objects");
+  const first = imageEditor.createContentObject("shape", {}, { name: "First", bounds: { width: 20, height: 10 }, transform: { x: 10, y: 15 } });
+  const second = imageEditor.createContentObject("shape", {}, { name: "Second", bounds: { width: 10, height: 10 }, transform: { x: 40, y: 20 } });
+  layer.objects = [first, second];
+  const store = { document: { canvas: { width: 100, height: 80 }, nodes: [layer] }, selectedIds: new Set([second.id]) };
+  const operations = imageEditor.ImageEditorObjectPropertyOperations;
+
+  assert.equal(operations.apply(store, "forward"), true);
+  assert.deepEqual(layer.objects.map((object) => object.name), ["Second", "First"]);
+  assert.equal(operations.apply(store, "to-back"), true);
+  assert.deepEqual(layer.objects.map((object) => object.name), ["First", "Second"]);
+  assert.equal(operations.apply(store, "align-right"), true);
+  assert.equal(second.transform.x, 90);
+  assert.equal(operations.apply(store, "align-bottom"), true);
+  assert.equal(second.transform.y, 70);
+  assert.equal(operations.apply(store, "width", 20, { ratioLocked: true }), true);
+  assert.equal(second.transform.scaleX, 2);
+  assert.equal(second.transform.scaleY, 2);
+  assert.equal(operations.apply(store, "height", 30, { ratioLocked: false }), true);
+  assert.equal(second.transform.scaleX, 2);
+  assert.equal(second.transform.scaleY, 3);
+  assert.equal(operations.apply(store, "x", 12), true);
+  assert.equal(second.transform.x, 12);
+  assert.equal(operations.apply(store, "y", 8), true);
+  assert.equal(second.transform.y, 8);
+  assert.equal(operations.apply(store, "rotation", 90), true);
+  assert.ok(Math.abs(second.transform.rotation - Math.PI / 2) < .000001);
 });
 
 test("adjustment inspector is a fixed stage overlay with a dedicated toolbar toggle", () => {
@@ -117,6 +193,7 @@ test("adjustment inspector is a fixed stage overlay with a dedicated toolbar tog
 test("adjustment inspector persists per-tab mode, height, and active tab state", () => {
   assert.match(panelSource, /mode:\s*\["expanded", "minimized", "hidden"\]/);
   assert.match(panelSource, /height:\s*Math\.max\(220/);
-  assert.match(panelSource, /activeTab:\s*options\.state\?\.activeTab/);
+  assert.match(panelSource, /\["properties", "tune", "effects"\]\.includes/);
+  assert.match(panelSource, /activeTab:\s*\["properties", "tune", "effects"\]\.includes\(options\.state\?\.activeTab\)/);
   assert.match(panelSource, /onStateChanged\(\{ \.\.\.this\.state \}\)/);
 });

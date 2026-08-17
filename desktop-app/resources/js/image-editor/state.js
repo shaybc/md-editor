@@ -3,7 +3,7 @@
   "use strict";
 
   const namespace = global.MarkdownViewerImageEditor = global.MarkdownViewerImageEditor || {};
-  const TOOLS = Object.freeze(["select", "move", "pencil", "brush", "eraser", "blur", "clone-stamp", "smudge", "line", "curve", "path", "arc", "spiral", "rectangular-grid", "polar-grid", "rectangle", "rounded-rectangle", "callout", "oval-callout", "cloud-callout", "ellipse", "polygon", "triangle", "diamond", "star", "arrow", "lightning", "heart", "bucket", "text"]);
+  const TOOLS = Object.freeze(["select", "move", "pencil", "brush", "eraser", "blur", "clone-stamp", "smudge", "line", "curve", "path", "arc", "spiral", "rectangular-grid", "polar-grid", "rectangle", "rounded-rectangle", "callout", "oval-callout", "cloud-callout", "ellipse", "polygon", "triangle", "diamond", "star", "arrow", "lightning", "heart", "cloud-cluster", "cloud", "teardrop", "curved-teardrop", ...(namespace.flowchartShapeTools || []), "bucket", "text"]);
 
   class ImageEditorState {
     /**
@@ -62,6 +62,18 @@
       this.fontSize = Math.max(8, Math.min(144, Number(options.fontSize || 24)));
       this.fontBold = options.fontBold === true;
       this.fontItalic = options.fontItalic === true;
+      this.fontUnderline = options.fontUnderline === true;
+      this.fontStrikethrough = options.fontStrikethrough === true;
+      this.textCase = ["normal", "lowercase", "uppercase"].includes(options.textCase) ? options.textCase : "normal";
+      this.textAlign = ["left", "center", "right", "justify"].includes(options.textAlign) ? options.textAlign : "left";
+      this.textListStyle = options.textListStyle === "bullet" ? "bullet" : "none";
+      this.textDirection = options.textDirection === "rtl" ? "rtl" : "ltr";
+      this.textLetterSpacing = Math.max(-5, Math.min(20, Number(options.textLetterSpacing) || 0));
+      this.textLineSpacing = Math.max(0.8, Math.min(3, Number(options.textLineSpacing) || 1.2));
+      this.textAnchor = ["top", "middle", "bottom"].includes(options.textAnchor) ? options.textAnchor : "top";
+      this.textPosition = ["normal", "superscript", "subscript"].includes(options.textPosition) ? options.textPosition : "normal";
+      this.textKerning = options.textKerning === "none" ? "none" : "auto";
+      this.textLigatures = options.textLigatures === "none" ? "none" : "normal";
       this.zoom = Math.max(0.25, Math.min(8, Number(options.zoom || 1)));
       this.revision = 0;
       this.savedRevision = 0;

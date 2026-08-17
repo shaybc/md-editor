@@ -117,7 +117,10 @@
       this.element.querySelector(".image-editor-palette-back").hidden = false;
       const source = edit ? this.draft : palette;
       const colors = edit ? source.slots.map((color) => color || "#FFFFFF") : this.options.catalog.previewColors(source);
-      const swatches = colors.map((color, index) => `<div class="image-editor-palette-detail-swatch" data-slot="${index}"><button type="button" data-palette-action="pick" style="--palette-color:${color}" aria-label="${edit ? "Edit" : "Color"} ${index + 1}"></button><span data-palette-value="${index}" style="background:${color};color:${contrast(color)}">${source.slots?.[index] ? formatted(source.slots[index], this.format) : edit ? "Empty" : formatted(color, this.format)}</span><button type="button" data-palette-action="copy-color" aria-label="Copy color ${index + 1}"><i class="bi bi-copy"></i></button></div>`).join("");
+      const swatches = colors.map((color, index) => {
+        const value = source.slots?.[index] ? formatted(source.slots[index], this.format) : edit ? "Empty" : formatted(color, this.format);
+        return `<div class="image-editor-palette-detail-swatch" data-slot="${index}"><button type="button" class="image-editor-palette-detail-color" data-palette-action="pick" style="--palette-color:${color}" aria-label="${edit ? "Edit" : "Color"} ${index + 1}"></button><button type="button" class="image-editor-palette-detail-value" data-palette-action="copy-color" data-palette-value="${index}" data-palette-copy-value="${escapeHtml(value)}" aria-label="Copy ${escapeHtml(value)}">${escapeHtml(value)}</button></div>`;
+      }).join("");
       const nameField = edit ? `<label>Name <input type="text" data-palette-name placeholder="Custom palette" value="${escapeHtml(this.draft.name)}"></label>` : `<h3>${escapeHtml(palette.name)}</h3>`;
       const saveDisabled = edit && !this.draft.slots.some(Boolean) ? " disabled" : "";
       this.element.querySelector(".image-editor-palette-dialog-body").innerHTML = `<section class="image-editor-palette-details"><div class="image-editor-palette-detail-heading">${nameField}<label>Values <select data-palette-format><option value="hex">Hex</option><option value="rgb">RGB</option><option value="hsb">HSB</option></select></label></div><div class="image-editor-palette-detail-grid">${swatches}</div><div class="image-editor-palette-preview">${this.options.preview.render(colors)}</div><footer><button type="button" data-palette-action="copy-all"><i class="bi bi-copy"></i> Copy all</button>${edit ? `<button type="button" class="primary" data-palette-action="save"${saveDisabled}>Save palette</button>` : '<button type="button" class="primary" data-palette-action="apply">Apply palette</button>'}</footer></section>`;
@@ -146,7 +149,15 @@
       if (action === "copy-color") {
         const index = Number(button.closest("[data-slot]").dataset.slot);
         const color = (this.draft?.slots || this.options.catalog.previewColors(palette))[index];
-        if (color) await this.run(() => this.options.onCopy(formatted(color, this.format)));
+        if (color) {
+          const value = formatted(color, this.format);
+          let copied = false;
+          await this.run(async () => {
+            await this.options.onCopy(value);
+            copied = true;
+          });
+          if (copied) this.showCopiedValue(button, value);
+        }
       }
       if (action === "copy-all") {
         const colors = this.draft ? this.draft.slots.filter(Boolean) : this.options.catalog.exportColors(palette);
@@ -185,6 +196,19 @@
       this.notify("");
       try { await operation(); }
       catch (error) { this.notify(error?.message || String(error), true); }
+    }
+
+    /** Briefly confirms a successful single-color copy without opening another dialog. */
+    showCopiedValue(label, value) {
+      if (!label?.isConnected) return;
+      clearTimeout(label.copyFeedbackTimer);
+      label.textContent = "Copied";
+      label.classList.add("is-copied");
+      label.copyFeedbackTimer = setTimeout(() => {
+        if (!label.isConnected) return;
+        label.textContent = value;
+        label.classList.remove("is-copied");
+      }, 1100);
     }
 
     destroy() {

@@ -11,9 +11,9 @@
       this.overlay.innerHTML = `<section class="image-editor-layer-style-dialog" role="dialog" aria-modal="true" aria-labelledby="image-editor-layer-style-title">
         <header><div><h2 id="image-editor-layer-style-title">Layer Style</h2><p class="image-editor-layer-style-target"></p></div><button type="button" data-layer-style-action="cancel" aria-label="Close"><i class="bi bi-x-lg"></i></button></header>
         <div class="image-editor-layer-style-body">
-          <nav><button type="button" class="selected"><i class="bi bi-check-square"></i> <span class="image-editor-layer-style-name">Drop Shadow</span></button></nav>
+          <nav><button type="button" class="selected"><i class="bi bi-check-square"></i> <span class="image-editor-layer-style-name">Cast Shadow</span></button></nav>
           <form>
-            <label class="image-editor-layer-style-enabled"><input name="enabled" type="checkbox"> <span class="image-editor-layer-style-enabled-name">Enable Drop Shadow</span></label>
+            <label class="image-editor-layer-style-enabled"><input name="enabled" type="checkbox"> <span class="image-editor-layer-style-enabled-name">Enable Cast Shadow</span></label>
             <div class="image-editor-layer-style-grid">
               <label>Blend mode<select name="blendMode"><option value="multiply">Multiply</option><option value="screen">Screen</option><option value="normal">Normal</option></select></label>
               <label data-color-field>Color<input name="color" type="color"></label>
@@ -53,6 +53,46 @@
               <label data-bevel-field hidden>Shadow mode<select name="shadowBlendMode"><option value="multiply">Multiply</option><option value="normal">Normal</option></select></label>
               <label data-bevel-field hidden>Shadow color<input name="shadowColor" type="color"></label>
               <label data-bevel-field hidden>Shadow opacity <output data-output="shadowOpacity"></output><input name="shadowOpacity" type="range" min="0" max="100"></label>
+              <label data-blur-effect-field hidden>Radius <output data-output="radius"></output><input name="radius" type="range" min="0" max="250" step="0.1"></label>
+              <label data-grain-effect-field hidden>Amount <output data-output="grainAmount"></output><input name="grainAmount" type="range" min="0" max="100" step="0.1"></label>
+              <fieldset class="image-editor-grain-distribution" data-grain-effect-field hidden><legend>Distribution</legend><label><input name="grainDistribution" type="radio" value="uniform"> Uniform</label><label><input name="grainDistribution" type="radio" value="gaussian"> Gaussian</label></fieldset>
+              <label class="image-editor-grain-monochromatic" data-grain-effect-field hidden><input name="grainMonochromatic" type="checkbox"> Monochromatic</label>
+              <label data-newspaper-effect-field hidden>Dot size <output data-output="newspaperDotSize"></output><input name="newspaperDotSize" type="range" min="2" max="40" step="1"></label>
+              <label data-newspaper-effect-field hidden>Contrast <output data-output="newspaperContrast"></output><input name="newspaperContrast" type="range" min="0" max="100" step="1"></label>
+              <label data-newspaper-effect-field hidden>Screen angle <output data-output="newspaperAngle"></output><input name="newspaperAngle" type="range" min="0" max="89" step="1"></label>
+              <label data-newspaper-effect-field hidden>Ink color<input name="newspaperInkColor" type="color"></label>
+              <label data-newspaper-effect-field hidden>Paper color<input name="newspaperPaperColor" type="color"></label>
+              <label data-snow-effect-field hidden>Density <output data-output="snowDensity"></output><input name="snowDensity" type="range" min="0" max="100" step="1"></label>
+              <label data-snow-effect-field hidden>Flake size <output data-output="snowFlakeSize"></output><input name="snowFlakeSize" type="range" min="1" max="20" step="0.5"></label>
+              <label data-snow-effect-field hidden>Depth <output data-output="snowDepth"></output><input name="snowDepth" type="range" min="0" max="100" step="1"></label>
+              <label data-snow-effect-field hidden>Fall angle <output data-output="snowAngle"></output><input name="snowAngle" type="range" min="-90" max="90" step="1"></label>
+              <label data-snow-effect-field hidden>Motion <output data-output="snowMotion"></output><input name="snowMotion" type="range" min="0" max="40" step="1"></label>
+              <label data-snow-effect-field hidden>Brightness <output data-output="snowBrightness"></output><input name="snowBrightness" type="range" min="0" max="100" step="1"></label>
+              <label data-painted-texture-effect-field hidden>Stylization <output data-output="paintedStylization"></output><input name="paintedStylization" type="range" min="0" max="10" step="0.1"></label>
+              <label data-painted-texture-effect-field hidden>Cleanliness <output data-output="paintedCleanliness"></output><input name="paintedCleanliness" type="range" min="0" max="10" step="0.1"></label>
+              <label data-painted-texture-effect-field hidden>Scale <output data-output="paintedScale"></output><input name="paintedScale" type="range" min="0.1" max="10" step="0.1"></label>
+              <label data-painted-texture-effect-field hidden>Bristle detail <output data-output="paintedBristleDetail"></output><input name="paintedBristleDetail" type="range" min="0" max="10" step="0.1"></label>
+              <label class="image-editor-grain-monochromatic" data-painted-texture-effect-field hidden><input name="paintedLighting" type="checkbox"> Lighting</label>
+              <label data-painted-texture-effect-field hidden>Light angle <output data-output="paintedAngle"></output><input name="paintedAngle" type="range" min="-180" max="180" step="1"></label>
+              <label data-painted-texture-effect-field hidden>Shine <output data-output="paintedShine"></output><input name="paintedShine" type="range" min="0" max="10" step="0.1"></label>
+              <label data-vortex-effect-field hidden>Angle <output data-output="vortexAngle"></output><input name="vortexAngle" type="range" min="-999" max="999" step="1"></label>
+              <label data-ripple-effect-field hidden>Generators <output data-output="rippleGenerators"></output><input name="rippleGenerators" type="range" min="1" max="999" step="1"></label>
+              <label data-ripple-effect-field hidden>Minimum wavelength <output data-output="rippleWavelengthMinimum"></output><input name="rippleWavelengthMinimum" type="range" min="1" max="999" step="1"></label>
+              <label data-ripple-effect-field hidden>Maximum wavelength <output data-output="rippleWavelengthMaximum"></output><input name="rippleWavelengthMaximum" type="range" min="1" max="999" step="1"></label>
+              <label data-ripple-effect-field hidden>Minimum amplitude <output data-output="rippleAmplitudeMinimum"></output><input name="rippleAmplitudeMinimum" type="range" min="0" max="999" step="1"></label>
+              <label data-ripple-effect-field hidden>Maximum amplitude <output data-output="rippleAmplitudeMaximum"></output><input name="rippleAmplitudeMaximum" type="range" min="0" max="999" step="1"></label>
+              <label data-ripple-effect-field hidden>Horizontal scale <output data-output="rippleHorizontalScale"></output><input name="rippleHorizontalScale" type="range" min="1" max="100" step="1"></label>
+              <label data-ripple-effect-field hidden>Vertical scale <output data-output="rippleVerticalScale"></output><input name="rippleVerticalScale" type="range" min="1" max="100" step="1"></label>
+              <label data-ripple-effect-field hidden>Waveform<select name="rippleWaveType"><option value="sine">Sine</option><option value="triangle">Triangle</option><option value="square">Square</option></select></label>
+              <label data-ripple-effect-field hidden>Undefined areas<select name="rippleUndefinedAreas"><option value="repeat">Repeat edge pixels</option><option value="wrap">Wrap around</option></select></label>
+              <input data-ripple-effect-field name="rippleSeed" type="hidden">
+              <button class="image-editor-ripple-randomize" data-ripple-effect-field data-layer-style-action="randomize-ripple" type="button" hidden>Randomize</button>
+              <label data-flare-effect-field hidden>Brightness <output data-output="flareBrightness"></output><input name="flareBrightness" type="range" min="0" max="300" step="1"></label>
+              <label data-flare-effect-field hidden>Horizontal position <output data-output="flarePositionX"></output><input name="flarePositionX" type="range" min="0" max="100" step="1"></label>
+              <label data-flare-effect-field hidden>Vertical position <output data-output="flarePositionY"></output><input name="flarePositionY" type="range" min="0" max="100" step="1"></label>
+              <label data-flare-effect-field hidden>Lens character<select name="flareLensType"><option value="zoom">Zoom</option><option value="prime-35">Prime 35</option><option value="prime-105">Prime 105</option><option value="cinema">Cinema</option></select></label>
+              <label data-gust-effect-field hidden>Character<select name="gustMethod"><option value="drift">Drift</option><option value="burst">Burst</option><option value="stagger">Stagger</option></select></label>
+              <label data-gust-effect-field hidden>Direction<select name="gustDirection"><option value="right">From right</option><option value="left">From left</option></select></label>
             </div>
             <label data-directional-shadow-field><input name="useGlobalLight" type="checkbox"> Use Global Light</label>
             <label data-pattern-field hidden><input name="linkWithLayer" type="checkbox"> Link with layer</label>
@@ -81,6 +121,12 @@
           this.form.elements.gradientOffsetX.value = 0;
           this.form.elements.gradientOffsetY.value = 0;
           this.refreshPreview();
+        } else if (action === "randomize-ripple") {
+          const seed = new Uint32Array(1);
+          if (global.crypto?.getRandomValues) global.crypto.getRandomValues(seed);
+          else seed[0] = (Date.now() ^ Math.floor(Math.random() * 0xFFFFFFFF)) >>> 0;
+          this.form.elements.rippleSeed.value = seed[0];
+          this.refreshPreview();
         } else if (action) this.finish(action);
         else if (event.target === this.overlay) this.finish("cancel");
       });
@@ -90,6 +136,99 @@
 
     readEffect() {
       const data = new FormData(this.form);
+      if (this.styleType === "gust") {
+        return this.effectModel.normalize({
+          ...this.effect,
+          enabled: data.get("enabled") === "on",
+          method: data.get("gustMethod"),
+          direction: data.get("gustDirection")
+        });
+      }
+      if (this.styleType === "flare") {
+        return this.effectModel.normalize({
+          ...this.effect,
+          enabled: data.get("enabled") === "on",
+          brightness: Number(data.get("flareBrightness")),
+          positionX: Number(data.get("flarePositionX")) / 100,
+          positionY: Number(data.get("flarePositionY")) / 100,
+          lensType: data.get("flareLensType")
+        });
+      }
+      if (this.styleType === "ripple-field") {
+        return this.effectModel.normalize({
+          ...this.effect,
+          enabled: data.get("enabled") === "on",
+          generators: Number(data.get("rippleGenerators")),
+          wavelengthMinimum: Number(data.get("rippleWavelengthMinimum")),
+          wavelengthMaximum: Number(data.get("rippleWavelengthMaximum")),
+          amplitudeMinimum: Number(data.get("rippleAmplitudeMinimum")),
+          amplitudeMaximum: Number(data.get("rippleAmplitudeMaximum")),
+          horizontalScale: Number(data.get("rippleHorizontalScale")),
+          verticalScale: Number(data.get("rippleVerticalScale")),
+          waveType: data.get("rippleWaveType"),
+          undefinedAreas: data.get("rippleUndefinedAreas"),
+          seed: Number(data.get("rippleSeed"))
+        });
+      }
+      if (this.styleType === "vortex") {
+        return this.effectModel.normalize({
+          ...this.effect,
+          enabled: data.get("enabled") === "on",
+          angle: Number(data.get("vortexAngle"))
+        });
+      }
+      if (this.styleType === "grain") {
+        return this.effectModel.normalize({
+          ...this.effect,
+          enabled: data.get("enabled") === "on",
+          amount: Number(data.get("grainAmount")) / 100,
+          distribution: data.get("grainDistribution"),
+          monochromatic: data.get("grainMonochromatic") === "on"
+        });
+      }
+      if (this.styleType === "newspaper") {
+        return this.effectModel.normalize({
+          ...this.effect,
+          enabled: data.get("enabled") === "on",
+          dotSize: Number(data.get("newspaperDotSize")),
+          contrast: Number(data.get("newspaperContrast")) / 100,
+          angle: Number(data.get("newspaperAngle")),
+          inkColor: data.get("newspaperInkColor"),
+          paperColor: data.get("newspaperPaperColor")
+        });
+      }
+      if (this.styleType === "snow") {
+        return this.effectModel.normalize({
+          ...this.effect,
+          enabled: data.get("enabled") === "on",
+          density: Number(data.get("snowDensity")) / 100,
+          flakeSize: Number(data.get("snowFlakeSize")),
+          depth: Number(data.get("snowDepth")) / 100,
+          angle: Number(data.get("snowAngle")),
+          motion: Number(data.get("snowMotion")),
+          brightness: Number(data.get("snowBrightness")) / 100
+        });
+      }
+      if (this.styleType === "painted-texture") {
+        return this.effectModel.normalize({
+          ...this.effect,
+          enabled: data.get("enabled") === "on",
+          stylization: Number(data.get("paintedStylization")),
+          cleanliness: Number(data.get("paintedCleanliness")),
+          scale: Number(data.get("paintedScale")),
+          bristleDetail: Number(data.get("paintedBristleDetail")),
+          lighting: data.get("paintedLighting") === "on",
+          angle: Number(data.get("paintedAngle")),
+          shine: Number(data.get("paintedShine"))
+        });
+      }
+      if (this.styleType === "blur") {
+        return this.effectModel.normalize({
+          ...this.effect,
+          enabled: data.get("enabled") === "on",
+          radius: Number(data.get("radius"))
+        });
+      }
       if (this.styleType === "bevel-emboss") {
         return this.effectModel.normalize({
           ...this.effect,
@@ -154,7 +293,25 @@
     }
 
     updateOutputs() {
-      const names = this.styleType === "bevel-emboss"
+      const names = this.styleType === "gust"
+        ? []
+        : this.styleType === "painted-texture"
+        ? ["paintedStylization", "paintedCleanliness", "paintedScale", "paintedBristleDetail", "paintedAngle", "paintedShine"]
+        : this.styleType === "snow"
+        ? ["snowDensity", "snowFlakeSize", "snowDepth", "snowAngle", "snowMotion", "snowBrightness"]
+        : this.styleType === "flare"
+        ? ["flareBrightness", "flarePositionX", "flarePositionY"]
+        : this.styleType === "ripple-field"
+        ? ["rippleGenerators", "rippleWavelengthMinimum", "rippleWavelengthMaximum", "rippleAmplitudeMinimum", "rippleAmplitudeMaximum", "rippleHorizontalScale", "rippleVerticalScale"]
+        : this.styleType === "vortex"
+        ? ["vortexAngle"]
+        : this.styleType === "grain"
+        ? ["grainAmount"]
+        : this.styleType === "newspaper"
+        ? ["newspaperDotSize", "newspaperContrast", "newspaperAngle"]
+        : this.styleType === "blur"
+        ? ["radius"]
+        : this.styleType === "bevel-emboss"
         ? ["depth", "bevelSize", "soften", "bevelAngle", "altitude", "highlightOpacity", "shadowOpacity"]
         : this.styleType === "gradient-overlay"
         ? ["opacity", "gradientAngle", "gradientScale"]
@@ -167,8 +324,9 @@
         : ["opacity", "angle", "distance", this.styleType === "inner-shadow" ? "choke" : "spread", "blur"];
       names.forEach((name) => {
         const input = this.form.elements[name];
-        const suffix = ["angle", "patternAngle", "gradientAngle", "bevelAngle", "altitude"].includes(name) ? "°" : ["opacity", "spread", "choke", "scale", "density", "gradientScale", "depth", "highlightOpacity", "shadowOpacity"].includes(name) ? "%" : " px";
-        this.overlay.querySelector(`[data-output="${name}"]`).textContent = `${input.value}${suffix}`;
+        const suffix = name === "rippleGenerators" ? "" : ["angle", "patternAngle", "gradientAngle", "bevelAngle", "altitude", "vortexAngle", "newspaperAngle", "snowAngle", "paintedAngle"].includes(name) ? "°" : ["opacity", "spread", "choke", "scale", "density", "gradientScale", "depth", "highlightOpacity", "shadowOpacity", "grainAmount", "newspaperContrast", "rippleHorizontalScale", "rippleVerticalScale", "flareBrightness", "flarePositionX", "flarePositionY", "snowDensity", "snowDepth", "snowBrightness"].includes(name) ? "%" : ["paintedStylization", "paintedCleanliness", "paintedScale", "paintedBristleDetail", "paintedShine"].includes(name) ? "" : " px";
+        const value = ["radius", "grainAmount", "snowFlakeSize", "paintedStylization", "paintedCleanliness", "paintedScale", "paintedBristleDetail", "paintedShine"].includes(name) ? Number(input.value).toFixed(1).replace(/\.0$/, "") : input.value;
+        this.overlay.querySelector(`[data-output="${name}"]`).textContent = `${value}${suffix}`;
       });
     }
 
@@ -180,7 +338,7 @@
     /** Open the requested shadow editor for one or more layers. */
     open(options) {
       this.options = options;
-      this.styleType = ["inner-shadow", "inner-glow", "outer-glow", "color-overlay", "gradient-overlay", "pattern-overlay", "bevel-emboss"].includes(options.styleType) ? options.styleType : "drop-shadow";
+      this.styleType = ["inner-shadow", "inner-glow", "outer-glow", "color-overlay", "gradient-overlay", "pattern-overlay", "bevel-emboss", "blur", "grain", "newspaper", "painted-texture", "snow", "vortex", "ripple-field", "flare", "gust"].includes(options.styleType) ? options.styleType : "drop-shadow";
       this.effectModel = this.styleType === "inner-shadow"
         ? namespace.ImageEditorInnerShadowEffect
         : this.styleType === "inner-glow" ? namespace.ImageEditorInnerGlowEffect
@@ -188,23 +346,41 @@
             : this.styleType === "color-overlay" ? namespace.ImageEditorColorOverlayEffect
               : this.styleType === "gradient-overlay" ? namespace.ImageEditorGradientOverlayEffect
                 : this.styleType === "pattern-overlay" ? namespace.ImageEditorPatternOverlayEffect
-                  : this.styleType === "bevel-emboss" ? namespace.ImageEditorBevelEmbossEffect : namespace.ImageEditorDropShadowEffect;
-      const styleName = this.styleType === "inner-shadow" ? "Inner Shadow" : this.styleType === "inner-glow" ? "Inner Glow" : this.styleType === "outer-glow" ? "Outer Glow" : this.styleType === "color-overlay" ? "Color Overlay" : this.styleType === "gradient-overlay" ? "Gradient Overlay" : this.styleType === "pattern-overlay" ? "Pattern Overlay" : this.styleType === "bevel-emboss" ? "Bevel & Emboss" : "Drop Shadow";
+                  : this.styleType === "bevel-emboss" ? namespace.ImageEditorBevelEmbossEffect
+                    : this.styleType === "blur" ? namespace.ImageEditorBlurEffect
+                      : this.styleType === "grain" ? namespace.ImageEditorGrainEffect
+                        : this.styleType === "newspaper" ? namespace.ImageEditorNewspaperEffect
+                          : this.styleType === "painted-texture" ? namespace.ImageEditorPaintedTextureEffect
+                          : this.styleType === "snow" ? namespace.ImageEditorSnowEffect
+                          : this.styleType === "vortex" ? namespace.ImageEditorVortexEffect
+                          : this.styleType === "ripple-field" ? namespace.ImageEditorRippleFieldEffect
+                            : this.styleType === "flare" ? namespace.ImageEditorFlareEffect
+                              : this.styleType === "gust" ? namespace.ImageEditorGustEffect : namespace.ImageEditorDropShadowEffect;
+      const styleName = this.styleType === "inner-shadow" ? "Inset Shadow" : this.styleType === "inner-glow" ? "Inner Aura" : this.styleType === "outer-glow" ? "Outer Aura" : this.styleType === "color-overlay" ? "Color Coat" : this.styleType === "gradient-overlay" ? "Gradient Coat" : this.styleType === "pattern-overlay" ? "Pattern Coat" : this.styleType === "bevel-emboss" ? "Raised Edge" : this.styleType === "blur" ? "Blur" : this.styleType === "grain" ? "Grain" : this.styleType === "newspaper" ? "Newspaper" : this.styleType === "painted-texture" ? "Painted Texture" : this.styleType === "snow" ? "Snow" : this.styleType === "vortex" ? "Vortex" : this.styleType === "ripple-field" ? "Ripple Field" : this.styleType === "flare" ? "Flare" : this.styleType === "gust" ? "Gust" : "Cast Shadow";
       this.effect = this.effectModel.normalize(options.effect || {});
       this.overlay.querySelector(".image-editor-layer-style-target").textContent = options.targetName || "Selected layers";
       this.overlay.querySelector(".image-editor-layer-style-name").textContent = styleName;
       this.overlay.querySelector(".image-editor-layer-style-enabled-name").textContent = `Enable ${styleName}`;
       ["blendMode", "color", "opacity", "angle", "distance", "spread", "choke", "blur", "useGlobalLight"].forEach((name) => {
-        this.form.elements[name].closest("label").hidden = false;
+        this.form.elements[name].closest("label").hidden = ["blur", "grain", "newspaper", "painted-texture", "snow", "vortex", "ripple-field", "flare", "gust"].includes(this.styleType);
       });
       this.form.elements.spread.closest("label").hidden = !["drop-shadow", "outer-glow"].includes(this.styleType);
       this.overlay.querySelector("[data-choke-field]").hidden = !["inner-shadow", "inner-glow"].includes(this.styleType);
-      this.overlay.querySelector("[data-size-field]").hidden = ["color-overlay", "gradient-overlay", "pattern-overlay"].includes(this.styleType);
-      this.overlay.querySelector("[data-color-field]").hidden = ["gradient-overlay", "pattern-overlay"].includes(this.styleType);
+      this.overlay.querySelector("[data-size-field]").hidden = ["color-overlay", "gradient-overlay", "pattern-overlay", "blur", "grain", "newspaper", "painted-texture", "snow", "vortex", "ripple-field", "flare", "gust"].includes(this.styleType);
+      this.overlay.querySelector("[data-color-field]").hidden = ["gradient-overlay", "pattern-overlay", "blur", "grain", "newspaper", "painted-texture", "snow", "vortex", "ripple-field", "flare", "gust"].includes(this.styleType);
       this.overlay.querySelectorAll("[data-gradient-field]").forEach((field) => { field.hidden = this.styleType !== "gradient-overlay"; });
       this.overlay.querySelectorAll("[data-pattern-field]").forEach((field) => { field.hidden = this.styleType !== "pattern-overlay"; });
       this.overlay.querySelectorAll("[data-bevel-field]").forEach((field) => { field.hidden = this.styleType !== "bevel-emboss"; });
-      this.overlay.querySelectorAll("[data-directional-shadow-field]").forEach((field) => { field.hidden = ["inner-glow", "outer-glow", "color-overlay", "gradient-overlay", "pattern-overlay"].includes(this.styleType); });
+      this.overlay.querySelectorAll("[data-blur-effect-field]").forEach((field) => { field.hidden = this.styleType !== "blur"; });
+      this.overlay.querySelectorAll("[data-grain-effect-field]").forEach((field) => { field.hidden = this.styleType !== "grain"; });
+      this.overlay.querySelectorAll("[data-newspaper-effect-field]").forEach((field) => { field.hidden = this.styleType !== "newspaper"; });
+      this.overlay.querySelectorAll("[data-painted-texture-effect-field]").forEach((field) => { field.hidden = this.styleType !== "painted-texture"; });
+      this.overlay.querySelectorAll("[data-snow-effect-field]").forEach((field) => { field.hidden = this.styleType !== "snow"; });
+      this.overlay.querySelectorAll("[data-vortex-effect-field]").forEach((field) => { field.hidden = this.styleType !== "vortex"; });
+      this.overlay.querySelectorAll("[data-ripple-effect-field]").forEach((field) => { field.hidden = this.styleType !== "ripple-field"; });
+      this.overlay.querySelectorAll("[data-flare-effect-field]").forEach((field) => { field.hidden = this.styleType !== "flare"; });
+      this.overlay.querySelectorAll("[data-gust-effect-field]").forEach((field) => { field.hidden = this.styleType !== "gust"; });
+      this.overlay.querySelectorAll("[data-directional-shadow-field]").forEach((field) => { field.hidden = ["inner-glow", "outer-glow", "color-overlay", "gradient-overlay", "pattern-overlay", "blur", "grain", "newspaper", "painted-texture", "snow", "vortex", "ripple-field", "flare", "gust"].includes(this.styleType); });
       const screenBlendOption = this.form.elements.blendMode.querySelector('option[value="screen"]');
       screenBlendOption.hidden = !["inner-glow", "outer-glow", "color-overlay", "gradient-overlay", "pattern-overlay"].includes(this.styleType);
       screenBlendOption.disabled = !["inner-glow", "outer-glow", "color-overlay", "gradient-overlay", "pattern-overlay"].includes(this.styleType);
@@ -212,6 +388,46 @@
         if (this.styleType === "bevel-emboss") this.form.elements[name].closest("label").hidden = true;
       });
       const values = this.effect;
+      this.form.elements.radius.value = values.radius ?? 5;
+      this.form.elements.grainAmount.value = Math.round((values.amount ?? 0.125) * 1000) / 10;
+      const grainDistribution = this.form.querySelector(`[name="grainDistribution"][value="${values.distribution || "gaussian"}"]`);
+      if (grainDistribution) grainDistribution.checked = true;
+      this.form.elements.grainMonochromatic.checked = values.monochromatic === true;
+      this.form.elements.newspaperDotSize.value = values.dotSize ?? 6;
+      this.form.elements.newspaperContrast.value = Math.round((values.contrast ?? 0.35) * 100);
+      this.form.elements.newspaperAngle.value = values.angle ?? 45;
+      this.form.elements.newspaperInkColor.value = values.inkColor || "#111111";
+      this.form.elements.newspaperPaperColor.value = values.paperColor || "#F7F2E7";
+      this.form.elements.paintedStylization.value = values.stylization ?? 4;
+      this.form.elements.paintedCleanliness.value = values.cleanliness ?? 2.3;
+      this.form.elements.paintedScale.value = values.scale ?? 0.8;
+      this.form.elements.paintedBristleDetail.value = values.bristleDetail ?? 10;
+      this.form.elements.paintedLighting.checked = values.lighting !== false;
+      this.form.elements.paintedAngle.value = values.angle ?? -60;
+      this.form.elements.paintedShine.value = values.shine ?? 1.3;
+      this.form.elements.snowDensity.value = Math.round((values.density ?? 0.35) * 100);
+      this.form.elements.snowFlakeSize.value = values.flakeSize ?? 4;
+      this.form.elements.snowDepth.value = Math.round((values.depth ?? 0.45) * 100);
+      this.form.elements.snowAngle.value = values.angle ?? -65;
+      this.form.elements.snowMotion.value = values.motion ?? 10;
+      this.form.elements.snowBrightness.value = Math.round((values.brightness ?? 0.9) * 100);
+      this.form.elements.vortexAngle.value = values.angle ?? 120;
+      this.form.elements.rippleGenerators.value = values.generators ?? 5;
+      this.form.elements.rippleWavelengthMinimum.value = values.wavelengthMinimum ?? 10;
+      this.form.elements.rippleWavelengthMaximum.value = values.wavelengthMaximum ?? 120;
+      this.form.elements.rippleAmplitudeMinimum.value = values.amplitudeMinimum ?? 5;
+      this.form.elements.rippleAmplitudeMaximum.value = values.amplitudeMaximum ?? 35;
+      this.form.elements.rippleHorizontalScale.value = values.horizontalScale ?? 100;
+      this.form.elements.rippleVerticalScale.value = values.verticalScale ?? 100;
+      this.form.elements.rippleWaveType.value = values.waveType || "sine";
+      this.form.elements.rippleUndefinedAreas.value = values.undefinedAreas || "repeat";
+      this.form.elements.rippleSeed.value = values.seed >>> 0;
+      this.form.elements.flareBrightness.value = values.brightness ?? 100;
+      this.form.elements.flarePositionX.value = Math.round((values.positionX ?? 0.5) * 100);
+      this.form.elements.flarePositionY.value = Math.round((values.positionY ?? 0.5) * 100);
+      this.form.elements.flareLensType.value = values.lensType || "zoom";
+      this.form.elements.gustMethod.value = values.method || "drift";
+      this.form.elements.gustDirection.value = values.direction || "right";
       Object.entries({ enabled: values.enabled, blendMode: values.blendMode, color: values.color || "#000000", opacity: Math.round(values.opacity * 100), angle: values.angle || 0, distance: values.distance || 0, spread: Math.round((values.spread || 0) * 100), choke: Math.round((values.choke || 0) * 100), blur: values.blur || 0, useGlobalLight: values.useGlobalLight, patternType: values.patternType || "crosshatch", foregroundColor: values.foregroundColor || "#000000", backgroundColor: values.backgroundColor || "#FFFFFF", scale: values.scale || 100, patternAngle: values.angle || 0, density: values.density || 50, offsetX: values.offsetX || 0, offsetY: values.offsetY || 0, linkWithLayer: values.linkWithLayer, gradientStyle: values.style || "linear", gradientStartColor: values.startColor || "#000000", gradientEndColor: values.endColor || "#FFFFFF", gradientAngle: values.angle ?? 90, gradientScale: values.scale || 100, gradientOffsetX: values.offsetX || 0, gradientOffsetY: values.offsetY || 0, gradientReverse: values.reverse, gradientAlignWithLayer: values.alignWithLayer, bevelStyle: values.style || "inner-bevel", bevelTechnique: values.technique || "smooth", depth: values.depth || 100, direction: values.direction || "up", bevelSize: values.size ?? 5, soften: values.soften || 0, bevelAngle: values.angle ?? 120, altitude: values.altitude ?? 30, glossContour: values.glossContour || "linear", highlightBlendMode: values.highlightBlendMode || "screen", highlightColor: values.highlightColor || "#FFFFFF", highlightOpacity: Math.round((values.highlightOpacity ?? 0.75) * 100), shadowBlendMode: values.shadowBlendMode || "multiply", shadowColor: values.shadowColor || "#000000", shadowOpacity: Math.round((values.shadowOpacity ?? 0.75) * 100), bevelUseGlobalLight: values.useGlobalLight, antialiased: values.antialiased }).forEach(([name, value]) => {
         const input = this.form.elements[name];
         if (input.type === "checkbox") input.checked = !!value; else input.value = value;
@@ -220,7 +436,7 @@
       this.overlay.querySelector('[data-layer-style-action="remove"]').disabled = options.hasEffect !== true;
       this.updateOutputs();
       this.overlay.classList.remove("hidden");
-      (this.styleType === "gradient-overlay" ? this.form.elements.gradientStyle : this.styleType === "pattern-overlay" ? this.form.elements.patternType : this.styleType === "bevel-emboss" ? this.form.elements.bevelStyle : this.form.elements.opacity).focus({ preventScroll: true });
+      (this.styleType === "gradient-overlay" ? this.form.elements.gradientStyle : this.styleType === "pattern-overlay" ? this.form.elements.patternType : this.styleType === "bevel-emboss" ? this.form.elements.bevelStyle : this.styleType === "blur" ? this.form.elements.radius : this.styleType === "grain" ? this.form.elements.grainAmount : this.styleType === "newspaper" ? this.form.elements.newspaperDotSize : this.styleType === "painted-texture" ? this.form.elements.paintedStylization : this.styleType === "snow" ? this.form.elements.snowDensity : this.styleType === "vortex" ? this.form.elements.vortexAngle : this.styleType === "ripple-field" ? this.form.elements.rippleGenerators : this.styleType === "flare" ? this.form.elements.flareBrightness : this.styleType === "gust" ? this.form.elements.gustMethod : this.form.elements.opacity).focus({ preventScroll: true });
       this.options.onPreview?.(this.effect, true);
     }
 
