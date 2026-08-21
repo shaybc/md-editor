@@ -81,6 +81,17 @@
       </section>`;
     }
 
+    function renderDockerCompose(configuration) {
+      const dockerCompose = configuration.dockerCompose || {};
+      const commandOptions = ["up", "down", "logs"].map((command) => `<option value="${command}"${dockerCompose.command === command ? " selected" : ""}>${command}</option>`).join("");
+      return `<section class="run-configuration-type-fields">
+        <label class="run-configuration-field"><span>Compose command</span><select data-run-field="dockerCompose.command">${commandOptions}</select><small class="run-configuration-field-error" data-run-error="dockerCompose.command"></small></label>
+        ${field("Compose file", "dockerCompose.filePath", dockerCompose.filePath, { wide: true, placeholder: "docker-compose.yml or compose.yml" })}
+        ${field("Services", "dockerCompose.services", dockerCompose.services, { wide: true, placeholder: "Optional service names" })}
+        <label class="run-configuration-checkbox"><input data-run-field="dockerCompose.detached" type="checkbox"${dockerCompose.detached ? " checked" : ""}> Run up detached</label>
+        <label class="run-configuration-checkbox"><input data-run-field="dockerCompose.followLogs" type="checkbox"${dockerCompose.followLogs ? " checked" : ""}> Follow logs</label>
+      </section>`;
+    }
     function setNestedValue(target, path, value) {
       const parts = String(path).split(".");
       let owner = target;
@@ -101,12 +112,12 @@
      */
     function render(host, configuration, options = {}) {
       if (!host || !configuration) return null;
-      const typeLabel = configuration.type === "java-application" ? "Java Application" : configuration.type === "maven" ? "Maven" : "Gradle";
+      const typeLabel = configuration.type === "java-application" ? "Java Application" : configuration.type === "maven" ? "Maven" : configuration.type === "gradle" ? "Gradle" : "Docker Compose";
       host.innerHTML = `<div class="run-configuration-editor-heading"><div><span>${typeLabel}</span><h3>${escapeHtml(configuration.name || "New Configuration")}</h3></div></div>
         <div class="run-configuration-form">
           ${field("Name", "name", configuration.name, { wide: true })}
           ${field("Working directory", "workingDirectory", configuration.workingDirectory, { wide: true, placeholder: "Project or module root" })}
-          ${configuration.type === "java-application" ? renderJava(configuration, options.jdks) : configuration.type === "maven" ? renderMaven(configuration) : renderGradle(configuration)}
+          ${configuration.type === "java-application" ? renderJava(configuration, options.jdks) : configuration.type === "maven" ? renderMaven(configuration) : configuration.type === "gradle" ? renderGradle(configuration) : renderDockerCompose(configuration)}
           ${renderEnvironment(configuration.environment)}
           <section class="run-configuration-preview"><h4>Command line</h4><pre data-run-command-preview>Resolving command...</pre></section>
         </div>`;

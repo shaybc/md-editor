@@ -119,6 +119,25 @@ test("YAML Outline nests mapping keys", async () => {
   assert.equal(JSON.stringify(nodes[0].children.map((node) => node.name)), JSON.stringify(["homepage", "labels"]));
 });
 
+test("YAML Outline highlights Kubernetes manifest fields", async () => {
+  const source = "apiVersion: apps/v1\nkind: Deployment\nmetadata:\n  name: app\nspec:\n  replicas: 2\n";
+  const apiVersion = syntaxNode("Pair", 0, 19, [syntaxNode("Key", 0, 10)]);
+  const kind = syntaxNode("Pair", 20, 36, [syntaxNode("Key", 20, 24)]);
+  const metadataName = syntaxNode("Pair", 49, 58, [syntaxNode("Key", 49, 53)]);
+  const metadata = syntaxNode("Pair", 37, 58, [syntaxNode("Key", 37, 45), syntaxNode("BlockMapping", 49, 58, [metadataName])]);
+  const replicas = syntaxNode("Pair", 66, source.length, [syntaxNode("Key", 66, 74)]);
+  const spec = syntaxNode("Pair", 59, source.length, [syntaxNode("Key", 59, 63), syntaxNode("BlockMapping", 66, source.length, [replicas])]);
+  const adapter = loadAdapter("yaml", "registerMarkdownViewerYamlOutlineLanguage", {
+    topNode: syntaxNode("Stream", 0, source.length, [syntaxNode("Document", 0, source.length, [apiVersion, kind, metadata, spec])])
+  });
+  const nodes = await adapter.parse(source);
+
+  assert.equal(JSON.stringify(nodes.map((node) => node.name)), JSON.stringify(["apiVersion", "kind", "metadata", "spec"]));
+  assert.equal(nodes.find((node) => node.name === "kind")?.detail, "Deployment");
+  assert.equal(nodes.find((node) => node.name === "metadata")?.children[0]?.name, "metadata.name");
+  assert.equal(nodes.find((node) => node.name === "metadata")?.children[0]?.detail, "resource name");
+  assert.equal(nodes.find((node) => node.name === "spec")?.detail, "resource spec");
+});
 test("HTML Outline follows element containment", async () => {
   const source = '<html><body><main id="app"><section></section></main></body></html>';
   const section = syntaxNode("Element", 27, 46);

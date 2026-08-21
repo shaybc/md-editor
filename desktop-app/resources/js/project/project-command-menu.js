@@ -31,6 +31,8 @@
     function getCapability(provider, commandName, context) {
       if (commandName === "show-problems" || commandName === "show-tasks") return true;
       if (commandName === "show-java-rebuild") return Boolean(context.folderPath && deps.javaRebuildOutput?.show);
+      if (/^kubernetes-/.test(commandName)) return deps.kubernetesCommands?.canExecute?.(commandName, context) === true;
+      if (/^helm-/.test(commandName)) return deps.helmCommands?.canExecute?.(commandName, context) === true;
       if (commandName === "manage-rat-licenses") return Boolean(context.folderPath && deps.getRatManager?.()?.open);
       if (commandName === "manage-rat-policy") return Boolean(context.folderPath && deps.getRatPolicyManager?.()?.open);
       if (!provider) return false;
@@ -149,9 +151,40 @@
           return false;
         }
       }
+      if (/^kubernetes-/.test(commandName)) {
+        const context = getContext(overrides);
+        if (!getCapability(null, commandName, context)) return false;
+        let commandOptions = {};
+        if (commandName === "kubernetes-dry-run" || commandName === "kubernetes-server-dry-run") {
+          const summary = deps.kubernetesContext?.getContextSummary?.() || { contextName: "current context", namespaceName: "default" };
+          commandOptions = await deps.kubernetesCommandOptionsDialog?.open?.({
+            dryRunMode: commandName === "kubernetes-server-dry-run" ? "server" : "client",
+            validateSchema: true,
+            contextName: summary.contextName,
+            namespaceName: summary.namespaceName,
+            manifestSource: context.filePath || "active manifest",
+            manifestPath: context.filePath || "<manifest>",
+            command: "kubectl apply"
+          });
+          if (!commandOptions) return false;
+        }
+        const result = await deps.kubernetesCommands.execute(commandName, context, commandOptions);
+        if (result && !result.cancelled) deps.projectCommandResultModal?.open?.(result);
+        return result?.ok === true;
+      }
+      if (/^helm-/.test(commandName)) {
+        const context = getContext(overrides);
+        if (!getCapability(null, commandName, context)) return false;
+        const result = await deps.helmCommands.execute(commandName, context);
+        if (result && !result.cancelled) deps.projectCommandResultModal?.open?.(result);
+        return result?.ok === true;
+      }
       const context = getContext(overrides);
       const provider = findProvider(context);
       if (!getCapability(provider, commandName, context)) return false;
+      const buildStartedAt = ["compile-file", "compile-folder", "rebuild-project", "rebuild-project-last-options"].includes(commandName)
+        ? Date.now()
+        : 0;
       try {
         if (commandName === "java-build-path") await provider.configureBuildPath(context);
         if (commandName === "compile-file") await provider.compileFile(context);
@@ -174,6 +207,8 @@
         if (diagnostics.length) deps.problemsPanel?.setDiagnostics?.(diagnostics, { revealErrors: true });
         deps.alert?.(error?.message || "The project command could not be completed.");
         return false;
+      } finally {
+        if (buildStartedAt) deps.statistics?.recordBuild?.(Date.now() - buildStartedAt);
       }
     }
 
@@ -185,7 +220,9 @@
       const provider = findProvider(context);
       if (!provider) throw new Error("No project provider supports the structured execution target.");
       if (operationName === "compile_project" && typeof provider.compileProject === "function") {
-        return provider.compileProject(context, args);
+        const result = await provider.compileProject(context, args);
+        deps.statistics?.recordBuild?.(result?.durationMs || 0);
+        return result;
       }
       if (operationName === "run_tests" && typeof provider.runTests === "function") {
         return provider.runTests(context, args);
@@ -220,3 +257,5 @@
 
   global.registerMarkdownViewerProjectCommandMenu = registerMarkdownViewerProjectCommandMenu;
 })(typeof window !== "undefined" ? window : globalThis);
+
+

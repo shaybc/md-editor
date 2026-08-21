@@ -117,7 +117,10 @@
     }
 
     function rejectPendingRequests(error) {
-      pending.forEach((request) => request.reject(error));
+      pending.forEach((request, id) => {
+        deps.statistics?.finishAiRequest?.(id);
+        request.reject(error);
+      });
       pending.clear();
     }
 
@@ -216,18 +219,22 @@
         }
         return;
       }
+      deps.statistics?.recordAiEvent?.(id, detail);
       request.onEvent?.(detail);
       if (detail.type === "done") {
         logBridgeDebug("done response received", getBridgeMessageSnapshot(detail));
         pending.delete(id);
+        deps.statistics?.finishAiRequest?.(id);
         request.resolve(detail.result || {});
       } else if (detail.type === "cancelled") {
         logBridgeDebug("cancelled response received", getBridgeMessageSnapshot(detail));
         pending.delete(id);
+        deps.statistics?.finishAiRequest?.(id);
         request.reject(createCancelledError());
       } else if (detail.type === "error") {
         logBridgeWarning("error response received", getBridgeMessageSnapshot(detail));
         pending.delete(id);
+        deps.statistics?.finishAiRequest?.(id);
         request.reject(new Error(detail.error || "AI Companion request failed."));
       }
     }
@@ -236,6 +243,7 @@
       const settings = payload.settings || deps.getSettings?.() || {};
       const id = String(nextRequestId++);
       const message = { id, action, ...payload, workspaceRoot, settings, profileRoot: payload.profileRoot || session?.profileRoot || "" };
+      deps.statistics?.startAiRequest?.({ id, action, chatId: payload.chatId || "" });
       const promise = new Promise((resolve, reject) => {
         pending.set(id, { resolve, reject, onEvent });
         logBridgeDebug("request queued", { id, action, workspaceRoot, pendingCount: pending.size });
@@ -250,6 +258,7 @@
           .catch((error) => {
             logBridgeWarning("request send failed", { id, action, workspaceRoot, error: error?.message || String(error) });
             pending.delete(id);
+            deps.statistics?.finishAiRequest?.(id);
             if (session && session.workspaceRoot === workspaceRoot) session = null;
             reject(error);
           });
@@ -301,6 +310,7 @@
       const currentSession = session;
       const request = pending.get(id);
       pending.delete(id);
+      deps.statistics?.finishAiRequest?.(id);
       request.reject(createCancelledError());
       if (hasProcessId(currentSession?.processId) && Neutralino?.os?.updateSpawnedProcess) {
         await Neutralino.os.updateSpawnedProcess(currentSession.processId, "stdIn", `${JSON.stringify({ id: `cancel-${id}`, action: "cancel", targetId: id })}\n`);

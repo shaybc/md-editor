@@ -180,6 +180,7 @@
       };
       logFolderOpenInfo("loaded", totalLogDetails);
       logFolderPerf("open folder total", folderOpenStart, totalLogDetails);
+      deps.statistics?.recordProject?.(selectedPath);
     } catch (error) {
       renderFolderLoadingError?.("Unable to load this folder.");
       throw error;

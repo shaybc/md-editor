@@ -6,6 +6,7 @@
     Object.freeze({ id: "javascript", label: "JavaScript" }),
     Object.freeze({ id: "typescript", label: "TypeScript" }),
     Object.freeze({ id: "java", label: "Java" }),
+    Object.freeze({ id: "yaml", label: "YAML" }),
     Object.freeze({ id: "python", label: "Python" }),
     Object.freeze({ id: "csharp", label: "C#" })
   ]);
@@ -56,6 +57,22 @@
     Object.freeze({ id: "with-block", label: "with", detail: "block", type: "keyword", template: "with ${expression} as ${name}:\n\t${}", enabled: true }),
     Object.freeze({ id: "main-guard", label: "main guard", detail: "entry point", type: "keyword", template: "if __name__ == \"__main__\":\n\t${}", enabled: true })
   ]);
+  const YAML_SNIPPETS = Object.freeze([
+    Object.freeze({ id: "kubernetes-deployment", label: "k8s Deployment", detail: "Kubernetes", type: "class", template: "apiVersion: apps/v1\nkind: Deployment\nmetadata:\n  name: ${appName}\n  labels:\n    app: ${appName}\nspec:\n  replicas: ${replicas}\n  selector:\n    matchLabels:\n      app: ${appName}\n  template:\n    metadata:\n      labels:\n        app: ${appName}\n    spec:\n      containers:\n        - name: ${appName}\n          image: ${image}\n          ports:\n            - containerPort: ${port}\n", enabled: true }),
+    Object.freeze({ id: "kubernetes-service", label: "k8s Service", detail: "Kubernetes", type: "class", template: "apiVersion: v1\nkind: Service\nmetadata:\n  name: ${appName}\nspec:\n  type: ClusterIP\n  selector:\n    app: ${appName}\n  ports:\n    - name: http\n      port: ${servicePort}\n      targetPort: ${containerPort}\n", enabled: true }),
+    Object.freeze({ id: "kubernetes-ingress", label: "k8s Ingress", detail: "Kubernetes", type: "class", template: "apiVersion: networking.k8s.io/v1\nkind: Ingress\nmetadata:\n  name: ${appName}\nspec:\n  rules:\n    - host: ${host}\n      http:\n        paths:\n          - path: /\n            pathType: Prefix\n            backend:\n              service:\n                name: ${appName}\n                port:\n                  number: ${servicePort}\n", enabled: true }),
+    Object.freeze({ id: "kubernetes-configmap", label: "k8s ConfigMap", detail: "Kubernetes", type: "class", template: "apiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: ${configName}\ndata:\n  ${key}: ${value}\n", enabled: true }),
+    Object.freeze({ id: "kubernetes-secret", label: "k8s Secret", detail: "Kubernetes", type: "class", template: "apiVersion: v1\nkind: Secret\nmetadata:\n  name: ${secretName}\ntype: Opaque\nstringData:\n  ${key}: ${value}\n", enabled: true }),
+    Object.freeze({ id: "kubernetes-namespace", label: "k8s Namespace", detail: "Kubernetes", type: "class", template: "apiVersion: v1\nkind: Namespace\nmetadata:\n  name: ${namespace}\n", enabled: true }),
+    Object.freeze({ id: "kubernetes-serviceaccount", label: "k8s ServiceAccount", detail: "Kubernetes", type: "class", template: "apiVersion: v1\nkind: ServiceAccount\nmetadata:\n  name: ${serviceAccount}\n  namespace: ${namespace}\n", enabled: true }),
+    Object.freeze({ id: "kubernetes-job", label: "k8s Job", detail: "Kubernetes", type: "class", template: "apiVersion: batch/v1\nkind: Job\nmetadata:\n  name: ${jobName}\nspec:\n  template:\n    spec:\n      restartPolicy: Never\n      containers:\n        - name: ${jobName}\n          image: ${image}\n          command: [\"${command}\"]\n  backoffLimit: 3\n", enabled: true }),
+    Object.freeze({ id: "kubernetes-cronjob", label: "k8s CronJob", detail: "Kubernetes", type: "class", template: "apiVersion: batch/v1\nkind: CronJob\nmetadata:\n  name: ${jobName}\nspec:\n  schedule: \"${schedule}\"\n  jobTemplate:\n    spec:\n      template:\n        spec:\n          restartPolicy: OnFailure\n          containers:\n            - name: ${jobName}\n              image: ${image}\n              command: [\"${command}\"]\n", enabled: true }),
+    Object.freeze({ id: "kubernetes-hpa", label: "k8s HorizontalPodAutoscaler", detail: "Kubernetes", type: "class", template: "apiVersion: autoscaling/v2\nkind: HorizontalPodAutoscaler\nmetadata:\n  name: ${appName}\nspec:\n  scaleTargetRef:\n    apiVersion: apps/v1\n    kind: Deployment\n    name: ${appName}\n  minReplicas: ${minReplicas}\n  maxReplicas: ${maxReplicas}\n  metrics:\n    - type: Resource\n      resource:\n        name: cpu\n        target:\n          type: Utilization\n          averageUtilization: ${cpuPercent}\n", enabled: true }),
+    Object.freeze({ id: "spring-boot-kubernetes-deployment", label: "Spring Boot Deployment", detail: "Kubernetes", type: "class", template: "apiVersion: apps/v1\nkind: Deployment\nmetadata:\n  name: ${appName}\n  labels:\n    app: ${appName}\nspec:\n  replicas: ${replicas}\n  selector:\n    matchLabels:\n      app: ${appName}\n  template:\n    metadata:\n      labels:\n        app: ${appName}\n    spec:\n      containers:\n        - name: ${appName}\n          image: ${image}\n          ports:\n            - containerPort: 8080\n          readinessProbe:\n            httpGet:\n              path: /actuator/health/readiness\n              port: 8080\n          livenessProbe:\n            httpGet:\n              path: /actuator/health/liveness\n              port: 8080\n          resources:\n            requests:\n              cpu: 250m\n              memory: 512Mi\n            limits:\n              cpu: 500m\n              memory: 1Gi\n", enabled: true }),
+    Object.freeze({ id: "docker-compose-spring-boot", label: "Compose Spring Boot", detail: "Docker Compose", type: "class", template: "services:\n  app:\n    image: ${image}\n    ports:\n      - \"8080:8080\"\n    environment:\n      SPRING_PROFILES_ACTIVE: ${profile}\n", enabled: true }),
+    Object.freeze({ id: "docker-compose-spring-postgres", label: "Compose Spring + PostgreSQL", detail: "Docker Compose", type: "class", template: "services:\n  app:\n    image: ${image}\n    ports:\n      - \"8080:8080\"\n    environment:\n      SPRING_DATASOURCE_URL: jdbc:postgresql://db:5432/${database}\n      SPRING_DATASOURCE_USERNAME: ${username}\n      SPRING_DATASOURCE_PASSWORD: ${password}\n    depends_on:\n      - db\n  db:\n    image: postgres:16\n    environment:\n      POSTGRES_DB: ${database}\n      POSTGRES_USER: ${username}\n      POSTGRES_PASSWORD: ${password}\n    ports:\n      - \"5432:5432\"\n", enabled: true }),
+    Object.freeze({ id: "docker-compose-spring-redis", label: "Compose Spring + Redis", detail: "Docker Compose", type: "class", template: "services:\n  app:\n    image: ${image}\n    ports:\n      - \"8080:8080\"\n    environment:\n      SPRING_DATA_REDIS_HOST: redis\n    depends_on:\n      - redis\n  redis:\n    image: redis:7\n    ports:\n      - \"6379:6379\"\n", enabled: true })
+  ]);
   const CSHARP_SNIPPETS = Object.freeze([
     Object.freeze({ id: "class-definition", label: "class", detail: "definition", type: "keyword", template: "public class ${Name}\n{\n\t${}\n}", enabled: true }),
     Object.freeze({ id: "main-method", label: "main", detail: "method", type: "function", template: "public static void Main(string[] args)\n{\n\t${}\n}", enabled: true }),
@@ -73,10 +90,26 @@
     javascript: JAVASCRIPT_SNIPPETS,
     typescript: TYPESCRIPT_SNIPPETS,
     java: JAVA_SNIPPETS,
+    yaml: YAML_SNIPPETS,
     python: PYTHON_SNIPPETS,
     csharp: CSHARP_SNIPPETS
   });
-
+  const YAML_COMPLETION_ALIASES_BY_SNIPPET_ID = Object.freeze({
+    "kubernetes-deployment": Object.freeze(["deployment", "kubernetes deployment"]),
+    "kubernetes-service": Object.freeze(["service", "kubernetes service"]),
+    "kubernetes-ingress": Object.freeze(["ingress", "kubernetes ingress"]),
+    "kubernetes-configmap": Object.freeze(["configmap", "config map"]),
+    "kubernetes-secret": Object.freeze(["secret"]),
+    "kubernetes-namespace": Object.freeze(["namespace"]),
+    "kubernetes-serviceaccount": Object.freeze(["serviceaccount", "service account"]),
+    "kubernetes-job": Object.freeze(["job"]),
+    "kubernetes-cronjob": Object.freeze(["cronjob", "cron job"]),
+    "kubernetes-hpa": Object.freeze(["hpa", "horizontal pod autoscaler"]),
+    "spring-boot-kubernetes-deployment": Object.freeze(["spring deployment", "spring boot deployment"]),
+    "docker-compose-spring-boot": Object.freeze(["compose", "docker compose", "spring compose"]),
+    "docker-compose-spring-postgres": Object.freeze(["postgres", "postgresql", "spring postgres"]),
+    "docker-compose-spring-redis": Object.freeze(["redis", "spring redis"])
+  });
   function cloneJson(value) {
     return JSON.parse(JSON.stringify(value));
   }
@@ -163,16 +196,32 @@
     return builtins.concat(customSnippets);
   }
 
+  function createCompletionSnippet(snippet, label, aliasIndex = -1) {
+    return {
+      id: aliasIndex >= 0 ? `${snippet.id}:alias:${aliasIndex}` : snippet.id,
+      label,
+      detail: snippet.detail,
+      type: snippet.type || "keyword",
+      template: snippet.template
+    };
+  }
+
   function getCompletionSnippets(languageId, preferences) {
     return getSnippetRows(languageId, preferences)
       .filter((snippet) => snippet.enabled !== false && snippet.label && snippet.template)
-      .map((snippet) => ({
-        id: snippet.id,
-        label: snippet.label,
-        detail: snippet.detail,
-        type: snippet.type || "keyword",
-        template: snippet.template
-      }));
+      .flatMap((snippet) => {
+        const completions = [createCompletionSnippet(snippet, snippet.label)];
+        if (languageId === "yaml") {
+          const aliases = YAML_COMPLETION_ALIASES_BY_SNIPPET_ID[snippet.id] || [];
+          aliases.forEach((alias, index) => {
+            const label = String(alias || "").trim();
+            if (label && label.toLowerCase() !== String(snippet.label || "").toLowerCase()) {
+              completions.push(createCompletionSnippet(snippet, label, index));
+            }
+          });
+        }
+        return completions;
+      });
   }
 
   function generateCustomSnippetId() {

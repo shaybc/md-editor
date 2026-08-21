@@ -29,7 +29,11 @@
     }
 
     function typeLabel(type) {
-      return type === "java-application" ? "Java Application" : type === "maven" ? "Maven" : "Gradle";
+      if (type === "java-application") return "Java Application";
+      if (type === "maven" || type === "maven-spring-boot") return type === "maven-spring-boot" ? "Spring Boot Maven" : "Maven";
+      if (type === "gradle" || type === "gradle-spring-boot") return type === "gradle-spring-boot" ? "Spring Boot Gradle" : "Gradle";
+      if (type === "docker-compose" || type === "docker-compose-down" || type === "docker-compose-logs") return type === "docker-compose-down" ? "Docker Compose Down" : type === "docker-compose-logs" ? "Docker Compose Logs" : "Docker Compose";
+      return "Configuration";
     }
 
     async function requestConfirmation(options) {
@@ -102,7 +106,7 @@
         <header class="run-configuration-header"><div><p class="run-configuration-kicker">Run</p><h2 id="run-configuration-title">Run Configurations</h2></div><button type="button" data-run-close aria-label="Close"><i class="bi bi-x-lg"></i></button></header>
         <div class="run-configuration-body">
           <aside class="run-configuration-sidebar">
-            <div class="run-configuration-new"><select data-run-new-type aria-label="New configuration type"><option value="java-application">Java Application</option><option value="maven">Maven</option><option value="gradle">Gradle</option></select><button type="button" class="reset-modal-btn reset-modal-cancel" data-run-new>New</button></div>
+            <div class="run-configuration-new"><select data-run-new-type aria-label="New configuration type"><option value="java-application">Java Application</option><option value="maven">Maven</option><option value="maven-spring-boot">Spring Boot Maven</option><option value="gradle">Gradle</option><option value="gradle-spring-boot">Spring Boot Gradle</option><option value="docker-compose">Docker Compose Up</option><option value="docker-compose-down">Docker Compose Down</option><option value="docker-compose-logs">Docker Compose Logs</option></select><button type="button" class="reset-modal-btn reset-modal-cancel" data-run-new>New</button></div>
             <div class="run-configuration-list" data-run-configuration-list></div>
             <div class="run-configuration-sidebar-actions"><button type="button" class="reset-modal-btn reset-modal-cancel" data-run-duplicate>Duplicate</button><button type="button" class="reset-modal-btn reset-modal-cancel" data-run-delete>Delete</button></div>
           </aside>
@@ -126,10 +130,10 @@
     function renderList() {
       const host = ensureModal().querySelector("[data-run-configuration-list]");
       const configurations = deps.store.getSnapshot().configurations;
-      host.innerHTML = ["java-application", "maven", "gradle"].map((type) => {
+      host.innerHTML = ["java-application", "maven", "gradle", "docker-compose"].map((type) => {
         const items = configurations.filter((item) => item.type === type);
         return `<section><h3>${typeLabel(type)}</h3>${items.length ? items.map((item) =>
-          `<button type="button" data-run-select="${escapeHtml(item.id)}" class="${item.id === selectedId ? "active" : ""}"><i class="bi ${type === "java-application" ? "bi-cup-hot" : type === "maven" ? "bi-box" : "bi-layers"}"></i><span>${escapeHtml(item.name)}</span></button>`
+          `<button type="button" data-run-select="${escapeHtml(item.id)}" class="${item.id === selectedId ? "active" : ""}"><i class="bi ${type === "java-application" ? "bi-cup-hot" : type === "maven" ? "bi-box" : type === "gradle" ? "bi-layers" : "bi-box-seam"}"></i><span>${escapeHtml(item.name)}</span></button>`
         ).join("") : '<p class="run-configuration-empty">No configurations</p>'}</section>`;
       }).join("");
       host.querySelectorAll("[data-run-select]").forEach((button) => button.addEventListener("click", () => void selectConfiguration(button.dataset.runSelect)));

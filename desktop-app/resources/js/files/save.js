@@ -29,6 +29,7 @@
     renderTabBar(tabs, activeTabId);
     updateSaveCurrentFileButtons();
     deps.onTabSourceMetadataChanged?.(tab);
+    deps.statistics?.recordSavedCharacters?.(normalizedContent);
   }
 
   function getActiveTabForSaveAs() {
@@ -431,6 +432,7 @@ ${bodyHtml}
         });
       }
       await updateFolderTreeAfterDocumentSave({ name: getFileName(finalPath), path: finalPath });
+      deps.statistics?.recordSavedCharacters?.(content);
       return true;
     }
 
@@ -455,10 +457,12 @@ ${bodyHtml}
       await writable.write(content);
       await writable.close();
       await updateFolderTreeAfterDocumentSave({ name: handle.name, handle });
+      deps.statistics?.recordSavedCharacters?.(content);
       return true;
     }
 
     saveAs(new Blob([content], { type: `${fileDetails.mimeType};charset=utf-8` }), fileDetails.suggestedName);
+    deps.statistics?.recordSavedCharacters?.(content);
     return true;
   }
 

@@ -54,6 +54,7 @@
     }
 
     async function resolveRuntime(projectPath, configuration, buildConfiguration) {
+      if (configuration.type === "docker-compose") return { ok: true };
       const runtimeConfiguration = {
         ...buildConfiguration,
         projectJdkId: configuration.java?.jdkId || buildConfiguration.projectJdkId
@@ -63,6 +64,7 @@
 
     async function resolveTooling(projectPath, configuration, buildConfiguration) {
       const sourceFolders = buildConfiguration.sourceFolders || [];
+      if (configuration.type === "docker-compose") return {};
       if (configuration.type === "maven" || buildConfiguration.buildSystem === "maven") {
         const target = configuration.type === "java-application" && configuration.java?.modulePath
           ? `${projectPath}/${configuration.java.modulePath}`
@@ -165,6 +167,7 @@
       let backgroundOwnerId = "";
       let backgroundStarted = false;
       let backgroundCompleted = false;
+      let runStartedAt = 0;
 
       function completeBackgroundRun(outcome) {
         if (!backgroundStarted || backgroundCompleted) return;
@@ -198,6 +201,7 @@
         const runId = `${Date.now()}-${++runSequence}`;
         const runTabId = `run-${runId}`;
         backgroundOwnerId = `run:${configuration.id}:${runId}`;
+        runStartedAt = Date.now();
         const result = await deps.terminal.runCommand(launch.command, {
           cwd: launch.cwd,
           title,
@@ -240,6 +244,7 @@
       } finally {
         const index = runningTitles.lastIndexOf(title);
         if (index >= 0) runningTitles.splice(index, 1);
+        if (runStartedAt) deps.statistics?.recordRun?.(Date.now() - runStartedAt);
         completeBackgroundRun("failed");
         publish();
       }

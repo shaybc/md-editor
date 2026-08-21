@@ -2282,16 +2282,111 @@ function normalizeAutocompletePreferences(preferences = {}) {
   };
 }
 
+const COMPLETION_ORIGIN_PILL_OPTION = Object.freeze({
+  position: 90,
+  render(completion) {
+    const origin = String(completion?.origin || "").trim();
+    if (!origin) return null;
+    const pill = document.createElement("span");
+    pill.className = `cm-completionOriginPill cm-completionOriginPill-${origin.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`;
+    pill.textContent = origin;
+    return pill;
+  }
+});
+
+function appendSnippetPreviewText(preview, text) {
+  const source = String(text || "");
+  const placeholderPattern = /\$\{[^}\n]+\}/g;
+  let offset = 0;
+  let match;
+  while ((match = placeholderPattern.exec(source)) !== null) {
+    if (match.index > offset) preview.appendChild(document.createTextNode(source.slice(offset, match.index)));
+    const placeholder = document.createElement("span");
+    placeholder.className = "cm-snippetPreview-placeholder";
+    placeholder.textContent = match[0];
+    preview.appendChild(placeholder);
+    offset = match.index + match[0].length;
+  }
+  if (offset < source.length) preview.appendChild(document.createTextNode(source.slice(offset)));
+}
+
+function createSnippetPreviewElement(snippetDefinition) {
+  const container = document.createElement("div");
+  container.className = "cm-snippetPreview";
+  const heading = document.createElement("div");
+  heading.className = "cm-snippetPreview-heading";
+  const title = document.createElement("strong");
+  title.textContent = String(snippetDefinition?.label || "Snippet");
+  heading.appendChild(title);
+  const detail = String(snippetDefinition?.detail || "Snippet").trim();
+  if (detail) {
+    const origin = document.createElement("span");
+    origin.textContent = detail;
+    heading.appendChild(origin);
+  }
+  const code = document.createElement("pre");
+  code.className = "cm-snippetPreview-code";
+  appendSnippetPreviewText(code, String(snippetDefinition?.template || "").trimEnd());
+  container.appendChild(heading);
+  container.appendChild(code);
+  return container;
+}
+
 function getSnippetCompletionSource(languageId, snippetDefinitions = []) {
-  if (!["javascript", "typescript", "java", "python", "csharp"].includes(languageId)) return null;
+  const definitionCount = Array.isArray(snippetDefinitions) ? snippetDefinitions.length : 0;
+  if (!["javascript", "typescript", "java", "yaml", "python", "csharp"].includes(languageId)) {
+    logCodeMirrorSnippetDebug("Snippet completion source skipped unsupported language", { languageId, definitionCount });
+    return null;
+  }
   const completionOptions = (Array.isArray(snippetDefinitions) ? snippetDefinitions : [])
     .filter((snippet) => snippet && snippet.label && snippet.template)
     .map((snippet) => snippetCompletion(String(snippet.template), {
       label: String(snippet.label),
       detail: String(snippet.detail || ""),
-      type: String(snippet.type || "keyword")
+      type: String(snippet.type || "keyword"),
+      origin: "Snippet",
+      info: () => createSnippetPreviewElement(snippet)
     }));
-  return completionOptions.length ? completeFromList(completionOptions) : null;
+  logCodeMirrorSnippetDebug("Snippet completion source prepared", {
+    languageId,
+    definitionCount,
+    optionCount: completionOptions.length,
+    labels: completionOptions.slice(0, 12).map((option) => option.label)
+  });
+  if (!completionOptions.length) return null;
+  return (context) => {
+    const word = context.matchBefore(/[\p{L}\p{N}_$-]+(?:\s+[\p{L}\p{N}_$-]+)*/u);
+    const line = context.state.doc.lineAt(context.pos);
+    const beforeCursor = line.text.slice(0, Math.max(0, context.pos - line.from));
+    logCodeMirrorSnippetDebug("Snippet completion source invoked", {
+      languageId,
+      explicit: context.explicit === true,
+      pos: context.pos,
+      lineNumber: line.number,
+      beforeCursor: beforeCursor.slice(-80),
+      matchedText: word?.text || "",
+      matchedFrom: word?.from ?? null,
+      matchedTo: word?.to ?? null,
+      optionCount: completionOptions.length
+    });
+    if (!context.explicit && !word) {
+      logCodeMirrorSnippetDebug("Snippet completion source ignored implicit empty context", { languageId, pos: context.pos });
+      return null;
+    }
+    const result = {
+      from: word?.from ?? context.pos,
+      options: completionOptions,
+      validFor: /^[\p{L}\p{N}_$\s-]*$/u
+    };
+    logCodeMirrorSnippetDebug("Snippet completion source returned options", {
+      languageId,
+      from: result.from,
+      optionCount: result.options.length,
+      labels: result.options.slice(0, 12).map((option) => option.label)
+    });
+    logCodeMirrorCompletionDomState("snippet-source-returned-options");
+    return result;
+  };
 }
 
 const JAVASCRIPT_GLOBAL_COMPLETION_SCOPE = Object.freeze({
@@ -2341,6 +2436,21 @@ function logCodeMirrorLspDebug(message, details) {
   }
 }
 
+function logCodeMirrorSnippetDebug(message, details) {
+  try {
+    const logger = typeof window !== "undefined" ? window.markdownViewerAppDebugLog : null;
+    if (typeof logger === "function") {
+      void logger("debug", `[snippets] ${message}`, details);
+      return;
+    }
+  } catch (_error) {
+    // Debug logging must not affect editor behavior.
+  }
+  if (typeof console !== "undefined" && typeof console.debug === "function") {
+    console.debug(`[snippets] ${message}`, details || "");
+  }
+}
+
 function createStaticCompletionSource(completions) {
   return completeFromList(completions.map((completion) => {
     const option = {
@@ -2352,6 +2462,41 @@ function createStaticCompletionSource(completions) {
     return option;
   }));
 }
+
+function getHelmCompletionItems() {
+  try {
+    const provider = typeof window !== "undefined" ? window.markdownViewerHelmCompletionProvider : null;
+    const items = typeof provider === "function" ? provider() : [];
+    return Array.isArray(items) ? items : [];
+  } catch (_error) {
+    return [];
+  }
+}
+
+function createHelmCompletionSource() {
+  return (context) => {
+    const word = context.matchBefore(/(?:\.Values[\p{L}\p{N}_.-]*|include\s+"[^"]*)$/u);
+    if (!context.explicit && !word) return null;
+    const options = getHelmCompletionItems().map((completion) => {
+      const option = {
+        label: String(completion.label || ""),
+        type: String(completion.type || "variable"),
+        detail: String(completion.detail || "Helm"),
+        origin: String(completion.origin || "Language")
+      };
+      if (completion.info) option.info = String(completion.info);
+      return option;
+    }).filter((completion) => completion.label);
+    if (!options.length) return null;
+    return {
+      from: word?.from ?? context.pos,
+      options,
+      validFor: /[\p{L}\p{N}_." -]*/u
+    };
+  };
+}
+
+const HELM_COMPLETION_SOURCE = createHelmCompletionSource();
 
 function createDockerfileCompletionSource() {
   const source = createStaticCompletionSource(DOCKERFILE_COMPLETIONS);
@@ -2942,7 +3087,8 @@ function getLspParameterCompletionOption(signatureHelpResult) {
     type: "variable",
     detail: parameterLabel,
     boost: 100,
-    apply: parameterName
+    apply: parameterName,
+    origin: "LSP"
   };
 }
 
@@ -3002,7 +3148,8 @@ function resolvingServerCompletionSource(context, lspLanguageId = "") {
       const option = {
         label: item.filterText || item.label,
         displayLabel: item.label,
-        type: getLspCompletionType(item.kind)
+        type: getLspCompletionType(item.kind),
+        origin: "LSP"
       };
       if (item.detail) option.detail = item.detail;
       if (item.sortText) option.sortText = item.sortText;
@@ -3389,6 +3536,8 @@ function getLanguageCompletionSources(languageId) {
       return [cssCompletionSource];
     case "sql":
       return [keywordCompletionSource(StandardSQL)];
+    case "yaml":
+      return [HELM_COMPLETION_SOURCE];
     default:
       return [];
   }
@@ -3439,6 +3588,15 @@ function createAutocompleteExtension(languageId, preferences, documentWordComple
       sourceNames.push("snippets");
     }
   }
+  logCodeMirrorSnippetDebug("Snippet autocomplete extension configured", {
+    languageId,
+    lspLanguageId,
+    snippetAutocompleteEnabled: normalizedPreferences.snippets === true,
+    snippetDefinitionCount: Array.isArray(snippetDefinitions) ? snippetDefinitions.length : 0,
+    snippetSourceEnabled: sourceNames.includes("snippets"),
+    sourceNames,
+    sourceCount: sources.length
+  });
   logCodeMirrorLspDebug("CodeMirror autocomplete extension configured", {
     languageId,
     lspLanguageId,
@@ -3446,11 +3604,196 @@ function createAutocompleteExtension(languageId, preferences, documentWordComple
     sourceNames,
     sourceCount: sources.length
   });
-  return autocompletion({ override: sources });
+  return autocompletion({ override: sources, addToOptions: [COMPLETION_ORIGIN_PILL_OPTION] });
 }
 
 function createMermaidLintExtension(languageId) {
   return languageId === "markdown" ? linter(mermaidDiagnostics) : [];
+}
+
+let latestCodeMirrorEditorView = null;
+
+function repositionOffscreenCodeMirrorAutocompleteTooltip(tooltip, reason) {
+  if (!tooltip || !latestCodeMirrorEditorView) return;
+  const rect = tooltip.getBoundingClientRect?.();
+  if (!rect || (rect.top >= 0 && rect.left >= 0 && rect.bottom <= window.innerHeight && rect.right <= window.innerWidth)) return;
+  const view = latestCodeMirrorEditorView;
+  const selectionHead = view.state.selection.main.head;
+  const cursorRect = view.coordsAtPos(selectionHead, 1) || view.coordsAtPos(Math.max(0, selectionHead - 1), -1) || view.dom.getBoundingClientRect();
+  const tooltipWidth = Math.max(rect.width || tooltip.offsetWidth || 260, 260);
+  const tooltipHeight = Math.max(rect.height || tooltip.offsetHeight || 80, 80);
+  const viewportPadding = 8;
+  const left = Math.min(Math.max(cursorRect.left, viewportPadding), Math.max(viewportPadding, window.innerWidth - tooltipWidth - viewportPadding));
+  const belowTop = cursorRect.bottom + 4;
+  const aboveTop = cursorRect.top - tooltipHeight - 4;
+  const top = belowTop + tooltipHeight <= window.innerHeight - viewportPadding
+    ? belowTop
+    : Math.max(viewportPadding, aboveTop);
+  tooltip.style.position = "fixed";
+  tooltip.style.left = `${Math.round(left)}px`;
+  tooltip.style.top = `${Math.round(top)}px`;
+  tooltip.style.right = "auto";
+  tooltip.style.bottom = "auto";
+  tooltip.style.transform = "none";
+  logCodeMirrorSnippetDebug("Completion tooltip repositioned", {
+    reason,
+    left: Math.round(left),
+    top: Math.round(top),
+    cursorRect: {
+      left: Math.round(cursorRect.left),
+      top: Math.round(cursorRect.top),
+      right: Math.round(cursorRect.right),
+      bottom: Math.round(cursorRect.bottom)
+    }
+  });
+}
+
+let codeMirrorCompletionTooltipRepositionFrame = 0;
+
+function repositionCodeMirrorCompletionInfoTooltip(reason) {
+  const doc = latestCodeMirrorEditorView?.dom?.ownerDocument || (typeof document !== "undefined" ? document : null);
+  if (!doc) return;
+  const autocomplete = doc.querySelector(".cm-tooltip-autocomplete");
+  const info = doc.querySelector(".cm-tooltip.cm-completionInfo");
+  if (!autocomplete || !info) return;
+  const autocompleteRect = autocomplete.getBoundingClientRect?.();
+  const infoRect = info.getBoundingClientRect?.();
+  if (!autocompleteRect || !infoRect) return;
+  const viewportPadding = 8;
+  const gap = 8;
+  const infoWidth = Math.max(infoRect.width || info.offsetWidth || 320, 260);
+  const infoHeight = Math.max(infoRect.height || info.offsetHeight || 120, 80);
+  const rightLeft = autocompleteRect.right + gap;
+  const leftLeft = autocompleteRect.left - infoWidth - gap;
+  const hasRightRoom = rightLeft + infoWidth <= window.innerWidth - viewportPadding;
+  const hasLeftRoom = leftLeft >= viewportPadding;
+  const unclampedLeft = hasRightRoom || !hasLeftRoom ? rightLeft : leftLeft;
+  const left = Math.min(Math.max(unclampedLeft, viewportPadding), Math.max(viewportPadding, window.innerWidth - infoWidth - viewportPadding));
+  const top = Math.min(Math.max(autocompleteRect.top, viewportPadding), Math.max(viewportPadding, window.innerHeight - infoHeight - viewportPadding));
+  info.style.position = "fixed";
+  info.style.left = `${Math.round(left)}px`;
+  info.style.top = `${Math.round(top)}px`;
+  info.style.right = "auto";
+  info.style.bottom = "auto";
+  info.style.transform = "none";
+  logCodeMirrorSnippetDebug("Completion info tooltip repositioned", {
+    reason,
+    side: hasRightRoom || !hasLeftRoom ? "right" : "left",
+    left: Math.round(left),
+    top: Math.round(top),
+    autocompleteRect: {
+      left: Math.round(autocompleteRect.left),
+      top: Math.round(autocompleteRect.top),
+      right: Math.round(autocompleteRect.right),
+      bottom: Math.round(autocompleteRect.bottom)
+    }
+  });
+}
+
+function runCodeMirrorCompletionTooltipReposition(reason) {
+  try {
+    const doc = latestCodeMirrorEditorView?.dom?.ownerDocument || (typeof document !== "undefined" ? document : null);
+    const autocomplete = doc?.querySelector?.(".cm-tooltip-autocomplete") || null;
+    repositionOffscreenCodeMirrorAutocompleteTooltip(autocomplete, reason);
+    repositionCodeMirrorCompletionInfoTooltip(reason);
+  } catch (error) {
+    logCodeMirrorSnippetDebug("Completion tooltip reposition failed", { reason, message: error?.message || String(error) });
+  }
+}
+
+function scheduleCodeMirrorCompletionTooltipReposition(reason) {
+  if (codeMirrorCompletionTooltipRepositionFrame) return;
+  const scheduleFrame = typeof requestAnimationFrame === "function"
+    ? requestAnimationFrame
+    : (callback) => setTimeout(callback, 16);
+  codeMirrorCompletionTooltipRepositionFrame = scheduleFrame(() => {
+    codeMirrorCompletionTooltipRepositionFrame = 0;
+    runCodeMirrorCompletionTooltipReposition(reason);
+    setTimeout(() => runCodeMirrorCompletionTooltipReposition(`${reason}-settled`), 80);
+  });
+}
+
+function logCodeMirrorCompletionDomState(reason) {
+  const logState = (delayMs) => {
+    setTimeout(() => {
+      try {
+        const doc = typeof document !== "undefined" ? document : null;
+        const tooltip = doc?.querySelector?.(".cm-tooltip-autocomplete") || null;
+        scheduleCodeMirrorCompletionTooltipReposition(reason);
+        const completionItems = tooltip ? Array.from(tooltip.querySelectorAll(".cm-completionLabel")) : [];
+        const tooltipRect = tooltip?.getBoundingClientRect?.();
+        const tooltipStyle = tooltip ? getComputedStyle(tooltip) : null;
+        logCodeMirrorSnippetDebug("Completion DOM state", {
+          reason,
+          delayMs,
+          tooltipExists: !!tooltip,
+          completionDomCount: completionItems.length,
+          labels: completionItems.slice(0, 12).map((item) => item.textContent || ""),
+          activeElementClass: doc?.activeElement?.className || "",
+          rect: tooltipRect ? {
+            left: Math.round(tooltipRect.left),
+            top: Math.round(tooltipRect.top),
+            width: Math.round(tooltipRect.width),
+            height: Math.round(tooltipRect.height),
+            right: Math.round(tooltipRect.right),
+            bottom: Math.round(tooltipRect.bottom)
+          } : null,
+          computed: tooltipStyle ? {
+            zIndex: tooltipStyle.zIndex,
+            display: tooltipStyle.display,
+            visibility: tooltipStyle.visibility,
+            opacity: tooltipStyle.opacity,
+            position: tooltipStyle.position,
+            pointerEvents: tooltipStyle.pointerEvents
+          } : null
+        });
+      } catch (error) {
+        logCodeMirrorSnippetDebug("Completion DOM state failed", { reason, message: error?.message || String(error) });
+      }
+    }, delayMs);
+  };
+  logState(0);
+  logState(50);
+  logState(200);
+}
+
+function logCodeMirrorCompletionUiState(view, reason) {
+  const logState = (delayMs) => {
+    setTimeout(() => {
+      try {
+        const doc = view.dom?.ownerDocument || document;
+        const tooltip = doc.querySelector(".cm-tooltip-autocomplete");
+        scheduleCodeMirrorCompletionTooltipReposition(reason);
+        const completionItems = tooltip ? Array.from(tooltip.querySelectorAll(".cm-completionLabel")) : [];
+        const tooltipRect = tooltip?.getBoundingClientRect?.();
+        const tooltipStyle = tooltip ? getComputedStyle(tooltip) : null;
+        logCodeMirrorSnippetDebug("Completion UI state", {
+          reason,
+          delayMs,
+          languageId: view.state.facet(language)?.name || "",
+          tooltipExists: !!tooltip,
+          completionDomCount: completionItems.length,
+          labels: completionItems.slice(0, 12).map((item) => item.textContent || ""),
+          activeElementClass: doc.activeElement?.className || ""
+        });
+      } catch (error) {
+        logCodeMirrorSnippetDebug("Completion UI state failed", { reason, message: error?.message || String(error) });
+      }
+    }, delayMs);
+  };
+  logState(0);
+  logState(50);
+  logState(200);
+}
+
+function startCompletionWithSnippetDebug(view) {
+  logCodeMirrorSnippetDebug("Explicit completion command started", {
+    languageId: view.state.facet(language)?.name || "",
+    pos: view.state.selection.main.head
+  });
+  const result = startCompletion(view);
+  logCodeMirrorCompletionUiState(view, "explicit-completion-command");
+  return result;
 }
 
 function createEditor(options) {
@@ -3506,7 +3849,7 @@ function createEditor(options) {
       const label = match[0];
       if (label === query || seen.has(label)) continue;
       seen.add(label);
-      completionOptions.push({ label, type: "text", detail: "document" });
+      completionOptions.push({ label, type: "text", detail: "document", origin: "Document" });
       if (completionOptions.length >= 200) break;
     }
     if (!completionOptions.length) return null;
@@ -3596,6 +3939,8 @@ function createEditor(options) {
       indentWithTab,
       ...closeBracketsKeymap,
       { key: "Mod-i", run: indentSelection, preventDefault: true },
+      { key: "Ctrl-Space", run: startCompletionWithSnippetDebug, preventDefault: true },
+      { key: "Mod-Space", run: startCompletionWithSnippetDebug, preventDefault: true },
       ...defaultKeymap,
       ...historyKeymap,
       ...foldKeymap,
@@ -3743,6 +4088,9 @@ function createEditor(options) {
   }
   findLineBookmarkViews.set(view.dom, view);
   activeFindLineBookmarkView = view;
+  latestCodeMirrorEditorView = view;
+  view.dom.addEventListener("focusin", () => { latestCodeMirrorEditorView = view; }, true);
+  scheduleCodeMirrorCompletionTooltipReposition("editor-created");
   view.dom.addEventListener("contextmenu", (event) => {
     const target = event.target instanceof Element ? event.target : null;
     if (!isFindLineBookmarkContextMenuTarget(target)) return;
@@ -3925,6 +4273,11 @@ function createEditor(options) {
     },
     setSnippetDefinitions(definitions) {
       snippetDefinitions = Array.isArray(definitions) ? definitions : [];
+      logCodeMirrorSnippetDebug("Snippet definitions refreshed", {
+        languageId: currentLanguageId,
+        definitionCount: snippetDefinitions.length,
+        labels: snippetDefinitions.slice(0, 12).map((snippetDefinition) => snippetDefinition?.label || "")
+      });
       view.dispatch({
         effects: autocompleteCompartment.reconfigure(createCurrentAutocompleteExtension())
       });
@@ -4367,3 +4720,6 @@ window.MarkdownViewerCodeMirror = {
   undo,
   getLanguageExtension
 };
+
+
+

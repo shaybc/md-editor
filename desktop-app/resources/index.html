@@ -33,6 +33,8 @@
     <link rel="stylesheet" href="/css/project/maven-build-options.css">
     <link rel="stylesheet" href="/css/project/run-configurations.css">
     <link rel="stylesheet" href="/css/project/new-project.css">
+    <link rel="stylesheet" href="/css/project/command-result-modal.css">
+    <link rel="stylesheet" href="/css/project/helm-template-preview-dialog.css">
     <link rel="stylesheet" href="/css/rat/rat-manager.css">
     <link rel="stylesheet" href="/css/rat/rat-policy-manager.css">
     <link rel="stylesheet" href="/css/sidebar/lower-panel-tabs.css">
@@ -525,6 +527,12 @@
                                     <button class="dropdown-item action-menu-item open-readme-page" type="button" title="Open readme">
                                         <i class="bi bi-file-earmark-text me-2"></i> Readme
                                     </button>
+                                    <button class="dropdown-item action-menu-item show-open-source-dialog" type="button" title="Open source components and licenses">
+                                        <i class="bi bi-code-slash me-2"></i> Open Source
+                                    </button>
+                                    <button class="dropdown-item action-menu-item show-statistics-dialog" type="button" title="Open read-only application statistics">
+                                        <i class="bi bi-bar-chart-line me-2"></i> Stats for Geeks
+                                    </button>
                                     <button class="dropdown-item action-menu-item show-about-dialog" type="button" title="About MD-Editor">
                                         <i class="bi bi-info-circle me-2"></i> About
                                     </button>
@@ -792,6 +800,14 @@
                                 <i class="bi bi-file-earmark-text me-2"></i> Readme
                             </button>
 
+                            <button class="mobile-menu-item show-open-source-dialog" type="button" title="Open source components and licenses">
+                                <i class="bi bi-code-slash me-2"></i> Open Source
+                            </button>
+
+                            <button class="mobile-menu-item show-statistics-dialog" type="button" title="Open read-only application statistics">
+                                <i class="bi bi-bar-chart-line me-2"></i> Stats for Geeks
+                            </button>
+
                             <button class="mobile-menu-item show-about-dialog" type="button" title="About MD-Editor">
                                 <i class="bi bi-info-circle me-2"></i> About
                             </button>
@@ -1023,15 +1039,19 @@
                     <p class="java-project-help">Choose project folders containing Java source files.</p>
                     <div id="java-build-path-source-list" class="java-build-path-list"></div>
                     <div class="java-build-path-toolbar">
+                      <button id="java-build-path-detect-sources" type="button" class="reset-modal-btn reset-modal-cancel"><i class="bi bi-search" aria-hidden="true"></i> Auto-detect Sources</button>
                       <button id="java-build-path-add-source" type="button" class="reset-modal-btn reset-modal-cancel">Add Folder...</button>
+                      <span id="java-build-path-source-detection-status" class="java-project-help"></span>
                     </div>
                   </section>
                   <section id="java-build-path-library-panel" class="java-build-path-panel" hidden>
                     <p class="java-project-help">Choose compiled class folders, JAR files, and ZIP files for the classpath.</p>
                     <div id="java-build-path-library-list" class="java-build-path-list"></div>
                     <div class="java-build-path-toolbar">
+                      <button id="java-build-path-detect-libraries" type="button" class="reset-modal-btn reset-modal-cancel"><i class="bi bi-search" aria-hidden="true"></i> Auto-detect Libraries</button>
                       <button id="java-build-path-add-folder" type="button" class="reset-modal-btn reset-modal-cancel">Add Class Folder...</button>
                       <button id="java-build-path-add-jar" type="button" class="reset-modal-btn reset-modal-cancel">Add JARs/ZIPs...</button>
+                      <span id="java-build-path-library-detection-status" class="java-project-help"></span>
                     </div>
                   </section>
                 </div>
@@ -1380,18 +1400,29 @@
                       <span>Tool Access</span>
                     </button>
                   </div>
-                  <button class="settings-tab-button" type="button" data-settings-tab="jdks" aria-selected="false" tabindex="-1">
-                    <i class="bi bi-cup-hot" aria-hidden="true"></i>
-                    <span>Java</span>
+                  <button class="settings-tab-group-toggle" type="button" data-settings-tab-group-toggle="frameworks" aria-expanded="false" aria-controls="settings-frameworks-tab-group">
+                    <i class="bi bi-boxes" aria-hidden="true"></i>
+                    <span>Frameworks</span>
+                    <i class="bi bi-chevron-down settings-tab-toggle-icon" aria-hidden="true"></i>
                   </button>
-                  <button class="settings-tab-button" type="button" data-settings-tab="maven" aria-selected="false" tabindex="-1">
-                    <i class="bi bi-stack" aria-hidden="true"></i>
-                    <span>Maven</span>
-                  </button>
-                  <button class="settings-tab-button" type="button" data-settings-tab="gradle" aria-selected="false" tabindex="-1">
-                    <i class="bi bi-box-seam" aria-hidden="true"></i>
-                    <span>Gradle</span>
-                  </button>
+                  <div id="settings-frameworks-tab-group" class="settings-tab-subtree" data-settings-tab-group="frameworks" hidden>
+                    <button class="settings-tab-button settings-tab-child" type="button" data-settings-tab="jdks" data-settings-parent-tab-group="frameworks" aria-selected="false" tabindex="-1">
+                      <i class="bi bi-cup-hot" aria-hidden="true"></i>
+                      <span>Java</span>
+                    </button>
+                    <button class="settings-tab-button settings-tab-child" type="button" data-settings-tab="maven" data-settings-parent-tab-group="frameworks" aria-selected="false" tabindex="-1">
+                      <i class="bi bi-stack" aria-hidden="true"></i>
+                      <span>Maven</span>
+                    </button>
+                    <button class="settings-tab-button settings-tab-child" type="button" data-settings-tab="gradle" data-settings-parent-tab-group="frameworks" aria-selected="false" tabindex="-1">
+                      <i class="bi bi-box-seam" aria-hidden="true"></i>
+                      <span>Gradle</span>
+                    </button>
+                    <button class="settings-tab-button settings-tab-child" type="button" data-settings-tab="kubernetes" data-settings-parent-tab-group="frameworks" aria-selected="false" tabindex="-1">
+                      <i class="bi bi-diagram-3" aria-hidden="true"></i>
+                      <span>Kubernetes</span>
+                    </button>
+                  </div>
                   <button class="settings-tab-button" type="button" data-settings-tab="api-client" aria-selected="false" tabindex="-1">
                     <i class="bi bi-send" aria-hidden="true"></i>
                     <span>API Client</span>
@@ -2939,10 +2970,16 @@
                 <div class="settings-subsection">
                   <div class="settings-section-toolbar">
                     <h4 class="settings-subsection-title">Gradle Installations</h4>
-                    <button type="button" class="reset-modal-btn settings-secondary-action" id="settings-add-gradle">
-                      <i class="bi bi-plus-lg" aria-hidden="true"></i>
-                      <span>Add Gradle</span>
-                    </button>
+                    <span class="settings-table-actions">
+                      <button type="button" class="reset-modal-btn settings-secondary-action" id="settings-detect-gradle" hidden>
+                        <i class="bi bi-search" aria-hidden="true"></i>
+                        <span>Auto-detect Gradle</span>
+                      </button>
+                      <button type="button" class="reset-modal-btn settings-secondary-action" id="settings-add-gradle">
+                        <i class="bi bi-plus-lg" aria-hidden="true"></i>
+                        <span>Add Gradle</span>
+                      </button>
+                    </span>
                   </div>
                   <div class="settings-table settings-gradle-table" role="table" aria-label="Configured Gradle homes">
                     <div class="settings-table-header" role="row">
@@ -2957,6 +2994,31 @@
                 </div>
               </section>
 
+              <section class="settings-panel" data-settings-panel="kubernetes" aria-labelledby="settings-kubernetes-title" hidden>
+                <div class="settings-panel-heading">
+                  <span class="settings-panel-icon"><i class="bi bi-diagram-3" aria-hidden="true"></i></span>
+                  <div><h3 id="settings-kubernetes-title" class="settings-panel-title">Kubernetes</h3><p class="settings-panel-description">Configure external kubectl and Helm tools used by Kubernetes and Helm project commands.</p></div>
+                </div>
+                <div class="settings-subsection">
+                  <h4 class="settings-subsection-title">Tools</h4>
+                  <div class="settings-path-field">
+                    <label class="settings-field" for="settings-kubernetes-kubectl-path"><span class="settings-field-label">kubectl executable</span><input id="settings-kubernetes-kubectl-path" class="rename-modal-input" type="text" placeholder="kubectl" /></label>
+                    <button id="settings-kubernetes-kubectl-browse" class="reset-modal-btn settings-secondary-action" type="button"><i class="bi bi-file-earmark-code" aria-hidden="true"></i><span>Browse</span></button>
+                  </div>
+                  <div class="settings-path-field">
+                    <label class="settings-field" for="settings-kubernetes-helm-path"><span class="settings-field-label">Helm executable</span><input id="settings-kubernetes-helm-path" class="rename-modal-input" type="text" placeholder="helm" /></label>
+                    <button id="settings-kubernetes-helm-browse" class="reset-modal-btn settings-secondary-action" type="button"><i class="bi bi-file-earmark-code" aria-hidden="true"></i><span>Browse</span></button>
+                  </div>
+                  <div class="settings-path-field">
+                    <label class="settings-field" for="settings-kubernetes-kubeconfig-path"><span class="settings-field-label">Kubeconfig file</span><input id="settings-kubernetes-kubeconfig-path" class="rename-modal-input" type="text" placeholder="Default kubeconfig" /></label>
+                    <button id="settings-kubernetes-kubeconfig-browse" class="reset-modal-btn settings-secondary-action" type="button"><i class="bi bi-file-earmark-code" aria-hidden="true"></i><span>Browse</span></button>
+                  </div>
+                  <div class="settings-field-grid settings-field-grid-two">
+                    <div class="settings-path-field"><label class="settings-field" for="settings-kubernetes-context"><span class="settings-field-label">Current context</span><input id="settings-kubernetes-context" class="rename-modal-input" type="text" placeholder="kubectl current-context" list="settings-kubernetes-context-options" /><datalist id="settings-kubernetes-context-options"></datalist></label><button id="settings-kubernetes-detect-contexts" class="reset-modal-btn settings-secondary-action" type="button"><i class="bi bi-search" aria-hidden="true"></i><span>Detect contexts</span></button></div>
+                    <label class="settings-field" for="settings-kubernetes-namespace"><span class="settings-field-label">Namespace</span><input id="settings-kubernetes-namespace" class="rename-modal-input" type="text" placeholder="default" /></label>
+                  </div>
+                </div>
+              </section>
               <section class="settings-panel settings-themes-panel" data-settings-panel="themes" aria-labelledby="settings-themes-title" hidden>
                 <div class="settings-panel-heading">
                   <span class="settings-panel-icon"><i class="bi bi-palette2" aria-hidden="true"></i></span>
@@ -5368,6 +5430,11 @@
     <script src="js/ui/notification-modal.js"></script>
     <script src="js/ui/foreground-wait-indicator.js"></script>
     <script src="js/ui/default-context-menu.js"></script>
+    <script src="js/ui/open-source-catalog.js"></script>
+    <script src="js/ui/open-source-dialog.js"></script>
+    <script src="js/statistics/statistics-model.js"></script>
+    <script src="js/statistics/statistics-store.js"></script>
+    <script src="js/statistics/statistics-dialog.js"></script>
     <script src="js/logging/rotation.js"></script>
     <script src="js/recent/index.js"></script>
     <script src="js/recent/actions.js"></script>
@@ -5536,6 +5603,18 @@
     <script src="js/project/source-root.js"></script>
     <script src="js/project/maven-runtime-tree.js"></script>
     <script src="js/project/recovery-updater.js"></script>
+      <script src="js/project/kubernetes-context.js"></script>
+      <script src="js/project/kubernetes-crd-schema-cache.js"></script>
+      <script src="js/project/kubernetes-cluster-explorer.js"></script>
+    <script src="js/project/kubernetes-command-result-parser.js"></script>
+    <script src="js/project/kubernetes-manifest-graph.js"></script>
+    <script src="js/project/kubernetes-command-options-dialog.js"></script>
+    <script src="js/project/project-command-result-modal.js"></script>
+    <script src="js/project/kubernetes-project-commands.js"></script>
+    <script src="js/project/helm-chart-context.js"></script>
+      <script src="js/project/helm-authoring-docs.js"></script>
+    <script src="js/project/helm-template-preview-dialog.js"></script>
+    <script src="js/project/helm-project-commands.js"></script>
     <script src="js/project/project-command-menu.js"></script>
     <script src="js/project/new-project/template-catalog.js"></script>
     <script src="js/project/new-project/project-specification.js"></script>
@@ -5550,6 +5629,7 @@
     <script src="js/project/maven-runtime-settings.js"></script>
     <script src="js/project/maven-project-detection.js"></script>
     <script src="js/project/gradle-project-detection.js"></script>
+    <script src="js/project/windows-gradle-detector.js"></script>
     <script src="js/project/maven-build-options/catalog.js"></script>
     <script src="js/project/maven-build-options/advanced-arguments.js"></script>
     <script src="js/project/maven-build-options/session.js"></script>
@@ -5603,6 +5683,8 @@
     <script src="js/rat-policy/index.js"></script>
     <script src="js/rat-policy/bootstrap.js"></script>
     <script src="js/project/maven-source-folders.js"></script>
+    <script src="js/project/java-source-folder-detection.js"></script>
+    <script src="js/project/java-library-detection.js"></script>
     <script src="js/project/java-project-runtime.js"></script>
     <script src="js/project/java-build-path-save-confirmation.js"></script>
     <script src="js/project/eclipse-analysis-scope-policy.js"></script>
@@ -5977,3 +6059,8 @@
     </script>
 </body>
 </html>
+
+
+
+
+

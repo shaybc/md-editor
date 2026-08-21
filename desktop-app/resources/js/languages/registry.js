@@ -76,6 +76,9 @@
     });
     const defaultSupportedTextExtensions = Array.from(languagesByExtension.keys()).sort();
     const requiredProjectTextExtensions = new Set(["aj", "classpath", "ftl", "mermaid", "project", "proto", "sdkmanrc", "testexecutionlistener"]);
+    const dockerComposeYamlNames = ["docker-compose.yml", "docker-compose.yaml", "compose.yml", "compose.yaml"];
+    const kubernetesYamlNames = ["deployment", "service", "ingress", "configmap", "secret", "namespace", "serviceaccount", "job", "cronjob", "hpa", "horizontalpodautoscaler"];
+    const kubernetesYamlDirectories = ["k8s", "kubernetes", "manifests"];
     let supportedTextExtensions = new Set(defaultSupportedTextExtensions);
 
     function getFileName(path) {
@@ -198,6 +201,44 @@
       return null;
     }
 
+    function hasTopLevelYamlFields(content, requiredFields) {
+      const fields = new Set();
+      String(content || "").split(/\r?\n/).some(function(line) {
+        if (/^\s*---\s*(#.*)?$/.test(line) && fields.size) return true;
+        const match = line.match(/^([A-Za-z][A-Za-z0-9_-]*)\s*:/);
+        if (match) fields.add(match[1]);
+        return requiredFields.every(function(field) { return fields.has(field); });
+      });
+      return requiredFields.every(function(field) { return fields.has(field); });
+    }
+
+    function isDockerComposeYamlPath(path) {
+      return dockerComposeYamlNames.includes(getFileName(path).toLowerCase());
+    }
+
+    function isKubernetesYamlPath(path) {
+      const extension = getFileExtension(path);
+      if (extension !== "yaml" && extension !== "yml") return false;
+      const normalizedPath = String(path || "").replace(/\\/g, "/").toLowerCase();
+      const baseName = getFileName(normalizedPath).replace(/\.(?:yaml|yml)$/i, "");
+      return kubernetesYamlNames.includes(baseName)
+        || normalizedPath.split("/").some(function(segment) { return kubernetesYamlDirectories.includes(segment); });
+    }
+
+    function isKubernetesYamlManifest(path, content) {
+      if (isDockerComposeYamlPath(path)) return false;
+      return isKubernetesYamlPath(path) || hasTopLevelYamlFields(content, ["apiVersion", "kind"]);
+    }
+
+    function withKubernetesVariant(language) {
+      return Object.freeze({
+        ...language,
+        variantId: "kubernetes",
+        variantLabel: "Kubernetes",
+        variantIcon: "bi-diagram-3",
+        variantColorClass: "language-color-yaml"
+      });
+    }
     function resolveLanguageForPath(path, options = {}) {
       const special = resolveBySpecialName(path);
       if (special) return special;
@@ -208,7 +249,10 @@
       const extension = getFileExtension(path);
       if (extension && !supportedTextExtensions.has(extension)) return null;
       const byExtension = extension ? languagesByExtension.get(extension) : null;
-      if (byExtension) return byExtension;
+      if (byExtension) {
+        if (byExtension.id === "yaml" && isKubernetesYamlManifest(path, options.content || "")) return withKubernetesVariant(byExtension);
+        return byExtension;
+      }
       if (extension) return languagesById.get("text");
 
       const byShebang = resolveByShebang(options.content || "");
@@ -256,6 +300,7 @@
       normalizeSupportedTextExtensions,
       resolveLanguageForPath,
       resolveByShebang,
+      isKubernetesYamlManifest,
       classifyOpeningModeSource,
       setSupportedTextExtensions,
       languages: languages.map(function(language) { return languagesById.get(language.id); })

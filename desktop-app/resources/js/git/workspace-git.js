@@ -2007,6 +2007,7 @@
       if (action === "push") {
         const branch = normalizeBranchName(data.localBranch || "");
         const result = await runGitAction(getActiveFolderPath(), "branchPush", { branch });
+        deps.statistics?.recordGitAction?.("push");
         return refreshBranchesAfterBranchAction(result, `Pushed branch ${branch} to origin.`);
       }
       if (action === "delete-local") {
@@ -2419,6 +2420,14 @@
     async function runAction(action, options = {}) {
       setBusy(true);
       setStatus(`Running git ${action}...`);
+      const stagedBeforeAction = action === "commit" && Array.isArray(lastStatus?.status?.staged)
+        ? lastStatus.status.staged
+        : [];
+      const gitStatistics = {
+        filesChanged: stagedBeforeAction.length,
+        additions: stagedBeforeAction.reduce((total, file) => total + (Number(file?.additions) || 0), 0),
+        deletions: stagedBeforeAction.reduce((total, file) => total + (Number(file?.deletions) || 0), 0)
+      };
       let suppressTimer = null;
       let suppressingWatcher = false;
       function scheduleWatcherSuppression() {
@@ -2431,6 +2440,7 @@
         scheduleWatcherSuppression();
         const result = await runGitAction(getActiveFolderPath(), action, options);
         renderGitResult(result);
+        deps.statistics?.recordGitAction?.(action, gitStatistics);
         if (action === "stashPop") await notifyStashPopConflicts(result);
         return result;
       } catch (error) {

@@ -318,11 +318,12 @@
       const server = options.server;
       if (server?.id === "java") {
         const controller = deps.getJavaWorkspaceController?.();
+        const standaloneJava = registry.isStandaloneJavaFile?.("java", options.filePath) === true;
         if (controller?.getState?.()?.phase === "degraded") {
           log("debug", "[lsp] Java session gated while project analysis is degraded", { filePath: options.filePath || "" });
           return null;
         }
-        if (registry.isStandaloneJavaFile?.("java", options.filePath) || !controller?.getRuntime?.()?.ok || !controller?.getRuntime?.()?.launcherJdk) {
+        if (!standaloneJava && (!controller?.getRuntime?.()?.ok || !controller?.getRuntime?.()?.launcherJdk)) {
           log("debug", "[lsp] Java session gated until the project runtime is configured", { filePath: options.filePath || "" });
           return null;
         }

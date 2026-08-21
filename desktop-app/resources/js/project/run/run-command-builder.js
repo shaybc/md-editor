@@ -84,6 +84,18 @@
       return parts.join(" ");
     }
 
+    function buildDockerComposeCommand(configuration) {
+      const dockerCompose = configuration.dockerCompose || {};
+      const command = ["up", "down", "logs"].includes(dockerCompose.command) ? dockerCompose.command : "up";
+      const parts = ["docker", "compose"];
+      const composeFile = String(dockerCompose.filePath || "").trim();
+      if (composeFile) parts.push("-f", quote(composeFile));
+      parts.push(command);
+      if (command === "up" && dockerCompose.detached === true) parts.push("-d");
+      if (command === "logs" && dockerCompose.followLogs === true) parts.push("-f");
+      String(dockerCompose.services || "").trim().split(/\s+/).filter(Boolean).forEach((service) => parts.push(service));
+      return parts.join(" ");
+    }
     function buildJavaCommand(configuration, context) {
       const executable = context.runtime?.javaExecutable || `${context.runtime?.projectJdk?.path || ""}/bin/java`;
       const parts = [quote(executable)];
@@ -108,13 +120,17 @@
         ? context.mavenProject?.projectRoot
         : configuration.type === "gradle"
           ? context.gradleProject?.projectRoot
-          : joinPath(projectPath, configuration.java?.modulePath);
+          : configuration.type === "docker-compose"
+            ? projectPath
+            : joinPath(projectPath, configuration.java?.modulePath);
       const cwd = joinPath(projectPath, configuration.workingDirectory || defaultCwd || projectPath);
       const baseCommand = configuration.type === "java-application"
         ? buildJavaCommand(configuration, context)
         : configuration.type === "maven"
           ? buildMavenCommand(configuration, context)
-          : buildGradleCommand(configuration, context);
+          : configuration.type === "gradle"
+            ? buildGradleCommand(configuration, context)
+            : buildDockerComposeCommand(configuration, context);
       const command = applyEnvironment(baseCommand, createEnvironment(configuration, context.runtime));
       return {
         command,

@@ -45,5 +45,7 @@ test("JDT log opening uses the recorded failure path and a project-root-only fal
   assert.notEqual(showFunctionEnd, -1);
   const showFunctionSource = scriptSource.slice(showFunctionStart, showFunctionEnd);
   assert.match(showFunctionSource, /getActiveJdtLogPath\(preferredLogPath, projectPath\)/);
+  assert.match(showFunctionSource, /const debugPreferences = getDebugPreferences\(\);/);
+  assert.match(showFunctionSource, /await openLocalFileWithDefaultApp\(debugLogPath\);/);
   assert.match(showFunctionSource, /Unable to access the JDT log at:/);
 });

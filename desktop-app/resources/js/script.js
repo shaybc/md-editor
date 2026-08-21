@@ -30,6 +30,9 @@ async function startMarkdownViewer() {
       notificationModal.alert(message);
     };
   }
+  const userStatistics = typeof window.registerMarkdownViewerUserStatistics === "function"
+    ? window.registerMarkdownViewerUserStatistics(app)
+    : null;
 
   function confirmWithAppModal(message, options = {}) {
     if (app.services?.confirm) {
@@ -39,6 +42,7 @@ async function startMarkdownViewer() {
   }
 
   function suppressBrowserContextMenu(event) {
+    if (app.modules?.defaultContextMenu) return;
     event.preventDefault();
   }
 
@@ -597,6 +601,7 @@ async function startMarkdownViewer() {
   });
 
   const fileOpen = window.registerMarkdownViewerFileOpen(app, {
+    statistics: userStatistics,
     get activeFolderName() { return activeFolderName; },
     set activeFolderName(value) { activeFolderName = value; },
     get activeFolderHandle() { return activeFolderHandle; },
@@ -1562,12 +1567,13 @@ async function startMarkdownViewer() {
       return letter.toUpperCase();
     });
     const body = String(selectedText || "").trim() || `${title} details go here.`;
-    return body.split(/\r?\n/).map(function(line) {
+    return body.split(/\\r?\\n/).map(function(line) {
       return line ? `> ${line}` : ">";
     }).join("\n");
   }
   function getMarkdownAlertText(alertType, selectedText) {
-    return `> [!${alertType}]\n${getMarkdownAlertBody(alertType, selectedText)}`;
+    return `> [!${alertType}]
+${getMarkdownAlertBody(alertType, selectedText)}`;
   }
   function openEditorAlertModal() {
     if (!editorAlertModal) return;
@@ -2175,6 +2181,7 @@ async function startMarkdownViewer() {
   let jdtTerminalFailureHandler = null;
   let jdkRegistry = null;
   let windowsJdkDetector = null;
+  let windowsGradleDetector = null;
   let javaProjectRuntime = null;
   let javaAnalysisFailureMonitor = null;
   let javaAnalysisProblems = null;
@@ -2547,6 +2554,16 @@ async function startMarkdownViewer() {
       getOsName: function() { return typeof NL_OS !== "undefined" ? NL_OS : ""; },
       readDirectory: function(path) { return Neutralino.filesystem.readDirectory(path); },
       validateJdk: function(entry) { return jdkRegistry.validate(entry); }
+    });
+  }
+  if (typeof window.registerMarkdownViewerWindowsGradleDetector === "function") {
+    windowsGradleDetector = window.registerMarkdownViewerWindowsGradleDetector(app, {
+      execCommand: function(command) { return Neutralino.os.execCommand(command); },
+      getEnv: function(name) { return Neutralino.os.getEnv(name); },
+      getOsName: function() { return typeof NL_OS !== "undefined" ? NL_OS : ""; },
+      readDirectory: function(path) { return Neutralino.filesystem.readDirectory(path); },
+      pathExists: canAccessLocalPath,
+      detectVersion: getGradleVersionForExecutable
     });
   }
   if (jdkRegistry && typeof window.registerMarkdownViewerJavaProjectRuntime === "function") {
@@ -3006,6 +3023,7 @@ async function startMarkdownViewer() {
     }
   if (typeof window.registerMarkdownViewerNeutralinoAiBridge === "function") {
     neutralinoAiBridge = window.registerMarkdownViewerNeutralinoAiBridge(app, {
+      statistics: userStatistics,
       appDebugLog,
       getDesktopAppRootPath,
       getSettings: function() { return getAiCompanionSettings(); },
@@ -4220,6 +4238,8 @@ async function startMarkdownViewer() {
   const welcomePageButtons = document.querySelectorAll(".open-welcome-page");
   const helpHomeButtons = document.querySelectorAll(".open-help-home");
   const readmePageButtons = document.querySelectorAll(".open-readme-page");
+  const openSourceDialogButtons = document.querySelectorAll(".show-open-source-dialog");
+  const statisticsDialogButtons = document.querySelectorAll(".show-statistics-dialog");
   const aboutDialogButtons = document.querySelectorAll(".show-about-dialog");
   const settingsDialogButtons = document.querySelectorAll(".open-settings-dialog");
   const codeConverterDialogButtons = document.querySelectorAll(".open-code-converter-dialog");
@@ -4238,6 +4258,12 @@ async function startMarkdownViewer() {
   const aboutModal = document.getElementById("about-modal");
   const aboutModalClose = document.getElementById("about-modal-close");
   const aboutLicenseButton = document.getElementById("about-app-license");
+  const openSourceDialog = typeof window.registerMarkdownViewerOpenSourceDialog === "function"
+    ? window.registerMarkdownViewerOpenSourceDialog(app, { openExternalUrl: openExternalWebLink })
+    : null;
+  const statisticsDialog = typeof window.registerMarkdownViewerStatisticsDialog === "function"
+    ? window.registerMarkdownViewerStatisticsDialog(app, { statistics: userStatistics })
+    : null;
   const settingsModal = document.getElementById("settings-modal");
   const settingsGraphAutoClusterThresholdInput = document.getElementById("settings-graph-auto-cluster-threshold");
   const settingsGraphAutoClusterLargeMapsInput = document.getElementById("settings-graph-auto-cluster-large-maps");
@@ -4487,7 +4513,19 @@ async function startMarkdownViewer() {
   const settingsGradleInstallationSelect = document.getElementById("settings-gradle-installation-select");
   const settingsGradleList = document.getElementById("settings-gradle-list");
   const settingsGradleEmpty = document.getElementById("settings-gradle-empty");
+  const settingsDetectGradleButton = document.getElementById("settings-detect-gradle");
   const settingsAddGradleButton = document.getElementById("settings-add-gradle");
+  if (settingsDetectGradleButton) settingsDetectGradleButton.hidden = !windowsGradleDetector?.isSupported?.();
+  const settingsKubernetesKubectlPathInput = document.getElementById("settings-kubernetes-kubectl-path");
+  const settingsKubernetesKubectlBrowseButton = document.getElementById("settings-kubernetes-kubectl-browse");
+  const settingsKubernetesHelmPathInput = document.getElementById("settings-kubernetes-helm-path");
+  const settingsKubernetesHelmBrowseButton = document.getElementById("settings-kubernetes-helm-browse");
+  const settingsKubernetesKubeconfigPathInput = document.getElementById("settings-kubernetes-kubeconfig-path");
+  const settingsKubernetesKubeconfigBrowseButton = document.getElementById("settings-kubernetes-kubeconfig-browse");
+  const settingsKubernetesContextInput = document.getElementById("settings-kubernetes-context");
+  const settingsKubernetesContextOptions = document.getElementById("settings-kubernetes-context-options");
+  const settingsKubernetesDetectContextsButton = document.getElementById("settings-kubernetes-detect-contexts");
+  const settingsKubernetesNamespaceInput = document.getElementById("settings-kubernetes-namespace");
   const settingsDebugEnabledInput = document.getElementById("settings-debug-enabled");
   const settingsDebugWriteFileInput = document.getElementById("settings-debug-write-file");
   const settingsDebugLevelInput = document.getElementById("settings-debug-level");
@@ -4639,6 +4677,7 @@ async function startMarkdownViewer() {
     "settings-gradle-user-home": "Optional Gradle user home for wrapper and dependency caches.",
     "settings-gradle-user-home-browse": "Choose a Gradle user home folder.",
     "settings-gradle-installation-select": "Choose the default local Gradle distribution for local mode and projects without a saved Project Gradle selection.",
+    "settings-detect-gradle": "Find valid Gradle installations available on this PC.",
     "settings-add-gradle": "Add an installed Gradle home folder.",
     "settings-theme-light-select": "Choose the app color theme used in light mode.",
     "settings-theme-dark-select": "Choose the app color theme used in dark mode.",
@@ -5081,6 +5120,11 @@ async function startMarkdownViewer() {
     mavenSettingsFilePath: "",
     mavenOffline: false,
     mavenLocalRepositoryPath: "",
+    kubernetesKubectlPath: "",
+    kubernetesHelmPath: "",
+    kubernetesKubeconfigPath: "",
+    kubernetesCurrentContext: "",
+    kubernetesCurrentNamespace: "default",
     debugEnabled: false,
     debugLevel: DEFAULT_DEBUG_LEVEL,
     debugLogPath: "",
@@ -5419,7 +5463,8 @@ async function startMarkdownViewer() {
         });
       }
       if (Neutralino.filesystem.appendFile) {
-        await Neutralino.filesystem.appendFile(logPath, `${line}\n`);
+        await Neutralino.filesystem.appendFile(logPath, `${line}
+`);
         return true;
       }
       if (Neutralino.filesystem.writeFile) {
@@ -5429,7 +5474,8 @@ async function startMarkdownViewer() {
         } catch (_error) {
           existing = "";
         }
-        await Neutralino.filesystem.writeFile(logPath, `${existing || ""}${line}\n`);
+        await Neutralino.filesystem.writeFile(logPath, `${existing || ""}${line}
+`);
         return true;
       }
     } catch (error) {
@@ -5825,6 +5871,33 @@ async function startMarkdownViewer() {
     if (selectedId) return selectedId;
     const first = getJavaConverterGradleInstallations()[0];
     return first?.id || "";
+  }
+
+  function getKubernetesToolSettings() {
+    const state = loadGlobalState();
+    return {
+      kubectlPath: normalizeLocalPath(state.kubernetesKubectlPath || ""),
+      helmPath: normalizeLocalPath(state.kubernetesHelmPath || ""),
+      kubeconfigPath: normalizeLocalPath(state.kubernetesKubeconfigPath || ""),
+      currentContext: String(state.kubernetesCurrentContext || "").trim(),
+      currentNamespace: String(state.kubernetesCurrentNamespace || "default").trim() || "default"
+    };
+  }
+
+  function getKubernetesContextSetting(name) {
+    return getKubernetesToolSettings()[name] || "";
+  }
+
+  function setKubernetesContextSetting(name, value) {
+    const keys = {
+      kubectlPath: "kubernetesKubectlPath",
+      helmPath: "kubernetesHelmPath",
+      kubeconfigPath: "kubernetesKubeconfigPath",
+      currentContext: "kubernetesCurrentContext",
+      currentNamespace: "kubernetesCurrentNamespace"
+    };
+    const stateKey = keys[name];
+    if (stateKey) saveGlobalState({ [stateKey]: String(value || "").trim() });
   }
 
   function normalizeExternalFileChangeBehavior(value) {
@@ -6240,7 +6313,9 @@ async function startMarkdownViewer() {
   function applyEditorSnippetPreferences() {
     if (typeof editorViewManager?.refreshSnippetDefinitionsForEditorViews === "function") {
       editorViewManager.refreshSnippetDefinitionsForEditorViews();
+      return;
     }
+    activeEditorCommands?.refreshSnippetDefinitions?.();
   }
 
   function applyEditorFontPreferences(state = loadGlobalState()) {
@@ -7005,6 +7080,7 @@ async function startMarkdownViewer() {
     return samples[languageId] || samples.text;
   }
 
+
   function getSyntaxEditorLanguageInfo(languageId) {
     return (languageRegistry?.languages || []).find((language) => language.id === languageId) || null;
   }
@@ -7723,6 +7799,7 @@ Markdown content is processed client-side in your browser and sanitized before p
       setLanguageServerAutocomplete: callActive("setLanguageServerAutocomplete", undefined),
       isLanguageServerAutocompleteEnabled: function() { return !!getActiveInstance()?.isLanguageServerAutocompleteEnabled?.(); },
       setSnippetAutocomplete: callActive("setSnippetAutocomplete", undefined),
+      refreshSnippetDefinitions: callActive("refreshSnippetDefinitions", undefined),
       isSnippetAutocompleteEnabled: function() { return !!getActiveInstance()?.isSnippetAutocompleteEnabled?.(); },
       selectAll: callActive("selectAll", false),
       startCompletion: callActive("startCompletion", false),
@@ -8323,6 +8400,7 @@ Markdown content is processed client-side in your browser and sanitized before p
   const tabHasUnsavedChanges = unsavedChanges.tabHasUnsavedChanges;
 
   const fileSave = window.registerMarkdownViewerFileSave(app, {
+    statistics: userStatistics,
     get activeTabId() { return activeTabId; },
     get activeFolderHandle() { return activeFolderHandle; },
     get activeFolderPath() { return activeFolderPath; },
@@ -9125,6 +9203,7 @@ Markdown content is processed client-side in your browser and sanitized before p
     }
     await flushCurrentTabSession();
     await regexTesterStorage.flush();
+    userStatistics?.endSession?.();
     await stopDesktopTerminalsBeforeExit();
     await stopLanguageServerProcessesBeforeExit();
     await flushDebugLogFileWrites();
@@ -9560,6 +9639,12 @@ Markdown content is processed client-side in your browser and sanitized before p
       settingsGradleUserHomeInput.value = getJavaConverterGradleUserHome();
     }
     renderSettingsGradleTable();
+    const kubernetesSettings = getKubernetesToolSettings();
+    if (settingsKubernetesKubectlPathInput) settingsKubernetesKubectlPathInput.value = kubernetesSettings.kubectlPath;
+    if (settingsKubernetesHelmPathInput) settingsKubernetesHelmPathInput.value = kubernetesSettings.helmPath;
+    if (settingsKubernetesKubeconfigPathInput) settingsKubernetesKubeconfigPathInput.value = kubernetesSettings.kubeconfigPath;
+    if (settingsKubernetesContextInput) settingsKubernetesContextInput.value = kubernetesSettings.currentContext;
+    if (settingsKubernetesNamespaceInput) settingsKubernetesNamespaceInput.value = kubernetesSettings.currentNamespace;
     const debugPreferences = getDebugPreferences();
     if (settingsDebugEnabledInput) {
       settingsDebugEnabledInput.checked = debugPreferences.enabled;
@@ -10516,7 +10601,10 @@ Markdown content is processed client-side in your browser and sanitized before p
     await app.services?.notify?.show?.({
       title: "Java Project Analysis Failed",
       dialogClassName: "java-analysis-failure-notification",
-      message: `${details.summary}\n\nProject JDK: ${selected ? `${selected.name} (Java ${selected.feature})` : "Unavailable"}\n${actionableRemediation}`,
+      message: `${details.summary}
+
+Project JDK: ${selected ? `${selected.name} (Java ${selected.feature})` : "Unavailable"}
+${actionableRemediation}`,
       buttons: [
         { id: "dismiss", label: "Dismiss", variant: "cancel" },
         { id: "show-log", label: "Show JDT Log", action: () => window.setTimeout(() => void showActiveJdtLogFromSettings(details.logPath, event?.workspaceRoot || activeFolderPath || ""), 0) },
@@ -10572,6 +10660,17 @@ Markdown content is processed client-side in your browser and sanitized before p
         await Neutralino.filesystem.getStats(logPath);
       } catch (error) {
         const reason = error?.message || "The file does not exist or cannot be read.";
+        const debugPreferences = getDebugPreferences();
+        const debugLogPath = normalizeLocalPath(debugPreferences.writeToFile ? debugPreferences.logPath : "");
+        if (debugLogPath && debugLogPath !== logPath) {
+          try {
+            await Neutralino.filesystem.getStats(debugLogPath);
+            await openLocalFileWithDefaultApp(debugLogPath);
+            return;
+          } catch (_debugLogError) {
+            // Keep the native JDT log path as the primary diagnostic target.
+          }
+        }
         throw new Error("Unable to access the JDT log at:\n" + logPath + "\n\n" + reason);
       }
       await openLocalFileWithDefaultApp(logPath);
@@ -11008,6 +11107,52 @@ Markdown content is processed client-side in your browser and sanitized before p
     }
   }
 
+  async function autoDetectSettingsGradle() {
+    if (!settingsDetectGradleButton || !windowsGradleDetector?.isSupported?.()) return;
+    const buttonLabel = settingsDetectGradleButton.querySelector("span");
+    const defaultLabel = buttonLabel?.textContent || "Auto-detect Gradle";
+    settingsDetectGradleButton.disabled = true;
+    settingsDetectGradleButton.setAttribute("aria-busy", "true");
+    if (buttonLabel) buttonLabel.textContent = "Detecting...";
+    try {
+      settingsGradleInstallationsDraft = collectSettingsGradleRows();
+      const detectedInstallations = await windowsGradleDetector.detectInstalledGradle();
+      if (!detectedInstallations.length) {
+        alert("No valid installed Gradle distributions were detected. Use Add Gradle to choose a Gradle home manually.");
+        return;
+      }
+
+      const existingPaths = new Set(settingsGradleInstallationsDraft.map((installation) => installation.path.toLowerCase()));
+      const newInstallations = detectedInstallations.filter((installation) => !existingPaths.has(installation.path.toLowerCase()));
+      if (!newInstallations.length) {
+        alert("All detected Gradle installations are already configured.");
+        return;
+      }
+
+      settingsGradleInstallationsDraft = normalizeJavaConverterGradleInstallations([
+        ...settingsGradleInstallationsDraft,
+        ...newInstallations
+      ]);
+      renderSettingsGradleTable();
+    const kubernetesSettings = getKubernetesToolSettings();
+    if (settingsKubernetesKubectlPathInput) settingsKubernetesKubectlPathInput.value = kubernetesSettings.kubectlPath;
+    if (settingsKubernetesHelmPathInput) settingsKubernetesHelmPathInput.value = kubernetesSettings.helmPath;
+    if (settingsKubernetesKubeconfigPathInput) settingsKubernetesKubeconfigPathInput.value = kubernetesSettings.kubeconfigPath;
+    if (settingsKubernetesContextInput) settingsKubernetesContextInput.value = kubernetesSettings.currentContext;
+    if (settingsKubernetesNamespaceInput) settingsKubernetesNamespaceInput.value = kubernetesSettings.currentNamespace;
+      if (settingsGradleInstallationSelect) settingsGradleInstallationSelect.value = newInstallations[0].id;
+      const suffix = newInstallations.length === 1 ? "" : "s";
+      alert(`Added ${newInstallations.length} detected Gradle installation${suffix}. Click Save settings to keep ${newInstallations.length === 1 ? "it" : "them"}.`);
+    } catch (error) {
+      console.warn("Failed to auto-detect installed Gradle distributions:", error);
+      alert("Unable to auto-detect installed Gradle distributions.");
+    } finally {
+      settingsDetectGradleButton.disabled = false;
+      settingsDetectGradleButton.removeAttribute("aria-busy");
+      if (buttonLabel) buttonLabel.textContent = defaultLabel;
+    }
+  }
+
   function renderSettingsGradleTable() {
     if (!settingsGradleList) return;
     settingsGradleList.innerHTML = "";
@@ -11070,6 +11215,12 @@ Markdown content is processed client-side in your browser and sanitized before p
           settingsGradleInstallationSelect.value = settingsGradleInstallationsDraft[0]?.id || "";
         }
         renderSettingsGradleTable();
+    const kubernetesSettings = getKubernetesToolSettings();
+    if (settingsKubernetesKubectlPathInput) settingsKubernetesKubectlPathInput.value = kubernetesSettings.kubectlPath;
+    if (settingsKubernetesHelmPathInput) settingsKubernetesHelmPathInput.value = kubernetesSettings.helmPath;
+    if (settingsKubernetesKubeconfigPathInput) settingsKubernetesKubeconfigPathInput.value = kubernetesSettings.kubeconfigPath;
+    if (settingsKubernetesContextInput) settingsKubernetesContextInput.value = kubernetesSettings.currentContext;
+    if (settingsKubernetesNamespaceInput) settingsKubernetesNamespaceInput.value = kubernetesSettings.currentNamespace;
       });
 
       actions.append(chooseButton, removeButton);
@@ -11163,6 +11314,12 @@ Markdown content is processed client-side in your browser and sanitized before p
         settingsGradleInstallationsDraft.push(inspected);
       }
       renderSettingsGradleTable();
+    const kubernetesSettings = getKubernetesToolSettings();
+    if (settingsKubernetesKubectlPathInput) settingsKubernetesKubectlPathInput.value = kubernetesSettings.kubectlPath;
+    if (settingsKubernetesHelmPathInput) settingsKubernetesHelmPathInput.value = kubernetesSettings.helmPath;
+    if (settingsKubernetesKubeconfigPathInput) settingsKubernetesKubeconfigPathInput.value = kubernetesSettings.kubeconfigPath;
+    if (settingsKubernetesContextInput) settingsKubernetesContextInput.value = kubernetesSettings.currentContext;
+    if (settingsKubernetesNamespaceInput) settingsKubernetesNamespaceInput.value = kubernetesSettings.currentNamespace;
     } catch (error) {
       console.warn("Failed to choose Gradle folder:", error);
       alert("Unable to choose that Gradle folder.");
@@ -11185,6 +11342,110 @@ Markdown content is processed client-side in your browser and sanitized before p
     } catch (error) {
       console.warn("Failed to choose Gradle user home:", error);
       alert("Unable to choose that Gradle user home folder.");
+    }
+  }
+
+  async function chooseSettingsKubernetesFile(title, input, extensions) {
+    if (typeof Neutralino === "undefined" || !Neutralino.os?.showOpenDialog) {
+      alert("Kubernetes tool selection requires the desktop app.");
+      return;
+    }
+    try {
+      const selected = await Neutralino.os.showOpenDialog(title, {
+        multiSelections: false,
+        filters: extensions?.length ? [{ name: "Supported files", extensions }] : undefined
+      });
+      const selectedPath = Array.isArray(selected) ? selected[0] : selected;
+      if (selectedPath && input) input.value = normalizeLocalPath(selectedPath);
+    } catch (error) {
+      console.warn("Failed to choose Kubernetes tool file:", error);
+      alert("Unable to choose that file.");
+    }
+  }
+
+  function quoteSettingsShellArgument(value) {
+    const text = String(value || "").trim();
+    return /[\s"&|<>^]/.test(text) ? `"${text.replace(/"/g, '\\"')}"` : text;
+  }
+
+  function getSettingsKubectlCommandBase() {
+    const kubectlPath = normalizeLocalPath(settingsKubernetesKubectlPathInput?.value || "") || "kubectl";
+    const kubeconfigPath = normalizeLocalPath(settingsKubernetesKubeconfigPathInput?.value || "");
+    return [quoteSettingsShellArgument(kubectlPath), kubeconfigPath ? `--kubeconfig ${quoteSettingsShellArgument(kubeconfigPath)}` : ""].filter(Boolean).join(" ");
+  }
+
+  function parseKubectlContextNames(output) {
+    return Array.from(new Set(String(output || "")
+      .split(/\\r?\\n/)
+      .map((line) => line.trim())
+      .filter(Boolean)
+      .filter((line) => !/^current\s+name\s+cluster/i.test(line))
+      .map((line) => line.replace(/^\*\s*/, "").split(/\s+/)[0])
+      .filter(Boolean)));
+  }
+
+  function setDetectedKubernetesContextOptions(contexts) {
+    if (!settingsKubernetesContextOptions) return;
+    settingsKubernetesContextOptions.innerHTML = "";
+    contexts.forEach((contextName) => {
+      const option = document.createElement("option");
+      option.value = contextName;
+      settingsKubernetesContextOptions.append(option);
+    });
+  }
+
+  async function detectSettingsKubernetesContexts() {
+    if (!settingsKubernetesDetectContextsButton) return;
+    if (typeof Neutralino === "undefined" || !Neutralino.os?.execCommand) {
+      alert("Kubernetes context detection requires the desktop app.");
+      return;
+    }
+    const label = settingsKubernetesDetectContextsButton.querySelector("span");
+    const previousLabel = label?.textContent || "Detect contexts";
+    settingsKubernetesDetectContextsButton.disabled = true;
+    settingsKubernetesDetectContextsButton.setAttribute("aria-busy", "true");
+    if (label) label.textContent = "Detecting...";
+    try {
+      const command = `${getSettingsKubectlCommandBase()} config get-contexts -o name`;
+      const result = await Neutralino.os.execCommand(command);
+      const output = [result?.stdOut, result?.stdout, result?.stdErr, result?.stderr].filter(Boolean).join("\n");
+      if (Number(result?.exitCode ?? 0) !== 0) {
+        const lower = output.toLowerCase();
+        if (lower.includes("not recognized") || lower.includes("command not found") || lower.includes("not found")) {
+          alert("kubectl is not available. Install kubectl and add it to PATH, or set the full kubectl executable path here.");
+        } else {
+          alert(output.trim() || "Unable to detect Kubernetes contexts from kubectl.");
+        }
+        return;
+      }
+      const contexts = parseKubectlContextNames(output);
+      setDetectedKubernetesContextOptions(contexts);
+      if (!contexts.length) {
+        alert("No Kubernetes contexts were found. Start a local cluster such as Docker Desktop Kubernetes, kind, or minikube, then try Detect contexts again.");
+        return;
+      }
+      if (contexts.length === 1) {
+        if (settingsKubernetesContextInput) settingsKubernetesContextInput.value = contexts[0];
+        alert(`Detected Kubernetes context: ${contexts[0]}`);
+        return;
+      }
+      const selected = await app.services?.prompt?.({
+        title: "Select Kubernetes context",
+        message: `Detected contexts:
+${contexts.map((name) => `- ${name}`).join("\n")}
+
+Enter the context to use:`,
+        value: contexts.includes(settingsKubernetesContextInput?.value) ? settingsKubernetesContextInput.value : contexts[0]
+      });
+      const selectedContext = String(selected || "").trim();
+      if (selectedContext && contexts.includes(selectedContext) && settingsKubernetesContextInput) settingsKubernetesContextInput.value = selectedContext;
+    } catch (error) {
+      console.warn("Failed to detect Kubernetes contexts:", error);
+      alert(error?.message || "Unable to detect Kubernetes contexts.");
+    } finally {
+      settingsKubernetesDetectContextsButton.disabled = false;
+      settingsKubernetesDetectContextsButton.removeAttribute("aria-busy");
+      if (label) label.textContent = previousLabel;
     }
   }
 
@@ -11630,6 +11891,15 @@ Markdown content is processed client-side in your browser and sanitized before p
     if (mavenExecutionMode === "custom" && !await validateSettingsMavenPath(mavenExecutablePath, "file", "The custom Maven executable")) return;
     if (!await validateSettingsMavenPath(mavenSettingsFilePath, "file", "The Maven user settings file")) return;
     if (!await validateSettingsMavenPath(mavenLocalRepositoryPath, "folder", "The Maven local repository")) return;
+    const kubernetesKubectlPath = normalizeLocalPath(settingsKubernetesKubectlPathInput?.value || "");
+    const kubernetesHelmPath = normalizeLocalPath(settingsKubernetesHelmPathInput?.value || "");
+    const kubernetesKubeconfigPath = normalizeLocalPath(settingsKubernetesKubeconfigPathInput?.value || "");
+    const kubernetesCurrentContext = String(settingsKubernetesContextInput?.value || "").trim();
+    const kubernetesCurrentNamespace = String(settingsKubernetesNamespaceInput?.value || "default").trim() || "default";
+    const looksLikeLocalToolPath = (value) => /^[A-Za-z]:\//.test(value) || value.includes("/");
+    if (looksLikeLocalToolPath(kubernetesKubectlPath) && !await validateSettingsMavenPath(kubernetesKubectlPath, "file", "The kubectl executable")) return;
+    if (looksLikeLocalToolPath(kubernetesHelmPath) && !await validateSettingsMavenPath(kubernetesHelmPath, "file", "The Helm executable")) return;
+    if (!await validateSettingsMavenPath(kubernetesKubeconfigPath, "file", "The kubeconfig file")) return;
     const codeConverterGradleInstallations = collectSettingsGradleRows();
     const selectedGradleModeInput = Array.from(settingsGradleModeInputs).find((input) => input.checked);
     const codeConverterGradleMode = normalizeGradleMode(selectedGradleModeInput?.value);
@@ -11956,9 +12226,13 @@ Markdown content is processed client-side in your browser and sanitized before p
   async function clearDraftsFromSettings() {
     const draftTabs = tabs.filter(isDraftBackedTab);
     const tabWarning = draftTabs.length
-      ? `\n\n${draftTabs.length} open draft-backed tab${draftTabs.length === 1 ? "" : "s"} will be closed. Unsaved draft content in those tabs will be discarded.`
+      ? `
+
+${draftTabs.length} open draft-backed tab${draftTabs.length === 1 ? "" : "s"} will be closed. Unsaved draft content in those tabs will be discarded.`
       : "";
-    if (!await confirmWithAppModal(`Delete all saved tab drafts from the draft folder?${tabWarning}\n\nThis cannot be undone.`, { confirmLabel: "Delete", confirmVariant: "danger" })) return false;
+    if (!await confirmWithAppModal(`Delete all saved tab drafts from the draft folder?${tabWarning}
+
+This cannot be undone.`, { confirmLabel: "Delete", confirmVariant: "danger" })) return false;
 
     if (draftTabs.length) {
       closeTabsByIds(draftTabs.map((tab) => tab.id), { allowEmpty: true, promptForUnsaved: false });
@@ -12331,7 +12605,8 @@ Markdown content is processed client-side in your browser and sanitized before p
   function appendCodeConverterConsoleLine(line) {
     if (!codeConverterConsoleOutput || line === "") return;
     const current = codeConverterConsoleOutput.textContent || "";
-    codeConverterConsoleOutput.textContent = current ? `${current}\n${line}` : line;
+    codeConverterConsoleOutput.textContent = current ? `${current}
+${line}` : line;
     if (codeConverterTask) codeConverterTask.consoleText = codeConverterConsoleOutput.textContent || "";
     restoreRunningCodeConverterConsoleState();
     if (!codeConverterConsoleAutoScrollPaused) scrollCodeConverterConsoleToBottom();
@@ -12340,7 +12615,7 @@ Markdown content is processed client-side in your browser and sanitized before p
   function appendCodeConverterProcessOutput(text, options = {}) {
     if (!text && !options.flush) return;
     const trackProgress = options.trackProgress !== false;
-    const normalized = String(text).replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+    const normalized = String(text).replace(/\\r\\n/g, "\\n").replace(/\\r/g, "\\n");
     const combined = codeConverterOutputLineBuffer + normalized;
     const hasTrailingNewline = combined.endsWith("\n");
     const lines = combined.split("\n");
@@ -12958,6 +13233,22 @@ Markdown content is processed client-side in your browser and sanitized before p
     }
   }
 
+  async function writeTemporaryKubernetesManifest(content) {
+    if (typeof Neutralino === "undefined" || !Neutralino.filesystem?.writeFile || !Neutralino.os?.getPath) {
+      throw new Error("Desktop file access is unavailable.");
+    }
+    const tempRoot = normalizeLocalPath(await Neutralino.os.getPath("temp"));
+    if (!tempRoot) throw new Error("Temporary folder is unavailable.");
+    const filePath = `${tempRoot}/md-editor-kubernetes-${Date.now()}-${Math.random().toString(36).slice(2)}.yaml`;
+    await Neutralino.filesystem.writeFile(filePath, String(content || ""));
+    return filePath;
+  }
+
+  async function removeTemporaryKubernetesManifest(path) {
+    if (!path || typeof Neutralino === "undefined" || !Neutralino.filesystem?.remove) return;
+    try { await Neutralino.filesystem.remove(path); } catch (_error) {}
+  }
+
   function getJavaConverterProjectRoot() {
     const basePath = normalizeLocalPath(getNeutralinoGlobalValue("NL_PATH"));
     const cwdPath = normalizeLocalPath(getNeutralinoGlobalValue("NL_CWD"));
@@ -13012,7 +13303,7 @@ Markdown content is processed client-side in your browser and sanitized before p
   }
 
   function getGradleVersionFromText(text) {
-    const match = String(text || "").match(/(?:^|\n)\s*Gradle\s+([^\s]+)/i);
+    const match = String(text || "").match(/(?:^|\\n)\\s*Gradle\s+([^\s]+)/i);
     return match ? match[1].trim() : "";
   }
 
@@ -13454,7 +13745,7 @@ Markdown content is processed client-side in your browser and sanitized before p
   }
 
   function getGitCloneProgressLabel(outputText) {
-    const lines = String(outputText || "").replace(/\r/g, "\n").split("\n");
+    const lines = String(outputText || "").replace(/\\r/g, "\\n").split("\n");
     for (let index = lines.length - 1; index >= 0; index -= 1) {
       const match = lines[index].trim().match(/^(?:remote:\s*)?([^:]+):\s*(\d{1,3})%/i);
       if (match) return `Cloning repository: ${match[1].trim()} ${match[2]}%`;
@@ -13484,7 +13775,8 @@ Markdown content is processed client-side in your browser and sanitized before p
         const text = String(value || "");
         if (!text) return;
         output += text;
-        if (output.length > 64000) output = `[Earlier clone output omitted]\n${output.slice(-64000)}`;
+        if (output.length > 64000) output = `[Earlier clone output omitted]
+${output.slice(-64000)}`;
         const progressLabel = getGitCloneProgressLabel(output);
         if (progressLabel) onProgress?.(progressLabel);
       };
@@ -13698,7 +13990,13 @@ Markdown content is processed client-side in your browser and sanitized before p
         confirmReplace: ({ existingRoot, generatedMarkdownRoot }) => app.services?.confirm
           ? app.services.confirm({
               title: "Replace Markdown project link?",
-              message: `This code project is linked to a different generated Markdown project.\n\nCurrent: ${existingRoot}\n\nNew: ${generatedMarkdownRoot}\n\nReplace the existing link?`,
+              message: `This code project is linked to a different generated Markdown project.
+
+Current: ${existingRoot}
+
+New: ${generatedMarkdownRoot}
+
+Replace the existing link?`,
               confirmLabel: "Replace link",
               cancelLabel: "Keep current link"
             })
@@ -13715,7 +14013,9 @@ Markdown content is processed client-side in your browser and sanitized before p
       appendCodeConverterConsole(`Warning: Markdown project link was not saved: ${error?.message || String(error)}`);
       await app.services?.alert?.({
         title: "Markdown project link not saved",
-        message: `The conversion completed, but MD-Editor could not save the generated Markdown project link.\n\n${error?.message || String(error)}`
+        message: `The conversion completed, but MD-Editor could not save the generated Markdown project link.
+
+${error?.message || String(error)}`
       });
       return null;
     }
@@ -14046,7 +14346,7 @@ Markdown content is processed client-side in your browser and sanitized before p
   function createFolderCountBridgeLineParser(onLine) {
     let pending = "";
     return function parseFolderCountBridgeOutput(chunk, options = {}) {
-      const combined = pending + String(chunk || "").replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+      const combined = pending + String(chunk || "").replace(/\\r\\n/g, "\\n").replace(/\\r/g, "\\n");
       const lines = combined.split("\n");
       pending = options.flush ? "" : (lines.pop() || "");
       lines.forEach((line) => {
@@ -14146,7 +14446,8 @@ Markdown content is processed client-side in your browser and sanitized before p
     const processPid = session.processPid;
     if (processId !== null && processId !== undefined && Neutralino?.os?.updateSpawnedProcess) {
       try {
-        void Neutralino.os.updateSpawnedProcess(processId, "stdIn", `${JSON.stringify({ type: "close" })}\n`);
+        void Neutralino.os.updateSpawnedProcess(processId, "stdIn", `${JSON.stringify({ type: "close" })}
+`);
       } catch (_error) {
         // Bridge cancellation is best-effort during folder teardown.
       }
@@ -14219,7 +14520,8 @@ Markdown content is processed client-side in your browser and sanitized before p
       }
       session.processId = processHandle?.id ?? processHandle;
       session.processPid = processHandle?.pid ?? null;
-      await Neutralino.os.updateSpawnedProcess(session.processId, "stdIn", `${JSON.stringify({ type: "start" })}\n`);
+      await Neutralino.os.updateSpawnedProcess(session.processId, "stdIn", `${JSON.stringify({ type: "start" })}
+`);
     } catch (error) {
       if (isCurrentLazyFolderCountSession(session)) console.warn("Failed to start folder count bridge:", error);
       cleanupLazyFolderCountSession(session, "failed");
@@ -15498,6 +15800,7 @@ async function* collectWorkspaceSearchFilesFromNeutralinoDirectory(parentPath, p
   });
   const openWorkspaceSearchModal = workspaceSearch.openWorkspaceSearchModal;
   const workspaceGit = window.registerMarkdownViewerWorkspaceGit?.(app, {
+    statistics: userStatistics,
     getActiveFolderPath: function() { return activeFolderPath || ""; },
     isDesktopRuntime: function() { return isNeutralinoRuntime(); },
     get activeTabId() { return activeTabId; },
@@ -15552,7 +15855,9 @@ async function* collectWorkspaceSearchFilesFromNeutralinoDirectory(parentPath, p
     notifyError: function(error, entry) {
       return app.services?.notify?.show?.({
         title: "Background process could not be cancelled",
-        message: `${entry?.description || "The background process"} is still running.\n\n${error?.message || String(error || "")}`,
+        message: `${entry?.description || "The background process"} is still running.
+
+${error?.message || String(error || "")}`,
         buttons: [{ id: "close", label: "Close", variant: "primary", autoFocus: true }]
       });
     }
@@ -15801,7 +16106,7 @@ async function* collectWorkspaceSearchFilesFromNeutralinoDirectory(parentPath, p
         sourceFilePath: diagnostic.filePath
       });
       const sourceContent = activeEditorCommands.getActiveEditorValue();
-      const lines = String(sourceContent || "").split(/\r?\n/);
+      const lines = String(sourceContent || "").split(/\\r?\\n/);
       const start = diagnostic.range?.start || { line: Math.max(0, Number(diagnostic.line || 1) - 1), character: Math.max(0, Number(diagnostic.column || 1) - 1) };
       const end = diagnostic.range?.end || start;
       const selectedLines = lines.slice(start.line, end.line + 1);
@@ -15818,11 +16123,105 @@ async function* collectWorkspaceSearchFilesFromNeutralinoDirectory(parentPath, p
       return openExternalWebLink(url);
     },
   });
+  const kubernetesContext = window.registerMarkdownViewerKubernetesContext?.(app, {
+    getSetting: getKubernetesContextSetting,
+    setSetting: setKubernetesContextSetting
+  });
+  const kubernetesCrdSchemaCache = window.registerMarkdownViewerKubernetesCrdSchemaCache?.(app, {
+    kubernetesContext,
+    get terminal() { return desktopTerminal; }
+  });
+  const kubernetesClusterExplorer = window.registerMarkdownViewerKubernetesClusterExplorer?.(app, {
+    kubernetesContext,
+    get terminal() { return desktopTerminal; }
+  });
+  const kubernetesCommandResultParser = window.registerMarkdownViewerKubernetesCommandResultParser?.(app);
+  const kubernetesManifestGraph = window.registerMarkdownViewerKubernetesManifestGraph?.(app);
+  const kubernetesCommandOptionsDialog = window.registerMarkdownViewerKubernetesCommandOptionsDialog?.(app);
+  const projectCommandResultModal = window.registerMarkdownViewerProjectCommandResultModal?.(app, {
+    parser: kubernetesCommandResultParser,
+    graphBuilder: kubernetesManifestGraph,
+    copyText: function(text) { return navigator.clipboard?.writeText?.(String(text || "")); },
+    openExternal: openExternalWebLink,
+    openPath: async function(path, ref) {
+      if (!path) return null;
+      if (ref?.kind === "chart" || ref?.kind === "folder") {
+        if (typeof Neutralino !== "undefined" && Neutralino.os?.open) return await Neutralino.os.open(path);
+        return null;
+      }
+      return openDocumentSourceFile({ name: getFileName(path), path, sourceFilePath: path });
+    }
+  });
+  const kubernetesProjectCommands = window.registerMarkdownViewerKubernetesProjectCommands?.(app, {
+      kubernetesContext,
+      clusterExplorer: kubernetesClusterExplorer,
+      crdSchemaCache: kubernetesCrdSchemaCache,
+    getActiveFolderPath: function() { return activeFolderPath || ""; },
+    getActiveFilePath: getActiveEditorPathForLanguage,
+    getActiveEditorValue: function() { return activeEditorCommands.getActiveEditorValue(); },
+    getSelectedText: function() {
+      const selection = activeEditorCommands.getActiveEditorSelection?.() || { start: 0, end: 0 };
+      return activeEditorCommands.getActiveEditorValue().slice(selection.start, selection.end);
+    },
+    get terminal() { return desktopTerminal; },
+    confirm: function(options) { return app.services?.confirm ? app.services.confirm(options) : Promise.resolve(false); },
+    alert: function(message) { return app.services?.alert ? app.services.alert(message) : null; },
+    pathExists: function(path) { return canAccessLocalPath(path); },
+    writeTemporaryManifest: writeTemporaryKubernetesManifest,
+    removeTemporaryManifest: removeTemporaryKubernetesManifest
+  });
+  const helmChartContext = window.registerMarkdownViewerHelmChartContext?.(app);
+  const helmAuthoringDocs = window.registerMarkdownViewerHelmAuthoringDocs?.(app);
+  const helmTemplatePreviewDialog = window.registerMarkdownViewerHelmTemplatePreviewDialog?.(app, {
+    selectValuesFiles: async function() {
+      if (typeof Neutralino === "undefined" || !Neutralino.os?.showOpenDialog) return [];
+      const selected = await Neutralino.os.showOpenDialog("Select Helm values files", {
+        multiSelections: true,
+        filters: [
+          { name: "YAML files", extensions: ["yaml", "yml"] },
+          { name: "All files", extensions: ["*"] }
+        ]
+      });
+      const paths = Array.isArray(selected) ? selected : selected ? [selected] : [];
+      return paths.map((path) => ({ path, name: String(path || "").replace(/\\/g, "/").split("/").filter(Boolean).pop() || path })).filter((entry) => entry.path);
+    }
+  });
+  const helmProjectCommands = window.registerMarkdownViewerHelmProjectCommands?.(app, {
+    chartContext: helmChartContext,
+      helmAuthoringDocs,
+      kubernetesContext,
+      dryRunOptionsDialog: kubernetesCommandOptionsDialog,
+      templatePreviewDialog: helmTemplatePreviewDialog,
+    getActiveFolderPath: function() { return activeFolderPath || ""; },
+    getActiveFilePath: getActiveEditorPathForLanguage,
+    getActiveEditorValue: function() { return activeEditorCommands.getActiveEditorValue(); },
+    get terminal() { return desktopTerminal; },
+    pathExists: function(path) { return canAccessLocalPath(path); },
+    readFile: function(path) { return typeof Neutralino !== "undefined" ? Neutralino.filesystem.readFile(path) : Promise.reject(new Error("Desktop file access is unavailable.")); },
+    openRenderedYamlTab: function(content, title) { return tabsModule?.newTab?.(String(content || ""), title || "helm-template.yaml", { viewMode: "editor" }) || null; },
+    openFileCompareInTab: function(compareDescriptor) { return tabsModule?.openFileCompareInTab?.(compareDescriptor) || null; },
+    alert: function(message) { return app.services?.alert ? app.services.alert(message) : null; }
+  });
+  window.markdownViewerHelmCompletionProvider = function() {
+    const context = {
+      folderPath: activeFolderPath || "",
+      filePath: getActiveEditorPathForLanguage(),
+      content: activeEditorCommands.getActiveEditorValue()
+    };
+    void helmProjectCommands?.refreshCompletionItems?.(context);
+    return helmProjectCommands?.getCachedCompletionItems?.() || [];
+  };
   const projectCommands = window.registerMarkdownViewerProjectCommandMenu?.(app, {
+    statistics: userStatistics,
     getActiveFolderPath: function() { return activeFolderPath || ""; },
     getActiveFilePath: getActiveEditorPathForLanguage,
     problemsPanel,
     tasksPanel,
+    kubernetesContext,
+    kubernetesCommandOptionsDialog,
+    projectCommandResultModal,
+    kubernetesCommands: kubernetesProjectCommands,
+    helmCommands: helmProjectCommands,
     get javaRebuildOutput() { return app.modules?.javaRebuildOutput; },
     getRatManager: function() { return app.modules?.ratManager || null; },
     getRatPolicyManager: function() { return app.modules?.ratPolicyManager || null; },
@@ -15989,6 +16388,12 @@ async function* collectWorkspaceSearchFilesFromNeutralinoDirectory(parentPath, p
   const mavenSourceFolders = window.registerMarkdownViewerMavenSourceFolders?.(app, {
     get Neutralino() { return typeof Neutralino !== "undefined" ? Neutralino : undefined; }
   });
+  const javaSourceFolderDetection = window.registerMarkdownViewerJavaSourceFolderDetection?.(app, {
+    readFile: function(path) { return Neutralino.filesystem.readFile(path); }
+  });
+  const javaLibraryDetection = window.registerMarkdownViewerJavaLibraryDetection?.(app, {
+    readDirectory: function(path) { return Neutralino.filesystem.readDirectory(path); }
+  });
   const javaBuildPathSaveConfirmation = window.registerMarkdownViewerJavaBuildPathSaveConfirmation?.(app, {
     notify: app.services?.notify,
     shouldConfirm: shouldConfirmJavaBuildPathRebuild,
@@ -16004,6 +16409,8 @@ async function* collectWorkspaceSearchFilesFromNeutralinoDirectory(parentPath, p
     get eclipsePreferences() { return eclipsePreferencesController; },
     mavenDetection: mavenProjectDetection,
     mavenSourceFolders,
+    javaSourceFolderDetection,
+    javaLibraryDetection,
     gradleDetection: gradleProjectDetection,
     getGradleLauncherSettings: getGradleProjectLauncherSettings,
     getGradleInstallations: getJavaConverterGradleInstallations,
@@ -16269,6 +16676,7 @@ async function* collectWorkspaceSearchFilesFromNeutralinoDirectory(parentPath, p
   });
   const runConfigurationEditor = window.registerMarkdownViewerRunConfigurationEditor?.(app);
   const runLauncher = window.registerMarkdownViewerRunLauncher?.(app, {
+    statistics: userStatistics,
     store: runConfigurationStore,
     validation: runConfigurationValidation,
     buildPath: javaBuildPath,
@@ -17371,6 +17779,26 @@ async function* collectWorkspaceSearchFilesFromNeutralinoDirectory(parentPath, p
     });
   });
 
+  openSourceDialogButtons.forEach(function(button) {
+    button.addEventListener("click", function(e) {
+      e.preventDefault();
+      openSourceDialog?.open({ invoker: button });
+      if (button.classList.contains("mobile-menu-item")) {
+        closeMobileMenu();
+      }
+    });
+  });
+
+  statisticsDialogButtons.forEach(function(button) {
+    button.addEventListener("click", function(e) {
+      e.preventDefault();
+      statisticsDialog?.open({ invoker: button });
+      if (button.classList.contains("mobile-menu-item")) {
+        closeMobileMenu();
+      }
+    });
+  });
+
   aboutDialogButtons.forEach(function(button) {
     button.addEventListener("click", function(e) {
       e.preventDefault();
@@ -17884,8 +18312,16 @@ async function* collectWorkspaceSearchFilesFromNeutralinoDirectory(parentPath, p
     settingsAddGradleButton.addEventListener("click", () => chooseSettingsGradleFolder());
   }
 
+  if (settingsDetectGradleButton) {
+    settingsDetectGradleButton.addEventListener("click", autoDetectSettingsGradle);
+  }
+
   settingsMavenExecutionModeInput?.addEventListener("change", updateSettingsMavenExecutionFields);
   settingsMavenCustomExecutableBrowseButton?.addEventListener("click", () => chooseSettingsMavenFile("Choose Maven executable", settingsMavenCustomExecutableInput));
+  settingsKubernetesKubectlBrowseButton?.addEventListener("click", () => chooseSettingsKubernetesFile("Choose kubectl executable", settingsKubernetesKubectlPathInput));
+  settingsKubernetesHelmBrowseButton?.addEventListener("click", () => chooseSettingsKubernetesFile("Choose Helm executable", settingsKubernetesHelmPathInput));
+  settingsKubernetesKubeconfigBrowseButton?.addEventListener("click", () => chooseSettingsKubernetesFile("Choose kubeconfig file", settingsKubernetesKubeconfigPathInput));
+  settingsKubernetesDetectContextsButton?.addEventListener("click", detectSettingsKubernetesContexts);
   settingsMavenSettingsFileBrowseButton?.addEventListener("click", () => chooseSettingsMavenFile("Choose Maven settings.xml", settingsMavenSettingsFileInput, ["xml"]));
   settingsMavenLocalRepositoryBrowseButton?.addEventListener("click", chooseSettingsMavenLocalRepository);
 
@@ -19382,3 +19818,4 @@ if (window.markdownViewerStartupErrors?.guardStartup) {
   });
 }
 })();
+

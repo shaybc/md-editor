@@ -50,6 +50,17 @@ test("Run configuration store persists CRUD and active selection per project", a
   assert.equal(document.version, 1);
   assert.equal(document.configurations[0].java.mainClass, "example.Main");
   assert.equal("maven" in document.configurations[0], false);
+
+  const springMaven = store.createDraft("maven-spring-boot");
+  assert.equal(springMaven.type, "maven");
+  assert.equal(springMaven.maven.commandLine, "spring-boot:run");
+  const springGradle = store.createDraft("gradle-spring-boot");
+  assert.equal(springGradle.type, "gradle");
+  assert.equal(springGradle.gradle.tasks, "bootRun");
+  const composeLogs = store.createDraft("docker-compose-logs");
+  assert.equal(composeLogs.type, "docker-compose");
+  assert.equal(composeLogs.dockerCompose.command, "logs");
+  assert.equal(composeLogs.dockerCompose.followLogs, true);
 });
 
 test("Run configuration validation reports common and type-specific fields", async () => {
@@ -74,6 +85,17 @@ test("Run configuration validation reports common and type-specific fields", asy
   assert.match(result.errors["java.mainClass"], /required/);
   assert.match(result.errors["java.jdkId"], /Project JDK/);
   assert.match(result.errors["environment.1.name"], /unique/);
+
+  const composeResult = await validation.validate({
+    id: "compose",
+    type: "docker-compose",
+    name: "Compose",
+    workingDirectory: "",
+    environment: [],
+    dockerCompose: { command: "restart" }
+  }, { projectPath: "C:/Project", configurations: [] });
+  assert.equal(composeResult.runnable, false);
+  assert.match(composeResult.errors["dockerCompose.command"], /Docker Compose command/);
 });
 
 test("Java main discovery ignores comments and returns qualified class names", () => {
@@ -121,4 +143,10 @@ test("Run command builder applies JDK environment and arbitrary Maven or Gradle 
     type: "gradle", name: "Boot", environment: [], gradle: { tasks: "bootRun", projectPath: "app" }
   }, { projectPath: "C:/Project", runtime, gradleProject: { runner: ".\\gradlew.bat", projectRoot: "C:/Project" } });
   assert.match(gradle.command, /:app:bootRun/);
+
+  const compose = builder.build({
+    type: "docker-compose", name: "Compose", workingDirectory: "", environment: [], dockerCompose: { command: "logs", filePath: "compose.yml", services: "app db", followLogs: true }
+  }, { projectPath: "C:/Project" });
+  assert.equal(compose.command, "docker compose -f compose.yml logs -f app db");
+  assert.equal(compose.cwd, "C:/Project");
 });

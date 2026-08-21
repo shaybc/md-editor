@@ -4,7 +4,7 @@
     "private":  true,
     "description":  "Neutralinojs desktop port of MD-Editor",
     "scripts":  {
-                    "setup":  "node setup-binaries.js \u0026\u0026 node setup-tooling-jdk.js \u0026\u0026 node download-vendor.js \u0026\u0026 node download-drawio-vendor.js \u0026\u0026 node download-kotlin-language-tools.js \u0026\u0026 node build-windows-credential-helper.js",
+                    "setup":  "node setup-binaries.js \u0026\u0026 node setup-tooling-jdk.js \u0026\u0026 node download-vendor.js \u0026\u0026 node download-drawio-vendor.js \u0026\u0026 node download-kotlin-language-tools.js \u0026\u0026 node download-jdt-language-server.js \u0026\u0026 node build-windows-credential-helper.js",
                     "setup:drawio":  "node download-drawio-vendor.js",
                     "verify:drawio":  "node download-drawio-vendor.js --verify-only",
                     "setup:tooling-jdk":  "node setup-tooling-jdk.js",

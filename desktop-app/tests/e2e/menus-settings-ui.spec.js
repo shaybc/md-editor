@@ -2,7 +2,7 @@ const { test, expect } = require("./desktop-fixture");
 const { openActionMenu, openApp, selectSettingsTab } = require("../helpers/desktop-ui");
 
 test.describe("desktop menus and settings UI", () => {
-  test("suppresses the browser context menu on unhandled app surfaces", async ({ page }) => {
+  test("shows the app context menu on unhandled app surfaces", async ({ page }) => {
     await openApp(page);
     await expect(page.locator(".content-container")).toHaveCount(1);
 
@@ -19,6 +19,17 @@ test.describe("desktop menus and settings UI", () => {
     });
 
     expect(defaultPrevented).toBe(true);
+    const contextMenu = page.locator(".app-default-context-menu");
+    await expect(contextMenu).toBeVisible();
+    await expect(contextMenu.locator("[data-default-context-action]")).toHaveText([
+      "Copy",
+      "Cut",
+      "Paste",
+      "Delete",
+      "Select all",
+      "Search the web",
+      "Print selection…",
+    ]);
   });
   test("action menu exposes desktop workflow sections", async ({ page }) => {
     await openApp(page);

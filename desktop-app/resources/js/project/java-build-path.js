@@ -12,7 +12,11 @@
     const sourcePanel = document.getElementById("java-build-path-source-panel");
     const libraryPanel = document.getElementById("java-build-path-library-panel");
     const sourceList = document.getElementById("java-build-path-source-list");
+    const detectSourcesButton = document.getElementById("java-build-path-detect-sources");
+    const sourceDetectionStatus = document.getElementById("java-build-path-source-detection-status");
     const libraryList = document.getElementById("java-build-path-library-list");
+    const detectLibrariesButton = document.getElementById("java-build-path-detect-libraries");
+    const libraryDetectionStatus = document.getElementById("java-build-path-library-detection-status");
     const errorElement = document.getElementById("java-build-path-error");
     const dialogActions = document.getElementById("java-build-path-actions");
     const detectionPrompt = document.getElementById("java-build-path-maven-detected");
@@ -656,6 +660,43 @@
       render();
     }
 
+    async function autoDetectSourceFolders() {
+      if (!deps.javaSourceFolderDetection?.detect || !activeProjectPath || !detectSourcesButton) return;
+      const defaultLabel = detectSourcesButton.innerHTML;
+      detectSourcesButton.disabled = true;
+      detectSourcesButton.setAttribute("aria-busy", "true");
+      detectSourcesButton.textContent = "Detecting...";
+      if (sourceDetectionStatus) sourceDetectionStatus.textContent = "Scanning project Java files...";
+      setError("");
+      try {
+        const workspaceModel = await deps.javaWorkspaceModel?.detect?.(activeProjectPath) || {};
+        const detectedFolders = await deps.javaSourceFolderDetection.detect(activeProjectPath, workspaceModel);
+        let added = 0;
+        for (const folderPath of detectedFolders) {
+          const stored = toStoredPath(activeProjectPath, folderPath);
+          if (draft.sourceFolders.includes(stored)) continue;
+          const candidateFolders = [...draft.sourceFolders, stored];
+          if (validateSourceFolders(activeProjectPath, candidateFolders)) continue;
+          draft.sourceFolders = candidateFolders;
+          added += 1;
+        }
+        if (sourceDetectionStatus) {
+          sourceDetectionStatus.textContent = detectedFolders.length
+            ? `Detected ${detectedFolders.length} Java source folder(s), selected ${added} new folder(s).`
+            : "No Java source folders were detected.";
+        }
+        await refreshAnalysisInventory(workspaceModel);
+        render();
+      } catch (error) {
+        setError(error?.message || "Java source folders could not be detected.");
+        if (sourceDetectionStatus) sourceDetectionStatus.textContent = "";
+      } finally {
+        detectSourcesButton.disabled = false;
+        detectSourcesButton.removeAttribute("aria-busy");
+        detectSourcesButton.innerHTML = defaultLabel;
+      }
+    }
+
     async function scanMavenSourceFolders() {
       if (!deps.mavenSourceFolders?.scan || !mavenProject?.hasPom) return;
       if (mavenSourceStatus) mavenSourceStatus.textContent = "Scanning...";
@@ -682,6 +723,49 @@
       await refreshAnalysisInventory();
       render();
     }
+
+    async function autoDetectLibraries() {
+      if (!deps.javaLibraryDetection?.detect || !activeProjectPath || !detectLibrariesButton) return;
+      const defaultLabel = detectLibrariesButton.innerHTML;
+      detectLibrariesButton.disabled = true;
+      detectLibrariesButton.setAttribute("aria-busy", "true");
+      detectLibrariesButton.textContent = "Detecting...";
+      if (libraryDetectionStatus) libraryDetectionStatus.textContent = "Scanning project Java libraries...";
+      setError("");
+      try {
+        const detected = await deps.javaLibraryDetection.detect(activeProjectPath);
+        let addedFolders = 0;
+        let addedArchives = 0;
+        for (const folderPath of detected.classpathFolders || []) {
+          const stored = toStoredPath(activeProjectPath, folderPath);
+          if (draft.classpathFolders.includes(stored)) continue;
+          draft.classpathFolders.push(stored);
+          addedFolders += 1;
+        }
+        for (const archivePath of detected.jarFiles || []) {
+          const stored = toStoredPath(activeProjectPath, archivePath);
+          if (draft.jarFiles.includes(stored)) continue;
+          draft.jarFiles.push(stored);
+          addedArchives += 1;
+        }
+        const detectedCount = (detected.classpathFolders?.length || 0) + (detected.jarFiles?.length || 0);
+        const addedCount = addedFolders + addedArchives;
+        if (libraryDetectionStatus) {
+          libraryDetectionStatus.textContent = detectedCount
+            ? `Detected ${detectedCount} Java library item(s), selected ${addedCount} new item(s).${detected.truncated ? " Scan limit reached." : ""}`
+            : `No project Java libraries were detected.${detected.truncated ? " Scan limit reached." : ""}`;
+        }
+        render();
+      } catch (error) {
+        setError(error?.message || "Project Java libraries could not be detected.");
+        if (libraryDetectionStatus) libraryDetectionStatus.textContent = "";
+      } finally {
+        detectLibrariesButton.disabled = false;
+        detectLibrariesButton.removeAttribute("aria-busy");
+        detectLibrariesButton.innerHTML = defaultLabel;
+      }
+    }
+
     async function addClasspathFolder() {
       const selected = normalizePath(await Neutralino.os.showFolderDialog("Select classpath folder", { defaultPath: activeProjectPath }));
       if (!selected) return;
@@ -727,6 +811,8 @@
       await refreshGradleProject();
       setError("");
       if (mavenSourceStatus) mavenSourceStatus.textContent = "";
+      if (sourceDetectionStatus) sourceDetectionStatus.textContent = "";
+      if (libraryDetectionStatus) libraryDetectionStatus.textContent = "";
       await renderProjectJdks();
       render();
       selectTab(options.initialTab || "source");
@@ -798,6 +884,8 @@
     document.querySelectorAll("[data-java-build-path-tab]").forEach((button) => {
       button.addEventListener("click", () => selectTab(button.dataset.javaBuildPathTab));
     });
+    detectSourcesButton?.addEventListener("click", () => void autoDetectSourceFolders());
+    detectLibrariesButton?.addEventListener("click", () => void autoDetectLibraries());
     document.getElementById("java-build-path-add-source")?.addEventListener("click", () => void addSourceFolder());
     document.getElementById("java-build-path-add-folder")?.addEventListener("click", () => void addClasspathFolder());
     document.getElementById("java-build-path-add-jar")?.addEventListener("click", () => void addJarFiles());

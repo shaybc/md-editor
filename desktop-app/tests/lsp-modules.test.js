@@ -437,6 +437,13 @@ test("LSP server registry exposes the bundled YAML language server recipe", asyn
     kubernetes: ["C:/Project/deployment.yaml"]
   });
 
+  const hintedKubernetesYaml = JSON.parse(JSON.stringify(registry.getServerWorkspaceConfiguration("yaml", {
+    filePath: "C:/Project/k8s/service.yaml",
+    content: "metadata:\n  name: app\n"
+  })));
+  assert.deepEqual(hintedKubernetesYaml.yaml.schemas, {
+    kubernetes: ["C:/Project/k8s/service.yaml"]
+  });
   const nonComposeServicesYaml = JSON.parse(JSON.stringify(registry.getServerWorkspaceConfiguration("yaml", {
     filePath: "C:/Project/services.yaml",
     content: "services:\n  web:\n    image: nginx\n"
@@ -681,7 +688,7 @@ test("LSP server registry exposes the installed Eclipse JDT LS Java recipe", asy
   const descriptor = await registry.getLaunchDescriptor("java", { workspaceRoot: "C:/Project", filePath: "C:/Project/src/App.java" });
 
   assert.equal(server.id, "java");
-  assert.equal(server.bundledVariantId, undefined);
+  assert.equal(server.bundledVariantId, "eclipse-jdt-ls");
   assert.deepEqual(Array.from(variant.requiredFiles), [
     "plugins/org.eclipse.equinox.launcher_*.jar",
     "config_win",
@@ -704,6 +711,101 @@ test("LSP server registry exposes the installed Eclipse JDT LS Java recipe", asy
   assert.ok(createdDirectories.some((path) => path.includes("language-server-workspaces/java")));
 });
 
+test("LSP server registry exposes the bundled Eclipse JDT LS Java recipe", async () => {
+  const context = createContext();
+  const installedFiles = new Set([
+    "C:/Desktop/config_win",
+    "C:/Desktop/features",
+    "C:/Desktop/plugins"
+  ]);
+  vm.runInContext(readWebFile("js/lsp/server-registry.js"), context);
+
+  const registry = context.window.registerMarkdownViewerLspServerRegistry(context.app, {
+    isNeutralinoRuntime: () => true,
+    getDesktopAppRootPath: async () => "C:/Desktop",
+    getProfileDataDirPath: async () => "C:/Profile",
+    getJavaWorkspaceRuntime: () => ({
+      ok: true,
+      projectJdk: { id: "jdk:project", name: "JDK 25", path: "C:/JDK", feature: 25 },
+      launcherJdk: { id: "jdk:project", name: "JDK 25", path: "C:/JDK", feature: 25 }
+    }),
+    getJavaExecutableForJdkHome: () => "C:/JDK/bin/java.exe",
+    Neutralino: {
+      filesystem: {
+        async getStats(path) {
+          if (!installedFiles.has(path)) throw new Error("missing");
+          return {};
+        },
+        async readDirectory(path) {
+          if (path === "C:/Desktop/plugins") {
+            return [{ entry: "org.eclipse.equinox.launcher_1.7.0.v20250519-0528.jar", type: "FILE" }];
+          }
+          return [];
+        },
+        async readFile() {
+          throw new Error("missing");
+        },
+        async createDirectory() {}
+      }
+    }
+  });
+
+  const status = await registry.getServerStatus("java");
+  const descriptor = await registry.getLaunchDescriptor("java", { workspaceRoot: "C:/Project", filePath: "C:/Project/src/App.java" });
+
+  assert.equal(status.installed, true);
+  assert.equal(status.bundled, true);
+  assert.equal(status.installDir, "C:/Desktop");
+  assert.equal(status.variant.id, "eclipse-jdt-ls");
+  assert.match(descriptor.command, /-jar \"C:\/Desktop\/plugins\/org\.eclipse\.equinox\.launcher_1\.7\.0\.v20250519-0528\.jar\"/);
+  assert.equal(descriptor.cwd, "C:/Desktop");
+});
+
+test("LSP server registry launches standalone Java with the language server Java executable", async () => {
+  const context = createContext();
+  const installedFiles = new Set([
+    "C:/Desktop/config_win",
+    "C:/Desktop/features",
+    "C:/Desktop/plugins"
+  ]);
+  const createdDirectories = [];
+  vm.runInContext(readWebFile("js/lsp/server-registry.js"), context);
+
+  const registry = context.window.registerMarkdownViewerLspServerRegistry(context.app, {
+    isNeutralinoRuntime: () => true,
+    getDesktopAppRootPath: async () => "C:/Desktop",
+    getProfileDataDirPath: async () => "C:/Profile",
+    getWorkspaceRoot: () => "",
+    getJavaLanguageServerExecutable: async () => "C:/ToolingJdk/bin/java.exe",
+    getJavaWorkspaceRuntime: () => null,
+    Neutralino: {
+      filesystem: {
+        async getStats(path) {
+          if (!installedFiles.has(path)) throw new Error("missing");
+          return {};
+        },
+        async readDirectory(path) {
+          if (path === "C:/Desktop/plugins") {
+            return [{ entry: "org.eclipse.equinox.launcher_1.7.0.v20250519-0528.jar", type: "FILE" }];
+          }
+          return [];
+        },
+        async readFile() {
+          throw new Error("missing");
+        },
+        async createDirectory(path) {
+          createdDirectories.push(path);
+        }
+      }
+    }
+  });
+
+  const descriptor = await registry.getLaunchDescriptor("java", { workspaceRoot: "", filePath: "Untitled.java" });
+
+  assert.match(descriptor.command, /^"C:\/ToolingJdk\/bin\/java\.exe" /);
+  assert.match(descriptor.command, /-data "C:\/Profile\/language-server-workspaces\/java\//);
+  assert.ok(createdDirectories.some((path) => path.includes("language-server-workspaces/java")));
+});
 test("JDT Gradle import uses the Gradle choice saved in Java Build Path", () => {
   const context = createContext();
   let projectGradle = { mode: "installation", installationId: "gradle-8.14" };
@@ -1929,7 +2031,7 @@ test("Neutralino LSP bridge logs the selected language server launch", async () 
   assert.match(launchLog.details.command, /javascript-typescript-langserver/);
 });
 
-test("Neutralino LSP bridge does not launch JDT for standalone Java files", async () => {
+test("Neutralino LSP bridge launches JDT for standalone Java files", async () => {
   const context = createContext();
   vm.runInContext(readWebFile("js/lsp/neutralino-lsp-bridge.js"), context);
   let workspaceResolutionCount = 0;
@@ -1944,6 +2046,8 @@ test("Neutralino LSP bridge does not launch JDT for standalone Java files", asyn
         return "C:/Project";
       },
       toFileUri: (path) => `file:///${path}`,
+      joinPath: (parent, child) => `${parent}/${child}`,
+      getServerWorkspaceDir: async () => "C:/Profile/language-server-workspaces/java/standalone",
       getServerStatus: async () => ({
         installed: true,
         bundled: true,
@@ -1972,8 +2076,9 @@ test("Neutralino LSP bridge does not launch JDT for standalone Java files", asyn
   });
 
   assert.equal(workspaceResolutionCount, 0);
-  assert.equal(launchOptions, null);
-  assert.equal(session, null);
+  assert.equal(launchOptions.workspaceRoot, "");
+  assert.equal(launchOptions.filePath, "C:/Project/test.java");
+  assert.equal(session.processId, 41);
 });
 
 test("Neutralino LSP bridge relies on JDT automatic managed import and enables autobuild after its initial build", async () => {

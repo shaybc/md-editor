@@ -362,6 +362,7 @@
       lspLanguageIds: Object.freeze({
         java: "java"
       }),
+      bundledVariantId: JDTLS_VARIANT.id,
       rootMarkers: Object.freeze(["pom.xml", "build.gradle", "settings.gradle", ".classpath", ".project", "src", ".git"]),
       metadataFile: METADATA_FILE,
       variants: Object.freeze([
@@ -685,6 +686,13 @@
       return DOCKER_COMPOSE_FILE_NAMES.includes(fileName);
     }
 
+    function isKubernetesYamlPath(path) {
+      const normalizedPath = String(path || "").replace(/\\/g, "/").toLowerCase();
+      const fileName = getFileName(normalizedPath);
+      const baseName = fileName.replace(/\.(?:yaml|yml)$/i, "");
+      return ["deployment", "service", "ingress", "configmap", "secret", "namespace", "serviceaccount", "job", "cronjob", "hpa", "horizontalpodautoscaler"].includes(baseName)
+        || normalizedPath.split("/").some((segment) => ["k8s", "kubernetes", "manifests"].includes(segment));
+    }
     function getYamlDocumentHeaderFields(content) {
       const fields = new Set();
       const lines = String(content || "").split(/\r?\n/);
@@ -714,10 +722,17 @@
         configuration.yaml.schemas = {
           [DOCKER_COMPOSE_SCHEMA_URL]: DOCKER_COMPOSE_FILE_NAMES
         };
-      } else if (isKubernetesYamlContent(content)) {
+      } else if (isKubernetesYamlPath(filePath) || isKubernetesYamlContent(content)) {
+        const fileMatch = getYamlSchemaFileMatch(filePath);
         configuration.yaml.schemas = {
-          kubernetes: [getYamlSchemaFileMatch(filePath)]
+          kubernetes: [fileMatch]
         };
+        const crdSchemas = Array.isArray(options.crdSchemas) && options.enableCrdSchemas !== false ? options.crdSchemas : [];
+        crdSchemas.forEach((entry) => {
+          const schemaKey = String(entry?.uri || entry?.name || "").trim();
+          if (!schemaKey) return;
+          configuration.yaml.schemas[schemaKey] = [fileMatch];
+        });
       }
       return configuration;
     }
@@ -1044,7 +1059,8 @@
         const workspaceDir = await getServerWorkspaceDir(serverId, options.workspaceRoot || "", options.filePath || "");
         await ensureDirectory(workspaceDir);
         const workspaceRuntime = serverId === JAVA_SERVER_ID ? deps.getJavaWorkspaceRuntime?.() : null;
-        if (serverId === JAVA_SERVER_ID && !workspaceRuntime?.launcherJdk?.path) return null;
+        const standaloneJava = isStandaloneJavaFile(serverId, options.filePath || "");
+        if (serverId === JAVA_SERVER_ID && !standaloneJava && !workspaceRuntime?.launcherJdk?.path) return null;
         const javaExecutable = workspaceRuntime?.launcherJdk?.path
           ? deps.getJavaExecutableForJdkHome?.(workspaceRuntime.launcherJdk.path)
           : (typeof deps.getJavaLanguageServerExecutable === "function" ? await deps.getJavaLanguageServerExecutable() : "java");
@@ -1161,3 +1177,4 @@
 
   window.registerMarkdownViewerLspServerRegistry = registerMarkdownViewerLspServerRegistry;
 })(window);
+

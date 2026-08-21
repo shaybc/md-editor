@@ -47,7 +47,8 @@
         environment: (configuration.environment || []).map((entry) => ({ ...entry })),
         java: configuration.java ? { ...configuration.java } : undefined,
         maven: configuration.maven ? { ...configuration.maven } : undefined,
-        gradle: configuration.gradle ? { ...configuration.gradle } : undefined
+        gradle: configuration.gradle ? { ...configuration.gradle } : undefined,
+        dockerCompose: configuration.dockerCompose ? { ...configuration.dockerCompose } : undefined
       };
     }
 
@@ -85,7 +86,7 @@
     }
 
     function normalizeType(value) {
-      return ["java-application", "maven", "gradle"].includes(value) ? value : "java-application";
+      return ["java-application", "maven", "gradle", "docker-compose"].includes(value) ? value : "java-application";
     }
 
     function normalizeConfiguration(input = {}, existing = null) {
@@ -126,15 +127,29 @@
           }
         };
       }
-      const gradle = { ...(existing?.gradle || {}), ...(input.gradle || {}) };
+      if (type === "gradle") {
+        const gradle = { ...(existing?.gradle || {}), ...(input.gradle || {}) };
+        return {
+          ...common,
+          buildBeforeRun: false,
+          gradle: {
+            tasks: String(gradle.tasks || ""),
+            projectPath: String(gradle.projectPath || ""),
+            runner: String(gradle.runner || ""),
+            offline: gradle.offline === true
+          }
+        };
+      }
+      const dockerCompose = { ...(existing?.dockerCompose || {}), ...(input.dockerCompose || {}) };
       return {
         ...common,
         buildBeforeRun: false,
-        gradle: {
-          tasks: String(gradle.tasks || ""),
-          projectPath: String(gradle.projectPath || ""),
-          runner: String(gradle.runner || ""),
-          offline: gradle.offline === true
+        dockerCompose: {
+          command: String(dockerCompose.command || "up"),
+          filePath: String(dockerCompose.filePath || ""),
+          services: String(dockerCompose.services || ""),
+          detached: dockerCompose.detached === true,
+          followLogs: dockerCompose.followLogs === true
         }
       };
     }
@@ -320,6 +335,10 @@
     }
 
     function createDraft(type = "java-application") {
+      if (type === "maven-spring-boot") return normalizeConfiguration({ id: createId(), type: "maven", name: "Spring Boot Maven", maven: { commandLine: "spring-boot:run" } });
+      if (type === "gradle-spring-boot") return normalizeConfiguration({ id: createId(), type: "gradle", name: "Spring Boot Gradle", gradle: { tasks: "bootRun" } });
+      if (type === "docker-compose-down") return normalizeConfiguration({ id: createId(), type: "docker-compose", name: "Docker Compose Down", dockerCompose: { command: "down" } });
+      if (type === "docker-compose-logs") return normalizeConfiguration({ id: createId(), type: "docker-compose", name: "Docker Compose Logs", dockerCompose: { command: "logs", followLogs: true } });
       return normalizeConfiguration({ id: createId(), type, name: "" });
     }
 

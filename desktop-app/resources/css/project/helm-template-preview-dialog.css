@@ -1,0 +1,112 @@
+/* Helm template preview wizard layout. */
+.helm-template-preview-box {
+  width: min(900px, calc(100vw - 64px));
+  max-width: none;
+  max-height: calc(100vh - 64px);
+  overflow: hidden;
+}
+
+.helm-template-preview-content {
+  display: grid;
+  grid-template-columns: minmax(300px, 0.9fr) minmax(380px, 1.1fr);
+  gap: 22px;
+  align-items: start;
+  padding: 20px 28px;
+}
+
+.helm-template-preview-column {
+  display: grid;
+  gap: 12px;
+  align-content: start;
+  min-width: 0;
+}
+
+.helm-template-preview-form select,
+.helm-template-preview-form input {
+  width: 100%;
+}
+
+.helm-template-preview-field-group {
+  display: grid;
+  gap: 8px;
+}
+
+.helm-template-preview-section-title {
+  color: var(--text-muted);
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.helm-template-preview-values-list {
+  display: grid;
+  gap: 6px;
+  min-height: 38px;
+  max-height: 150px;
+  overflow: auto;
+}
+
+.helm-template-preview-empty,
+.helm-template-preview-values-row {
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  background: var(--surface-muted, rgba(255, 255, 255, 0.03));
+  padding: 8px 10px;
+}
+
+.helm-template-preview-empty {
+  color: var(--text-muted);
+  font-size: 0.84rem;
+}
+
+.helm-template-preview-values-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+}
+
+.helm-template-preview-values-name {
+  overflow: hidden;
+  color: var(--text-color);
+  font-size: 0.86rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.helm-template-preview-inline-actions {
+  display: flex;
+  justify-content: flex-start;
+}
+
+.helm-template-preview-inline-actions .reset-modal-btn,
+.helm-template-preview-remove-values {
+  min-height: 34px;
+  padding: 6px 12px;
+}
+
+.helm-template-preview-inline-actions .reset-modal-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.helm-template-preview-summary .project-command-summary-grid {
+  grid-template-columns: 1fr;
+}
+
+.helm-template-preview-summary .project-command-code {
+  min-height: 150px;
+  max-height: 260px;
+}
+
+@media (max-width: 760px) {
+  .helm-template-preview-box {
+    width: min(680px, calc(100vw - 28px));
+    max-height: calc(100vh - 28px);
+  }
+
+  .helm-template-preview-content {
+    grid-template-columns: 1fr;
+    padding: 16px 14px;
+  }
+}

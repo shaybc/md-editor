@@ -8,6 +8,10 @@ When developing a notification, confirmation, prompt, or alert dialog, never use
 
 When developing or changing an application dialog, always use MD-Editor's existing app-wide dialog button classes and visual patterns for primary, secondary, destructive, and close actions. Never use unstyled browser-default buttons in an application dialog.
 
+## UI/UX dialog guidelines
+
+When developing or changing dialogs, modals, command sheets, or result summaries, read and follow [.agents/ui-ux-dialog-guidelines.md](.agents/ui-ux-dialog-guidelines.md). Keep command and result dialogs wide enough for paths, code, output, and diagnostics while preserving the app-wide dialog controls.
+
 ## Pinned vendor package restoration
 
 When asked to restore the currently pinned vendor packages and rebuild the Kotlin ABI JAR, read and follow [`.agents/restore-pinned-vendor-packages.md`](.agents/restore-pinned-vendor-packages.md) completely before running the workflow.

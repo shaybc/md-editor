@@ -210,6 +210,7 @@
       host.dataset.language = language?.id || "text";
       onLanguageChange(language);
       if (nextLanguageId === lastLanguageId) {
+        codeMirror.setSnippetDefinitions?.(getSnippetDefinitions(nextLanguageId));
         if (lspActivationEnabled) void refreshLspSessionForActivePath();
         return;
       }

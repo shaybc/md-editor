@@ -43,6 +43,35 @@ test("language registry detects Docker-related file names", () => {
   assert.equal(dockerignore?.codeMirrorLanguage, "text");
 });
 
+test("language registry adds Kubernetes metadata to YAML manifests", () => {
+  const context = createContext();
+  vm.runInContext(readWebFile("js/languages/registry.js"), context);
+
+  const registry = context.window.registerMarkdownViewerLanguageRegistry(context.app);
+  const pathManifest = registry.resolveLanguageForPath("C:/Project/k8s/deployment.yaml");
+  const contentManifest = registry.resolveLanguageForPath("C:/Project/config.yaml", {
+    content: "apiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: app\n"
+  });
+  const compose = registry.resolveLanguageForPath("C:/Project/manifests/docker-compose.yml", {
+    content: "apiVersion: v1\nkind: ConfigMap\nservices:\n  app:\n    image: nginx\n"
+  });
+  const generic = registry.resolveLanguageForPath("C:/Project/settings.yaml", {
+    content: "name: app\nsettings:\n  enabled: true\n"
+  });
+
+  assert.equal(pathManifest?.id, "yaml");
+  assert.equal(pathManifest?.codeMirrorLanguage, "yaml");
+  assert.equal(pathManifest?.formatter, "prettier-yaml");
+  assert.equal(pathManifest?.variantId, "kubernetes");
+  assert.equal(pathManifest?.variantLabel, "Kubernetes");
+  assert.equal(contentManifest?.variantId, "kubernetes");
+  assert.equal(compose?.id, "yaml");
+  assert.equal(compose?.variantId, undefined);
+  assert.equal(generic?.id, "yaml");
+  assert.equal(generic?.variantId, undefined);
+  assert.equal(registry.isKubernetesYamlManifest("C:/Project/kubernetes/service.yml", ""), true);
+  assert.equal(registry.isKubernetesYamlManifest("C:/Project/docker-compose.yml", "apiVersion: v1\nkind: Service\n"), false);
+});
 test("language registry colors MD-Editor debug logs as C#", () => {
   const context = createContext();
   vm.runInContext(readWebFile("js/languages/registry.js"), context);
@@ -130,3 +159,4 @@ test("language registry classifies configurable file opening mode types", () => 
   assert.equal(types.some((type) => type.key === "special:license"), true);
   assert.equal(types.find((type) => type.key === "extension:markdown")?.defaultMode, "split");
 });
+

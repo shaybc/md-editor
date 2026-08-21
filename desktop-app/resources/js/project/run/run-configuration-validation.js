@@ -86,6 +86,8 @@
         if (!String(configuration.gradle?.tasks || "").trim()) addError(errors, "gradle.tasks", "Gradle tasks are required.");
         if (context.gradleProject && !context.gradleProject.hasGradleProject) addError(errors, "gradle.project", "A Gradle project is required.");
         if (context.gradleProject?.runnerError) addError(errors, "gradle.runner", context.gradleProject.runnerError);
+      } else if (configuration?.type === "docker-compose") {
+        if (!["up", "down", "logs"].includes(configuration.dockerCompose?.command)) addError(errors, "dockerCompose.command", "Choose a Docker Compose command.");
       } else {
         addError(errors, "type", "Choose a supported Run configuration type.");
       }

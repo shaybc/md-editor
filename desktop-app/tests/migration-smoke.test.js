@@ -366,6 +366,9 @@ test("interface settings expose indent and autocomplete controls", () => {
   assert.match(legacyScript, /settingsSnippetPreferencesDraft/);
   const snippetRegistry = readWebFile("js/editor/snippets.js");
   assert.match(snippetRegistry, /id: "java", label: "Java"/);
+  assert.match(snippetRegistry, /id: "yaml", label: "YAML"/);
+  assert.match(snippetRegistry, /kubernetes-deployment/);
+  assert.match(snippetRegistry, /docker-compose-spring-postgres/);
   assert.match(snippetRegistry, /id: "python", label: "Python"/);
   assert.match(snippetRegistry, /id: "csharp", label: "C#"/);
   assert.match(snippetRegistry, /CSHARP_SNIPPETS/);
@@ -394,7 +397,7 @@ test("CodeMirror source exposes edit command hooks and configurable completion",
   assert.match(source, /getLanguageCompletionSources/);
   assert.match(source, /getSnippetCompletionSource/);
   assert.match(source, /snippetCompletion/);
-  assert.match(source, /\["javascript", "typescript", "java", "python", "csharp"\]\.includes\(languageId\)/);
+  assert.match(source, /\["javascript", "typescript", "java", "yaml", "python", "csharp"\]\.includes\(languageId\)/);
   assert.match(source, /createAutocompleteExtension/);
   assert.match(source, /languageAutocompleteEnabled/);
   assert.match(source, /languageServerAutocompleteEnabled/);
@@ -1777,4 +1780,45 @@ test("offline license header resources and services are bundled before editor vi
     assert.equal(canonicalText.length > 0, true, `${license.id} canonical text should be bundled`);
     assert.doesNotMatch(canonicalText, /^---\r?\n/, `${license.id} should not include upstream front matter`);
   });
+});
+
+test("Kubernetes project commands are bundled and exposed from the Project menu", () => {
+  const html = readWebFile("index.html");
+  const applicationMenuScript = readWebFile("js/ui/application-menu.js");
+  const projectCommandMenuScript = readWebFile("js/project/project-command-menu.js");
+  const kubernetesScriptIndex = html.indexOf('src="js/project/kubernetes-project-commands.js"');
+  const projectMenuScriptIndex = html.indexOf('src="js/project/project-command-menu.js"');
+
+  assert.ok(kubernetesScriptIndex >= 0, "Kubernetes project commands should be loaded");
+  assert.ok(projectMenuScriptIndex >= 0, "Project command menu should be loaded");
+  assert.ok(kubernetesScriptIndex < projectMenuScriptIndex, "Kubernetes commands should load before the project command menu");
+
+  ["kubernetes-dry-run", "kubernetes-server-dry-run", "kubernetes-apply", "kubernetes-delete", "kubernetes-explain"].forEach((commandName) => {
+    assert.match(applicationMenuScript, new RegExp(`data-project-command="${commandName}"`));
+  });
+  assert.doesNotMatch(applicationMenuScript, /Server Dry Run \(Skip Schema Validation\)/);
+  assert.match(projectCommandMenuScript, /kubernetesCommandOptionsDialog[\s\S]*open/);
+  assert.match(projectCommandMenuScript, /projectCommandResultModal[\s\S]*open/);
+});
+
+test("Helm project commands are bundled and exposed from the Project menu", () => {
+  const html = readWebFile("index.html");
+  const applicationMenuScript = readWebFile("js/ui/application-menu.js");
+  const projectCommandMenuScript = readWebFile("js/project/project-command-menu.js");
+  const codeMirrorSource = readWebFile("js/editor/codemirror-bundle-source.js");
+  const chartContextIndex = html.indexOf('src="js/project/helm-chart-context.js"');
+  const helmCommandsIndex = html.indexOf('src="js/project/helm-project-commands.js"');
+  const projectMenuScriptIndex = html.indexOf('src="js/project/project-command-menu.js"');
+
+  assert.ok(chartContextIndex >= 0, "Helm chart context should be loaded");
+  assert.ok(helmCommandsIndex >= 0, "Helm project commands should be loaded");
+  assert.ok(chartContextIndex < helmCommandsIndex, "Helm context should load before Helm commands");
+  assert.ok(helmCommandsIndex < projectMenuScriptIndex, "Helm commands should load before the project command menu");
+
+  ["helm-lint-chart", "helm-template-chart", "helm-template-active-file", "helm-preview-template", "helm-preview-chart", "helm-dependency-update", "helm-render-kubernetes-dry-run"].forEach((commandName) => {
+    assert.match(applicationMenuScript, new RegExp(`data-project-command="${commandName}"`));
+  });
+  assert.match(projectCommandMenuScript, /helmCommands[\s\S]*execute\(commandName, context\)/);
+  assert.match(codeMirrorSource, /createHelmCompletionSource/);
+  assert.match(codeMirrorSource, /markdownViewerHelmCompletionProvider/);
 });
