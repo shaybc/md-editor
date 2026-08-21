@@ -66,6 +66,9 @@ function loadFileOpen(overrides = {}) {
     isMarkdownPath(value) {
       return /\.(md|markdown)$/i.test(value || "");
     },
+    isMermaidPath(value) {
+      return /\.mermaid$/i.test(value || "");
+    },
     isTextDocumentPath(value) {
       return /\.(md|markdown|json|txt|js)$/i.test(value || "");
     },
@@ -74,6 +77,15 @@ function loadFileOpen(overrides = {}) {
     },
     looksLikeGraphDocument(value) {
       return value?.documentType === "graph-view";
+    },
+    isDiagramCandidatePath() {
+      return false;
+    },
+    isDiagramPath() {
+      return false;
+    },
+    looksLikeDiagramXml() {
+      return false;
     },
     largeFileViewer: {
       classifyLargeDocumentOpen() {
@@ -240,6 +252,115 @@ test("graph json detection still wins over text preview", async () => {
   assert.equal(tab.type, "graph");
 });
 
+test("Kubernetes topology files reuse an existing source tab", async () => {
+  const calls = [];
+  const existingTab = { id: "topology-tab", type: "kubernetes-topology" };
+  const fileOpen = loadFileOpen({
+    isKubernetesTopologyFilePath(value) {
+      return /\.mdviewer-k8s-topology\.json$/i.test(value || "");
+    },
+    findTabForSourceFile(source, requiredType) {
+      calls.push(["find", source.path, requiredType]);
+      return existingTab;
+    },
+    switchTab(tabId) {
+      calls.push(["switch", tabId]);
+    },
+    openSavedKubernetesTopologyDocument() {
+      throw new Error("should not open duplicate topology tab");
+    },
+    Neutralino: {
+      filesystem: {
+        readFile() {
+          throw new Error("should not read existing topology file");
+        },
+        getStats() {
+          return { size: 20 };
+        }
+      }
+    }
+  });
+
+  const tab = await fileOpen.openDocumentSourceFile({ name: "topology.mdviewer-k8s-topology.json", path: "C:/vault/topology.mdviewer-k8s-topology.json" });
+
+  assert.equal(tab, existingTab);
+  assert.deepEqual(calls, [
+    ["find", "C:/vault/topology.mdviewer-k8s-topology.json", "kubernetes-topology"],
+    ["switch", "topology-tab"]
+  ]);
+});
+
+test("permanent Kubernetes topology opens pin an existing temporary source tab", async () => {
+  const calls = [];
+  const existingTab = { id: "topology-tab", type: "kubernetes-topology", isTemporary: true };
+  const fileOpen = loadFileOpen({
+    isKubernetesTopologyFilePath(value) {
+      return /\.mdviewer-k8s-topology\.json$/i.test(value || "");
+    },
+    findTabForSourceFile(source, requiredType) {
+      calls.push(["find", source.path, requiredType]);
+      return existingTab;
+    },
+    switchTab(tabId) {
+      calls.push(["switch", tabId]);
+    },
+    pinTemporaryTab(tabId) {
+      calls.push(["pin", tabId]);
+    },
+    openSavedKubernetesTopologyDocument() {
+      throw new Error("should not open duplicate topology tab");
+    }
+  });
+
+  const tab = await fileOpen.openDocumentSourceFile({ name: "topology.mdviewer-k8s-topology.json", path: "C:/vault/topology.mdviewer-k8s-topology.json" }, { temporary: false });
+
+  assert.equal(tab, existingTab);
+  assert.deepEqual(calls, [
+    ["find", "C:/vault/topology.mdviewer-k8s-topology.json", "kubernetes-topology"],
+    ["switch", "topology-tab"],
+    ["pin", "topology-tab"]
+  ]);
+});
+test("detected Kubernetes topology JSON documents reuse an existing source tab", async () => {
+  const calls = [];
+  const existingTab = { id: "topology-json-tab", type: "kubernetes-topology" };
+  const fileOpen = loadFileOpen({
+    isKubernetesTopologyFilePath() {
+      return false;
+    },
+    looksLikeKubernetesTopologyDocument(value) {
+      return value?.documentType === "kubernetes-topology-view";
+    },
+    findTabForSourceFile(source, requiredType) {
+      calls.push(["find", source.path, requiredType]);
+      return existingTab;
+    },
+    switchTab(tabId) {
+      calls.push(["switch", tabId]);
+    },
+    openSavedKubernetesTopologyDocument() {
+      throw new Error("should not open duplicate topology tab");
+    },
+    Neutralino: {
+      filesystem: {
+        readFile() {
+          return JSON.stringify({ documentType: "kubernetes-topology-view" });
+        },
+        getStats() {
+          return { size: 45 };
+        }
+      }
+    }
+  });
+
+  const tab = await fileOpen.openDocumentSourceFile({ name: "topology.json", path: "C:/vault/topology.json" });
+
+  assert.equal(tab, existingTab);
+  assert.deepEqual(calls, [
+    ["find", "C:/vault/topology.json", "kubernetes-topology"],
+    ["switch", "topology-json-tab"]
+  ]);
+});
 test("folder startup lazy markdown indexing runs after the folder tree renders", async () => {
   const scanCalls = [];
   const collectCalls = [];

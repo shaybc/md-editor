@@ -199,9 +199,23 @@ test("Helm project commands refresh cached completion items", async () => {
   assert.ok(items.some((item) => item.label === ".Values.image.repository" && item.detail === "Helm values"));
   assert.ok(items.some((item) => item.label === "include \"hello-world.fullname\" ." && item.detail === "Helm named template"));
   assert.ok(items.some((item) => item.label === "toYaml" && item.info.includes("Convert a value")));
+  assert.ok(items.some((item) => item.label === "nindent" && item.info.includes("newline")));
+  assert.ok(items.some((item) => item.label === "if" && item.detail === "Go template action"));
+  assert.ok(items.some((item) => item.label === "with" && item.detail === "Go template action"));
+  assert.ok(!items.some((item) => item.detail === "Helm Chart.yaml"));
   assert.equal(api.getCachedCompletionItems().length, items.length);
 });
 
+
+test("Helm project commands refresh Chart.yaml completion items", async () => {
+  const { api } = createApi();
+  const items = JSON.parse(JSON.stringify(await api.refreshCompletionItems({ folderPath: "C:/Project", filePath: "C:/Project/charts/hello-world/Chart.yaml" })));
+
+  for (const label of ["apiVersion", "name", "description", "type", "version", "appVersion"]) {
+    assert.ok(items.some((item) => item.label === label && item.apply === `${label}: ` && item.detail === "Helm Chart.yaml"));
+  }
+  assert.ok(items.some((item) => item.label === ".Values.image.repository" && item.detail === "Helm values"));
+});
 test("Helm project commands handle dependency fragment command", async () => {
   const { api, tabs } = createApi();
   const result = await api.execute("helm-insert-dependency", { folderPath: "C:/Project", filePath: "C:/Project/charts/hello-world/Chart.yaml" });

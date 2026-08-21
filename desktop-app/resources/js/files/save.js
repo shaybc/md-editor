@@ -37,7 +37,7 @@
   }
 
   function isSaveAsSupportedFileTab(tab) {
-    return !!tab && tab.type !== "graph";
+    return !!tab && tab.type !== "graph" && tab.type !== "kubernetes-topology";
   }
 
   function getTabSourcePath(tab) {
@@ -305,7 +305,7 @@ ${bodyHtml}
   }
 
   async function saveMarkdownTabToSource(tab) {
-    if (!tab || tab.type === "graph" || (!tab.sourceFileHandle && !tab.sourceFilePath)) return false;
+    if (!tab || tab.type === "graph" || tab.type === "kubernetes-topology" || (!tab.sourceFileHandle && !tab.sourceFilePath)) return false;
     if (tab.transformedForViewing === true) return false;
 
     try {
@@ -338,7 +338,7 @@ ${bodyHtml}
   }
 
   async function saveMarkdownTabWithSaveDialog(tab) {
-    if (!tab || tab.type === "graph") return false;
+    if (!tab || tab.type === "graph" || tab.type === "kubernetes-topology") return false;
 
     const content = getMarkdownTabContentForSave(tab);
     const isFormattedView = tab.transformedForViewing === true;
@@ -408,7 +408,7 @@ ${bodyHtml}
   }
 
   async function saveGeneratedHtmlTabWithSaveDialog(tab) {
-    if (!tab || tab.type === "graph") return false;
+    if (!tab || tab.type === "graph" || tab.type === "kubernetes-topology") return false;
 
     const fileDetails = getGeneratedHtmlSaveDetails(tab);
     const content = buildGeneratedHtmlSaveContent(tab);

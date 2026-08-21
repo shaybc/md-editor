@@ -473,6 +473,7 @@ async function startMarkdownViewer() {
   const {
     getMarkdownTitleFromFileName,
     isGraphFilePath,
+    isKubernetesTopologyFilePath,
     isJsonPath,
     isPotentialGraphFilePath,
     getFileExtension,
@@ -486,6 +487,7 @@ async function startMarkdownViewer() {
     fileContainsGraphDocument,
     neutralinoPathContainsGraphDocument,
     looksLikeGraphDocument,
+    looksLikeKubernetesTopologyDocument,
     isFirefoxBrowser,
     sanitizeMarkdownFileName,
     sanitizeDocumentFileName,
@@ -600,6 +602,8 @@ async function startMarkdownViewer() {
     rootElement: document.body
   });
 
+  let kubernetesTopologyDocument = null;
+
   const fileOpen = window.registerMarkdownViewerFileOpen(app, {
     statistics: userStatistics,
     get activeFolderName() { return activeFolderName; },
@@ -614,12 +618,14 @@ async function startMarkdownViewer() {
     getFileName,
     getMarkdownTitleFromFileName,
     isGraphFilePath,
+    isKubernetesTopologyFilePath,
     isJsonPath,
     largeFileViewer,
     largeJsonOpen,
     foregroundWaitIndicator,
     appDebugLog,
     looksLikeGraphDocument,
+    looksLikeKubernetesTopologyDocument,
     isMarkdownPath,
     isMermaidPath,
     isTextDocumentPath,
@@ -634,9 +640,12 @@ async function startMarkdownViewer() {
     get saveGlobalState() { return saveGlobalState; },
     get openSidebarFileInTab() { return openSidebarFileInTab; },
     get findGraphTabForSourceFile() { return findGraphTabForSourceFile; },
+    get findTabForSourceFile() { return tabsModule?.findTabForSourceFile; },
+    get pinTemporaryTab() { return pinTemporaryTab; },
     get switchTab() { return switchTab; },
     get rememberRecentFile() { return rememberRecentFile; },
     get openSavedGraphDocument() { return openSavedGraphDocument; },
+    get openSavedKubernetesTopologyDocument() { return kubernetesTopologyDocument?.openSavedKubernetesTopologyDocument; },
     get openLargeFileInTab() { return openLargeFileInTab; },
     get openFilePreviewInTab() { return openFilePreviewInTab; },
     get openHexEditorInTab() { return tabsModule?.openHexEditorInTab; },
@@ -3287,6 +3296,17 @@ ${getMarkdownAlertBody(alertType, selectedText)}`;
       serverId: server?.id || ""
     });
     if (!server) return null;
+    const activeContent = typeof options.content === "string" ? options.content : options.view?.state?.doc?.toString?.() || "";
+    if (lspServerRegistry.shouldEnableLanguageServerForDocument?.(server.id, { filePath: path, content: activeContent }) === false) {
+      void appDebugLog?.("debug", "[lsp] Editor session skipped", {
+        reason: "document-language-server-disabled",
+        path,
+        serverId: server.id,
+        languageId: language?.id || "",
+        codeMirrorLanguage
+      });
+      return null;
+    }
     const autoStartEnabled = isLanguageServerAutoStartEnabled(server.id);
     const hasRunningSession = autoStartEnabled
       ? true
@@ -3347,7 +3367,7 @@ ${getMarkdownAlertBody(alertType, selectedText)}`;
       initializationOptions: session.initializationOptions || {},
       workspaceConfiguration: lspServerRegistry.getServerWorkspaceConfiguration(server.id, {
         filePath: path,
-        content: typeof options.content === "string" ? options.content : options.view?.state?.doc?.toString?.() || ""
+        content: activeContent
       }),
       transport: session.transport
     };
@@ -8290,6 +8310,22 @@ Markdown content is processed client-side in your browser and sanitized before p
   const saveGraphTabWithSaveDialog = graphDocuments.saveGraphTabWithSaveDialog;
   const saveActiveGraphWithSaveDialog = graphDocuments.saveActiveGraphWithSaveDialog;
   const openSavedGraphDocument = graphDocuments.openSavedGraphDocument;
+  kubernetesTopologyDocument = window.registerMarkdownViewerKubernetesTopologyDocument?.(app, {
+    get activeFolderPath() { return activeFolderPath; },
+    get activeTabId() { return activeTabId; },
+    get tabs() { return tabs; },
+    get Neutralino() { return typeof Neutralino !== "undefined" ? Neutralino : undefined; },
+    get NL_VERSION() { return typeof NL_VERSION !== "undefined" ? NL_VERSION : undefined; },
+    get saveAs() { return saveAs; },
+    get openKubernetesTopologyInTab() { return tabsModule?.openKubernetesTopologyInTab; },
+    get saveTabsToStorage() { return saveTabsToStorage; },
+    get renderTabBar() { return renderTabBar; },
+    get updateSaveCurrentFileButtons() { return updateSaveCurrentFileButtons; },
+    get setTabOpenedSource() { return setTabOpenedSource; },
+    getFileName,
+    joinPath,
+    isFirefoxBrowser
+  });
 
   const tagsModule = window.registerMarkdownViewerTags(app, {
     get folderMarkdownFiles() { return folderMarkdownFiles; },
@@ -8629,6 +8665,7 @@ Markdown content is processed client-side in your browser and sanitized before p
     saveGeneratedHtmlTabWithSaveDialog,
     saveActiveGraphToSource,
     saveActiveGraphWithSaveDialog,
+    kubernetesTopologyDocument,
     isKeepSavedGraphMode,
     get renameSidebarNodeOnDisk() { return renameSidebarNodeOnDisk; },
     openDocumentSourceFile,
@@ -8820,6 +8857,7 @@ Markdown content is processed client-side in your browser and sanitized before p
     createGraphTab,
     createLargeFileTab,
     createFilePreviewTab,
+    createKubernetesTopologyTab: function(graph, result, options) { return tabsModule?.createKubernetesTopologyTab?.(graph, result, options) || null; },
     createImageEditorTab,
     createDiagramEditorTab,
     createHexEditorTab,
@@ -13953,7 +13991,7 @@ ${output.slice(-64000)}`;
 
   function getConversionExportState() {
     const activeTab = tabs.find((tab) => tab.id === activeTabId) || null;
-    const nonEditableTypes = new Set(["graph", "large-file", "file-preview", "image-editor", "hex-editor", "file-compare", "api-client"]);
+    const nonEditableTypes = new Set(["graph", "large-file", "file-preview", "image-editor", "hex-editor", "file-compare", "api-client", "kubernetes-topology"]);
     return {
       activeDocument: {
         exportable: !!activeTab && !nonEditableTypes.has(activeTab.type),
@@ -15501,6 +15539,7 @@ async function* collectWorkspaceSearchFilesFromNeutralinoDirectory(parentPath, p
     sanitizeMarkdownFileName,
     getMarkdownTitleFromFileName,
     isGraphFilePath,
+    isKubernetesTopologyFilePath,
     isJsonPath,
     isSidebarDocumentPath,
     isSidebarDocumentNode,
@@ -16137,10 +16176,17 @@ ${error?.message || String(error || "")}`,
   });
   const kubernetesCommandResultParser = window.registerMarkdownViewerKubernetesCommandResultParser?.(app);
   const kubernetesManifestGraph = window.registerMarkdownViewerKubernetesManifestGraph?.(app);
+  const kubernetesTopologyRenderer = window.registerMarkdownViewerKubernetesTopologyRenderer?.(app, {
+    openPath: async function(path) {
+      return openDocumentSourceFile({ name: getFileName(path), path, sourceFilePath: path }, { temporary: false, pinExisting: true });
+    }
+  });
   const kubernetesCommandOptionsDialog = window.registerMarkdownViewerKubernetesCommandOptionsDialog?.(app);
   const projectCommandResultModal = window.registerMarkdownViewerProjectCommandResultModal?.(app, {
     parser: kubernetesCommandResultParser,
     graphBuilder: kubernetesManifestGraph,
+    topologyRenderer: kubernetesTopologyRenderer,
+    openKubernetesTopologyInTab: function(graph, result) { return tabsModule?.openKubernetesTopologyInTab?.(graph, result) || null; },
     copyText: function(text) { return navigator.clipboard?.writeText?.(String(text || "")); },
     openExternal: openExternalWebLink,
     openPath: async function(path, ref) {
@@ -16208,8 +16254,10 @@ ${error?.message || String(error || "")}`,
       filePath: getActiveEditorPathForLanguage(),
       content: activeEditorCommands.getActiveEditorValue()
     };
-    void helmProjectCommands?.refreshCompletionItems?.(context);
-    return helmProjectCommands?.getCachedCompletionItems?.() || [];
+    if (helmProjectCommands?.isHelmChart?.(context) === false) return [];
+    const fallbackItems = helmProjectCommands?.getCachedCompletionItems?.() || helmAuthoringDocs?.getFunctionCompletionItems?.() || [];
+    const refresh = helmProjectCommands?.refreshCompletionItems?.(context);
+    return refresh && typeof refresh.then === "function" ? refresh.catch(() => fallbackItems) : (refresh || fallbackItems);
   };
   const projectCommands = window.registerMarkdownViewerProjectCommandMenu?.(app, {
     statistics: userStatistics,
@@ -16220,6 +16268,7 @@ ${error?.message || String(error || "")}`,
     kubernetesContext,
     kubernetesCommandOptionsDialog,
     projectCommandResultModal,
+    get terminal() { return desktopTerminal; },
     kubernetesCommands: kubernetesProjectCommands,
     helmCommands: helmProjectCommands,
     get javaRebuildOutput() { return app.modules?.javaRebuildOutput; },
@@ -19146,6 +19195,10 @@ ${error?.message || String(error || "")}`,
         const activeTab = tabsModule?.getActiveTab?.();
         if (activeTab?.type === "hex-editor") {
           await hexEditor.saveHexEditorTab(activeTab, { saveAs: true });
+          return;
+        }
+        if (activeTab?.type === "kubernetes-topology") {
+          await kubernetesTopologyDocument?.saveKubernetesTopologyTabWithSaveDialog?.(activeTab);
           return;
         }
         saveCurrentTabState();

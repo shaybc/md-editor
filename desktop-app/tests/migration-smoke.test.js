@@ -1799,6 +1799,7 @@ test("Kubernetes project commands are bundled and exposed from the Project menu"
   assert.doesNotMatch(applicationMenuScript, /Server Dry Run \(Skip Schema Validation\)/);
   assert.match(projectCommandMenuScript, /kubernetesCommandOptionsDialog[\s\S]*open/);
   assert.match(projectCommandMenuScript, /projectCommandResultModal[\s\S]*open/);
+  assert.match(projectCommandMenuScript, /attachCommandResult/);
 });
 
 test("Helm project commands are bundled and exposed from the Project menu", () => {

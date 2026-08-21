@@ -6,6 +6,7 @@
       markdown: ".md",
       graph: ".mdviewer-graph.json",
       report: ".mdviewer-graph.json",
+      "kubernetes-topology": ".mdviewer-k8s-topology.json",
       "image-editor": ".mdimage",
       "diagram-editor": ".drawio",
       file: ".txt"
@@ -85,7 +86,7 @@
         title: tab?.title || tab?.folderName || "Untitled",
         createdAt: Number(tab?.createdAt || Date.now()),
         isTemporary: tab?.isTemporary === true,
-        viewMode: tab?.viewMode || (type === "graph" || type === "health-report" || type === "large-file" || type === "file-preview" || type === "diagram-editor" || type === "hex-editor" ? "preview" : "split"),
+        viewMode: tab?.viewMode || (type === "graph" || type === "health-report" || type === "large-file" || type === "file-preview" || type === "diagram-editor" || type === "hex-editor" || type === "kubernetes-topology" ? "preview" : "split"),
         splitViewEditorWidthPercent: Number.isFinite(tab?.splitViewEditorWidthPercent) ? tab.splitViewEditorWidthPercent : null,
         scrollPos: Number(tab?.scrollPos || 0) || 0,
         selectionStart: Number(tab?.selectionStart || 0) || 0,
@@ -145,6 +146,21 @@
       return descriptor;
     }
 
+    function serializeKubernetesTopologyTab(tab) {
+      const descriptor = createDescriptorBase(tab, "kubernetes-topology");
+      descriptor.source = getOpenedSource(tab, "kubernetes-topology-file");
+      descriptor.sourceFileName = tab?.sourceFileName || descriptor.source?.name || null;
+      descriptor.sourceFilePath = normalizePath(tab?.sourceFilePath || descriptor.source?.path || "") || null;
+      descriptor.kubernetesTopology = {
+        graph: clone(tab?.kubernetesTopology?.graph || tab?.kubernetesTopologyDocument?.topology || { nodes: [], edges: [], warnings: [] }),
+        result: clone(tab?.kubernetesTopology?.result || tab?.kubernetesTopologyDocument?.commandSummary || null),
+        manifestContent: String(tab?.kubernetesTopology?.manifestContent || tab?.kubernetesTopologyDocument?.manifestSnapshot || "")
+      };
+      descriptor.kubernetesTopologyLayout = clone(tab?.kubernetesTopologyLayout || tab?.kubernetesTopologyDocument?.layout || { positions: {} });
+      descriptor.kubernetesTopologyDocument = clone(tab?.kubernetesTopologyDocument || null);
+      descriptor.dirty = tab?.kubernetesTopologyDirty === true;
+      return descriptor;
+    }
     function getGraphDocument(tab) {
       if (typeof deps.serializeGraphTab === "function") {
         return deps.serializeGraphTab(tab, { documentType: deps.GRAPH_DOCUMENT_TYPE_VIEW || "graph-view" });
@@ -283,6 +299,7 @@
       if (tab.type === "graph") return serializeGraphTab(tab, options);
       if (tab.type === "large-file") return serializeLargeFileTab(tab, options);
       if (tab.type === "file-preview") return serializeFilePreviewTab(tab, options);
+      if (tab.type === "kubernetes-topology") return serializeKubernetesTopologyTab(tab, options);
       if (tab.type === "image-editor") return serializeImageEditorTab(tab, options);
       if (tab.type === "diagram-editor") return serializeDiagramEditorTab(tab, options);
       if (tab.type === "hex-editor") return serializeHexEditorTab(tab);
@@ -551,6 +568,52 @@
       return paths;
     }
 
+    function isKubernetesTopologyDocumentPath(path) {
+      return /\.mdviewer-k8s-topology\.json$/i.test(path || "");
+    }
+
+    function isLegacyKubernetesTopologyDescriptor(descriptor) {
+      if (!descriptor || descriptor.type === "kubernetes-topology") return false;
+      const sourcePath = normalizePath(descriptor.sourceFilePath || descriptor.source?.path || "");
+      return isKubernetesTopologyDocumentPath(sourcePath);
+    }
+
+    function isKubernetesTopologyDocument(document) {
+      return !!(document && typeof document === "object" && document.documentType === "kubernetes-topology-view" && document.topology && Array.isArray(document.topology.nodes) && Array.isArray(document.topology.edges));
+    }
+
+    async function readKubernetesTopologyDocument(descriptor) {
+      if (isKubernetesTopologyDocument(descriptor?.kubernetesTopologyDocument)) return descriptor.kubernetesTopologyDocument;
+      if (!deps.Neutralino?.filesystem?.readFile) return null;
+      for (const path of getGraphDocumentCandidatePaths(descriptor)) {
+        if (!isKubernetesTopologyDocumentPath(path)) continue;
+        try {
+          const document = JSON.parse(await deps.Neutralino.filesystem.readFile(path) || "{}");
+          if (isKubernetesTopologyDocument(document)) return document;
+        } catch (_error) {}
+      }
+      return null;
+    }
+
+    async function restoreLegacyKubernetesTopologyTab(descriptor) {
+      const document = await readKubernetesTopologyDocument(descriptor);
+      if (!document) return null;
+      return restoreKubernetesTopologyTab({
+        ...descriptor,
+        type: "kubernetes-topology",
+        title: descriptor.title || document.title || "Kubernetes Topology",
+        kubernetesTopologyDocument: document,
+        kubernetesTopology: {
+          graph: document.topology,
+          result: document.commandSummary || null,
+          manifestContent: document.manifestSnapshot || ""
+        },
+        kubernetesTopologyLayout: document.layout || { positions: {} },
+        dirty: false,
+        viewMode: "preview"
+      });
+    }
+
     async function readGraphDocument(descriptor) {
       if (descriptor?.draftDocument) return descriptor.draftDocument;
       if (!deps.Neutralino?.filesystem?.readFile) return null;
@@ -678,6 +741,36 @@
       return tab;
     }
 
+    async function restoreKubernetesTopologyTab(descriptor) {
+      const document = descriptor.kubernetesTopologyDocument || null;
+      const topology = descriptor.kubernetesTopology || {};
+      const graph = topology.graph || document?.topology || { nodes: [], edges: [], warnings: [] };
+      const result = topology.result || document?.commandSummary || null;
+      const sourcePath = normalizePath(descriptor.sourceFilePath || descriptor.source?.path || "");
+      const sourceFileName = descriptor.sourceFileName || descriptor.source?.name || descriptor.title || null;
+      const tab = deps.createKubernetesTopologyTab
+        ? deps.createKubernetesTopologyTab(graph, result, {
+            title: descriptor.title || document?.title || "Kubernetes Topology",
+            layout: descriptor.kubernetesTopologyLayout || document?.layout || { positions: {} },
+            document,
+            sourceFilePath: sourcePath || null,
+            sourceFileName,
+            manifestContent: topology.manifestContent || document?.manifestSnapshot || "",
+            temporary: descriptor.isTemporary === true,
+            dirty: descriptor.dirty === true
+          })
+        : deps.createTab("", descriptor.title || "Kubernetes Topology", "preview", { openedSource: descriptor.source || null });
+      applyDescriptorIdentity(tab, descriptor);
+      tab.type = "kubernetes-topology";
+      tab.sourceFileName = sourceFileName;
+      tab.sourceFilePath = sourcePath || null;
+      tab.kubernetesTopology = tab.kubernetesTopology || { graph, result, manifestContent: topology.manifestContent || document?.manifestSnapshot || "" };
+      tab.kubernetesTopologyLayout = tab.kubernetesTopologyLayout || descriptor.kubernetesTopologyLayout || document?.layout || { positions: {} };
+      tab.kubernetesTopologyDocument = document;
+      tab.kubernetesTopologyDirty = descriptor.dirty === true;
+      restoreCommonViewState(tab, descriptor);
+      return tab;
+    }
     async function restoreImageEditorTab(descriptor) {
       const sourcePath = normalizePath(descriptor.sourceFilePath || descriptor.source?.path || descriptor.imageEditorSource?.path || "");
       let draftBytes = null;
@@ -837,10 +930,15 @@
 
     async function restoreDescriptor(descriptor) {
       if (!descriptor || descriptor.schemaVersion !== SESSION_VERSION) return null;
+      if (isLegacyKubernetesTopologyDescriptor(descriptor)) {
+        const topologyTab = await restoreLegacyKubernetesTopologyTab(descriptor);
+        if (topologyTab) return topologyTab;
+      }
       if (descriptor.type === "graph") return restoreGraphTab(descriptor);
       if (descriptor.type === "health-report") return restoreHealthReportTab(descriptor);
       if (descriptor.type === "large-file") return restoreLargeFileTab(descriptor);
       if (descriptor.type === "file-preview") return restoreFilePreviewTab(descriptor);
+      if (descriptor.type === "kubernetes-topology") return restoreKubernetesTopologyTab(descriptor);
       if (descriptor.type === "image-editor") return restoreImageEditorTab(descriptor);
       if (descriptor.type === "diagram-editor") return restoreDiagramEditorTab(descriptor);
       if (descriptor.type === "hex-editor") return restoreHexEditorTab(descriptor);
@@ -872,6 +970,7 @@
       serializeHealthReportTab: serializeGraphTab,
       serializeLargeFileTab,
       serializeFilePreviewTab,
+      serializeKubernetesTopologyTab,
       serializeImageEditorTab,
       serializeDiagramEditorTab,
       serializeHexEditorTab,
@@ -886,6 +985,7 @@
       restoreHealthReportTab,
       restoreLargeFileTab,
       restoreFilePreviewTab,
+      restoreKubernetesTopologyTab,
       restoreImageEditorTab,
       restoreHexEditorTab,
       restoreDraftTab,

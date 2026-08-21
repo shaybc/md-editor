@@ -51,6 +51,22 @@ test("CodeMirror generated bundle enables YAML snippet completions", () => {
   assert.ok(generatedBundle.includes(supportedSnippetLanguages));
 });
 
+test("CodeMirror generated bundle scopes Helm completions to template actions", () => {
+  const source = readResourceFile(path.join("js", "editor", "codemirror-bundle-source.js"));
+  const generatedBundle = readResourceFile(path.join("js", "vendor", "codemirror.bundle.js"));
+
+  for (const content of [source, generatedBundle]) {
+    assert.ok(content.includes("function getOpenHelmTemplateAction"));
+    assert.ok(content.includes("lastIndexOf(\"{{\")"));
+    assert.ok(content.includes("lastIndexOf(\"}}\")"));
+    assert.ok(content.includes("window.markdownViewerHelmCompletionProvider"));
+    assert.ok(content.includes("items.then"));
+    assert.ok(content.includes("include\\s+"));
+    assert.ok(content.includes("function createHelmChartYamlCompletion"));
+    assert.ok(content.includes("Helm Chart.yaml"));
+    assert.ok(content.includes("option.apply = String(completion.apply)"));
+  }
+});
 test("CodeMirror snippet completion source uses an explicit word range", () => {
   const source = readResourceFile(path.join("js", "editor", "codemirror-bundle-source.js"));
   const generatedBundle = readResourceFile(path.join("js", "vendor", "codemirror.bundle.js"));

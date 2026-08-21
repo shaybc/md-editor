@@ -154,6 +154,40 @@
       return header;
     }
 
+    function ensureCommandResultActions(session) {
+      if (!session?.view || !session?.terminalRoot) return null;
+      if (session.resultActions) return session.resultActions;
+      const actions = document.createElement("div");
+      actions.className = "terminal-command-result-actions";
+      actions.hidden = true;
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "terminal-command-result-button";
+      button.title = "Show result summary";
+      button.setAttribute("aria-label", "Show result summary");
+      button.innerHTML = '<i class="bi bi-diagram-3" aria-hidden="true"></i>';
+      button.addEventListener("click", () => {
+        if (session.commandResult) app?.modules?.projectCommandResultModal?.open?.(session.commandResult);
+      });
+      actions.appendChild(button);
+      session.view.insertBefore(actions, session.terminalRoot);
+      session.resultActions = actions;
+      session.resultButton = button;
+      return actions;
+    }
+
+    /** Attach a structured command result to a command terminal tab for later reopening. */
+    function attachCommandResult(tabId, result) {
+      const session = sessionsByTabId.get(String(tabId || ""));
+      if (!session?.commandRun || !result || result.cancelled) return false;
+      session.commandResult = result;
+      const actions = ensureCommandResultActions(session);
+      if (!actions) return false;
+      actions.hidden = false;
+      session.resultButton?.classList.toggle("failed", result.ok === false);
+      return true;
+    }
+
     function getTerminalConstructor() {
       return global.Terminal || global.Xterm?.Terminal || null;
     }
@@ -801,6 +835,7 @@
       runCommand,
       showCommandOutput,
       closeCommandOutput,
+      attachCommandResult,
       stopCommandSession,
       openTerminal,
       stopAllTerminals,

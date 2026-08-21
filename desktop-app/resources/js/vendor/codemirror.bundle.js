@@ -99551,6 +99551,85 @@ function createStaticCompletionSource(completions) {
       return option;
     }));
   }
+  function getHelmCompletionItems() {
+    try {
+      const provider = typeof window !== "undefined" ? window.markdownViewerHelmCompletionProvider : null;
+      const items = typeof provider === "function" ? provider() : [];
+      if (items && typeof items.then === "function") return items.then((resolved) => Array.isArray(resolved) ? resolved : []);
+      return Array.isArray(items) ? items : [];
+    } catch (_error) {
+      return [];
+    }
+  }
+  function getOpenHelmTemplateAction(state, pos) {
+    const beforeCursor = state.sliceDoc(0, pos);
+    const open = beforeCursor.lastIndexOf("{{");
+    if (open < 0) return null;
+    const close = beforeCursor.lastIndexOf("}}");
+    if (close > open) return null;
+    return { from: open + 2, text: beforeCursor.slice(open + 2) };
+  }
+  function toHelmCompletionOptions(items, predicate = () => true) {
+    return items.filter(predicate).map((completion) => {
+      const option = {
+        label: String(completion.label || ""),
+        type: String(completion.type || "variable"),
+        detail: String(completion.detail || "Helm"),
+        origin: String(completion.origin || "Language")
+      };
+      if (completion.info) option.info = String(completion.info);
+      if (completion.apply) option.apply = String(completion.apply);
+      return option;
+    }).filter((completion) => completion.label);
+  }
+  function isHelmChartYamlCompletion(completion) {
+    return String(completion?.detail || "") === "Helm Chart.yaml";
+  }
+  function isHelmTemplateCompletion(completion) {
+    return !isHelmChartYamlCompletion(completion);
+  }
+  function createHelmCompletionResult(context2, items, from) {
+    const options2 = toHelmCompletionOptions(items, isHelmTemplateCompletion);
+    if (!options2.length) return null;
+    return {
+      from,
+      options: options2,
+      validFor: /[\p{L}\p{N}_." -]*/u
+    };
+  }
+  function createHelmChartYamlCompletionResult(context2, items, from) {
+    const options2 = toHelmCompletionOptions(items, isHelmChartYamlCompletion);
+    if (!options2.length) return null;
+    return {
+      from,
+      options: options2,
+      validFor: /[\p{L}\p{N}_-]*/u
+    };
+  }
+  function createHelmChartYamlCompletion(context2) {
+    const line4 = context2.state.doc.lineAt(context2.pos);
+    const beforeCursor = line4.text.slice(0, context2.pos - line4.from);
+    if (!/^\s*[\p{L}\p{N}_-]*$/u.test(beforeCursor)) return null;
+    const word = context2.matchBefore(/[\p{L}\p{N}_-]*$/u);
+    if (!context2.explicit && (!word || word.from === word.to)) return null;
+    const items = getHelmCompletionItems();
+    const from = word?.from ?? context2.pos;
+    if (items && typeof items.then === "function") return items.then((resolved) => createHelmChartYamlCompletionResult(context2, resolved, from));
+    return createHelmChartYamlCompletionResult(context2, items, from);
+  }
+  function createHelmCompletionSource() {
+    return (context2) => {
+      const action = getOpenHelmTemplateAction(context2.state, context2.pos);
+      if (!action) return createHelmChartYamlCompletion(context2);
+      const word = context2.matchBefore(/(?:\.Values[\p{L}\p{N}_.-]*|include\s+"[^"]*|[\p{L}\p{N}_.-]*)$/u);
+      if (!context2.explicit && (!word || word.from === word.to)) return null;
+      const items = getHelmCompletionItems();
+      const from = word?.from ?? context2.pos;
+      if (items && typeof items.then === "function") return items.then((resolved) => createHelmCompletionResult(context2, resolved, from));
+      return createHelmCompletionResult(context2, items, from);
+    };
+  }
+  const HELM_COMPLETION_SOURCE = createHelmCompletionSource();
   function createDockerfileCompletionSource() {
     const source = createStaticCompletionSource(DOCKERFILE_COMPLETIONS);
     return (context2) => {
@@ -100538,6 +100617,8 @@ function createStaticCompletionSource(completions) {
         return [cssCompletionSource];
       case "sql":
         return [keywordCompletionSource(StandardSQL)];
+      case "yaml":
+        return [HELM_COMPLETION_SOURCE];
       default:
         return [];
     }

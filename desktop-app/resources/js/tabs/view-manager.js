@@ -18,6 +18,10 @@
     const regexTester = deps.regexTester || null;
     const editorViewManager = deps.editorViewManager || null;
 
+    function getKubernetesTopologyRenderer() {
+      return deps.kubernetesTopologyRenderer || app?.modules?.kubernetesTopologyRenderer || null;
+    }
+
     function parkLegacySurface() {
       if (!legacyEditorSurface) return;
       legacyEditorSurface.hidden = true;
@@ -43,6 +47,7 @@
       if (tab?.type === "file-compare") return "file-compare";
       if (tab?.type === "api-client") return "api-client";
       if (tab?.type === "regex-tester") return "regex-tester";
+      if (tab?.type === "kubernetes-topology") return "kubernetes-topology";
       if (!tab || tab.type !== "graph") return "editor";
       return tab.graphViewKind === "health-report" ? "graph-health-report" : "graph";
     }
@@ -126,6 +131,9 @@
       } else if (tab?.type === "regex-tester") {
         editorViewManager?.deactivateEditorView?.();
         regexTester?.mountRegexTesterTab?.(tab, root);
+      } else if (tab?.type === "kubernetes-topology") {
+        editorViewManager?.deactivateEditorView?.();
+        getKubernetesTopologyRenderer()?.mountTopologyTab?.(tab, root);
       } else if (tab?.type !== "graph") {
         if (!editorViewManager?.activateEditorTab) {
           renderEditableTabFailure(root, "Editable text tabs require the CodeMirror editor view manager.");
@@ -155,6 +163,7 @@
       fileCompare?.destroyFileCompareTab?.(tabId);
       apiClient?.destroyApiClientTab?.(tabId);
       regexTester?.destroyRegexTesterTab?.(tabId);
+      getKubernetesTopologyRenderer()?.destroyTopologyTab?.(tabId);
       editorViewManager?.destroyEditorTab?.(tabId);
       root.remove();
       viewRoots.delete(tabId);

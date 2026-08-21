@@ -976,7 +976,7 @@
   let tabContextCloseMobileMenuOnAction = false;
 
   function getTabCompareSource(tab) {
-    if (!tab || ['graph', 'file-compare', 'api-client', 'regex-tester'].includes(tab.type)) return null;
+    if (!tab || ['graph', 'file-compare', 'api-client', 'regex-tester', 'kubernetes-topology'].includes(tab.type)) return null;
     const path = tab.sourceFilePath || tab.openedSource?.path || tab.largeFileSource?.path || tab.filePreviewSource?.path || null;
     const handle = tab.sourceFileHandle || tab.largeFileSource?.handle || tab.filePreviewSource?.handle || null;
     const file = tab.filePreviewSource?.file || null;
@@ -1589,11 +1589,16 @@
     }
   }
 
+  function topologyTabNeedsInitialSave(tab) {
+    return tab?.type === "kubernetes-topology" && !(tab.sourceFileHandle || (isNeutralinoRuntime() && tab.sourceFilePath));
+  }
+
   function activeTabHasUnsavedChanges() {
     const activeTab = getActiveTab();
     if (activeTab?.type === "image-editor") return tabHasPendingChanges(activeTab);
     if (activeTab?.type === "hex-editor") return tabHasPendingChanges(activeTab);
     if (activeTab?.type === "diagram-editor") return tabHasPendingChanges(activeTab);
+    if (activeTab?.type === "kubernetes-topology") return topologyTabNeedsInitialSave(activeTab) || tabHasPendingChanges(activeTab);
     const tab = getActiveMarkdownTab();
     const activeContent = getActiveEditorContent();
     return tabHasPendingChanges(tab, activeContent);
@@ -1603,6 +1608,7 @@
     return tabs.filter(function(tab) {
       if (!tab) return false;
       if (tab.type === "file-preview" || tab.type === "file-compare" || tab.type === "api-client" || tab.type === "regex-tester") return false;
+      if (tab.type === "kubernetes-topology") return topologyTabNeedsInitialSave(tab) || tabHasPendingChanges(tab);
       if (tab.type === "graph" || tab.type === "large-file" || tab.type === "image-editor" || tab.type === "diagram-editor" || tab.type === "hex-editor") return tabHasPendingChanges(tab);
       const currentContent = tab.id === activeTabId ? getActiveEditorContent() : tab.content;
       return tabHasPendingChanges(tab, currentContent);
@@ -1621,7 +1627,8 @@
     const hasUnsavedChanges = activeTabHasUnsavedChanges();
     const isImageEditor = activeTab?.type === "image-editor";
     const isDiagramEditor = activeTab?.type === "diagram-editor";
-    const hasWritableSource = isImageEditor || isDiagramEditor
+    const isKubernetesTopology = activeTab?.type === "kubernetes-topology";
+    const hasWritableSource = isImageEditor || isDiagramEditor || isKubernetesTopology
       ? !!(activeTab.sourceFileHandle || (isNeutralinoRuntime() && activeTab.sourceFilePath))
       : !!(tab && (tab.sourceFileHandle || (isNeutralinoRuntime() && tab.sourceFilePath)));
     const title = graphTab
@@ -1629,9 +1636,9 @@
         ? "Save the graph file that backs this health report."
         : "Save layout, groups, filters, hidden points, tags, and connections. File contents are not included.")
       : (hasUnsavedChanges
-        ? (hasWritableSource ? "Save changes to current file" : (isImageEditor ? "Save image as a new file" : (isDiagramEditor ? "Save diagram as a new file" : "Save changes as Markdown")))
+        ? (hasWritableSource ? "Save changes to current file" : (isImageEditor ? "Save image as a new file" : (isDiagramEditor ? "Save diagram as a new file" : (isKubernetesTopology ? "Save topology as a new file" : "Save changes as Markdown"))))
         : "No changes to save");
-    const label = graphTab ? (graphTab.graphViewKind === "health-report" ? "Save Graph Report" : "Save Graph View") : (isImageEditor ? "Save Image" : (isDiagramEditor ? "Save Diagram" : "Save Changes"));
+    const label = graphTab ? (graphTab.graphViewKind === "health-report" ? "Save Graph Report" : "Save Graph View") : (isImageEditor ? "Save Image" : (isDiagramEditor ? "Save Diagram" : (isKubernetesTopology ? "Save Topology" : "Save Changes")));
 
     document.querySelectorAll(".save-current-file-button").forEach(function(button) {
       button.disabled = graphTab ? false : !hasUnsavedChanges;
@@ -1705,6 +1712,12 @@
       if (options.activateSaveDialog === true) activateTabBeforeSaveDialog(tab);
       return saveGraphTabWithSaveDialog(tab);
     }
+    if (tab.type === "kubernetes-topology") {
+      if (!topologyTabNeedsInitialSave(tab) && !tabHasPendingChanges(tab) && options.activateSaveDialog !== true) return true;
+      if (await deps.kubernetesTopologyDocument?.saveKubernetesTopologyTabToSource?.(tab)) return true;
+      if (options.activateSaveDialog === true) activateTabBeforeSaveDialog(tab);
+      return await deps.kubernetesTopologyDocument?.saveKubernetesTopologyTabWithSaveDialog?.(tab) === true;
+    }
     if (tab.type === "large-file" || tab.type === "file-preview" || tab.type === "file-compare" || tab.type === "api-client" || tab.type === "regex-tester") return true;
 
     const content = getMarkdownTabContentForSave(tab);
@@ -1713,7 +1726,6 @@
     if (options.activateSaveDialog === true) activateTabBeforeSaveDialog(tab);
     return saveMarkdownTabWithSaveDialog(tab);
   }
-
   async function saveAllChangedTabs() {
     saveCurrentTabState();
     const changedTabs = getUnsavedTabs();
@@ -1784,6 +1796,12 @@
       if (!(await saveActiveGraphToSource())) {
         await saveActiveGraphWithSaveDialog();
       }
+      updateSaveCurrentFileButtons();
+      return;
+    }
+
+    if (activeTab?.type === "kubernetes-topology") {
+      await saveChangedTab(activeTab, { activateSaveDialog: true });
       updateSaveCurrentFileButtons();
       return;
     }
@@ -2018,7 +2036,7 @@
       perf.finish({ branch: "graph", reusedRender: false });
       return;
     }
-    if (tab.type === "large-file" || tab.type === "file-preview" || tab.type === "image-editor" || tab.type === "diagram-editor" || tab.type === "hex-editor" || tab.type === "file-compare" || tab.type === "api-client" || tab.type === "regex-tester") {
+    if (tab.type === "large-file" || tab.type === "file-preview" || tab.type === "image-editor" || tab.type === "diagram-editor" || tab.type === "hex-editor" || tab.type === "file-compare" || tab.type === "api-client" || tab.type === "regex-tester" || tab.type === "kubernetes-topology") {
       setActiveEditorContent("");
       perf.mark("clear active editor content");
       setViewMode("preview");
@@ -2081,7 +2099,7 @@
   }
 
   function isUnsupportedFileTab(tab) {
-    if (!tab || tab.type === "graph" || tab.type === "hex-editor" || tab.type === "file-compare" || tab.type === "api-client" || tab.type === "regex-tester") return false;
+    if (!tab || tab.type === "graph" || tab.type === "hex-editor" || tab.type === "file-compare" || tab.type === "api-client" || tab.type === "regex-tester" || tab.type === "kubernetes-topology") return false;
     if (tab.isUnsupportedFile === true) return true;
     const path = tab.sourceFilePath || tab.sourceFileName || tab.sourceFileHandle?.name || "";
     return !!path && isTextDocumentPath(path) && !isSupportedFolderTreeDocumentPath(path);
@@ -2098,13 +2116,13 @@
   }
 
   function isPreviewableDocumentTab(tab) {
-    if (!tab || tab.type === "graph" || tab.type === "file-compare" || tab.type === "api-client" || tab.type === "regex-tester") return false;
+    if (!tab || tab.type === "graph" || tab.type === "file-compare" || tab.type === "api-client" || tab.type === "regex-tester" || tab.type === "kubernetes-topology") return false;
     const path = tab.sourceFilePath || tab.sourceFileName || tab.sourceFileHandle?.name || "";
     return !path || isTextDocumentPath(path) || isHtmlPath(path);
   }
 
   function isMarkdownDocumentTab(tab) {
-    if (!tab || tab.type === "graph" || tab.type === "large-file" || tab.type === "file-preview" || tab.type === "image-editor" || tab.type === "diagram-editor" || tab.type === "hex-editor" || tab.type === "file-compare" || tab.type === "api-client" || tab.type === "regex-tester") return false;
+    if (!tab || tab.type === "graph" || tab.type === "large-file" || tab.type === "file-preview" || tab.type === "image-editor" || tab.type === "diagram-editor" || tab.type === "hex-editor" || tab.type === "file-compare" || tab.type === "api-client" || tab.type === "regex-tester" || tab.type === "kubernetes-topology") return false;
     const path = tab.sourceFilePath || tab.sourceFileName || tab.sourceFileHandle?.name || "";
     return path ? isMarkdownPath(path) : tab.type === "markdown";
   }
@@ -2115,7 +2133,7 @@
 
   function getAllowedViewModeForActiveTab(mode) {
     const activeTab = getActiveTab();
-    if (activeTab && (activeTab.type === "graph" || activeTab.type === "large-file" || activeTab.type === "file-preview" || activeTab.type === "image-editor" || activeTab.type === "diagram-editor" || activeTab.type === "hex-editor" || activeTab.type === "file-compare" || activeTab.type === "api-client" || activeTab.type === "regex-tester")) return 'preview';
+    if (activeTab && (activeTab.type === "graph" || activeTab.type === "large-file" || activeTab.type === "file-preview" || activeTab.type === "image-editor" || activeTab.type === "diagram-editor" || activeTab.type === "hex-editor" || activeTab.type === "file-compare" || activeTab.type === "api-client" || activeTab.type === "regex-tester" || activeTab.type === "kubernetes-topology")) return 'preview';
     return isPreviewableDocumentTab(activeTab) ? (mode || 'split') : 'editor';
   }
 
@@ -2221,6 +2239,26 @@
     return tab;
   }
 
+  function createKubernetesTopologyTab(graph, result, options = {}) {
+    const commandName = String(result?.commandName || result?.tool || "Kubernetes").trim();
+    const tab = createTab("", options.title || `${commandName} Topology`, "preview");
+    tab.type = "kubernetes-topology";
+    tab.kubernetesTopology = {
+      graph: graph || { nodes: [], edges: [], warnings: [] },
+      result: result || null,
+      manifestContent: options.manifestContent || ""
+    };
+    tab.kubernetesTopologyLayout = options.layout || options.document?.layout || { positions: {} };
+    tab.kubernetesTopologyDocument = options.document || null;
+    tab.kubernetesTopologyDirty = options.dirty === true;
+    tab.sourceFileName = options.sourceFileName || null;
+    tab.sourceFileHandle = options.sourceFileHandle || null;
+    tab.sourceFilePath = options.sourceFilePath || null;
+    if (tab.sourceFileName || tab.sourceFilePath || tab.sourceFileHandle) setTabOpenedSource(tab, createOpenedSourceFromSourceFile({ name: tab.sourceFileName || getFileName(tab.sourceFilePath), path: tab.sourceFilePath, handle: tab.sourceFileHandle }, "kubernetes-topology-file"));
+    tab.savedContent = "";
+    tab.isTemporary = options.temporary === true;
+    return tab;
+  }
   function activateSidebarTab(tab) {
     deps.closedTabHistory?.removeMatchingTab?.(tab);
     const previousActiveTabId = activeTabId;
@@ -2229,7 +2267,7 @@
     saveActiveTabId(activeTabId);
     refreshGraphModeNotices(tab);
     activateManagedTabView(tab);
-    if (tab.type === "large-file" || tab.type === "file-preview" || tab.type === "image-editor" || tab.type === "diagram-editor" || tab.type === "hex-editor" || tab.type === "file-compare" || tab.type === "api-client" || tab.type === "regex-tester") {
+    if (tab.type === "large-file" || tab.type === "file-preview" || tab.type === "image-editor" || tab.type === "diagram-editor" || tab.type === "hex-editor" || tab.type === "file-compare" || tab.type === "api-client" || tab.type === "regex-tester" || tab.type === "kubernetes-topology") {
       setActiveEditorContent("");
       setNoOpenTabsMode(false);
       setViewMode("preview");
@@ -2638,6 +2676,38 @@
   }
 
 
+  function openKubernetesTopologyInTab(graph, result, options = {}) {
+    const isTemporary = options.temporary === true;
+    saveCurrentTabState();
+
+    let tab = isTemporary ? findTemporaryTab() : null;
+    if (!tab && hasReachedOpenTabLimit("open Kubernetes topology")) return null;
+
+    if (!tab || tab.type === "graph") {
+      tab = createKubernetesTopologyTab(graph, result, options);
+      tabs.push(tab);
+    } else {
+      const tabIndex = tabs.findIndex(function(candidate) { return candidate.id === tab.id; });
+      destroyManagedTabView(tab.id);
+      const replacementTab = createKubernetesTopologyTab(graph, result, options);
+      if (tabIndex >= 0) tabs.splice(tabIndex, 1, replacementTab);
+      tab = replacementTab;
+    }
+
+    activateSidebarTab(tab);
+    return tab;
+  }
+
+  function markKubernetesTopologyTabDirty(tabId, layout) {
+    const tab = tabs.find(function(candidate) { return candidate.id === tabId; });
+    if (!tab || tab.type !== "kubernetes-topology") return false;
+    if (layout) tab.kubernetesTopologyLayout = layout;
+    tab.kubernetesTopologyDirty = true;
+    saveTabsToStorage(tabs);
+    renderTabBar(tabs, activeTabId);
+    updateSaveCurrentFileButtons();
+    return true;
+  }
   function openApiClientInTab(options) {
     options = options || {};
     const isTemporary = options.temporary === true;
@@ -3176,7 +3246,7 @@
         saveTabsToStorage(tabs);
         return;
       }
-      if (newActiveTab.type === "large-file" || newActiveTab.type === "file-preview" || newActiveTab.type === "image-editor" || newActiveTab.type === "diagram-editor" || newActiveTab.type === "hex-editor" || newActiveTab.type === "file-compare" || newActiveTab.type === "api-client" || newActiveTab.type === "regex-tester") {
+      if (newActiveTab.type === "large-file" || newActiveTab.type === "file-preview" || newActiveTab.type === "image-editor" || newActiveTab.type === "diagram-editor" || newActiveTab.type === "hex-editor" || newActiveTab.type === "file-compare" || newActiveTab.type === "api-client" || newActiveTab.type === "regex-tester" || newActiveTab.type === "kubernetes-topology") {
         setActiveEditorContent("");
         setViewMode("preview");
         setGraphViewMode(false);
@@ -3313,7 +3383,7 @@
   async function duplicateTab(tabId) {
     const tab = tabs.find(function(t) { return t.id === tabId; });
     if (!tab) return;
-    if (tab.type === "regex-tester") return;
+    if (tab.type === "regex-tester" || tab.type === "kubernetes-topology") return;
     if (hasReachedOpenTabLimit('open a new one')) {
       return;
     }
@@ -3607,7 +3677,7 @@
       startupPerf?.mark?.("tabs.init graph startup rendered");
       return;
     }
-    if (activeTab.type === "large-file" || activeTab.type === "file-preview" || activeTab.type === "image-editor" || activeTab.type === "diagram-editor" || activeTab.type === "hex-editor" || activeTab.type === "file-compare" || activeTab.type === "api-client" || activeTab.type === "regex-tester") {
+    if (activeTab.type === "large-file" || activeTab.type === "file-preview" || activeTab.type === "image-editor" || activeTab.type === "diagram-editor" || activeTab.type === "hex-editor" || activeTab.type === "file-compare" || activeTab.type === "api-client" || activeTab.type === "regex-tester" || activeTab.type === "kubernetes-topology") {
       setActiveEditorContent("");
       setNoOpenTabsMode(false);
       setViewMode("preview");
@@ -3692,6 +3762,7 @@
       createHexEditorTab,
       createFileCompareTab,
       createApiClientTab,
+      createKubernetesTopologyTab,
       createRegexTesterTab,
       activateSidebarTab,
       openSidebarFileInTab,
@@ -3704,6 +3775,7 @@
       openBlankDiagramEditorInTab,
       openHexEditorInTab,
       openFileCompareInTab,
+      openKubernetesTopologyInTab,
       openApiClientInTab,
       openRegexTesterInTab,
       openSidebarFileInTemporaryTab,

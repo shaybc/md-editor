@@ -169,14 +169,20 @@
           if (!commandOptions) return false;
         }
         const result = await deps.kubernetesCommands.execute(commandName, context, commandOptions);
-        if (result && !result.cancelled) deps.projectCommandResultModal?.open?.(result);
+        if (result && !result.cancelled) {
+          deps.terminal?.attachCommandResult?.(result.terminalTabId, result);
+          deps.projectCommandResultModal?.open?.(result);
+        }
         return result?.ok === true;
       }
       if (/^helm-/.test(commandName)) {
         const context = getContext(overrides);
         if (!getCapability(null, commandName, context)) return false;
         const result = await deps.helmCommands.execute(commandName, context);
-        if (result && !result.cancelled) deps.projectCommandResultModal?.open?.(result);
+        if (result && !result.cancelled) {
+          deps.terminal?.attachCommandResult?.(result.terminalTabId, result);
+          deps.projectCommandResultModal?.open?.(result);
+        }
         return result?.ok === true;
       }
       const context = getContext(overrides);
@@ -257,5 +263,3 @@
 
   global.registerMarkdownViewerProjectCommandMenu = registerMarkdownViewerProjectCommandMenu;
 })(typeof window !== "undefined" ? window : globalThis);
-
-

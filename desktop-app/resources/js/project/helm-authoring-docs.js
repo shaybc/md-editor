@@ -5,6 +5,11 @@
   function registerMarkdownViewerHelmAuthoringDocs(app) {
     const FUNCTIONS = Object.freeze({
       include: { detail: "Helm template", signature: "include \"template.name\" .", description: "Render a named template with the supplied context." },
+      if: { detail: "Go template action", signature: "if PIPELINE", description: "Start a conditional block when the pipeline evaluates to true." },
+      with: { detail: "Go template action", signature: "with PIPELINE", description: "Set dot to the pipeline value inside the block when it is non-empty." },
+      range: { detail: "Go template action", signature: "range PIPELINE", description: "Iterate over an array, slice, map, or channel." },
+      else: { detail: "Go template action", signature: "else", description: "Start the fallback branch for an if, with, or range block." },
+      end: { detail: "Go template action", signature: "end", description: "Close an if, with, range, or define block." },
       tpl: { detail: "Helm template", signature: "tpl VALUE .", description: "Evaluate a string as a template using the supplied context." },
       toYaml: { detail: "Helm function", signature: "toYaml VALUE", description: "Convert a value to indented YAML text." },
       indent: { detail: "Helm function", signature: "indent WIDTH TEXT", description: "Indent every line by the requested number of spaces." },

@@ -155,9 +155,12 @@
 
     function getDefaultStatusLabel() {
       const activeTab = getActiveTab();
-      return getPreviewHoveredLinkUrl() || (activeTab?.type === "graph"
+      const hoveredLinkUrl = getPreviewHoveredLinkUrl();
+      if (hoveredLinkUrl) return hoveredLinkUrl;
+      if (activeTab?.type === "kubernetes-topology") return "Tip: select a node or relationship to inspect it.";
+      return activeTab?.type === "graph"
         ? "Tip: hold ctrl / shift to see out / back links"
-        : "Tip: drag in text files, use split preview, or open a folder to build a graph.");
+        : "Tip: drag in text files, use split preview, or open a folder to build a graph.";
     }
 
     const statusManager = window.registerMarkdownViewerStatusManager(app, {

@@ -2467,32 +2467,85 @@ function getHelmCompletionItems() {
   try {
     const provider = typeof window !== "undefined" ? window.markdownViewerHelmCompletionProvider : null;
     const items = typeof provider === "function" ? provider() : [];
+    if (items && typeof items.then === "function") return items.then((resolved) => Array.isArray(resolved) ? resolved : []);
     return Array.isArray(items) ? items : [];
   } catch (_error) {
     return [];
   }
 }
 
+function getOpenHelmTemplateAction(state, pos) {
+  const beforeCursor = state.sliceDoc(0, pos);
+  const open = beforeCursor.lastIndexOf("{{");
+  if (open < 0) return null;
+  const close = beforeCursor.lastIndexOf("}}");
+  if (close > open) return null;
+  return { from: open + 2, text: beforeCursor.slice(open + 2) };
+}
+
+function toHelmCompletionOptions(items, predicate = () => true) {
+  return items.filter(predicate).map((completion) => {
+    const option = {
+      label: String(completion.label || ""),
+      type: String(completion.type || "variable"),
+      detail: String(completion.detail || "Helm"),
+      origin: String(completion.origin || "Language")
+    };
+    if (completion.info) option.info = String(completion.info);
+    if (completion.apply) option.apply = String(completion.apply);
+    return option;
+  }).filter((completion) => completion.label);
+}
+
+function isHelmChartYamlCompletion(completion) {
+  return String(completion?.detail || "") === "Helm Chart.yaml";
+}
+
+function isHelmTemplateCompletion(completion) {
+  return !isHelmChartYamlCompletion(completion);
+}
+function createHelmCompletionResult(context, items, from) {
+  const options = toHelmCompletionOptions(items, isHelmTemplateCompletion);
+  if (!options.length) return null;
+  return {
+    from,
+    options,
+    validFor: /[\p{L}\p{N}_." -]*/u
+  };
+}
+
+function createHelmChartYamlCompletionResult(context, items, from) {
+  const options = toHelmCompletionOptions(items, isHelmChartYamlCompletion);
+  if (!options.length) return null;
+  return {
+    from,
+    options,
+    validFor: /[\p{L}\p{N}_-]*/u
+  };
+}
+
+function createHelmChartYamlCompletion(context) {
+  const line = context.state.doc.lineAt(context.pos);
+  const beforeCursor = line.text.slice(0, context.pos - line.from);
+  if (!/^\s*[\p{L}\p{N}_-]*$/u.test(beforeCursor)) return null;
+  const word = context.matchBefore(/[\p{L}\p{N}_-]*$/u);
+  if (!context.explicit && (!word || word.from === word.to)) return null;
+  const items = getHelmCompletionItems();
+  const from = word?.from ?? context.pos;
+  if (items && typeof items.then === "function") return items.then((resolved) => createHelmChartYamlCompletionResult(context, resolved, from));
+  return createHelmChartYamlCompletionResult(context, items, from);
+}
+
 function createHelmCompletionSource() {
   return (context) => {
-    const word = context.matchBefore(/(?:\.Values[\p{L}\p{N}_.-]*|include\s+"[^"]*)$/u);
-    if (!context.explicit && !word) return null;
-    const options = getHelmCompletionItems().map((completion) => {
-      const option = {
-        label: String(completion.label || ""),
-        type: String(completion.type || "variable"),
-        detail: String(completion.detail || "Helm"),
-        origin: String(completion.origin || "Language")
-      };
-      if (completion.info) option.info = String(completion.info);
-      return option;
-    }).filter((completion) => completion.label);
-    if (!options.length) return null;
-    return {
-      from: word?.from ?? context.pos,
-      options,
-      validFor: /[\p{L}\p{N}_." -]*/u
-    };
+    const action = getOpenHelmTemplateAction(context.state, context.pos);
+    if (!action) return createHelmChartYamlCompletion(context);
+    const word = context.matchBefore(/(?:\.Values[\p{L}\p{N}_.-]*|include\s+"[^"]*|[\p{L}\p{N}_.-]*)$/u);
+    if (!context.explicit && (!word || word.from === word.to)) return null;
+    const items = getHelmCompletionItems();
+    const from = word?.from ?? context.pos;
+    if (items && typeof items.then === "function") return items.then((resolved) => createHelmCompletionResult(context, resolved, from));
+    return createHelmCompletionResult(context, items, from);
   };
 }
 

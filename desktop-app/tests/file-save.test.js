@@ -120,3 +120,29 @@ test("generated HTML report tabs save as HTML without replacing tab content", as
   assert.equal(tab.content, "# Line Counter\n\n<table><tbody><tr><td>file.js</td></tr></tbody></table>");
   assert.equal(tab.sourceFilePath, undefined);
 });
+
+test("generic markdown save paths refuse Kubernetes topology tabs", async () => {
+  const window = loadFileSaveModule();
+  const writes = [];
+  const tab = {
+    id: "tab_topology",
+    type: "kubernetes-topology",
+    content: "",
+    savedContent: "",
+    sourceFilePath: "C:/Vault/topology.mdviewer-k8s-topology.json"
+  };
+  const api = window.registerMarkdownViewerFileSave({}, createDeps({
+    tabs: [tab],
+    activeTabId: "tab_topology",
+    NL_VERSION: "5.6.0",
+    Neutralino: {
+      filesystem: {
+        writeFile: async (filePath, content) => writes.push([filePath, content])
+      }
+    }
+  }));
+
+  assert.equal(await api.saveMarkdownTabToSource(tab), false);
+  assert.equal(await api.saveMarkdownTabWithSaveDialog(tab), false);
+  assert.deepEqual(writes, []);
+});

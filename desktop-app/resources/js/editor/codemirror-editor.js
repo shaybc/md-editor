@@ -241,6 +241,7 @@
           path,
           language,
           codeMirrorLanguage: language?.codeMirrorLanguage || "text",
+          content: backingValue,
           view: codeMirror.view
         });
         if (requestId !== lspSessionRequestId) return false;

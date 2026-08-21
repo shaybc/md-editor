@@ -4,6 +4,22 @@
 
   /** Register pure Helm chart context helpers. */
   function registerMarkdownViewerHelmChartContext(app) {
+    const CHART_YAML_FIELDS = Object.freeze(["apiVersion", "name", "description", "type", "version", "appVersion"]);
+
+    function isChartYamlPath(filePath) {
+      return getFileName(filePath).toLowerCase() === "chart.yaml";
+    }
+
+    function createChartYamlCompletionItems(context = {}) {
+      if (!isChartYamlPath(context.filePath || context.path || "")) return [];
+      return CHART_YAML_FIELDS.map((label) => ({
+        label,
+        apply: `${label}: `,
+        type: "property",
+        detail: "Helm Chart.yaml"
+      }));
+    }
+
     function normalizePath(value) {
       return String(value || "").trim().replace(/\\/g, "/").replace(/\/+/g, "/");
     }
@@ -124,17 +140,19 @@
       return Array.from(new Set(names));
     }
 
-    function createCompletionItems(valuesYaml, helpersText) {
+    function createCompletionItems(valuesYaml, helpersText, context = {}) {
+      const chartYamlItems = createChartYamlCompletionItems(context);
       const valueItems = parseValuesPaths(valuesYaml).map((label) => ({ label, type: "variable", detail: "Helm values" }));
       const templateItems = extractNamedTemplates(helpersText).map((name) => ({
         label: `include "${name}" .`,
         type: "function",
         detail: "Helm named template"
       }));
-      return [...valueItems, ...templateItems];
+      return [...chartYamlItems, ...valueItems, ...templateItems];
     }
 
     const api = {
+      createChartYamlCompletionItems,
       createCompletionItems,
       extractNamedTemplates,
       findChartRoot,

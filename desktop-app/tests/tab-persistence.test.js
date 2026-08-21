@@ -57,6 +57,21 @@ function createPersistence(extraDeps = {}) {
         isTemporary: options.temporary === true
       };
     },
+    createKubernetesTopologyTab(graph, result, options = {}) {
+      return {
+        id: `topology_${options.title || "Topology"}`,
+        type: "kubernetes-topology",
+        title: options.title || "Kubernetes Topology",
+        viewMode: "preview",
+        kubernetesTopology: { graph, result, manifestContent: options.manifestContent || "" },
+        kubernetesTopologyLayout: options.layout || { positions: {} },
+        kubernetesTopologyDocument: options.document || null,
+        kubernetesTopologyDirty: options.dirty === true,
+        sourceFileName: options.sourceFileName || null,
+        sourceFilePath: options.sourceFilePath || null,
+        isTemporary: options.temporary === true
+      };
+    },
     createHexEditorTab(source, title, options = {}) {
       return {
         id: `hex_${title}`,
@@ -566,6 +581,118 @@ test("draft cleanup removes restored and deterministic draft files", async () =>
   assert.ok(removed.includes("C:\\Users\\tester\\.md-editor\\drafts\\report\\tab_cleanup.mdviewer-graph.json"));
 });
 
+test("Kubernetes topology tab serializes durable graph state", () => {
+  const persistence = createPersistence();
+  const tab = {
+    id: "tab_topology",
+    type: "kubernetes-topology",
+    title: "helm-template-chart",
+    createdAt: 123,
+    sourceFileName: "helm-template-chart.mdviewer-k8s-topology.json",
+    sourceFilePath: "C:/work/helm-template-chart.mdviewer-k8s-topology.json",
+    openedSource: {
+      path: "C:/work/helm-template-chart.mdviewer-k8s-topology.json",
+      name: "helm-template-chart.mdviewer-k8s-topology.json",
+      kind: "kubernetes-topology-file"
+    },
+    kubernetesTopology: {
+      graph: { schemaVersion: 1, nodes: [{ id: "namespace/default" }], edges: [], warnings: [] },
+      result: { tool: "helm", commandName: "helm-template-chart" },
+      manifestContent: "kind: Deployment"
+    },
+    kubernetesTopologyLayout: { positions: { "namespace/default": { x: 10, y: 20 } } },
+    kubernetesTopologyDirty: false
+  };
+
+  const descriptor = persistence.serializeTab(tab);
+
+  assert.equal(descriptor.type, "kubernetes-topology");
+  assert.equal(descriptor.viewMode, "preview");
+  assert.equal(descriptor.sourceFilePath, "C:/work/helm-template-chart.mdviewer-k8s-topology.json");
+  assert.equal(descriptor.kubernetesTopology.graph.nodes[0].id, "namespace/default");
+  assert.deepEqual(JSON.parse(JSON.stringify(descriptor.kubernetesTopologyLayout.positions["namespace/default"])), { x: 10, y: 20 });
+});
+
+test("Kubernetes topology session restores as topology view", async () => {
+  const persistence = createPersistence();
+  const restored = await persistence.restoreTabsFromPayload({
+    version: persistence.SESSION_VERSION,
+    activeTabId: "tab_topology",
+    tabs: [{
+      schemaVersion: persistence.SESSION_VERSION,
+      id: "tab_topology",
+      type: "kubernetes-topology",
+      title: "helm-template-chart",
+      sourceFileName: "helm-template-chart.mdviewer-k8s-topology.json",
+      sourceFilePath: "C:/work/helm-template-chart.mdviewer-k8s-topology.json",
+      source: {
+        path: "C:/work/helm-template-chart.mdviewer-k8s-topology.json",
+        name: "helm-template-chart.mdviewer-k8s-topology.json",
+        kind: "kubernetes-topology-file"
+      },
+      kubernetesTopology: {
+        graph: { schemaVersion: 1, nodes: [{ id: "namespace/default" }], edges: [], warnings: [] },
+        result: { tool: "helm", commandName: "helm-template-chart" },
+        manifestContent: "kind: Deployment"
+      },
+      kubernetesTopologyLayout: { positions: { "namespace/default": { x: 10, y: 20 } } },
+      dirty: false,
+      viewMode: "preview"
+    }]
+  });
+
+  assert.equal(restored.tabs.length, 1);
+  assert.equal(restored.tabs[0].type, "kubernetes-topology");
+  assert.equal(restored.tabs[0].viewMode, "preview");
+  assert.equal(restored.tabs[0].sourceFilePath, "C:/work/helm-template-chart.mdviewer-k8s-topology.json");
+  assert.equal(restored.tabs[0].kubernetesTopology.graph.nodes[0].id, "namespace/default");
+  assert.deepEqual(restored.tabs[0].kubernetesTopologyLayout.positions["namespace/default"], { x: 10, y: 20 });
+});
+test("legacy markdown topology session restores from saved topology file", async () => {
+  const persistence = createPersistence({
+    Neutralino: {
+      filesystem: {
+        async readFile(filePath) {
+          assert.equal(filePath, "C:/work/helm-template-chart.mdviewer-k8s-topology.json");
+          return JSON.stringify({
+            documentType: "kubernetes-topology-view",
+            schemaVersion: 1,
+            title: "helm-template-chart Topology",
+            topology: { schemaVersion: 1, nodes: [{ id: "namespace/default" }], edges: [], warnings: [] },
+            layout: { positions: { "namespace/default": { x: 10, y: 20 } } },
+            commandSummary: { tool: "helm", commandName: "helm-template-chart" },
+            manifestSnapshot: "kind: Deployment"
+          });
+        }
+      }
+    }
+  });
+
+  const restored = await persistence.restoreTabsFromPayload({
+    version: persistence.SESSION_VERSION,
+    activeTabId: "tab_legacy_topology",
+    tabs: [{
+      schemaVersion: persistence.SESSION_VERSION,
+      id: "tab_legacy_topology",
+      type: "markdown",
+      title: "helm-template-chart",
+      sourceFileName: "helm-template-chart.mdviewer-k8s-topology.json",
+      sourceFilePath: "C:/work/helm-template-chart.mdviewer-k8s-topology.json",
+      source: {
+        path: "C:/work/helm-template-chart.mdviewer-k8s-topology.json",
+        name: "helm-template-chart.mdviewer-k8s-topology.json",
+        kind: "markdown"
+      },
+      viewMode: "split"
+    }]
+  });
+
+  assert.equal(restored.tabs.length, 1);
+  assert.equal(restored.tabs[0].type, "kubernetes-topology");
+  assert.equal(restored.tabs[0].viewMode, "preview");
+  assert.equal(restored.tabs[0].sourceFilePath, "C:/work/helm-template-chart.mdviewer-k8s-topology.json");
+  assert.equal(restored.tabs[0].kubernetesTopology.graph.nodes[0].id, "namespace/default");
+});
 test("old tab sessions are ignored", async () => {
   const persistence = createPersistence();
   const restored = await persistence.restoreTabsFromPayload({

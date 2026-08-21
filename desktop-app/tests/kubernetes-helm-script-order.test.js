@@ -8,6 +8,8 @@ test("Kubernetes and Helm project helper scripts load before command modules", (
   const kubernetesContext = html.indexOf('src="js/project/kubernetes-context.js"');
   const resultParser = html.indexOf('src="js/project/kubernetes-command-result-parser.js"');
   const manifestGraph = html.indexOf('src="js/project/kubernetes-manifest-graph.js"');
+  const topologyDocument = html.indexOf('src="js/project/kubernetes-topology-document.js"');
+  const topologyRenderer = html.indexOf('src="js/project/kubernetes-topology-renderer.js"');
   const optionsDialog = html.indexOf('src="js/project/kubernetes-command-options-dialog.js"');
   const resultModal = html.indexOf('src="js/project/project-command-result-modal.js"');
   const kubernetesCommands = html.indexOf('src="js/project/kubernetes-project-commands.js"');
@@ -18,6 +20,8 @@ test("Kubernetes and Helm project helper scripts load before command modules", (
   assert.ok(kubernetesContext >= 0 && kubernetesContext < kubernetesCommands);
   assert.ok(resultParser >= 0 && resultParser < kubernetesCommands);
   assert.ok(manifestGraph >= 0 && manifestGraph < kubernetesCommands);
+  assert.ok(topologyDocument >= 0 && manifestGraph < topologyDocument && topologyDocument < topologyRenderer);
+  assert.ok(topologyRenderer >= 0 && topologyRenderer < resultModal);
   assert.ok(optionsDialog >= 0 && optionsDialog < kubernetesCommands);
   assert.ok(resultModal >= 0 && resultModal < kubernetesCommands);
   assert.ok(helmDocs >= 0 && helmDocs < helmCommands);

@@ -21,6 +21,13 @@ class ElementStub {
     return child;
   }
 
+  insertBefore(child, reference) {
+    const index = this.children.indexOf(reference);
+    if (index >= 0) this.children.splice(index, 0, child);
+    else this.children.push(child);
+    return child;
+  }
+
   append(...children) {
     this.children.push(...children);
   }
@@ -79,7 +86,7 @@ function loadTerminal(extraDeps = {}) {
   context.window.document = context.document;
   context.globalThis = context;
   vm.runInNewContext(source, context, { filename: "desktop-terminal.js" });
-  const app = { registerModule: () => {} };
+  const app = { modules: extraDeps.appModules || {}, registerModule: () => {} };
   const api = context.window.registerMarkdownViewerDesktopTerminal(app, {
     isNeutralinoRuntime: () => true,
     getActiveFolderPath: () => "C:/work/repo",
@@ -609,4 +616,35 @@ test("runCommand does not write bridge resize messages after command exit", asyn
   addedBottomPanelTabs.at(-1).onActivate();
 
   assert.deepEqual(updates, []);
+});
+
+
+test("attachCommandResult shows a lower-panel result summary button", async () => {
+  const spawnedHandlers = {};
+  let reopened = null;
+  const { api, addedBottomPanelTabs } = loadTerminal({
+    appModules: { projectCommandResultModal: { open: (result) => { reopened = result; } } },
+    Neutralino: {
+      events: { on: (name, handler) => { spawnedHandlers[name] = handler; } },
+      os: {
+        getEnv: async () => "",
+        spawnProcess: async () => ({ id: 31 }),
+        updateSpawnedProcess: async () => {}
+      }
+    }
+  });
+
+  const completion = api.runCommand("kubectl apply --dry-run=client -f app.yaml", { title: "Kubernetes" });
+  await new Promise((resolve) => setImmediate(resolve));
+  const tab = addedBottomPanelTabs.at(-1);
+  const result = { ok: true, commandName: "kubernetes-dry-run", terminalTabId: tab.id };
+
+  assert.equal(api.attachCommandResult(tab.id, result), true);
+  const actions = tab.view.children.find((child) => child.className === "terminal-command-result-actions");
+  assert.equal(actions.hidden, false);
+  actions.children[0].listeners.click();
+  assert.equal(reopened, result);
+
+  spawnedHandlers.spawnedProcess({ detail: { id: 31, action: "exit", exitCode: 0 } });
+  await completion;
 });

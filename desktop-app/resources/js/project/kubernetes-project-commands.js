@@ -242,6 +242,7 @@
         output,
         startedAt,
         durationMs: Date.now() - startedAt,
+        terminalTabId: terminalResult?.session?.tabId || "",
         contextSummary: getContextSummary(),
         sourceRefs: createSourceRefs(context, filePath),
         diagnostics,

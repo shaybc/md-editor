@@ -269,6 +269,7 @@ function createTabsHarness(options = {}) {
     hideSidebarContextMenus() {},
     closeMobileMenu() {}
   };
+  Object.assign(deps, options.deps || {});
   const api = context.window.registerMarkdownViewerTabs(app, deps);
   api.renderTabBar(tabs, activeTabId);
   return { api, tabs, tabList, sidebarCalls, activeTabChanges, bottomPanelCalls, bottomPanel, aiCompanionCalls, body, getActiveTabId: () => activeTabId };
@@ -406,4 +407,53 @@ test("right-clicking an unselected tab clears the previous multi-selection", () 
   tabs[2].dispatch("contextmenu", { clientX: 20, clientY: 20 });
 
   assert.deepEqual(visibleTabItems(harness).map((tab) => tab.hasClass("selected")), [false, false, false]);
+});
+test("unsaved Kubernetes topology tabs enable direct save and Ctrl+S save dialog", async () => {
+  const saveDialogCalls = [];
+  const harness = createTabsHarness({
+    tabs: [{
+      id: "topology-tab",
+      title: "Helm Topology",
+      type: "kubernetes-topology",
+      content: "",
+      savedContent: "",
+      kubernetesTopologyDirty: false
+    }],
+    activeTabId: "topology-tab",
+    deps: {
+      kubernetesTopologyDocument: {
+        saveKubernetesTopologyTabToSource: async () => false,
+        saveKubernetesTopologyTabWithSaveDialog: async (tab) => {
+          saveDialogCalls.push(tab.id);
+          tab.sourceFilePath = "C:/Vault/helm.mdviewer-k8s-topology.json";
+          return true;
+        }
+      }
+    }
+  });
+
+  assert.equal(harness.api.activeTabHasUnsavedChanges(), true);
+  assert.deepEqual(harness.api.getUnsavedTabs().map((tab) => tab.id), ["topology-tab"]);
+
+  await harness.api.saveCurrentFileIfChanged();
+
+  assert.deepEqual(saveDialogCalls, ["topology-tab"]);
+});
+
+test("saved clean Kubernetes topology tabs do not enable direct save", () => {
+  const harness = createTabsHarness({
+    tabs: [{
+      id: "topology-tab",
+      title: "Helm Topology",
+      type: "kubernetes-topology",
+      content: "",
+      savedContent: "",
+      kubernetesTopologyDirty: false,
+      sourceFileHandle: { name: "helm.mdviewer-k8s-topology.json" }
+    }],
+    activeTabId: "topology-tab"
+  });
+
+  assert.equal(harness.api.activeTabHasUnsavedChanges(), false);
+  assert.deepEqual(harness.api.getUnsavedTabs(), []);
 });

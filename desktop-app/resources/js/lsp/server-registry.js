@@ -709,6 +709,13 @@
       return fields.has("apiVersion") && fields.has("kind");
     }
 
+    function isHelmTemplateYamlDocument(path, content) {
+      const normalizedPath = normalizeLocalPath(path).toLowerCase();
+      if (!/\.(?:yaml|yml)$/.test(normalizedPath)) return false;
+      if (!normalizedPath.split("/").includes("templates")) return false;
+      return /\{\{[-\s]?/.test(String(content || ""));
+    }
+
     function getYamlSchemaFileMatch(filePath) {
       const normalizedPath = normalizeLocalPath(filePath);
       return normalizedPath || getFileName(filePath) || "*.yaml";
@@ -1010,6 +1017,13 @@
       return serverDefinitions[serverId]?.workspaceConfiguration || {};
     }
 
+    function shouldEnableLanguageServerForDocument(serverId, options = {}) {
+      if (serverId === YAML_SERVER_ID && isHelmTemplateYamlDocument(options.filePath || options.path || "", options.content || "")) {
+        return false;
+      }
+      return true;
+    }
+
     /**
      * Build the process launch descriptor for an installed server.
      * @param {string} serverId - Supported server id.
@@ -1162,6 +1176,7 @@
       getServerWorkspaceConfiguration,
       fromFileUri,
       isDesktopLspRuntime,
+      shouldEnableLanguageServerForDocument,
       isStandaloneJavaFile,
       joinPath,
       normalizeLocalPath,

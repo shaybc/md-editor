@@ -12,12 +12,16 @@
     return /\.(mdviewer-graph\.json|mdgraph\.json)$/i.test(path || "");
   }
 
+  function isKubernetesTopologyFilePath(path) {
+    return /\.mdviewer-k8s-topology\.json$/i.test(path || "");
+  }
+
   function isJsonPath(path) {
     return /\.json$/i.test(path || "");
   }
 
   function isPotentialGraphFilePath(path) {
-    return isGraphFilePath(path) || isJsonPath(path);
+    return isGraphFilePath(path) || isKubernetesTopologyFilePath(path) || isJsonPath(path);
   }
 
   function getFileExtension(path) {
@@ -65,7 +69,7 @@
   }
 
   function isSupportedFolderTreeDocumentPath(path) {
-    return isMarkdownPath(path) || isMermaidPath(path) || isGraphFilePath(path) || /\.drawio$/i.test(path || "") || languageRegistry?.isSupportedLanguagePath(path) === true;
+    return isMarkdownPath(path) || isMermaidPath(path) || isGraphFilePath(path) || isKubernetesTopologyFilePath(path) || /\.drawio$/i.test(path || "") || languageRegistry?.isSupportedLanguagePath(path) === true;
   }
 
   function isSupportedFolderTreeDocumentNode(node) {
@@ -91,6 +95,10 @@
     } catch (_) {
       return false;
     }
+  }
+
+  function looksLikeKubernetesTopologyDocument(document) {
+    return !!(document && typeof document === "object" && document.documentType === "kubernetes-topology-view" && document.topology && Array.isArray(document.topology.nodes) && Array.isArray(document.topology.edges));
   }
 
   function looksLikeGraphDocument(document) {
@@ -168,6 +176,7 @@
   const api = {
     getMarkdownTitleFromFileName,
     isGraphFilePath,
+    isKubernetesTopologyFilePath,
     isJsonPath,
     isPotentialGraphFilePath,
     getFileExtension,
@@ -181,6 +190,7 @@
     fileContainsGraphDocument,
     neutralinoPathContainsGraphDocument,
     looksLikeGraphDocument,
+    looksLikeKubernetesTopologyDocument,
     isFirefoxBrowser,
     sanitizeMarkdownFileName,
     sanitizeDocumentFileName,

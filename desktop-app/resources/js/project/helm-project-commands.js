@@ -260,6 +260,7 @@
         output,
         startedAt,
         durationMs: Date.now() - startedAt,
+        terminalTabId: terminalResult?.session?.tabId || "",
         contextSummary: getContextSummary(),
         sourceRefs: createSourceRefs(context, chartRoot, extra.sourceRefs || []),
         diagnostics,
@@ -397,7 +398,7 @@
       const helpersPath = chartContext.joinPath(chartRoot, "templates/_helpers.tpl");
       const valuesYaml = await deps.readFile(valuesPath).catch(() => "");
       const helpersText = await deps.readFile(helpersPath).catch(() => "");
-      const items = [...chartContext.createCompletionItems(valuesYaml, helpersText), ...functionItems];
+      const items = [...chartContext.createCompletionItems(valuesYaml, helpersText, activeContext), ...functionItems];
       if (requestId === completionRequestId) cachedCompletionItems = items;
       return items;
     }

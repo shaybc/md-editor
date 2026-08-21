@@ -43,6 +43,25 @@
     }
   }
 
+  function isKubernetesTopologyOpenPath(filePath) {
+    return typeof isKubernetesTopologyFilePath === "function" && isKubernetesTopologyFilePath(filePath);
+  }
+
+  function looksLikeKubernetesTopologyOpenDocument(document) {
+    return typeof looksLikeKubernetesTopologyDocument === "function" && looksLikeKubernetesTopologyDocument(document);
+  }
+
+  function openExistingKubernetesTopologyTab(sourceFile, name, path, openOptions) {
+    const existingTopologyTab = typeof findTabForSourceFile === "function"
+      ? findTabForSourceFile({ ...sourceFile, name, path }, "kubernetes-topology")
+      : null;
+    if (!existingTopologyTab) return null;
+    switchTab(existingTopologyTab.id);
+    if (openOptions?.pinExisting && typeof pinTemporaryTab === "function") pinTemporaryTab(existingTopologyTab.id);
+    rememberOpenDocumentSourceFile(sourceFile, name, openOptions);
+    return existingTopologyTab;
+  }
+
   async function readNeutralinoFileWithForegroundWait(path) {
     const releaseWait = deps.foregroundWaitIndicator?.begin?.();
     try {
@@ -482,6 +501,15 @@
       return tab;
     }
 
+    if (!openOptions.forceText && isKubernetesTopologyOpenPath(filePath)) {
+      const existingTopologyTab = openExistingKubernetesTopologyTab(sourceFile, name, path, openOptions);
+      if (existingTopologyTab) return existingTopologyTab;
+      logLargeFileOpen("debug", "opening as Kubernetes topology file", { name, path: filePath });
+      const tab = await openSavedKubernetesTopologyDocument?.({ ...sourceFile, name, path }, openOptions);
+      if (tab) rememberOpenDocumentSourceFile(sourceFile, name, openOptions);
+      return tab;
+    }
+
     const existingGraphTab = isGraphFilePath(filePath) && typeof findGraphTabForSourceFile === "function"
       ? findGraphTabForSourceFile({ ...sourceFile, name })
       : null;
@@ -586,6 +614,13 @@
           contentLength: content.length
         });
         const parsed = JSON.parse(content);
+        if (isKubernetesTopologyOpenPath(filePath) || looksLikeKubernetesTopologyOpenDocument(parsed)) {
+          const existingTopologyTab = openExistingKubernetesTopologyTab(sourceFile, name, path, openOptions);
+          if (existingTopologyTab) return existingTopologyTab;
+          const openedTopologyTab = await openSavedKubernetesTopologyDocument?.({ ...sourceFile, name, content }, openOptions);
+          if (openedTopologyTab) rememberOpenDocumentSourceFile(sourceFile, name, openOptions);
+          return openedTopologyTab;
+        }
         if (looksLikeGraphDocument(parsed)) {
           const graphTab = typeof findGraphTabForSourceFile === "function"
             ? findGraphTabForSourceFile({ ...sourceFile, name })
@@ -653,7 +688,7 @@
           filters: [
             { name: "MD-Editor layered images", extensions: ["mdimage"] },
             { name: "Draw.io diagrams", extensions: ["drawio", "xml"] },
-            { name: "Text-based files", extensions: ["md", "markdown", "mermaid", "mdviewer-graph.json", "mdgraph.json", "json", "txt", "java", "cs", "css", "js", "ts", "html", "xml", "csv", "yml", "yaml", "toml", "ini", "log"] },
+            { name: "Text-based files", extensions: ["md", "markdown", "mermaid", "mdviewer-graph.json", "mdgraph.json", "mdviewer-k8s-topology.json", "json", "txt", "java", "cs", "css", "js", "ts", "html", "xml", "csv", "yml", "yaml", "toml", "ini", "log"] },
             { name: "All files", extensions: ["*"] }
           ]
         });

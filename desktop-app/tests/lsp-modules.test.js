@@ -460,6 +460,27 @@ test("LSP server registry exposes the bundled YAML language server recipe", asyn
   assert.equal(descriptor.cwd, "C:/Desktop");
 });
 
+test("LSP server registry disables YAML language server for Helm template YAML", () => {
+  const context = createContext();
+  vm.runInContext(readWebFile("js/lsp/server-registry.js"), context);
+  const registry = context.window.registerMarkdownViewerLspServerRegistry(context.app, {
+    isNeutralinoRuntime: () => true
+  });
+
+  assert.equal(registry.shouldEnableLanguageServerForDocument("yaml", {
+    filePath: "C:/Project/charts/hello-world/templates/serviceaccount.yaml",
+    content: "{{- if .Values.serviceAccount.create -}}\napiVersion: v1\nkind: ServiceAccount\n{{- end }}\n"
+  }), false);
+  assert.equal(registry.shouldEnableLanguageServerForDocument("yaml", {
+    filePath: "C:/Project/charts/hello-world/values.yaml",
+    content: "serviceAccount:\n  create: true\n"
+  }), true);
+  assert.equal(registry.shouldEnableLanguageServerForDocument("yaml", {
+    filePath: "C:/Project/manifests/serviceaccount.yaml",
+    content: "apiVersion: v1\nkind: ServiceAccount\nmetadata:\n  name: app\n"
+  }), true);
+});
+
 test("LSP server registry exposes the bundled Bash language server recipe", async () => {
   const context = createContext();
   const installedFiles = new Set([
