@@ -330,6 +330,8 @@ test("interface settings expose indent and autocomplete controls", () => {
   assert.match(html, /open-json-yaml-tool/);
   assert.match(html, /open-jsonpath-tool/);
   assert.match(html, /open-xpath-tool/);
+  assert.match(html, /open-xslt-tool/);
+  assert.ok(styles.includes(".tab-view[data-tab-view-kind=") && styles.includes("xslt-runner-tool"));
   assert.match(html, /open-uuid-tool/);
   assert.match(html, /open-qr-tool/);
   assert.match(html, /open-hash-tool/);
@@ -900,6 +902,9 @@ test("active editor commands route editor actions through the active tab view", 
 test("editor context menu is registered from its extracted classic script", () => {
   const html = readWebFile("index.html");
   const legacyScript = readWebFile("script.js");
+  const styles = readWebFile("styles.css");
+  const xpathBuilderScript = readWebFile("js/tools/xpath/xpath-builder.js");
+  const xmlAwareDiffScript = readWebFile("js/tools/xml-aware-diff.js");
   const contextMenuScript = readWebFile("js/editor/context-menu.js");
   const unicodeConverterScript = readWebFile("js/editor/unicode-converter.js");
   const base64ConverterScript = readWebFile("js/editor/base64-converter.js");
@@ -991,7 +996,27 @@ test("editor context menu is registered from its extracted classic script", () =
   assert.match(html, /js\/tools\/jsonpath\/jsonpath-evaluator\.js/);
   assert.match(html, /js\/tools\/jsonpath\/jsonpath-tool\.js/);
   assert.match(html, /js\/tools\/xpath\/xpath-evaluator\.js/);
+  assert.match(html, /js\/tools\/xpath\/xpath-builder\.js/);
   assert.match(html, /js\/tools\/xpath\/xpath-tool\.js/);
+  assert.ok(
+    html.indexOf('src="js/tools/xpath/xpath-evaluator.js"') < html.indexOf('src="js/tools/xpath/xpath-builder.js"') &&
+      html.indexOf('src="js/tools/xpath/xpath-builder.js"') < html.indexOf('src="js/tools/xpath/xpath-tool.js"'),
+    "XPath builder should load between the evaluator and tool"
+  );
+  assert.match(html, /js\/tools\/xml-aware-diff\.js/);
+  assert.ok(
+    html.indexOf('src="js/tools/xml-aware-diff.js"') < html.indexOf('src="js/files/compare.js"'),
+    "XML-aware diff should load before compare files"
+  );
+  assert.match(xpathBuilderScript, /parseXmlToXPathTree/);
+  assert.match(xpathBuilderScript, /buildXPathForNode/);
+  assert.match(styles, /xpath-tool-builder-panel/);
+  assert.match(xmlAwareDiffScript, /normalizeXmlForDiff/);
+  assert.match(xmlAwareDiffScript, /createXmlAwareCompareSources/);
+  assert.match(xmlAwareDiffScript, /isXmlLikeSource/);
+  assert.match(styles, /file-compare-normalization-note/);
+  assert.match(html, /js\/tools\/xslt\/xslt-runner\.js/);
+  assert.match(html, /js\/tools\/xslt\/xslt-tool\.js/);
   assert.match(html, /js\/tools\/uuid\/uuid-codec\.js/);
   assert.match(html, /js\/tools\/uuid\/uuid-tool\.js/);
   assert.match(html, /js\/tools\/qr\/qr-codec\.js/);
@@ -1008,6 +1033,9 @@ test("editor context menu is registered from its extracted classic script", () =
   assert.match(html, /js\/tools\/string-bytes\/string-bytes-tool\.js/);
   assert.match(html, /js\/tools\/database-connection-string\/database-connection-string-codec\.js/);
   assert.match(html, /js\/tools\/database-connection-string\/database-connection-string-tool\.js/);
+  assert.match(html, /XML-aware Compare\.\.\./);
+  assert.match(legacyScript, /openXmlAwareCompareFilesFromPicker/);
+  assert.match(contextMenuScript, /xml-aware-compare/);
   assert.match(legacyScript, /registerMarkdownViewerBase64Tool/);
   assert.match(legacyScript, /registerMarkdownViewerCertificateParser/);
   assert.match(legacyScript, /registerMarkdownViewerCertificateDecoder/);
@@ -1015,6 +1043,7 @@ test("editor context menu is registered from its extracted classic script", () =
   assert.match(legacyScript, /registerMarkdownViewerJsonPathTool/);
   assert.match(legacyScript, /registerMarkdownViewerXPathEvaluator/);
   assert.match(legacyScript, /registerMarkdownViewerXPathTool/);
+  assert.match(legacyScript, /registerMarkdownViewerXsltTool/);
   assert.match(legacyScript, /registerMarkdownViewerUuidCodec/);
   assert.match(legacyScript, /registerMarkdownViewerUuidTool/);
   assert.match(legacyScript, /registerMarkdownViewerQrCodec/);
@@ -1060,11 +1089,13 @@ test("editor context menu is registered from its extracted classic script", () =
   assert.match(contextMenuScript, /\.\.\.\(isJsonContext \? getEditorJsonSourceActions\(\) : \[\]\)/);
   assert.match(contextMenuScript, /function getEditorXmlSourceActions\(\)/);
   assert.match(contextMenuScript, /menu: "source-xml"/);
-  assert.match(contextMenuScript, /\.\.\.\.\(isXmlContext \? getEditorXmlSourceActions\(\) : \[\]\)/);
+  assert.match(contextMenuScript, /\.\.\.\(isXmlContext \? getEditorXmlSourceActions\(\) : \[\]\)/);
   assert.match(contextMenuScript, /case "compact-json":[\s\S]*case "json-for-code":[\s\S]*case "json-from-code":[\s\S]*runJsonEditCommand\(action, \{ useContextSelection: true \}\)/);
-  assert.match(contextMenuScript, /case "compact-xml":[\s\S]*case "xml-validate":[\s\S]*case "xml-associate-schema":[\s\S]*case "xml-for-code":[\s\S]*case "xml-from-code":[\s\S]*case "xml-create-schema":[\s\S]*case "xml-create-stub":[\s\S]*runXmlEditCommand\(action, \{ useContextSelection: true \}\)/);
+  assert.match(contextMenuScript, /case "compact-xml":[\s\S]*case "xml-validate":[\s\S]*case "xml-associate-schema":[\s\S]*case "xml-for-code":[\s\S]*case "xml-from-code":[\s\S]*case "xml-create-schema":[\s\S]*case "xml-create-stub":[\s\S]*case "xml-aware-compare":[\s\S]*runXmlEditCommand\(action, \{ useContextSelection: true \}\)/);
   assert.match(contextMenuScript, /type: "xml-create-schema", label: "Create XML Schema from XML"/);
   assert.match(contextMenuScript, /type: "xml-create-stub", label: "Create XML Stub from XSD"/);
+  assert.match(contextMenuScript, /type: "xml-run-xslt", label: "Run XSLT"/);
+  assert.match(contextMenuScript, /type: "xml-aware-compare", label: "XML-aware Compare\.\.\."/);
   assert.match(contextMenuScript, /openGeneratedXmlSchemaInTab\(schemaSource, getXmlSchemaOutputTitle\(\)\)/);
   assert.match(contextMenuScript, /openGeneratedXmlStubInTab\(stubSource, getXmlStubOutputTitle\(\)\)/);
   assert.match(legacyScript, /registerMarkdownViewerXmlSchemaGenerator/);

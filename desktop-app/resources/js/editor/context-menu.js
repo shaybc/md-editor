@@ -22,6 +22,8 @@
     const getXmlValidation = deps.getXmlValidation || function() { return app.modules?.xmlValidation || null; };
     const getXmlSchemaAutocomplete = deps.getXmlSchemaAutocomplete || function() { return app.modules?.xmlSchemaAutocomplete || null; };
     const getXmlTreeGridView = deps.getXmlTreeGridView || function() { return app.modules?.xmlTreeGridView || null; };
+    const openXsltToolInTab = deps.openXsltToolInTab || null;
+    const openXmlAwareCompareForActiveEditor = deps.openXmlAwareCompareForActiveEditor || null;
     const getLessToCssConverter = deps.getLessToCssConverter || function() { return app.modules?.lessToCssConverter || null; };
     const openGeneratedXmlSchemaInTab = deps.openGeneratedXmlSchemaInTab || null;
     const openGeneratedXmlStubInTab = deps.openGeneratedXmlStubInTab || null;
@@ -626,6 +628,8 @@
         case "xml-from-code":
         case "xml-create-schema":
         case "xml-create-stub":
+        case "xml-run-xslt":
+        case "xml-aware-compare":
         case "xml-tree-grid":
           runXmlEditCommand(action, { useContextSelection: true });
           break;
@@ -984,6 +988,25 @@
       }
     }
 
+    function getActiveEditorPath() {
+      const activeTab = getActiveTab();
+      return activeTab?.sourceFilePath || activeTab?.sourceFileName || activeTab?.sourceFileHandle?.name || activeTab?.title || "";
+    }
+
+    function openXsltRunnerForActiveEditor() {
+      try {
+        if (typeof openXsltToolInTab !== "function") throw new Error("XSLT Runner is not available in this build.");
+        const sourcePath = getActiveEditorPath();
+        const source = getEditorValue();
+        const options = /\.(xsl|xslt)$/i.test(sourcePath) ? { xsltText: source } : { xmlText: source };
+        openXsltToolInTab(options);
+      } catch (error) {
+        showXmlConversionError(error?.message || "XSLT Runner failed.");
+      } finally {
+        hideEditorContextMenu();
+      }
+    }
+
     function openXmlTreeGridForActiveEditor() {
       try {
         const view = getXmlTreeGridView();
@@ -997,7 +1020,21 @@
         hideEditorContextMenu();
       }
     }
-
+    function openXmlAwareCompareForEditor() {
+      try {
+        if (typeof openXmlAwareCompareForActiveEditor !== "function") throw new Error("XML-aware comparison is not available in this build.");
+        const sourcePath = getActiveEditorPath();
+        openXmlAwareCompareForActiveEditor({
+          name: sourcePath.replace(/\\/g, "/").split("/").pop() || "Active XML",
+          path: sourcePath || null,
+          content: getEditorValue()
+        });
+      } catch (error) {
+        showXmlConversionError(error?.message || "XML-aware comparison failed.");
+      } finally {
+        hideEditorContextMenu();
+      }
+    }
     /**
      * Run one XML conversion for either the editor context menu or the main Edit menu.
      * @param {string} command XML conversion command identifier.
@@ -1016,6 +1053,9 @@
           return true;
         case "xml-tree-grid":
           openXmlTreeGridForActiveEditor();
+          return true;
+        case "xml-aware-compare":
+          openXmlAwareCompareForEditor();
           return true;
         case "compact-xml":
           compactXmlDocument();
@@ -1183,7 +1223,9 @@
           { type: "xml-for-code", label: "XML for Code", icon: "bi-code-square" },
           { type: "xml-from-code", label: "XML from Code", icon: "bi-code-slash" },
           { type: "xml-create-schema", label: "Create XML Schema from XML", icon: "bi-diagram-3" },
-          { type: "xml-create-stub", label: "Create XML Stub from XSD", icon: "bi-filetype-xml" }
+          { type: "xml-create-stub", label: "Create XML Stub from XSD", icon: "bi-filetype-xml" },
+          { type: "xml-run-xslt", label: "Run XSLT", icon: "bi-shuffle" },
+          { type: "xml-aware-compare", label: "XML-aware Compare...", icon: "bi-file-diff" }
         ]
       };
     }
@@ -1517,3 +1559,6 @@
 
   window.registerMarkdownViewerEditorContextMenu = registerMarkdownViewerEditorContextMenu;
 })(window, document);
+
+
+

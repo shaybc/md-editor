@@ -21,6 +21,7 @@
   function registerMarkdownViewerFileCompare(app, deps) {
     const compareViews = new Map();
     const alertUser = deps.alert || function(message) { global.alert?.(message); };
+    const xmlAwareDiff = deps.xmlAwareDiff || null;
     const normalizeEditorContent = deps.normalizeEditorContent || function(value) {
       return String(value || "").replace(/\r\n/g, "\n").replace(/\r/g, "\n");
     };
@@ -189,6 +190,30 @@
       };
     }
 
+    function createXmlAwareCompareTabDescriptor(leftSource, rightSource) {
+      return {
+        title: `XML diff: ${leftSource.name || "Left"} <-> ${rightSource.name || "Right"}`,
+        left: {
+          name: leftSource.name,
+          path: leftSource.path || null,
+          handle: leftSource.handle || null,
+          content: leftSource.content
+        },
+        right: {
+          name: rightSource.name,
+          path: rightSource.path || null,
+          handle: rightSource.handle || null,
+          content: rightSource.content
+        },
+        readOnly: true,
+        viewMode: "side-by-side",
+        xmlAwareDiff: {
+          normalized: true,
+          note: "XML-aware comparison normalized indentation, insignificant whitespace, and attribute order."
+        }
+      };
+    }
+
     /**
      * Load two provided file sources and open them in a compare tab.
      */
@@ -208,6 +233,38 @@
       }
     }
 
+    function formatXmlAwareDiagnostics(diagnostics) {
+      return (Array.isArray(diagnostics) ? diagnostics : [])
+        .map((diagnostic) => `${diagnostic.side ? `${diagnostic.side}: ` : ""}${diagnostic.message || diagnostic}`)
+        .filter(Boolean)
+        .join("\n");
+    }
+
+    /**
+     * Load two provided XML sources, normalize them, and open a read-only compare tab.
+     */
+    async function openXmlAwareCompareFiles(leftSource, rightSource) {
+      try {
+        if (typeof xmlAwareDiff?.createXmlAwareCompareSources !== "function") {
+          throw new Error("XML-aware comparison is not available in this build.");
+        }
+        const loadedLeftSource = await loadCompareSource(leftSource);
+        const loadedRightSource = await loadCompareSource(rightSource);
+        const normalized = xmlAwareDiff.createXmlAwareCompareSources(loadedLeftSource, loadedRightSource);
+        if (!normalized.ok) {
+          throw new Error(formatXmlAwareDiagnostics(normalized.diagnostics) || "Unable to normalize XML for comparison.");
+        }
+        const descriptor = createXmlAwareCompareTabDescriptor(normalized.left, normalized.right);
+        const tab = deps.openFileCompareInTab?.(descriptor);
+        if (!tab) alertUser("Unable to open the compare tab.");
+        return tab || null;
+      } catch (error) {
+        if (error?.name === "AbortError") return null;
+        console.error("Failed to compare XML files:", error);
+        alertUser(error?.message || "Unable to compare the selected XML files.");
+        return null;
+      }
+    }
     /**
      * Pick two files and open them in a compare tab.
      */
@@ -224,6 +281,31 @@
       }
     }
 
+    async function openXmlAwareCompareFilesFromPicker() {
+      try {
+        const sources = await selectCompareSources();
+        if (!sources) return null;
+        return openXmlAwareCompareFiles(sources[0], sources[1]);
+      } catch (error) {
+        if (error?.name === "AbortError") return null;
+        console.error("Failed to compare XML files:", error);
+        alertUser(error?.message || "Unable to compare the selected XML files.");
+        return null;
+      }
+    }
+
+    async function openXmlAwareCompareWithPicker(leftSource) {
+      try {
+        const rightSource = await selectCompareSource("right");
+        if (!rightSource) return null;
+        return openXmlAwareCompareFiles(leftSource, rightSource);
+      } catch (error) {
+        if (error?.name === "AbortError") return null;
+        console.error("Failed to compare XML files:", error);
+        alertUser(error?.message || "Unable to compare the selected XML files.");
+        return null;
+      }
+    }
     function createElement(tagName, className, textContent) {
       const element = document.createElement(tagName);
       if (className) element.className = className;
@@ -542,6 +624,9 @@
       const modeSelect = createElement("select", "file-compare-mode-select");
       const editorHost = createElement("div", "file-compare-editor-host");
       const status = createElement("div", "file-compare-status", "Loading compare editor...");
+      const xmlAwareNote = tab.fileCompare?.xmlAwareDiff?.normalized
+        ? createElement("div", "file-compare-normalization-note", tab.fileCompare.xmlAwareDiff.note || "XML-aware normalization applied.")
+        : null;
       const previousButton = createToolbarButton("bi-arrow-up", "", "Previous difference");
       const nextButton = createToolbarButton("bi-arrow-down", "", "Next difference");
       const applyLeftButton = createToolbarButton("bi-arrow-right", "", "Apply current left change to right");
@@ -571,7 +656,9 @@
         status
       );
       titleRow.append(leftTitle, rightTitle);
-      shell.append(toolbar, titleRow, editorHost);
+      shell.append(toolbar, titleRow);
+      if (xmlAwareNote) shell.append(xmlAwareNote);
+      shell.append(editorHost);
       root.appendChild(shell);
 
       const viewState = {
@@ -674,6 +761,9 @@
       createCompareTabDescriptor,
       openCompareFiles,
       openCompareFilesFromPicker,
+      openXmlAwareCompareFiles,
+      openXmlAwareCompareFilesFromPicker,
+      openXmlAwareCompareWithPicker,
       mountFileCompareTab,
       destroyFileCompareTab,
       getMountedCompareCount() {
@@ -688,3 +778,5 @@
 
   global.registerMarkdownViewerFileCompare = registerMarkdownViewerFileCompare;
 })(typeof window !== "undefined" ? window : globalThis, document);
+
+

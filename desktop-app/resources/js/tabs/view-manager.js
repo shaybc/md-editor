@@ -15,6 +15,7 @@
     const hexEditor = deps.hexEditor || null;
     const fileCompare = deps.fileCompare || null;
     const apiClient = deps.apiClient || null;
+    const soapClient = deps.soapClient || null;
     const regexTester = deps.regexTester || null;
     const base64Tool = deps.base64Tool || null;
     const certificateDecoder = deps.certificateDecoder || null;
@@ -22,6 +23,7 @@
     const jsonYamlTool = deps.jsonYamlTool || null;
     const jsonPathTool = deps.jsonPathTool || null;
     const xpathTool = deps.xpathTool || null;
+    const xsltTool = deps.xsltTool || null;
     const xmlTreeGridView = deps.xmlTreeGridView || null;
     const uuidTool = deps.uuidTool || null;
     const qrTool = deps.qrTool || null;
@@ -61,6 +63,7 @@
       if (tab?.type === "hex-editor") return "hex-editor";
       if (tab?.type === "file-compare") return "file-compare";
       if (tab?.type === "api-client") return "api-client";
+      if (tab?.type === "soap-client") return "soap-client";
       if (tab?.type === "regex-tester") return "regex-tester";
       if (tab?.type === "base64-tool") return "base64-tool";
       if (tab?.type === "certificate-decoder") return "certificate-decoder";
@@ -68,6 +71,7 @@
       if (tab?.type === "json-yaml-tool") return "json-yaml-tool";
       if (tab?.type === "jsonpath-tool") return "jsonpath-tool";
       if (tab?.type === "xpath-tool") return "xpath-tool";
+      if (tab?.type === "xslt-runner-tool") return "xslt-runner-tool";
       if (tab?.type === "xml-tree-grid") return "xml-tree-grid";
       if (tab?.type === "uuid-tool") return "uuid-tool";
       if (tab?.type === "qr-tool") return "qr-tool";
@@ -131,6 +135,7 @@
 
     function activateTabView(tab) {
       if (tab?.type !== "api-client") apiClient?.deactivateApiClientSidebar?.();
+      if (tab?.type !== "soap-client") soapClient?.deactivateSoapClientSidebar?.();
       regexTester?.setActiveTab?.(tab);
       const root = ensureTabView(tab);
       if (!root) return null;
@@ -158,6 +163,10 @@
         editorViewManager?.deactivateEditorView?.();
         apiClient?.mountApiClientTab?.(tab, root);
         apiClient?.activateApiClientSidebar?.(tab);
+      } else if (tab?.type === "soap-client") {
+        editorViewManager?.deactivateEditorView?.();
+        soapClient?.mountSoapClientTab?.(tab, root);
+        soapClient?.activateSoapClientSidebar?.(tab);
       } else if (tab?.type === "regex-tester") {
         editorViewManager?.deactivateEditorView?.();
         regexTester?.mountRegexTesterTab?.(tab, root);
@@ -179,6 +188,9 @@
       } else if (tab?.type === "xpath-tool") {
         editorViewManager?.deactivateEditorView?.();
         xpathTool?.mountXPathToolTab?.(tab, root);
+      } else if (tab?.type === "xslt-runner-tool") {
+        editorViewManager?.deactivateEditorView?.();
+        xsltTool?.mountXsltToolTab?.(tab, root);
       } else if (tab?.type === "xml-tree-grid") {
         editorViewManager?.deactivateEditorView?.();
         xmlTreeGridView?.mountXmlTreeGridTab?.(tab, root);
@@ -237,6 +249,7 @@
       hexEditor?.destroyHexEditorTab?.(tabId);
       fileCompare?.destroyFileCompareTab?.(tabId);
       apiClient?.destroyApiClientTab?.(tabId);
+      soapClient?.destroySoapClientTab?.(tabId);
       regexTester?.destroyRegexTesterTab?.(tabId);
       base64Tool?.destroyBase64ToolTab?.(tabId);
       certificateDecoder?.destroyCertificateDecoderTab?.(tabId);
@@ -244,6 +257,7 @@
       jsonYamlTool?.destroyJsonYamlToolTab?.(tabId);
       jsonPathTool?.destroyJsonPathToolTab?.(tabId);
       xpathTool?.destroyXPathToolTab?.(tabId);
+      xsltTool?.destroyXsltToolTab?.(tabId);
       xmlTreeGridView?.destroyXmlTreeGridTab?.(tabId);
       uuidTool?.destroyUuidToolTab?.(tabId);
       qrTool?.destroyQrToolTab?.(tabId);

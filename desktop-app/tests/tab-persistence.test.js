@@ -716,7 +716,7 @@ test("legacy markdown topology session restores from saved topology file", async
 });
 test("DevToys tool tabs serialize and restore as preview tools", async () => {
   const persistence = createPersistence();
-  const toolTypes = ["base64-tool", "certificate-decoder", "jwt-tool", "json-yaml-tool", "jsonpath-tool", "xpath-tool", "uuid-tool", "qr-tool", "hash-tool", "json-array-table-tool", "text-escape-tool", "unicode-tool", "string-bytes-tool", "database-connection-string-tool"];
+  const toolTypes = ["soap-client", "base64-tool", "certificate-decoder", "jwt-tool", "json-yaml-tool", "jsonpath-tool", "xpath-tool", "xslt-runner-tool", "uuid-tool", "qr-tool", "hash-tool", "json-array-table-tool", "text-escape-tool", "unicode-tool", "string-bytes-tool", "database-connection-string-tool"];
 
   for (const type of toolTypes) {
     const descriptor = persistence.serializeTab({ id: `tab_${type}`, type, title: type, viewMode: "preview" });
@@ -736,6 +736,34 @@ test("DevToys tool tabs serialize and restore as preview tools", async () => {
   }
 });
 
+
+test("SOAP Client tabs preserve request state during restore", async () => {
+  const persistence = createPersistence();
+  const descriptor = persistence.serializeTab({
+    id: "tab_soap",
+    type: "soap-client",
+    title: "SOAP: SayHello",
+    viewMode: "preview",
+    soapClient: {
+      operationName: "SayHello",
+      endpointUrl: "https://example.test/soap",
+      soapVersion: "1.1",
+      requestXml: "<soap:Envelope/>"
+    }
+  });
+
+  const restored = await persistence.restoreTabsFromPayload({
+    version: persistence.SESSION_VERSION,
+    activeTabId: descriptor.id,
+    tabs: [descriptor]
+  });
+
+  assert.equal(restored.tabs[0].type, "soap-client");
+  assert.equal(restored.tabs[0].viewMode, "preview");
+  assert.equal(restored.tabs[0].soapClient.operationName, "SayHello");
+  assert.equal(restored.tabs[0].soapClient.endpointUrl, "https://example.test/soap");
+  assert.equal(restored.tabs[0].soapClient.requestXml, "<soap:Envelope/>");
+});
 test("old tab sessions are ignored", async () => {
   const persistence = createPersistence();
   const restored = await persistence.restoreTabsFromPayload({

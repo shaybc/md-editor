@@ -109,6 +109,7 @@ async function startMarkdownViewer() {
   const spaceToTabLabelElements = document.querySelectorAll(".space-to-tab-label");
   const importFromFileButtons = document.querySelectorAll("#import-from-file");
   const fileCompareButtons = document.querySelectorAll(".open-file-compare");
+  const xmlAwareCompareButtons = document.querySelectorAll(".open-xml-aware-compare");
   const lineCounterButtons = document.querySelectorAll(".open-line-counter");
   const apiClientButtons = document.querySelectorAll(".open-api-client");
   const regexTesterButtons = document.querySelectorAll(".open-regex-tester");
@@ -882,6 +883,7 @@ async function startMarkdownViewer() {
   const base64Converter = window.registerMarkdownViewerBase64Converter(app);
   const xmlSchemaGenerator = window.registerMarkdownViewerXmlSchemaGenerator?.(app) || null;
   const xmlStubGenerator = window.registerMarkdownViewerXmlStubGenerator?.(app) || null;
+  const xmlAwareDiff = window.registerMarkdownViewerXmlAwareDiff?.(app) || null;
   const xmlValidation = window.registerMarkdownViewerXmlValidation?.(app, {
     getActiveEditorValue: function() { return activeEditorCommands.getActiveEditorValue(); },
     getActiveEditorPath: getActiveEditorPathForLanguage,
@@ -993,6 +995,8 @@ async function startMarkdownViewer() {
     getXmlStubGenerator: function() { return xmlStubGenerator; },
     getXmlValidation: function() { return xmlValidation; },
     getXmlSchemaAutocomplete: function() { return xmlSchemaAutocomplete; },
+    openXsltToolInTab: function(options) { return tabsModule?.openXsltToolInTab?.(options) || null; },
+    openXmlAwareCompareForActiveEditor: function(source) { return fileCompare?.openXmlAwareCompareWithPicker?.(source) || null; },
     getLessToCssConverter: function() { return lessToCssConverter; },
     openGeneratedXmlSchemaInTab: function(content, title) {
       const name = title || "schema.xsd";
@@ -2366,6 +2370,7 @@ ${getMarkdownAlertBody(alertType, selectedText)}`;
   let aiCompanionConversionExportTools = null;
   let graphCompanionControl = null;
   let apiClient = null;
+  let soapClient = null;
   let regexTester = null;
   let base64Tool = null;
   let certificateParser = null;
@@ -2378,6 +2383,7 @@ ${getMarkdownAlertBody(alertType, selectedText)}`;
   let jsonPathTool = null;
   let xpathEvaluator = null;
   let xpathTool = null;
+  let xsltTool = null;
   let xmlTreeGridView = null;
   let uuidCodec = null;
   let uuidTool = null;
@@ -3793,6 +3799,9 @@ ${getMarkdownAlertBody(alertType, selectedText)}`;
         <button class="sidebar-view-rail-button sidebar-view-option" type="button" data-sidebar-rail-icon="api-client" data-sidebar-view="api-client" title="API Client" aria-label="API Client" aria-pressed="false">
           <i class="bi bi-send" aria-hidden="true"></i><span class="sidebar-view-rail-label">API</span>
         </button>
+        <button class="sidebar-view-rail-button sidebar-view-option" type="button" data-sidebar-rail-icon="soap-client" data-sidebar-view="soap-client" title="SOAP Client" aria-label="SOAP Client" aria-pressed="false">
+          <span class="soap-rail-mark" aria-hidden="true"><svg viewBox="0 0 24 24" focusable="false"><path class="soap-rail-mark-gold" d="M2.5 7.2h6.4l3.1 3.1-2.2 2.2-2.1-2.1H4.8L2.5 7.2Zm18.9 0-6.4 6.4-3-3 2.2-2.2 2.1 2.1h2.9l2.2-3.3Z"/><path class="soap-rail-mark-white" d="M13.7 2.5 6.9 9.3l4.1 4.1-4.6 4.6 3.1 3.1 6.8-6.8-4.1-4.1 4.6-4.6-3.1-3.1Z"/><path class="soap-rail-mark-cut" d="M10.9 8.9 14.8 5m-1.7 10.2-3.9 3.9"/></svg></span><span class="sidebar-view-rail-label">SOAP</span>
+        </button>
         <button class="sidebar-view-rail-button open-regex-tester" type="button" data-sidebar-rail-icon="regex-tester" title="Regex-Tester" aria-label="Regex-Tester" aria-pressed="false">
           <i class="bi bi-regex" aria-hidden="true"></i><span class="sidebar-view-rail-label">Regex</span>
         </button>
@@ -4036,7 +4045,33 @@ ${getMarkdownAlertBody(alertType, selectedText)}`;
           <button class="workspace-git-text-button" id="workspace-git-push" type="button">Push</button>
         </div>
       </div>
-      <div id="api-client-sidebar-panel" class="api-client-sidebar-panel" hidden>
+      <div id="soap-client-sidebar-panel" class="soap-client-sidebar-panel" hidden>
+        <div class="soap-client-sidebar-header">
+          <h3 class="soap-client-sidebar-title">SOAP Client</h3>
+          <div class="soap-client-sidebar-actions">
+            <button class="folder-tree-tool-button" type="button" data-soap-client-import-file title="Import WSDL file" aria-label="Import WSDL file"><i class="bi bi-folder2-open" aria-hidden="true"></i></button>
+            <button class="folder-tree-tool-button" type="button" data-soap-client-refresh title="Refresh" aria-label="Refresh SOAP Client"><i class="bi bi-arrow-clockwise" aria-hidden="true"></i></button>
+            <button class="folder-tree-tool-button" type="button" data-soap-client-new-request title="New request" aria-label="New SOAP request"><i class="bi bi-plus-lg" aria-hidden="true"></i></button>
+          </div>
+        </div>
+        <div class="soap-client-import-row">
+          <input class="soap-client-url-input" type="url" data-soap-client-url placeholder="WSDL URL" aria-label="WSDL URL">
+          <button class="workspace-git-text-button" type="button" data-soap-client-import-url>Import WSDL</button>
+        </div>
+        <div class="soap-client-sidebar-status" data-soap-client-status role="status" hidden></div>
+        <div class="soap-client-sidebar-tabs" role="tablist" aria-label="SOAP Client sidebar views">
+          <span class="soap-client-sidebar-tab active">WSDL</span>
+          <span class="soap-client-sidebar-tab">History</span>
+        </div>
+        <section class="soap-client-sidebar-section">
+          <div class="soap-client-sidebar-section-title">WSDL</div>
+          <div data-soap-client-wsdl-tree class="soap-client-wsdl-tree"></div>
+        </section>
+        <section class="soap-client-sidebar-section">
+          <div class="soap-client-sidebar-section-title">History</div>
+          <div data-soap-client-history class="soap-client-history-list"></div>
+        </section>
+      </div>      <div id="api-client-sidebar-panel" class="api-client-sidebar-panel" hidden>
         <div class="api-client-sidebar-header">
           <h3 class="api-client-sidebar-title">API Client</h3>
           <div class="api-client-sidebar-actions">
@@ -4538,6 +4573,7 @@ ${getMarkdownAlertBody(alertType, selectedText)}`;
   const settingsSidebarRailStyleInput = document.getElementById("settings-sidebar-rail-style");
   const settingsSidebarRailShowGitInput = document.getElementById("settings-sidebar-rail-show-git");
   const settingsSidebarRailShowApiClientInput = document.getElementById("settings-sidebar-rail-show-api-client");
+  const settingsSidebarRailShowSoapClientInput = document.getElementById("settings-sidebar-rail-show-soap-client");
   const settingsSidebarRailShowRegexTesterInput = document.getElementById("settings-sidebar-rail-show-regex-tester");
   const settingsSidebarRailShowAiCompanionInput = document.getElementById("settings-sidebar-rail-show-ai-companion");
   const settingsSidebarRailShowSettingsInput = document.getElementById("settings-sidebar-rail-show-settings");
@@ -5297,6 +5333,7 @@ ${getMarkdownAlertBody(alertType, selectedText)}`;
     "search",
     "git",
     "api-client",
+    "soap-client",
     "regex-tester",
     "convert",
     "ai-companion",
@@ -5305,6 +5342,7 @@ ${getMarkdownAlertBody(alertType, selectedText)}`;
   const DEFAULT_SIDEBAR_RAIL_ICON_VISIBILITY = Object.freeze({
     git: true,
     "api-client": true,
+    "soap-client": true,
     "regex-tester": true,
     "ai-companion": true,
     settings: true
@@ -8741,6 +8779,20 @@ Markdown content is processed client-side in your browser and sanitized before p
     getSidebarView: function() { return workspaceSearch?.getActiveSidebarView?.() || "files"; },
     alert: function(message) { window.alert(message); }
   });
+  soapClient = window.registerMarkdownViewerSoapClient?.(app, {
+    isNeutralinoRuntime,
+    get Neutralino() { return typeof Neutralino !== "undefined" ? Neutralino : undefined; },
+    localStorage,
+    getProfileDataFilePath: recentItems.getProfileDataFilePath,
+    getRequestSettings: function() { return getApiClientRequestSettings(); },
+    processRouter: spawnedProcessRouter,
+    copyTextToClipboard: copyTextToSystemClipboard,
+    syntaxTextarea: toolSyntaxTextarea,
+    openSoapClientInTab: function(options) {
+      return tabsModule?.openSoapClientInTab?.(options) || null;
+    },
+    setSidebarView: function(view) { workspaceSearch?.setSidebarView?.(view); }
+  }) || null;
   const regexTesterStorage = window.registerMarkdownViewerRegexTesterStorage(app, {
     get Neutralino() { return typeof Neutralino !== "undefined" ? Neutralino : undefined; },
     localStorage,
@@ -8805,6 +8857,14 @@ Markdown content is processed client-side in your browser and sanitized before p
     syntaxTextarea: toolSyntaxTextarea,
     openXPathToolInTab: function() {
       return tabsModule?.openXPathToolInTab?.() || null;
+    }
+  }) || null;
+  xsltTool = window.registerMarkdownViewerXsltTool?.(app, {
+    runner: window.markdownViewerXsltRunner,
+    copyTextToClipboard: copyTextToSystemClipboard,
+    syntaxTextarea: toolSyntaxTextarea,
+    openXsltToolInTab: function(options) {
+      return tabsModule?.openXsltToolInTab?.(options) || null;
     }
   }) || null;
   xmlTreeGridView = window.registerMarkdownViewerXmlTreeGridView?.(app, {
@@ -8910,6 +8970,7 @@ Markdown content is processed client-side in your browser and sanitized before p
     hexEditor,
     fileCompare,
     apiClient,
+    soapClient,
     regexTester,
     base64Tool,
     certificateDecoder,
@@ -8917,6 +8978,7 @@ Markdown content is processed client-side in your browser and sanitized before p
     jsonYamlTool,
     jsonPathTool,
     xpathTool,
+    xsltTool,
     xmlTreeGridView,
     uuidTool,
     qrTool,
@@ -9873,6 +9935,7 @@ Markdown content is processed client-side in your browser and sanitized before p
     const sidebarRailIconVisibility = sidebarRailPreferences.normalizeVisibility(loadGlobalState().sidebarRailIconVisibility);
     if (settingsSidebarRailShowGitInput) settingsSidebarRailShowGitInput.checked = sidebarRailIconVisibility.git;
     if (settingsSidebarRailShowApiClientInput) settingsSidebarRailShowApiClientInput.checked = sidebarRailIconVisibility["api-client"];
+    if (settingsSidebarRailShowSoapClientInput) settingsSidebarRailShowSoapClientInput.checked = sidebarRailIconVisibility["soap-client"];
     if (settingsSidebarRailShowRegexTesterInput) settingsSidebarRailShowRegexTesterInput.checked = sidebarRailIconVisibility["regex-tester"];
     if (settingsSidebarRailShowAiCompanionInput) settingsSidebarRailShowAiCompanionInput.checked = sidebarRailIconVisibility["ai-companion"];
     if (settingsSidebarRailShowSettingsInput) settingsSidebarRailShowSettingsInput.checked = sidebarRailIconVisibility.settings;
@@ -12093,6 +12156,7 @@ Enter the context to use:`,
     const sidebarRailIconVisibility = sidebarRailPreferences.normalizeVisibility({
       git: settingsSidebarRailShowGitInput?.checked !== false,
       "api-client": settingsSidebarRailShowApiClientInput?.checked !== false,
+      "soap-client": settingsSidebarRailShowSoapClientInput?.checked !== false,
       "regex-tester": settingsSidebarRailShowRegexTesterInput?.checked !== false,
       "ai-companion": settingsSidebarRailShowAiCompanionInput?.checked !== false,
       settings: settingsSidebarRailShowSettingsInput?.checked !== false
@@ -14345,7 +14409,7 @@ ${output.slice(-64000)}`;
 
   function getConversionExportState() {
     const activeTab = tabs.find((tab) => tab.id === activeTabId) || null;
-    const nonEditableTypes = new Set(["graph", "large-file", "file-preview", "image-editor", "hex-editor", "file-compare", "api-client", "kubernetes-topology"]);
+    const nonEditableTypes = new Set(["graph", "large-file", "file-preview", "image-editor", "hex-editor", "file-compare", "api-client", "soap-client", "xslt-runner-tool", "kubernetes-topology"]);
     return {
       activeDocument: {
         exportable: !!activeTab && !nonEditableTypes.has(activeTab.type),
@@ -17631,6 +17695,7 @@ ${error?.message || String(error || "")}`,
       case "xml-from-code":
       case "xml-create-schema":
       case "xml-create-stub":
+      case "xml-run-xslt":
         return app.modules?.editorContextMenu?.runXmlEditCommand?.(command);
       case "toggle-comment":
         return activeEditorCommands.toggleComment?.();
@@ -18076,6 +18141,15 @@ ${error?.message || String(error || "")}`,
     });
   });
 
+  xmlAwareCompareButtons.forEach(function(button) {
+    button.addEventListener("click", function(e) {
+      e.preventDefault();
+      fileCompare.openXmlAwareCompareFilesFromPicker?.();
+      if (button.classList.contains("mobile-menu-item")) {
+        closeMobileMenu();
+      }
+    });
+  });
   fileCompareButtons.forEach(function(button) {
     button.addEventListener("click", function(e) {
       e.preventDefault();
@@ -20232,3 +20306,4 @@ if (window.markdownViewerStartupErrors?.guardStartup) {
   });
 }
 })();
+

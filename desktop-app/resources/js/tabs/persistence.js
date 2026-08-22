@@ -12,7 +12,7 @@
       file: ".txt"
     };
     const DRAFT_WRITE_CHUNK_SIZE = 256 * 1024;
-    const RESTORABLE_TOOL_TAB_TYPES = new Set(["base64-tool", "certificate-decoder", "jwt-tool", "json-yaml-tool", "jsonpath-tool", "xpath-tool", "uuid-tool", "qr-tool", "hash-tool", "json-array-table-tool", "text-escape-tool", "unicode-tool", "string-bytes-tool", "database-connection-string-tool"]);
+    const RESTORABLE_TOOL_TAB_TYPES = new Set(["soap-client", "base64-tool", "certificate-decoder", "jwt-tool", "json-yaml-tool", "jsonpath-tool", "xpath-tool", "xslt-runner-tool", "uuid-tool", "qr-tool", "hash-tool", "json-array-table-tool", "text-escape-tool", "unicode-tool", "string-bytes-tool", "database-connection-string-tool"]);
 
     function normalizePath(value) {
       return String(value || "").trim().replace(/\\/g, "/");
@@ -282,7 +282,10 @@
     }
 
     function serializeToolTab(tab) {
-      return createDescriptorBase(tab, tab.type);
+      const descriptor = createDescriptorBase(tab, tab.type);
+      if (tab.type === "soap-client") descriptor.soapClient = clone(tab.soapClient || {});
+      if (tab.type === "xslt-runner-tool") descriptor.xsltRunner = clone(tab.xsltRunner || {});
+      return descriptor;
     }
 
     function createDraftId(tab, kind) {
@@ -861,6 +864,7 @@
 
     function restoreToolTab(descriptor) {
       const factoryNameByType = {
+        "soap-client": "createSoapClientTab",
         "base64-tool": "createBase64ToolTab",
         "certificate-decoder": "createCertificateDecoderTab",
         "jwt-tool": "createJwtToolTab",
@@ -882,6 +886,8 @@
         : deps.createTab("", descriptor.title || "Tool", "preview", { openedSource: descriptor.source || null });
       applyDescriptorIdentity(tab, descriptor);
       tab.type = descriptor.type;
+      if (descriptor.type === "soap-client") tab.soapClient = clone(descriptor.soapClient || tab.soapClient || {});
+      if (descriptor.type === "xslt-runner-tool") tab.xsltRunner = clone(descriptor.xsltRunner || tab.xsltRunner || {});
       tab.savedContent = "";
       restoreCommonViewState(tab, { ...descriptor, viewMode: "preview" });
       return tab;

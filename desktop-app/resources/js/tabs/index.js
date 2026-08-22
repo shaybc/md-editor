@@ -164,7 +164,7 @@
   }
 
   function isLargeEditableTab(tab) {
-    return !!tab && tab.type !== "graph" && tab.type !== "large-file" && tab.type !== "file-preview" && tab.type !== "image-editor" && tab.type !== "diagram-editor" && tab.type !== "hex-editor" && tab.type !== "file-compare" && tab.type !== "api-client" && tab.type !== "regex-tester" && tab.type !== "base64-tool" && tab.type !== "certificate-decoder" && tab.type !== "jwt-tool" && tab.type !== "json-yaml-tool" && tab.type !== "jsonpath-tool" && tab.type !== "xpath-tool" && tab.type !== "xml-tree-grid" && tab.type !== "uuid-tool" && tab.type !== "qr-tool" && tab.type !== "hash-tool" && tab.type !== "json-array-table-tool" && tab.type !== "text-escape-tool" &&
+    return !!tab && tab.type !== "graph" && tab.type !== "large-file" && tab.type !== "file-preview" && tab.type !== "image-editor" && tab.type !== "diagram-editor" && tab.type !== "hex-editor" && tab.type !== "file-compare" && tab.type !== "api-client" && tab.type !== "soap-client" && tab.type !== "regex-tester" && tab.type !== "base64-tool" && tab.type !== "certificate-decoder" && tab.type !== "jwt-tool" && tab.type !== "json-yaml-tool" && tab.type !== "jsonpath-tool" && tab.type !== "xpath-tool" && tab.type !== "xslt-runner-tool" && tab.type !== "xml-tree-grid" && tab.type !== "uuid-tool" && tab.type !== "qr-tool" && tab.type !== "hash-tool" && tab.type !== "json-array-table-tool" && tab.type !== "text-escape-tool" &&
       getEditableTabContentLength(tab) > LARGE_EDITABLE_AUTO_FOCUS_BYTES;
   }
 
@@ -1094,7 +1094,7 @@
   let tabContextCloseMobileMenuOnAction = false;
 
   function getTabCompareSource(tab) {
-    if (!tab || ['graph', 'file-compare', 'api-client', 'regex-tester', 'base64-tool', 'certificate-decoder', 'jwt-tool', 'json-yaml-tool', 'jsonpath-tool', 'xml-tree-grid', 'kubernetes-topology'].includes(tab.type)) return null;
+    if (!tab || ['graph', 'file-compare', 'api-client', 'soap-client', 'regex-tester', 'base64-tool', 'certificate-decoder', 'jwt-tool', 'json-yaml-tool', 'jsonpath-tool', 'xml-tree-grid', 'kubernetes-topology'].includes(tab.type)) return null;
     const path = tab.sourceFilePath || tab.openedSource?.path || tab.largeFileSource?.path || tab.filePreviewSource?.path || null;
     const handle = tab.sourceFileHandle || tab.largeFileSource?.handle || tab.filePreviewSource?.handle || null;
     const file = tab.filePreviewSource?.file || null;
@@ -1190,7 +1190,7 @@
   }
 
   function isParseAsEligibleTab(tab) {
-    return !!tab && !["graph", "large-file", "file-preview", "image-editor", "diagram-editor", "hex-editor", "file-compare", "api-client", "regex-tester", "base64-tool", "certificate-decoder", "jwt-tool", "json-yaml-tool", "jsonpath-tool", "xml-tree-grid", "uuid-tool", "qr-tool", "hash-tool", "json-array-table-tool", "text-escape-tool"].includes(tab.type);
+    return !!tab && !["graph", "large-file", "file-preview", "image-editor", "diagram-editor", "hex-editor", "file-compare", "api-client", "soap-client", "regex-tester", "base64-tool", "certificate-decoder", "jwt-tool", "json-yaml-tool", "jsonpath-tool", "xml-tree-grid", "uuid-tool", "qr-tool", "hash-tool", "json-array-table-tool", "text-escape-tool"].includes(tab.type);
   }
 
   function applyTabLanguageOverride(languageId) {
@@ -1489,7 +1489,7 @@
 
   function getActiveDocumentViewModeForSave(tab) {
     if (!tab) return currentViewMode || "split";
-    if (tab.type === "graph" || tab.type === "large-file" || tab.type === "file-preview" || tab.type === "image-editor" || tab.type === "diagram-editor" || tab.type === "hex-editor" || tab.type === "file-compare" || tab.type === "api-client" || tab.type === "regex-tester" || tab.type === "base64-tool" || tab.type === "certificate-decoder" || tab.type === "jwt-tool" || tab.type === "json-yaml-tool" || tab.type === "jsonpath-tool" || tab.type === "xml-tree-grid" || tab.type === "uuid-tool" || tab.type === "qr-tool" || tab.type === "hash-tool" || tab.type === "json-array-table-tool" || tab.type === "text-escape-tool") return "preview";
+    if (tab.type === "graph" || tab.type === "large-file" || tab.type === "file-preview" || tab.type === "image-editor" || tab.type === "diagram-editor" || tab.type === "hex-editor" || tab.type === "file-compare" || tab.type === "api-client" || tab.type === "soap-client" || tab.type === "regex-tester" || tab.type === "base64-tool" || tab.type === "certificate-decoder" || tab.type === "jwt-tool" || tab.type === "json-yaml-tool" || tab.type === "jsonpath-tool" || tab.type === "xml-tree-grid" || tab.type === "uuid-tool" || tab.type === "qr-tool" || tab.type === "hash-tool" || tab.type === "json-array-table-tool" || tab.type === "text-escape-tool") return "preview";
     if (!isPreviewableDocumentTab(tab)) return "editor";
     const activeContentContainer = deps.contentContainer || document.querySelector(".content-container");
     if (activeContentContainer && activeContentContainer.classList) {
@@ -1518,7 +1518,7 @@
       }
       return;
     }
-    if (tab.type === "graph" || tab.type === "large-file" || tab.type === "file-preview" || tab.type === "image-editor" || tab.type === "diagram-editor" || tab.type === "hex-editor" || tab.type === "file-compare" || tab.type === "api-client" || tab.type === "regex-tester" || tab.type === "base64-tool" || tab.type === "certificate-decoder" || tab.type === "jwt-tool" || tab.type === "json-yaml-tool" || tab.type === "jsonpath-tool" || tab.type === "xml-tree-grid" || tab.type === "uuid-tool" || tab.type === "qr-tool" || tab.type === "hash-tool" || tab.type === "json-array-table-tool" || tab.type === "text-escape-tool") {
+    if (tab.type === "graph" || tab.type === "large-file" || tab.type === "file-preview" || tab.type === "image-editor" || tab.type === "diagram-editor" || tab.type === "hex-editor" || tab.type === "file-compare" || tab.type === "api-client" || tab.type === "soap-client" || tab.type === "regex-tester" || tab.type === "base64-tool" || tab.type === "certificate-decoder" || tab.type === "jwt-tool" || tab.type === "json-yaml-tool" || tab.type === "jsonpath-tool" || tab.type === "xml-tree-grid" || tab.type === "uuid-tool" || tab.type === "qr-tool" || tab.type === "hash-tool" || tab.type === "json-array-table-tool" || tab.type === "text-escape-tool") {
       if (typeof appDebugLog === "function") {
         void appDebugLog("debug", "[tabs-session] Skipped markdown state save for active non-editor tab", {
           lifecycle: !!options.lifecycle,
@@ -1618,12 +1618,12 @@
 
   function getActiveMarkdownTab() {
     const tab = tabs.find(function(t) { return t.id === activeTabId; });
-    if (!tab || tab.type === "graph" || tab.type === "large-file" || tab.type === "file-preview" || tab.type === "image-editor" || tab.type === "diagram-editor" || tab.type === "hex-editor" || tab.type === "file-compare" || tab.type === "api-client" || tab.type === "regex-tester" || tab.type === "base64-tool" || tab.type === "certificate-decoder" || tab.type === "jwt-tool" || tab.type === "json-yaml-tool" || tab.type === "jsonpath-tool" || tab.type === "xml-tree-grid" || tab.type === "uuid-tool" || tab.type === "qr-tool" || tab.type === "hash-tool" || tab.type === "json-array-table-tool" || tab.type === "text-escape-tool") return null;
+    if (!tab || tab.type === "graph" || tab.type === "large-file" || tab.type === "file-preview" || tab.type === "image-editor" || tab.type === "diagram-editor" || tab.type === "hex-editor" || tab.type === "file-compare" || tab.type === "api-client" || tab.type === "soap-client" || tab.type === "regex-tester" || tab.type === "base64-tool" || tab.type === "certificate-decoder" || tab.type === "jwt-tool" || tab.type === "json-yaml-tool" || tab.type === "jsonpath-tool" || tab.type === "xml-tree-grid" || tab.type === "uuid-tool" || tab.type === "qr-tool" || tab.type === "hash-tool" || tab.type === "json-array-table-tool" || tab.type === "text-escape-tool") return null;
     return tab;
   }
 
   function canReadTabFromDisk(tab) {
-    if (!tab || tab.type === "graph" || tab.type === "hex-editor" || tab.type === "file-compare" || tab.type === "api-client" || tab.type === "regex-tester" || tab.type === "base64-tool" || tab.type === "certificate-decoder" || tab.type === "jwt-tool" || tab.type === "json-yaml-tool" || tab.type === "jsonpath-tool" || tab.type === "xml-tree-grid" || tab.type === "uuid-tool" || tab.type === "qr-tool" || tab.type === "hash-tool" || tab.type === "json-array-table-tool" || tab.type === "text-escape-tool") return false;
+    if (!tab || tab.type === "graph" || tab.type === "hex-editor" || tab.type === "file-compare" || tab.type === "api-client" || tab.type === "soap-client" || tab.type === "regex-tester" || tab.type === "base64-tool" || tab.type === "certificate-decoder" || tab.type === "jwt-tool" || tab.type === "json-yaml-tool" || tab.type === "jsonpath-tool" || tab.type === "xml-tree-grid" || tab.type === "uuid-tool" || tab.type === "qr-tool" || tab.type === "hash-tool" || tab.type === "json-array-table-tool" || tab.type === "text-escape-tool") return false;
     if (isNeutralinoRuntime() && tab.sourceFilePath && Neutralino?.filesystem?.readFile) return true;
     if (tab.sourceFileHandle && typeof tab.sourceFileHandle.getFile === "function") return true;
     return false;
@@ -1725,7 +1725,7 @@
   function getUnsavedTabs() {
     return tabs.filter(function(tab) {
       if (!tab) return false;
-      if (tab.type === "file-preview" || tab.type === "file-compare" || tab.type === "api-client" || tab.type === "regex-tester" || tab.type === "base64-tool" || tab.type === "certificate-decoder" || tab.type === "jwt-tool" || tab.type === "json-yaml-tool" || tab.type === "jsonpath-tool" || tab.type === "xml-tree-grid" || tab.type === "uuid-tool" || tab.type === "qr-tool" || tab.type === "hash-tool" || tab.type === "json-array-table-tool" || tab.type === "text-escape-tool") return false;
+      if (tab.type === "file-preview" || tab.type === "file-compare" || tab.type === "api-client" || tab.type === "soap-client" || tab.type === "regex-tester" || tab.type === "base64-tool" || tab.type === "certificate-decoder" || tab.type === "jwt-tool" || tab.type === "json-yaml-tool" || tab.type === "jsonpath-tool" || tab.type === "xml-tree-grid" || tab.type === "uuid-tool" || tab.type === "qr-tool" || tab.type === "hash-tool" || tab.type === "json-array-table-tool" || tab.type === "text-escape-tool") return false;
       if (tab.type === "kubernetes-topology") return topologyTabNeedsInitialSave(tab) || tabHasPendingChanges(tab);
       if (tab.type === "graph" || tab.type === "large-file" || tab.type === "image-editor" || tab.type === "diagram-editor" || tab.type === "hex-editor") return tabHasPendingChanges(tab);
       const currentContent = tab.id === activeTabId ? getActiveEditorContent() : tab.content;
@@ -1836,7 +1836,7 @@
       if (options.activateSaveDialog === true) activateTabBeforeSaveDialog(tab);
       return await deps.kubernetesTopologyDocument?.saveKubernetesTopologyTabWithSaveDialog?.(tab) === true;
     }
-    if (tab.type === "large-file" || tab.type === "file-preview" || tab.type === "file-compare" || tab.type === "api-client" || tab.type === "regex-tester" || tab.type === "base64-tool" || tab.type === "certificate-decoder" || tab.type === "jwt-tool" || tab.type === "json-yaml-tool" || tab.type === "jsonpath-tool" || tab.type === "xml-tree-grid" || tab.type === "uuid-tool" || tab.type === "qr-tool" || tab.type === "hash-tool" || tab.type === "json-array-table-tool" || tab.type === "text-escape-tool") return true;
+    if (tab.type === "large-file" || tab.type === "file-preview" || tab.type === "file-compare" || tab.type === "api-client" || tab.type === "soap-client" || tab.type === "regex-tester" || tab.type === "base64-tool" || tab.type === "certificate-decoder" || tab.type === "jwt-tool" || tab.type === "json-yaml-tool" || tab.type === "jsonpath-tool" || tab.type === "xml-tree-grid" || tab.type === "uuid-tool" || tab.type === "qr-tool" || tab.type === "hash-tool" || tab.type === "json-array-table-tool" || tab.type === "text-escape-tool") return true;
 
     const content = getMarkdownTabContentForSave(tab);
     if (!tabHasPendingChanges(tab, content)) return true;
@@ -2154,7 +2154,7 @@
       perf.finish({ branch: "graph", reusedRender: false });
       return;
     }
-    if (tab.type === "large-file" || tab.type === "file-preview" || tab.type === "image-editor" || tab.type === "diagram-editor" || tab.type === "hex-editor" || tab.type === "file-compare" || tab.type === "api-client" || tab.type === "regex-tester" || tab.type === "base64-tool" || tab.type === "certificate-decoder" || tab.type === "jwt-tool" || tab.type === "json-yaml-tool" || tab.type === "jsonpath-tool" || tab.type === "xml-tree-grid" || tab.type === "uuid-tool" || tab.type === "qr-tool" || tab.type === "hash-tool" || tab.type === "json-array-table-tool" || tab.type === "text-escape-tool" || tab.type === "kubernetes-topology") {
+    if (tab.type === "large-file" || tab.type === "file-preview" || tab.type === "image-editor" || tab.type === "diagram-editor" || tab.type === "hex-editor" || tab.type === "file-compare" || tab.type === "api-client" || tab.type === "soap-client" || tab.type === "regex-tester" || tab.type === "base64-tool" || tab.type === "certificate-decoder" || tab.type === "jwt-tool" || tab.type === "json-yaml-tool" || tab.type === "jsonpath-tool" || tab.type === "xml-tree-grid" || tab.type === "uuid-tool" || tab.type === "qr-tool" || tab.type === "hash-tool" || tab.type === "json-array-table-tool" || tab.type === "text-escape-tool" || tab.type === "kubernetes-topology") {
       setActiveEditorContent("");
       perf.mark("clear active editor content");
       setViewMode("preview");
@@ -2217,7 +2217,7 @@
   }
 
   function isUnsupportedFileTab(tab) {
-    if (!tab || tab.type === "graph" || tab.type === "hex-editor" || tab.type === "file-compare" || tab.type === "api-client" || tab.type === "regex-tester" || tab.type === "base64-tool" || tab.type === "certificate-decoder" || tab.type === "jwt-tool" || tab.type === "json-yaml-tool" || tab.type === "jsonpath-tool" || tab.type === "xml-tree-grid" || tab.type === "uuid-tool" || tab.type === "qr-tool" || tab.type === "hash-tool" || tab.type === "json-array-table-tool" || tab.type === "text-escape-tool" || tab.type === "kubernetes-topology") return false;
+    if (!tab || tab.type === "graph" || tab.type === "hex-editor" || tab.type === "file-compare" || tab.type === "api-client" || tab.type === "soap-client" || tab.type === "regex-tester" || tab.type === "base64-tool" || tab.type === "certificate-decoder" || tab.type === "jwt-tool" || tab.type === "json-yaml-tool" || tab.type === "jsonpath-tool" || tab.type === "xml-tree-grid" || tab.type === "uuid-tool" || tab.type === "qr-tool" || tab.type === "hash-tool" || tab.type === "json-array-table-tool" || tab.type === "text-escape-tool" || tab.type === "kubernetes-topology") return false;
     if (tab.isUnsupportedFile === true) return true;
     const path = tab.sourceFilePath || tab.sourceFileName || tab.sourceFileHandle?.name || "";
     return !!path && isTextDocumentPath(path) && !isSupportedFolderTreeDocumentPath(path);
@@ -2234,13 +2234,13 @@
   }
 
   function isPreviewableDocumentTab(tab) {
-    if (!tab || tab.type === "graph" || tab.type === "file-compare" || tab.type === "api-client" || tab.type === "regex-tester" || tab.type === "base64-tool" || tab.type === "certificate-decoder" || tab.type === "jwt-tool" || tab.type === "json-yaml-tool" || tab.type === "jsonpath-tool" || tab.type === "xml-tree-grid" || tab.type === "uuid-tool" || tab.type === "qr-tool" || tab.type === "hash-tool" || tab.type === "json-array-table-tool" || tab.type === "text-escape-tool" || tab.type === "kubernetes-topology") return false;
+    if (!tab || tab.type === "graph" || tab.type === "file-compare" || tab.type === "api-client" || tab.type === "soap-client" || tab.type === "regex-tester" || tab.type === "base64-tool" || tab.type === "certificate-decoder" || tab.type === "jwt-tool" || tab.type === "json-yaml-tool" || tab.type === "jsonpath-tool" || tab.type === "xml-tree-grid" || tab.type === "uuid-tool" || tab.type === "qr-tool" || tab.type === "hash-tool" || tab.type === "json-array-table-tool" || tab.type === "text-escape-tool" || tab.type === "kubernetes-topology") return false;
     const path = tab.sourceFilePath || tab.sourceFileName || tab.sourceFileHandle?.name || "";
     return !path || isTextDocumentPath(path) || isHtmlPath(path);
   }
 
   function isMarkdownDocumentTab(tab) {
-    if (!tab || tab.type === "graph" || tab.type === "large-file" || tab.type === "file-preview" || tab.type === "image-editor" || tab.type === "diagram-editor" || tab.type === "hex-editor" || tab.type === "file-compare" || tab.type === "api-client" || tab.type === "regex-tester" || tab.type === "base64-tool" || tab.type === "certificate-decoder" || tab.type === "jwt-tool" || tab.type === "json-yaml-tool" || tab.type === "jsonpath-tool" || tab.type === "xml-tree-grid" || tab.type === "uuid-tool" || tab.type === "qr-tool" || tab.type === "hash-tool" || tab.type === "json-array-table-tool" || tab.type === "text-escape-tool" || tab.type === "kubernetes-topology") return false;
+    if (!tab || tab.type === "graph" || tab.type === "large-file" || tab.type === "file-preview" || tab.type === "image-editor" || tab.type === "diagram-editor" || tab.type === "hex-editor" || tab.type === "file-compare" || tab.type === "api-client" || tab.type === "soap-client" || tab.type === "regex-tester" || tab.type === "base64-tool" || tab.type === "certificate-decoder" || tab.type === "jwt-tool" || tab.type === "json-yaml-tool" || tab.type === "jsonpath-tool" || tab.type === "xml-tree-grid" || tab.type === "uuid-tool" || tab.type === "qr-tool" || tab.type === "hash-tool" || tab.type === "json-array-table-tool" || tab.type === "text-escape-tool" || tab.type === "kubernetes-topology") return false;
     const path = tab.sourceFilePath || tab.sourceFileName || tab.sourceFileHandle?.name || "";
     return path ? isMarkdownPath(path) : tab.type === "markdown";
   }
@@ -2350,7 +2350,8 @@
       right: { ...(compareDescriptor?.right || {}) },
       gitConflict: compareDescriptor?.gitConflict ? { ...compareDescriptor.gitConflict } : null,
       readOnly: compareDescriptor?.readOnly === true,
-      viewMode: compareDescriptor?.viewMode || "side-by-side"
+      viewMode: compareDescriptor?.viewMode || "side-by-side",
+      xmlAwareDiff: compareDescriptor?.xmlAwareDiff ? { ...compareDescriptor.xmlAwareDiff } : null
     };
     tab.savedContent = "";
     tab.isTemporary = options.temporary === true;
@@ -2385,7 +2386,7 @@
     saveActiveTabId(activeTabId);
     refreshGraphModeNotices(tab);
     activateManagedTabView(tab);
-    if (tab.type === "large-file" || tab.type === "file-preview" || tab.type === "image-editor" || tab.type === "diagram-editor" || tab.type === "hex-editor" || tab.type === "file-compare" || tab.type === "api-client" || tab.type === "regex-tester" || tab.type === "base64-tool" || tab.type === "certificate-decoder" || tab.type === "jwt-tool" || tab.type === "json-yaml-tool" || tab.type === "jsonpath-tool" || tab.type === "xml-tree-grid" || tab.type === "uuid-tool" || tab.type === "qr-tool" || tab.type === "hash-tool" || tab.type === "json-array-table-tool" || tab.type === "text-escape-tool" || tab.type === "kubernetes-topology") {
+    if (tab.type === "large-file" || tab.type === "file-preview" || tab.type === "image-editor" || tab.type === "diagram-editor" || tab.type === "hex-editor" || tab.type === "file-compare" || tab.type === "api-client" || tab.type === "soap-client" || tab.type === "regex-tester" || tab.type === "base64-tool" || tab.type === "certificate-decoder" || tab.type === "jwt-tool" || tab.type === "json-yaml-tool" || tab.type === "jsonpath-tool" || tab.type === "xml-tree-grid" || tab.type === "uuid-tool" || tab.type === "qr-tool" || tab.type === "hash-tool" || tab.type === "json-array-table-tool" || tab.type === "text-escape-tool" || tab.type === "kubernetes-topology") {
       setActiveEditorContent("");
       setNoOpenTabsMode(false);
       setViewMode("preview");
@@ -2500,6 +2501,32 @@
     tab.isTemporary = options.temporary === true;
     return tab;
   }
+
+  function createSoapClientState(options = {}) {
+    return {
+      wsdlLabel: options.wsdlLabel || options.operationSnapshot?.sourceLabel || "",
+      serviceName: options.serviceName || options.operationSnapshot?.serviceName || "",
+      portName: options.portName || options.operationSnapshot?.portName || "",
+      operationName: options.operationName || options.operationSnapshot?.name || "",
+      endpointUrl: options.endpointUrl || options.operationSnapshot?.endpointUrl || "",
+      soapAction: options.soapAction || options.operationSnapshot?.soapAction || "",
+      soapVersion: options.soapVersion || options.operationSnapshot?.soapVersion || "1.1",
+      requestXml: options.requestXml || "",
+      responseXml: options.responseXml || "",
+      responseMeta: options.responseMeta || null,
+      operationSnapshot: options.operationSnapshot || null
+    };
+  }
+
+  function createSoapClientTab(options = {}) {
+    const operationName = options.operationSnapshot?.name || options.operationName || "Request";
+    const tab = createTab("", options.title || `SOAP: ${operationName}`, "preview");
+    tab.type = "soap-client";
+    tab.soapClient = createSoapClientState(options);
+    tab.savedContent = "";
+    tab.isTemporary = options.temporary === true;
+    return tab;
+  }
   function createRegexTesterTab() {
     const tab = createTab("", "Regex-Tester", "preview");
     tab.type = "regex-tester";
@@ -2553,6 +2580,20 @@
     tab.type = "xpath-tool";
     tab.savedContent = "";
     tab.isTemporary = false;
+    return tab;
+  }
+
+  function createXsltToolTab(options = {}) {
+    const tab = createTab("", "XSLT Runner", "preview");
+    tab.type = "xslt-runner-tool";
+    tab.savedContent = "";
+    tab.isTemporary = false;
+    tab.xsltRunner = {
+      xmlText: options.xmlText || "",
+      xsltText: options.xsltText || "",
+      resultText: options.resultText || "",
+      parameters: Array.isArray(options.parameters) ? options.parameters : []
+    };
     return tab;
   }
 
@@ -2900,7 +2941,8 @@
         left: { ...(compareDescriptor?.left || {}) },
         right: { ...(compareDescriptor?.right || {}) },
         readOnly: compareDescriptor?.readOnly === true,
-        viewMode: compareDescriptor?.viewMode || "side-by-side"
+        viewMode: compareDescriptor?.viewMode || "side-by-side",
+        xmlAwareDiff: compareDescriptor?.xmlAwareDiff ? { ...compareDescriptor.xmlAwareDiff } : null
       };
       tab.largeFileSource = null;
       tab.largeFileDocumentStats = null;
@@ -3010,6 +3052,27 @@
     activateSidebarTab(tab);
     return tab;
   }
+  function openSoapClientInTab(options) {
+    options = options || {};
+    const operationKey = String(options.operationSnapshot?.id || options.operationName || "").trim();
+    saveCurrentTabState();
+    if (operationKey) {
+      const existingTab = tabs.find(function(candidate) {
+        return candidate?.type === "soap-client" && (candidate.soapClient?.operationSnapshot?.id || candidate.soapClient?.operationName) === operationKey;
+      });
+      if (existingTab) {
+        existingTab.soapClient = createSoapClientState({ ...(existingTab.soapClient || {}), ...options });
+        existingTab.title = options.title || `SOAP: ${existingTab.soapClient.operationName || "Request"}`;
+        switchTab(existingTab.id);
+        return existingTab;
+      }
+    }
+    if (hasReachedOpenTabLimit("open SOAP Client")) return null;
+    const tab = createSoapClientTab(options);
+    tabs.push(tab);
+    activateSidebarTab(tab);
+    return tab;
+  }
   function openRegexTesterInTab() {
     saveCurrentTabState();
     const existingTab = tabs.find(function(candidate) { return candidate?.type === "regex-tester"; });
@@ -3103,6 +3166,22 @@
     }
     if (hasReachedOpenTabLimit("open XPath Search")) return null;
     const tab = createXPathToolTab();
+    tabs.push(tab);
+    activateSidebarTab(tab);
+    return tab;
+  }
+
+
+  function openXsltToolInTab(options = {}) {
+    saveCurrentTabState();
+    const existingTab = tabs.find(function(candidate) { return candidate?.type === "xslt-runner-tool"; });
+    if (existingTab) {
+      existingTab.xsltRunner = { ...(existingTab.xsltRunner || {}), ...options };
+      switchTab(existingTab.id);
+      return existingTab;
+    }
+    if (hasReachedOpenTabLimit("open XSLT Runner")) return null;
+    const tab = createXsltToolTab(options);
     tabs.push(tab);
     activateSidebarTab(tab);
     return tab;
@@ -4210,6 +4289,7 @@
       createHexEditorTab,
       createFileCompareTab,
       createApiClientTab,
+      createSoapClientTab,
       createKubernetesTopologyTab,
       createRegexTesterTab,
       createBase64ToolTab,
@@ -4218,6 +4298,7 @@
       createJsonYamlToolTab,
       createJsonPathToolTab,
       createXPathToolTab,
+      createXsltToolTab,
       createXmlTreeGridTab,
       createUuidToolTab,
       createQrToolTab,
@@ -4240,6 +4321,7 @@
       openFileCompareInTab,
       openKubernetesTopologyInTab,
       openApiClientInTab,
+      openSoapClientInTab,
       openRegexTesterInTab,
       openBase64ToolInTab,
       openCertificateDecoderInTab,
@@ -4247,6 +4329,7 @@
       openJsonYamlToolInTab,
       openJsonPathToolInTab,
       openXPathToolInTab,
+      openXsltToolInTab,
       openXmlTreeGridTab,
       openUuidToolInTab,
       openQrToolInTab,
@@ -4292,3 +4375,4 @@
     return api;
   };
 })(window);
+

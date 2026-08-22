@@ -259,6 +259,7 @@
     }
     const gitPanel = document.getElementById("workspace-git-panel");
     const apiClientPanel = document.getElementById("api-client-sidebar-panel");
+    const soapClientPanel = document.getElementById("soap-client-sidebar-panel");
     const regexTesterPanel = document.getElementById("regex-tester-sidebar-panel");
     const folderTreePane = document.getElementById("folder-tree-pane");
     const folderTreeTopbar = document.querySelector(".folder-tree-topbar");
@@ -372,9 +373,10 @@
       const searchView = targetView === "search";
       const gitView = targetView === "git";
       const apiClientView = targetView === "api-client";
+      const soapClientView = targetView === "soap-client";
       const regexTesterView = targetView === "regex-tester";
       const aiCompanionView = targetView === "ai-companion";
-      const toolView = searchView || gitView || apiClientView || regexTesterView;
+      const toolView = searchView || gitView || apiClientView || soapClientView || regexTesterView;
       const hideFolderView = toolView || aiCompanionView;
       const previousSidebarView = getActiveSidebarView();
       if (aiCompanionView) {
@@ -386,11 +388,14 @@
       if (gitPanel) gitPanel.hidden = !gitView;
       if (regexTesterPanel) regexTesterPanel.hidden = !regexTesterView;
       if (apiClientPanel) apiClientPanel.hidden = !apiClientView;
+      if (soapClientView) app.modules?.soapClient?.activateSoapClientSidebar?.();
+      else if (soapClientPanel) soapClientPanel.hidden = true;
       folderTreePane?.classList.toggle("workspace-search-open", toolView);
       folderTreePane?.classList.toggle("regex-tester-open", regexTesterView);
       folderTreePane?.classList.toggle("api-client-open", apiClientView);
+      folderTreePane?.classList.toggle("soap-client-open", soapClientView);
       folderTreePane?.classList.toggle("ai-companion-workspace-rail", aiCompanionView);
-      if (folderTreeTopbar) folderTreeTopbar.hidden = searchView || gitView || regexTesterView;
+      if (folderTreeTopbar) folderTreeTopbar.hidden = searchView || gitView || regexTesterView || soapClientView;
       if (folderTreeRoot) folderTreeRoot.hidden = hideFolderView;
       if (dropzonePanel) dropzonePanel.hidden = hideFolderView;
       if (dropzoneResizer) dropzoneResizer.hidden = hideFolderView;
@@ -409,6 +414,7 @@
 
     function getActiveSidebarView() {
       if (regexTesterPanel && !regexTesterPanel.hidden) return "regex-tester";
+      if (soapClientPanel && !soapClientPanel.hidden) return "soap-client";
       return document.querySelector(".sidebar-view-option.active")?.dataset?.sidebarView || "files";
     }
 
