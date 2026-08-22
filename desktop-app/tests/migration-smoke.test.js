@@ -1062,7 +1062,7 @@ test("editor context menu is registered from its extracted classic script", () =
   assert.match(contextMenuScript, /menu: "source-xml"/);
   assert.match(contextMenuScript, /\.\.\.\.\(isXmlContext \? getEditorXmlSourceActions\(\) : \[\]\)/);
   assert.match(contextMenuScript, /case "compact-json":[\s\S]*case "json-for-code":[\s\S]*case "json-from-code":[\s\S]*runJsonEditCommand\(action, \{ useContextSelection: true \}\)/);
-  assert.match(contextMenuScript, /case "compact-xml":[\s\S]*case "xml-for-code":[\s\S]*case "xml-from-code":[\s\S]*case "xml-create-schema":[\s\S]*case "xml-create-stub":[\s\S]*runXmlEditCommand\(action, \{ useContextSelection: true \}\)/);
+  assert.match(contextMenuScript, /case "compact-xml":[\s\S]*case "xml-validate":[\s\S]*case "xml-associate-schema":[\s\S]*case "xml-for-code":[\s\S]*case "xml-from-code":[\s\S]*case "xml-create-schema":[\s\S]*case "xml-create-stub":[\s\S]*runXmlEditCommand\(action, \{ useContextSelection: true \}\)/);
   assert.match(contextMenuScript, /type: "xml-create-schema", label: "Create XML Schema from XML"/);
   assert.match(contextMenuScript, /type: "xml-create-stub", label: "Create XML Stub from XSD"/);
   assert.match(contextMenuScript, /openGeneratedXmlSchemaInTab\(schemaSource, getXmlSchemaOutputTitle\(\)\)/);
@@ -1928,4 +1928,11 @@ test("Helm project commands are bundled and exposed from the Project menu", () =
   assert.match(projectCommandMenuScript, /helmCommands[\s\S]*execute\(commandName, context\)/);
   assert.match(codeMirrorSource, /createHelmCompletionSource/);
   assert.match(codeMirrorSource, /markdownViewerHelmCompletionProvider/);
+});
+test("XML validation reads diagnostics from the active tab and XML language server", () => {
+  const legacyScript = readWebFile("script.js");
+
+  assert.match(legacyScript, /getActiveEditorDiagnostics:\s*function\(\)\s*\{[\s\S]*editorViewManager\?\.getActiveCodeMirrorEditor\?\.\(\)[\s\S]*codeMirrorEditor[\s\S]*editor\?\.getDiagnostics\?\.\(\)/);
+  assert.match(legacyScript, /subscribeServerMessages\?\.\(handleXmlLanguageServerDiagnostics\)/);
+  assert.match(legacyScript, /getLanguageServerDiagnostics:\s*function\(filePath\)\s*\{\s*return getXmlLanguageServerDiagnosticsForPath\(filePath\);\s*\}/);
 });

@@ -78,6 +78,29 @@
         source: "xml"
       };
     }
+    function normalizeSeverity(severity) {
+      const value = String(severity || "").toLowerCase();
+      if (value === "error" || value === "warning" || value === "info" || value === "hint") return value;
+      return "error";
+    }
+
+    function normalizeActiveEditorDiagnostics(entries, filePath) {
+      if (!Array.isArray(entries)) return [];
+      return entries
+        .map(function(entry) {
+          const diagnostic = entry?.diagnostic || entry;
+          const message = String(diagnostic?.message || entry?.message || "").trim();
+          if (!message) return null;
+          return createDiagnostic(
+            normalizeSeverity(diagnostic?.severity || entry?.severity),
+            message,
+            filePath,
+            Number(entry?.line || diagnostic?.line || 1) || 1,
+            Number(entry?.column || diagnostic?.column || 1) || 1
+          );
+        })
+        .filter(Boolean);
+    }
 
     function readRootAttribute(root, localName) {
       return root?.getAttributeNS?.(XML_SCHEMA_INSTANCE_NAMESPACE, localName)
@@ -210,6 +233,19 @@
         languageId: options.languageId || activeTab?.parseAsLanguageId || "",
         schemaPath: options.schemaPath
       });
+      const editorDiagnostics = normalizeActiveEditorDiagnostics(
+        typeof deps.getActiveEditorDiagnostics === "function" ? deps.getActiveEditorDiagnostics() : [],
+        filePath
+      );
+      const languageServerDiagnostics = normalizeActiveEditorDiagnostics(
+        typeof deps.getLanguageServerDiagnostics === "function" ? deps.getLanguageServerDiagnostics(filePath) : [],
+        filePath
+      );
+      const liveDiagnostics = editorDiagnostics.concat(languageServerDiagnostics);
+      if (liveDiagnostics.length) {
+        result.diagnostics = result.diagnostics.concat(liveDiagnostics);
+        result.status = "issues";
+      }
       publishDiagnostics(filePath, result.diagnostics);
       notifyValidationResult(result);
       return result;
@@ -230,6 +266,7 @@
         extractParserLocation,
         resolveLocalPath,
         resolveSchemaReferences,
+        normalizeActiveEditorDiagnostics,
         getCollectionOwner
       }
     };

@@ -66,6 +66,55 @@ test("XML Outline follows element containment", async () => {
   assert.equal(nodes[0].children[0].children[0].name, "item");
 });
 
+
+test("XML Outline nests flat document symbols by range", () => {
+  const source = '<books><book><title>Book name</title></book></books>';
+  const adapter = loadAdapter("xml", "registerMarkdownViewerXmlOutlineLanguage", { topNode: syntaxNode("Document", 0, source.length) });
+  const range = (startLine, startCharacter, endLine, endCharacter) => ({
+    start: { line: startLine, character: startCharacter },
+    end: { line: endLine, character: endCharacter }
+  });
+  const nodes = adapter.normalizeDocumentSymbols([
+    { id: "books", name: "books", kind: "field", detail: "xml", range: range(0, 0, 0, 50), selectionRange: range(0, 1, 0, 6), children: [] },
+    { id: "book", name: "book", kind: "field", detail: "books", range: range(0, 7, 0, 43), selectionRange: range(0, 8, 0, 12), children: [] },
+    { id: "title", name: "title", kind: "field", detail: "book", range: range(0, 13, 0, 36), selectionRange: range(0, 14, 0, 19), children: [] }
+  ], source);
+
+  assert.equal(nodes.length, 1);
+  assert.equal(nodes[0].name, "books");
+  assert.equal(nodes[0].children[0].name, "book");
+  assert.equal(nodes[0].children[0].children[0].name, "title");
+});
+
+test("XML Outline uses source tree over flat XML document symbols", () => {
+  const source = [
+    '<?xml version="1.0"?>',
+    '<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">',
+    '  <xs:element name="books">',
+    '    <xs:complexType>',
+    '      <xs:sequence>',
+    '        <xs:element name="title" type="xs:string" />',
+    '      </xs:sequence>',
+    '    </xs:complexType>',
+    '  </xs:element>',
+    '</xs:schema>'
+  ].join('\n');
+  const adapter = loadAdapter("xml", "registerMarkdownViewerXmlOutlineLanguage", null);
+  const range = (startLine, startCharacter, endLine, endCharacter) => ({
+    start: { line: startLine, character: startCharacter },
+    end: { line: endLine, character: endCharacter }
+  });
+  const nodes = adapter.normalizeDocumentSymbols([
+    { name: "xs:schema", kind: 8, detail: "xml", range: range(1, 0, 9, 12), selectionRange: range(1, 1, 1, 10), children: [] },
+    { name: "xs:element", kind: 8, detail: "xs:schema", range: range(2, 2, 8, 15), selectionRange: range(2, 3, 2, 13), children: [] }
+  ], source);
+
+  assert.equal(nodes[0].kind, "element");
+  assert.equal(nodes[0].name, "xs:schema");
+  assert.equal(nodes[0].children[0].name, "xs:element");
+  assert.equal(nodes[0].children[0].detail, "books");
+  assert.equal(nodes[0].children[0].children[0].children[0].children[0].detail, "title");
+});
 test("CSS Outline captures selectors and nested at-rules", async () => {
   const source = "@media screen {.card { color: red; }}";
   const rule = syntaxNode("RuleSet", 15, 36);

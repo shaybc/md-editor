@@ -108,6 +108,30 @@ test("manual schema association produces an XML file association", async () => {
   });
 });
 
+test("schema association attributes are added to the XML root from the XSD namespace", () => {
+  const autocomplete = registerMarkdownViewerXmlSchemaAutocomplete(createApp());
+
+  const result = autocomplete._test.applySchemaAssociationAttributesToText("<?xml version=\"1.0\"?>\n<books>\n</books>", {
+    targetNamespace: "http://bookstore.example.com",
+    schemaReference: "books.xsd"
+  });
+
+  assert.equal(result.changed, true);
+  assert.equal(result.text, "<?xml version=\"1.0\"?>\n<books xmlns=\"http://bookstore.example.com\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xsi:schemaLocation=\"http://bookstore.example.com books.xsd\">\n</books>");
+});
+
+test("schema association uses no-namespace schema location when the XSD has no target namespace", () => {
+  const autocomplete = registerMarkdownViewerXmlSchemaAutocomplete(createApp());
+
+  const result = autocomplete._test.applySchemaAssociationAttributesToText("<?xml version=\"1.0\"?>\n<library>\n</library>", {
+    targetNamespace: "",
+    schemaReference: "books.xsd"
+  });
+
+  assert.equal(result.changed, true);
+  assert.equal(result.text, "<?xml version=\"1.0\"?>\n<library xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xsi:noNamespaceSchemaLocation=\"books.xsd\">\n</library>");
+});
+
 test("missing schema selection is rejected", async () => {
   const autocomplete = registerMarkdownViewerXmlSchemaAutocomplete(createApp(), {
     Neutralino: {
@@ -148,9 +172,15 @@ test("clearing an association removes only the matching XML file", async () => {
 
 test("associating from the active editor refreshes XML server configuration", async () => {
   let refreshed = 0;
+  let editorValue = "<?xml version=\"1.0\"?>\n<books>\n</books>";
   const messages = [];
   const autocomplete = registerMarkdownViewerXmlSchemaAutocomplete(createApp(), {
     getActiveEditorPath: () => "C:/Project/order.xml",
+    getActiveEditorValue: () => editorValue,
+    replaceActiveEditorContent(content) {
+      editorValue = content;
+      return true;
+    },
     Neutralino: {
       os: {
         async showOpenDialog() {
@@ -160,6 +190,9 @@ test("associating from the active editor refreshes XML server configuration", as
       filesystem: {
         async getStats() {
           return {};
+        },
+        async readFile() {
+          return { data: "<xs:schema targetNamespace=\"http://bookstore.example.com\"/>" };
         }
       }
     },
@@ -176,8 +209,18 @@ test("associating from the active editor refreshes XML server configuration", as
   const result = await autocomplete.associateSchemaForActiveEditor();
 
   assert.equal(result.ok, true);
+  assert.equal(result.documentUpdated, true);
+  assert.match(editorValue, /xmlns="http:\/\/bookstore\.example\.com"/);
+  assert.match(editorValue, /xmlns:xsi="http:\/\/www\.w3\.org\/2001\/XMLSchema-instance"/);
+  assert.match(editorValue, /xsi:schemaLocation="http:\/\/bookstore\.example\.com order\.xsd"/);
   assert.equal(refreshed, 1);
   assert.deepEqual(messages, ["XML schema associated. Autocomplete will use it for this session."]);
+});
+test("schema reader normalizes file API result objects", () => {
+  const autocomplete = registerMarkdownViewerXmlSchemaAutocomplete(createApp());
+
+  assert.equal(autocomplete._test.normalizeSchemaReadResult({ data: "<xs:schema/>" }), "<xs:schema/>");
+  assert.equal(autocomplete._test.normalizeSchemaReadResult({ content: "<xs:schema/>" }), "<xs:schema/>");
 });
 
 test("XML server workspace configuration includes generated associations", () => {

@@ -29,6 +29,12 @@
       return index >= 0 ? normalized.slice(0, index) : "";
     }
 
+    function basename(filePath) {
+      const normalized = normalizeSlashes(filePath);
+      const index = normalized.lastIndexOf("/");
+      return index >= 0 ? normalized.slice(index + 1) : normalized;
+    }
+
     function normalizeLocalPath(path) {
       const normalized = normalizeSlashes(path);
       const driveMatch = normalized.match(/^([A-Za-z]:)(\/.*)?$/);
@@ -59,6 +65,25 @@
       return normalizeLocalPath(base ? base + "/" + value : value);
     }
 
+    function getRelativeSchemaReference(filePath, schemaPath) {
+      const fromDir = dirname(normalizeLocalPath(filePath));
+      const target = normalizeLocalPath(schemaPath);
+      const targetDir = dirname(target);
+      if (!fromDir || !targetDir) return basename(target);
+      const fromDrive = fromDir.match(/^[A-Za-z]:/)?.[0]?.toLowerCase() || "";
+      const targetDrive = target.match(/^[A-Za-z]:/)?.[0]?.toLowerCase() || "";
+      if (fromDrive && targetDrive && fromDrive !== targetDrive) return basename(target);
+      if (fromDir.toLowerCase() === targetDir.toLowerCase()) return basename(target);
+      const fromParts = fromDir.replace(/^[A-Za-z]:\//, "").split("/").filter(Boolean);
+      const targetParts = targetDir.replace(/^[A-Za-z]:\//, "").split("/").filter(Boolean);
+      let common = 0;
+      while (common < fromParts.length && common < targetParts.length && fromParts[common].toLowerCase() === targetParts[common].toLowerCase()) {
+        common += 1;
+      }
+      const up = fromParts.slice(common).map(function() { return ".."; });
+      return up.concat(targetParts.slice(common), basename(target)).join("/") || basename(target);
+    }
+
     function getAssociationKey(filePath) {
       return normalizeLocalPath(filePath).toLowerCase();
     }
@@ -82,6 +107,82 @@
     function getAttribute(root, name) {
       if (!root || typeof root.getAttribute !== "function") return "";
       return root.getAttributeNS?.(XML_SCHEMA_INSTANCE_NAMESPACE, name) || root.getAttribute("xsi:" + name) || root.getAttribute(name) || "";
+    }
+
+    function escapeXmlAttribute(value) {
+      return String(value || "")
+        .replace(/&/g, "&amp;")
+        .replace(/"/g, "&quot;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;");
+    }
+
+    function extractSchemaTargetNamespace(text) {
+      const match = String(text || "").match(/\btargetNamespace\s*=\s*(["'])(.*?)\1/i);
+      return match ? match[2] : "";
+    }
+
+    function applySchemaAssociationAttributesToText(text, options = {}) {
+      const source = String(text || "");
+      if (!source) return { changed: false, text: source };
+      const targetNamespace = String(options.targetNamespace || "").trim();
+      const schemaReference = String(options.schemaReference || "").trim();
+      if (!schemaReference) return { changed: false, text: source };
+      const rootMatch = /<(?![?!/])([A-Za-z_][\w:.-]*)([^<>]*?)(\/?)>/.exec(source);
+      if (!rootMatch) return { changed: false, text: source };
+      const fullTag = rootMatch[0];
+      const attrs = rootMatch[2] || "";
+      const additions = [];
+      if (targetNamespace && !/\sxmlns\s*=/.test(attrs)) additions.push(`xmlns="${escapeXmlAttribute(targetNamespace)}"`);
+      if (!/\sxmlns:xsi\s*=/.test(attrs)) additions.push(`xmlns:xsi="${XML_SCHEMA_INSTANCE_NAMESPACE}"`);
+      if (targetNamespace) {
+        if (!/\sxsi:schemaLocation\s*=/.test(attrs)) additions.push(`xsi:schemaLocation="${escapeXmlAttribute(targetNamespace + " " + schemaReference)}"`);
+      } else if (!/\sxsi:noNamespaceSchemaLocation\s*=/.test(attrs)) {
+        additions.push(`xsi:noNamespaceSchemaLocation="${escapeXmlAttribute(schemaReference)}"`);
+      }
+      if (!additions.length) return { changed: false, text: source };
+      const insertion = (attrs && /\s$/.test(attrs) ? "" : " ") + additions.join(" ");
+      const nextTag = fullTag.slice(0, fullTag.length - 1 - rootMatch[3].length) + insertion + rootMatch[3] + ">";
+      return {
+        changed: true,
+        text: source.slice(0, rootMatch.index) + nextTag + source.slice(rootMatch.index + fullTag.length)
+      };
+    }
+
+    function normalizeSchemaReadResult(result) {
+      if (typeof result === "string") return result;
+      if (result && typeof result.data === "string") return result.data;
+      if (result && typeof result.content === "string") return result.content;
+      return "";
+    }
+
+    async function readSchemaText(schemaPath) {
+      let schemaText = "";
+      if (typeof deps.readSchemaText === "function") schemaText = normalizeSchemaReadResult(await deps.readSchemaText(schemaPath));
+      if (schemaText) return schemaText;
+      const filesystem = NeutralinoRef?.filesystem;
+      if (typeof filesystem?.readFile === "function") return normalizeSchemaReadResult(await filesystem.readFile(schemaPath));
+      return "";
+    }
+
+    async function applySchemaAssociationToActiveEditor(filePath, schemaPath) {
+      const currentText = deps.getActiveEditorValue?.();
+      if (typeof currentText !== "string") return false;
+      const schemaText = await readSchemaText(schemaPath);
+      const targetNamespace = extractSchemaTargetNamespace(schemaText);
+      const schemaReference = getRelativeSchemaReference(filePath, schemaPath);
+      const result = applySchemaAssociationAttributesToText(currentText, { targetNamespace, schemaReference });
+      if (!result.changed) return false;
+      if (typeof deps.replaceActiveEditorContent === "function") {
+        if (deps.replaceActiveEditorContent(result.text) === false) return false;
+      } else if (typeof deps.setActiveEditorValue === "function") {
+        deps.setActiveEditorValue(result.text);
+        deps.dispatchActiveEditorInput?.();
+        deps.refreshActiveEditorUi?.();
+      } else {
+        return false;
+      }
+      return true;
     }
 
     function extractInlineSchemaReferences(text, filePath) {
@@ -206,8 +307,10 @@
         notify("warning", result.message);
         return result;
       }
+      const documentUpdated = await applySchemaAssociationToActiveEditor(filePath, schemaPath);
       await deps.refreshWorkspaceConfiguration?.();
       notify("success", "XML schema associated. Autocomplete will use it for this session.");
+      result.documentUpdated = documentUpdated;
       return result;
     }
 
@@ -219,6 +322,10 @@
       getAssociations,
       _test: {
         extractInlineSchemaReferences,
+        applySchemaAssociationAttributesToText,
+        extractSchemaTargetNamespace,
+        getRelativeSchemaReference,
+        normalizeSchemaReadResult,
         isXmlDocumentPath,
         normalizeLocalPath,
         resolveLocalPath

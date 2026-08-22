@@ -4221,6 +4221,23 @@ function createEditor(options) {
     getDocumentSymbols() {
       return requestLspDocumentSymbols(view);
     },
+    getDiagnostics() {
+      const diagnostics = [];
+      forEachDiagnostic(view.state, (diagnostic, from, to) => {
+        const startLine = view.state.doc.lineAt(from);
+        const endLine = view.state.doc.lineAt(to);
+        diagnostics.push({
+          diagnostic,
+          from,
+          to,
+          line: startLine.number,
+          column: from - startLine.from + 1,
+          endLine: endLine.number,
+          endColumn: to - endLine.from + 1
+        });
+      });
+      return diagnostics;
+    },
     getSyntaxTree() {
       return ensureSyntaxTree(view.state, view.state.doc.length, 100) || syntaxTree(view.state);
     },

@@ -886,6 +886,11 @@ async function startMarkdownViewer() {
     getActiveEditorValue: function() { return activeEditorCommands.getActiveEditorValue(); },
     getActiveEditorPath: getActiveEditorPathForLanguage,
     getActiveTab: function() { return getActiveTab(); },
+    getActiveEditorDiagnostics: function() {
+      const editor = editorViewManager?.getActiveCodeMirrorEditor?.() || codeMirrorEditor || null;
+      return editor?.getDiagnostics?.() || [];
+    },
+    getLanguageServerDiagnostics: function(filePath) { return getXmlLanguageServerDiagnosticsForPath(filePath); },
     getProblemsPanel: function() { return app.modules?.problemsPanel || null; },
     notify: app.services?.notify || app.modules?.notificationModal,
     Neutralino: window.Neutralino
@@ -893,6 +898,31 @@ async function startMarkdownViewer() {
   const xmlSchemaAutocomplete = window.registerMarkdownViewerXmlSchemaAutocomplete?.(app, {
     getActiveEditorPath: getActiveEditorPathForLanguage,
     getActiveTab: function() { return getActiveTab(); },
+    getActiveEditorValue: function() { return activeEditorCommands.getActiveEditorValue(); },
+    readSchemaText: async function(schemaPath) {
+      const normalizedSchemaPath = normalizeLocalPath(schemaPath).toLowerCase();
+      const openSchemaTab = tabs.find(function(tab) {
+        const tabPath = normalizeLocalPath(tab.sourceFilePath || tab.sourceFileName || tab.title || "").toLowerCase();
+        return tabPath && tabPath === normalizedSchemaPath && typeof tab.content === "string";
+      });
+      if (openSchemaTab) return openSchemaTab.content;
+      return window.Neutralino?.filesystem?.readFile?.(schemaPath) || "";
+    },
+    replaceActiveEditorContent: function(content) {
+      const editor = activeEditorCommands.getActiveEditor?.();
+      const current = activeEditorCommands.getActiveEditorValue();
+      if (activeEditorCommands.replaceActiveEditorRange?.(0, current.length, content)) return true;
+      const selection = activeEditorCommands.getActiveEditorSelection?.() || { start: 0, end: 0 };
+      activeEditorCommands.setActiveEditorValue(content);
+      const position = Math.min(String(content || "").length, selection.start || 0);
+      activeEditorCommands.setActiveEditorSelection?.(position, position);
+      activeEditorCommands.dispatchActiveEditorInput?.();
+      updateEditorLineNumbers();
+      updateEditorSelectionHighlights();
+      updateStatusLine();
+      editor?.focus?.();
+      return true;
+    },
     notify: app.services?.notify || app.modules?.notificationModal,
     Neutralino: window.Neutralino,
     refreshWorkspaceConfiguration: refreshXmlSchemaAutocompleteConfiguration
@@ -903,6 +933,47 @@ async function startMarkdownViewer() {
   function clearXmlValidationDiagnosticsForTab(tab) {
     const path = tab?.sourceFilePath || tab?.sourceFileName || tab?.sourceFileHandle?.name || tab?.title || "";
     if (path && isXmlValidationPath(path)) xmlValidation?.clearDiagnosticsForPath?.(path);
+  }
+  function getXmlValidationPathKey(path) {
+    return normalizeLocalPath(path || "").toLowerCase();
+  }
+  function getXmlLanguageServerDiagnosticsForPath(path) {
+    const key = getXmlValidationPathKey(path);
+    return key ? (xmlLanguageServerDiagnosticsByPath.get(key) || []).slice() : [];
+  }
+  function mapXmlLanguageServerSeverity(value) {
+    if (Number(value) === 1) return "error";
+    if (Number(value) === 2) return "warning";
+    if (Number(value) === 3) return "info";
+    if (Number(value) === 4) return "hint";
+    return "error";
+  }
+  function mapXmlLanguageServerDiagnostic(filePath, diagnostic) {
+    const range = diagnostic?.range || {};
+    return {
+      severity: mapXmlLanguageServerSeverity(diagnostic?.severity),
+      message: String(diagnostic?.message || "XML language-server diagnostic"),
+      filePath,
+      line: Math.max(1, (Number(range.start?.line) || 0) + 1),
+      column: Math.max(1, (Number(range.start?.character) || 0) + 1),
+      source: "xml"
+    };
+  }
+  function handleXmlLanguageServerDiagnostics(event) {
+    if (event?.serverId !== "xml") return;
+    let message = null;
+    try {
+      message = JSON.parse(String(event.message || ""));
+    } catch (_error) {
+      return;
+    }
+    if (message?.method !== "textDocument/publishDiagnostics") return;
+    const filePath = lspServerRegistry?.fromFileUri?.(message.params?.uri || "") || "";
+    const key = getXmlValidationPathKey(filePath);
+    if (!key) return;
+    const diagnostics = (Array.isArray(message.params?.diagnostics) ? message.params.diagnostics : [])
+      .map((diagnostic) => mapXmlLanguageServerDiagnostic(filePath, diagnostic));
+    xmlLanguageServerDiagnosticsByPath.set(key, diagnostics);
   }
   const lessToCssConverter = window.registerMarkdownViewerLessToCssConverter?.(app) || null;
   const toolSyntaxTextarea = window.registerMarkdownViewerToolSyntaxTextarea?.(app) || null;
@@ -2252,6 +2323,7 @@ ${getMarkdownAlertBody(alertType, selectedText)}`;
   let lspServerRegistry = null;
   let lspVsixInstaller = null;
   let neutralinoLspBridge = null;
+  const xmlLanguageServerDiagnosticsByPath = new Map();
   let jdtProxyClient = null;
   let kotlinAdapterClient = null;
   let kotlinWorkspaceCoordinator = null;
@@ -2843,6 +2915,7 @@ ${getMarkdownAlertBody(alertType, selectedText)}`;
       onJdtUnavailable: showJdtUnavailableNotification,
       get Neutralino() { return typeof Neutralino !== "undefined" ? Neutralino : undefined; }
     });
+    neutralinoLspBridge?.subscribeServerMessages?.(handleXmlLanguageServerDiagnostics);
   }
   if (typeof window.registerMarkdownViewerKotlinWorkspaceCoordinator === "function") {
     kotlinWorkspaceCoordinator = window.registerMarkdownViewerKotlinWorkspaceCoordinator(app, {
@@ -7928,6 +8001,7 @@ Markdown content is processed client-side in your browser and sanitized before p
       collapseTopLevelFolds: callActive("collapseTopLevelFolds", false),
       expandTopLevelFolds: callActive("expandTopLevelFolds", false),
       getDocumentSymbols: callActive("getDocumentSymbols", Promise.resolve([])),
+      getDiagnostics: callActive("getDiagnostics", []),
       getSyntaxTree: callActive("getSyntaxTree", null),
       getActiveLanguage: function() { return getActiveInstance()?.getActiveLanguage?.() || null; },
       formatActiveDocument: async function() {
@@ -20158,4 +20232,3 @@ if (window.markdownViewerStartupErrors?.guardStartup) {
   });
 }
 })();
-

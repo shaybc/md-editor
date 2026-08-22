@@ -620,6 +620,8 @@
           runJsonEditCommand(action, { useContextSelection: true });
           break;
         case "compact-xml":
+        case "xml-validate":
+        case "xml-associate-schema":
         case "xml-for-code":
         case "xml-from-code":
         case "xml-create-schema":

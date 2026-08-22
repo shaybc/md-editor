@@ -155,3 +155,76 @@ test("XML validation publishes and clears Problems panel diagnostics", async () 
   assert.equal(calls[0].diagnostics[0].source, "xml");
   assert.deepEqual(calls[1], { type: "clear", owner: "xml-validation:c:/work/input.xml" });
 });
+test("XML validation includes active editor language-server diagnostics", async () => {
+  const calls = [];
+  const validator = registerMarkdownViewerXmlValidation({ registerModule() {} }, {
+    DOMParser: createParser([{}]),
+    getActiveEditorValue() {
+      return "<xs:schema xmlns:xs=\"http://www.w3.org/2001/XMLSchema\"/>";
+    },
+    getActiveEditorPath() {
+      return "C:/work/books.xsd";
+    },
+    getActiveEditorDiagnostics() {
+      return [{
+        diagnostic: {
+          severity: "error",
+          message: "The content of 'book' must match the schema model."
+        },
+        line: 10,
+        column: 5
+      }];
+    },
+    getProblemsPanel() {
+      return {
+        setDiagnosticCollection(owner, diagnostics) {
+          calls.push({ owner, diagnostics });
+        }
+      };
+    }
+  });
+
+  const result = await validator.validateActiveEditor();
+
+  assert.equal(result.status, "issues");
+  assert.equal(result.diagnostics.length, 1);
+  assert.equal(result.diagnostics[0].message, "The content of 'book' must match the schema model.");
+  assert.equal(result.diagnostics[0].line, 10);
+  assert.equal(result.diagnostics[0].column, 5);
+  assert.equal(calls[0].diagnostics[0].source, "xml");
+});
+test("XML validation includes cached XML language-server diagnostics", async () => {
+  const calls = [];
+  const validator = registerMarkdownViewerXmlValidation({ registerModule() {} }, {
+    DOMParser: createParser([{}]),
+    getActiveEditorValue() {
+      return "<xs:schema xmlns:xs=\"http://www.w3.org/2001/XMLSchema\"/>";
+    },
+    getActiveEditorPath() {
+      return "C:/work/books.xsd";
+    },
+    getLanguageServerDiagnostics(filePath) {
+      assert.equal(filePath, "C:/work/books.xsd");
+      return [{
+        severity: "error",
+        message: "The content of 'book' must match the schema model.",
+        line: 10,
+        column: 5
+      }];
+    },
+    getProblemsPanel() {
+      return {
+        setDiagnosticCollection(owner, diagnostics) {
+          calls.push({ owner, diagnostics });
+        }
+      };
+    }
+  });
+
+  const result = await validator.validateActiveEditor();
+
+  assert.equal(result.status, "issues");
+  assert.equal(result.diagnostics.length, 1);
+  assert.equal(result.diagnostics[0].message, "The content of 'book' must match the schema model.");
+  assert.equal(calls[0].diagnostics[0].source, "xml");
+});
