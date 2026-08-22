@@ -84,6 +84,27 @@ function createPersistence(extraDeps = {}) {
         isTemporary: options.temporary === true
       };
     },
+    createBase64ToolTab() {
+      return { id: "base64_tool", type: "base64-tool", title: "Base64 Encoder/Decoder", viewMode: "preview" };
+    },
+    createCertificateDecoderTab() {
+      return { id: "certificate_decoder", type: "certificate-decoder", title: "Certificate Decoder", viewMode: "preview" };
+    },
+    createJwtToolTab() {
+      return { id: "jwt_tool", type: "jwt-tool", title: "JWT Encoder/Decoder", viewMode: "preview" };
+    },
+    createJsonYamlToolTab() {
+      return { id: "json_yaml_tool", type: "json-yaml-tool", title: "JSON <> YAML Converter", viewMode: "preview" };
+    },
+    createJsonPathToolTab() {
+      return { id: "jsonpath_tool", type: "jsonpath-tool", title: "JSONPath Tester", viewMode: "preview" };
+    },
+    createXPathToolTab() {
+      return { id: "xpath_tool", type: "xpath-tool", title: "XPath Search", viewMode: "preview" };
+    },
+    createUuidToolTab() {
+      return { id: "uuid_tool", type: "uuid-tool", title: "UUID Generator", viewMode: "preview" };
+    },
     createGraphTab(folderName, options = {}) {
       return {
         id: `graph_${folderName}`,
@@ -693,6 +714,28 @@ test("legacy markdown topology session restores from saved topology file", async
   assert.equal(restored.tabs[0].sourceFilePath, "C:/work/helm-template-chart.mdviewer-k8s-topology.json");
   assert.equal(restored.tabs[0].kubernetesTopology.graph.nodes[0].id, "namespace/default");
 });
+test("DevToys tool tabs serialize and restore as preview tools", async () => {
+  const persistence = createPersistence();
+  const toolTypes = ["base64-tool", "certificate-decoder", "jwt-tool", "json-yaml-tool", "jsonpath-tool", "xpath-tool", "uuid-tool", "qr-tool", "hash-tool", "json-array-table-tool", "text-escape-tool", "unicode-tool", "string-bytes-tool", "database-connection-string-tool"];
+
+  for (const type of toolTypes) {
+    const descriptor = persistence.serializeTab({ id: `tab_${type}`, type, title: type, viewMode: "preview" });
+    assert.equal(descriptor.type, type);
+    assert.equal(descriptor.viewMode, "preview");
+
+    const restored = await persistence.restoreTabsFromPayload({
+      version: persistence.SESSION_VERSION,
+      activeTabId: descriptor.id,
+      tabs: [descriptor]
+    });
+
+    assert.equal(restored.tabs.length, 1);
+    assert.equal(restored.tabs[0].type, type);
+    assert.equal(restored.tabs[0].viewMode, "preview");
+    assert.equal(restored.tabs[0].savedContent, "");
+  }
+});
+
 test("old tab sessions are ignored", async () => {
   const persistence = createPersistence();
   const restored = await persistence.restoreTabsFromPayload({

@@ -858,6 +858,13 @@ async function startMarkdownViewer() {
     updateEditorSelectionHighlights: function() { updateEditorSelectionHighlights(); },
     updateStatusLine: function() { updateStatusLine(); }
   });
+  window.registerMarkdownViewerFormattingSourceActions(app, {
+    sourceActions,
+    activeEditorCommands,
+    updateEditorLineNumbers: function() { return updateEditorLineNumbers(); },
+    updateEditorSelectionHighlights: function() { return updateEditorSelectionHighlights(); },
+    updateStatusLine: function() { return updateStatusLine(); }
+  });
   const javaMethodJavadoc = window.createMarkdownViewerJavaMethodJavadoc?.();
   window.registerMarkdownViewerProjectDocumentationSourceActions(app, {
     appDebugLog,
@@ -873,6 +880,10 @@ async function startMarkdownViewer() {
   });
   const unicodeConverter = window.registerMarkdownViewerUnicodeConverter(app);
   const base64Converter = window.registerMarkdownViewerBase64Converter(app);
+  const xmlSchemaGenerator = window.registerMarkdownViewerXmlSchemaGenerator?.(app) || null;
+  const xmlStubGenerator = window.registerMarkdownViewerXmlStubGenerator?.(app) || null;
+  const lessToCssConverter = window.registerMarkdownViewerLessToCssConverter?.(app) || null;
+  const toolSyntaxTextarea = window.registerMarkdownViewerToolSyntaxTextarea?.(app) || null;
   const editorContextMenu = window.registerMarkdownViewerEditorContextMenu(app, {
     markdownEditor,
     activeEditorCommands,
@@ -885,6 +896,57 @@ async function startMarkdownViewer() {
     getActiveTab: function() { return getActiveTab(); },
     getUnicodeConverter: function() { return unicodeConverter; },
     getBase64Converter: function() { return base64Converter; },
+    getXmlSchemaGenerator: function() { return xmlSchemaGenerator; },
+    getXmlStubGenerator: function() { return xmlStubGenerator; },
+    getLessToCssConverter: function() { return lessToCssConverter; },
+    openGeneratedXmlSchemaInTab: function(content, title) {
+      const name = title || "schema.xsd";
+      const tab = tabsModule?.openSidebarFileInTab?.(content, name, { name }, {
+        temporary: false,
+        skipExistingSourceTab: true,
+        viewMode: "editor"
+      });
+      if (tab) {
+        tab.isNewUnsavedFile = true;
+        tab.savedContent = "";
+        tab.parseAsLanguageId = "xml";
+        updateSaveCurrentFileButtons();
+        saveTabsToStorage(tabs);
+      }
+      return tab || null;
+    },
+    openGeneratedXmlStubInTab: function(content, title) {
+      const name = title || "document-stub.xml";
+      const tab = tabsModule?.openSidebarFileInTab?.(content, name, { name }, {
+        temporary: false,
+        skipExistingSourceTab: true,
+        viewMode: "editor"
+      });
+      if (tab) {
+        tab.isNewUnsavedFile = true;
+        tab.savedContent = "";
+        tab.parseAsLanguageId = "xml";
+        updateSaveCurrentFileButtons();
+        saveTabsToStorage(tabs);
+      }
+      return tab || null;
+    },
+    openGeneratedCssInTab: function(content, title) {
+      const name = title || "style.css";
+      const tab = tabsModule?.openSidebarFileInTab?.(content, name, { name }, {
+        temporary: false,
+        skipExistingSourceTab: true,
+        viewMode: "editor"
+      });
+      if (tab) {
+        tab.isNewUnsavedFile = true;
+        tab.savedContent = "";
+        tab.parseAsLanguageId = "css";
+        updateSaveCurrentFileButtons();
+        saveTabsToStorage(tabs);
+      }
+      return tab || null;
+    },
     isMarkdownPath: function(path) { return isMarkdownPath(path); },
     isUnsupportedFileTab: function(tab) { return isUnsupportedFileTab(tab); },
     updateEditorLineNumbers: function() { updateEditorLineNumbers(); },
@@ -2209,6 +2271,33 @@ ${getMarkdownAlertBody(alertType, selectedText)}`;
   let graphCompanionControl = null;
   let apiClient = null;
   let regexTester = null;
+  let base64Tool = null;
+  let certificateParser = null;
+  let certificateDecoder = null;
+  let jwtCodec = null;
+  let jwtTool = null;
+  let jsonYamlCodec = null;
+  let jsonYamlTool = null;
+  let jsonPathEvaluator = null;
+  let jsonPathTool = null;
+  let xpathEvaluator = null;
+  let xpathTool = null;
+  let uuidCodec = null;
+  let uuidTool = null;
+  let qrCodec = null;
+  let qrTool = null;
+  let hashCodec = null;
+  let hashTool = null;
+  let jsonArrayTableCodec = null;
+  let jsonArrayTableTool = null;
+  let textEscapeCodec = null;
+  let textEscapeTool = null;
+  let unicodeCodec = null;
+  let unicodeTool = null;
+  let stringBytesCodec = null;
+  let stringBytesTool = null;
+  let databaseConnectionStringCodec = null;
+  let databaseConnectionStringTool = null;
   let markdownRender = null;
   const SOURCEGRAPH_TYPESCRIPT_VSIX_URL = "https://marketplace.visualstudio.com/_apis/public/gallery/publishers/sourcegraph/vsextensions/javascript-typescript/latest/vspackage";
   const ECLIPSE_JDTLS_MILESTONES_URL = "https://download.eclipse.org/jdtls/milestones/";
@@ -8546,6 +8635,126 @@ Markdown content is processed client-side in your browser and sanitized before p
     processRouter: spawnedProcessRouter,
     getAppRoot: function() { return typeof NL_PATH !== "undefined" ? NL_PATH : "."; }
   });
+  base64Tool = window.registerMarkdownViewerBase64Tool?.(app, {
+    converter: base64Converter,
+    copyTextToClipboard: copyTextToSystemClipboard,
+    openBase64ToolInTab: function() {
+      return tabsModule?.openBase64ToolInTab?.() || null;
+    }
+  }) || null;
+
+  certificateParser = window.registerMarkdownViewerCertificateParser?.(app) || null;
+  certificateDecoder = window.registerMarkdownViewerCertificateDecoder?.(app, {
+    parser: certificateParser,
+    copyTextToClipboard: copyTextToSystemClipboard,
+    openCertificateDecoderInTab: function() {
+      return tabsModule?.openCertificateDecoderInTab?.() || null;
+    }
+  }) || null;
+  jwtCodec = window.registerMarkdownViewerJwtCodec?.(app) || null;
+  jwtTool = window.registerMarkdownViewerJwtTool?.(app, {
+    codec: jwtCodec,
+    copyTextToClipboard: copyTextToSystemClipboard,
+    syntaxTextarea: toolSyntaxTextarea,
+    openJwtToolInTab: function() {
+      return tabsModule?.openJwtToolInTab?.() || null;
+    }
+  }) || null;
+  jsonYamlCodec = window.registerMarkdownViewerJsonYamlCodec?.(app, {
+    yamlLibrary: window.jsyaml
+  }) || null;
+  jsonYamlTool = window.registerMarkdownViewerJsonYamlTool?.(app, {
+    codec: jsonYamlCodec,
+    copyTextToClipboard: copyTextToSystemClipboard,
+    syntaxTextarea: toolSyntaxTextarea,
+    openJsonYamlToolInTab: function() {
+      return tabsModule?.openJsonYamlToolInTab?.() || null;
+    }
+  }) || null;
+  jsonPathEvaluator = window.registerMarkdownViewerJsonPathEvaluator?.(app) || null;
+  jsonPathTool = window.registerMarkdownViewerJsonPathTool?.(app, {
+    evaluator: jsonPathEvaluator,
+    copyTextToClipboard: copyTextToSystemClipboard,
+    syntaxTextarea: toolSyntaxTextarea,
+    openJsonPathToolInTab: function() {
+      return tabsModule?.openJsonPathToolInTab?.() || null;
+    }
+  }) || null;
+  xpathEvaluator = window.registerMarkdownViewerXPathEvaluator?.(app) || null;
+  xpathTool = window.registerMarkdownViewerXPathTool?.(app, {
+    evaluator: xpathEvaluator,
+    copyTextToClipboard: copyTextToSystemClipboard,
+    syntaxTextarea: toolSyntaxTextarea,
+    openXPathToolInTab: function() {
+      return tabsModule?.openXPathToolInTab?.() || null;
+    }
+  }) || null;
+  uuidCodec = window.registerMarkdownViewerUuidCodec?.(app) || null;
+  uuidTool = window.registerMarkdownViewerUuidTool?.(app, {
+    codec: uuidCodec,
+    copyTextToClipboard: copyTextToSystemClipboard,
+    openUuidToolInTab: function() {
+      return tabsModule?.openUuidToolInTab?.() || null;
+    }
+  }) || null;
+  qrCodec = window.registerMarkdownViewerQrCodec?.(app) || null;
+  qrTool = window.registerMarkdownViewerQrTool?.(app, {
+    codec: qrCodec,
+    copyTextToClipboard: copyTextToSystemClipboard,
+    openQrToolInTab: function() {
+      return tabsModule?.openQrToolInTab?.() || null;
+    }
+  }) || null;
+  hashCodec = window.registerMarkdownViewerHashCodec?.(app) || null;
+  hashTool = window.registerMarkdownViewerHashTool?.(app, {
+    codec: hashCodec,
+    copyTextToClipboard: copyTextToSystemClipboard,
+    openHashToolInTab: function() {
+      return tabsModule?.openHashToolInTab?.() || null;
+    }
+  }) || null;
+  jsonArrayTableCodec = window.registerMarkdownViewerJsonArrayTableCodec?.(app) || null;
+  jsonArrayTableTool = window.registerMarkdownViewerJsonArrayTableTool?.(app, {
+    codec: jsonArrayTableCodec,
+    copyTextToClipboard: copyTextToSystemClipboard,
+    saveAs,
+    openJsonArrayTableToolInTab: function() {
+      return tabsModule?.openJsonArrayTableToolInTab?.() || null;
+    }
+  }) || null;
+  textEscapeCodec = window.registerMarkdownViewerTextEscapeCodec?.(app) || null;
+  textEscapeTool = window.registerMarkdownViewerTextEscapeTool?.(app, {
+    codec: textEscapeCodec,
+    copyTextToClipboard: copyTextToSystemClipboard,
+    openTextEscapeToolInTab: function() {
+      return tabsModule?.openTextEscapeToolInTab?.() || null;
+    }
+  }) || null;
+  unicodeCodec = window.registerMarkdownViewerUnicodeCodec?.(app) || null;
+  unicodeTool = window.registerMarkdownViewerUnicodeTool?.(app, {
+    codec: unicodeCodec,
+    copyTextToClipboard: copyTextToSystemClipboard,
+    openUnicodeToolInTab: function() {
+      return tabsModule?.openUnicodeToolInTab?.() || null;
+    }
+  }) || null;
+  stringBytesCodec = window.registerMarkdownViewerStringBytesCodec?.(app) || null;
+  stringBytesTool = window.registerMarkdownViewerStringBytesTool?.(app, {
+    codec: stringBytesCodec,
+    copyTextToClipboard: copyTextToSystemClipboard,
+    openStringBytesToolInTab: function() {
+      return tabsModule?.openStringBytesToolInTab?.() || null;
+    }
+  }) || null;
+  databaseConnectionStringCodec = window.registerMarkdownViewerDatabaseConnectionStringCodec?.(app) || null;
+  databaseConnectionStringTool = window.registerMarkdownViewerDatabaseConnectionStringTool?.(app, {
+    codec: databaseConnectionStringCodec,
+    copyTextToClipboard: copyTextToSystemClipboard,
+    saveAs,
+    openDatabaseConnectionStringToolInTab: function() {
+      return tabsModule?.openDatabaseConnectionStringToolInTab?.() || null;
+    }
+  }) || null;
   regexTester = window.registerMarkdownViewerRegexTester(app, {
     storage: regexTesterStorage,
     javascriptEngine: regexTesterJavascriptEngine,
@@ -8575,6 +8784,20 @@ Markdown content is processed client-side in your browser and sanitized before p
     fileCompare,
     apiClient,
     regexTester,
+    base64Tool,
+    certificateDecoder,
+    jwtTool,
+    jsonYamlTool,
+    jsonPathTool,
+    xpathTool,
+    uuidTool,
+    qrTool,
+    hashTool,
+    jsonArrayTableTool,
+    textEscapeTool,
+    unicodeTool,
+    stringBytesTool,
+    databaseConnectionStringTool,
     editorViewManager
   });
 
@@ -17272,6 +17495,12 @@ ${error?.message || String(error || "")}`,
       case "json-for-code":
       case "json-from-code":
         return app.modules?.editorContextMenu?.runJsonEditCommand?.(command);
+      case "compact-xml":
+      case "xml-for-code":
+      case "xml-from-code":
+      case "xml-create-schema":
+      case "xml-create-stub":
+        return app.modules?.editorContextMenu?.runXmlEditCommand?.(command);
       case "toggle-comment":
         return activeEditorCommands.toggleComment?.();
       case "trim-trailing":

@@ -5,6 +5,10 @@ const {
   registerMarkdownViewerBase64Converter,
   encodeBase64Text,
   decodeBase64Text,
+  encodeBase64Bytes,
+  decodeBase64ToBytes,
+  createBase64DataUrl,
+  decodeBase64Image,
 } = require("../resources/js/editor/base64-converter.js");
 
 test("encodes and decodes ASCII text as standard Base64", () => {
@@ -43,6 +47,27 @@ test("rejects Base64 bytes that are not valid UTF-8 text", () => {
   assert.throws(() => decodeBase64Text("/w=="), Base64ConversionError);
 });
 
+
+test("encodes and decodes arbitrary bytes for image data", () => {
+  const bytes = new Uint8Array([0, 255, 16, 32, 64]);
+  const encoded = encodeBase64Bytes(bytes);
+  const decoded = decodeBase64ToBytes(encoded);
+
+  assert.equal(encoded, "AP8QIEA=");
+  assert.deepEqual(Array.from(decoded), Array.from(bytes));
+});
+
+test("builds and decodes Base64 image data URLs", () => {
+  const bytes = new Uint8Array([137, 80, 78, 71]);
+  const dataUrl = createBase64DataUrl(bytes, "image/png");
+  const decoded = decodeBase64Image(dataUrl);
+
+  assert.equal(dataUrl, "data:image/png;base64,iVBORw==");
+  assert.equal(decoded.mimeType, "image/png");
+  assert.equal(decoded.dataUrl, dataUrl);
+  assert.deepEqual(Array.from(decoded.bytes), Array.from(bytes));
+});
+
 test("registers the Base64 converter with application services and modules", () => {
   const registered = [];
   const app = {
@@ -57,4 +82,5 @@ test("registers the Base64 converter with application services and modules", () 
   assert.equal(app.services.base64Converter, converter);
   assert.deepEqual(registered, [{ name: "base64Converter", module: converter }]);
   assert.equal(converter.decode(converter.encode("שלום 😀")), "שלום 😀");
+  assert.equal(converter.createDataUrl(new Uint8Array([72]), "text/plain"), "data:text/plain;base64,SA==");
 });

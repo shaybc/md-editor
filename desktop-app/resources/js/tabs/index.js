@@ -164,7 +164,7 @@
   }
 
   function isLargeEditableTab(tab) {
-    return !!tab && tab.type !== "graph" && tab.type !== "large-file" && tab.type !== "file-preview" && tab.type !== "image-editor" && tab.type !== "diagram-editor" && tab.type !== "hex-editor" && tab.type !== "file-compare" && tab.type !== "api-client" && tab.type !== "regex-tester" &&
+    return !!tab && tab.type !== "graph" && tab.type !== "large-file" && tab.type !== "file-preview" && tab.type !== "image-editor" && tab.type !== "diagram-editor" && tab.type !== "hex-editor" && tab.type !== "file-compare" && tab.type !== "api-client" && tab.type !== "regex-tester" && tab.type !== "base64-tool" && tab.type !== "certificate-decoder" && tab.type !== "jwt-tool" && tab.type !== "json-yaml-tool" && tab.type !== "jsonpath-tool" && tab.type !== "uuid-tool" && tab.type !== "qr-tool" && tab.type !== "hash-tool" && tab.type !== "json-array-table-tool" && tab.type !== "text-escape-tool" &&
       getEditableTabContentLength(tab) > LARGE_EDITABLE_AUTO_FOCUS_BYTES;
   }
 
@@ -764,6 +764,60 @@
         regexTesterIcon.className = "bi bi-regex me-1";
         titleSpan.appendChild(regexTesterIcon);
         titleSpan.append(document.createTextNode(displayName));
+      } else if (tab.type === "base64-tool") {
+        const base64Icon = document.createElement("i");
+        base64Icon.className = "bi bi-file-binary me-1";
+        titleSpan.appendChild(base64Icon);
+        titleSpan.append(document.createTextNode(displayName));
+      } else if (tab.type === "certificate-decoder") {
+        const certificateIcon = document.createElement("i");
+        certificateIcon.className = "bi bi-award me-1";
+        titleSpan.appendChild(certificateIcon);
+        titleSpan.append(document.createTextNode(displayName));
+      } else if (tab.type === "jwt-tool") {
+        const jwtIcon = document.createElement("i");
+        jwtIcon.className = "bi bi-key me-1";
+        titleSpan.appendChild(jwtIcon);
+        titleSpan.append(document.createTextNode(displayName));
+      } else if (tab.type === "json-yaml-tool") {
+        const jsonYamlIcon = document.createElement("i");
+        jsonYamlIcon.className = "bi bi-braces me-1";
+        titleSpan.appendChild(jsonYamlIcon);
+      } else if (tab.type === "jsonpath-tool") {
+        const jsonPathIcon = document.createElement("i");
+        jsonPathIcon.className = "bi bi-signpost-split me-1";
+        titleSpan.appendChild(jsonPathIcon);
+        titleSpan.append(document.createTextNode(displayName));
+      } else if (tab.type === "xpath-tool") {
+        const xpathIcon = document.createElement("i");
+        xpathIcon.className = "bi bi-signpost-split me-1";
+        titleSpan.appendChild(xpathIcon);
+        titleSpan.append(document.createTextNode(displayName));
+      } else if (tab.type === "uuid-tool") {
+        const uuidIcon = document.createElement("i");
+        uuidIcon.className = "bi bi-hash me-1";
+        titleSpan.appendChild(uuidIcon);
+        titleSpan.append(document.createTextNode(displayName));
+      } else if (tab.type === "qr-tool") {
+        const qrIcon = document.createElement("i");
+        qrIcon.className = "bi bi-qr-code me-1";
+        titleSpan.appendChild(qrIcon);
+        titleSpan.append(document.createTextNode(displayName));
+      } else if (tab.type === "hash-tool") {
+        const hashIcon = document.createElement("i");
+        hashIcon.className = "bi bi-fingerprint me-1";
+        titleSpan.appendChild(hashIcon);
+        titleSpan.append(document.createTextNode(displayName));
+      } else if (tab.type === "json-array-table-tool") {
+        const tableIcon = document.createElement("i");
+        tableIcon.className = "bi bi-database me-1";
+        titleSpan.appendChild(tableIcon);
+        titleSpan.append(document.createTextNode(displayName));
+      } else if (tab.type === "text-escape-tool") {
+        const textEscapeIcon = document.createElement("i");
+        textEscapeIcon.className = "bi bi-textarea-t me-1";
+        titleSpan.appendChild(textEscapeIcon);
+        titleSpan.append(document.createTextNode(displayName));
       } else {
         const tabIcon = document.createElement("i");
         tabIcon.className = `bi ${getFileIconClass(tab.sourceFileName || tab.sourceFilePath || tab.title)} me-1`;
@@ -936,6 +990,60 @@
         regexTesterIcon.className = "bi bi-regex me-1";
         titleSpan.appendChild(regexTesterIcon);
         titleSpan.append(document.createTextNode(displayName));
+      } else if (tab.type === "base64-tool") {
+        const base64Icon = document.createElement("i");
+        base64Icon.className = "bi bi-file-binary me-1";
+        titleSpan.appendChild(base64Icon);
+        titleSpan.append(document.createTextNode(displayName));
+      } else if (tab.type === "certificate-decoder") {
+        const certificateIcon = document.createElement("i");
+        certificateIcon.className = "bi bi-award me-1";
+        titleSpan.appendChild(certificateIcon);
+        titleSpan.append(document.createTextNode(displayName));
+      } else if (tab.type === "jwt-tool") {
+        const jwtIcon = document.createElement("i");
+        jwtIcon.className = "bi bi-key me-1";
+        titleSpan.appendChild(jwtIcon);
+        titleSpan.append(document.createTextNode(displayName));
+      } else if (tab.type === "json-yaml-tool") {
+        const jsonYamlIcon = document.createElement("i");
+        jsonYamlIcon.className = "bi bi-braces me-1";
+        titleSpan.appendChild(jsonYamlIcon);
+      } else if (tab.type === "jsonpath-tool") {
+        const jsonPathIcon = document.createElement("i");
+        jsonPathIcon.className = "bi bi-signpost-split me-1";
+        titleSpan.appendChild(jsonPathIcon);
+        titleSpan.append(document.createTextNode(displayName));
+      } else if (tab.type === "xpath-tool") {
+        const xpathIcon = document.createElement("i");
+        xpathIcon.className = "bi bi-signpost-split me-1";
+        titleSpan.appendChild(xpathIcon);
+        titleSpan.append(document.createTextNode(displayName));
+      } else if (tab.type === "uuid-tool") {
+        const uuidIcon = document.createElement("i");
+        uuidIcon.className = "bi bi-hash me-1";
+        titleSpan.appendChild(uuidIcon);
+        titleSpan.append(document.createTextNode(displayName));
+      } else if (tab.type === "qr-tool") {
+        const qrIcon = document.createElement("i");
+        qrIcon.className = "bi bi-qr-code me-1";
+        titleSpan.appendChild(qrIcon);
+        titleSpan.append(document.createTextNode(displayName));
+      } else if (tab.type === "hash-tool") {
+        const hashIcon = document.createElement("i");
+        hashIcon.className = "bi bi-fingerprint me-1";
+        titleSpan.appendChild(hashIcon);
+        titleSpan.append(document.createTextNode(displayName));
+      } else if (tab.type === "json-array-table-tool") {
+        const tableIcon = document.createElement("i");
+        tableIcon.className = "bi bi-database me-1";
+        titleSpan.appendChild(tableIcon);
+        titleSpan.append(document.createTextNode(displayName));
+      } else if (tab.type === "text-escape-tool") {
+        const textEscapeIcon = document.createElement("i");
+        textEscapeIcon.className = "bi bi-textarea-t me-1";
+        titleSpan.appendChild(textEscapeIcon);
+        titleSpan.append(document.createTextNode(displayName));
       } else if (tab.type === "large-file" || tab.type === "file-preview" || tab.type === "image-editor" || tab.type === "hex-editor" || tab.type === "file-compare") {
         titleSpan.textContent = displayName;
       } else {
@@ -976,7 +1084,7 @@
   let tabContextCloseMobileMenuOnAction = false;
 
   function getTabCompareSource(tab) {
-    if (!tab || ['graph', 'file-compare', 'api-client', 'regex-tester', 'kubernetes-topology'].includes(tab.type)) return null;
+    if (!tab || ['graph', 'file-compare', 'api-client', 'regex-tester', 'base64-tool', 'certificate-decoder', 'jwt-tool', 'json-yaml-tool', 'jsonpath-tool', 'kubernetes-topology'].includes(tab.type)) return null;
     const path = tab.sourceFilePath || tab.openedSource?.path || tab.largeFileSource?.path || tab.filePreviewSource?.path || null;
     const handle = tab.sourceFileHandle || tab.largeFileSource?.handle || tab.filePreviewSource?.handle || null;
     const file = tab.filePreviewSource?.file || null;
@@ -1072,7 +1180,7 @@
   }
 
   function isParseAsEligibleTab(tab) {
-    return !!tab && !["graph", "large-file", "file-preview", "image-editor", "diagram-editor", "hex-editor", "file-compare", "api-client", "regex-tester"].includes(tab.type);
+    return !!tab && !["graph", "large-file", "file-preview", "image-editor", "diagram-editor", "hex-editor", "file-compare", "api-client", "regex-tester", "base64-tool", "certificate-decoder", "jwt-tool", "json-yaml-tool", "jsonpath-tool", "uuid-tool", "qr-tool", "hash-tool", "json-array-table-tool", "text-escape-tool"].includes(tab.type);
   }
 
   function applyTabLanguageOverride(languageId) {
@@ -1371,7 +1479,7 @@
 
   function getActiveDocumentViewModeForSave(tab) {
     if (!tab) return currentViewMode || "split";
-    if (tab.type === "graph" || tab.type === "large-file" || tab.type === "file-preview" || tab.type === "image-editor" || tab.type === "diagram-editor" || tab.type === "hex-editor" || tab.type === "file-compare" || tab.type === "api-client" || tab.type === "regex-tester") return "preview";
+    if (tab.type === "graph" || tab.type === "large-file" || tab.type === "file-preview" || tab.type === "image-editor" || tab.type === "diagram-editor" || tab.type === "hex-editor" || tab.type === "file-compare" || tab.type === "api-client" || tab.type === "regex-tester" || tab.type === "base64-tool" || tab.type === "certificate-decoder" || tab.type === "jwt-tool" || tab.type === "json-yaml-tool" || tab.type === "jsonpath-tool" || tab.type === "uuid-tool" || tab.type === "qr-tool" || tab.type === "hash-tool" || tab.type === "json-array-table-tool" || tab.type === "text-escape-tool") return "preview";
     if (!isPreviewableDocumentTab(tab)) return "editor";
     const activeContentContainer = deps.contentContainer || document.querySelector(".content-container");
     if (activeContentContainer && activeContentContainer.classList) {
@@ -1400,7 +1508,7 @@
       }
       return;
     }
-    if (tab.type === "graph" || tab.type === "large-file" || tab.type === "file-preview" || tab.type === "image-editor" || tab.type === "diagram-editor" || tab.type === "hex-editor" || tab.type === "file-compare" || tab.type === "api-client" || tab.type === "regex-tester") {
+    if (tab.type === "graph" || tab.type === "large-file" || tab.type === "file-preview" || tab.type === "image-editor" || tab.type === "diagram-editor" || tab.type === "hex-editor" || tab.type === "file-compare" || tab.type === "api-client" || tab.type === "regex-tester" || tab.type === "base64-tool" || tab.type === "certificate-decoder" || tab.type === "jwt-tool" || tab.type === "json-yaml-tool" || tab.type === "jsonpath-tool" || tab.type === "uuid-tool" || tab.type === "qr-tool" || tab.type === "hash-tool" || tab.type === "json-array-table-tool" || tab.type === "text-escape-tool") {
       if (typeof appDebugLog === "function") {
         void appDebugLog("debug", "[tabs-session] Skipped markdown state save for active non-editor tab", {
           lifecycle: !!options.lifecycle,
@@ -1500,12 +1608,12 @@
 
   function getActiveMarkdownTab() {
     const tab = tabs.find(function(t) { return t.id === activeTabId; });
-    if (!tab || tab.type === "graph" || tab.type === "large-file" || tab.type === "file-preview" || tab.type === "image-editor" || tab.type === "diagram-editor" || tab.type === "hex-editor" || tab.type === "file-compare" || tab.type === "api-client" || tab.type === "regex-tester") return null;
+    if (!tab || tab.type === "graph" || tab.type === "large-file" || tab.type === "file-preview" || tab.type === "image-editor" || tab.type === "diagram-editor" || tab.type === "hex-editor" || tab.type === "file-compare" || tab.type === "api-client" || tab.type === "regex-tester" || tab.type === "base64-tool" || tab.type === "certificate-decoder" || tab.type === "jwt-tool" || tab.type === "json-yaml-tool" || tab.type === "jsonpath-tool" || tab.type === "uuid-tool" || tab.type === "qr-tool" || tab.type === "hash-tool" || tab.type === "json-array-table-tool" || tab.type === "text-escape-tool") return null;
     return tab;
   }
 
   function canReadTabFromDisk(tab) {
-    if (!tab || tab.type === "graph" || tab.type === "hex-editor" || tab.type === "file-compare" || tab.type === "api-client" || tab.type === "regex-tester") return false;
+    if (!tab || tab.type === "graph" || tab.type === "hex-editor" || tab.type === "file-compare" || tab.type === "api-client" || tab.type === "regex-tester" || tab.type === "base64-tool" || tab.type === "certificate-decoder" || tab.type === "jwt-tool" || tab.type === "json-yaml-tool" || tab.type === "jsonpath-tool" || tab.type === "uuid-tool" || tab.type === "qr-tool" || tab.type === "hash-tool" || tab.type === "json-array-table-tool" || tab.type === "text-escape-tool") return false;
     if (isNeutralinoRuntime() && tab.sourceFilePath && Neutralino?.filesystem?.readFile) return true;
     if (tab.sourceFileHandle && typeof tab.sourceFileHandle.getFile === "function") return true;
     return false;
@@ -1607,7 +1715,7 @@
   function getUnsavedTabs() {
     return tabs.filter(function(tab) {
       if (!tab) return false;
-      if (tab.type === "file-preview" || tab.type === "file-compare" || tab.type === "api-client" || tab.type === "regex-tester") return false;
+      if (tab.type === "file-preview" || tab.type === "file-compare" || tab.type === "api-client" || tab.type === "regex-tester" || tab.type === "base64-tool" || tab.type === "certificate-decoder" || tab.type === "jwt-tool" || tab.type === "json-yaml-tool" || tab.type === "jsonpath-tool" || tab.type === "uuid-tool" || tab.type === "qr-tool" || tab.type === "hash-tool" || tab.type === "json-array-table-tool" || tab.type === "text-escape-tool") return false;
       if (tab.type === "kubernetes-topology") return topologyTabNeedsInitialSave(tab) || tabHasPendingChanges(tab);
       if (tab.type === "graph" || tab.type === "large-file" || tab.type === "image-editor" || tab.type === "diagram-editor" || tab.type === "hex-editor") return tabHasPendingChanges(tab);
       const currentContent = tab.id === activeTabId ? getActiveEditorContent() : tab.content;
@@ -1623,7 +1731,7 @@
     const graphTab = getActiveGraphTab();
     const tab = getActiveMarkdownTab();
     const activeTab = tabs.find(function(candidate) { return candidate.id === activeTabId; }) || null;
-    const canSaveAsFile = !!activeTab && activeTab.type !== "graph" && activeTab.type !== "file-preview" && activeTab.type !== "file-compare" && activeTab.type !== "api-client" && activeTab.type !== "regex-tester";
+    const canSaveAsFile = !!activeTab && activeTab.type !== "graph" && activeTab.type !== "file-preview" && activeTab.type !== "file-compare" && activeTab.type !== "api-client" && activeTab.type !== "regex-tester" && activeTab.type !== "base64-tool" && activeTab.type !== "certificate-decoder" && activeTab.type !== "jwt-tool" && activeTab.type !== "json-yaml-tool" && activeTab.type !== "jsonpath-tool";
     const hasUnsavedChanges = activeTabHasUnsavedChanges();
     const isImageEditor = activeTab?.type === "image-editor";
     const isDiagramEditor = activeTab?.type === "diagram-editor";
@@ -1718,7 +1826,7 @@
       if (options.activateSaveDialog === true) activateTabBeforeSaveDialog(tab);
       return await deps.kubernetesTopologyDocument?.saveKubernetesTopologyTabWithSaveDialog?.(tab) === true;
     }
-    if (tab.type === "large-file" || tab.type === "file-preview" || tab.type === "file-compare" || tab.type === "api-client" || tab.type === "regex-tester") return true;
+    if (tab.type === "large-file" || tab.type === "file-preview" || tab.type === "file-compare" || tab.type === "api-client" || tab.type === "regex-tester" || tab.type === "base64-tool" || tab.type === "certificate-decoder" || tab.type === "jwt-tool" || tab.type === "json-yaml-tool" || tab.type === "jsonpath-tool" || tab.type === "uuid-tool" || tab.type === "qr-tool" || tab.type === "hash-tool" || tab.type === "json-array-table-tool" || tab.type === "text-escape-tool") return true;
 
     const content = getMarkdownTabContentForSave(tab);
     if (!tabHasPendingChanges(tab, content)) return true;
@@ -2036,7 +2144,7 @@
       perf.finish({ branch: "graph", reusedRender: false });
       return;
     }
-    if (tab.type === "large-file" || tab.type === "file-preview" || tab.type === "image-editor" || tab.type === "diagram-editor" || tab.type === "hex-editor" || tab.type === "file-compare" || tab.type === "api-client" || tab.type === "regex-tester" || tab.type === "kubernetes-topology") {
+    if (tab.type === "large-file" || tab.type === "file-preview" || tab.type === "image-editor" || tab.type === "diagram-editor" || tab.type === "hex-editor" || tab.type === "file-compare" || tab.type === "api-client" || tab.type === "regex-tester" || tab.type === "base64-tool" || tab.type === "certificate-decoder" || tab.type === "jwt-tool" || tab.type === "json-yaml-tool" || tab.type === "jsonpath-tool" || tab.type === "uuid-tool" || tab.type === "qr-tool" || tab.type === "hash-tool" || tab.type === "json-array-table-tool" || tab.type === "text-escape-tool" || tab.type === "kubernetes-topology") {
       setActiveEditorContent("");
       perf.mark("clear active editor content");
       setViewMode("preview");
@@ -2099,7 +2207,7 @@
   }
 
   function isUnsupportedFileTab(tab) {
-    if (!tab || tab.type === "graph" || tab.type === "hex-editor" || tab.type === "file-compare" || tab.type === "api-client" || tab.type === "regex-tester" || tab.type === "kubernetes-topology") return false;
+    if (!tab || tab.type === "graph" || tab.type === "hex-editor" || tab.type === "file-compare" || tab.type === "api-client" || tab.type === "regex-tester" || tab.type === "base64-tool" || tab.type === "certificate-decoder" || tab.type === "jwt-tool" || tab.type === "json-yaml-tool" || tab.type === "jsonpath-tool" || tab.type === "uuid-tool" || tab.type === "qr-tool" || tab.type === "hash-tool" || tab.type === "json-array-table-tool" || tab.type === "text-escape-tool" || tab.type === "kubernetes-topology") return false;
     if (tab.isUnsupportedFile === true) return true;
     const path = tab.sourceFilePath || tab.sourceFileName || tab.sourceFileHandle?.name || "";
     return !!path && isTextDocumentPath(path) && !isSupportedFolderTreeDocumentPath(path);
@@ -2116,13 +2224,13 @@
   }
 
   function isPreviewableDocumentTab(tab) {
-    if (!tab || tab.type === "graph" || tab.type === "file-compare" || tab.type === "api-client" || tab.type === "regex-tester" || tab.type === "kubernetes-topology") return false;
+    if (!tab || tab.type === "graph" || tab.type === "file-compare" || tab.type === "api-client" || tab.type === "regex-tester" || tab.type === "base64-tool" || tab.type === "certificate-decoder" || tab.type === "jwt-tool" || tab.type === "json-yaml-tool" || tab.type === "jsonpath-tool" || tab.type === "uuid-tool" || tab.type === "qr-tool" || tab.type === "hash-tool" || tab.type === "json-array-table-tool" || tab.type === "text-escape-tool" || tab.type === "kubernetes-topology") return false;
     const path = tab.sourceFilePath || tab.sourceFileName || tab.sourceFileHandle?.name || "";
     return !path || isTextDocumentPath(path) || isHtmlPath(path);
   }
 
   function isMarkdownDocumentTab(tab) {
-    if (!tab || tab.type === "graph" || tab.type === "large-file" || tab.type === "file-preview" || tab.type === "image-editor" || tab.type === "diagram-editor" || tab.type === "hex-editor" || tab.type === "file-compare" || tab.type === "api-client" || tab.type === "regex-tester" || tab.type === "kubernetes-topology") return false;
+    if (!tab || tab.type === "graph" || tab.type === "large-file" || tab.type === "file-preview" || tab.type === "image-editor" || tab.type === "diagram-editor" || tab.type === "hex-editor" || tab.type === "file-compare" || tab.type === "api-client" || tab.type === "regex-tester" || tab.type === "base64-tool" || tab.type === "certificate-decoder" || tab.type === "jwt-tool" || tab.type === "json-yaml-tool" || tab.type === "jsonpath-tool" || tab.type === "uuid-tool" || tab.type === "qr-tool" || tab.type === "hash-tool" || tab.type === "json-array-table-tool" || tab.type === "text-escape-tool" || tab.type === "kubernetes-topology") return false;
     const path = tab.sourceFilePath || tab.sourceFileName || tab.sourceFileHandle?.name || "";
     return path ? isMarkdownPath(path) : tab.type === "markdown";
   }
@@ -2133,7 +2241,7 @@
 
   function getAllowedViewModeForActiveTab(mode) {
     const activeTab = getActiveTab();
-    if (activeTab && (activeTab.type === "graph" || activeTab.type === "large-file" || activeTab.type === "file-preview" || activeTab.type === "image-editor" || activeTab.type === "diagram-editor" || activeTab.type === "hex-editor" || activeTab.type === "file-compare" || activeTab.type === "api-client" || activeTab.type === "regex-tester" || activeTab.type === "kubernetes-topology")) return 'preview';
+    if (activeTab && (activeTab.type === "graph" || activeTab.type === "large-file" || activeTab.type === "file-preview" || activeTab.type === "image-editor" || activeTab.type === "diagram-editor" || activeTab.type === "hex-editor" || activeTab.type === "file-compare" || activeTab.type === "api-client" || activeTab.type === "regex-tester" || activeTab.type === "base64-tool" || activeTab.type === "certificate-decoder" || activeTab.type === "jwt-tool" || activeTab.type === "json-yaml-tool" || activeTab.type === "jsonpath-tool" || activeTab.type === "kubernetes-topology")) return 'preview';
     return isPreviewableDocumentTab(activeTab) ? (mode || 'split') : 'editor';
   }
 
@@ -2267,7 +2375,7 @@
     saveActiveTabId(activeTabId);
     refreshGraphModeNotices(tab);
     activateManagedTabView(tab);
-    if (tab.type === "large-file" || tab.type === "file-preview" || tab.type === "image-editor" || tab.type === "diagram-editor" || tab.type === "hex-editor" || tab.type === "file-compare" || tab.type === "api-client" || tab.type === "regex-tester" || tab.type === "kubernetes-topology") {
+    if (tab.type === "large-file" || tab.type === "file-preview" || tab.type === "image-editor" || tab.type === "diagram-editor" || tab.type === "hex-editor" || tab.type === "file-compare" || tab.type === "api-client" || tab.type === "regex-tester" || tab.type === "base64-tool" || tab.type === "certificate-decoder" || tab.type === "jwt-tool" || tab.type === "json-yaml-tool" || tab.type === "jsonpath-tool" || tab.type === "uuid-tool" || tab.type === "qr-tool" || tab.type === "hash-tool" || tab.type === "json-array-table-tool" || tab.type === "text-escape-tool" || tab.type === "kubernetes-topology") {
       setActiveEditorContent("");
       setNoOpenTabsMode(false);
       setViewMode("preview");
@@ -2385,6 +2493,118 @@
   function createRegexTesterTab() {
     const tab = createTab("", "Regex-Tester", "preview");
     tab.type = "regex-tester";
+    tab.savedContent = "";
+    tab.isTemporary = false;
+    return tab;
+  }
+
+  function createBase64ToolTab() {
+    const tab = createTab("", "Base64 Encoder/Decoder", "preview");
+    tab.type = "base64-tool";
+    tab.savedContent = "";
+    tab.isTemporary = false;
+    return tab;
+  }
+
+  function createCertificateDecoderTab() {
+    const tab = createTab("", "Certificate Decoder", "preview");
+    tab.type = "certificate-decoder";
+    tab.savedContent = "";
+    tab.isTemporary = false;
+    return tab;
+  }
+
+  function createJwtToolTab() {
+    const tab = createTab("", "JWT Encoder/Decoder", "preview");
+    tab.type = "jwt-tool";
+    tab.savedContent = "";
+    tab.isTemporary = false;
+    return tab;
+  }
+
+  function createJsonYamlToolTab() {
+    const tab = createTab("", "JSON <> YAML Converter", "preview");
+    tab.type = "json-yaml-tool";
+    tab.savedContent = "";
+    tab.isTemporary = false;
+    return tab;
+  }
+
+  function createJsonPathToolTab() {
+    const tab = createTab("", "JSONPath Tester", "preview");
+    tab.type = "jsonpath-tool";
+    tab.savedContent = "";
+    tab.isTemporary = false;
+    return tab;
+  }
+
+  function createXPathToolTab() {
+    const tab = createTab("", "XPath Search", "preview");
+    tab.type = "xpath-tool";
+    tab.savedContent = "";
+    tab.isTemporary = false;
+    return tab;
+  }
+
+  function createUuidToolTab() {
+    const tab = createTab("", "UUID Generator", "preview");
+    tab.type = "uuid-tool";
+    tab.savedContent = "";
+    tab.isTemporary = false;
+    return tab;
+  }
+
+  function createQrToolTab() {
+    const tab = createTab("", "QR Code Encoder / Decoder", "preview");
+    tab.type = "qr-tool";
+    tab.savedContent = "";
+    tab.isTemporary = false;
+    return tab;
+  }
+
+  function createHashToolTab() {
+    const tab = createTab("", "Hash / Checksum Generator", "preview");
+    tab.type = "hash-tool";
+    tab.savedContent = "";
+    tab.isTemporary = false;
+    return tab;
+  }
+
+  function createJsonArrayTableToolTab() {
+    const tab = createTab("", "JSON Array to Table", "preview");
+    tab.type = "json-array-table-tool";
+    tab.savedContent = "";
+    tab.isTemporary = false;
+    return tab;
+  }
+
+  function createTextEscapeToolTab() {
+    const tab = createTab("", "Text Escape / Unescape", "preview");
+    tab.type = "text-escape-tool";
+    tab.savedContent = "";
+    tab.isTemporary = false;
+    return tab;
+  }
+
+  function createUnicodeToolTab() {
+    const tab = createTab("", "Unicode Encoder / Decoder", "preview");
+    tab.type = "unicode-tool";
+    tab.savedContent = "";
+    tab.isTemporary = false;
+    return tab;
+  }
+
+  function createStringBytesToolTab() {
+    const tab = createTab("", "String to Bytes Converter", "preview");
+    tab.type = "string-bytes-tool";
+    tab.savedContent = "";
+    tab.isTemporary = false;
+    return tab;
+  }
+
+  function createDatabaseConnectionStringToolTab() {
+    const tab = createTab("", "Database Connection String Builder", "preview");
+    tab.type = "database-connection-string-tool";
     tab.savedContent = "";
     tab.isTemporary = false;
     return tab;
@@ -2777,6 +2997,202 @@
     }
     if (hasReachedOpenTabLimit("open Regex-Tester")) return null;
     const tab = createRegexTesterTab();
+    tabs.push(tab);
+    activateSidebarTab(tab);
+    return tab;
+  }
+
+  function openBase64ToolInTab() {
+    saveCurrentTabState();
+    const existingTab = tabs.find(function(candidate) { return candidate?.type === "base64-tool"; });
+    if (existingTab) {
+      switchTab(existingTab.id);
+      return existingTab;
+    }
+    if (hasReachedOpenTabLimit("open Base64 Encoder/Decoder")) return null;
+    const tab = createBase64ToolTab();
+    tabs.push(tab);
+    activateSidebarTab(tab);
+    return tab;
+  }
+
+  function openCertificateDecoderInTab() {
+    saveCurrentTabState();
+    const existingTab = tabs.find(function(candidate) { return candidate?.type === "certificate-decoder"; });
+    if (existingTab) {
+      switchTab(existingTab.id);
+      return existingTab;
+    }
+    if (hasReachedOpenTabLimit("open Certificate Decoder")) return null;
+    const tab = createCertificateDecoderTab();
+    tabs.push(tab);
+    activateSidebarTab(tab);
+    return tab;
+  }
+
+  function openJwtToolInTab() {
+    saveCurrentTabState();
+    const existingTab = tabs.find(function(candidate) { return candidate?.type === "jwt-tool"; });
+    if (existingTab) {
+      switchTab(existingTab.id);
+      return existingTab;
+    }
+    if (hasReachedOpenTabLimit("open JWT Encoder/Decoder")) return null;
+    const tab = createJwtToolTab();
+    tabs.push(tab);
+    activateSidebarTab(tab);
+    return tab;
+  }
+
+  function openJsonYamlToolInTab() {
+    saveCurrentTabState();
+    const existingTab = tabs.find(function(candidate) { return candidate?.type === "json-yaml-tool"; });
+    if (existingTab) {
+      switchTab(existingTab.id);
+      return existingTab;
+    }
+    if (hasReachedOpenTabLimit("open JSON <> YAML Converter")) return null;
+    const tab = createJsonYamlToolTab();
+    tabs.push(tab);
+    activateSidebarTab(tab);
+    return tab;
+  }
+
+  function openJsonPathToolInTab() {
+    saveCurrentTabState();
+    const existingTab = tabs.find(function(candidate) { return candidate?.type === "jsonpath-tool"; });
+    if (existingTab) {
+      switchTab(existingTab.id);
+      return existingTab;
+    }
+    if (hasReachedOpenTabLimit("open JSONPath Tester")) return null;
+    const tab = createJsonPathToolTab();
+    tabs.push(tab);
+    activateSidebarTab(tab);
+    return tab;
+  }
+
+  function openXPathToolInTab() {
+    saveCurrentTabState();
+    const existingTab = tabs.find(function(candidate) { return candidate?.type === "xpath-tool"; });
+    if (existingTab) {
+      switchTab(existingTab.id);
+      return existingTab;
+    }
+    if (hasReachedOpenTabLimit("open XPath Search")) return null;
+    const tab = createXPathToolTab();
+    tabs.push(tab);
+    activateSidebarTab(tab);
+    return tab;
+  }
+
+  function openUuidToolInTab() {
+    saveCurrentTabState();
+    const existingTab = tabs.find(function(candidate) { return candidate?.type === "uuid-tool"; });
+    if (existingTab) {
+      switchTab(existingTab.id);
+      return existingTab;
+    }
+    if (hasReachedOpenTabLimit("open UUID Generator")) return null;
+    const tab = createUuidToolTab();
+    tabs.push(tab);
+    activateSidebarTab(tab);
+    return tab;
+  }
+
+  function openQrToolInTab() {
+    saveCurrentTabState();
+    const existingTab = tabs.find(function(candidate) { return candidate?.type === "qr-tool"; });
+    if (existingTab) {
+      switchTab(existingTab.id);
+      return existingTab;
+    }
+    if (hasReachedOpenTabLimit("open QR Code Encoder / Decoder")) return null;
+    const tab = createQrToolTab();
+    tabs.push(tab);
+    activateSidebarTab(tab);
+    return tab;
+  }
+
+  function openHashToolInTab() {
+    saveCurrentTabState();
+    const existingTab = tabs.find(function(candidate) { return candidate?.type === "hash-tool"; });
+    if (existingTab) {
+      switchTab(existingTab.id);
+      return existingTab;
+    }
+    if (hasReachedOpenTabLimit("open Hash / Checksum Generator")) return null;
+    const tab = createHashToolTab();
+    tabs.push(tab);
+    activateSidebarTab(tab);
+    return tab;
+  }
+
+  function openJsonArrayTableToolInTab() {
+    saveCurrentTabState();
+    const existingTab = tabs.find(function(candidate) { return candidate?.type === "json-array-table-tool"; });
+    if (existingTab) {
+      switchTab(existingTab.id);
+      return existingTab;
+    }
+    if (hasReachedOpenTabLimit("open JSON Array to Table")) return null;
+    const tab = createJsonArrayTableToolTab();
+    tabs.push(tab);
+    activateSidebarTab(tab);
+    return tab;
+  }
+
+  function openTextEscapeToolInTab() {
+    saveCurrentTabState();
+    const existingTab = tabs.find(function(candidate) { return candidate?.type === "text-escape-tool"; });
+    if (existingTab) {
+      switchTab(existingTab.id);
+      return existingTab;
+    }
+    if (hasReachedOpenTabLimit("open Text Escape / Unescape")) return null;
+    const tab = createTextEscapeToolTab();
+    tabs.push(tab);
+    activateSidebarTab(tab);
+    return tab;
+  }
+
+  function openUnicodeToolInTab() {
+    saveCurrentTabState();
+    const existingTab = tabs.find(function(candidate) { return candidate?.type === "unicode-tool"; });
+    if (existingTab) {
+      switchTab(existingTab.id);
+      return existingTab;
+    }
+    if (hasReachedOpenTabLimit("open Unicode Encoder / Decoder")) return null;
+    const tab = createUnicodeToolTab();
+    tabs.push(tab);
+    activateSidebarTab(tab);
+    return tab;
+  }
+
+  function openStringBytesToolInTab() {
+    saveCurrentTabState();
+    const existingTab = tabs.find(function(candidate) { return candidate?.type === "string-bytes-tool"; });
+    if (existingTab) {
+      switchTab(existingTab.id);
+      return existingTab;
+    }
+    if (hasReachedOpenTabLimit("open String to Bytes Converter")) return null;
+    const tab = createStringBytesToolTab();
+    tabs.push(tab);
+    activateSidebarTab(tab);
+    return tab;
+  }
+
+  function openDatabaseConnectionStringToolInTab() {
+    saveCurrentTabState();
+    const existingTab = tabs.find(function(candidate) { return candidate?.type === "database-connection-string-tool"; });
+    if (existingTab) {
+      switchTab(existingTab.id);
+      return existingTab;
+    }
+    if (hasReachedOpenTabLimit("open Database Connection String Builder")) return null;
+    const tab = createDatabaseConnectionStringToolTab();
     tabs.push(tab);
     activateSidebarTab(tab);
     return tab;
@@ -3246,7 +3662,7 @@
         saveTabsToStorage(tabs);
         return;
       }
-      if (newActiveTab.type === "large-file" || newActiveTab.type === "file-preview" || newActiveTab.type === "image-editor" || newActiveTab.type === "diagram-editor" || newActiveTab.type === "hex-editor" || newActiveTab.type === "file-compare" || newActiveTab.type === "api-client" || newActiveTab.type === "regex-tester" || newActiveTab.type === "kubernetes-topology") {
+      if (newActiveTab.type === "large-file" || newActiveTab.type === "file-preview" || newActiveTab.type === "image-editor" || newActiveTab.type === "diagram-editor" || newActiveTab.type === "hex-editor" || newActiveTab.type === "file-compare" || newActiveTab.type === "api-client" || newActiveTab.type === "regex-tester" || newActiveTab.type === "base64-tool" || newActiveTab.type === "certificate-decoder" || newActiveTab.type === "jwt-tool" || newActiveTab.type === "json-yaml-tool" || newActiveTab.type === "jsonpath-tool" || newActiveTab.type === "kubernetes-topology") {
         setActiveEditorContent("");
         setViewMode("preview");
         setGraphViewMode(false);
@@ -3383,7 +3799,7 @@
   async function duplicateTab(tabId) {
     const tab = tabs.find(function(t) { return t.id === tabId; });
     if (!tab) return;
-    if (tab.type === "regex-tester" || tab.type === "kubernetes-topology") return;
+    if (tab.type === "regex-tester" || tab.type === "base64-tool" || tab.type === "certificate-decoder" || tab.type === "jwt-tool" || tab.type === "json-yaml-tool" || tab.type === "jsonpath-tool" || tab.type === "uuid-tool" || tab.type === "qr-tool" || tab.type === "hash-tool" || tab.type === "json-array-table-tool" || tab.type === "text-escape-tool" || tab.type === "kubernetes-topology") return;
     if (hasReachedOpenTabLimit('open a new one')) {
       return;
     }
@@ -3677,7 +4093,7 @@
       startupPerf?.mark?.("tabs.init graph startup rendered");
       return;
     }
-    if (activeTab.type === "large-file" || activeTab.type === "file-preview" || activeTab.type === "image-editor" || activeTab.type === "diagram-editor" || activeTab.type === "hex-editor" || activeTab.type === "file-compare" || activeTab.type === "api-client" || activeTab.type === "regex-tester" || activeTab.type === "kubernetes-topology") {
+    if (activeTab.type === "large-file" || activeTab.type === "file-preview" || activeTab.type === "image-editor" || activeTab.type === "diagram-editor" || activeTab.type === "hex-editor" || activeTab.type === "file-compare" || activeTab.type === "api-client" || activeTab.type === "regex-tester" || activeTab.type === "base64-tool" || activeTab.type === "certificate-decoder" || activeTab.type === "jwt-tool" || activeTab.type === "json-yaml-tool" || activeTab.type === "jsonpath-tool" || activeTab.type === "kubernetes-topology") {
       setActiveEditorContent("");
       setNoOpenTabsMode(false);
       setViewMode("preview");
@@ -3764,6 +4180,20 @@
       createApiClientTab,
       createKubernetesTopologyTab,
       createRegexTesterTab,
+      createBase64ToolTab,
+      createCertificateDecoderTab,
+      createJwtToolTab,
+      createJsonYamlToolTab,
+      createJsonPathToolTab,
+      createXPathToolTab,
+      createUuidToolTab,
+      createQrToolTab,
+      createHashToolTab,
+      createJsonArrayTableToolTab,
+      createTextEscapeToolTab,
+      createUnicodeToolTab,
+      createStringBytesToolTab,
+      createDatabaseConnectionStringToolTab,
       activateSidebarTab,
       openSidebarFileInTab,
       openNewUnsavedFileInTab,
@@ -3778,6 +4208,20 @@
       openKubernetesTopologyInTab,
       openApiClientInTab,
       openRegexTesterInTab,
+      openBase64ToolInTab,
+      openCertificateDecoderInTab,
+      openJwtToolInTab,
+      openJsonYamlToolInTab,
+      openJsonPathToolInTab,
+      openXPathToolInTab,
+      openUuidToolInTab,
+      openQrToolInTab,
+      openHashToolInTab,
+      openJsonArrayTableToolInTab,
+      openTextEscapeToolInTab,
+      openUnicodeToolInTab,
+      openStringBytesToolInTab,
+      openDatabaseConnectionStringToolInTab,
       openSidebarFileInTemporaryTab,
       openSidebarFileInPermanentTab,
       findTabForSourceFile,

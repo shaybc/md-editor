@@ -17,6 +17,12 @@
     const getSourceActions = deps.getSourceActions || function() { return app.modules?.sourceActions || null; };
     const getUnicodeConverter = deps.getUnicodeConverter || function() { return app.modules?.unicodeConverter || null; };
     const getBase64Converter = deps.getBase64Converter || function() { return app.modules?.base64Converter || null; };
+    const getXmlSchemaGenerator = deps.getXmlSchemaGenerator || function() { return app.modules?.xmlSchemaGenerator || null; };
+    const getXmlStubGenerator = deps.getXmlStubGenerator || function() { return app.modules?.xmlStubGenerator || null; };
+    const getLessToCssConverter = deps.getLessToCssConverter || function() { return app.modules?.lessToCssConverter || null; };
+    const openGeneratedXmlSchemaInTab = deps.openGeneratedXmlSchemaInTab || null;
+    const openGeneratedXmlStubInTab = deps.openGeneratedXmlStubInTab || null;
+    const openGeneratedCssInTab = deps.openGeneratedCssInTab || null;
     const isMarkdownPath = deps.isMarkdownPath || function(path) { return /\.(md|markdown)$/i.test(path || ""); };
     const isUnsupportedFileTab = deps.isUnsupportedFileTab || function() { return false; };
 
@@ -610,6 +616,16 @@
         case "json-from-code":
           runJsonEditCommand(action, { useContextSelection: true });
           break;
+        case "compact-xml":
+        case "xml-for-code":
+        case "xml-from-code":
+        case "xml-create-schema":
+        case "xml-create-stub":
+          runXmlEditCommand(action, { useContextSelection: true });
+          break;
+        case "less-to-css":
+          convertLessDocumentToCss(true);
+          break;
         case "collapse-all-folds":
           collapseAllEditorFolds();
           break;
@@ -767,6 +783,203 @@
       }
     }
 
+    function showXmlConversionError(message) {
+      console.warn(message);
+      const notify = app.services?.notify || app.modules?.notificationModal;
+      if (typeof notify?.alert === "function") {
+        void notify.alert({ title: "XML", message });
+      }
+    }
+
+    function parseXmlDocument(source) {
+      const xmlDocument = new DOMParser().parseFromString(source, "application/xml");
+      const parserError = xmlDocument.querySelector("parsererror");
+      if (parserError) {
+        throw new Error(parserError.textContent?.trim() || "This file does not contain valid XML.");
+      }
+      return xmlDocument;
+    }
+
+    function removeXmlWhitespaceTextNodes(node) {
+      Array.from(node.childNodes || []).forEach(function(child) {
+        if (child.nodeType === Node.TEXT_NODE && !child.nodeValue.trim()) {
+          node.removeChild(child);
+          return;
+        }
+        removeXmlWhitespaceTextNodes(child);
+      });
+    }
+
+    function serializeCompactXml(source) {
+      const declarationMatch = source.match(/^\s*(<\?xml\s+[^?]*\?>)/i);
+      const xmlDocument = parseXmlDocument(source);
+      removeXmlWhitespaceTextNodes(xmlDocument);
+      const serializedXml = new XMLSerializer().serializeToString(xmlDocument);
+      if (declarationMatch && !/^\s*<\?xml\s+/i.test(serializedXml)) {
+        return declarationMatch[1] + serializedXml;
+      }
+      return serializedXml;
+    }
+
+    function compactXmlDocument() {
+      const source = getEditorValue();
+      const caretPosition = getEditorSelection().start;
+      try {
+        const compactXml = serializeCompactXml(source);
+        replaceEditorSelectionPreservingUndo(0, source.length, compactXml);
+        const compactCaretPosition = Math.min(caretPosition, compactXml.length);
+        setEditorSelection(compactCaretPosition, compactCaretPosition);
+        updateEditorLineNumbers();
+        updateEditorSelectionHighlights();
+        updateStatusLine();
+      } catch (error) {
+        showXmlConversionError(error?.message || "This file does not contain valid XML.");
+      } finally {
+        hideEditorContextMenu();
+      }
+    }
+
+    function convertXmlToJavaStringLiteral(useContextSelection) {
+      const target = getJsonCodeTransformationTarget(useContextSelection);
+      try {
+        const compactXml = serializeCompactXml(target.source);
+        replaceEditorSelectionPreservingUndo(target.start, target.end, JSON.stringify(compactXml));
+        updateEditorLineNumbers();
+        updateEditorSelectionHighlights();
+        updateStatusLine();
+      } catch (error) {
+        showXmlConversionError(error?.message || "The selected content does not contain valid XML.");
+      } finally {
+        hideEditorContextMenu();
+      }
+    }
+
+    function convertJavaStringLiteralToXml(useContextSelection) {
+      const target = getJsonCodeTransformationTarget(useContextSelection);
+      try {
+        const decodedXml = JSON.parse(target.source.trim());
+        if (typeof decodedXml !== "string") {
+          throw new Error("The selected content must be a string literal containing XML.");
+        }
+        parseXmlDocument(decodedXml);
+        replaceEditorSelectionPreservingUndo(target.start, target.end, decodedXml);
+        updateEditorLineNumbers();
+        updateEditorSelectionHighlights();
+        updateStatusLine();
+      } catch (error) {
+        showXmlConversionError(error?.message || "The selected code string does not contain valid XML.");
+      } finally {
+        hideEditorContextMenu();
+      }
+    }
+
+    function getXmlGeneratedOutputTitle(extension) {
+      const activeTab = getActiveTab();
+      const sourceName = String(activeTab?.sourceFileName || activeTab?.sourceFileHandle?.name || activeTab?.title || "document.xml");
+      return sourceName.replace(/\.[^./\\]+$/, "") + extension;
+    }
+
+    function getXmlSchemaOutputTitle() {
+      return getXmlGeneratedOutputTitle(".xsd");
+    }
+
+    function getXmlStubOutputTitle() {
+      return getXmlGeneratedOutputTitle("-stub.xml");
+    }
+
+    function getLessCssOutputTitle() {
+      const activeTab = getActiveTab();
+      const sourceName = String(activeTab?.sourceFileName || activeTab?.sourceFileHandle?.name || activeTab?.title || "style.less");
+      return sourceName.replace(/\.[^./\\]+$/, "") + ".css";
+    }
+
+    function convertLessDocumentToCss(useContextSelection) {
+      const target = getJsonCodeTransformationTarget(useContextSelection);
+      try {
+        const converter = getLessToCssConverter();
+        if (typeof converter?.convertLessToCss !== "function") {
+          throw new Error("LESS to CSS conversion is not available in this build.");
+        }
+        if (typeof openGeneratedCssInTab !== "function") {
+          throw new Error("Generated CSS tabs are not available in this build.");
+        }
+        const cssSource = converter.convertLessToCss(target.source);
+        openGeneratedCssInTab(cssSource, getLessCssOutputTitle());
+      } catch (error) {
+        showXmlConversionError(error?.message || "The selected content does not contain valid LESS.");
+      } finally {
+        hideEditorContextMenu();
+      }
+    }
+
+    function createXmlSchemaFromEditorXml(useContextSelection) {
+      const target = getJsonCodeTransformationTarget(useContextSelection);
+      try {
+        const generator = getXmlSchemaGenerator();
+        if (typeof generator?.createXmlSchemaFromXml !== "function") {
+          throw new Error("XML schema generation is not available in this build.");
+        }
+        if (typeof openGeneratedXmlSchemaInTab !== "function") {
+          throw new Error("Generated XML schema tabs are not available in this build.");
+        }
+        const schemaSource = generator.createXmlSchemaFromXml(target.source);
+        openGeneratedXmlSchemaInTab(schemaSource, getXmlSchemaOutputTitle());
+      } catch (error) {
+        showXmlConversionError(error?.message || "The selected content does not contain valid XML.");
+      } finally {
+        hideEditorContextMenu();
+      }
+    }
+
+    function createXmlStubFromEditorXsd(useContextSelection) {
+      const target = getJsonCodeTransformationTarget(useContextSelection);
+      try {
+        const generator = getXmlStubGenerator();
+        if (typeof generator?.createXmlStubFromXsd !== "function") {
+          throw new Error("XML stub generation is not available in this build.");
+        }
+        if (typeof openGeneratedXmlStubInTab !== "function") {
+          throw new Error("Generated XML stub tabs are not available in this build.");
+        }
+        const stubSource = generator.createXmlStubFromXsd(target.source);
+        openGeneratedXmlStubInTab(stubSource, getXmlStubOutputTitle());
+      } catch (error) {
+        showXmlConversionError(error?.message || "The selected content does not contain a valid XML Schema.");
+      } finally {
+        hideEditorContextMenu();
+      }
+    }
+
+    /**
+     * Run one XML conversion for either the editor context menu or the main Edit menu.
+     * @param {string} command XML conversion command identifier.
+     * @param {object} [options] Selection source options.
+     * @param {boolean} [options.useContextSelection=false] Whether to use the saved right-click selection.
+     * @returns {boolean} Whether the command identifier was handled.
+     */
+    function runXmlEditCommand(command, options = {}) {
+      const useContextSelection = options.useContextSelection === true;
+      switch (command) {
+        case "compact-xml":
+          compactXmlDocument();
+          return true;
+        case "xml-for-code":
+          convertXmlToJavaStringLiteral(useContextSelection);
+          return true;
+        case "xml-from-code":
+          convertJavaStringLiteralToXml(useContextSelection);
+          return true;
+        case "xml-create-schema":
+          createXmlSchemaFromEditorXml(useContextSelection);
+          return true;
+        case "xml-create-stub":
+          createXmlStubFromEditorXsd(useContextSelection);
+          return true;
+        default:
+          return false;
+      }
+    }
+
     function canShowMarkdownConversionSection() {
       const activeTab = getActiveTab();
       if (isUnsupportedFileTab(activeTab)) return false;
@@ -894,6 +1107,49 @@
       };
     }
 
+    function getEditorJsonSourceActions() {
+      return getEditorJsonConversionAction().children.map(function(action) {
+        return { ...action, menu: "source-json" };
+      });
+    }
+
+    function getEditorXmlConversionAction() {
+      return {
+        id: "xml",
+        label: "XML",
+        icon: "bi-code-slash",
+        children: [
+          { type: "compact-xml", label: "One-line XML", icon: "bi-arrows-collapse" },
+          { type: "xml-for-code", label: "XML for Code", icon: "bi-code-square" },
+          { type: "xml-from-code", label: "XML from Code", icon: "bi-code-slash" },
+          { type: "xml-create-schema", label: "Create XML Schema from XML", icon: "bi-diagram-3" },
+          { type: "xml-create-stub", label: "Create XML Stub from XSD", icon: "bi-filetype-xml" }
+        ]
+      };
+    }
+
+    function getEditorXmlSourceActions() {
+      return getEditorXmlConversionAction().children
+        .filter((action) => action.type !== "xml-create-stub")
+        .map(function(action) {
+          return { ...action, menu: "source-xml" };
+        });
+    }
+
+    function getEditorXsdSourceActions() {
+      return getEditorXmlConversionAction().children
+        .filter((action) => action.type === "xml-create-stub")
+        .map(function(action) {
+          return { ...action, menu: "source-xsd" };
+        });
+    }
+
+    function getEditorLessSourceActions() {
+      return [
+        { type: "less-to-css", label: "LESS to CSS", icon: "bi-filetype-css", menu: "source-less" }
+      ];
+    }
+
     function getEditorEditAction(hasSelection) {
       const children = [
         { type: "copy", label: "Copy", shortcut: "Ctrl+C", icon: "bi-copy", disabled: !hasSelection },
@@ -913,6 +1169,7 @@
       const uriConversionAction = hasSelection ? getEditorUriConversionAction() : null;
       if (uriConversionAction) children.push(uriConversionAction);
       children.push(getEditorJsonConversionAction());
+      children.push(getEditorXmlConversionAction());
       return { id: "edit", label: "Edit", icon: "bi-pencil-square", children };
     }
 
@@ -961,10 +1218,23 @@
         || activeLanguage?.id === "json"
         || activeLanguage?.codeMirrorLanguage === "json"
         || /\.json$/i.test(activePath);
-      if (!isJsonContext) return insertEditorSourceActionSeparators(sourceMenuActions);
+      const isXsdContext = /\.xsd$/i.test(activePath);
+      const isXmlContext = !isXsdContext && (activeTab?.parseAsLanguageId === "xml"
+        || activeLanguage?.id === "xml"
+        || activeLanguage?.codeMirrorLanguage === "xml"
+        || /\.xml$/i.test(activePath));
+      const isLessContext = activeTab?.parseAsLanguageId === "less"
+        || activeLanguage?.id === "less"
+        || activeLanguage?.codeMirrorLanguage === "less"
+        || /\.less$/i.test(activePath);
+      if (!isJsonContext && !isXmlContext && !isXsdContext && !isLessContext) return insertEditorSourceActionSeparators(sourceMenuActions);
       return insertEditorSourceActionSeparators([
         { type: "format-file", label: "Format File", shortcut: "", icon: "bi-magic" },
-        ...sourceMenuActions
+        ...sourceMenuActions,
+        ...(isJsonContext ? getEditorJsonSourceActions() : []),
+        ...(isXmlContext ? getEditorXmlSourceActions() : []),
+        ...(isXsdContext ? getEditorXsdSourceActions() : []),
+        ...(isLessContext ? getEditorLessSourceActions() : [])
       ]);
     }
 
@@ -1172,6 +1442,8 @@
       hideEditorContextMenu,
       handleEditorContextMenu,
       runJsonEditCommand,
+      runXmlEditCommand,
+      convertLessDocumentToCss,
       redoEditorContextMenuConversion,
       undoEditorContextMenuConversion
     };

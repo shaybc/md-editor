@@ -11,6 +11,7 @@ function loadSourceActionModules() {
     "../resources/js/editor/source-actions/index.js",
     "../resources/js/editor/source-actions/comment-actions.js",
     "../resources/js/editor/source-actions/indentation-actions.js",
+    "../resources/js/editor/source-actions/formatting-actions.js",
     "../resources/js/editor/source-actions/project-documentation-actions.js"
   ].forEach((relativePath) => {
     vm.runInNewContext(fs.readFileSync(path.resolve(__dirname, relativePath), "utf8"), context, { filename: relativePath });
@@ -29,13 +30,25 @@ function createRegistry(capabilities) {
   const refreshes = [];
   const sourceActions = loaded.registerMarkdownViewerSourceActions(app);
   const activeEditorCommands = {
+    getActiveEditor() {
+      return { getActiveLanguage: () => capabilities?.activeLanguage || null };
+    },
     getCommentCapabilities: () => capabilities,
     toggleComment() { calls.push("line"); return true; },
     toggleBlockComment() { calls.push("block"); return true; },
-    correctIndentation() { calls.push("indentation"); return true; }
+    correctIndentation() { calls.push("indentation"); return true; },
+    canFormatActiveDocument() { return capabilities?.canFormatActiveDocument === true; },
+    async formatActiveDocument() { calls.push("format"); return true; }
   };
   loaded.registerMarkdownViewerCommentSourceActions(app, { sourceActions, activeEditorCommands });
   loaded.registerMarkdownViewerIndentationSourceActions(app, {
+    sourceActions,
+    activeEditorCommands,
+    updateEditorLineNumbers() { refreshes.push("lines"); },
+    updateEditorSelectionHighlights() { refreshes.push("selection"); },
+    updateStatusLine() { refreshes.push("status"); }
+  });
+  loaded.registerMarkdownViewerFormattingSourceActions(app, {
     sourceActions,
     activeEditorCommands,
     updateEditorLineNumbers() { refreshes.push("lines"); },
@@ -81,6 +94,28 @@ test("Correct Indentation Source action executes the editor command and refreshe
   assert.deepEqual(calls, ["indentation"]);
   assert.deepEqual(refreshes, ["lines", "selection", "status"]);
 });
+test("Format File Source action executes the active document formatter", async () => {
+  const { sourceActions, calls, refreshes } = createRegistry({ canToggleComment: false, canToggleBlockComment: false, canFormatActiveDocument: true });
+  const action = sourceActions.findAvailableAction("format-file");
+
+  assert.equal(action.label, "Format File");
+  assert.equal(action.icon, "bi-magic");
+  assert.equal(await sourceActions.executeAction("format-file"), true);
+  assert.deepEqual(calls, ["format"]);
+  assert.deepEqual(refreshes, ["lines", "selection", "status"]);
+});
+
+test("Format File Source action defers Java formatting to the Java provider", () => {
+  const { sourceActions } = createRegistry({
+    canToggleComment: false,
+    canToggleBlockComment: false,
+    canFormatActiveDocument: true,
+    activeLanguage: { id: "java", codeMirrorLanguage: "java" }
+  });
+
+  assert.equal(sourceActions.findAvailableAction("format-file"), null);
+});
+
 test("Source action registry prepares providers and executes nested leaf actions", async () => {
   const loaded = loadSourceActionModules();
   const app = { modules: {}, registerModule(name, api) { this.modules[name] = api; } };

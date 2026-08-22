@@ -527,6 +527,15 @@
       increaseLineIndent: function() { return runCodeMirrorCommand("indentMore") || increaseLineIndentFallback(); },
       decreaseLineIndent: function() { return runCodeMirrorCommand("indentLess") || decreaseLineIndentFallback(); },
       correctIndentation: function() { return runCodeMirrorCommand("correctIndentation"); },
+      canFormatActiveDocument: function() {
+        return deps.getCodeMirrorEditor?.()?.canFormatActiveDocument?.() === true;
+      },
+      formatActiveDocument: async function() {
+        const codeMirrorEditor = deps.getCodeMirrorEditor?.();
+        return typeof codeMirrorEditor?.formatActiveDocument === "function"
+          ? codeMirrorEditor.formatActiveDocument()
+          : false;
+      },
       getCommentCapabilities: function() {
         return deps.getCodeMirrorEditor?.()?.getCommentCapabilities?.() || { canToggleComment: false, canToggleBlockComment: false };
       },

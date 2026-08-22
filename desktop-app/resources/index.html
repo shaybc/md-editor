@@ -309,6 +309,18 @@
                                             <button class="dropdown-item action-menu-item edit-command" type="button" data-edit-command="json-from-code">JSON from Code</button>
                                         </div>
                                     </div>
+                                    <div class="dropdown-submenu action-menu-submenu xml-edit-submenu">
+                                        <button class="dropdown-item action-menu-item dropdown-toggle" type="button" aria-haspopup="true" aria-expanded="false">
+                                            <i class="bi bi-code-slash me-2"></i> XML
+                                        </button>
+                                        <div class="dropdown-menu action-submenu" aria-label="XML conversion options">
+                                            <button class="dropdown-item action-menu-item edit-command" type="button" data-edit-command="compact-xml">One-line XML</button>
+                                            <button class="dropdown-item action-menu-item edit-command" type="button" data-edit-command="xml-for-code">XML for Code</button>
+                                            <button class="dropdown-item action-menu-item edit-command" type="button" data-edit-command="xml-from-code">XML from Code</button>
+                                            <button class="dropdown-item action-menu-item edit-command" type="button" data-edit-command="xml-create-schema">Create XML Schema from XML</button>
+                                            <button class="dropdown-item action-menu-item edit-command" type="button" data-edit-command="xml-create-stub">Create XML Stub from XSD</button>
+                                        </div>
+                                    </div>
                                     <button class="dropdown-item action-menu-item edit-command" type="button" data-edit-command="toggle-comment" title="Comment or uncomment selected lines">
                                         <i class="bi bi-chat-square-text me-2"></i><span>Comment/Uncomment</span><span class="menu-shortcut-label">Ctrl+/</span>
                                     </button>
@@ -464,12 +476,6 @@
                                         <i class="bi bi-download me-2"></i> Export Folder to Graph
                                     </button>
                                     <hr class="dropdown-divider">
-                                    <button class="dropdown-item action-menu-item open-code-converter-dialog" type="button" title="Convert code dependencies to Markdown">
-                                        <i class="bi bi-code-slash me-2"></i> Convert Code to MD
-                                    </button>
-                                    <button class="dropdown-item action-menu-item open-workspace-git" type="button" title="Open a local folder to use Git" disabled aria-disabled="true">
-                                        <i class="bi bi-git me-2"></i> Git ...
-                                    </button>
                                     <div class="dropdown-submenu action-menu-submenu terminal-menu-submenu">
                                         <button class="dropdown-item action-menu-item dropdown-toggle" type="button" aria-haspopup="true" aria-expanded="false">
                                             <i class="bi bi-terminal-plus me-2"></i> Open Terminal
@@ -498,8 +504,50 @@
                                     <button class="dropdown-item action-menu-item open-file-compare" type="button" title="Compare two text files">
                                         <i class="bi bi-file-diff me-2"></i> Compare Files ...
                                     </button>
-                                    <button class="dropdown-item action-menu-item open-api-client" type="button" title="Open API Client">
-                                        <i class="bi bi-send me-2"></i> API Client
+                                    <hr class="dropdown-divider">
+                                    <button class="dropdown-item action-menu-item open-json-yaml-tool" type="button" title="Open JSON &lt;&gt; YAML Converter">
+                                        <i class="bi bi-braces me-2"></i> JSON &lt;&gt; YAML Converter
+                                    </button>
+                                    <button class="dropdown-item action-menu-item open-jsonpath-tool" type="button" title="Open JSONPath Tester">
+                                        <i class="bi bi-signpost-split me-2"></i> JSONPath Tester
+                                    </button>
+                                    <button class="dropdown-item action-menu-item open-json-array-table-tool" type="button" title="Open JSON Array to Table">
+                                        <i class="bi bi-database me-2"></i> JSON Array to Table
+                                    </button>
+                                    <hr class="dropdown-divider">
+                                    <button class="dropdown-item action-menu-item open-base64-tool" type="button" title="Open Base64 Encoder/Decoder">
+                                        <i class="bi bi-file-binary me-2"></i> Base64 Encoder/Decoder
+                                    </button>
+                                    <button class="dropdown-item action-menu-item open-text-escape-tool" type="button" title="Open Text Escape / Unescape">
+                                        <i class="bi bi-textarea-t me-2"></i> Text Escape / Unescape
+                                    </button>
+                                    <button class="dropdown-item action-menu-item open-unicode-tool" type="button" title="Open Unicode Encoder / Decoder">
+                                        <i class="bi bi-globe2 me-2"></i> Unicode Encoder / Decoder
+                                    </button>
+                                    <button class="dropdown-item action-menu-item open-string-bytes-tool" type="button" title="Open String to Bytes Converter">
+                                        <i class="bi bi-braces me-2"></i> String to Bytes Converter
+                                    </button>
+                                    <hr class="dropdown-divider">
+                                    <button class="dropdown-item action-menu-item open-certificate-decoder" type="button" title="Open Certificate Decoder">
+                                        <i class="bi bi-award me-2"></i> Certificate Decoder
+                                    </button>
+                                    <button class="dropdown-item action-menu-item open-jwt-tool" type="button" title="Open JWT Encoder/Decoder">
+                                        <i class="bi bi-key me-2"></i> JWT Encoder/Decoder
+                                    </button>
+                                    <button class="dropdown-item action-menu-item open-xpath-tool" type="button" title="Open XPath Search">
+                                        <i class="bi bi-signpost-split me-2"></i> XPath Search
+                                    </button>
+                                    <button class="dropdown-item action-menu-item open-uuid-tool" type="button" title="Open UUID Generator">
+                                        <i class="bi bi-hash me-2"></i> UUID Generator
+                                    </button>
+                                    <button class="dropdown-item action-menu-item open-qr-tool" type="button" title="Open QR Code Encoder / Decoder">
+                                        <i class="bi bi-qr-code me-2"></i> QR Code Encoder / Decoder
+                                    </button>
+                                    <button class="dropdown-item action-menu-item open-hash-tool" type="button" title="Open Hash / Checksum Generator">
+                                        <i class="bi bi-fingerprint me-2"></i> Hash / Checksum Generator
+                                    </button>
+                                    <button class="dropdown-item action-menu-item open-database-connection-string-tool" type="button" title="Open Database Connection String Builder">
+                                        <i class="bi bi-database me-2"></i> Database Connection String Builder
                                     </button>
                                     <hr class="dropdown-divider">
                                     <button class="dropdown-item action-menu-item update-project-button" type="button" title="Apply pending dependency recovery updates to the open generated Markdown project" disabled aria-disabled="true">
@@ -780,6 +828,48 @@
                             </button>
                             <button class="mobile-menu-item open-api-client" type="button" title="Open API Client">
                                 <i class="bi bi-send me-2"></i> API Client
+                            </button>
+                            <button class="mobile-menu-item open-base64-tool" type="button" title="Open Base64 Encoder/Decoder">
+                                <i class="bi bi-file-binary me-2"></i> Base64 Encoder/Decoder
+                            </button>
+                            <button class="mobile-menu-item open-certificate-decoder" type="button" title="Open Certificate Decoder">
+                                <i class="bi bi-award me-2"></i> Certificate Decoder
+                            </button>
+                            <button class="mobile-menu-item open-jwt-tool" type="button" title="Open JWT Encoder/Decoder">
+                                <i class="bi bi-key me-2"></i> JWT Encoder/Decoder
+                            </button>
+                            <button class="mobile-menu-item open-json-yaml-tool" type="button" title="Open JSON &lt;&gt; YAML Converter">
+                                <i class="bi bi-braces me-2"></i> JSON &lt;&gt; YAML Converter
+                            </button>
+                            <button class="mobile-menu-item open-jsonpath-tool" type="button" title="Open JSONPath Tester">
+                                <i class="bi bi-signpost-split me-2"></i> JSONPath Tester
+                            </button>
+                            <button class="mobile-menu-item open-xpath-tool" type="button" title="Open XPath Search">
+                                <i class="bi bi-signpost-split me-2"></i> XPath Search
+                            </button>
+                            <button class="mobile-menu-item open-uuid-tool" type="button" title="Open UUID Generator">
+                                <i class="bi bi-hash me-2"></i> UUID Generator
+                            </button>
+                            <button class="mobile-menu-item open-qr-tool" type="button" title="Open QR Code Encoder / Decoder">
+                                <i class="bi bi-qr-code me-2"></i> QR Code Encoder / Decoder
+                            </button>
+                            <button class="mobile-menu-item open-hash-tool" type="button" title="Open Hash / Checksum Generator">
+                                <i class="bi bi-fingerprint me-2"></i> Hash / Checksum Generator
+                            </button>
+                            <button class="mobile-menu-item open-json-array-table-tool" type="button" title="Open JSON Array to Table">
+                                <i class="bi bi-database me-2"></i> JSON Array to Table
+                            </button>
+                            <button class="mobile-menu-item open-text-escape-tool" type="button" title="Open Text Escape / Unescape">
+                                <i class="bi bi-textarea-t me-2"></i> Text Escape / Unescape
+                            </button>
+                            <button class="mobile-menu-item open-unicode-tool" type="button" title="Open Unicode Encoder / Decoder">
+                                <i class="bi bi-globe2 me-2"></i> Unicode Encoder / Decoder
+                            </button>
+                            <button class="mobile-menu-item open-string-bytes-tool" type="button" title="Open String to Bytes Converter">
+                                <i class="bi bi-braces me-2"></i> String to Bytes Converter
+                            </button>
+                            <button class="mobile-menu-item open-database-connection-string-tool" type="button" title="Open Database Connection String Builder">
+                                <i class="bi bi-database me-2"></i> Database Connection String Builder
                             </button>
 
                             <button class="mobile-menu-item export-folder-to-graph" type="button" title="Create a portable graph archive that includes Markdown file contents." disabled aria-disabled="true">
@@ -5413,6 +5503,34 @@
     <script src="js/tools/regex-tester/quick-reference.js"></script>
     <script src="js/tools/regex-tester/storage.js"></script>
     <script src="js/tools/regex-tester/regex-tester.js"></script>
+    <script src="js/tools/syntax-textarea.js"></script>
+    <script src="js/tools/base64/base64-tool.js"></script>
+    <script src="js/tools/certificate-decoder/certificate-parser.js"></script>
+    <script src="js/tools/certificate-decoder/certificate-decoder.js"></script>
+    <script src="js/tools/jwt/jwt-codec.js"></script>
+    <script src="js/tools/jwt/jwt-tool.js"></script>
+    <script src="js/tools/json-yaml/json-yaml-codec.js"></script>
+    <script src="js/tools/json-yaml/json-yaml-tool.js"></script>
+    <script src="js/tools/jsonpath/jsonpath-evaluator.js"></script>
+    <script src="js/tools/jsonpath/jsonpath-tool.js"></script>
+    <script src="js/tools/xpath/xpath-evaluator.js"></script>
+    <script src="js/tools/xpath/xpath-tool.js"></script>
+    <script src="js/tools/uuid/uuid-codec.js"></script>
+    <script src="js/tools/uuid/uuid-tool.js"></script>
+    <script src="js/tools/qr/qr-codec.js"></script>
+    <script src="js/tools/qr/qr-tool.js"></script>
+    <script src="js/tools/hash/hash-codec.js"></script>
+    <script src="js/tools/hash/hash-tool.js"></script>
+    <script src="js/tools/json-array-table/json-array-table-codec.js"></script>
+    <script src="js/tools/json-array-table/json-array-table-tool.js"></script>
+    <script src="js/tools/text-escape/text-escape-codec.js"></script>
+    <script src="js/tools/text-escape/text-escape-tool.js"></script>
+    <script src="js/tools/unicode/unicode-codec.js"></script>
+    <script src="js/tools/unicode/unicode-tool.js"></script>
+    <script src="js/tools/string-bytes/string-bytes-codec.js"></script>
+    <script src="js/tools/string-bytes/string-bytes-tool.js"></script>
+    <script src="js/tools/database-connection-string/database-connection-string-codec.js"></script>
+    <script src="js/tools/database-connection-string/database-connection-string-tool.js"></script>
     <script src="js/tools/line-counter.js"></script>
     <script src="js/ui/theme-preferences.js"></script>
     <script src="js/ui/mobile-menu.js"></script>
@@ -5535,6 +5653,9 @@
     <script src="js/editor/line-delimiter-conversion.js"></script>
     <script src="js/editor/unicode-converter.js"></script>
     <script src="js/editor/base64-converter.js"></script>
+    <script src="js/editor/xml-schema-generator.js"></script>
+    <script src="js/editor/xml-stub-generator.js"></script>
+    <script src="js/editor/less-to-css-converter.js"></script>
     <script src="js/editor/line-delimiter-dialog.js"></script>
     <script src="js/editor/snippets.js"></script>
     <script src="js/editor/codemirror-editor.js"></script>
@@ -5544,6 +5665,7 @@
     <script src="js/editor/source-actions/index.js"></script>
     <script src="js/editor/source-actions/comment-actions.js"></script>
     <script src="js/editor/source-actions/indentation-actions.js"></script>
+    <script src="js/editor/source-actions/formatting-actions.js"></script>
     <script src="js/editor/source-actions/dialogs/getter-setter-dialog.js"></script>
     <script src="js/editor/source-actions/languages/java-class-analysis.js"></script>
     <script src="js/editor/source-actions/languages/java-accessor-generator.js"></script>

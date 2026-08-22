@@ -49,6 +49,7 @@ test("classic migration scripts load before the legacy monolith", () => {
     'src="js/editor/source-actions/index.js"',
     'src="js/editor/source-actions/comment-actions.js"',
     'src="js/editor/source-actions/indentation-actions.js"',
+    'src="js/editor/source-actions/formatting-actions.js"',
     'src="js/editor/source-actions/languages/java-method-javadoc.js"',
     'src="js/editor/source-actions/project-documentation-actions.js"',
     'src="js/editor/source-actions/languages/java-surround-with-templates.js"',
@@ -298,6 +299,11 @@ test("hamburger and mobile menus expose edit commands before find", () => {
   assert.match(html, /data-edit-command="autocomplete-toggle"/);
   assert.match(html, /data-edit-command="duplicate-line"/);
   assert.match(html, /data-edit-command="space-to-tab"/);
+  assert.match(html, /data-edit-command="compact-xml"/);
+  assert.match(html, /data-edit-command="xml-for-code"/);
+  assert.match(html, /data-edit-command="xml-from-code"/);
+  assert.match(html, /data-edit-command="xml-create-schema"/);
+  assert.match(html, /data-edit-command="xml-create-stub"/);
   assert.match(html, /data-line-delimiter="crlf"/);
   assert.match(html, /data-line-delimiter="lf"/);
   assert.match(html, /id="line-delimiter-scope-modal"/);
@@ -318,6 +324,20 @@ test("interface settings expose indent and autocomplete controls", () => {
   assert.match(html, /id="settings-sidebar-rail-show-git"/);
   assert.match(html, /id="settings-sidebar-rail-show-api-client"/);
   assert.match(html, /id="settings-sidebar-rail-show-regex-tester"/);
+  assert.match(html, /open-base64-tool/);
+  assert.match(html, /open-certificate-decoder/);
+  assert.match(html, /open-jwt-tool/);
+  assert.match(html, /open-json-yaml-tool/);
+  assert.match(html, /open-jsonpath-tool/);
+  assert.match(html, /open-xpath-tool/);
+  assert.match(html, /open-uuid-tool/);
+  assert.match(html, /open-qr-tool/);
+  assert.match(html, /open-hash-tool/);
+  assert.match(html, /open-json-array-table-tool/);
+  assert.match(html, /open-text-escape-tool/);
+  assert.match(html, /open-unicode-tool/);
+  assert.match(html, /open-string-bytes-tool/);
+  assert.match(html, /open-database-connection-string-tool/);
   assert.match(html, /id="settings-sidebar-rail-show-ai-companion"/);
   assert.match(html, /id="settings-sidebar-rail-show-settings"/);
   assert.match(html, /data-sidebar-rail-icon="files"/);
@@ -883,9 +903,12 @@ test("editor context menu is registered from its extracted classic script", () =
   const contextMenuScript = readWebFile("js/editor/context-menu.js");
   const unicodeConverterScript = readWebFile("js/editor/unicode-converter.js");
   const base64ConverterScript = readWebFile("js/editor/base64-converter.js");
+  const xmlSchemaGeneratorScript = readWebFile("js/editor/xml-schema-generator.js");
+  const xmlStubGeneratorScript = readWebFile("js/editor/xml-stub-generator.js");
   const sidebarScript = readWebFile("js/sidebar/context-tree.js");
   const sourceActionsScript = readWebFile("js/editor/source-actions/index.js");
   const indentationSourceActionsScript = readWebFile("js/editor/source-actions/indentation-actions.js");
+  const formattingSourceActionsScript = readWebFile("js/editor/source-actions/formatting-actions.js");
   const commentSourceActionsScript = readWebFile("js/editor/source-actions/comment-actions.js");
   const javaMethodJavadocScript = readWebFile("js/editor/source-actions/languages/java-method-javadoc.js");
   const javaSurroundTemplatesScript = readWebFile("js/editor/source-actions/languages/java-surround-with-templates.js");
@@ -903,6 +926,7 @@ test("editor context menu is registered from its extracted classic script", () =
 
   assert.match(html, /src="js\/editor\/source-actions\/index\.js"/);
   assert.match(html, /src="js\/editor\/source-actions\/indentation-actions\.js"/);
+  assert.match(html, /src="js\/editor\/source-actions\/formatting-actions\.js"/);
   assert.match(html, /src="js\/editor\/source-actions\/comment-actions\.js"/);
   assert.match(html, /src="js\/editor\/source-actions\/languages\/java-method-javadoc\.js"/);
   assert.match(html, /src="js\/editor\/source-actions\/languages\/java-surround-with-templates\.js"/);
@@ -943,6 +967,70 @@ test("editor context menu is registered from its extracted classic script", () =
     "Base64 converter should load before the editor context menu"
   );
   assert.match(base64ConverterScript, /root\.registerMarkdownViewerBase64Converter =/);
+  assert.match(html, /src="js\/editor\/xml-schema-generator\.js"/);
+  assert.match(html, /src="js\/editor\/xml-stub-generator\.js"/);
+  assert.ok(
+    html.indexOf('src="js/editor/xml-schema-generator.js"') < html.indexOf('src="js/editor/context-menu.js"'),
+    "XML schema generator should load before the editor context menu"
+  );
+  assert.ok(
+    html.indexOf('src="js/editor/xml-stub-generator.js"') < html.indexOf('src="js/editor/context-menu.js"'),
+    "XML stub generator should load before the editor context menu"
+  );
+  assert.match(xmlSchemaGeneratorScript, /registerMarkdownViewerXmlSchemaGenerator/);
+  assert.match(xmlSchemaGeneratorScript, /createXmlSchemaFromXml/);
+  assert.match(xmlStubGeneratorScript, /registerMarkdownViewerXmlStubGenerator/);
+  assert.match(xmlStubGeneratorScript, /createXmlStubFromXsd/);
+  assert.match(html, /js\/tools\/base64\/base64-tool\.js/);
+  assert.match(html, /js\/tools\/certificate-decoder\/certificate-parser\.js/);
+  assert.match(html, /js\/tools\/certificate-decoder\/certificate-decoder\.js/);
+  assert.match(html, /js\/tools\/jwt\/jwt-codec\.js/);
+  assert.match(html, /js\/tools\/jwt\/jwt-tool\.js/);
+  assert.match(html, /js\/tools\/json-yaml\/json-yaml-codec\.js/);
+  assert.match(html, /js\/tools\/json-yaml\/json-yaml-tool\.js/);
+  assert.match(html, /js\/tools\/jsonpath\/jsonpath-evaluator\.js/);
+  assert.match(html, /js\/tools\/jsonpath\/jsonpath-tool\.js/);
+  assert.match(html, /js\/tools\/xpath\/xpath-evaluator\.js/);
+  assert.match(html, /js\/tools\/xpath\/xpath-tool\.js/);
+  assert.match(html, /js\/tools\/uuid\/uuid-codec\.js/);
+  assert.match(html, /js\/tools\/uuid\/uuid-tool\.js/);
+  assert.match(html, /js\/tools\/qr\/qr-codec\.js/);
+  assert.match(html, /js\/tools\/qr\/qr-tool\.js/);
+  assert.match(html, /js\/tools\/hash\/hash-codec\.js/);
+  assert.match(html, /js\/tools\/hash\/hash-tool\.js/);
+  assert.match(html, /js\/tools\/json-array-table\/json-array-table-codec\.js/);
+  assert.match(html, /js\/tools\/json-array-table\/json-array-table-tool\.js/);
+  assert.match(html, /js\/tools\/text-escape\/text-escape-codec\.js/);
+  assert.match(html, /js\/tools\/text-escape\/text-escape-tool\.js/);
+  assert.match(html, /js\/tools\/unicode\/unicode-codec\.js/);
+  assert.match(html, /js\/tools\/unicode\/unicode-tool\.js/);
+  assert.match(html, /js\/tools\/string-bytes\/string-bytes-codec\.js/);
+  assert.match(html, /js\/tools\/string-bytes\/string-bytes-tool\.js/);
+  assert.match(html, /js\/tools\/database-connection-string\/database-connection-string-codec\.js/);
+  assert.match(html, /js\/tools\/database-connection-string\/database-connection-string-tool\.js/);
+  assert.match(legacyScript, /registerMarkdownViewerBase64Tool/);
+  assert.match(legacyScript, /registerMarkdownViewerCertificateParser/);
+  assert.match(legacyScript, /registerMarkdownViewerCertificateDecoder/);
+  assert.match(legacyScript, /registerMarkdownViewerJsonPathEvaluator/);
+  assert.match(legacyScript, /registerMarkdownViewerJsonPathTool/);
+  assert.match(legacyScript, /registerMarkdownViewerXPathEvaluator/);
+  assert.match(legacyScript, /registerMarkdownViewerXPathTool/);
+  assert.match(legacyScript, /registerMarkdownViewerUuidCodec/);
+  assert.match(legacyScript, /registerMarkdownViewerUuidTool/);
+  assert.match(legacyScript, /registerMarkdownViewerQrCodec/);
+  assert.match(legacyScript, /registerMarkdownViewerQrTool/);
+  assert.match(legacyScript, /registerMarkdownViewerHashCodec/);
+  assert.match(legacyScript, /registerMarkdownViewerHashTool/);
+  assert.match(legacyScript, /registerMarkdownViewerJsonArrayTableCodec/);
+  assert.match(legacyScript, /registerMarkdownViewerJsonArrayTableTool/);
+  assert.match(legacyScript, /registerMarkdownViewerTextEscapeCodec/);
+  assert.match(legacyScript, /registerMarkdownViewerTextEscapeTool/);
+  assert.match(legacyScript, /registerMarkdownViewerUnicodeCodec/);
+  assert.match(legacyScript, /registerMarkdownViewerUnicodeTool/);
+  assert.match(legacyScript, /registerMarkdownViewerStringBytesCodec/);
+  assert.match(legacyScript, /registerMarkdownViewerStringBytesTool/);
+  assert.match(legacyScript, /registerMarkdownViewerDatabaseConnectionStringCodec/);
+  assert.match(legacyScript, /registerMarkdownViewerDatabaseConnectionStringTool/);
   assert.match(legacyScript, /registerMarkdownViewerBase64Converter\(app\)/);
   assert.match(contextMenuScript, /getBase64Converter/);
   assert.match(contextMenuScript, /window\.registerMarkdownViewerEditorContextMenu\s*=/);
@@ -953,6 +1041,8 @@ test("editor context menu is registered from its extracted classic script", () =
   assert.match(sourceActionsScript, /findAvailableAction/);
   assert.match(commentSourceActionsScript, /label: "Toggle Comment"/);
   assert.match(indentationSourceActionsScript, /label: "Correct Indentation"/);
+  assert.match(formattingSourceActionsScript, /label: "Format File"/);
+  assert.match(formattingSourceActionsScript, /formatActiveDocument/);
   assert.match(indentationSourceActionsScript, /shortcut: "Ctrl\+I"/);
   assert.match(legacyScript, /window\.registerMarkdownViewerIndentationSourceActions\(app,/);
   assert.match(commentSourceActionsScript, /label: "Toggle Block Comment"/);
@@ -965,6 +1055,22 @@ test("editor context menu is registered from its extracted classic script", () =
   assert.match(contextMenuScript, /groupedActions\.push\(\{ type: "separator" \}\)/);
   assert.match(contextMenuScript, /id === "toggle-comment" \|\| id === "toggle-block-comment"/);
   assert.match(contextMenuScript, /id === "add-import" \|\| id === "organize-imports"/);
+  assert.match(contextMenuScript, /function getEditorJsonSourceActions\(\)/);
+  assert.match(contextMenuScript, /menu: "source-json"/);
+  assert.match(contextMenuScript, /\.\.\.\(isJsonContext \? getEditorJsonSourceActions\(\) : \[\]\)/);
+  assert.match(contextMenuScript, /function getEditorXmlSourceActions\(\)/);
+  assert.match(contextMenuScript, /menu: "source-xml"/);
+  assert.match(contextMenuScript, /\.\.\.\.\(isXmlContext \? getEditorXmlSourceActions\(\) : \[\]\)/);
+  assert.match(contextMenuScript, /case "compact-json":[\s\S]*case "json-for-code":[\s\S]*case "json-from-code":[\s\S]*runJsonEditCommand\(action, \{ useContextSelection: true \}\)/);
+  assert.match(contextMenuScript, /case "compact-xml":[\s\S]*case "xml-for-code":[\s\S]*case "xml-from-code":[\s\S]*case "xml-create-schema":[\s\S]*case "xml-create-stub":[\s\S]*runXmlEditCommand\(action, \{ useContextSelection: true \}\)/);
+  assert.match(contextMenuScript, /type: "xml-create-schema", label: "Create XML Schema from XML"/);
+  assert.match(contextMenuScript, /type: "xml-create-stub", label: "Create XML Stub from XSD"/);
+  assert.match(contextMenuScript, /openGeneratedXmlSchemaInTab\(schemaSource, getXmlSchemaOutputTitle\(\)\)/);
+  assert.match(contextMenuScript, /openGeneratedXmlStubInTab\(stubSource, getXmlStubOutputTitle\(\)\)/);
+  assert.match(legacyScript, /registerMarkdownViewerXmlSchemaGenerator/);
+  assert.match(legacyScript, /registerMarkdownViewerXmlStubGenerator/);
+  assert.match(legacyScript, /openGeneratedXmlSchemaInTab/);
+  assert.match(legacyScript, /openGeneratedXmlStubInTab/);
   assert.match(javaSurroundTemplatesScript, /label: '1 do \(do while statement\)'/);
   assert.match(javaSurroundActionsScript, /label: 'Surround With'/);
   assert.match(javaSurroundActionsScript, /textDocument\/codeAction/);

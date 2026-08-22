@@ -12,6 +12,7 @@
       file: ".txt"
     };
     const DRAFT_WRITE_CHUNK_SIZE = 256 * 1024;
+    const RESTORABLE_TOOL_TAB_TYPES = new Set(["base64-tool", "certificate-decoder", "jwt-tool", "json-yaml-tool", "jsonpath-tool", "xpath-tool", "uuid-tool", "qr-tool", "hash-tool", "json-array-table-tool", "text-escape-tool", "unicode-tool", "string-bytes-tool", "database-connection-string-tool"]);
 
     function normalizePath(value) {
       return String(value || "").trim().replace(/\\/g, "/");
@@ -86,7 +87,7 @@
         title: tab?.title || tab?.folderName || "Untitled",
         createdAt: Number(tab?.createdAt || Date.now()),
         isTemporary: tab?.isTemporary === true,
-        viewMode: tab?.viewMode || (type === "graph" || type === "health-report" || type === "large-file" || type === "file-preview" || type === "diagram-editor" || type === "hex-editor" || type === "kubernetes-topology" ? "preview" : "split"),
+        viewMode: tab?.viewMode || (type === "graph" || type === "health-report" || type === "large-file" || type === "file-preview" || type === "diagram-editor" || type === "hex-editor" || type === "kubernetes-topology" || RESTORABLE_TOOL_TAB_TYPES.has(type) ? "preview" : "split"),
         splitViewEditorWidthPercent: Number.isFinite(tab?.splitViewEditorWidthPercent) ? tab.splitViewEditorWidthPercent : null,
         scrollPos: Number(tab?.scrollPos || 0) || 0,
         selectionStart: Number(tab?.selectionStart || 0) || 0,
@@ -280,6 +281,10 @@
       return serializeMarkdownTab(tab, options);
     }
 
+    function serializeToolTab(tab) {
+      return createDescriptorBase(tab, tab.type);
+    }
+
     function createDraftId(tab, kind) {
       const id = String(tab?.id || `tab_${Date.now()}`).replace(/[^a-zA-Z0-9_-]+/g, "_");
       return `${id}${DRAFT_EXTENSIONS[kind] || ".txt"}`;
@@ -304,6 +309,7 @@
       if (tab.type === "diagram-editor") return serializeDiagramEditorTab(tab, options);
       if (tab.type === "hex-editor") return serializeHexEditorTab(tab);
       if (tab.type === "file-compare") return null;
+      if (RESTORABLE_TOOL_TAB_TYPES.has(tab.type)) return serializeToolTab(tab);
       if (tab.type === "api-client" || tab.type === "regex-tester") return null;
       if (tab.type === "draft") return serializeDraftTab(tab, options);
       return serializeMarkdownTab(tab, options);
@@ -853,6 +859,34 @@
       return tab;
     }
 
+    function restoreToolTab(descriptor) {
+      const factoryNameByType = {
+        "base64-tool": "createBase64ToolTab",
+        "certificate-decoder": "createCertificateDecoderTab",
+        "jwt-tool": "createJwtToolTab",
+        "json-yaml-tool": "createJsonYamlToolTab",
+        "jsonpath-tool": "createJsonPathToolTab",
+        "xpath-tool": "createXPathToolTab",
+        "uuid-tool": "createUuidToolTab",
+        "qr-tool": "createQrToolTab",
+        "hash-tool": "createHashToolTab",
+        "json-array-table-tool": "createJsonArrayTableToolTab",
+        "text-escape-tool": "createTextEscapeToolTab",
+        "unicode-tool": "createUnicodeToolTab",
+        "string-bytes-tool": "createStringBytesToolTab",
+        "database-connection-string-tool": "createDatabaseConnectionStringToolTab"
+      };
+      const factory = deps[factoryNameByType[descriptor.type]];
+      const tab = typeof factory === "function"
+        ? factory()
+        : deps.createTab("", descriptor.title || "Tool", "preview", { openedSource: descriptor.source || null });
+      applyDescriptorIdentity(tab, descriptor);
+      tab.type = descriptor.type;
+      tab.savedContent = "";
+      restoreCommonViewState(tab, { ...descriptor, viewMode: "preview" });
+      return tab;
+    }
+
     async function restoreGraphTab(descriptor) {
       const graphDocument = await readGraphDocument(descriptor);
       if (!graphDocument) {
@@ -942,6 +976,7 @@
       if (descriptor.type === "image-editor") return restoreImageEditorTab(descriptor);
       if (descriptor.type === "diagram-editor") return restoreDiagramEditorTab(descriptor);
       if (descriptor.type === "hex-editor") return restoreHexEditorTab(descriptor);
+      if (RESTORABLE_TOOL_TAB_TYPES.has(descriptor.type)) return restoreToolTab(descriptor);
       if (descriptor.type === "draft") return restoreDraftTab(descriptor);
       return restoreMarkdownTab(descriptor);
     }
@@ -976,6 +1011,7 @@
       serializeHexEditorTab,
       serializeUnsupportedFileTab: serializeMarkdownTab,
       serializeDraftTab,
+      serializeToolTab,
       serializeTab,
       cleanupDraftForTab,
       cleanupAllDrafts,
