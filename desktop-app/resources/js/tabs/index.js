@@ -3613,6 +3613,7 @@
     if (deps.tabSessionPersistence?.cleanupDraftForTab) {
       void deps.tabSessionPersistence.cleanupDraftForTab(tabToClose);
     }
+    deps.onTabClosed?.(tabToClose);
     const cachedGraphRender = graphRenderCache.get(tabId);
     if (cachedGraphRender) {
       if (cachedGraphRender.simulation) cachedGraphRender.simulation.stop();

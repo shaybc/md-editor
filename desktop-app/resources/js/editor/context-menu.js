@@ -19,6 +19,7 @@
     const getBase64Converter = deps.getBase64Converter || function() { return app.modules?.base64Converter || null; };
     const getXmlSchemaGenerator = deps.getXmlSchemaGenerator || function() { return app.modules?.xmlSchemaGenerator || null; };
     const getXmlStubGenerator = deps.getXmlStubGenerator || function() { return app.modules?.xmlStubGenerator || null; };
+    const getXmlValidation = deps.getXmlValidation || function() { return app.modules?.xmlValidation || null; };
     const getLessToCssConverter = deps.getLessToCssConverter || function() { return app.modules?.lessToCssConverter || null; };
     const openGeneratedXmlSchemaInTab = deps.openGeneratedXmlSchemaInTab || null;
     const openGeneratedXmlStubInTab = deps.openGeneratedXmlStubInTab || null;
@@ -950,6 +951,20 @@
       }
     }
 
+    async function validateXmlFromActiveEditor() {
+      try {
+        const validator = getXmlValidation();
+        if (typeof validator?.validateActiveEditor !== "function") {
+          throw new Error("XML validation is not available in this build.");
+        }
+        await validator.validateActiveEditor();
+      } catch (error) {
+        showXmlConversionError(error?.message || "XML validation failed.");
+      } finally {
+        hideEditorContextMenu();
+      }
+    }
+
     /**
      * Run one XML conversion for either the editor context menu or the main Edit menu.
      * @param {string} command XML conversion command identifier.
@@ -960,6 +975,9 @@
     function runXmlEditCommand(command, options = {}) {
       const useContextSelection = options.useContextSelection === true;
       switch (command) {
+        case "xml-validate":
+          void validateXmlFromActiveEditor();
+          return true;
         case "compact-xml":
           compactXmlDocument();
           return true;
@@ -1119,6 +1137,7 @@
         label: "XML",
         icon: "bi-code-slash",
         children: [
+          { type: "xml-validate", label: "Validate XML", icon: "bi-check2-circle" },
           { type: "compact-xml", label: "One-line XML", icon: "bi-arrows-collapse" },
           { type: "xml-for-code", label: "XML for Code", icon: "bi-code-square" },
           { type: "xml-from-code", label: "XML from Code", icon: "bi-code-slash" },
@@ -1138,9 +1157,9 @@
 
     function getEditorXsdSourceActions() {
       return getEditorXmlConversionAction().children
-        .filter((action) => action.type === "xml-create-stub")
+        .filter((action) => action.type === "xml-validate" || action.type === "xml-create-stub")
         .map(function(action) {
-          return { ...action, menu: "source-xsd" };
+          return { ...action, label: action.type === "xml-validate" ? "Validate XSD" : action.label, menu: "source-xsd" };
         });
     }
 
@@ -1220,9 +1239,12 @@
         || /\.json$/i.test(activePath);
       const isXsdContext = /\.xsd$/i.test(activePath);
       const isXmlContext = !isXsdContext && (activeTab?.parseAsLanguageId === "xml"
+        || activeTab?.parseAsLanguageId === "maven"
         || activeLanguage?.id === "xml"
+        || activeLanguage?.id === "maven"
         || activeLanguage?.codeMirrorLanguage === "xml"
-        || /\.xml$/i.test(activePath));
+        || /\.(xml|xsl|xslt|svg)$/i.test(activePath)
+        || /(^|[/\\])pom\.xml$/i.test(activePath));
       const isLessContext = activeTab?.parseAsLanguageId === "less"
         || activeLanguage?.id === "less"
         || activeLanguage?.codeMirrorLanguage === "less"

@@ -882,6 +882,21 @@ async function startMarkdownViewer() {
   const base64Converter = window.registerMarkdownViewerBase64Converter(app);
   const xmlSchemaGenerator = window.registerMarkdownViewerXmlSchemaGenerator?.(app) || null;
   const xmlStubGenerator = window.registerMarkdownViewerXmlStubGenerator?.(app) || null;
+  const xmlValidation = window.registerMarkdownViewerXmlValidation?.(app, {
+    getActiveEditorValue: function() { return activeEditorCommands.getActiveEditorValue(); },
+    getActiveEditorPath: getActiveEditorPathForLanguage,
+    getActiveTab: function() { return getActiveTab(); },
+    getProblemsPanel: function() { return app.modules?.problemsPanel || null; },
+    notify: app.services?.notify || app.modules?.notificationModal,
+    Neutralino: window.Neutralino
+  }) || null;
+  function isXmlValidationPath(path) {
+    return /\.(xml|xsd|xsl|xslt|svg)$/i.test(String(path || "")) || /(^|[/\\])pom\.xml$/i.test(String(path || ""));
+  }
+  function clearXmlValidationDiagnosticsForTab(tab) {
+    const path = tab?.sourceFilePath || tab?.sourceFileName || tab?.sourceFileHandle?.name || tab?.title || "";
+    if (path && isXmlValidationPath(path)) xmlValidation?.clearDiagnosticsForPath?.(path);
+  }
   const lessToCssConverter = window.registerMarkdownViewerLessToCssConverter?.(app) || null;
   const toolSyntaxTextarea = window.registerMarkdownViewerToolSyntaxTextarea?.(app) || null;
   const editorContextMenu = window.registerMarkdownViewerEditorContextMenu(app, {
@@ -898,6 +913,7 @@ async function startMarkdownViewer() {
     getBase64Converter: function() { return base64Converter; },
     getXmlSchemaGenerator: function() { return xmlSchemaGenerator; },
     getXmlStubGenerator: function() { return xmlStubGenerator; },
+    getXmlValidation: function() { return xmlValidation; },
     getLessToCssConverter: function() { return lessToCssConverter; },
     openGeneratedXmlSchemaInTab: function(content, title) {
       const name = title || "schema.xsd";
@@ -8910,6 +8926,9 @@ Markdown content is processed client-side in your browser and sanitized before p
     promptForStaleSavedGraphIfNeeded,
     refreshGraphModeNoticesForTab,
     clearGraphTabUnsavedChanges,
+    onTabClosed: function(tab) {
+      clearXmlValidationDiagnosticsForTab(tab);
+    },
     onActiveTabChanged: function(tab) {
       updateDiagramExportMenu(tab);
       updateImageExportMenu(tab);
@@ -17788,6 +17807,7 @@ ${error?.message || String(error || "")}`,
     editorInputEventCount += 1;
     const activeContent = getActiveEditorValue();
     const activeTab = tabs.find(function(t) { return t.id === activeTabId; });
+    if (activeTab) clearXmlValidationDiagnosticsForTab(activeTab);
     const isLargeCodeMirrorDocument = event?.detail?.largeCodeMirrorDocument === true;
     if (isLargeCodeMirrorDocument) {
       if (activeTab) {
