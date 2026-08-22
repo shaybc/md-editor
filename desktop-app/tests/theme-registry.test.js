@@ -36,6 +36,15 @@ test("theme registry exposes built-in light and dark themes", () => {
   assert.equal(defaultDark.colors["editor-selection-match-text-color"], "#c9d1d9");
   assert.equal(defaultDark.colors["editor-current-selection-bg"], "rgba(255, 241, 118, 0.8)");
   assert.equal(defaultDark.colors["editor-current-selection-text-color"], "#000000");
+  const apiStudioDark = registry.getBuiltinThemes("dark").find((theme) => theme.id === "api-studio-dark");
+  assert.equal(apiStudioDark.name, "API Studio Dark");
+  assert.equal(apiStudioDark.source, "MD-Editor");
+  assert.equal(apiStudioDark.colors["bg-color"], "#15182b");
+  assert.equal(apiStudioDark.colors["panel-bg"], "#20243f");
+  assert.equal(apiStudioDark.colors["accent-color"], "#7c8cff");
+  assert.equal(apiStudioDark.colors["link-color"], "#22d3ee");
+  assert.equal(apiStudioDark.colors["success-color"], "#65e572");
+  assert.equal(apiStudioDark.colors["error-color"], "#ff6b9a");
   assert.ok(registry.getBuiltinThemes("light").some((theme) => theme.id === "vscode-light"));
   assert.ok(registry.getBuiltinThemes("dark").some((theme) => theme.id === "one-dark"));
   const intellijLight = registry.getBuiltinThemes("light").find((theme) => theme.id === "intellij-light");
@@ -105,6 +114,15 @@ test("theme registry keeps saved IntelliJ theme selections", () => {
 
   assert.equal(selections.light, "intellij-light");
   assert.equal(selections.dark, "intellij-dark");
+});
+
+test("theme registry keeps saved API Studio dark theme selections", () => {
+  const registry = loadRegistry();
+  const selections = registry.normalizeThemeSelections({
+    dark: "api-studio-dark"
+  }, {});
+
+  assert.equal(selections.dark, "api-studio-dark");
 });
 
 test("theme registry applies selected theme variables to an element", () => {
