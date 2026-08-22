@@ -26743,3 +26743,236 @@ html[data-desktop-menu-layout="full"] .header-action-menu {
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
+.tab-view[data-tab-view-kind="xml-tree-grid"] {
+  background: var(--content-bg, #1e1e1e);
+}
+
+.xml-tree-grid-view {
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  height: 100%;
+  min-height: 0;
+  padding: 24px 30px;
+  color: var(--text-primary, #f5f5f5);
+  background: var(--content-bg, #1e1e1e);
+}
+
+.xml-tree-grid-header {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  flex: 0 0 auto;
+}
+
+.xml-tree-grid-header h2 {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0;
+  font-size: 24px;
+  font-weight: 700;
+}
+
+.xml-tree-grid-source {
+  max-width: min(54vw, 760px);
+  overflow: hidden;
+  color: var(--text-secondary, #aaa);
+  font-family: var(--font-monospace, Consolas, monospace);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.xml-tree-grid-layout {
+  display: grid;
+  grid-template-columns: minmax(320px, 1fr) minmax(360px, 1fr);
+  gap: 16px;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.xml-tree-grid-tree-pane,
+.xml-tree-grid-detail-pane {
+  min-height: 0;
+  overflow: auto;
+  border: 1px solid var(--border-color, #3f3f3f);
+  background: var(--panel-bg, #252526);
+}
+
+.xml-tree-grid-root,
+.xml-tree-grid-node ol {
+  margin: 0;
+  padding: 0 0 0 18px;
+  list-style: none;
+}
+
+.xml-tree-grid-root {
+  padding: 12px;
+}
+
+.xml-tree-grid-node.is-collapsed > ol {
+  display: none;
+}
+
+.xml-tree-grid-row {
+  display: grid;
+  grid-template-columns: 18px auto minmax(90px, max-content) auto 1fr;
+  align-items: center;
+  width: 100%;
+  min-height: 30px;
+  padding: 4px 8px;
+  border: 0;
+  border-radius: 4px;
+  color: inherit;
+  background: transparent;
+  font-family: var(--font-monospace, Consolas, monospace);
+  font-size: 13px;
+  text-align: left;
+}
+
+.xml-tree-grid-row:hover,
+.xml-tree-grid-row.is-selected {
+  background: rgba(0, 122, 204, 0.24);
+}
+
+.xml-tree-grid-toggle {
+  color: var(--text-secondary, #aaa);
+  font-weight: 700;
+}
+
+.xml-tree-grid-type,
+.xml-tree-grid-badge {
+  color: #9cdcfe;
+  font-size: 11px;
+  text-transform: uppercase;
+}
+
+.xml-tree-grid-name {
+  color: #dcdcaa;
+  font-weight: 600;
+}
+
+.xml-tree-grid-badge {
+  justify-self: start;
+  min-width: 22px;
+  margin-left: 8px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: rgba(156, 220, 254, 0.12);
+  text-align: center;
+}
+
+.xml-tree-grid-preview {
+  overflow: hidden;
+  color: var(--text-secondary, #aaa);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.xml-tree-grid-detail-pane {
+  padding: 16px;
+}
+
+.xml-tree-grid-details-header {
+  margin-bottom: 16px;
+}
+
+.xml-tree-grid-detail-title {
+  color: #dcdcaa;
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.xml-tree-grid-detail-path {
+  overflow-wrap: anywhere;
+  color: var(--text-secondary, #aaa);
+  font-family: var(--font-monospace, Consolas, monospace);
+  font-size: 12px;
+}
+
+.xml-tree-grid-properties,
+.xml-tree-grid-attributes {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.xml-tree-grid-properties th,
+.xml-tree-grid-properties td,
+.xml-tree-grid-attributes th,
+.xml-tree-grid-attributes td {
+  padding: 7px 8px;
+  border-bottom: 1px solid var(--border-color, #3f3f3f);
+  vertical-align: top;
+}
+
+.xml-tree-grid-properties th,
+.xml-tree-grid-attributes th {
+  width: 150px;
+  color: var(--text-secondary, #aaa);
+  font-weight: 600;
+  text-align: left;
+}
+
+.xml-tree-grid-detail-section {
+  margin-top: 18px;
+}
+
+.xml-tree-grid-detail-section h3 {
+  margin: 0 0 8px;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.xml-tree-grid-detail-section pre {
+  min-height: 72px;
+  margin: 0;
+  padding: 10px;
+  overflow: auto;
+  border: 1px solid var(--border-color, #3f3f3f);
+  background: var(--editor-bg, #1e1e1e);
+  color: inherit;
+  white-space: pre-wrap;
+}
+
+.xml-tree-grid-empty,
+.xml-tree-grid-error,
+.xml-tree-grid-empty-cell {
+  color: var(--text-secondary, #aaa);
+}
+
+.xml-tree-grid-error {
+  padding: 16px;
+  color: #ff7875;
+}
+
+.xml-tree-grid-status {
+  flex: 0 0 auto;
+  min-height: 20px;
+  color: #73d13d;
+  font-family: var(--font-monospace, Consolas, monospace);
+  font-size: 12px;
+}
+
+@media (max-width: 900px) {
+  .xml-tree-grid-view {
+    padding: 18px;
+  }
+
+  .xml-tree-grid-header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .xml-tree-grid-source {
+    max-width: 100%;
+  }
+
+  .xml-tree-grid-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

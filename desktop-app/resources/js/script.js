@@ -2306,6 +2306,7 @@ ${getMarkdownAlertBody(alertType, selectedText)}`;
   let jsonPathTool = null;
   let xpathEvaluator = null;
   let xpathTool = null;
+  let xmlTreeGridView = null;
   let uuidCodec = null;
   let uuidTool = null;
   let qrCodec = null;
@@ -8732,6 +8733,15 @@ Markdown content is processed client-side in your browser and sanitized before p
       return tabsModule?.openXPathToolInTab?.() || null;
     }
   }) || null;
+  xmlTreeGridView = window.registerMarkdownViewerXmlTreeGridView?.(app, {
+    getActiveEditorValue: function() { return activeEditorCommands.getActiveEditorValue(); },
+    getActiveEditorPath: getActiveEditorPathForLanguage,
+    getActiveTab: function() { return getActiveTab(); },
+    notify: app.services?.notify || app.modules?.notificationModal,
+    openXmlTreeGridTab: function(options) {
+      return tabsModule?.openXmlTreeGridTab?.(options) || null;
+    }
+  }) || null;
   uuidCodec = window.registerMarkdownViewerUuidCodec?.(app) || null;
   uuidTool = window.registerMarkdownViewerUuidTool?.(app, {
     codec: uuidCodec,
@@ -8833,6 +8843,7 @@ Markdown content is processed client-side in your browser and sanitized before p
     jsonYamlTool,
     jsonPathTool,
     xpathTool,
+    xmlTreeGridView,
     uuidTool,
     qrTool,
     hashTool,

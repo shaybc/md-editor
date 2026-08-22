@@ -22,6 +22,7 @@
     const jsonYamlTool = deps.jsonYamlTool || null;
     const jsonPathTool = deps.jsonPathTool || null;
     const xpathTool = deps.xpathTool || null;
+    const xmlTreeGridView = deps.xmlTreeGridView || null;
     const uuidTool = deps.uuidTool || null;
     const qrTool = deps.qrTool || null;
     const hashTool = deps.hashTool || null;
@@ -67,6 +68,7 @@
       if (tab?.type === "json-yaml-tool") return "json-yaml-tool";
       if (tab?.type === "jsonpath-tool") return "jsonpath-tool";
       if (tab?.type === "xpath-tool") return "xpath-tool";
+      if (tab?.type === "xml-tree-grid") return "xml-tree-grid";
       if (tab?.type === "uuid-tool") return "uuid-tool";
       if (tab?.type === "qr-tool") return "qr-tool";
       if (tab?.type === "hash-tool") return "hash-tool";
@@ -177,6 +179,9 @@
       } else if (tab?.type === "xpath-tool") {
         editorViewManager?.deactivateEditorView?.();
         xpathTool?.mountXPathToolTab?.(tab, root);
+      } else if (tab?.type === "xml-tree-grid") {
+        editorViewManager?.deactivateEditorView?.();
+        xmlTreeGridView?.mountXmlTreeGridTab?.(tab, root);
       } else if (tab?.type === "uuid-tool") {
         editorViewManager?.deactivateEditorView?.();
         uuidTool?.mountUuidToolTab?.(tab, root);
@@ -239,6 +244,7 @@
       jsonYamlTool?.destroyJsonYamlToolTab?.(tabId);
       jsonPathTool?.destroyJsonPathToolTab?.(tabId);
       xpathTool?.destroyXPathToolTab?.(tabId);
+      xmlTreeGridView?.destroyXmlTreeGridTab?.(tabId);
       uuidTool?.destroyUuidToolTab?.(tabId);
       qrTool?.destroyQrToolTab?.(tabId);
       hashTool?.destroyHashToolTab?.(tabId);

@@ -21,6 +21,7 @@
     const getXmlStubGenerator = deps.getXmlStubGenerator || function() { return app.modules?.xmlStubGenerator || null; };
     const getXmlValidation = deps.getXmlValidation || function() { return app.modules?.xmlValidation || null; };
     const getXmlSchemaAutocomplete = deps.getXmlSchemaAutocomplete || function() { return app.modules?.xmlSchemaAutocomplete || null; };
+    const getXmlTreeGridView = deps.getXmlTreeGridView || function() { return app.modules?.xmlTreeGridView || null; };
     const getLessToCssConverter = deps.getLessToCssConverter || function() { return app.modules?.lessToCssConverter || null; };
     const openGeneratedXmlSchemaInTab = deps.openGeneratedXmlSchemaInTab || null;
     const openGeneratedXmlStubInTab = deps.openGeneratedXmlStubInTab || null;
@@ -623,6 +624,7 @@
         case "xml-from-code":
         case "xml-create-schema":
         case "xml-create-stub":
+        case "xml-tree-grid":
           runXmlEditCommand(action, { useContextSelection: true });
           break;
         case "less-to-css":
@@ -980,6 +982,20 @@
       }
     }
 
+    function openXmlTreeGridForActiveEditor() {
+      try {
+        const view = getXmlTreeGridView();
+        if (typeof view?.openForActiveEditor !== "function") {
+          throw new Error("XML Tree/Grid View is not available in this build.");
+        }
+        view.openForActiveEditor();
+      } catch (error) {
+        showXmlConversionError(error?.message || "XML Tree/Grid View failed.");
+      } finally {
+        hideEditorContextMenu();
+      }
+    }
+
     /**
      * Run one XML conversion for either the editor context menu or the main Edit menu.
      * @param {string} command XML conversion command identifier.
@@ -995,6 +1011,9 @@
           return true;
         case "xml-associate-schema":
           void associateXmlSchemaForActiveEditor();
+          return true;
+        case "xml-tree-grid":
+          openXmlTreeGridForActiveEditor();
           return true;
         case "compact-xml":
           compactXmlDocument();
@@ -1156,6 +1175,7 @@
         icon: "bi-code-slash",
         children: [
           { type: "xml-validate", label: "Validate XML", icon: "bi-check2-circle" },
+          { type: "xml-tree-grid", label: "XML Tree/Grid View", icon: "bi-diagram-3" },
           { type: "xml-associate-schema", label: "Associate XML Schema...", icon: "bi-link-45deg" },
           { type: "compact-xml", label: "One-line XML", icon: "bi-arrows-collapse" },
           { type: "xml-for-code", label: "XML for Code", icon: "bi-code-square" },
@@ -1176,7 +1196,7 @@
 
     function getEditorXsdSourceActions() {
       return getEditorXmlConversionAction().children
-        .filter((action) => action.type === "xml-validate" || action.type === "xml-create-stub")
+        .filter((action) => action.type === "xml-validate" || action.type === "xml-tree-grid" || action.type === "xml-create-stub")
         .map(function(action) {
           return { ...action, label: action.type === "xml-validate" ? "Validate XSD" : action.label, menu: "source-xsd" };
         });
