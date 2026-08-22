@@ -3078,10 +3078,11 @@ function createResolvingLspApply(plugin, item, itemDefaults) {
   };
 }
 
-function shouldTriggerLspCompletion(plugin, character) {
+function shouldTriggerLspCompletion(plugin, character, lspLanguageId = "") {
   const triggers = plugin.client.serverCapabilities?.completionProvider?.triggerCharacters;
   if (triggers && triggers.indexOf(character) > -1) return "triggerCharacter";
-  if (/[\p{L}\p{N}_$!%~:\\\."\[\]@-]/u.test(character)) return "identifier";
+  if (lspLanguageId === "xml" && /[<\/\s="':]/.test(character)) return "triggerCharacter";
+  if (/[\p{L}\p{N}_$!%~:\\\\."\[\]@-]/u.test(character)) return "identifier";
   return null;
 }
 
@@ -3169,7 +3170,7 @@ function resolvingServerCompletionSource(context, lspLanguageId = "") {
   if (shouldSuppressJavaDotCompletion(context.state, context.pos, triggerChar, lspLanguageId)) return null;
   const triggerReason = context.explicit
     ? "invoked"
-    : shouldTriggerLspCompletion(plugin, triggerChar) || (hasLspCompletionWordPrefix(context) ? "identifier" : null);
+    : shouldTriggerLspCompletion(plugin, triggerChar, lspLanguageId) || (hasLspCompletionWordPrefix(context) ? "identifier" : null);
   if (!triggerReason) return null;
   logCodeMirrorLspDebug("LSP completion source requesting completions", {
     explicit: context.explicit === true,

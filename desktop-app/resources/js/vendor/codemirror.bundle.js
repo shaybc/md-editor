@@ -100146,10 +100146,11 @@ function createStaticCompletionSource(completions) {
       });
     };
   }
-  function shouldTriggerLspCompletion(plugin2, character) {
+  function shouldTriggerLspCompletion(plugin2, character, lspLanguageId = "") {
     const triggers = plugin2.client.serverCapabilities?.completionProvider?.triggerCharacters;
     if (triggers && triggers.indexOf(character) > -1) return "triggerCharacter";
-    if (/[\p{L}\p{N}_$!%~:\\\."\[\]@-]/u.test(character)) return "identifier";
+    if (lspLanguageId === "xml" && /[<\/\s="':]/.test(character)) return "triggerCharacter";
+    if (/[\p{L}\p{N}_$!%~:\\\\."\[\]@-]/u.test(character)) return "identifier";
     return null;
   }
   function hasLspCompletionWordPrefix(context2) {
@@ -100221,7 +100222,7 @@ function createStaticCompletionSource(completions) {
     if (!plugin2 || plugin2.client.hasCapability("completionProvider") === false) return null;
     const triggerChar = context2.state.sliceDoc(context2.pos - 1, context2.pos);
     if (shouldSuppressJavaDotCompletion(context2.state, context2.pos, triggerChar, lspLanguageId)) return null;
-    const triggerReason = context2.explicit ? "invoked" : shouldTriggerLspCompletion(plugin2, triggerChar) || (hasLspCompletionWordPrefix(context2) ? "identifier" : null);
+    const triggerReason = context2.explicit ? "invoked" : shouldTriggerLspCompletion(plugin2, triggerChar, lspLanguageId) || (hasLspCompletionWordPrefix(context2) ? "identifier" : null);
     if (!triggerReason) return null;
     logCodeMirrorLspDebug("LSP completion source requesting completions", {
       explicit: context2.explicit === true,

@@ -890,6 +890,13 @@ async function startMarkdownViewer() {
     notify: app.services?.notify || app.modules?.notificationModal,
     Neutralino: window.Neutralino
   }) || null;
+  const xmlSchemaAutocomplete = window.registerMarkdownViewerXmlSchemaAutocomplete?.(app, {
+    getActiveEditorPath: getActiveEditorPathForLanguage,
+    getActiveTab: function() { return getActiveTab(); },
+    notify: app.services?.notify || app.modules?.notificationModal,
+    Neutralino: window.Neutralino,
+    refreshWorkspaceConfiguration: refreshXmlSchemaAutocompleteConfiguration
+  }) || null;
   function isXmlValidationPath(path) {
     return /\.(xml|xsd|xsl|xslt|svg)$/i.test(String(path || "")) || /(^|[/\\])pom\.xml$/i.test(String(path || ""));
   }
@@ -914,6 +921,7 @@ async function startMarkdownViewer() {
     getXmlSchemaGenerator: function() { return xmlSchemaGenerator; },
     getXmlStubGenerator: function() { return xmlStubGenerator; },
     getXmlValidation: function() { return xmlValidation; },
+    getXmlSchemaAutocomplete: function() { return xmlSchemaAutocomplete; },
     getLessToCssConverter: function() { return lessToCssConverter; },
     openGeneratedXmlSchemaInTab: function(content, title) {
       const name = title || "schema.xsd";
@@ -2814,7 +2822,10 @@ ${getMarkdownAlertBody(alertType, selectedText)}`;
       getProfileDataDirPath: recentItems.getProfileDataDirPath,
       getMaximumProblems: getJdtMaximumProblems,
       isNeutralinoRuntime,
-      get Neutralino() { return typeof Neutralino !== "undefined" ? Neutralino : undefined; }
+      get Neutralino() { return typeof Neutralino !== "undefined" ? Neutralino : undefined; },
+      getXmlWorkspaceConfiguration: function(options) {
+        return xmlSchemaAutocomplete?.getWorkspaceConfiguration?.(options) || {};
+      }
     });
   }
   if (lspServerRegistry && typeof window.registerMarkdownViewerNeutralinoLspBridge === "function") {
@@ -3476,6 +3487,22 @@ ${getMarkdownAlertBody(alertType, selectedText)}`;
       }),
       transport: session.transport
     };
+  }
+
+  function refreshXmlSchemaAutocompleteConfiguration() {
+    if (!lspServerRegistry || !codeMirrorEditor) return false;
+    const context = codeMirrorEditor.getLspDocumentContext?.();
+    if (!context || context.languageId !== "xml" || !context.transport || typeof context.transport.send !== "function") return false;
+    const settings = lspServerRegistry.getServerWorkspaceConfiguration("xml", {
+      filePath: getActiveEditorPathForLanguage(),
+      content: activeEditorCommands.getActiveEditorValue()
+    });
+    context.transport.send(JSON.stringify({
+      jsonrpc: "2.0",
+      method: "workspace/didChangeConfiguration",
+      params: { settings }
+    }));
+    return true;
   }
 
   function logCacheClear(name, details = {}) {

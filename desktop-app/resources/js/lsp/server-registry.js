@@ -668,6 +668,30 @@
       return String(path || "").replace(/\\/g, "/").split("/").pop() || "";
     }
 
+    function cloneWorkspaceConfiguration(value) {
+      if (Array.isArray(value)) return value.map(cloneWorkspaceConfiguration);
+      if (value && typeof value === "object") {
+        const copy = {};
+        Object.keys(value).forEach(function(key) { copy[key] = cloneWorkspaceConfiguration(value[key]); });
+        return copy;
+      }
+      return value;
+    }
+
+    function mergeWorkspaceConfiguration(base, extra) {
+      const merged = cloneWorkspaceConfiguration(base || {});
+      Object.keys(extra || {}).forEach(function(key) {
+        const current = merged[key];
+        const next = extra[key];
+        if (current && next && typeof current === "object" && typeof next === "object" && !Array.isArray(current) && !Array.isArray(next)) {
+          merged[key] = mergeWorkspaceConfiguration(current, next);
+        } else {
+          merged[key] = cloneWorkspaceConfiguration(next);
+        }
+      });
+      return merged;
+    }
+
     function cloneYamlWorkspaceConfiguration() {
       return {
         yaml: {
@@ -719,6 +743,14 @@
     function getYamlSchemaFileMatch(filePath) {
       const normalizedPath = normalizeLocalPath(filePath);
       return normalizedPath || getFileName(filePath) || "*.yaml";
+    }
+
+    function getXmlWorkspaceConfiguration(options = {}) {
+      const base = serverDefinitions[XML_SERVER_ID]?.workspaceConfiguration || {};
+      const extra = typeof deps.getXmlWorkspaceConfiguration === "function"
+        ? deps.getXmlWorkspaceConfiguration(options) || {}
+        : {};
+      return mergeWorkspaceConfiguration(base, extra);
     }
 
     function getYamlWorkspaceConfiguration(options = {}) {
@@ -1013,6 +1045,7 @@
         const filePath = normalizeLocalPath(options.filePath || "");
         return isStandaloneJavaFile(serverId, filePath) ? JAVA_STANDALONE_WORKSPACE_CONFIGURATION : getJavaWorkspaceConfiguration(options);
       }
+      if (serverId === XML_SERVER_ID) return getXmlWorkspaceConfiguration(options);
       if (serverId === YAML_SERVER_ID) return getYamlWorkspaceConfiguration(options);
       return serverDefinitions[serverId]?.workspaceConfiguration || {};
     }

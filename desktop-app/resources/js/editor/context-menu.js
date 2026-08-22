@@ -20,6 +20,7 @@
     const getXmlSchemaGenerator = deps.getXmlSchemaGenerator || function() { return app.modules?.xmlSchemaGenerator || null; };
     const getXmlStubGenerator = deps.getXmlStubGenerator || function() { return app.modules?.xmlStubGenerator || null; };
     const getXmlValidation = deps.getXmlValidation || function() { return app.modules?.xmlValidation || null; };
+    const getXmlSchemaAutocomplete = deps.getXmlSchemaAutocomplete || function() { return app.modules?.xmlSchemaAutocomplete || null; };
     const getLessToCssConverter = deps.getLessToCssConverter || function() { return app.modules?.lessToCssConverter || null; };
     const openGeneratedXmlSchemaInTab = deps.openGeneratedXmlSchemaInTab || null;
     const openGeneratedXmlStubInTab = deps.openGeneratedXmlStubInTab || null;
@@ -965,6 +966,20 @@
       }
     }
 
+    async function associateXmlSchemaForActiveEditor() {
+      try {
+        const autocomplete = getXmlSchemaAutocomplete();
+        if (typeof autocomplete?.associateSchemaForActiveEditor !== "function") {
+          throw new Error("XML schema association is not available in this build.");
+        }
+        await autocomplete.associateSchemaForActiveEditor();
+      } catch (error) {
+        showXmlConversionError(error?.message || "XML schema association failed.");
+      } finally {
+        hideEditorContextMenu();
+      }
+    }
+
     /**
      * Run one XML conversion for either the editor context menu or the main Edit menu.
      * @param {string} command XML conversion command identifier.
@@ -977,6 +992,9 @@
       switch (command) {
         case "xml-validate":
           void validateXmlFromActiveEditor();
+          return true;
+        case "xml-associate-schema":
+          void associateXmlSchemaForActiveEditor();
           return true;
         case "compact-xml":
           compactXmlDocument();
@@ -1138,6 +1156,7 @@
         icon: "bi-code-slash",
         children: [
           { type: "xml-validate", label: "Validate XML", icon: "bi-check2-circle" },
+          { type: "xml-associate-schema", label: "Associate XML Schema...", icon: "bi-link-45deg" },
           { type: "compact-xml", label: "One-line XML", icon: "bi-arrows-collapse" },
           { type: "xml-for-code", label: "XML for Code", icon: "bi-code-square" },
           { type: "xml-from-code", label: "XML from Code", icon: "bi-code-slash" },
