@@ -173,6 +173,7 @@ async function startMarkdownViewer() {
   const folderFileCountElement = document.getElementById("folder-file-count");
   const folderDirectoryCountElement = document.getElementById("folder-directory-count");
   const FOLDER_COUNT_BRIDGE_PATH = "resources/bridges/folder-count-bridge/folder-count-bridge.cjs";
+  const OPENAPI_CODEGEN_BRIDGE_PATH = "resources/bridges/openapi-codegen/openapi-codegen-bridge.cjs";
   const editorTextpadStatusElement = document.getElementById("editor-textpad-status");
   const editorTotalLengthElement = document.getElementById("editor-total-length");
   const editorTotalLinesElement = document.getElementById("editor-total-lines");
@@ -623,6 +624,11 @@ async function startMarkdownViewer() {
     isJsonPath,
     largeFileViewer,
     largeJsonOpen,
+    openApiDetector: window.markdownViewerOpenApiDetector,
+    yamlLibrary: window.jsyaml,
+    openOpenApiEditorInTab: function(source, options) {
+      return tabsModule?.openOpenApiEditorInTab?.(source, options) || null;
+    },
     foregroundWaitIndicator,
     appDebugLog,
     looksLikeGraphDocument,
@@ -2370,6 +2376,8 @@ ${getMarkdownAlertBody(alertType, selectedText)}`;
   let aiCompanionConversionExportTools = null;
   let graphCompanionControl = null;
   let apiClient = null;
+  let openApiEditor = null;
+  let openApiCodegen = null;
   let soapClient = null;
   let regexTester = null;
   let base64Tool = null;
@@ -8779,6 +8787,87 @@ Markdown content is processed client-side in your browser and sanitized before p
     getSidebarView: function() { return workspaceSearch?.getActiveSidebarView?.() || "files"; },
     alert: function(message) { window.alert(message); }
   });
+  openApiCodegen = window.registerMarkdownViewerOpenApiCodegen?.(app, {
+    detector: window.markdownViewerOpenApiDetector,
+    yamlLibrary: window.jsyaml,
+    notify: app.services?.notify || app.modules?.notificationModal,
+    getWorkspaceRoot: function() { return activeFolderPath || ""; },
+    getActiveFolderPath: function() { return activeFolderPath || ""; },
+    showFolderDialog: function(title, options) { return Neutralino.os.showFolderDialog(title, options); },
+    refreshFolderTree: function() {
+      return app.modules?.sidebarContextTree?.refreshOpenFolderTreeFromContextMenu?.({ notify: false, preserveExpandedFolders: true });
+    },
+    bridge: {
+      generate: function(request) { return runOpenApiCodegenBridge("generate", request); },
+      apply: function(request) { return runOpenApiCodegenBridge("apply", request); },
+      read: function(request) { return runOpenApiCodegenBridge("read", request); }
+    }
+  }) || null;
+  openApiEditor = window.registerMarkdownViewerOpenApiEditor?.(app, {
+    detector: window.markdownViewerOpenApiDetector,
+    explorer: window.markdownViewerOpenApiExplorer,
+    requestMapper: window.markdownViewerOpenApiRequestMapper,
+    endpointScanner: window.markdownViewerOpenApiEndpointScanner,
+    generator: window.markdownViewerOpenApiGenerator,
+    codegenTool: openApiCodegen,
+    yamlLibrary: window.jsyaml,
+    notify: app.services?.notify || app.modules?.notificationModal,
+    normalizeEditorContent,
+    getActiveEditorValue,
+    getActiveEditorPath: getActiveEditorPathForLanguage,
+    getActiveFolderPath: function() { return activeFolderPath || ""; },
+    getWorkspaceRoot: function() { return activeFolderPath || ""; },
+    readDirectory: function(path) { return Neutralino.filesystem.readDirectory(path); },
+    readFile: function(path) { return Neutralino.filesystem.readFile(path); },
+    writeFile: function(path, content) { return Neutralino.filesystem.writeFile(path, content); },
+    showFolderDialog: function(title, options) { return Neutralino.os.showFolderDialog(title, options); },
+    openOpenApiEditorInTab: function(source, options) { return tabsModule?.openOpenApiEditorInTab?.(source, options) || null; },
+    saveCurrentFileIfChanged: function() { return saveCurrentFileIfChanged(); },
+    getProblemsPanel: function() { return app.modules?.problemsPanel || null; },
+    createCodeMirrorEditorInstance: function(openApiApp, options) {
+      return window.createMarkdownViewerCodeMirrorEditorInstance?.(openApiApp || app, options) || null;
+    },
+    loadCodeMirrorBundle: loadDeferredCodeMirrorBundle,
+    languageRegistry,
+    getWordWrapEnabled: function() { return isWordWrapEnabled(); },
+    getDocumentWordAutocompleteEnabled: function() { return isDocumentWordAutocompleteEnabled(); },
+    getLanguageAutocompleteEnabled: function() { return isLanguageAutocompleteEnabled(); },
+    getLanguageServerAutocompleteEnabled: function() { return isLanguageServerAutocompleteEnabled(); },
+    getSnippetAutocompleteEnabled: function() { return isSnippetAutocompleteEnabled(); },
+    getUnclosedBracketHighlightEnabled: function() { return isUnclosedBracketHighlightEnabled(); },
+    getAutocompletePreferences,
+    getSnippetDefinitions: function(languageId) { return getEditorSnippetDefinitions(languageId); },
+    getLspSession: getLspSessionForEditor,
+    openLspDefinitionTarget,
+    getEditorQuickFixSuggestions: async function(request) {
+      const diagnosticStore = app.modules?.quickFixDiagnosticStore;
+      const controller = app.modules?.quickFixController;
+      const diagnostic = diagnosticStore?.findEditorDiagnostic?.(request);
+      return diagnostic && controller?.getEditorSuggestions
+        ? controller.getEditorSuggestions(diagnostic)
+        : null;
+    },
+    openEditorQuickFix: function(preparedResult, initialActionId) {
+      const controller = app.modules?.quickFixController;
+      if (!preparedResult?.diagnostic || !controller?.openForDiagnostic) return false;
+      return controller.openForDiagnostic(preparedResult.diagnostic, { preparedResult, initialActionId });
+    },
+    getShowSymbolPreferences,
+    aiAutocomplete: aiCompanionAutocomplete,
+    goToEditorLinePrompt,
+    openEditorFindReplace: openEditorFindReplaceModal,
+    activeEditorCommands,
+    openApiClientInTab: function(options) {
+      return tabsModule?.openApiClientInTab?.(options) || null;
+    },
+    openSwaggerUiPreviewInTab: function(options) {
+      return tabsModule?.openSwaggerUiPreviewInTab?.(options) || null;
+    },
+    refreshTabs: function() {
+      renderTabBar(tabs, activeTabId);
+      updateSaveCurrentFileButtons();
+    }
+  }) || null;
   soapClient = window.registerMarkdownViewerSoapClient?.(app, {
     isNeutralinoRuntime,
     get Neutralino() { return typeof Neutralino !== "undefined" ? Neutralino : undefined; },
@@ -8970,6 +9059,7 @@ Markdown content is processed client-side in your browser and sanitized before p
     hexEditor,
     fileCompare,
     apiClient,
+    openApiEditor,
     soapClient,
     regexTester,
     base64Tool,
@@ -8997,6 +9087,7 @@ Markdown content is processed client-side in your browser and sanitized before p
     tabViewManager,
     diagramEditor,
     editorViewManager,
+    openApiEditor,
     activeEditorCommands,
     languageRegistry,
     createTabParseAsMenu: window.createMarkdownViewerTabParseAsMenu,
@@ -9277,9 +9368,11 @@ Markdown content is processed client-side in your browser and sanitized before p
     createImageEditorTab,
     createDiagramEditorTab,
     createHexEditorTab,
+    createOpenApiEditorTab: function(source, options) { return tabsModule?.createOpenApiEditorTab?.(source, options) || null; },
     imageEditor,
     diagramEditor,
     hexEditor,
+    openApiEditor,
     serializeGraphTab,
     serializeGraphViewDocument,
     stripGraphSnapshotContent,
@@ -14890,6 +14983,40 @@ ${error?.message || String(error)}`
     }
   }
 
+  async function getOpenApiCodegenJavaExecutable() {
+    const bundledJava = getJavaExecutableForJdkHome(`${getDesktopAppRootPath()}/bin/tooling-jdk`);
+    if (bundledJava && await canAccessLocalPath(bundledJava)) return bundledJava;
+    const configuredJdks = jdkRegistry?.list?.() || getJavaConverterJdks?.() || [];
+    const candidates = [];
+    for (const jdk of configuredJdks) {
+      const javaExecutable = getJavaExecutableForJdkHome(jdk.path);
+      if (!javaExecutable || !await canAccessLocalPath(javaExecutable)) continue;
+      const feature = jdk.feature || await getJavaFeatureForJdkHome(jdk.path);
+      candidates.push({ javaExecutable, feature });
+    }
+    candidates.sort((left, right) => (right.feature || 0) - (left.feature || 0));
+    return candidates[0]?.javaExecutable || "java";
+  }
+
+  async function runOpenApiCodegenBridge(action, payload) {
+    if (!isNeutralinoRuntime() || !Neutralino.filesystem?.writeFile || !Neutralino.os?.execCommand || !Neutralino.os?.getPath) {
+      throw new Error("OpenAPI code generation is available only in the desktop app.");
+    }
+    const tempRoot = normalizeLocalPath(await Neutralino.os.getPath("temp"));
+    const requestPath = joinPath(tempRoot, `md-editor-openapi-codegen-${Date.now()}-${Math.random().toString(16).slice(2)}.json`);
+    const request = Object.assign({}, payload || {}, {
+      action,
+      javaExecutable: await getOpenApiCodegenJavaExecutable(),
+      appRoot: getDesktopAppRootPath()
+    });
+    await Neutralino.filesystem.writeFile(requestPath, JSON.stringify(request));
+    const result = await Neutralino.os.execCommand(`node ${quoteCommandArg(OPENAPI_CODEGEN_BRIDGE_PATH)} --request-file ${quoteCommandArg(requestPath)}`);
+    const output = String(result?.stdOut || result?.stdout || "").trim();
+    const jsonLine = output.split(/\r?\n/).filter(Boolean).pop() || "{}";
+    const bridgeResult = JSON.parse(jsonLine);
+    if (!bridgeResult.ok && !bridgeResult.exitCode && result?.exitCode) bridgeResult.exitCode = result.exitCode;
+    return bridgeResult;
+  }
   function cancelActiveLazyFolderCountBridge() {
     const session = lazyFolderCountSession;
     if (!session) return;
@@ -15147,7 +15274,7 @@ ${error?.message || String(error)}`
     if (typeof NL_VERSION !== "undefined" && activeFolderPath) {
       const nodes = await listMarkdownTreeNeutralino(activeFolderPath);
       folderMarkdownFiles = await collectMarkdownFilesFromTreeNeutralino(nodes, "", { resolveLazyDirectories: true });
-      renderFolderTree(nodes);
+      renderFolderTree(nodes, { preserveExpandedFolders: options.preserveExpandedFolders === true });
       await refreshOpenFolderGraphTabsFromFolderFiles();
       if (options.skipSavedGraphPrompt !== true) await promptActiveSavedGraphForCurrentFolder();
       return true;
@@ -15156,7 +15283,7 @@ ${error?.message || String(error)}`
     if (activeFolderHandle) {
       const nodes = await listMarkdownTree(activeFolderHandle);
       folderMarkdownFiles = await collectMarkdownFilesFromTree(nodes);
-      renderFolderTree(nodes);
+      renderFolderTree(nodes, { preserveExpandedFolders: options.preserveExpandedFolders === true });
       rememberRecentFolder({ name: activeFolderName, label: activeFolderName });
       await refreshOpenFolderGraphTabsFromFolderFiles();
       if (options.skipSavedGraphPrompt !== true) await promptActiveSavedGraphForCurrentFolder();
@@ -16395,9 +16522,13 @@ ${error?.message || String(error || "")}`,
     openJavaBuildPath: function() { return openJavaBuildPathForRuntime(); },
     createJdtScopeMismatchNotification: function(state) { return jdtScopeMismatchNotification?.create?.(state); },
     canOpenQuickFix: function(diagnostic) {
-      return app.modules?.quickFixController?.canOpenForDiagnostic?.(diagnostic) === true;
+      return app.modules?.openApiEditor?.canOpenQuickFix?.(diagnostic) === true
+        || app.modules?.quickFixController?.canOpenForDiagnostic?.(diagnostic) === true;
     },
     openQuickFix: function(diagnostic) {
+      if (app.modules?.openApiEditor?.canOpenQuickFix?.(diagnostic) === true) {
+        return app.modules.openApiEditor.openQuickFix?.(diagnostic);
+      }
       return app.modules?.quickFixController?.openForDiagnostic?.(diagnostic);
     },
     openDiagnostic: async function(diagnostic) {

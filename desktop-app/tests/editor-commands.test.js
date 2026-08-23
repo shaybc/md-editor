@@ -4,14 +4,17 @@ const path = require("node:path");
 const test = require("node:test");
 const vm = require("node:vm");
 
-function loadEditorCommandsTestApi() {
+function loadEditorCommandsModule() {
   const source = fs.readFileSync(path.resolve(__dirname, "../resources/js/editor/commands.js"), "utf8");
-  const context = { window: {}, globalThis: {} };
+  const context = { window: {}, globalThis: {}, document: { activeElement: null, querySelector: () => null }, Event: class { constructor(type) { this.type = type; } } };
   context.window.window = context.window;
   vm.runInNewContext(source, context, { filename: "commands.js" });
-  return context.window.registerMarkdownViewerActiveEditorCommands._test;
+  return context.window.registerMarkdownViewerActiveEditorCommands;
 }
 
+function loadEditorCommandsTestApi() {
+  return loadEditorCommandsModule()._test;
+}
 test("editor command helpers normalize indent settings", () => {
   const api = loadEditorCommandsTestApi();
 
@@ -139,6 +142,26 @@ test("editor command helper duplicates the current line", () => {
   });
 });
 
+test("active editor commands can route through a focused tool editor override", () => {
+  const register = loadEditorCommandsModule();
+  const fallbackEditor = { value: "fallback", selectionStart: 0, selectionEnd: 0, focus() {} };
+  const toolEditor = { value: "openapi yaml", selectionStart: 2, selectionEnd: 6, focus() {} };
+  const app = { services: {}, registerModule(name, api) { this.services[name] = api; } };
+  const commands = register(app, { markdownEditor: fallbackEditor, getCodeMirrorEditor: () => ({ isFocused: () => false }) });
+
+  assert.equal(commands.getActiveEditorValue(), "fallback");
+  assert.equal(commands.setActiveEditorOverride(toolEditor, { owner: "openapi:tab", codeMirrorEditor: { isFocused: () => true } }), true);
+  assert.equal(commands.getActiveEditor(), toolEditor);
+  assert.equal(commands.getActiveEditorValue(), "openapi yaml");
+  assert.equal(commands.getActiveEditorSelection().start, 2);
+  assert.equal(commands.getActiveEditorSelection().end, 6);
+  assert.equal(commands.isActiveEditorFocused(), true);
+
+  commands.clearActiveEditorOverride("other");
+  assert.equal(commands.getActiveEditor(), toolEditor);
+  commands.clearActiveEditorOverride("openapi:tab");
+  assert.equal(commands.getActiveEditor(), fallbackEditor);
+});
 test("editor commands expose CodeMirror autocomplete preference forwarding", () => {
   const source = fs.readFileSync(path.resolve(__dirname, "../resources/js/editor/commands.js"), "utf8");
 

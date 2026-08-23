@@ -227,11 +227,38 @@
 
   function registerMarkdownViewerActiveEditorCommands(app, deps) {
     const fallbackEditor = deps.markdownEditor || null;
+    let activeEditorOverride = null;
+
+    function isActiveEditorOverrideCurrent() {
+      const editor = activeEditorOverride?.editor;
+      if (!editor) return false;
+      const activeTabView = document.querySelector?.(".tab-view.active");
+      return !activeTabView || activeTabView.contains?.(editor) === true;
+    }
 
     function getActiveEditor() {
+      if (isActiveEditorOverrideCurrent()) return activeEditorOverride.editor;
+      activeEditorOverride = null;
       return app.services?.editorViewManager?.getActiveMarkdownEditor?.() || fallbackEditor;
     }
 
+    function getActiveCodeMirrorEditor() {
+      if (isActiveEditorOverrideCurrent() && activeEditorOverride?.codeMirrorEditor) return activeEditorOverride.codeMirrorEditor;
+      return deps.getCodeMirrorEditor?.();
+    }
+
+    function setActiveEditorOverride(editor, options = {}) {
+      if (!editor) {
+        activeEditorOverride = null;
+        return false;
+      }
+      activeEditorOverride = { editor, codeMirrorEditor: options.codeMirrorEditor || null, owner: options.owner || "" };
+      return true;
+    }
+
+    function clearActiveEditorOverride(owner) {
+      if (!owner || activeEditorOverride?.owner === owner) activeEditorOverride = null;
+    }
     function getActiveEditorValue() {
       return getActiveEditor()?.value || "";
     }
@@ -285,7 +312,7 @@
     }
 
     function isActiveEditorFocused() {
-      const codeMirrorEditor = deps.getCodeMirrorEditor?.();
+      const codeMirrorEditor = getActiveCodeMirrorEditor();
       if (typeof codeMirrorEditor?.isFocused === "function" && codeMirrorEditor.isFocused()) return true;
       return document.activeElement === getActiveEditor();
     }
@@ -308,7 +335,7 @@
       const selectionStart = Math.max(0, Math.min(value.length, Number(start) || 0));
       const selectionEnd = Math.max(selectionStart, Math.min(value.length, Number(end) || selectionStart));
       const replacement = String(text || "");
-      const codeMirrorEditor = deps.getCodeMirrorEditor?.();
+      const codeMirrorEditor = getActiveCodeMirrorEditor();
       focusActiveEditor();
       setActiveEditorSelection(selectionStart, selectionEnd);
       if (typeof codeMirrorEditor?.replaceRange === "function" && codeMirrorEditor.replaceRange(selectionStart, selectionEnd, replacement)) {
@@ -362,7 +389,7 @@
     }
 
     function runCodeMirrorCommand(methodName) {
-      const codeMirrorEditor = deps.getCodeMirrorEditor?.();
+      const codeMirrorEditor = getActiveCodeMirrorEditor();
       if (typeof codeMirrorEditor?.[methodName] !== "function") return false;
       const handled = codeMirrorEditor[methodName]();
       if (handled) refreshActiveEditorUi();
@@ -490,14 +517,14 @@
     }
 
     function setActiveEditorBookmarkedLines(lineNumbers) {
-      const codeMirrorEditor = deps.getCodeMirrorEditor?.();
+      const codeMirrorEditor = getActiveCodeMirrorEditor();
       return typeof codeMirrorEditor?.setBookmarkedLines === "function"
         ? codeMirrorEditor.setBookmarkedLines(lineNumbers)
         : false;
     }
 
     function clearActiveEditorBookmarkedLines() {
-      const codeMirrorEditor = deps.getCodeMirrorEditor?.();
+      const codeMirrorEditor = getActiveCodeMirrorEditor();
       return typeof codeMirrorEditor?.clearBookmarkedLines === "function"
         ? codeMirrorEditor.clearBookmarkedLines()
         : false;
@@ -505,6 +532,8 @@
 
     const api = {
       getActiveEditor,
+      setActiveEditorOverride,
+      clearActiveEditorOverride,
       getActiveEditorValue,
       getActiveEditorScroll,
       setActiveEditorValue,
@@ -528,22 +557,22 @@
       decreaseLineIndent: function() { return runCodeMirrorCommand("indentLess") || decreaseLineIndentFallback(); },
       correctIndentation: function() { return runCodeMirrorCommand("correctIndentation"); },
       canFormatActiveDocument: function() {
-        return deps.getCodeMirrorEditor?.()?.canFormatActiveDocument?.() === true;
+        return getActiveCodeMirrorEditor()?.canFormatActiveDocument?.() === true;
       },
       formatActiveDocument: async function() {
-        const codeMirrorEditor = deps.getCodeMirrorEditor?.();
+        const codeMirrorEditor = getActiveCodeMirrorEditor();
         return typeof codeMirrorEditor?.formatActiveDocument === "function"
           ? codeMirrorEditor.formatActiveDocument()
           : false;
       },
       getCommentCapabilities: function() {
-        return deps.getCodeMirrorEditor?.()?.getCommentCapabilities?.() || { canToggleComment: false, canToggleBlockComment: false };
+        return getActiveCodeMirrorEditor()?.getCommentCapabilities?.() || { canToggleComment: false, canToggleBlockComment: false };
       },
       toggleComment: function() { return runCodeMirrorCommand("toggleComment"); },
       toggleBlockComment: function() { return runCodeMirrorCommand("toggleBlockComment"); },
       startAutocomplete: function() { return runCodeMirrorCommand("startCompletion"); },
       setDocumentWordAutocomplete: function(enabled) {
-        const codeMirrorEditor = deps.getCodeMirrorEditor?.();
+        const codeMirrorEditor = getActiveCodeMirrorEditor();
         if (typeof codeMirrorEditor?.setDocumentWordAutocomplete === "function") {
           codeMirrorEditor.setDocumentWordAutocomplete(enabled === true);
           return true;
@@ -551,7 +580,7 @@
         return false;
       },
       setAutocompletePreferences: function(preferences) {
-        const codeMirrorEditor = deps.getCodeMirrorEditor?.();
+        const codeMirrorEditor = getActiveCodeMirrorEditor();
         if (typeof codeMirrorEditor?.setAutocompletePreferences === "function") {
           codeMirrorEditor.setAutocompletePreferences(preferences || {});
           return true;

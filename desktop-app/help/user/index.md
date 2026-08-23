@@ -41,6 +41,7 @@ This manual is organized like the app itself. Start with the essentials if you a
   - [5.2. Git Panel](05-tools.md#52-git-panel)
   - [5.3. Terminal](05-tools.md#53-terminal)
   - [5.4. API Client](05-tools.md#54-api-client)
+  - [OpenAPI Editor](openapi-editor.md)
   - [5.5. Line Counter](05-tools.md#55-line-counter)
   - [5.6. Search Tools](05-tools.md#56-search-tools)
   - [5.7. File Compare And Sort Lines](05-tools.md#57-file-compare-and-sort-lines)

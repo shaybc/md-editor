@@ -179,8 +179,11 @@
     return true;
   }
 
-  function getMarkdownTabContentForSave(tab) {
+  function getMarkdownTabContentForSave(tab, options = {}) {
     if (!tab) return '';
+    if (Object.prototype.hasOwnProperty.call(options, "content")) {
+      return normalizeEditorContent(options.content);
+    }
     const activeContent = activeEditorCommands?.getActiveEditorValue ? activeEditorCommands.getActiveEditorValue() : markdownEditor.value;
     return normalizeEditorContent(tab.id === activeTabId ? activeContent : tab.content);
   }
@@ -304,12 +307,12 @@ ${bodyHtml}
     return false;
   }
 
-  async function saveMarkdownTabToSource(tab) {
+  async function saveMarkdownTabToSource(tab, options = {}) {
     if (!tab || tab.type === "graph" || tab.type === "kubernetes-topology" || (!tab.sourceFileHandle && !tab.sourceFilePath)) return false;
     if (tab.transformedForViewing === true) return false;
 
     try {
-      const content = getMarkdownTabContentForSave(tab);
+      const content = getMarkdownTabContentForSave(tab, options);
       if (tab.sourceFileHandle && typeof tab.sourceFileHandle.createWritable === "function") {
         const writable = await tab.sourceFileHandle.createWritable();
         await writable.write(content);
@@ -337,10 +340,10 @@ ${bodyHtml}
     }
   }
 
-  async function saveMarkdownTabWithSaveDialog(tab) {
+  async function saveMarkdownTabWithSaveDialog(tab, options = {}) {
     if (!tab || tab.type === "graph" || tab.type === "kubernetes-topology") return false;
 
-    const content = getMarkdownTabContentForSave(tab);
+    const content = getMarkdownTabContentForSave(tab, options);
     const isFormattedView = tab.transformedForViewing === true;
     const fileDetails = getSaveAsFileDetails(tab, isFormattedView);
     const suggestedName = fileDetails.suggestedName;

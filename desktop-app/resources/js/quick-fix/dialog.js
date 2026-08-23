@@ -148,7 +148,7 @@
             applyResult = await options.applyPreview(selectedPreview);
             stateElement.textContent = await options.verify?.() || "Quick Fix applied.";
             undoButton.hidden = typeof applyResult?.undo !== "function";
-            rebuildButton.hidden = false;
+            rebuildButton.hidden = typeof options.rebuild !== "function";
             applyButton.hidden = true;
             cancelButton.disabled = false;
             cancelButton.textContent = "Close";

@@ -77,6 +77,28 @@
     return { submenu, submenuBtn, submenuPanel };
   }
 
+
+  function createOpenApiContextSubmenu(className, tooltipText) {
+    const submenu = document.createElement("div");
+    submenu.className = `graph-context-menu-submenu ${className}`;
+    const submenuBtn = createFileContextMenuButton(
+      "OpenAPI / Swagger",
+      "bi bi-diagram-3",
+      tooltipText || "Open OpenAPI / Swagger actions."
+    );
+    submenuBtn.setAttribute("aria-haspopup", "true");
+    disableContextMenuTooltip(submenuBtn);
+    const submenuArrow = document.createElement("span");
+    submenuArrow.className = "graph-context-menu-submenu-arrow";
+    submenuArrow.textContent = String.fromCharCode(8250);
+    submenuBtn.appendChild(submenuArrow);
+    const submenuPanel = document.createElement("div");
+    submenuPanel.className = "graph-context-menu-submenu-panel";
+    submenu.appendChild(submenuBtn);
+    submenu.appendChild(submenuPanel);
+    return { submenu, submenuPanel };
+  }
+
   function getSidebarLogErrorDetails(error) {
     return {
       name: error?.name || "Error",
@@ -2383,6 +2405,35 @@
     [compileJavaFileBtn, documentJavaFileBtn, formatJavaSourceBtn, organizeJavaImportsBtn].forEach((button) => sourceSubmenuPanel.appendChild(button));
     sourceSubmenu.appendChild(sourceSubmenuBtn);
     sourceSubmenu.appendChild(sourceSubmenuPanel);
+    const { submenu: openApiSubmenu, submenuPanel: openApiSubmenuPanel } = createOpenApiContextSubmenu(
+      "sidebar-file-openapi-submenu",
+      "Generate, update, remove, or generate code from OpenAPI / Swagger assets."
+    );
+    const generateOpenApiFileBtn = createFileContextMenuButton(
+      "Generate OpenAPI doc",
+      "bi bi-file-earmark-plus",
+      "Generate OpenAPI entries from this Java source file."
+    );
+    generateOpenApiFileBtn.classList.add("sidebar-openapi-source-action");
+    const updateOpenApiFileBtn = createFileContextMenuButton(
+      "Update OpenAPI doc",
+      "bi bi-arrow-repeat",
+      "Update an OpenAPI document from this Java source file."
+    );
+    updateOpenApiFileBtn.classList.add("sidebar-openapi-source-action");
+    const removeOpenApiFileBtn = createFileContextMenuButton(
+      "Remove from OpenAPI Doc",
+      "bi bi-file-earmark-minus",
+      "Remove this Java source file's endpoints from an OpenAPI document."
+    );
+    removeOpenApiFileBtn.classList.add("sidebar-openapi-source-action");
+    const generateOpenApiCodeBtn = createFileContextMenuButton(
+      "Generate Code...",
+      "bi bi-braces",
+      "Generate source code from this OpenAPI document."
+    );
+    generateOpenApiCodeBtn.classList.add("sidebar-openapi-codegen-action");
+    openApiSubmenuPanel.append(generateOpenApiFileBtn, updateOpenApiFileBtn, removeOpenApiFileBtn, generateOpenApiCodeBtn);
     const renameFileBtn = createFileContextMenuButton(
       CONTEXT_MENU_ACTIONS.rename.label,
       CONTEXT_MENU_ACTIONS.rename.icon,
@@ -2495,6 +2546,7 @@
       showGraphSubmenu,
       runSubmenu,
       sourceSubmenu,
+      openApiSubmenu,
       renameFileBtn,
       tagsSubmenu,
       copySubmenu,
@@ -2631,6 +2683,61 @@
         alert(error?.message || "A new Java Run configuration could not be prepared.");
       }
     });
+
+    async function runSidebarOpenApiFileAction(actionName) {
+      const target = sidebarContextTarget;
+      const targetPath = getSidebarNodeFilesystemPath(target) || target?.fullPath || target?.path || "";
+      hideSidebarFileContextMenu();
+      if (!targetPath) return;
+      try {
+        await app.modules?.openApiEditor?.runOpenApiSourceAction?.(actionName, {
+          type: "file",
+          path: targetPath,
+          label: target?.name || getFileName(targetPath) || "Java source file"
+        });
+        await refreshOpenFolderTreeFromContextMenu({ notify: false, preserveExpandedFolders: true });
+      } catch (error) {
+        console.error("Failed to run sidebar OpenAPI source action:", error);
+        alert(error?.message || "Unable to update the OpenAPI document.");
+      }
+    }
+
+    async function runSidebarOpenApiCodegenAction() {
+      const target = sidebarContextTarget;
+      const targetPath = getSidebarNodeFilesystemPath(target) || target?.fullPath || target?.path || "";
+      hideSidebarFileContextMenu();
+      if (!targetPath) return;
+      try {
+        const content = await readSidebarNodeContent(target);
+        await app.modules?.openApiEditor?.generateCodeFromFile?.(targetPath, content);
+        await refreshOpenFolderTreeFromContextMenu({ notify: false, preserveExpandedFolders: true });
+      } catch (error) {
+        console.error("Failed to run sidebar OpenAPI code generation:", error);
+        await app.services?.notify?.show?.({
+          title: "Generate Code From OpenAPI",
+          message: error?.message || "Unable to generate code from this OpenAPI document.",
+          dismissValue: "ok",
+          buttons: [{ id: "ok", label: "OK", value: "ok", variant: "primary", autoFocus: true }]
+        });
+      }
+    }
+
+    generateOpenApiCodeBtn.addEventListener("click", async (event) => {
+      event.stopPropagation();
+      await runSidebarOpenApiCodegenAction();
+    });
+    [
+      [generateOpenApiFileBtn, "generate"],
+      [updateOpenApiFileBtn, "update"],
+      [removeOpenApiFileBtn, "remove"]
+    ].forEach(([button, actionName]) => {
+      button.addEventListener("click", async (event) => {
+        event.stopPropagation();
+        await runSidebarOpenApiFileAction(actionName);
+      });
+    });
+
+
 
     [compileJavaFileBtn, documentJavaFileBtn].forEach((button) => {
       button.addEventListener("click", async (event) => {
@@ -3829,7 +3936,7 @@
   }
   async function refreshOpenFolderTreeFromContextMenu(options = {}) {
     try {
-      const refreshed = await reloadOpenFolderTree();
+      const refreshed = await reloadOpenFolderTree({ preserveExpandedFolders: options.preserveExpandedFolders === true });
       if (!refreshed && options.notify !== false) {
         alert("Unable to refresh the folder tree because no reusable folder source is available. Please reopen the folder.");
       }
@@ -3903,6 +4010,26 @@
       "Generate documentation for this folder and its sub-folders."
     );
     documentFolderBtn.dataset.sidebarFolderProjectCommand = "generate-documentation";
+    const { submenu: folderOpenApiSubmenu, submenuPanel: folderOpenApiSubmenuPanel } = createOpenApiContextSubmenu(
+      "sidebar-folder-openapi-submenu",
+      "Generate, update, or remove OpenAPI entries for Java sources in this folder."
+    );
+    const generateOpenApiFolderBtn = createFileContextMenuButton(
+      "Generate OpenAPI doc",
+      "bi bi-file-earmark-plus",
+      "Generate OpenAPI entries from Java sources in this folder."
+    );
+    const updateOpenApiFolderBtn = createFileContextMenuButton(
+      "Update OpenAPI doc",
+      "bi bi-arrow-repeat",
+      "Update an OpenAPI document from Java sources in this folder."
+    );
+    const removeOpenApiFolderBtn = createFileContextMenuButton(
+      "Remove from OpenAPI Doc",
+      "bi bi-file-earmark-minus",
+      "Remove this folder's Java endpoints from an OpenAPI document."
+    );
+    folderOpenApiSubmenuPanel.append(generateOpenApiFolderBtn, updateOpenApiFolderBtn, removeOpenApiFolderBtn);
     const refreshFolderTreeBtn = createFileContextMenuButton(
       CONTEXT_MENU_ACTIONS.refresh.label,
       CONTEXT_MENU_ACTIONS.refresh.icon,
@@ -4030,6 +4157,7 @@
       rebuildProjectBtn,
       compileFolderBtn,
       documentFolderBtn,
+      folderOpenApiSubmenu,
       setOriginalSourceRootBtn,
       projectActionsSeparator,
       copyPathBtn,
@@ -4123,6 +4251,35 @@
         targetPath: getSidebarFolderFilesystemPath(target) || activeFolderPath || "",
         targetKind: "directory",
         scope: isOpenFolderRootContextNode(target) ? "project" : "folder"
+      });
+    });
+
+    async function runSidebarOpenApiFolderAction(actionName) {
+      const target = sidebarContextTarget;
+      const targetPath = getSidebarFolderFilesystemPath(target) || activeFolderPath || "";
+      hideSidebarFolderContextMenu();
+      if (!targetPath) return;
+      try {
+        await app.modules?.openApiEditor?.runOpenApiSourceAction?.(actionName, {
+          type: "folder",
+          path: targetPath,
+          label: target?.name || getFileName(targetPath) || "Java source folder"
+        });
+        await refreshOpenFolderTreeFromContextMenu({ notify: false, preserveExpandedFolders: true });
+      } catch (error) {
+        console.error("Failed to run sidebar folder OpenAPI action:", error);
+        alert(error?.message || "Unable to update the OpenAPI document.");
+      }
+    }
+
+    [
+      [generateOpenApiFolderBtn, "generate"],
+      [updateOpenApiFolderBtn, "update"],
+      [removeOpenApiFolderBtn, "remove"]
+    ].forEach(([button, actionName]) => {
+      button.addEventListener("click", async (event) => {
+        event.stopPropagation();
+        await runSidebarOpenApiFolderAction(actionName);
       });
     });
 
@@ -4308,6 +4465,9 @@
     const showGraphSubmenu = menu.querySelector(".sidebar-file-graph-submenu");
     const originalSourceSubmenu = menu.querySelector(".sidebar-original-source-submenu");
     const sourceSubmenu = menu.querySelector(".sidebar-file-source-submenu");
+    const openApiSubmenu = menu.querySelector(".sidebar-file-openapi-submenu");
+    const openApiSourceActionBtns = menu.querySelectorAll(".sidebar-openapi-source-action");
+    const generateOpenApiCodeBtn = menu.querySelector(".sidebar-openapi-codegen-action");
     const runSubmenu = menu.querySelector(".sidebar-file-run-submenu");
     const runJavaMainBtn = menu.querySelector(".sidebar-run-java-main");
     const configureJavaRunBtn = menu.querySelector(".sidebar-configure-java-run");
@@ -4318,6 +4478,9 @@
     const canCompareSelection = selectedContextItems.length === 2
       && selectedContextItems.every((item) => item.kind === "file");
     const canRunJavaSourceActions = !isBulkContext && /\.java$/i.test(nodePath);
+    const canCheckOpenApiCodegenAction = !isBulkContext && /\.ya?ml$/i.test(nodePath);
+    const hasStrongOpenApiYamlName = canCheckOpenApiCodegenAction && /(^|[\/])(?:openapi|swagger|api-docs)(?:[-_.].*)?\.ya?ml$/i.test(nodePath);
+    let canRunOpenApiCodegenAction = hasStrongOpenApiYamlName;
     const targetPath = getSidebarNodeFilesystemPath(node) || node.fullPath || node.path || "";
     const projectState = app.modules?.projectCommands?.updateAvailability?.({
       filePath: targetPath,
@@ -4366,6 +4529,29 @@
     if (showGraphSubmenu) showGraphSubmenu.classList.toggle("hidden", !Array.from(graphActionBtns).some((button) => !button.classList.contains("hidden")));
     if (originalSourceSubmenu) originalSourceSubmenu.classList.toggle("hidden", !canManageTags);
     if (sourceSubmenu) sourceSubmenu.classList.toggle("hidden", !canRunJavaSourceActions);
+    openApiSourceActionBtns.forEach((button) => button.classList.toggle("hidden", !canRunJavaSourceActions));
+    if (generateOpenApiCodeBtn) {
+      generateOpenApiCodeBtn.classList.toggle("hidden", !canRunOpenApiCodegenAction);
+      setContextMenuControlDisabled(generateOpenApiCodeBtn, !canRunOpenApiCodegenAction);
+    }
+    if (openApiSubmenu) openApiSubmenu.classList.toggle("hidden", !(canRunJavaSourceActions || canRunOpenApiCodegenAction));
+    if (canCheckOpenApiCodegenAction && generateOpenApiCodeBtn) {
+      const contextTargetPath = targetPath;
+      readSidebarNodeContent(node)
+        .then((content) => {
+          const currentPath = getSidebarNodeFilesystemPath(sidebarContextTarget) || sidebarContextTarget?.fullPath || sidebarContextTarget?.path || "";
+          if (normalizeLocalPath(currentPath).toLowerCase() !== normalizeLocalPath(contextTargetPath).toLowerCase()) return;
+          canRunOpenApiCodegenAction = hasStrongOpenApiYamlName || app.modules?.openApiEditor?.isOpenApiFileContent?.(content, contextTargetPath) === true;
+          generateOpenApiCodeBtn.classList.toggle("hidden", !canRunOpenApiCodegenAction);
+          setContextMenuControlDisabled(generateOpenApiCodeBtn, !canRunOpenApiCodegenAction);
+          if (openApiSubmenu) openApiSubmenu.classList.toggle("hidden", !(canRunJavaSourceActions || canRunOpenApiCodegenAction));
+        })
+        .catch(() => {
+          generateOpenApiCodeBtn.classList.toggle("hidden", !hasStrongOpenApiYamlName);
+          setContextMenuControlDisabled(generateOpenApiCodeBtn, !hasStrongOpenApiYamlName);
+          if (openApiSubmenu) openApiSubmenu.classList.toggle("hidden", !(canRunJavaSourceActions || hasStrongOpenApiYamlName));
+        });
+    }
     if (exportOriginalNodeBtn) exportOriginalNodeBtn.classList.toggle("hidden", !canManageTags);
     if (compareFilesBtn) compareFilesBtn.classList.toggle("hidden", !canCompareSelection);
     if (tagsSubmenu) tagsSubmenu.classList.toggle("hidden", !canManageTags);
@@ -4434,6 +4620,7 @@
     const tagsSubmenuPanel = menu.querySelector('[data-sidebar-folder-tags-panel="true"]');
     const expandBranchBtn = menu.querySelector('[data-sidebar-folder-action="expand-branch"]');
     const viewSubmenu = menu.querySelector('[data-sidebar-folder-action="view-submenu"]');
+    const folderOpenApiSubmenu = menu.querySelector(".sidebar-folder-openapi-submenu");
     if (title) title.textContent = isBulkContext ? `${selectedContextItems.length} selected items` : (isRootContext ? (activeFolderName || "Folder") : (node.name || "Folder"));
     menu.querySelector('[data-sidebar-folder-action="rename"]')?.classList.remove("hidden");
     menu.querySelectorAll('[data-sidebar-folder-action="delete"]').forEach((item) => {
@@ -4456,6 +4643,9 @@
       expandBranchBtn.dataset.tooltip = isExpanding ? "Stop the current folder expansion." : "Open nested folders under this folder only.";
       expandBranchBtn.classList.remove("hidden");
     }
+    const folderOpenApiTargetPath = getSidebarFolderFilesystemPath(node) || activeFolderPath || "";
+    if (folderOpenApiSubmenu) folderOpenApiSubmenu.classList.toggle("hidden", isBulkContext || !folderOpenApiTargetPath);
+
     const renderFolderTags = (currentTags) => renderTagsContextSubmenu(tagsSubmenuPanel, currentTags, async (tag, shouldAdd) => {
       const target = sidebarContextTarget;
       hideSidebarFolderContextMenu();

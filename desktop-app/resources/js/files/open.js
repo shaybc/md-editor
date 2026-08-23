@@ -642,6 +642,17 @@
       }
     }
 
+    if (!openOptions.forceText && openApiDetector?.isOpenApiCandidatePath?.(filePath)) {
+      const detection = openApiDetector.detectOpenApiDocument(content, filePath, {
+        yamlLibrary: deps.yamlLibrary
+      });
+      if (detection.openapi && openOpenApiEditorInTab) {
+        const tab = openOpenApiEditorInTab({ ...sourceFileWithStats, name, content }, openOptions);
+        if (tab) rememberOpenDocumentSourceFile(sourceFile, name, openOptions);
+        return tab;
+      }
+    }
+
     const contentClassification = largeFileViewer?.classifyLargeDocumentOpen?.(sourceFileWithStats, name, content);
     if (contentClassification?.useViewer) {
       logLargeFileOpen("debug", "large viewer selected after content read", {

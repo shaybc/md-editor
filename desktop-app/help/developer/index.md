@@ -85,7 +85,8 @@ This guide is for developers and AI agents working on the desktop app. It maps u
   - Git bridge and panel flow
   - Status, stash, branch, and conflict behavior
 - [18. Workspace Tools Internals](18-workspace-tools-internals.md)
-  - File Compare, Sort Lines, converter, Line Counter, terminal, and API Client
+  - File Compare, Sort Lines, converter, Line Counter, terminal, API Client, and OpenAPI Editor
+  - [OpenAPI Editor Internals](openapi-editor-internals.md)
 - [19. Apache RAT Manager Internals](19-apache-rat-manager-internals.md)
   - RAT findings, investigation, resolution actions, previews, and verification
 - [20. Apache RAT Policy Manager Internals](20-apache-rat-policy-manager-internals.md)
@@ -110,6 +111,7 @@ This guide is for developers and AI agents working on the desktop app. It maps u
 | Git panel | `resources/js/git/workspace-git.js`, `resources/bridges/git-bridge/git-bridge.cjs`, [Git Integration Internals](17-git-integration-internals.md) | Git status, branch, stash, compare, and commit helpers |
 | Code converter | `resources/js/script.js`, `desktop-app/converters/`, [Project Metadata And Recovery](10-project-metadata-and-recovery.md) | `runCodeConverter()`, `getCodeConverterScriptPath()`, `getJavaConverterRootCandidates()` |
 | API Client | `resources/js/tools/api-client/*` | `openApiClient()`, `mountApiClientTab()`, `refreshFromStorage()` |
+| OpenAPI Editor | `resources/js/tools/openapi/*` | `detectOpenApiDocument()`, `mountOpenApiEditorTab()`, `createOpenApiClientRequest()` |
 | AI Companion | `resources/js/ai-companion/*`, `resources/ai-companion/*`, [AI Companion Internals](09-ai-companion-internals.md) | `registerMarkdownViewerAiCompanionPanel()`, bridge request handlers |
 | RAT policy | `resources/js/rat-policy/*`, `resources/assets/rat-policy/*`, [RAT Policy Internals](20-apache-rat-policy-manager-internals.md) | `ratPolicyManager.open()`, `ratPolicyChangePlanner.plan()` |
 | Maven Build Options | `resources/js/project/maven-build-options/*`, [Maven Build Options Internals](21-maven-build-options-internals.md) | `mavenBuildOptions.createSession()`, `mavenBuildOptions.registerProvider()` |

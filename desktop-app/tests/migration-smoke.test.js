@@ -187,8 +187,9 @@ test("root folder rename reuses the sidebar context refresh action", () => {
   const refreshFunction = sidebarScript.slice(functionStart, nextFunctionStart);
 
   assert.notEqual(functionStart, -1, "refreshOpenFolderTreeFromContextMenu should exist");
-  assert.match(refreshFunction, /const refreshed = await reloadOpenFolderTree\(\)/);
+  assert.match(refreshFunction, /const refreshed = await reloadOpenFolderTree\(\{ preserveExpandedFolders: options\.preserveExpandedFolders === true \}\)/);
   assert.match(sidebarScript, /refreshFolderTreeBtn\.addEventListener\("click", async \(event\) => \{[\s\S]*await refreshOpenFolderTreeFromContextMenu\(\);/);
+  assert.match(sidebarScript, /await refreshOpenFolderTreeFromContextMenu\(\{ notify: false, preserveExpandedFolders: true \}\);/);
   assert.match(sidebarScript, /refreshOpenFolderTreeFromContextMenu,/);
 });
 

@@ -9,7 +9,8 @@
       "kubernetes-topology": ".mdviewer-k8s-topology.json",
       "image-editor": ".mdimage",
       "diagram-editor": ".drawio",
-      file: ".txt"
+      file: ".txt",
+      "openapi-editor": ".openapi.yaml"
     };
     const DRAFT_WRITE_CHUNK_SIZE = 256 * 1024;
     const RESTORABLE_TOOL_TAB_TYPES = new Set(["soap-client", "base64-tool", "certificate-decoder", "jwt-tool", "json-yaml-tool", "jsonpath-tool", "xpath-tool", "xslt-runner-tool", "uuid-tool", "qr-tool", "hash-tool", "json-array-table-tool", "text-escape-tool", "unicode-tool", "string-bytes-tool", "database-connection-string-tool"]);
@@ -288,6 +289,22 @@
       return descriptor;
     }
 
+    function serializeOpenApiEditorTab(tab, options = {}) {
+      const descriptor = createDescriptorBase(tab, "openapi-editor");
+      descriptor.source = getOpenedSource(tab, "openapi-editor");
+      descriptor.sourceFileName = tab?.sourceFileName || descriptor.source?.name || null;
+      descriptor.sourceFilePath = normalizePath(tab?.sourceFilePath || descriptor.source?.path || "") || null;
+      const content = normalizeContent(deps.openApiEditor?.getTabContent?.(tab) || tab?.content || "");
+      descriptor.dirty = tab?.isNewUnsavedFile === true || normalizeContent(tab?.savedContent || "") !== content;
+      descriptor.hasDraft = !hasSourcePath(tab) || descriptor.dirty;
+      descriptor.savedContent = normalizeContent(tab?.savedContent || "");
+      if (descriptor.hasDraft) {
+        descriptor.draft = createDraftReference(tab, "openapi-editor", options);
+        if (options.includeInlineDraft !== false) descriptor.draftContent = content;
+      }
+      return descriptor;
+    }
+
     function createDraftId(tab, kind) {
       const id = String(tab?.id || `tab_${Date.now()}`).replace(/[^a-zA-Z0-9_-]+/g, "_");
       return `${id}${DRAFT_EXTENSIONS[kind] || ".txt"}`;
@@ -311,7 +328,8 @@
       if (tab.type === "image-editor") return serializeImageEditorTab(tab, options);
       if (tab.type === "diagram-editor") return serializeDiagramEditorTab(tab, options);
       if (tab.type === "hex-editor") return serializeHexEditorTab(tab);
-      if (tab.type === "file-compare") return null;
+      if (tab.type === "openapi-editor") return serializeOpenApiEditorTab(tab, options);
+      if (tab.type === "file-compare" || tab.type === "openapi-preview") return null;
       if (RESTORABLE_TOOL_TAB_TYPES.has(tab.type)) return serializeToolTab(tab);
       if (tab.type === "api-client" || tab.type === "regex-tester") return null;
       if (tab.type === "draft") return serializeDraftTab(tab, options);
@@ -931,6 +949,31 @@
       return restoreMarkdownTab({ ...descriptor, hasDraft: true });
     }
 
+    async function restoreOpenApiEditorTab(descriptor) {
+      const restored = await restoreMarkdownTab({ ...descriptor, type: "markdown" });
+      if (!restored) return null;
+      if (typeof deps.createOpenApiEditorTab === "function") {
+        const tab = deps.createOpenApiEditorTab({
+          name: restored.sourceFileName || descriptor.source?.name || descriptor.title || "OpenAPI",
+          path: restored.sourceFilePath || descriptor.source?.path || null,
+          content: restored.content || ""
+        }, { temporary: descriptor.isTemporary === true });
+        applyDescriptorIdentity(tab, descriptor);
+        tab.sourceFileName = restored.sourceFileName;
+        tab.sourceFilePath = restored.sourceFilePath;
+        tab.savedContent = descriptor.savedContent !== undefined ? normalizeContent(descriptor.savedContent) : restored.savedContent;
+        tab.isNewUnsavedFile = restored.isNewUnsavedFile === true;
+        if (descriptor.draft) {
+          tab.draft = clone(descriptor.draft);
+          tab.draftFilePath = descriptor.draft.path || null;
+        }
+        restoreCommonViewState(tab, descriptor);
+        return tab;
+      }
+      restored.type = "openapi-editor";
+      return restored;
+    }
+
     function restoreMissingGraphTab(descriptor) {
       const tab = deps.createTab("", descriptor.title || "Missing graph", "preview", { openedSource: descriptor.source || null });
       applyDescriptorIdentity(tab, descriptor);
@@ -982,6 +1025,7 @@
       if (descriptor.type === "image-editor") return restoreImageEditorTab(descriptor);
       if (descriptor.type === "diagram-editor") return restoreDiagramEditorTab(descriptor);
       if (descriptor.type === "hex-editor") return restoreHexEditorTab(descriptor);
+      if (descriptor.type === "openapi-editor") return restoreOpenApiEditorTab(descriptor);
       if (RESTORABLE_TOOL_TAB_TYPES.has(descriptor.type)) return restoreToolTab(descriptor);
       if (descriptor.type === "draft") return restoreDraftTab(descriptor);
       return restoreMarkdownTab(descriptor);

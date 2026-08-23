@@ -1489,7 +1489,7 @@
 
   function getActiveDocumentViewModeForSave(tab) {
     if (!tab) return currentViewMode || "split";
-    if (tab.type === "graph" || tab.type === "large-file" || tab.type === "file-preview" || tab.type === "image-editor" || tab.type === "diagram-editor" || tab.type === "hex-editor" || tab.type === "file-compare" || tab.type === "api-client" || tab.type === "soap-client" || tab.type === "regex-tester" || tab.type === "base64-tool" || tab.type === "certificate-decoder" || tab.type === "jwt-tool" || tab.type === "json-yaml-tool" || tab.type === "jsonpath-tool" || tab.type === "xml-tree-grid" || tab.type === "uuid-tool" || tab.type === "qr-tool" || tab.type === "hash-tool" || tab.type === "json-array-table-tool" || tab.type === "text-escape-tool") return "preview";
+    if (tab.type === "graph" || tab.type === "large-file" || tab.type === "file-preview" || tab.type === "image-editor" || tab.type === "diagram-editor" || tab.type === "hex-editor" || tab.type === "file-compare" || tab.type === "api-client" || tab.type === "openapi-editor" || tab.type === "openapi-preview" || tab.type === "soap-client" || tab.type === "regex-tester" || tab.type === "base64-tool" || tab.type === "certificate-decoder" || tab.type === "jwt-tool" || tab.type === "json-yaml-tool" || tab.type === "jsonpath-tool" || tab.type === "xml-tree-grid" || tab.type === "uuid-tool" || tab.type === "qr-tool" || tab.type === "hash-tool" || tab.type === "json-array-table-tool" || tab.type === "text-escape-tool") return "preview";
     if (!isPreviewableDocumentTab(tab)) return "editor";
     const activeContentContainer = deps.contentContainer || document.querySelector(".content-container");
     if (activeContentContainer && activeContentContainer.classList) {
@@ -1518,7 +1518,7 @@
       }
       return;
     }
-    if (tab.type === "graph" || tab.type === "large-file" || tab.type === "file-preview" || tab.type === "image-editor" || tab.type === "diagram-editor" || tab.type === "hex-editor" || tab.type === "file-compare" || tab.type === "api-client" || tab.type === "soap-client" || tab.type === "regex-tester" || tab.type === "base64-tool" || tab.type === "certificate-decoder" || tab.type === "jwt-tool" || tab.type === "json-yaml-tool" || tab.type === "jsonpath-tool" || tab.type === "xml-tree-grid" || tab.type === "uuid-tool" || tab.type === "qr-tool" || tab.type === "hash-tool" || tab.type === "json-array-table-tool" || tab.type === "text-escape-tool") {
+    if (tab.type === "graph" || tab.type === "large-file" || tab.type === "file-preview" || tab.type === "image-editor" || tab.type === "diagram-editor" || tab.type === "hex-editor" || tab.type === "file-compare" || tab.type === "api-client" || tab.type === "openapi-editor" || tab.type === "openapi-preview" || tab.type === "soap-client" || tab.type === "regex-tester" || tab.type === "base64-tool" || tab.type === "certificate-decoder" || tab.type === "jwt-tool" || tab.type === "json-yaml-tool" || tab.type === "jsonpath-tool" || tab.type === "xml-tree-grid" || tab.type === "uuid-tool" || tab.type === "qr-tool" || tab.type === "hash-tool" || tab.type === "json-array-table-tool" || tab.type === "text-escape-tool") {
       if (typeof appDebugLog === "function") {
         void appDebugLog("debug", "[tabs-session] Skipped markdown state save for active non-editor tab", {
           lifecycle: !!options.lifecycle,
@@ -1618,12 +1618,12 @@
 
   function getActiveMarkdownTab() {
     const tab = tabs.find(function(t) { return t.id === activeTabId; });
-    if (!tab || tab.type === "graph" || tab.type === "large-file" || tab.type === "file-preview" || tab.type === "image-editor" || tab.type === "diagram-editor" || tab.type === "hex-editor" || tab.type === "file-compare" || tab.type === "api-client" || tab.type === "soap-client" || tab.type === "regex-tester" || tab.type === "base64-tool" || tab.type === "certificate-decoder" || tab.type === "jwt-tool" || tab.type === "json-yaml-tool" || tab.type === "jsonpath-tool" || tab.type === "xml-tree-grid" || tab.type === "uuid-tool" || tab.type === "qr-tool" || tab.type === "hash-tool" || tab.type === "json-array-table-tool" || tab.type === "text-escape-tool") return null;
+    if (!tab || tab.type === "graph" || tab.type === "large-file" || tab.type === "file-preview" || tab.type === "image-editor" || tab.type === "diagram-editor" || tab.type === "hex-editor" || tab.type === "file-compare" || tab.type === "api-client" || tab.type === "openapi-editor" || tab.type === "openapi-preview" || tab.type === "soap-client" || tab.type === "regex-tester" || tab.type === "base64-tool" || tab.type === "certificate-decoder" || tab.type === "jwt-tool" || tab.type === "json-yaml-tool" || tab.type === "jsonpath-tool" || tab.type === "xml-tree-grid" || tab.type === "uuid-tool" || tab.type === "qr-tool" || tab.type === "hash-tool" || tab.type === "json-array-table-tool" || tab.type === "text-escape-tool") return null;
     return tab;
   }
 
   function canReadTabFromDisk(tab) {
-    if (!tab || tab.type === "graph" || tab.type === "hex-editor" || tab.type === "file-compare" || tab.type === "api-client" || tab.type === "soap-client" || tab.type === "regex-tester" || tab.type === "base64-tool" || tab.type === "certificate-decoder" || tab.type === "jwt-tool" || tab.type === "json-yaml-tool" || tab.type === "jsonpath-tool" || tab.type === "xml-tree-grid" || tab.type === "uuid-tool" || tab.type === "qr-tool" || tab.type === "hash-tool" || tab.type === "json-array-table-tool" || tab.type === "text-escape-tool") return false;
+    if (!tab || tab.type === "graph" || tab.type === "hex-editor" || tab.type === "file-compare" || tab.type === "api-client" || tab.type === "openapi-editor" || tab.type === "openapi-preview" || tab.type === "soap-client" || tab.type === "regex-tester" || tab.type === "base64-tool" || tab.type === "certificate-decoder" || tab.type === "jwt-tool" || tab.type === "json-yaml-tool" || tab.type === "jsonpath-tool" || tab.type === "xml-tree-grid" || tab.type === "uuid-tool" || tab.type === "qr-tool" || tab.type === "hash-tool" || tab.type === "json-array-table-tool" || tab.type === "text-escape-tool") return false;
     if (isNeutralinoRuntime() && tab.sourceFilePath && Neutralino?.filesystem?.readFile) return true;
     if (tab.sourceFileHandle && typeof tab.sourceFileHandle.getFile === "function") return true;
     return false;
@@ -1717,6 +1717,7 @@
     if (activeTab?.type === "hex-editor") return tabHasPendingChanges(activeTab);
     if (activeTab?.type === "diagram-editor") return tabHasPendingChanges(activeTab);
     if (activeTab?.type === "kubernetes-topology") return topologyTabNeedsInitialSave(activeTab) || tabHasPendingChanges(activeTab);
+    if (activeTab?.type === "openapi-editor") return tabHasPendingChanges(activeTab, deps.openApiEditor?.getTabContent?.(activeTab) || activeTab.content);
     const tab = getActiveMarkdownTab();
     const activeContent = getActiveEditorContent();
     return tabHasPendingChanges(tab, activeContent);
@@ -1725,6 +1726,7 @@
   function getUnsavedTabs() {
     return tabs.filter(function(tab) {
       if (!tab) return false;
+      if (tab.type === "openapi-editor") return tabHasPendingChanges(tab, deps.openApiEditor?.getTabContent?.(tab) || tab.content);
       if (tab.type === "file-preview" || tab.type === "file-compare" || tab.type === "api-client" || tab.type === "soap-client" || tab.type === "regex-tester" || tab.type === "base64-tool" || tab.type === "certificate-decoder" || tab.type === "jwt-tool" || tab.type === "json-yaml-tool" || tab.type === "jsonpath-tool" || tab.type === "xml-tree-grid" || tab.type === "uuid-tool" || tab.type === "qr-tool" || tab.type === "hash-tool" || tab.type === "json-array-table-tool" || tab.type === "text-escape-tool") return false;
       if (tab.type === "kubernetes-topology") return topologyTabNeedsInitialSave(tab) || tabHasPendingChanges(tab);
       if (tab.type === "graph" || tab.type === "large-file" || tab.type === "image-editor" || tab.type === "diagram-editor" || tab.type === "hex-editor") return tabHasPendingChanges(tab);
@@ -1741,22 +1743,23 @@
     const graphTab = getActiveGraphTab();
     const tab = getActiveMarkdownTab();
     const activeTab = tabs.find(function(candidate) { return candidate.id === activeTabId; }) || null;
-    const canSaveAsFile = !!activeTab && activeTab.type !== "graph" && activeTab.type !== "file-preview" && activeTab.type !== "file-compare" && activeTab.type !== "api-client" && activeTab.type !== "regex-tester" && activeTab.type !== "base64-tool" && activeTab.type !== "certificate-decoder" && activeTab.type !== "jwt-tool" && activeTab.type !== "json-yaml-tool" && activeTab.type !== "jsonpath-tool" && activeTab.type !== "xml-tree-grid";
+    const canSaveAsFile = !!activeTab && activeTab.type !== "graph" && activeTab.type !== "file-preview" && activeTab.type !== "file-compare" && activeTab.type !== "api-client" && activeTab.type !== "openapi-preview" && activeTab.type !== "regex-tester" && activeTab.type !== "base64-tool" && activeTab.type !== "certificate-decoder" && activeTab.type !== "jwt-tool" && activeTab.type !== "json-yaml-tool" && activeTab.type !== "jsonpath-tool" && activeTab.type !== "xml-tree-grid";
     const hasUnsavedChanges = activeTabHasUnsavedChanges();
     const isImageEditor = activeTab?.type === "image-editor";
     const isDiagramEditor = activeTab?.type === "diagram-editor";
     const isKubernetesTopology = activeTab?.type === "kubernetes-topology";
+    const isOpenApiEditor = activeTab?.type === "openapi-editor";
     const hasWritableSource = isImageEditor || isDiagramEditor || isKubernetesTopology
       ? !!(activeTab.sourceFileHandle || (isNeutralinoRuntime() && activeTab.sourceFilePath))
-      : !!(tab && (tab.sourceFileHandle || (isNeutralinoRuntime() && tab.sourceFilePath)));
+      : !!((isOpenApiEditor ? activeTab : tab) && ((isOpenApiEditor ? activeTab : tab).sourceFileHandle || (isNeutralinoRuntime() && (isOpenApiEditor ? activeTab : tab).sourceFilePath)));
     const title = graphTab
       ? (graphTab.graphViewKind === "health-report"
         ? "Save the graph file that backs this health report."
         : "Save layout, groups, filters, hidden points, tags, and connections. File contents are not included.")
       : (hasUnsavedChanges
-        ? (hasWritableSource ? "Save changes to current file" : (isImageEditor ? "Save image as a new file" : (isDiagramEditor ? "Save diagram as a new file" : (isKubernetesTopology ? "Save topology as a new file" : "Save changes as Markdown"))))
+        ? (hasWritableSource ? "Save changes to current file" : (isImageEditor ? "Save image as a new file" : (isDiagramEditor ? "Save diagram as a new file" : (isKubernetesTopology ? "Save topology as a new file" : isOpenApiEditor ? "Save OpenAPI document as a new file" : "Save changes as Markdown"))))
         : "No changes to save");
-    const label = graphTab ? (graphTab.graphViewKind === "health-report" ? "Save Graph Report" : "Save Graph View") : (isImageEditor ? "Save Image" : (isDiagramEditor ? "Save Diagram" : (isKubernetesTopology ? "Save Topology" : "Save Changes")));
+    const label = graphTab ? (graphTab.graphViewKind === "health-report" ? "Save Graph Report" : "Save Graph View") : (isImageEditor ? "Save Image" : (isDiagramEditor ? "Save Diagram" : (isKubernetesTopology ? "Save Topology" : isOpenApiEditor ? "Save OpenAPI" : "Save Changes")));
 
     document.querySelectorAll(".save-current-file-button").forEach(function(button) {
       button.disabled = graphTab ? false : !hasUnsavedChanges;
@@ -1835,6 +1838,14 @@
       if (await deps.kubernetesTopologyDocument?.saveKubernetesTopologyTabToSource?.(tab)) return true;
       if (options.activateSaveDialog === true) activateTabBeforeSaveDialog(tab);
       return await deps.kubernetesTopologyDocument?.saveKubernetesTopologyTabWithSaveDialog?.(tab) === true;
+    }
+    if (tab.type === "openapi-editor") {
+      const content = deps.openApiEditor?.getTabContent?.(tab) || tab.content;
+      if (!tabHasPendingChanges(tab, content)) return true;
+      const normalizedContent = deps.openApiEditor?.setTabContent?.(tab, content) || content;
+      if (await saveMarkdownTabToSource(tab, { content: normalizedContent })) return true;
+      if (options.activateSaveDialog === true) activateTabBeforeSaveDialog(tab);
+      return saveMarkdownTabWithSaveDialog(tab, { content: normalizedContent });
     }
     if (tab.type === "large-file" || tab.type === "file-preview" || tab.type === "file-compare" || tab.type === "api-client" || tab.type === "soap-client" || tab.type === "regex-tester" || tab.type === "base64-tool" || tab.type === "certificate-decoder" || tab.type === "jwt-tool" || tab.type === "json-yaml-tool" || tab.type === "jsonpath-tool" || tab.type === "xml-tree-grid" || tab.type === "uuid-tool" || tab.type === "qr-tool" || tab.type === "hash-tool" || tab.type === "json-array-table-tool" || tab.type === "text-escape-tool") return true;
 
@@ -1920,6 +1931,13 @@
 
     if (activeTab?.type === "kubernetes-topology") {
       await saveChangedTab(activeTab, { activateSaveDialog: true });
+      updateSaveCurrentFileButtons();
+      return;
+    }
+
+    if (activeTab?.type === "openapi-editor") {
+      const saved = await saveChangedTab(activeTab, { activateSaveDialog: true });
+      if (saved) await deps.openApiEditor?.validateTab?.(activeTab, { publishProblems: true });
       updateSaveCurrentFileButtons();
       return;
     }
@@ -2154,7 +2172,7 @@
       perf.finish({ branch: "graph", reusedRender: false });
       return;
     }
-    if (tab.type === "large-file" || tab.type === "file-preview" || tab.type === "image-editor" || tab.type === "diagram-editor" || tab.type === "hex-editor" || tab.type === "file-compare" || tab.type === "api-client" || tab.type === "soap-client" || tab.type === "regex-tester" || tab.type === "base64-tool" || tab.type === "certificate-decoder" || tab.type === "jwt-tool" || tab.type === "json-yaml-tool" || tab.type === "jsonpath-tool" || tab.type === "xml-tree-grid" || tab.type === "uuid-tool" || tab.type === "qr-tool" || tab.type === "hash-tool" || tab.type === "json-array-table-tool" || tab.type === "text-escape-tool" || tab.type === "kubernetes-topology") {
+    if (tab.type === "large-file" || tab.type === "file-preview" || tab.type === "image-editor" || tab.type === "diagram-editor" || tab.type === "hex-editor" || tab.type === "file-compare" || tab.type === "api-client" || tab.type === "openapi-editor" || tab.type === "openapi-preview" || tab.type === "soap-client" || tab.type === "regex-tester" || tab.type === "base64-tool" || tab.type === "certificate-decoder" || tab.type === "jwt-tool" || tab.type === "json-yaml-tool" || tab.type === "jsonpath-tool" || tab.type === "xml-tree-grid" || tab.type === "uuid-tool" || tab.type === "qr-tool" || tab.type === "hash-tool" || tab.type === "json-array-table-tool" || tab.type === "text-escape-tool" || tab.type === "kubernetes-topology") {
       setActiveEditorContent("");
       perf.mark("clear active editor content");
       setViewMode("preview");
@@ -2217,7 +2235,7 @@
   }
 
   function isUnsupportedFileTab(tab) {
-    if (!tab || tab.type === "graph" || tab.type === "hex-editor" || tab.type === "file-compare" || tab.type === "api-client" || tab.type === "soap-client" || tab.type === "regex-tester" || tab.type === "base64-tool" || tab.type === "certificate-decoder" || tab.type === "jwt-tool" || tab.type === "json-yaml-tool" || tab.type === "jsonpath-tool" || tab.type === "xml-tree-grid" || tab.type === "uuid-tool" || tab.type === "qr-tool" || tab.type === "hash-tool" || tab.type === "json-array-table-tool" || tab.type === "text-escape-tool" || tab.type === "kubernetes-topology") return false;
+    if (!tab || tab.type === "graph" || tab.type === "hex-editor" || tab.type === "file-compare" || tab.type === "api-client" || tab.type === "openapi-editor" || tab.type === "openapi-preview" || tab.type === "soap-client" || tab.type === "regex-tester" || tab.type === "base64-tool" || tab.type === "certificate-decoder" || tab.type === "jwt-tool" || tab.type === "json-yaml-tool" || tab.type === "jsonpath-tool" || tab.type === "xml-tree-grid" || tab.type === "uuid-tool" || tab.type === "qr-tool" || tab.type === "hash-tool" || tab.type === "json-array-table-tool" || tab.type === "text-escape-tool" || tab.type === "kubernetes-topology") return false;
     if (tab.isUnsupportedFile === true) return true;
     const path = tab.sourceFilePath || tab.sourceFileName || tab.sourceFileHandle?.name || "";
     return !!path && isTextDocumentPath(path) && !isSupportedFolderTreeDocumentPath(path);
@@ -2234,13 +2252,13 @@
   }
 
   function isPreviewableDocumentTab(tab) {
-    if (!tab || tab.type === "graph" || tab.type === "file-compare" || tab.type === "api-client" || tab.type === "soap-client" || tab.type === "regex-tester" || tab.type === "base64-tool" || tab.type === "certificate-decoder" || tab.type === "jwt-tool" || tab.type === "json-yaml-tool" || tab.type === "jsonpath-tool" || tab.type === "xml-tree-grid" || tab.type === "uuid-tool" || tab.type === "qr-tool" || tab.type === "hash-tool" || tab.type === "json-array-table-tool" || tab.type === "text-escape-tool" || tab.type === "kubernetes-topology") return false;
+    if (!tab || tab.type === "graph" || tab.type === "file-compare" || tab.type === "api-client" || tab.type === "openapi-editor" || tab.type === "openapi-preview" || tab.type === "soap-client" || tab.type === "regex-tester" || tab.type === "base64-tool" || tab.type === "certificate-decoder" || tab.type === "jwt-tool" || tab.type === "json-yaml-tool" || tab.type === "jsonpath-tool" || tab.type === "xml-tree-grid" || tab.type === "uuid-tool" || tab.type === "qr-tool" || tab.type === "hash-tool" || tab.type === "json-array-table-tool" || tab.type === "text-escape-tool" || tab.type === "kubernetes-topology") return false;
     const path = tab.sourceFilePath || tab.sourceFileName || tab.sourceFileHandle?.name || "";
     return !path || isTextDocumentPath(path) || isHtmlPath(path);
   }
 
   function isMarkdownDocumentTab(tab) {
-    if (!tab || tab.type === "graph" || tab.type === "large-file" || tab.type === "file-preview" || tab.type === "image-editor" || tab.type === "diagram-editor" || tab.type === "hex-editor" || tab.type === "file-compare" || tab.type === "api-client" || tab.type === "soap-client" || tab.type === "regex-tester" || tab.type === "base64-tool" || tab.type === "certificate-decoder" || tab.type === "jwt-tool" || tab.type === "json-yaml-tool" || tab.type === "jsonpath-tool" || tab.type === "xml-tree-grid" || tab.type === "uuid-tool" || tab.type === "qr-tool" || tab.type === "hash-tool" || tab.type === "json-array-table-tool" || tab.type === "text-escape-tool" || tab.type === "kubernetes-topology") return false;
+    if (!tab || tab.type === "graph" || tab.type === "large-file" || tab.type === "file-preview" || tab.type === "image-editor" || tab.type === "diagram-editor" || tab.type === "hex-editor" || tab.type === "file-compare" || tab.type === "api-client" || tab.type === "openapi-editor" || tab.type === "openapi-preview" || tab.type === "soap-client" || tab.type === "regex-tester" || tab.type === "base64-tool" || tab.type === "certificate-decoder" || tab.type === "jwt-tool" || tab.type === "json-yaml-tool" || tab.type === "jsonpath-tool" || tab.type === "xml-tree-grid" || tab.type === "uuid-tool" || tab.type === "qr-tool" || tab.type === "hash-tool" || tab.type === "json-array-table-tool" || tab.type === "text-escape-tool" || tab.type === "kubernetes-topology") return false;
     const path = tab.sourceFilePath || tab.sourceFileName || tab.sourceFileHandle?.name || "";
     return path ? isMarkdownPath(path) : tab.type === "markdown";
   }
@@ -2251,7 +2269,7 @@
 
   function getAllowedViewModeForActiveTab(mode) {
     const activeTab = getActiveTab();
-    if (activeTab && (activeTab.type === "graph" || activeTab.type === "large-file" || activeTab.type === "file-preview" || activeTab.type === "image-editor" || activeTab.type === "diagram-editor" || activeTab.type === "hex-editor" || activeTab.type === "file-compare" || activeTab.type === "api-client" || activeTab.type === "regex-tester" || activeTab.type === "base64-tool" || activeTab.type === "certificate-decoder" || activeTab.type === "jwt-tool" || activeTab.type === "json-yaml-tool" || activeTab.type === "jsonpath-tool" || activeTab.type === "xml-tree-grid" || activeTab.type === "kubernetes-topology")) return 'preview';
+    if (activeTab && (activeTab.type === "graph" || activeTab.type === "large-file" || activeTab.type === "file-preview" || activeTab.type === "image-editor" || activeTab.type === "diagram-editor" || activeTab.type === "hex-editor" || activeTab.type === "file-compare" || activeTab.type === "api-client" || activeTab.type === "openapi-editor" || activeTab.type === "openapi-preview" || activeTab.type === "soap-client" || activeTab.type === "base64-tool" || activeTab.type === "certificate-decoder" || activeTab.type === "jwt-tool" || activeTab.type === "json-yaml-tool" || activeTab.type === "jsonpath-tool" || activeTab.type === "xml-tree-grid" || activeTab.type === "kubernetes-topology")) return 'preview';
     return isPreviewableDocumentTab(activeTab) ? (mode || 'split') : 'editor';
   }
 
@@ -2386,7 +2404,7 @@
     saveActiveTabId(activeTabId);
     refreshGraphModeNotices(tab);
     activateManagedTabView(tab);
-    if (tab.type === "large-file" || tab.type === "file-preview" || tab.type === "image-editor" || tab.type === "diagram-editor" || tab.type === "hex-editor" || tab.type === "file-compare" || tab.type === "api-client" || tab.type === "soap-client" || tab.type === "regex-tester" || tab.type === "base64-tool" || tab.type === "certificate-decoder" || tab.type === "jwt-tool" || tab.type === "json-yaml-tool" || tab.type === "jsonpath-tool" || tab.type === "xml-tree-grid" || tab.type === "uuid-tool" || tab.type === "qr-tool" || tab.type === "hash-tool" || tab.type === "json-array-table-tool" || tab.type === "text-escape-tool" || tab.type === "kubernetes-topology") {
+    if (tab.type === "large-file" || tab.type === "file-preview" || tab.type === "image-editor" || tab.type === "diagram-editor" || tab.type === "hex-editor" || tab.type === "file-compare" || tab.type === "api-client" || tab.type === "openapi-editor" || tab.type === "openapi-preview" || tab.type === "soap-client" || tab.type === "regex-tester" || tab.type === "base64-tool" || tab.type === "certificate-decoder" || tab.type === "jwt-tool" || tab.type === "json-yaml-tool" || tab.type === "jsonpath-tool" || tab.type === "xml-tree-grid" || tab.type === "uuid-tool" || tab.type === "qr-tool" || tab.type === "hash-tool" || tab.type === "json-array-table-tool" || tab.type === "text-escape-tool" || tab.type === "kubernetes-topology") {
       setActiveEditorContent("");
       setNoOpenTabsMode(false);
       setViewMode("preview");
@@ -2485,8 +2503,11 @@
       history: Array.isArray(options.history) ? options.history : (historyEntry ? [historyEntry] : []),
       method: request?.method || "GET",
       url: request?.url || "",
+      paramsText: request?.paramsText || "",
       headersText: request?.headersText || "Content-Type: application/json",
+      bodyMode: request?.bodyMode || "none",
       bodyText: request?.bodyText || "",
+      formDataText: request?.formDataText || "",
       savedRequestId: options.savedRequestId || request?.savedRequestId || null,
       historyEntryKey: options.historyEntryKey || null,
       historyEntry
@@ -2499,6 +2520,39 @@
     tab.apiClient = createApiClientState(options);
     tab.savedContent = "";
     tab.isTemporary = options.temporary === true;
+    return tab;
+  }
+
+  function createOpenApiEditorTab(source = {}, options = {}) {
+    const content = normalizeEditorContent(source.content || "");
+    const title = options.title || source.name || "OpenAPI";
+    const tab = createTab(content, title, "preview");
+    tab.type = "openapi-editor";
+    tab.sourceFileName = source.name || null;
+    tab.sourceFileHandle = source.handle || null;
+    tab.sourceFilePath = source.path || source.fullPath || source.sourceFilePath || null;
+    tab.openedSource = createOpenedSourceFromSourceFile(source, "openapi-editor");
+    tab.savedContent = content;
+    tab.isTemporary = options.temporary === true;
+    return tab;
+  }
+
+  function createOpenApiPreviewTab(options = {}) {
+    const sourceName = options.sourceFileName || options.title || "OpenAPI";
+    const tab = createTab("", options.title || `${sourceName} Preview`, "preview");
+    tab.type = "openapi-preview";
+    tab.openapiPreview = {
+      spec: options.spec || {},
+      requestSpec: options.requestSpec || options.spec || {},
+      serverUrl: options.serverUrl || "",
+      sourceKey: options.sourceKey || "",
+      sourceTabId: options.sourceTabId || null,
+      sourceFilePath: options.sourceFilePath || null,
+      sourceFileName: options.sourceFileName || null,
+      selectedOperation: options.selectedOperation || null
+    };
+    tab.savedContent = "";
+    tab.isTemporary = false;
     return tab;
   }
 
@@ -2992,6 +3046,83 @@
     updateSaveCurrentFileButtons();
     return true;
   }
+  function openOpenApiEditorInTab(source, options = {}) {
+    const isTemporary = options.temporary === true;
+    const pinExisting = Object.prototype.hasOwnProperty.call(options, "pinExisting")
+      ? options.pinExisting !== false
+      : !isTemporary;
+    saveCurrentTabState();
+
+    const sourceFile = {
+      name: source?.name || options.title || "OpenAPI",
+      path: source?.path || source?.fullPath || source?.sourceFilePath || null,
+      handle: source?.handle || null
+    };
+    const existingTab = options.skipExistingSourceTab === true ? null : findTabForSourceFile(sourceFile);
+    if (existingTab) {
+      if (existingTab.type !== "openapi-editor") {
+        existingTab.type = "openapi-editor";
+        existingTab.content = normalizeEditorContent(source?.content || existingTab.content || "");
+        existingTab.savedContent = existingTab.content;
+      }
+      switchTab(existingTab.id);
+      if (pinExisting) pinTemporaryTab(existingTab.id);
+      return existingTab;
+    }
+
+    let tab = isTemporary ? findTemporaryTab() : null;
+    if (!tab && hasReachedOpenTabLimit("open the OpenAPI editor")) return null;
+
+    if (!tab || tab.type === "graph") {
+      tab = createOpenApiEditorTab(source, options);
+      tabs.push(tab);
+    } else {
+      destroyManagedTabView(tab.id);
+      const replacement = createOpenApiEditorTab(source, options);
+      Object.assign(tab, replacement, { id: tab.id, createdAt: tab.createdAt });
+    }
+
+    activateSidebarTab(tab);
+    return tab;
+  }
+
+  function normalizeOpenApiPreviewSourceKey(options = {}) {
+    const sourcePath = String(options.sourceFilePath || "").trim().replace(/\\/g, "/").toLowerCase();
+    if (sourcePath) return `path:${sourcePath}`;
+    const sourceTabId = String(options.sourceTabId || "").trim();
+    if (sourceTabId) return `tab:${sourceTabId}`;
+    return "";
+  }
+
+  function openSwaggerUiPreviewInTab(options = {}) {
+    const sourceKey = normalizeOpenApiPreviewSourceKey(options);
+    saveCurrentTabState();
+    let tab = sourceKey ? tabs.find(function(candidate) {
+      return candidate?.type === "openapi-preview" && candidate.openapiPreview?.sourceKey === sourceKey;
+    }) : null;
+    if (!tab) {
+      if (hasReachedOpenTabLimit("open Swagger UI preview")) return null;
+      tab = createOpenApiPreviewTab({ ...options, sourceKey });
+      tabs.push(tab);
+    } else {
+      tab.title = options.title || tab.title || "OpenAPI Preview";
+      tab.openapiPreview = {
+        ...(tab.openapiPreview || {}),
+        spec: options.spec || {},
+        requestSpec: options.requestSpec || options.spec || tab.openapiPreview?.requestSpec || {},
+        serverUrl: options.serverUrl || tab.openapiPreview?.serverUrl || "",
+        sourceKey,
+        sourceTabId: options.sourceTabId || tab.openapiPreview?.sourceTabId || null,
+        sourceFilePath: options.sourceFilePath || tab.openapiPreview?.sourceFilePath || null,
+        sourceFileName: options.sourceFileName || tab.openapiPreview?.sourceFileName || null,
+        selectedOperation: options.selectedOperation || null
+      };
+    }
+    activateSidebarTab(tab);
+    deps.openApiEditor?.refreshOpenApiPreviewTab?.(tab);
+    return tab;
+  }
+
   function openApiClientInTab(options) {
     options = options || {};
     const isTemporary = options.temporary === true;
@@ -4204,7 +4335,7 @@
       startupPerf?.mark?.("tabs.init graph startup rendered");
       return;
     }
-    if (activeTab.type === "large-file" || activeTab.type === "file-preview" || activeTab.type === "image-editor" || activeTab.type === "diagram-editor" || activeTab.type === "hex-editor" || activeTab.type === "file-compare" || activeTab.type === "api-client" || activeTab.type === "regex-tester" || activeTab.type === "base64-tool" || activeTab.type === "certificate-decoder" || activeTab.type === "jwt-tool" || activeTab.type === "json-yaml-tool" || activeTab.type === "jsonpath-tool" || activeTab.type === "xml-tree-grid" || activeTab.type === "kubernetes-topology") {
+    if (activeTab.type === "large-file" || activeTab.type === "file-preview" || activeTab.type === "image-editor" || activeTab.type === "diagram-editor" || activeTab.type === "hex-editor" || activeTab.type === "file-compare" || activeTab.type === "api-client" || activeTab.type === "openapi-editor" || activeTab.type === "openapi-preview" || activeTab.type === "soap-client" || activeTab.type === "base64-tool" || activeTab.type === "certificate-decoder" || activeTab.type === "jwt-tool" || activeTab.type === "json-yaml-tool" || activeTab.type === "jsonpath-tool" || activeTab.type === "xml-tree-grid" || activeTab.type === "kubernetes-topology") {
       setActiveEditorContent("");
       setNoOpenTabsMode(false);
       setViewMode("preview");
@@ -4289,6 +4420,8 @@
       createHexEditorTab,
       createFileCompareTab,
       createApiClientTab,
+      createOpenApiEditorTab,
+      createOpenApiPreviewTab,
       createSoapClientTab,
       createKubernetesTopologyTab,
       createRegexTesterTab,
@@ -4320,6 +4453,8 @@
       openHexEditorInTab,
       openFileCompareInTab,
       openKubernetesTopologyInTab,
+      openOpenApiEditorInTab,
+      openSwaggerUiPreviewInTab,
       openApiClientInTab,
       openSoapClientInTab,
       openRegexTesterInTab,
@@ -4375,4 +4510,3 @@
     return api;
   };
 })(window);
-

@@ -146,3 +146,34 @@ test("generic markdown save paths refuse Kubernetes topology tabs", async () => 
   assert.equal(await api.saveMarkdownTabWithSaveDialog(tab), false);
   assert.deepEqual(writes, []);
 });
+
+test("save to source can use an explicit content override", async () => {
+  const window = loadFileSaveModule();
+  const writes = [];
+  const tab = {
+    id: "tab_openapi",
+    type: "openapi-editor",
+    content: "openapi: 3.0.3\ninfo:\n  title: Old\n  version: 1.0.0\npaths: {}\n",
+    savedContent: "openapi: 3.0.3\ninfo:\n  title: Old\n  version: 1.0.0\npaths: {}\n",
+    sourceFilePath: "C:/Vault/openapi.yaml"
+  };
+  const overrideContent = "openapi: 3.0.3\ninfo:\n  title: Changed\n  version: 1.0.0\npaths: {}\n";
+  const api = window.registerMarkdownViewerFileSave({}, createDeps({
+    tabs: [tab],
+    activeTabId: "tab_openapi",
+    editorValue: "# unrelated markdown editor content",
+    NL_VERSION: "5.6.0",
+    Neutralino: {
+      filesystem: {
+        writeFile: async (filePath, content) => {
+          writes.push([filePath, content]);
+        }
+      }
+    }
+  }));
+
+  assert.equal(await api.saveMarkdownTabToSource(tab, { content: overrideContent }), true);
+  assert.deepEqual(writes, [["C:/Vault/openapi.yaml", overrideContent]]);
+  assert.equal(tab.content, overrideContent);
+  assert.equal(tab.savedContent, overrideContent);
+});

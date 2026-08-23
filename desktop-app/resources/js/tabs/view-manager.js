@@ -15,6 +15,7 @@
     const hexEditor = deps.hexEditor || null;
     const fileCompare = deps.fileCompare || null;
     const apiClient = deps.apiClient || null;
+    const openApiEditor = deps.openApiEditor || null;
     const soapClient = deps.soapClient || null;
     const regexTester = deps.regexTester || null;
     const base64Tool = deps.base64Tool || null;
@@ -63,6 +64,8 @@
       if (tab?.type === "hex-editor") return "hex-editor";
       if (tab?.type === "file-compare") return "file-compare";
       if (tab?.type === "api-client") return "api-client";
+      if (tab?.type === "openapi-editor") return "openapi-editor";
+      if (tab?.type === "openapi-preview") return "openapi-preview";
       if (tab?.type === "soap-client") return "soap-client";
       if (tab?.type === "regex-tester") return "regex-tester";
       if (tab?.type === "base64-tool") return "base64-tool";
@@ -163,6 +166,12 @@
         editorViewManager?.deactivateEditorView?.();
         apiClient?.mountApiClientTab?.(tab, root);
         apiClient?.activateApiClientSidebar?.(tab);
+      } else if (tab?.type === "openapi-editor") {
+        editorViewManager?.deactivateEditorView?.();
+        openApiEditor?.mountOpenApiEditorTab?.(tab, root);
+      } else if (tab?.type === "openapi-preview") {
+        editorViewManager?.deactivateEditorView?.();
+        openApiEditor?.mountOpenApiPreviewTab?.(tab, root);
       } else if (tab?.type === "soap-client") {
         editorViewManager?.deactivateEditorView?.();
         soapClient?.mountSoapClientTab?.(tab, root);
@@ -249,6 +258,8 @@
       hexEditor?.destroyHexEditorTab?.(tabId);
       fileCompare?.destroyFileCompareTab?.(tabId);
       apiClient?.destroyApiClientTab?.(tabId);
+      openApiEditor?.destroyOpenApiEditorTab?.(tabId);
+      openApiEditor?.destroyOpenApiPreviewTab?.(tabId);
       soapClient?.destroySoapClientTab?.(tabId);
       regexTester?.destroyRegexTesterTab?.(tabId);
       base64Tool?.destroyBase64ToolTab?.(tabId);

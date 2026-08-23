@@ -107,5 +107,12 @@
   {
     "url": "https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/fonts/bootstrap-icons.woff",
     "path": "css/fonts/bootstrap-icons.woff"
+  },
+  {
+    "url": "https://repo1.maven.org/maven2/io/swagger/codegen/v3/swagger-codegen-cli/3.0.82/swagger-codegen-cli-3.0.82.jar",
+    "path": "swagger-codegen/swagger-codegen-cli.jar",
+    "downloadPath": "swagger-codegen-cli-3.0.82.jar",
+    "sha256": "b8c18c7e8cf4fbbcd5514144344077e9674962ad80b726095fa7524dfa45e7b6",
+    "checksumUrl": "https://repo1.maven.org/maven2/io/swagger/codegen/v3/swagger-codegen-cli/3.0.82/swagger-codegen-cli-3.0.82.jar.sha256"
   }
 ]
