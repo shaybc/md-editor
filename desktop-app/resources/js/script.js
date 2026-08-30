@@ -4611,6 +4611,7 @@ ${getMarkdownAlertBody(alertType, selectedText)}`;
   const settingsSupportedTextExtensionsInput = document.getElementById("settings-supported-text-extensions");
   const settingsContextMenuTooltipDelayInput = document.getElementById("settings-context-menu-tooltip-delay");
   const settingsMenuLayoutInput = document.getElementById("settings-menu-layout");
+  const settingsDefaultWorkspaceLayoutInput = document.getElementById("settings-default-workspace-layout");
   const settingsAppHeaderSpacingInput = document.getElementById("settings-app-header-spacing");
   const settingsTabStyleInput = document.getElementById("settings-tab-style");
   const settingsSplitViewSeparatorPerTabInput = document.getElementById("settings-split-view-separator-per-tab");
@@ -4895,6 +4896,7 @@ ${getMarkdownAlertBody(alertType, selectedText)}`;
     "settings-max-recent-files": "Set how many recently opened files are kept in the menu.",
     "settings-max-recent-folders": "Set how many recently opened folders are kept in the menu.",
     "settings-context-menu-tooltip-delay": "Set how long menu tooltips wait before appearing, in milliseconds.",
+    "settings-default-workspace-layout": "Choose which workspace layout opens when the app launches.",
     "settings-closed-tab-history-limit": "Set how many source-backed tabs remain available to reopen after they are closed.",
     "settings-sidebar-rail-style": "Choose whether the side rail bar is thin or spacious with labeled buttons.",
     "settings-tab-style": "Choose the visual style used by outer document, sidebar, and bottom-panel tabs.",
@@ -5217,12 +5219,15 @@ ${getMarkdownAlertBody(alertType, selectedText)}`;
   const DEFAULT_DEBUG_MAX_LOG_SIZE_MB = 10;
   const DEFAULT_DEBUG_MAX_LOG_FILES = 10;
   const DEFAULT_STARTUP_BEHAVIOR = "last-tabs";
+  const DEFAULT_WORKSPACE_LAYOUT = "developer";
   const DEFAULT_EXTERNAL_FILE_CHANGE_BEHAVIOR = "prompt";
   const DEFAULT_EDITOR_FONT_FAMILY = "mono";
   const DEFAULT_EDITOR_FONT_SIZE = 14;
   const DEFAULT_SPACES_PER_INDENT_LEVEL = 4;
   const DEFAULT_TABS_PER_INDENT_LEVEL = 1;
   const STARTUP_BEHAVIORS = new Set(["last-tabs", "welcome", "untitled", "empty"]);
+  const WORKSPACE_LAYOUTS = new Set(["developer", "debug", "ai"]);
+  const DEFAULT_WORKSPACE_LAYOUT_OPTIONS = new Set(["developer", "debug", "ai", "last-used"]);
   const EXTERNAL_FILE_CHANGE_BEHAVIORS = new Set(["ignore", "prompt", "auto-refresh"]);
   const DEFAULT_GRADLE_MODE = "auto";
   const DEFAULT_GRADLE_METADATA_FAILURE = "parse-only";
@@ -5492,6 +5497,8 @@ ${getMarkdownAlertBody(alertType, selectedText)}`;
     restoreLastFolderOnStartup: true,
     desktopTerminalTabs: [],
     menuLayout: "full",
+    defaultWorkspaceLayout: DEFAULT_WORKSPACE_LAYOUT,
+    lastWorkspaceLayout: DEFAULT_WORKSPACE_LAYOUT,
     startupBehavior: DEFAULT_STARTUP_BEHAVIOR,
     syncScrollingEnabled: true,
     tabsPerIndentLevel: DEFAULT_TABS_PER_INDENT_LEVEL,
@@ -5986,6 +5993,25 @@ ${getMarkdownAlertBody(alertType, selectedText)}`;
   function normalizeStartupBehavior(value) {
     const behavior = String(value || "").trim();
     return STARTUP_BEHAVIORS.has(behavior) ? behavior : DEFAULT_STARTUP_BEHAVIOR;
+  }
+
+  function normalizeWorkspaceLayout(value) {
+    const layout = String(value || "").trim();
+    return WORKSPACE_LAYOUTS.has(layout) ? layout : DEFAULT_WORKSPACE_LAYOUT;
+  }
+
+  function normalizeDefaultWorkspaceLayout(value) {
+    const layout = String(value || "").trim();
+    return DEFAULT_WORKSPACE_LAYOUT_OPTIONS.has(layout) ? layout : DEFAULT_WORKSPACE_LAYOUT;
+  }
+
+  function getDefaultWorkspaceLayout(state = loadGlobalState()) {
+    return normalizeDefaultWorkspaceLayout(state.defaultWorkspaceLayout);
+  }
+
+  function getStartupWorkspaceLayout(state = loadGlobalState()) {
+    const layout = getDefaultWorkspaceLayout(state);
+    return layout === "last-used" ? normalizeWorkspaceLayout(state.lastWorkspaceLayout) : layout;
   }
 
   function normalizeSidebarRailStyle(value) {
@@ -10051,6 +10077,9 @@ Markdown content is processed client-side in your browser and sanitized before p
     if (settingsMenuLayoutInput) {
       settingsMenuLayoutInput.value = applicationMenu?.getLayout?.() || "full";
     }
+    if (settingsDefaultWorkspaceLayoutInput) {
+      settingsDefaultWorkspaceLayoutInput.value = getDefaultWorkspaceLayout();
+    }
     if (settingsAppHeaderSpacingInput) {
       settingsAppHeaderSpacingInput.value = getAppHeaderSpacing();
     }
@@ -12274,6 +12303,7 @@ Enter the context to use:`,
     const debugCategories = collectDebugCategorySettings();
     const startupBehavior = normalizeStartupBehavior(settingsStartupBehaviorInput?.value);
     const menuLayout = applicationMenu?.normalizeLayout?.(settingsMenuLayoutInput?.value) || "full";
+    const defaultWorkspaceLayout = normalizeDefaultWorkspaceLayout(settingsDefaultWorkspaceLayoutInput?.value);
     const appHeaderSpacing = normalizeAppHeaderSpacing(settingsAppHeaderSpacingInput?.value);
     const tabStyle = normalizeTabStyle(settingsTabStyleInput?.value);
     const splitViewSeparatorPerTab = settingsSplitViewSeparatorPerTabInput?.checked !== false;
@@ -12562,6 +12592,7 @@ Enter the context to use:`,
         showMdEditorProjectFolder,
         hiddenFolderNames,
         menuLayout,
+        defaultWorkspaceLayout,
         appHeaderSpacing,
         tabStyle,
         splitViewSeparatorPerTab,
@@ -12616,6 +12647,7 @@ Enter the context to use:`,
       closedTabHistory?.trim?.();
       void appDebugLog("info", "[tabs-session] Saved interface startup preferences", {
         startupBehavior,
+        defaultWorkspaceLayout,
         restoreLastFolderOnStartup,
         showGitProjectFolder,
         showMdEditorProjectFolder,
@@ -17848,6 +17880,32 @@ ${error?.message || String(error || "")}`,
       option.setAttribute("aria-checked", option.dataset.layoutMode === presentation.mode ? "true" : "false");
     });
   }
+  function saveLastWorkspaceLayout(mode) {
+    saveGlobalState({ lastWorkspaceLayout: normalizeWorkspaceLayout(mode) });
+  }
+
+  function openWorkspaceLayoutMode(mode, options = {}) {
+    const normalizedMode = normalizeWorkspaceLayout(mode);
+    if (normalizedMode === "debug") {
+      return Promise.resolve(javaDebugPanel?.openPerspective?.({ persist: options.persist }) || true).catch(function(error) {
+        setWorkspaceLayoutMode("developer");
+        return app.services?.notify?.show?.({ title: "Java Debugger", message: String(error?.message || error || "Unable to open the Debug layout."), type: "error" });
+      });
+    }
+    if (normalizedMode === "ai") {
+      javaDebugPanel?.closePerspective?.({ persist: false });
+      const previousSidebarView = workspaceSearch?.getActiveSidebarView?.() || "files";
+      workspaceSearch?.setSidebarView?.("ai-companion");
+      aiCompanionPanel?.setWorkspaceOpen?.(true, { previousSidebarView });
+      setWorkspaceLayoutMode("ai");
+      return Promise.resolve(true);
+    }
+    aiCompanionPanel?.closeWorkspaceForExternalNavigation?.();
+    javaDebugPanel?.closePerspective?.({ persist: options.persist });
+    setWorkspaceLayoutMode("developer");
+    return Promise.resolve(true);
+  }
+
   function setJavaDebugRailActive(active) {
     setWorkspaceLayoutMode(active ? "debug" : "developer");
   }
@@ -17870,20 +17928,8 @@ ${error?.message || String(error || "")}`,
         closeOpenActionMenus();
       }
       const mode = option.dataset.layoutMode || "developer";
-      if (mode === "debug") {
-        void javaDebugPanel?.openPerspective?.()?.catch?.(function(error) {
-          setWorkspaceLayoutMode("developer");
-          return app.services?.notify?.show?.({ title: "Java Debugger", message: String(error?.message || error || "Unable to open the Debug layout."), type: "error" });
-        });
-      } else if (mode === "ai") {
-        javaDebugPanel?.closePerspective?.({ persist: false });
-        workspaceSearch?.setSidebarView?.("ai-companion");
-        setWorkspaceLayoutMode("ai");
-      } else {
-        aiCompanionPanel?.closeWorkspaceForExternalNavigation?.();
-        javaDebugPanel?.closePerspective?.();
-        setWorkspaceLayoutMode("developer");
-      }
+      saveLastWorkspaceLayout(mode);
+      void openWorkspaceLayoutMode(mode);
     });
   });
   document.addEventListener("click", function(event) {
@@ -21135,14 +21181,21 @@ ${error?.message || String(error || "")}`,
     resetAllTabs();
   });
 
-  startupPerf?.mark?.("workspace ready mark requested");
-  startupPerf?.flushToAppDebug?.(appDebugLog);
-  window.markdownViewerBootScreen?.markReady?.("workspace-ready");
+  const startupWorkspaceLayout = getStartupWorkspaceLayout(restoredGlobalState);
+  function markWorkspaceReady() {
+    startupPerf?.mark?.("workspace ready mark requested");
+    startupPerf?.flushToAppDebug?.(appDebugLog);
+    window.markdownViewerBootScreen?.markReady?.("workspace-ready");
+  }
+  if (startupWorkspaceLayout === "developer") markWorkspaceReady();
   window.setTimeout(function() {
     void app.modules?.desktopTerminal?.restoreTerminalsFromPreferences?.();
   }, 0);
   window.setTimeout(function() {
-    void restoreLastFolderOnStartupInBackground();
+    void restoreLastFolderOnStartupInBackground().finally(function() {
+      if (startupWorkspaceLayout === "developer") return;
+      void Promise.resolve(openWorkspaceLayoutMode(startupWorkspaceLayout, { persist: false })).finally(markWorkspaceReady);
+    });
   }, 0);
   window.setTimeout(loadDeferredCodeMirrorBundle, 0);
   window.setTimeout(function() {

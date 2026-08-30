@@ -322,6 +322,13 @@ test("interface settings expose indent and autocomplete controls", () => {
   assert.match(html, /id="settings-tabs-per-indent-level"/);
   assert.match(html, /id="settings-document-word-autocomplete"/);
   assert.match(html, /id="settings-sidebar-rail-style"/);
+  assert.match(html, /id="settings-default-workspace-layout"/);
+  assert.ok(html.indexOf('id="settings-startup-behavior"') < html.indexOf('id="settings-default-workspace-layout"'));
+  assert.ok(html.indexOf('id="settings-default-workspace-layout"') < html.indexOf('id="settings-max-open-tabs"'));
+  assert.match(html, /<option value="developer" selected>Develop Layout<\/option>/);
+  assert.match(html, /<option value="debug">Debug Layout<\/option>/);
+  assert.match(html, /<option value="ai">AI Layout<\/option>/);
+  assert.match(html, /<option value="last-used">Last used layout<\/option>/);
   assert.match(html, /id="settings-sidebar-rail-show-git"/);
   assert.match(html, /id="settings-sidebar-rail-show-api-client"/);
   assert.match(html, /id="settings-sidebar-rail-show-regex-tester"/);
@@ -371,6 +378,20 @@ test("interface settings expose indent and autocomplete controls", () => {
   assert.match(recentItemsSource, /Number\(profileData\?\.version\) >= GLOBAL_PROFILE_VERSION/);
   assert.match(recentItemsSource, /languageServerAutocompleteEnabled: true/);
   assert.match(legacyScript, /sidebarRailStyle: "thin"/);
+  assert.match(legacyScript, /defaultWorkspaceLayout: DEFAULT_WORKSPACE_LAYOUT/);
+  assert.match(legacyScript, /lastWorkspaceLayout: DEFAULT_WORKSPACE_LAYOUT/);
+  assert.match(legacyScript, /function normalizeDefaultWorkspaceLayout/);
+  assert.match(legacyScript, /function getStartupWorkspaceLayout/);
+  assert.match(legacyScript, /settingsDefaultWorkspaceLayoutInput\.value = getDefaultWorkspaceLayout\(\)/);
+  assert.match(legacyScript, /const defaultWorkspaceLayout = normalizeDefaultWorkspaceLayout\(settingsDefaultWorkspaceLayoutInput\?\.value\)/);
+  assert.match(legacyScript, /saveGlobalState\(\{ lastWorkspaceLayout: normalizeWorkspaceLayout\(mode\) \}\)/);
+  assert.match(legacyScript, /aiCompanionPanel\?\.setWorkspaceOpen\?\.\(true, \{ previousSidebarView \}\)/);
+  assert.match(legacyScript, /const startupWorkspaceLayout = getStartupWorkspaceLayout\(restoredGlobalState\)/);
+  assert.match(legacyScript, /if \(startupWorkspaceLayout === "developer"\) markWorkspaceReady\(\)/);
+  assert.match(legacyScript, /restoreLastFolderOnStartupInBackground\(\)\.finally\(function\(\) \{\s+if \(startupWorkspaceLayout === "developer"\) return;\s+void Promise\.resolve\(openWorkspaceLayoutMode\(startupWorkspaceLayout, \{ persist: false \}\)\)\.finally\(markWorkspaceReady\);/);
+  assert.ok(
+    legacyScript.indexOf('void Promise.resolve(openWorkspaceLayoutMode(startupWorkspaceLayout, { persist: false })).finally(markWorkspaceReady);') < legacyScript.indexOf('window.setTimeout(loadDeferredCodeMirrorBundle, 0);')
+  );
   assert.match(legacyScript, /sidebarRailIconOrder: DEFAULT_SIDEBAR_RAIL_ICON_ORDER/);
   assert.match(legacyScript, /sidebarRailIconVisibility: DEFAULT_SIDEBAR_RAIL_ICON_VISIBILITY/);
   const railPreferencesSource = readWebFile("js/sidebar/rail-preferences.js");
