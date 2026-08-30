@@ -7,6 +7,7 @@
     const resizer = deps.resizer;
     const tabList = deps.tabList;
     const views = new Map();
+    const stateChangeListeners = new Set();
     let activeViewId = String(deps.initialActiveViewId || "outline");
 
     function getEnabledViews() {
@@ -15,6 +16,20 @@
 
     function persistActiveView() {
       deps.saveGlobalState?.({ sidebarLowerPanelActiveTab: activeViewId });
+    }
+
+    function getStateSnapshot() {
+      const enabled = {};
+      views.forEach((view, id) => { enabled[id] = view.enabled === true; });
+      return { activeViewId, enabled };
+    }
+
+    function notifyStateChanged(reason = "state") {
+      const snapshot = getStateSnapshot();
+      deps.onStateChanged?.(snapshot, reason, api);
+      stateChangeListeners.forEach((listener) => {
+        try { listener(snapshot, reason, api); } catch (_error) { /* Lower-panel observers cannot interrupt tab state updates. */ }
+      });
     }
 
     function sync() {
@@ -72,6 +87,7 @@
       activeViewId = view.id;
       sync();
       if (options.persist !== false) persistActiveView();
+      notifyStateChanged("active-view");
       return true;
     }
 
@@ -86,6 +102,7 @@
         deps.saveGlobalState?.({ [options.stateKey]: view.enabled });
       }
       if (options.persist !== false && options.persistActive !== false && activeViewId) persistActiveView();
+      notifyStateChanged("enabled-view");
       return view.enabled;
     }
 
@@ -95,7 +112,13 @@
 
     const api = {
       activate,
+      addStateChangeListener(listener) {
+        if (typeof listener !== "function") return () => {};
+        stateChangeListeners.add(listener);
+        return () => stateChangeListeners.delete(listener);
+      },
       getActiveViewId() { return activeViewId; },
+      getStateSnapshot,
       isEnabled,
       registerView,
       setEnabled,

@@ -530,6 +530,41 @@
         : false;
     }
 
+    function setActiveEditorDebugBreakpoints(breakpoints) {
+      const codeMirrorEditor = getActiveCodeMirrorEditor();
+      return typeof codeMirrorEditor?.setDebugBreakpoints === "function"
+        ? codeMirrorEditor.setDebugBreakpoints(breakpoints)
+        : false;
+    }
+
+    function clearActiveEditorDebugBreakpoints() {
+      const codeMirrorEditor = getActiveCodeMirrorEditor();
+      return typeof codeMirrorEditor?.clearDebugBreakpoints === "function"
+        ? codeMirrorEditor.clearDebugBreakpoints()
+        : false;
+    }
+
+    function setActiveEditorDebugExecutionLine(lineNumber) {
+      const codeMirrorEditor = getActiveCodeMirrorEditor();
+      return typeof codeMirrorEditor?.setDebugExecutionLine === "function"
+        ? codeMirrorEditor.setDebugExecutionLine(lineNumber)
+        : false;
+    }
+
+    function clearActiveEditorDebugExecutionLine() {
+      const codeMirrorEditor = getActiveCodeMirrorEditor();
+      return typeof codeMirrorEditor?.clearDebugExecutionLine === "function"
+        ? codeMirrorEditor.clearDebugExecutionLine()
+        : false;
+    }
+
+    function setActiveEditorDebugBreakpointHandler(handler) {
+      const codeMirrorEditor = getActiveCodeMirrorEditor();
+      return typeof codeMirrorEditor?.setDebugBreakpointHandler === "function"
+        ? codeMirrorEditor.setDebugBreakpointHandler(handler)
+        : false;
+    }
+
     const api = {
       getActiveEditor,
       setActiveEditorOverride,
@@ -609,6 +644,11 @@
       },
       setActiveEditorBookmarkedLines,
       clearActiveEditorBookmarkedLines,
+      setActiveEditorDebugBreakpoints,
+      clearActiveEditorDebugBreakpoints,
+      setActiveEditorDebugExecutionLine,
+      clearActiveEditorDebugExecutionLine,
+      setActiveEditorDebugBreakpointHandler,
       replaceActiveEditorRange,
       dispatchActiveEditorInput
     };

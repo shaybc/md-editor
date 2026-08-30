@@ -2221,9 +2221,10 @@
       if (!hasWorkspaceUi()) return;
       if (open) {
         if (!workspaceOpen) workspaceRestoreState = captureWorkspaceRestoreState(options);
+        deps.restoreAiCompanionWorkspaceDock?.();
         restoreWorkspaceSideWidths();
-        setOpen(true, { persist: false });
-        getBottomPanelModule()?.hidePanel?.();
+        setOpen(true, { persist: false, skipRightSidebarSync: true, keepRightSidebar: true });
+        getBottomPanelModule()?.hidePanel?.({ persist: false });
         deps.setSidebarVisible?.(true, false, false);
         setWorkspaceVisible(true);
         setPlansViewOpen(false, { load: false });
@@ -7142,16 +7143,31 @@
       return window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches === true;
     }
 
-    function updatePanelToggleButton(open) {
+    function isRightSidebarVisible() {
+      if (typeof deps.isRightSidebarVisible === "function") return deps.isRightSidebarVisible() === true;
+      return document.body.classList.contains("ai-companion-open");
+    }
+
+    function updatePanelToggleButton(open = isRightSidebarVisible()) {
       if (!closeButton) return;
-      const label = open ? "Hide AI Companion" : "Show AI Companion";
+      const label = open ? "Hide right sidebar" : "Show right sidebar";
       closeButton.title = label;
       closeButton.setAttribute("aria-label", label);
       closeButton.setAttribute("aria-pressed", open ? "true" : "false");
 
     }
 
+    function toggleRightSidebar() {
+      const nextVisible = !isRightSidebarVisible();
+      if (nextVisible) deps.showRightSidebar?.({ fromAiCompanion: true });
+      else deps.hideRightSidebar?.({ fromAiCompanion: true });
+      updatePanelToggleButton(nextVisible);
+    }
+
     function setOpen(open, options = {}) {
+      const wasOpen = document.body.classList.contains("ai-companion-open");
+      if (open && options.skipRightSidebarSync !== true) deps.showInRightSidebar?.({ persist: options.persist, fromAiCompanion: true });
+      if (!open && wasOpen && options.keepRightSidebar !== true && options.skipRightSidebarSync !== true) deps.hideRightSidebar?.({ persist: options.persist, fromAiCompanion: true });
       if (panelVisibilityTimer) {
         window.clearTimeout(panelVisibilityTimer);
         panelVisibilityTimer = null;
@@ -7187,7 +7203,7 @@
         }
       }
       toggleButtons.forEach((button) => button.setAttribute("aria-pressed", open ? "true" : "false"));
-      updatePanelToggleButton(open);
+      updatePanelToggleButton();
       refreshModeMessages();
       if (options.persist !== false) deps.saveGlobalState?.({ aiCompanionPanelVisible: open === true });
     }
@@ -8073,8 +8089,15 @@
       window.setTimeout(() => { void pollDueCompanionSchedules(); }, 0);
     }
 
-    toggleButtons.forEach((button) => button.addEventListener("click", () => setOpen(!document.body.classList.contains("ai-companion-open"))));
-    closeButton?.addEventListener("click", () => setOpen(!document.body.classList.contains("ai-companion-open")));
+    toggleButtons.forEach((button) => button.addEventListener("click", () => {
+      if (deps.isAiCompanionTabVisible?.() === true && deps.hideAiCompanionTab) {
+        deps.hideAiCompanionTab();
+        updatePanelToggleButton(false);
+        return;
+      }
+      setOpen(true);
+    }));
+    closeButton?.addEventListener("click", toggleRightSidebar);
     document.addEventListener("click", (event) => {
       const actionMenuToggle = event.target?.closest?.(".ai-companion-chat-action-toggle");
       if (actionMenuToggle) {

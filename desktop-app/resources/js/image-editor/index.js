@@ -2529,27 +2529,25 @@
       });
     }
 
-    /** Replace visible document content with one raster layer after confirmation. */
+    /** Create a flattened raster copy of visible content after confirmation. */
     async function flattenDocument(controller) {
       if (typeof deps.confirm !== "function") return false;
       const confirmed = await deps.confirm({
         title: "Flatten layers?",
-        message: "Flatten visible content into one layer? Hidden content will be discarded.",
+        message: "Create a flattened copy of the visible content as a new layer? Existing layers will remain unchanged.",
         confirmLabel: "Flatten",
-        confirmVariant: "danger"
+        confirmVariant: "primary"
       });
       if (!confirmed) return false;
       return commitDocumentMutation(controller, "Flatten document", () => {
         const canvas = controller.compositor.render();
         const imageData = canvas.getContext("2d").getImageData(0, 0, canvas.width, canvas.height);
-        const document = namespace.createImageDocument(canvas.width, canvas.height, controller.documentStore.document.canvas.backgroundColor);
-        const store = new namespace.ImageEditorDocumentStore(document);
-        store.document.nodes[0].name = "Flattened image";
-        store.addRasterObject(imageData, { x: 0, y: 0, width: canvas.width, height: canvas.height }, { name: "Flattened image", layerId: store.document.nodes[0].id });
-        controller.documentStore.document = store.document;
-        controller.documentStore.assets = store.assets;
-        controller.documentStore.selectedIds = new Set([store.document.activeLayerId]);
-        controller.documentStore.notify({ type: "flatten" });
+        const flattenedLayer = controller.documentStore.addLayer("Flattened image", null);
+        controller.documentStore.addRasterObject(imageData, { x: 0, y: 0, width: canvas.width, height: canvas.height }, { name: "Flattened image", layerId: flattenedLayer.id });
+        controller.documentStore.document.activeLayerId = flattenedLayer.id;
+        controller.documentStore.selectedIds = new Set([flattenedLayer.id]);
+        controller.documentStore.adjustmentTarget = null;
+        controller.documentStore.notify({ type: "flatten", ids: [flattenedLayer.id] });
         return true;
       });
     }

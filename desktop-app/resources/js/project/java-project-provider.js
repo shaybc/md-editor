@@ -284,7 +284,8 @@
           sourceRoots: selection.sourceRoots,
           classpathEntries,
           outputMode: selection.outputMode,
-          outputPath: selection.outputPath
+          outputPath: selection.outputPath,
+          debugInfo: options.debugInfo === true
         });
         await deps.rebuildOutput?.begin?.(projectPath);
         const result = await deps.terminal.runCommand(command, Object.assign({

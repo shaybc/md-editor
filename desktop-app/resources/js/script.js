@@ -2328,7 +2328,12 @@ ${getMarkdownAlertBody(alertType, selectedText)}`;
   });
   // View Mode Elements - Story 1.1
   const contentContainer = document.querySelector(".content-container");
-  const viewModeButtons = document.querySelectorAll(".view-mode-btn");
+  const viewModeButtons = document.querySelectorAll(".view-mode-btn, .view-mode-menu-item");
+  const layoutModeSelect = document.getElementById("layout-mode-select");
+  const layoutModeIcon = document.getElementById("layout-mode-icon");
+  const layoutModeLabel = document.getElementById("layout-mode-label");
+  const layoutModeMenu = document.getElementById("layout-mode-menu");
+  const layoutModeOptions = document.querySelectorAll(".layout-mode-option");
   const folderPicker = window.registerMarkdownViewerFolderPicker(app);
   let lspServerRegistry = null;
   let lspVsixInstaller = null;
@@ -2461,6 +2466,7 @@ ${getMarkdownAlertBody(alertType, selectedText)}`;
     getActiveEditorPath: getActiveEditorPathForLanguage,
     getEditorPath: getEditorPathForTab,
     getEditorLanguageOverride,
+    onEditorDebugBreakpointsRemapped: handleJavaDebugBreakpointsRemapped,
     onEditorLanguageChange: function(tabId, language) {
       if (tabId !== activeTabId) return;
       editorFormattingToolbar?.toggleAttribute("hidden", language?.id !== "markdown");
@@ -3301,6 +3307,8 @@ ${getMarkdownAlertBody(alertType, selectedText)}`;
       getMaximumProblems: getJdtMaximumProblems,
       refreshApiClientFromAgentTool: function(event) { return apiClient?.refreshFromStorage?.({ source: "ai-companion", tool: event?.tool || "" }); },
       refreshWorkspaceGitFromAgentTool: function() { return app.modules?.workspaceGit?.refreshWorkspaceGitStatus?.(); },
+      isAiCompanionTabVisible: function() { return app.modules?.javaDebugPanel?.isLayoutTabVisible?.("ai-companion") === true; },
+      hideAiCompanionTab: function() { return app.modules?.javaDebugPanel?.hideLayoutTab?.("ai-companion") === true; },
       appDebugLog,
       loadGlobalState: function() { return loadGlobalState(); },
       saveGlobalState: function(patch) { return saveGlobalState(patch); },
@@ -3334,6 +3342,14 @@ ${getMarkdownAlertBody(alertType, selectedText)}`;
       getBottomPanel: function() { return app.modules?.bottomPanelTabs || null; },
       getSidebarView: function() { return app.modules?.workspaceSearch?.getActiveSidebarView?.() || "files"; },
       setSidebarView: function(view) { return app.modules?.workspaceSearch?.setSidebarView?.(view); },
+      restoreAiCompanionWorkspaceDock: function() {
+        if (!aiCompanionDockElement || !contentContainer || aiCompanionDockElement.parentElement === contentContainer) return;
+        contentContainer.appendChild(aiCompanionDockElement);
+      },
+      showInRightSidebar: function(options) { return app.modules?.javaDebugPanel?.openAiCompanionRightSidebar?.(options); },
+      showRightSidebar: function(options) { return app.modules?.javaDebugPanel?.showRightSidebar?.(options); },
+      hideRightSidebar: function(options) { return app.modules?.javaDebugPanel?.hideRightSidebar?.(options); },
+      isRightSidebarVisible: function() { return app.modules?.javaDebugPanel?.isRightSidebarVisible?.() === true; },
       isSidebarVisible,
       setSidebarVisible,
       renderMarkdownContent: function(target, markdown, options) {
@@ -3803,8 +3819,7 @@ ${getMarkdownAlertBody(alertType, selectedText)}`;
         </button>
         <button class="sidebar-view-rail-button sidebar-view-option" type="button" data-sidebar-rail-icon="git" data-sidebar-view="git" title="Git" aria-label="Git" aria-pressed="false">
           <i class="bi bi-git" aria-hidden="true"></i><span class="sidebar-view-rail-label">Git</span>
-        </button>
-        <button class="sidebar-view-rail-button sidebar-view-option" type="button" data-sidebar-rail-icon="api-client" data-sidebar-view="api-client" title="API Client" aria-label="API Client" aria-pressed="false">
+        </button>        <button class="sidebar-view-rail-button sidebar-view-option" type="button" data-sidebar-rail-icon="api-client" data-sidebar-view="api-client" title="API Client" aria-label="API Client" aria-pressed="false">
           <i class="bi bi-send" aria-hidden="true"></i><span class="sidebar-view-rail-label">API</span>
         </button>
         <button class="sidebar-view-rail-button sidebar-view-option" type="button" data-sidebar-rail-icon="soap-client" data-sidebar-view="soap-client" title="SOAP Client" aria-label="SOAP Client" aria-pressed="false">
@@ -4194,7 +4209,12 @@ ${getMarkdownAlertBody(alertType, selectedText)}`;
   const sidebarDropzoneResizer = document.getElementById("sidebar-dropzone-resizer");
   const sidebarWidthResizer = document.getElementById("sidebar-width-resizer");
   const aiCompanionWidthResizer = document.getElementById("ai-companion-width-resizer");
+  const rightSidebarWidthResizer = document.getElementById("java-debug-right-width-resizer");
+  const aiCompanionDockElement = document.querySelector(".ai-companion-dock");
   const aiCompanionPanelElement = document.getElementById("ai-companion-panel");
+  const javaDebugLeftPerspectiveElement = document.getElementById("java-debug-left-perspective");
+  const javaDebugRightDockElement = document.getElementById("java-debug-right-dock");
+  const javaDebugRightPerspectiveElement = document.getElementById("java-debug-right-perspective");
   const editorWorkspaceElement = document.querySelector(".editor-workspace");
   const toggleDropzonePanelButtons = document.querySelectorAll(".toggle-dropzone-panel");
   const toggleOutlinePanelButtons = document.querySelectorAll(".toggle-outline-panel");
@@ -4424,10 +4444,12 @@ ${getMarkdownAlertBody(alertType, selectedText)}`;
     sidebarDropzoneResizer,
     sidebarWidthResizer,
     aiCompanionWidthResizer,
+    rightSidebarWidthResizer,
     appStatusLineElement,
     folderTreePane,
     sidebarDropzonePanel,
     aiCompanionPanelElement,
+    rightSidebarElement: javaDebugRightDockElement,
     editorPaneElement,
     previewPaneElement,
     MIN_SIDEBAR_WIDTH,
@@ -4452,7 +4474,8 @@ ${getMarkdownAlertBody(alertType, selectedText)}`;
     onViewModeChanged: function(mode) { setActiveMarkdownTabViewMode(mode); },
     renderMarkdown: function(options) { return renderMarkdown(options); },
     scheduleEditorLineNumbersUpdate,
-    isSidebarVisible
+    isSidebarVisible,
+    onPanelSizesChanged: function() { app.modules?.javaDebugPanel?.captureCurrentLayoutSizes?.(); }
   });
   const updateViewModeButtons = viewLayout.updateViewModeButtons;
   const setViewMode = viewLayout.setViewMode;
@@ -8062,6 +8085,11 @@ Markdown content is processed client-side in your browser and sanitized before p
       setLanguageForActivePath: callActive("setLanguageForActivePath", undefined),
       setBookmarkedLines: callActive("setBookmarkedLines", false),
       clearBookmarkedLines: callActive("clearBookmarkedLines", false),
+      setDebugBreakpoints: callActive("setDebugBreakpoints", false),
+      clearDebugBreakpoints: callActive("clearDebugBreakpoints", false),
+      setDebugExecutionLine: callActive("setDebugExecutionLine", false),
+      clearDebugExecutionLine: callActive("clearDebugExecutionLine", false),
+      setDebugBreakpointHandler: callActive("setDebugBreakpointHandler", false),
       setSelectionMatchCaseSensitive: callActive("setSelectionMatchCaseSensitive", undefined),
       syncFromTextarea: callActive("syncFromTextarea", undefined),
       setAutocompletePreferences: callActive("setAutocompletePreferences", undefined),
@@ -9209,7 +9237,11 @@ Markdown content is processed client-side in your browser and sanitized before p
       if (outlinePanel?.isVisible?.() && outlinePanel.supports?.(tab)) {
         sidebarLowerPanelTabs?.activate?.("outline", { persist: false });
       }
-      window.requestAnimationFrame(function() { void outlinePanel?.refresh?.(tab); });
+      window.requestAnimationFrame(function() {
+        void outlinePanel?.refresh?.(tab);
+        const debugSession = app.modules?.javaDebugSession;
+        if (debugSession) syncJavaDebugEditorMarkers(debugSession.getState?.() || null);
+      });
     }
   });
   const {    nextUntitledTitle,
@@ -14768,21 +14800,30 @@ ${error?.message || String(error)}`
     });
   }
 
+  function restoreDebugPanelLayoutForProject(projectPath, dependencies = []) {
+    const panel = app.modules?.javaDebugPanel;
+    if (!panel?.restoreForProject) return;
+    void panel.restoreForProject(projectPath || "", { after: dependencies });
+  }
+
   function updateFolderDependentControls() {
     const hasFolder = Boolean(activeFolderName && activeFolderName !== "Graph View" && (isFolderOpen || activeFolderPath || activeFolderHandle));
     const folderPath = activeFolderPath || "";
     updateOriginalSourceRootButtons(hasFolder && !!folderPath);
     updateProjectMenuButtons(hasFolder && !!folderPath);
-    void app.modules?.problemsPanel?.restoreForProject?.(hasFolder ? folderPath : "");
-    void app.modules?.javaRebuildOutput?.restoreForProject?.(hasFolder ? folderPath : "");
-    void app.modules?.runConfigurationStore?.loadProject?.(hasFolder ? folderPath : "");
-    void app.modules?.runOutput?.restoreForProject?.(hasFolder ? folderPath : "");
-    const nextTaskWorkspace = hasFolder ? folderPath : "";
+    const projectPathForPanels = hasFolder ? folderPath : "";
+    const problemsRestore = app.modules?.problemsPanel?.restoreForProject?.(projectPathForPanels);
+    const javaRebuildRestore = app.modules?.javaRebuildOutput?.restoreForProject?.(projectPathForPanels);
+    void app.modules?.runConfigurationStore?.loadProject?.(projectPathForPanels);
+    void app.modules?.javaDebugSession?.loadProjectState?.();
+    const runOutputRestore = app.modules?.runOutput?.restoreForProject?.(projectPathForPanels);
+    const nextTaskWorkspace = projectPathForPanels;
     const currentTaskWorkspace = app.modules?.projectTaskStore?.getState?.().workspaceRoot || "";
     if (normalizeLocalPath(currentTaskWorkspace).toLowerCase() !== normalizeLocalPath(nextTaskWorkspace).toLowerCase()) {
       app.modules?.jdtTaskSource?.closeWorkspace?.(currentTaskWorkspace);
     }
-    void app.modules?.projectTaskStore?.openProject?.(nextTaskWorkspace);
+    const taskRestore = app.modules?.projectTaskStore?.openProject?.(nextTaskWorkspace);
+    restoreDebugPanelLayoutForProject(projectPathForPanels, [problemsRestore, javaRebuildRestore, runOutputRestore, taskRestore]);
     app.modules?.workspaceGit?.updateWorkspaceGitAvailability?.();
   }
 
@@ -16380,7 +16421,8 @@ async function* collectWorkspaceSearchFilesFromNeutralinoDirectory(parentPath, p
     isSupportedFolderTreeDocumentNode,
     isSidebarVisible,
     setSidebarVisible,
-    copyTextToClipboard: copyTextToSystemClipboard
+    copyTextToClipboard: copyTextToSystemClipboard,
+    setWorkspaceLayoutMode
   });
   const openWorkspaceSearchModal = workspaceSearch.openWorkspaceSearchModal;
   const workspaceGit = window.registerMarkdownViewerWorkspaceGit?.(app, {
@@ -16814,6 +16856,8 @@ ${error?.message || String(error || "")}`,
     getActiveFilePath: getActiveEditorPathForLanguage,
     problemsPanel,
     tasksPanel,
+    isPanelTabVisible: isPanelTabVisibleInAnyDock,
+    hidePanelTab: hidePanelTabInAnyDock,
     kubernetesContext,
     kubernetesCommandOptionsDialog,
     projectCommandResultModal,
@@ -17294,7 +17338,656 @@ ${error?.message || String(error || "")}`,
     get osName() { return typeof NL_OS !== "undefined" ? NL_OS : "Windows"; },
     alert: function(message) { window.alert(message); }
   });
-  const runConfigurationDialog = window.registerMarkdownViewerRunConfigurationDialog?.(app, {
+  const javaDebugProtocolClient = window.registerMarkdownViewerJavaDebugProtocolClient?.(app, {
+    getAppRoot: function() { return typeof NL_PATH !== "undefined" ? NL_PATH : "."; },
+    isNeutralinoRuntime,
+    processRouter: spawnedProcessRouter,
+    get Neutralino() { return typeof Neutralino !== "undefined" ? Neutralino : undefined; }
+  });
+  const javaDebugBreakpointStore = window.registerMarkdownViewerJavaDebugBreakpointStore?.(app, {
+    get Neutralino() { return typeof Neutralino !== "undefined" ? Neutralino : undefined; }
+  });
+  function getJavaDebugClassSourceSuffix(className, sourceName) {
+    const normalizedClassName = String(className || "").split("$")[0];
+    const parts = normalizedClassName ? normalizedClassName.split(".").filter(Boolean) : [];
+    const fileName = getFileName(sourceName || (parts.length ? `${parts[parts.length - 1]}.java` : ""));
+    if (!fileName) return "";
+    return parts.length > 1 ? `${parts.slice(0, -1).join("/")}/${fileName}` : fileName;
+  }
+
+  function createJavaDebugSourceMatch(path) {
+    return { name: getFileName(path), path, sourceFilePath: path };
+  }
+
+  function isJavaDebugAbsoluteSourcePath(path) {
+    const value = String(path || "").replace(/\\/g, "/");
+    return isAbsoluteFilesystemPath?.(value) === true || /^[a-zA-Z]:\//.test(value) || value.startsWith("/");
+  }
+
+  function normalizeJavaDebugSourcePathForOpen(path) {
+    return String(path || "").replace(/\\/g, "/").replace(/\/+/g, "/");
+  }
+
+  async function findJavaDebugConfiguredSourceFile(sourceName, sourcePath, className = "") {
+    if (!activeFolderPath || !javaBuildPath?.loadConfiguration) return null;
+    const suffixes = [
+      sourcePath,
+      getJavaDebugClassSourceSuffix(className, sourceName || sourcePath),
+      sourceName
+    ].map(function(candidate) {
+      return normalizeJavaDebugSourcePathForOpen(candidate).replace(/^\/+/, "");
+    }).filter(Boolean);
+    if (!suffixes.length) return null;
+    let configuration = null;
+    try {
+      configuration = await javaBuildPath.loadConfiguration(activeFolderPath);
+    } catch (_error) {
+      return null;
+    }
+    for (const storedSourceFolder of configuration?.sourceFolders || []) {
+      const sourceRoot = javaBuildPath.resolveStoredPath
+        ? javaBuildPath.resolveStoredPath(activeFolderPath, storedSourceFolder)
+        : joinPath(activeFolderPath, storedSourceFolder);
+      for (const suffix of suffixes) {
+        const candidate = isJavaDebugAbsoluteSourcePath(suffix) ? suffix : joinPath(sourceRoot, suffix);
+        if (await canAccessLocalPath(candidate)) return createJavaDebugSourceMatch(candidate);
+      }
+    }
+    return null;
+  }
+
+  async function findJavaDebugSourceFile(sourceName, sourcePath, className = "") {
+    const expectedName = getFileName(sourceName || sourcePath || "").toLowerCase();
+    const expectedSuffixes = [
+      sourcePath,
+      getJavaDebugClassSourceSuffix(className, sourceName || sourcePath),
+      sourceName
+    ].map(function(candidate) {
+      return normalizeJavaDebugPath(candidate).replace(/^\/+/, "");
+    }).filter(Boolean);
+    const specificSuffixes = expectedSuffixes.filter(function(candidate) { return candidate.includes("/"); });
+    let pathMatch = null;
+    let nameMatch = null;
+    let nameMatchCount = 0;
+    const stack = Array.isArray(currentFolderTreeNodes) ? currentFolderTreeNodes.slice() : [];
+    while (stack.length) {
+      const node = stack.shift();
+      const path = String(node?.path || node?.fullPath || "").replace(/\\/g, "/");
+      const normalizedPath = normalizeJavaDebugPath(path);
+      if (path && expectedSuffixes.some(function(suffix) { return normalizedPath === suffix || normalizedPath.endsWith(`/${suffix}`); })) {
+        pathMatch = createJavaDebugSourceMatch(path);
+        if (specificSuffixes.some(function(suffix) { return normalizedPath === suffix || normalizedPath.endsWith(`/${suffix}`); })) return pathMatch;
+      } else if (path && expectedName && getFileName(path).toLowerCase() === expectedName) {
+        nameMatch = nameMatch || createJavaDebugSourceMatch(path);
+        nameMatchCount += 1;
+      }
+      if (Array.isArray(node?.children)) stack.push(...node.children);
+    }
+    if (pathMatch) return pathMatch;
+    if (nameMatch && (!specificSuffixes.length || nameMatchCount === 1)) return nameMatch;
+    const configuredSourceMatch = await findJavaDebugConfiguredSourceFile(sourceName, sourcePath, className);
+    if (configuredSourceMatch) return configuredSourceMatch;
+    const fallbackSourcePath = String(sourcePath || expectedSuffixes[0] || "").replace(/\\/g, "/");
+    if (activeFolderPath && fallbackSourcePath) {
+      const sourceFilePath = isJavaDebugAbsoluteSourcePath(fallbackSourcePath)
+        ? fallbackSourcePath
+        : joinPath(activeFolderPath, normalizeJavaDebugSourcePathForOpen(fallbackSourcePath).replace(/^\/+/, ""));
+      return createJavaDebugSourceMatch(sourceFilePath);
+    }
+    return null;
+  }
+  let javaDebugStateSnapshot = { breakpoints: [], location: null, state: "not-running" };
+
+  function normalizeJavaDebugPath(path) {
+    return String(path || "").replace(/\\/g, "/").replace(/\/+/g, "/").toLowerCase();
+  }
+
+  function isJavaDebugSourcePath(path) {
+    return /\.java$/i.test(String(path || ""));
+  }
+
+  function getActiveJavaDebugEditorPath() {
+    return getEditorPathForTab(activeTabId);
+  }
+
+  function javaDebugPathsMatch(left, right) {
+    const normalizedLeft = normalizeJavaDebugPath(left);
+    const normalizedRight = normalizeJavaDebugPath(right);
+    if (!normalizedLeft || !normalizedRight) return false;
+    if (normalizedLeft === normalizedRight) return true;
+    return normalizedLeft.endsWith(`/${normalizedRight}`) || normalizedRight.endsWith(`/${normalizedLeft}`);
+  }
+
+  function javaDebugLocationMatchesPath(location, filePath) {
+    if (!location || !filePath) return false;
+    if (javaDebugPathsMatch(filePath, location.file)) return true;
+    if (normalizeJavaDebugPath(location.file).includes("/")) return false;
+    const classSourceSuffix = normalizeJavaDebugPath(getJavaDebugClassSourceSuffix(location.className, location.sourceName || location.file));
+    if (classSourceSuffix) {
+      const normalizedFilePath = normalizeJavaDebugPath(filePath);
+      if (normalizedFilePath === classSourceSuffix || normalizedFilePath.endsWith(`/${classSourceSuffix}`)) return true;
+      if (classSourceSuffix.includes("/")) return false;
+    }
+    const sourceName = getFileName(location.sourceName || "").toLowerCase();
+    return !!sourceName && getFileName(filePath).toLowerCase() === sourceName;
+  }
+
+  function javaDebugBreakpointMatchesPath(filePath, breakpoint) {
+    if (!breakpoint || !filePath) return false;
+    if (javaDebugPathsMatch(filePath, breakpoint.file) || javaDebugPathsMatch(filePath, breakpoint.resolvedFile)) return true;
+    const classSourceSuffix = normalizeJavaDebugPath(getJavaDebugClassSourceSuffix(breakpoint.className, breakpoint.sourceName || breakpoint.resolvedFile || breakpoint.file));
+    if (classSourceSuffix) {
+      const normalizedFilePath = normalizeJavaDebugPath(filePath);
+      if (normalizedFilePath === classSourceSuffix || normalizedFilePath.endsWith(`/${classSourceSuffix}`)) return true;
+      if (classSourceSuffix.includes("/")) return false;
+    }
+    const sourceName = getFileName(breakpoint.sourceName || "").toLowerCase();
+    return !!sourceName && getFileName(filePath).toLowerCase() === sourceName;
+  }
+
+  function getActiveJavaDebugBreakpoints(snapshot) {
+    const activePath = getActiveJavaDebugEditorPath();
+    if (!isJavaDebugSourcePath(activePath)) return [];
+    return (snapshot?.breakpoints || []).filter((breakpoint) => javaDebugBreakpointMatchesPath(activePath, breakpoint));
+  }
+
+  function getJavaDebugSourceForFile(filePath) {
+    if (!javaDebugPathsMatch(filePath, getActiveJavaDebugEditorPath())) return "";
+    return activeEditorCommands.getActiveEditorValue();
+  }
+
+  function getJavaDebugBreakpointSourcePreview(filePath, lineNumber) {
+    const source = getJavaDebugSourceForFile(filePath);
+    if (!source) return "";
+    return window.MarkdownViewerJavaDebugSourceContext?.getJavaLinePreview?.({ source, line: lineNumber }) || "";
+  }
+
+  function isJavaDebugBreakpointLineAvailable(filePath, lineNumber) {
+    const source = getJavaDebugSourceForFile(filePath);
+    const validator = window.MarkdownViewerJavaDebugSourceContext?.isJavaBreakpointLine;
+    if (!source || typeof validator !== "function") return true;
+    return validator({ source, file: filePath, line: lineNumber }) === true;
+  }
+
+  function notifyInvalidJavaDebugBreakpointLine(lineNumber) {
+    app.services?.notify?.show?.({ title: "Java Debugger", message: "Line " + lineNumber + " is not a valid Java breakpoint location. Choose an executable statement line.", type: "info" });
+    return false;
+  }
+
+  function hasJavaDebugBreakpointAtLine(filePath, lineNumber) {
+    return getActiveJavaDebugBreakpoints(javaDebugStateSnapshot).some(function(breakpoint) {
+      return javaDebugBreakpointMatchesPath(filePath, breakpoint) && Number(breakpoint.line) === Number(lineNumber);
+    });
+  }
+
+  function toggleJavaDebugBreakpoint(filePath, lineNumber, patch = {}) {
+    if (!javaDebugSession || !isJavaDebugSourcePath(filePath)) return false;
+    if (!hasJavaDebugBreakpointAtLine(filePath, lineNumber) && !isJavaDebugBreakpointLineAvailable(filePath, lineNumber)) {
+      notifyInvalidJavaDebugBreakpointLine(lineNumber);
+      return Promise.resolve(false);
+    }
+    const sourcePreview = getJavaDebugBreakpointSourcePreview(filePath, lineNumber);
+    return javaDebugSession.toggleBreakpoint(filePath, lineNumber, { ...(sourcePreview ? { sourcePreview } : {}), ...patch })
+      .then(function() {
+        syncJavaDebugEditorMarkers(javaDebugSession.getState?.() || javaDebugStateSnapshot);
+      });
+  }
+
+
+  async function handleJavaDebugBreakpointsRemapped(tabId, payload = {}) {
+    const session = app.modules?.javaDebugSession || null;
+    if (!session) return false;
+    const editorPath = payload.path || getEditorPathForTab(tabId);
+    const remaps = Array.isArray(payload.remaps) ? payload.remaps : [];
+    if (!isJavaDebugSourcePath(editorPath) || !remaps.length) return false;
+    let changed = false;
+    for (const remap of remaps) {
+      const fromLine = Number(remap.line) || 0;
+      const toLine = Number(remap.nextLine) || 0;
+      if (!fromLine || !toLine || fromLine === toLine) continue;
+      const breakpoint = await session.moveBreakpoint?.(remap.file || editorPath, fromLine, toLine);
+      changed = changed || !!breakpoint;
+    }
+    if (changed) syncJavaDebugEditorMarkers(session.getState?.() || javaDebugStateSnapshot);
+    return changed;
+  }
+  function toggleActiveJavaDebugBreakpoint(lineNumber) {
+    return toggleJavaDebugBreakpoint(getActiveJavaDebugEditorPath(), lineNumber);
+  }
+
+  function handleActiveJavaDebugBreakpointGutter(lineNumber, event, details = {}) {
+    const activePath = getActiveJavaDebugEditorPath();
+    if (!javaDebugSession || !isJavaDebugSourcePath(activePath)) return false;
+    if (details.action === "contextmenu") {
+      return javaDebugEditorActions?.showBreakpointContextMenu?.(activePath, lineNumber, event, { ...details, breakpointLineAvailable: isJavaDebugBreakpointLineAvailable(activePath, lineNumber) }) || false;
+    }
+    return toggleActiveJavaDebugBreakpoint(lineNumber);
+  }
+
+  function syncJavaDebugEditorMarkers(snapshot = javaDebugStateSnapshot) {
+    javaDebugStateSnapshot = snapshot || javaDebugStateSnapshot;
+    const activePath = getActiveJavaDebugEditorPath();
+    if (!isJavaDebugSourcePath(activePath)) {
+      activeEditorCommands.clearActiveEditorDebugBreakpoints?.();
+      activeEditorCommands.clearActiveEditorDebugExecutionLine?.();
+      activeEditorCommands.setActiveEditorDebugBreakpointHandler?.(null);
+      return false;
+    }
+
+    activeEditorCommands.setActiveEditorDebugBreakpointHandler?.(handleActiveJavaDebugBreakpointGutter);
+    activeEditorCommands.setActiveEditorDebugBreakpoints?.(getActiveJavaDebugBreakpoints(javaDebugStateSnapshot));
+    const stopped = javaDebugStateSnapshot.state === "paused" || javaDebugStateSnapshot.state === "stopped-at-breakpoint";
+    if (stopped && javaDebugLocationMatchesPath(javaDebugStateSnapshot.location, activePath)) {
+      activeEditorCommands.setActiveEditorDebugExecutionLine?.(Number(javaDebugStateSnapshot.location?.line) || 1);
+    } else {
+      activeEditorCommands.clearActiveEditorDebugExecutionLine?.();
+    }
+    return true;
+  }
+
+  function revealJavaDebugLine(lineNumber) {
+    const source = activeEditorCommands.getActiveEditorValue();
+    const targetLine = Math.max(1, Number(lineNumber) || 1);
+    let offset = 0;
+    for (let line = 1; line < targetLine && offset < source.length; line += 1) {
+      const next = source.indexOf("\n", offset);
+      offset = next < 0 ? source.length : next + 1;
+    }
+    selectEditorTextRange(offset, offset);
+    activeEditorCommands.setActiveEditorDebugExecutionLine?.(targetLine);
+    syncJavaDebugEditorMarkers(javaDebugStateSnapshot);
+  }
+
+  async function getJavaDebugWorkspaceJavaExecutable(runtimeOverride = null) {
+    const runtime = runtimeOverride || javaWorkspaceController?.getRuntime?.();
+    if (runtime?.javaExecutable && await canAccessLocalPath(runtime.javaExecutable)) return runtime.javaExecutable;
+    const jdkPath = runtime?.projectJdk?.path || "";
+    const javaExecutable = getJavaExecutableForJdkHome(jdkPath);
+    if (javaExecutable && await canAccessLocalPath(javaExecutable)) return javaExecutable;
+    const bundledJava = getJavaExecutableForJdkHome(`${getDesktopAppRootPath()}/bin/tooling-jdk`);
+    return bundledJava && await canAccessLocalPath(bundledJava) ? bundledJava : "";
+  }
+
+  const javaDebugSession = window.registerMarkdownViewerJavaDebugSessionManager?.(app, {
+    protocol: javaDebugProtocolClient,
+    protocolFactory: javaDebugProtocolClient?.createClient,
+    sessionFactory: window.registerMarkdownViewerJavaDebugSession,
+    store: javaDebugBreakpointStore,
+    storeConfig: runConfigurationStore,
+    launcher: runLauncher,
+    getProjectPath: function() { return activeFolderPath || ""; },
+    resolveJavaExecutable: getJavaDebugWorkspaceJavaExecutable,
+    findSourceFile: findJavaDebugSourceFile,
+    openSourceFile: function(source) { return openDocumentSourceFile(source, { temporary: false, pinExisting: true }); },
+    revealLine: revealJavaDebugLine,
+    getSourceForFile: getJavaDebugSourceForFile,
+    sourceContext: window.MarkdownViewerJavaDebugSourceContext
+  });
+  javaDebugSession?.subscribe?.(function(snapshot) {
+    javaDebugStateSnapshot = snapshot || javaDebugStateSnapshot;
+    syncJavaDebugEditorMarkers(javaDebugStateSnapshot);
+  });
+  void javaDebugSession?.loadProjectState?.();
+  tabViewHost?.addEventListener?.("click", function() {
+    window.setTimeout(function() { syncJavaDebugEditorMarkers(javaDebugStateSnapshot); }, 0);
+  }, true);
+  function runActiveJavaDebugToCursor() {
+    const tab = tabsModule?.getActiveTab?.();
+    const file = tab?.sourceFilePath || tab?.sourceFileName || "";
+    const source = activeEditorCommands.getActiveEditorValue();
+    const offset = activeEditorCommands.getActiveEditorSelection().start || 0;
+    const line = source.slice(0, offset).split("\n").length;
+    return javaDebugSession?.runToCursor?.(file, line);
+  }
+  function hasOpenJavaDebugProject() {
+    return Boolean(runConfigurationStore?.getSnapshot?.().projectPath);
+  }
+  function notifyJavaDebugProjectRequired() {
+    app.services?.notify?.show?.({ title: "Java Debugger", message: "Open a project folder before starting Java debugging.", type: "info" });
+    return false;
+  }
+  let runConfigurationDialog = null;
+  function openJavaDebugConfigurationDialog() {
+    if (!runConfigurationDialog?.open) throw new Error("Debug Configurations are not available yet.");
+    return runConfigurationDialog.open({
+      mode: "manage",
+      initialType: "java-application",
+      dialogKicker: "Debug",
+      dialogTitle: "Debug Configurations",
+      executeLabel: "Debug",
+      executeIcon: "bi-bug-fill",
+      onExecute: startJavaDebugging
+    });
+  }
+  async function resolveJavaDebugLaunchConfiguration(configuration = null) {
+    if (configuration) return configuration;
+    const activeConfiguration = runConfigurationStore?.getActive?.() || null;
+    if (activeConfiguration?.type === "java-application") return activeConfiguration;
+    const activeFile = getActiveJavaDebugEditorPath();
+    if (isJavaDebugSourcePath(activeFile) && runLauncher?.ensureJavaFileConfiguration) {
+      return runLauncher.ensureJavaFileConfiguration(activeFile);
+    }
+    return activeConfiguration;
+  }
+
+  async function startJavaDebugging(configuration = null) {
+    if (!hasOpenJavaDebugProject()) return notifyJavaDebugProjectRequired();
+    const target = await resolveJavaDebugLaunchConfiguration(configuration);
+    if (!target) {
+      if (isJavaDebugSourcePath(getActiveJavaDebugEditorPath())) return false;
+      return openJavaDebugConfigurationDialog();
+    }
+    if (target.type !== "java-application") return openJavaDebugConfigurationDialog();
+    return javaDebugSession?.start?.(target);
+  }
+  async function startJavaDebuggingForFile(filePath) {
+    if (!hasOpenJavaDebugProject()) return notifyJavaDebugProjectRequired();
+    const target = await runLauncher?.ensureJavaFileConfiguration?.(filePath);
+    if (!target) return false;
+    return startJavaDebugging(target);
+  }
+  function canDebugActiveJavaFile() {
+    const activeFile = getActiveJavaDebugEditorPath();
+    if (!isJavaDebugSourcePath(activeFile)) return false;
+    return Boolean(javaMainClassFinder?.inspectSource?.(activeEditorCommands.getActiveEditorValue(), activeFile));
+  }
+  function getSidebarLowerPanelLayoutState() {
+    const state = loadGlobalState();
+    return sidebarLowerPanelTabs?.getStateSnapshot?.() || {
+      activeViewId: state.sidebarLowerPanelActiveTab || "outline",
+      enabled: {
+        dropzone: state.sidebarDropzoneVisible !== false,
+        outline: state.outlinePanelVisible !== false
+      }
+    };
+  }
+
+  function applySidebarLowerPanelLayoutState(state = {}) {
+    const enabled = state.enabled || {};
+    const dropzoneVisible = enabled.dropzone !== false;
+    const outlineVisible = enabled.outline !== false;
+    if (dropzoneVisible) showSidebarDropzone(false);
+    else hideSidebarDropzone(false);
+    outlinePanel?.setVisible?.(outlineVisible, { persist: false });
+    const activeViewId = String(state.activeViewId || "");
+    if (activeViewId && sidebarLowerPanelTabs?.isEnabled?.(activeViewId)) sidebarLowerPanelTabs.activate(activeViewId, { persist: false });
+    sidebarLowerPanelTabs?.sync?.();
+    updateDropzoneToggleButtons();
+    updatePanelToggleMenuLabels();
+  }
+
+  const javaDebugPanel = window.registerMarkdownViewerJavaDebugPanel?.(app, {
+    bottomPanel: bottomPanelTabs,
+    session: javaDebugSession,
+    store: runConfigurationStore,
+    getProjectPath: function() { return activeFolderPath || ""; },
+    get Neutralino() { return typeof Neutralino !== "undefined" ? Neutralino : undefined; },
+    leftHost: javaDebugLeftPerspectiveElement,
+    rightDock: javaDebugRightDockElement,
+    aiCompanionDockElement,
+    rightHost: javaDebugRightPerspectiveElement,
+    setSidebarVisible,
+    setAiCompanionOpen: function(open, options) { return aiCompanionPanel?.setOpen?.(open, options); },
+    setRailActive: setJavaDebugRailActive,
+    loadGlobalState,
+    saveGlobalState,
+    prompt: function(options) { return notificationModal?.prompt?.(options) || Promise.resolve(null); },
+    copyTextToClipboard: copyTextToSystemClipboard,
+    getPanelSizes: function() { return viewLayout.getCurrentPanelSizes?.() || {}; },
+    getDefaultPanelSizes: function() { return viewLayout.getDefaultPanelSizes?.() || {}; },
+    applyPanelSizes: function(sizes) { return viewLayout.applyPanelSizes?.(sizes); },
+    getSidebarLowerPanelState: getSidebarLowerPanelLayoutState,
+    applySidebarLowerPanelState: applySidebarLowerPanelLayoutState,
+    getActiveEditorPath: getActiveJavaDebugEditorPath,
+    getActiveEditorLine: getActiveJavaDebugSourceLine,
+    getActiveEditorValue: function() { return activeEditorCommands.getActiveEditorValue(); },
+    getActiveEditorSelection: function() { return activeEditorCommands.getActiveEditorSelection?.() || { start: 0, end: 0 }; },
+    getSelectionText: getActiveJavaDebugSelectionText,
+    sourceContext: window.MarkdownViewerJavaDebugSourceContext,
+    isJavaSourcePath: isJavaDebugSourcePath,
+    runToCursor: runActiveJavaDebugToCursor,
+    toggleBreakpoint: toggleJavaDebugBreakpoint,
+    isActiveEditorBreakpointLineAvailable: function() { return isJavaDebugBreakpointLineAvailable(getActiveJavaDebugEditorPath(), getActiveJavaDebugSourceLine()); },
+    startDebugging: startJavaDebugging,
+    alert: function(message) {
+      return app.services?.notify?.show?.({ title: "Java Debugger", message: String(message || ""), type: "error" });
+    }
+  });
+  function isPanelTabVisibleInAnyDock(tabId) {
+    const id = String(tabId || "").trim();
+    if (!id) return false;
+    if (javaDebugPanel?.isLayoutTabVisible?.(id) === true) return true;
+    return bottomPanelTabs?.isPanelVisible?.() === true && bottomPanelTabs?.hasTab?.(id) === true;
+  }
+
+  function hidePanelTabInAnyDock(tabId) {
+    const id = String(tabId || "").trim();
+    if (!id) return false;
+    if (javaDebugPanel?.hideLayoutTab?.(id) === true) {
+      updatePanelToggleMenuLabels();
+      return true;
+    }
+    if (bottomPanelTabs?.isPanelVisible?.() === true && bottomPanelTabs?.getActiveTabId?.() === id) {
+      bottomPanelTabs.hidePanel?.();
+      updatePanelToggleMenuLabels();
+      return true;
+    }
+    return false;
+  }
+
+  function updatePanelToggleMenuLabel(selector, showLabel, hideLabel, visible) {
+    const label = visible ? hideLabel : showLabel;
+    document.querySelectorAll(selector).forEach(function(labelElement) {
+      labelElement.textContent = label;
+      const button = labelElement.closest?.("button");
+      if (!button) return;
+      button.title = label;
+      button.setAttribute("aria-label", label);
+      if (button.hasAttribute("aria-pressed")) button.setAttribute("aria-pressed", String(visible));
+    });
+  }
+
+  function updatePanelToggleMenuLabels() {
+    updatePanelToggleMenuLabel(".problems-toggle-label", "Show Problems", "Hide Problems", isPanelTabVisibleInAnyDock("problems"));
+    updatePanelToggleMenuLabel(".java-rebuild-toggle-label", "Show Java Rebuild", "Hide Java Rebuild", isPanelTabVisibleInAnyDock("java-rebuild"));
+    updatePanelToggleMenuLabel(".ai-companion-toggle-label", "Show AI Companion", "Hide AI Companion", javaDebugPanel?.isLayoutTabVisible?.("ai-companion") === true);
+    updatePanelToggleMenuLabel(".tasks-toggle-label", "Show Tasks", "Hide Tasks", isPanelTabVisibleInAnyDock("tasks"));
+    updatePanelToggleMenuLabel(".background-processes-toggle-label", "Show Background Processes", "Hide Background Processes", isPanelTabVisibleInAnyDock("background-processes"));
+    updatePanelToggleMenuLabel(".find-results-toggle-label", "Show Find in Files Results", "Hide Find in Files Results", isPanelTabVisibleInAnyDock(bottomPanelTabs?.SEARCH_RESULTS_TAB_ID || "search-results"));
+    updatePanelToggleMenuLabel(".dropzone-toggle-label", "Show Dropzone Panel", "Hide Dropzone Panel", isSidebarDropzoneVisible());
+    updatePanelToggleMenuLabel(".outline-toggle-label", "Show Outline Panel", "Hide Outline Panel", outlinePanel?.isVisible?.() === true);
+  }
+
+  bottomPanelTabs?.addStateChangeListener?.(updatePanelToggleMenuLabels);
+  ["find", "view", "project"].forEach(function(categoryName) {
+    const toggle = applicationMenu?.getCategory?.(categoryName)?.toggle;
+    toggle?.addEventListener?.("mouseenter", updatePanelToggleMenuLabels);
+    toggle?.addEventListener?.("focus", updatePanelToggleMenuLabels);
+    toggle?.addEventListener?.("click", updatePanelToggleMenuLabels);
+  });
+  document.addEventListener("pointerdown", function(event) {
+    if (event.target?.closest?.(".dropdown-toggle, .mobile-menu-item, .action-menu-toggle")) updatePanelToggleMenuLabels();
+  }, true);
+  updatePanelToggleMenuLabels();
+  window.registerMarkdownViewerJavaDebugGlobalToolbar?.(app, {
+    host: document.getElementById("java-debug-header-toolbar"),
+    session: javaDebugSession,
+    panel: javaDebugPanel,
+    store: runConfigurationStore,
+    prompt: function(options) { return notificationModal?.prompt?.(options) || Promise.resolve(null); },
+    getActiveEditorPath: getActiveJavaDebugEditorPath,
+    getActiveEditorLine: getActiveJavaDebugSourceLine,
+    isJavaSourcePath: isJavaDebugSourcePath,
+    runToCursor: runActiveJavaDebugToCursor,
+    toggleBreakpoint: function() {
+      return toggleActiveJavaDebugBreakpoint(getActiveJavaDebugSourceLine());
+    },
+    isActiveEditorBreakpointLineAvailable: function() { return isJavaDebugBreakpointLineAvailable(getActiveJavaDebugEditorPath(), getActiveJavaDebugSourceLine()); },
+    startDebugging: startJavaDebugging,
+    alert: function(message) {
+      return app.services?.notify?.show?.({ title: "Java Debugger", message: String(message || ""), type: "error" });
+    }
+  });
+  function getWorkspaceLayoutPresentation(mode) {
+    if (mode === "ai") return { mode: "ai", icon: "bi bi-stars", label: "AI Layout" };
+    if (mode === "debug") return { mode: "debug", icon: "bi bi-bug-fill", label: "Debug Layout" };
+    return { mode: "developer", icon: "bi bi-code-slash", label: "Develop Layout" };
+  }
+  function setWorkspaceLayoutMode(mode) {
+    const presentation = getWorkspaceLayoutPresentation(mode);
+    if (layoutModeSelect) {
+      layoutModeSelect.dataset.layoutMode = presentation.mode;
+      layoutModeSelect.setAttribute("aria-expanded", "false");
+    }
+    if (layoutModeIcon) {
+      layoutModeIcon.className = presentation.icon;
+    }
+    if (layoutModeLabel) layoutModeLabel.textContent = presentation.label;
+    layoutModeMenu?.setAttribute("hidden", "");
+    layoutModeOptions.forEach(function(option) {
+      option.setAttribute("aria-checked", option.dataset.layoutMode === presentation.mode ? "true" : "false");
+    });
+  }
+  function setJavaDebugRailActive(active) {
+    setWorkspaceLayoutMode(active ? "debug" : "developer");
+  }
+  function setLayoutModeMenuOpen(open) {
+    if (!layoutModeSelect || !layoutModeMenu) return;
+    layoutModeSelect.setAttribute("aria-expanded", open ? "true" : "false");
+    layoutModeMenu.toggleAttribute("hidden", !open);
+  }
+  layoutModeSelect?.addEventListener("click", function(event) {
+    event.stopPropagation();
+    setLayoutModeMenuOpen(layoutModeMenu?.hasAttribute("hidden") === true);
+  });
+  layoutModeOptions.forEach(function(option) {
+    option.addEventListener("click", function(event) {
+      const isHeaderLayoutOption = option.closest(".layout-mode-menu");
+      if (isHeaderLayoutOption) {
+        event.stopPropagation();
+        setLayoutModeMenuOpen(false);
+      } else {
+        closeOpenActionMenus();
+      }
+      const mode = option.dataset.layoutMode || "developer";
+      if (mode === "debug") {
+        void javaDebugPanel?.openPerspective?.()?.catch?.(function(error) {
+          setWorkspaceLayoutMode("developer");
+          return app.services?.notify?.show?.({ title: "Java Debugger", message: String(error?.message || error || "Unable to open the Debug layout."), type: "error" });
+        });
+      } else if (mode === "ai") {
+        javaDebugPanel?.closePerspective?.({ persist: false });
+        workspaceSearch?.setSidebarView?.("ai-companion");
+        setWorkspaceLayoutMode("ai");
+      } else {
+        aiCompanionPanel?.closeWorkspaceForExternalNavigation?.();
+        javaDebugPanel?.closePerspective?.();
+        setWorkspaceLayoutMode("developer");
+      }
+    });
+  });
+  document.addEventListener("click", function(event) {
+    if (event.target?.closest?.(".layout-mode-control")) return;
+    setLayoutModeMenuOpen(false);
+  });
+  layoutModeSelect?.addEventListener("keydown", function(event) {
+    if (event.key === "Escape") setLayoutModeMenuOpen(false);
+  });
+  layoutModeMenu?.addEventListener("keydown", function(event) {
+    if (event.key === "Escape") setLayoutModeMenuOpen(false);
+  });
+  setJavaDebugRailActive(javaDebugPanel?.isPerspectiveOpen?.() === true);
+  document.querySelectorAll(".sidebar-view-option").forEach(function(button) {
+    button.addEventListener("click", function() {
+      if (button.getAttribute("data-sidebar-view") === "ai-companion") return;
+      javaDebugPanel?.closePerspective?.({ persist: false });
+    });
+  });
+  const javaDebugEditorActions = window.registerMarkdownViewerJavaDebugEditorActions?.(app, {
+    sourceActions,
+    session: javaDebugSession,
+    panel: javaDebugPanel,
+    getProjectPath: function() { return activeFolderPath || ""; },
+    getActiveEditorPath: getActiveJavaDebugEditorPath,
+    getActiveEditorValue: function() { return activeEditorCommands.getActiveEditorValue(); },
+    prompt: function(options) { return notificationModal?.prompt?.(options) || Promise.resolve(null); },
+    startDebugging: startJavaDebugging,
+    startDebuggingForFile: startJavaDebuggingForFile,
+    toggleBreakpoint: toggleJavaDebugBreakpoint,
+    sourceContext: window.MarkdownViewerJavaDebugSourceContext,
+    mainClassFinder: javaMainClassFinder,
+    alert: function(message) {
+      return app.services?.notify?.show?.({ title: "Java Debugger", message: String(message || ""), type: "error" });
+    }
+  });
+  window.setTimeout(function() { syncJavaDebugEditorMarkers(javaDebugSession?.getState?.() || javaDebugStateSnapshot); }, 0);
+  window.registerMarkdownViewerJavaDebugHover?.(app, {
+    editorElement: markdownEditor,
+    editor: { getView: function() { return (editorViewManager?.getActiveCodeMirrorEditor?.() || codeMirrorEditor || null)?.getView?.() || null; }, getActiveEditor: function() { return activeEditorCommands.getActiveEditor?.() || null; } },
+    session: javaDebugSession,
+    getActiveEditorPath: getActiveJavaDebugEditorPath,
+    getActiveEditorValue: function() { return activeEditorCommands.getActiveEditorValue(); },
+    isJavaSourcePath: isJavaDebugSourcePath
+  });
+
+  function getActiveJavaDebugSourceLine() {
+    const source = activeEditorCommands.getActiveEditorValue();
+    const selection = activeEditorCommands.getActiveEditorSelection?.() || { start: 0 };
+    const offset = Math.max(0, Number(selection.start) || 0);
+    return source.slice(0, offset).split("\n").length;
+  }
+
+  function getActiveJavaDebugSelectionText() {
+    const source = activeEditorCommands.getActiveEditorValue();
+    const selection = activeEditorCommands.getActiveEditorSelection?.() || { start: 0, end: 0 };
+    return source.slice(Math.max(0, Number(selection.start) || 0), Math.max(0, Number(selection.end) || 0)).trim();
+  }
+
+  function notifyJavaDebugShortcutError(error) {
+    app.services?.notify?.show?.({ title: "Java Debugger", message: String(error?.message || error || "Java debugger command failed."), type: "error" });
+  }
+
+  function notifyJavaDebugShortcutUnavailable(message) {
+    app.services?.notify?.show?.({ title: "Java Debugger", message: String(message || "That Java debugger command is not available right now."), type: "info" });
+    return true;
+  }
+
+  function runJavaDebugShortcut(commandId) {
+    if (!javaDebugSession) return false;
+    const snapshot = javaDebugSession.getState?.() || javaDebugStateSnapshot || {};
+    const debugState = String(snapshot.state || "not-running");
+    const stopped = debugState === "paused" || debugState === "stopped-at-breakpoint";
+    const evaluatable = stopped && Boolean(snapshot.selectedFrameId);
+    const active = !["not-running", "terminated", "failed"].includes(debugState);
+    const editorPath = getActiveJavaDebugEditorPath();
+    const isJavaEditor = isJavaDebugSourcePath(editorPath);
+    if (commandId === "debug-start-continue") {
+      if (stopped) void javaDebugSession.resume?.().catch?.(notifyJavaDebugShortcutError);
+      else if (!active) void startJavaDebugging().catch(notifyJavaDebugShortcutError);
+      else return notifyJavaDebugShortcutUnavailable("Java debugging is already running. Use Pause to suspend it or Stop Debugging to terminate it.");
+      return true;
+    }
+    if (commandId === "debug-stop") { if (!active) return notifyJavaDebugShortcutUnavailable("No Java debug session is running."); void javaDebugSession.stop?.().catch?.(notifyJavaDebugShortcutError); return true; }
+    if (commandId === "debug-pause") { if (!["running", "launching", "stepping", "evaluating"].includes(debugState)) return notifyJavaDebugShortcutUnavailable("Start a Java debug session before pausing execution."); void javaDebugSession.pause?.().catch?.(notifyJavaDebugShortcutError); return true; }
+    if (commandId === "debug-step-over") { if (!evaluatable) return notifyJavaDebugShortcutUnavailable("Pause at a Java stack frame before stepping over."); void javaDebugSession.stepOver?.().catch?.(notifyJavaDebugShortcutError); return true; }
+    if (commandId === "debug-step-into") { if (!active) return false; if (!evaluatable) return notifyJavaDebugShortcutUnavailable("Pause at a Java stack frame before stepping into."); void javaDebugSession.stepInto?.().catch?.(notifyJavaDebugShortcutError); return true; }
+    if (commandId === "debug-step-out") { if (!evaluatable) return notifyJavaDebugShortcutUnavailable("Pause at a Java stack frame before stepping out."); void javaDebugSession.stepOut?.().catch?.(notifyJavaDebugShortcutError); return true; }
+    if (commandId === "debug-toggle-breakpoint") { if (!isJavaEditor) return notifyJavaDebugShortcutUnavailable("Open a Java source file before toggling a breakpoint."); if (!isJavaDebugBreakpointLineAvailable(editorPath, getActiveJavaDebugSourceLine())) return notifyJavaDebugShortcutUnavailable("Choose an executable Java statement line before toggling a breakpoint."); void toggleActiveJavaDebugBreakpoint(getActiveJavaDebugSourceLine()).catch(notifyJavaDebugShortcutError); return true; }
+    if (commandId === "debug-run-to-cursor") {
+      if (!isJavaEditor) return notifyJavaDebugShortcutUnavailable("Open a Java source file before using Run to Cursor.");
+      if (!evaluatable) return notifyJavaDebugShortcutUnavailable("Pause at a Java stack frame before using Run to Cursor.");
+      void javaDebugSession.runToCursor?.(editorPath, getActiveJavaDebugSourceLine()).catch?.(notifyJavaDebugShortcutError);
+      return true;
+    }
+    if (commandId === "debug-evaluate-expression") {
+      if (!evaluatable) return notifyJavaDebugShortcutUnavailable("Pause at a Java stack frame before evaluating expressions.");
+      const selection = isJavaEditor ? getActiveJavaDebugSelectionText() : "";
+      void javaDebugPanel?.openView?.("expressions").then(function() { return selection ? javaDebugSession.evaluate?.(selection) : javaDebugPanel.focusExpressionInput?.(); }).catch(notifyJavaDebugShortcutError);
+      return true;
+    }
+    return false;
+  }
+  runConfigurationDialog = window.registerMarkdownViewerRunConfigurationDialog?.(app, {
     store: runConfigurationStore,
     editor: runConfigurationEditor,
     launcher: runLauncher,
@@ -17304,6 +17997,29 @@ ${error?.message || String(error || "")}`,
     jdkRegistry,
     confirm: function(options) {
       return app.services?.confirm ? app.services.confirm(options) : Promise.resolve(false);
+    }
+  });
+  window.registerMarkdownViewerJavaDebugCommandMenu?.(app, {
+    store: runConfigurationStore,
+    dialog: runConfigurationDialog,
+    session: javaDebugSession,
+    panel: javaDebugPanel,
+    prompt: function(options) { return notificationModal?.prompt?.(options) || Promise.resolve(null); },
+    applicationMenu,
+    closeActionMenus: closeOpenActionMenus,
+    getActiveEditorPath: getActiveJavaDebugEditorPath,
+    getActiveEditorLine: getActiveJavaDebugSourceLine,
+    getSelectionText: getActiveJavaDebugSelectionText,
+    isJavaSourcePath: isJavaDebugSourcePath,
+    canDebugActiveJavaFile,
+    runToCursor: runActiveJavaDebugToCursor,
+    toggleBreakpoint: function() {
+      return toggleActiveJavaDebugBreakpoint(getActiveJavaDebugSourceLine());
+    },
+    isActiveEditorBreakpointLineAvailable: function() { return isJavaDebugBreakpointLineAvailable(getActiveJavaDebugEditorPath(), getActiveJavaDebugSourceLine()); },
+    startDebugging: startJavaDebugging,
+    alert: function(message) {
+      return app.services?.notify?.show?.({ title: "Java Debugger", message: String(message || ""), type: "error" });
     }
   });
   window.registerMarkdownViewerRunCommandMenu?.(app, {
@@ -17322,7 +18038,7 @@ ${error?.message || String(error || "")}`,
     alert: function(message) { window.alert(message); }
   });
   void runConfigurationStore?.loadProject?.(activeFolderPath || "");
-  void runOutput?.restoreForProject?.(activeFolderPath || "");
+  const startupRunOutputRestore = runOutput?.restoreForProject?.(activeFolderPath || "");
   const findInFiles = window.registerMarkdownViewerFindInFiles(app, {
     loadGlobalState,
     saveGlobalState,
@@ -17339,6 +18055,7 @@ ${error?.message || String(error || "")}`,
   });
   const openFindInFilesModal = findInFiles.openFindInFilesModal;
   const toggleFindInFilesResultsPanel = findInFiles.toggleResultsPanel;
+  restoreDebugPanelLayoutForProject(activeFolderPath || "", [startupRunOutputRestore]);
   const openFileByName = window.registerMarkdownViewerOpenFileByName(app, {
     isFolderOpen: function() { return isFolderOpen; },
     getCurrentFolderTreeNodes: function() { return currentFolderTreeNodes; },
@@ -18357,7 +19074,10 @@ ${error?.message || String(error || "")}`,
   findInFilesResultsPanelToggleButtons.forEach(function(button) {
     button.addEventListener("click", function(e) {
       e.preventDefault();
-      toggleFindInFilesResultsPanel();
+      const searchResultsTabId = bottomPanelTabs?.SEARCH_RESULTS_TAB_ID || "search-results";
+      if (isPanelTabVisibleInAnyDock(searchResultsTabId)) hidePanelTabInAnyDock(searchResultsTabId);
+      else toggleFindInFilesResultsPanel();
+      updatePanelToggleMenuLabels();
       if (button.classList.contains("mobile-menu-item")) {
         closeMobileMenu();
       }
@@ -20262,6 +20982,10 @@ ${error?.message || String(error || "")}`,
     tab: document.getElementById("sidebar-lower-tab-dropzone"),
     enabled: lowerPanelState.sidebarDropzoneVisible !== false
   });
+  sidebarLowerPanelTabs.addStateChangeListener?.(function() {
+    javaDebugPanel?.captureCurrentLayout?.();
+    updatePanelToggleMenuLabels();
+  });
   const outlineDocumentSymbols = window.registerMarkdownViewerOutlineDocumentSymbols(app);
   const outlineSyntaxTree = window.registerMarkdownViewerOutlineSyntaxTree(app);
   const outlineLanguageDependencies = {
@@ -20370,6 +21094,7 @@ ${error?.message || String(error || "")}`,
     },
     hideGraphStaleModal,
     goToEditorLinePrompt,
+    runJavaDebugShortcut,
     isActiveEditorFocused: function() {
       return codeMirrorEditor?.isFocused ? codeMirrorEditor.isFocused() : activeEditorCommands.isActiveEditorFocused();
     },
@@ -20437,4 +21162,3 @@ if (window.markdownViewerStartupErrors?.guardStartup) {
   });
 }
 })();
-

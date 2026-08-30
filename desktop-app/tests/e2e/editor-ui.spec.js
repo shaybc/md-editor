@@ -45,6 +45,13 @@ async function openEditorEditSubmenu(page) {
   return editSubmenu;
 }
 
+async function openEditorSourceSubmenu(page) {
+  const sourceButton = page.locator("#editor-context-menu").getByRole("menuitem", { name: "Source", exact: true });
+  const sourceSubmenu = sourceButton.locator("..");
+  await sourceButton.hover();
+  return sourceSubmenu;
+}
+
 async function openUtf8ConvertSubmenu(page) {
   const editSubmenu = await openEditorEditSubmenu(page);
   const unicodeSubmenu = editSubmenu.locator(".editor-context-menu-submenu", { hasText: "UTF8 Convert" }).first();
@@ -109,6 +116,38 @@ test.describe("desktop editor UI", () => {
 
     await selectViewMode(page, "editor");
     await expect(page.locator(".cm-editor")).toBeVisible();
+  });
+
+  test("Ctrl-click does not show the crash overlay when CodeMirror cannot resolve coordinates", async ({ page }) => {
+    const pageErrors = [];
+    page.on("pageerror", (error) => pageErrors.push(error.message));
+    await openApp(page);
+    await selectViewMode(page, "editor");
+    await focusCodeMirror(page);
+    await setActiveEditorValue(page, "alpha\nbeta");
+    await expect.poll(() => codeMirrorDocText(page)).toBe("alpha\nbeta");
+
+    await page.evaluate(() => {
+      const editor = window.markdownViewerApp.modules.codeMirrorEditor;
+      const view = editor.getView();
+      const coords = view.coordsAtPos(1);
+      Object.defineProperty(view, "posAtCoords", {
+        configurable: true,
+        value: () => { throw new TypeError("Cannot read properties of undefined (reading 'isText')"); },
+      });
+      view.contentDOM.dispatchEvent(new MouseEvent("click", {
+        bubbles: true,
+        cancelable: true,
+        button: 0,
+        buttons: 1,
+        ctrlKey: true,
+        clientX: coords.left,
+        clientY: coords.top,
+      }));
+    });
+
+    await expect(page.locator("#startup-crash-overlay")).toHaveCount(0);
+    expect(pageErrors.filter((message) => message.includes("isText"))).toEqual([]);
   });
 
   test("toolbar formatting and undo redo update the active editor", async ({ page }) => {
@@ -401,7 +440,7 @@ test.describe("desktop editor UI", () => {
     await expect(page.locator(".cm-findLineBookmarkMarker")).toHaveCount(0);
   });
 
-  test("editor generic context menu includes editing and fold actions", async ({ page }) => {
+  test("editor generic context menu includes editing actions", async ({ page }) => {
     await openApp(page);
     await setActiveEditorValue(page, "# Alpha\n\nBeta");
     await setActiveEditorSelection(page, 0, 0);
@@ -416,11 +455,28 @@ test.describe("desktop editor UI", () => {
     const menu = page.locator("#editor-context-menu");
     await expect(menu).toBeVisible();
     await expect(menu).toContainText("Emoji");
-    await expect(menu).toContainText("Format file");
-    await expect(menu).toContainText("Collapse all");
-    await expect(menu).toContainText("Expand all");
+    await expect(menu).toContainText("Format File");
+    await expect(menu).not.toContainText("Collapse all");
+    await expect(menu).not.toContainText("Expand all");
+    await expect(page.locator("[data-editor-context-action='collapse-all-folds']")).toHaveCount(0);
+    await expect(page.locator("[data-editor-context-action='expand-all-folds']")).toHaveCount(0);
     await expect(page.locator("[data-editor-context-action='emoji']")).toBeVisible();
-    await expect(page.locator("[data-editor-context-action='format-file']")).toBeVisible();
+    await expect(page.locator("[data-editor-context-action='format-file']")).toHaveCount(1);
+    const rootMenuLabels = await menu.locator("> .editor-context-menu-items > *").evaluateAll((elements) => elements.map((element) => {
+      const button = element.matches("button") ? element : element.querySelector(":scope > button");
+      return button?.querySelector("span")?.textContent?.trim() || "";
+    }));
+    expect(rootMenuLabels.indexOf("Edit")).toBeGreaterThan(-1);
+    expect(rootMenuLabels.indexOf("Source")).toBeGreaterThan(-1);
+    expect(rootMenuLabels.indexOf("Edit")).toBeLessThan(rootMenuLabels.indexOf("Source"));
+
+    const editButton = menu.getByRole("menuitem", { name: "Edit", exact: true });
+    const editSubmenu = editButton.locator("..");
+    await editButton.hover();
+    const disabledCopyAction = editSubmenu.locator('[data-editor-context-action="copy"]');
+    await expect(disabledCopyAction).toBeDisabled();
+    await expect(disabledCopyAction).toHaveCSS("cursor", "not-allowed");
+    await expect(disabledCopyAction).toHaveCSS("opacity", "0.55");
   });
 
   test("Edit submenu groups no-selection editor actions", async ({ page }) => {
@@ -733,8 +789,7 @@ test.describe("desktop editor UI", () => {
       clientX: 240,
       clientY: 220,
     });
-    const sourceSubmenu = page.locator("#editor-context-menu .editor-context-menu-submenu").first();
-    await sourceSubmenu.locator("> button").hover();
+    const sourceSubmenu = await openEditorSourceSubmenu(page);
     await expect(sourceSubmenu.locator('[data-editor-context-action="toggle-comment"]')).toContainText("Toggle Comment");
     await expect(sourceSubmenu.locator('[data-editor-context-action="toggle-block-comment"]')).toContainText("Toggle Block Comment");
     await expect(sourceSubmenu.locator('[data-editor-context-action="toggle-block-comment"] kbd')).toHaveText("Ctrl+Shift+/");
@@ -761,8 +816,7 @@ test.describe("desktop editor UI", () => {
       clientX: 240,
       clientY: 220,
     });
-    const pythonSourceSubmenu = page.locator("#editor-context-menu .editor-context-menu-submenu").first();
-    await pythonSourceSubmenu.locator("> button").hover();
+    const pythonSourceSubmenu = await openEditorSourceSubmenu(page);
     await expect(pythonSourceSubmenu.locator('[data-editor-context-action="toggle-comment"]')).toBeVisible();
     await expect(pythonSourceSubmenu.locator('[data-editor-context-action="toggle-block-comment"]')).toHaveCount(0);
     await pythonSourceSubmenu.locator('[data-editor-context-action="toggle-comment"]').evaluate((button) => button.click());
@@ -796,8 +850,7 @@ test.describe("desktop editor UI", () => {
       clientX: 240,
       clientY: 220,
     });
-    const sourceSubmenu = page.locator("#editor-context-menu .editor-context-menu-submenu").first();
-    await sourceSubmenu.locator("> button").hover();
+    const sourceSubmenu = await openEditorSourceSubmenu(page);
     const sourceActionOrder = await sourceSubmenu.locator("> .editor-context-menu-submenu-panel > *").evaluateAll((elements) => (
       elements.map((element) => element.getAttribute("data-editor-context-action")
         || (element.classList.contains("editor-context-menu-divider") ? "separator" : ""))
@@ -937,8 +990,7 @@ test.describe("desktop editor UI", () => {
       }));
     }, { position: from + 2 });
 
-    const sourceSubmenu = page.locator("#editor-context-menu .editor-context-menu-submenu").first();
-    await sourceSubmenu.locator("> button").hover();
+    const sourceSubmenu = await openEditorSourceSubmenu(page);
     const formatSelectedAction = sourceSubmenu.locator('[data-editor-context-action="format-selected"]');
     await expect(formatSelectedAction).toBeVisible();
     await formatSelectedAction.click();

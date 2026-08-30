@@ -15,7 +15,11 @@
     let dirty = false;
     let editorControls = null;
     let previewGeneration = 0;
-
+    let dialogKicker = "Run";
+    let dialogTitle = "Run Configurations";
+    let executeLabel = "Run";
+    let executeIcon = "bi-play-fill";
+    let executeHandler = null;
     function clone(value) {
       return JSON.parse(JSON.stringify(value));
     }
@@ -103,7 +107,7 @@
       modal.setAttribute("aria-labelledby", "run-configuration-title");
       modal.hidden = true;
       modal.innerHTML = `<div class="reset-modal-box run-configuration-box">
-        <header class="run-configuration-header"><div><p class="run-configuration-kicker">Run</p><h2 id="run-configuration-title">Run Configurations</h2></div><button type="button" data-run-close aria-label="Close"><i class="bi bi-x-lg"></i></button></header>
+        <header class="run-configuration-header"><div><p class="run-configuration-kicker" data-run-dialog-kicker>Run</p><h2 id="run-configuration-title" data-run-dialog-title>Run Configurations</h2></div><button type="button" data-run-close aria-label="Close"><i class="bi bi-x-lg"></i></button></header>
         <div class="run-configuration-body">
           <aside class="run-configuration-sidebar">
             <div class="run-configuration-new"><select data-run-new-type aria-label="New configuration type"><option value="java-application">Java Application</option><option value="maven">Maven</option><option value="maven-spring-boot">Spring Boot Maven</option><option value="gradle">Gradle</option><option value="gradle-spring-boot">Spring Boot Gradle</option><option value="docker-compose">Docker Compose Up</option><option value="docker-compose-down">Docker Compose Down</option><option value="docker-compose-logs">Docker Compose Logs</option></select><button type="button" class="reset-modal-btn reset-modal-cancel" data-run-new>New</button></div>
@@ -112,7 +116,7 @@
           </aside>
           <main class="run-configuration-editor" data-run-configuration-editor></main>
         </div>
-        <footer class="run-configuration-actions reset-modal-actions"><span data-run-dialog-status role="status"></span><button type="button" class="reset-modal-btn reset-modal-cancel" data-run-close>Close</button><button type="button" class="reset-modal-btn reset-modal-cancel" data-run-apply>Apply</button><button type="button" class="reset-modal-btn reset-modal-confirm" data-run-execute><i class="bi bi-play-fill"></i> Run</button></footer>
+        <footer class="run-configuration-actions reset-modal-actions"><span data-run-dialog-status role="status"></span><button type="button" class="reset-modal-btn reset-modal-cancel" data-run-close>Close</button><button type="button" class="reset-modal-btn reset-modal-cancel" data-run-apply>Apply</button><button type="button" class="reset-modal-btn reset-modal-confirm" data-run-execute><i class="bi bi-play-fill" data-run-execute-icon></i> <span data-run-execute-label>Run</span></button></footer>
       </div>`;
       document.body.appendChild(modal);
       modal.querySelector("[data-run-new]")?.addEventListener("click", createNew);
@@ -146,7 +150,7 @@
     function renderEditor() {
       const host = ensureModal().querySelector("[data-run-configuration-editor]");
       if (!draft) {
-        host.innerHTML = '<div class="run-configuration-placeholder"><i class="bi bi-play-circle"></i><p>Create or select a Run configuration.</p></div>';
+        host.innerHTML = `<div class="run-configuration-placeholder"><i class="bi bi-play-circle"></i><p>Create or select a ${dialogKicker} configuration.</p></div>`;
         return;
       }
       editorControls = deps.editor.render(host, draft, {
@@ -169,10 +173,16 @@
       renderList();
       renderEditor();
       const hasDraft = Boolean(draft);
-      ensureModal().querySelector("[data-run-duplicate]").disabled = !selectedId;
-      ensureModal().querySelector("[data-run-delete]").disabled = !selectedId;
-      ensureModal().querySelector("[data-run-apply]").disabled = !hasDraft;
-      ensureModal().querySelector("[data-run-execute]").disabled = !hasDraft;
+      const currentModal = ensureModal();
+      currentModal.querySelector("[data-run-dialog-kicker]").textContent = dialogKicker;
+      currentModal.querySelector("[data-run-dialog-title]").textContent = dialogTitle;
+      currentModal.querySelector("[data-run-duplicate]").disabled = !selectedId;
+      currentModal.querySelector("[data-run-delete]").disabled = !selectedId;
+      currentModal.querySelector("[data-run-apply]").disabled = !hasDraft;
+      const executeButton = currentModal.querySelector("[data-run-execute]");
+      executeButton.disabled = !hasDraft;
+      executeButton.querySelector("[data-run-execute-icon]").className = `bi ${executeIcon}`;
+      executeButton.querySelector("[data-run-execute-label]").textContent = executeLabel;
     }
 
     async function selectConfiguration(configurationId) {
@@ -248,6 +258,7 @@
       const saved = await applyDraft();
       if (!saved) return false;
       modal.hidden = true;
+      if (typeof executeHandler === "function") return executeHandler(saved);
       return deps.launcher.runConfiguration(saved);
     }
 
@@ -286,14 +297,32 @@
       if (status) status.textContent = message;
     }
 
+    function configureExecution(options = {}) {
+      dialogKicker = options.dialogKicker || "Run";
+      dialogTitle = options.dialogTitle || "Run Configurations";
+      executeLabel = options.executeLabel || "Run";
+      executeIcon = options.executeIcon || "bi-play-fill";
+      executeHandler = typeof options.onExecute === "function" ? options.onExecute : null;
+    }
+
     /**
-     * Open the dialog in run or manage mode.
-     * @param {object} options Initial selection and type.
+     * Open the dialog in run, manage, or custom execute mode.
+     * @param {object} options Initial selection, type, and optional execute behavior.
      * @returns {boolean} Whether the dialog opened.
      */
     function open(options = {}) {
       ensureModal();
-      const selected = deps.store.get(options.configurationId) || deps.store.getActive() || deps.store.getSnapshot().configurations[0] || null;
+      configureExecution(options);
+      const snapshot = deps.store.getSnapshot();
+      const explicitSelection = deps.store.get(options.configurationId);
+      const activeSelection = deps.store.getActive();
+      let selected = explicitSelection;
+      if (!selected && options.initialType) {
+        selected = activeSelection?.type === options.initialType
+          ? activeSelection
+          : (snapshot.configurations || []).find((configuration) => configuration.type === options.initialType) || null;
+      }
+      if (!selected && !options.initialType) selected = activeSelection || snapshot.configurations[0] || null;
       if (selected) {
         selectedId = selected.id;
         draft = clone(selected);
@@ -321,6 +350,7 @@
       if (dirty && !await confirmDiscardChanges()) return false;
 
       ensureModal();
+      configureExecution();
       const simpleName = String(options.simpleName || className.split(".").pop() || "Java Application").trim();
       selectedId = "";
       draft = deps.store.createDraft("java-application");

@@ -57,7 +57,7 @@
         ${field("VM arguments", "java.vmArguments", java.vmArguments, { textarea: true, wide: true, placeholder: "-Xmx512m" })}
         <label class="run-configuration-field"><span>JRE / JDK</span><select data-run-field="java.jdkId">${jdkOptions}</select><small class="run-configuration-field-error" data-run-error="java.jdkId"></small></label>
         ${field("Classpath override", "java.classpathOverride", java.classpathOverride, { textarea: true, wide: true, placeholder: "Leave empty to derive the runtime classpath" })}
-        <label class="run-configuration-checkbox"><input data-run-field="buildBeforeRun" type="checkbox"${configuration.buildBeforeRun !== false ? " checked" : ""}> Build before run</label>
+        <label class="run-configuration-checkbox"><input data-run-field="buildBeforeRun" type="checkbox"${configuration.buildBeforeRun !== false ? " checked" : ""}> Build before run/debug</label>
       </section>`;
     }
 

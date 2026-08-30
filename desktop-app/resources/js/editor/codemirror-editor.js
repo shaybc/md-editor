@@ -82,6 +82,17 @@
       return language.formatter || language.id || "";
     }
 
+    function getCodeMirrorPositionAtMouseEvent(sourceEvent) {
+      if (!(sourceEvent instanceof MouseEvent) || typeof codeMirror?.view?.posAtCoords !== "function") return null;
+      try {
+        const position = codeMirror.view.posAtCoords({ x: sourceEvent.clientX, y: sourceEvent.clientY });
+        return typeof position === "number" ? position : null;
+      } catch (error) {
+        console.warn("CodeMirror position lookup failed.", error);
+        return null;
+      }
+    }
+
     function dispatchTextareaEvent(type, sourceEvent) {
       const eventOptions = { bubbles: true, cancelable: true };
       let event;
@@ -112,6 +123,8 @@
       } else {
         event = new Event(type, eventOptions);
       }
+      const position = getCodeMirrorPositionAtMouseEvent(sourceEvent);
+      if (typeof position === "number") Object.defineProperty(event, "markdownViewerCodeMirrorOffset", { value: position });
       textarea.dispatchEvent(event);
       return event;
     }
@@ -132,6 +145,12 @@
       openLspDefinitionTarget,
       getEditorQuickFixSuggestions,
       openEditorQuickFix,
+      onDebugBreakpointsRemapped: function(remaps) {
+        if (syncingToCodeMirror) return;
+        if (typeof deps.onDebugBreakpointsRemapped === "function") {
+          deps.onDebugBreakpointsRemapped({ path: getActiveEditorPath(), remaps: remaps || [] });
+        }
+      },
       onUpdate: function(update) {
         if (syncingToCodeMirror) return;
         const selection = codeMirror.getSelection();
@@ -417,7 +436,7 @@
     }
 
     function moveSelectionToContextMenuPosition(event) {
-      const position = codeMirror.view.posAtCoords({ x: event.clientX, y: event.clientY });
+      const position = getCodeMirrorPositionAtMouseEvent(event);
       if (typeof position !== "number") return;
       const range = codeMirror.view.state.selection.main;
       const selectionStart = Math.min(range.anchor, range.head);
@@ -546,6 +565,36 @@
     function clearBookmarkedLines() {
       return typeof codeMirror.clearBookmarkedLines === "function"
         ? codeMirror.clearBookmarkedLines()
+        : false;
+    }
+
+    function setDebugBreakpoints(breakpoints) {
+      return typeof codeMirror.setDebugBreakpoints === "function"
+        ? codeMirror.setDebugBreakpoints(breakpoints)
+        : false;
+    }
+
+    function clearDebugBreakpoints() {
+      return typeof codeMirror.clearDebugBreakpoints === "function"
+        ? codeMirror.clearDebugBreakpoints()
+        : false;
+    }
+
+    function setDebugExecutionLine(lineNumber) {
+      return typeof codeMirror.setDebugExecutionLine === "function"
+        ? codeMirror.setDebugExecutionLine(lineNumber)
+        : false;
+    }
+
+    function clearDebugExecutionLine() {
+      return typeof codeMirror.clearDebugExecutionLine === "function"
+        ? codeMirror.clearDebugExecutionLine()
+        : false;
+    }
+
+    function setDebugBreakpointHandler(handler) {
+      return typeof codeMirror.setDebugBreakpointHandler === "function"
+        ? codeMirror.setDebugBreakpointHandler(handler)
         : false;
     }
 
@@ -833,6 +882,11 @@
       setLspActivationEnabled,
       setBookmarkedLines,
       clearBookmarkedLines,
+      setDebugBreakpoints,
+      clearDebugBreakpoints,
+      setDebugExecutionLine,
+      clearDebugExecutionLine,
+      setDebugBreakpointHandler,
       setAiGhostSuggestion,
       clearAiGhostSuggestion,
       setAutocompletePreferences,

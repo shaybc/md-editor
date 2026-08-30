@@ -152,8 +152,8 @@ test.describe("desktop menus and settings UI", () => {
 
     const railButtons = page.locator(".sidebar-view-rail-button");
     await expect(page.locator("#settings-sidebar-rail-style")).toHaveValue("thin");
-    await expect(railButtons).toHaveCount(8);
-    await expect(page.locator(".sidebar-view-rail-label")).toHaveCount(8);
+    await expect(railButtons).toHaveCount(10);
+    await expect(page.locator(".sidebar-view-rail-label")).toHaveCount(10);
 
     await page.locator("#settings-sidebar-rail-style").selectOption("spacious");
     await page.locator("#settings-modal-save").click();
@@ -198,18 +198,20 @@ test.describe("desktop menus and settings UI", () => {
     await selectSettingsTab(page, "interface");
     await page.locator("#settings-sidebar-rail-show-git").uncheck();
     await page.locator("#settings-sidebar-rail-show-api-client").uncheck();
+    await page.locator("#settings-sidebar-rail-show-soap-client").uncheck();
     await page.locator("#settings-sidebar-rail-show-regex-tester").uncheck();
     await page.locator("#settings-sidebar-rail-show-ai-companion").uncheck();
     await page.locator("#settings-sidebar-rail-show-settings").uncheck();
     await page.locator("#settings-modal-save").click();
 
-    for (const iconId of ["git", "api-client", "regex-tester", "ai-companion", "settings"]) {
+    for (const iconId of ["git", "api-client", "soap-client", "regex-tester", "ai-companion", "settings"]) {
       await expect(page.locator(`[data-sidebar-rail-icon="${iconId}"]`)).toBeHidden();
     }
     await expect(page.locator('[data-sidebar-rail-icon="files"]')).toHaveClass(/active/);
     await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem("markdownViewerGlobalState") || "{}").sidebarRailIconVisibility)).toEqual({
       git: false,
       "api-client": false,
+      "soap-client": false,
       "regex-tester": false,
       "ai-companion": false,
       settings: false,
@@ -217,12 +219,12 @@ test.describe("desktop menus and settings UI", () => {
 
     await openActionMenu(page);
     await expect(page.locator(".header-action-menu .toggle-ai-companion-panel")).toHaveCount(1);
-    const toolsSubmenu = page.locator(".tools-menu-submenu");
-    await toolsSubmenu.locator("> .dropdown-toggle").hover();
-    await expect(toolsSubmenu.locator("> .action-submenu .open-api-client")).toHaveCount(1);
+    const debugSubmenu = page.locator(".header-action-menu .application-menu-debug");
+    await debugSubmenu.locator("> .dropdown-toggle").hover();
+    await expect(debugSubmenu.locator('> .action-submenu [data-debug-menu-command="workspace"]')).toHaveCount(1);
 
     await page.reload();
-    for (const iconId of ["git", "api-client", "regex-tester", "ai-companion", "settings"]) {
+    for (const iconId of ["git", "api-client", "soap-client", "regex-tester", "ai-companion", "settings"]) {
       await expect(page.locator(`[data-sidebar-rail-icon="${iconId}"]`)).toBeHidden();
     }
   });
@@ -285,7 +287,7 @@ test.describe("desktop menus and settings UI", () => {
     await expect.poll(() => page.evaluate(() => {
       return Array.from(document.querySelectorAll(".sidebar-view-rail-button[data-sidebar-rail-icon]"))
         .map((button) => button.dataset.sidebarRailIcon);
-    })).toEqual(["git", "files", "search", "api-client", "regex-tester", "convert", "ai-companion", "settings"]);
+    })).toEqual(["git", "files", "search", "api-client", "soap-client", "regex-tester", "convert", "ai-companion", "settings"]);
     await expect(page.locator('[data-sidebar-rail-icon="api-client"]')).toBeHidden();
 
     await selectSettingsTab(page, "interface");
@@ -295,7 +297,7 @@ test.describe("desktop menus and settings UI", () => {
     await expect.poll(() => page.evaluate(() => {
       return Array.from(document.querySelectorAll(".sidebar-view-rail-button[data-sidebar-rail-icon]"))
         .map((button) => button.dataset.sidebarRailIcon);
-    })).toEqual(["git", "files", "search", "api-client", "regex-tester", "convert", "ai-companion", "settings"]);
+    })).toEqual(["git", "files", "search", "api-client", "soap-client", "regex-tester", "convert", "ai-companion", "settings"]);
   });
 
   test("AI Companion can move between the bottom and main rail areas while Settings stays fixed", async ({ page }) => {
@@ -356,8 +358,8 @@ test.describe("desktop menus and settings UI", () => {
       localStorage: {
         markdownViewerGlobalState: JSON.stringify({
           startupBehavior: "empty",
-          sidebarRailIconOrder: ["settings", "files", "search", "git", "api-client", "regex-tester", "convert", "ai-companion"],
-          sidebarRailIconVisibility: { git: false, "api-client": false, "regex-tester": false, "ai-companion": false, settings: false },
+          sidebarRailIconOrder: ["settings", "files", "search", "git", "api-client", "soap-client", "regex-tester", "convert", "ai-companion"],
+          sidebarRailIconVisibility: { git: false, "api-client": false, "soap-client": false, "regex-tester": false, "ai-companion": false, settings: false },
         }),
       },
     });
@@ -374,6 +376,7 @@ test.describe("desktop menus and settings UI", () => {
       { id: "search", hidden: false },
       { id: "git", hidden: false },
       { id: "api-client", hidden: false },
+      { id: "soap-client", hidden: false },
       { id: "regex-tester", hidden: false },
       { id: "convert", hidden: false },
       { id: "ai-companion", hidden: false },
@@ -507,7 +510,12 @@ test.describe("desktop menus and settings UI", () => {
     await selectSettingsTab(page, "keyboard-shortcuts");
 
     const shortcutRows = page.locator(".settings-shortcut-row");
-    await expect(shortcutRows).toHaveCount(17);
+    const registeredShortcutCount = await page.evaluate(() => window.markdownViewerApp.modules.keyboardShortcuts.commands.length);
+    await expect(shortcutRows).toHaveCount(registeredShortcutCount);
+    await expect(page.locator('[data-shortcut-command="debug-start-continue"] .settings-shortcut-binding')).toHaveText("F5");
+    await expect(page.locator('[data-shortcut-command="debug-step-over"] .settings-shortcut-binding')).toHaveText("F10");
+    await expect(page.locator('[data-shortcut-command="debug-toggle-breakpoint"] .settings-shortcut-binding')).toHaveText("F9");
+    await expect(page.locator('[data-shortcut-command="debug-evaluate-expression"] .settings-shortcut-binding')).toHaveText("Alt+F8");
     await page.locator("#settings-shortcuts-search").fill("Save Changes");
     await expect(shortcutRows).toHaveCount(1);
 

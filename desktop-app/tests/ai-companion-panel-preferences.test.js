@@ -725,6 +725,10 @@ function createPanelHarness(options = {}) {
     appDebugLog: (level, message, details) => appDebugLogs.push({ level, message, details }),
     loadGlobalState: () => options.globalState || {},
     saveGlobalState: (patch) => savedPatches.push(patch),
+    showInRightSidebar: options.showInRightSidebar,
+    showRightSidebar: options.showRightSidebar,
+    hideRightSidebar: options.hideRightSidebar,
+    isRightSidebarVisible: options.isRightSidebarVisible,
     renderMarkdownContent: options.renderMarkdownContent,
     openDocumentSourceFile: options.openDocumentSourceFile || (async (source, openOptions) => {
       openedDocuments.push({ source, openOptions });
@@ -870,6 +874,55 @@ test("AI Companion panel visibility persists only user-driven open state changes
   assert.deepEqual(plain(harness.savedPatches), [
     { aiCompanionPanelVisible: true },
     { aiCompanionPanelVisible: false }
+  ]);
+});
+
+test("AI Companion panel open and close can route through the shared right sidebar", () => {
+  const rightSidebarCalls = [];
+  const harness = createPanelHarness({
+    showInRightSidebar: (options) => rightSidebarCalls.push(["show", options]),
+    hideRightSidebar: (options) => rightSidebarCalls.push(["hide", options])
+  });
+
+  harness.api.setOpen(true, { persist: false });
+  harness.api.setOpen(false, { persist: false, keepRightSidebar: true });
+  harness.api.setOpen(true, { persist: false });
+  harness.api.setOpen(false, { persist: false });
+
+  assert.deepEqual(plain(rightSidebarCalls), [
+    ["show", { persist: false, fromAiCompanion: true }],
+    ["show", { persist: false, fromAiCompanion: true }],
+    ["hide", { persist: false, fromAiCompanion: true }]
+  ]);
+});
+
+test("AI Companion sidebar button toggles only the right sidebar", () => {
+  const rightSidebarCalls = [];
+  let rightSidebarVisible = true;
+  const harness = createPanelHarness({
+    showInRightSidebar: (options) => rightSidebarCalls.push(["show-ai", options]),
+    showRightSidebar: (options) => {
+      rightSidebarVisible = true;
+      rightSidebarCalls.push(["show-sidebar", options]);
+      return true;
+    },
+    hideRightSidebar: (options) => {
+      rightSidebarVisible = false;
+      rightSidebarCalls.push(["hide-sidebar", options]);
+      return true;
+    },
+    isRightSidebarVisible: () => rightSidebarVisible
+  });
+
+  assert.equal(harness.document.body.classList.contains("ai-companion-open"), false);
+
+  harness.closeButton.click();
+  harness.closeButton.click();
+
+  assert.equal(harness.document.body.classList.contains("ai-companion-open"), false);
+  assert.deepEqual(plain(rightSidebarCalls), [
+    ["hide-sidebar", { fromAiCompanion: true }],
+    ["show-sidebar", { fromAiCompanion: true }]
   ]);
 });
 

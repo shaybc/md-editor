@@ -1444,24 +1444,32 @@
       return setDiagnostics([], { revealErrors: false });
     }
 
-    function show() {
-      return bottomPanel?.activateTab?.("problems") || null;
-    }
-
-    if (bottomPanel && view) {
-      bottomPanel.addTab({
+    function addProblemsTab(options = {}) {
+      bottomPanel?.addTab?.({
         id: "problems",
         title: "Problems",
         icon: "bi-exclamation-triangle",
         view,
         permanent: true,
-        activate: false,
+        activate: options.activate === true,
         onActivate() {
           jdtActivated = true;
           render();
           if ((!jdtSnapshotId || jdtLoadedCount === 0) && !jdtInitialLoadPending) void loadJdtProblems(getInitialJdtProblemLimit());
         }
       });
+    }
+
+    function show() {
+      if (!bottomPanel?.hasTab?.("problems")) {
+        addProblemsTab({ activate: true });
+        return true;
+      }
+      return bottomPanel?.activateTab?.("problems") || null;
+    }
+
+    if (bottomPanel && view) {
+      addProblemsTab();
     }
     deps.subscribeJdtDiagnosticSummary?.(acceptJdtSummary);
     render();

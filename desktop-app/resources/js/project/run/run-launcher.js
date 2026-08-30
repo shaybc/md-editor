@@ -144,6 +144,32 @@
       }
     }
 
+    /**
+     * Resolve and prepare a Java Application configuration for debugger launch.
+     * @param {object} configuration Saved Run configuration.
+     * @returns {Promise<object>} Prepared launch context with runtime classpath.
+     */
+    async function resolveJavaLaunchContext(configuration) {
+      const context = await resolveContext(configuration);
+      if (configuration.type !== "java-application") {
+        throw new Error("Java debugging is available for Java Application run configurations.");
+      }
+      await deps.buildBeforeLaunch.prepare(
+        context.projectPath,
+        configuration,
+        context.buildConfiguration,
+        context.runtime,
+        context,
+        { debugInfo: true }
+      );
+      const classpath = await deps.runtimeClasspath.resolve(
+        context.projectPath,
+        configuration,
+        context.buildConfiguration,
+        context.runtime
+      );
+      return { ...context, ...classpath };
+    }
     async function persistResult(projectPath, configuration, result, fallbackContent = "") {
       const content = result?.session?.consoleOutput || result?.output || fallbackContent;
       await deps.output.save(projectPath, {
@@ -282,11 +308,11 @@
     }
 
     /**
-     * Create or reuse a saved Java Application configuration for one source file, then run it.
+     * Create or reuse a saved Java Application configuration for one source file.
      * @param {string} filePath Java source file path.
-     * @returns {Promise<boolean>} Whether execution succeeded.
+     * @returns {Promise<object|null>} Saved Java Application configuration, or null when the file cannot launch.
      */
-    async function runJavaFile(filePath) {
+    async function ensureJavaFileConfiguration(filePath) {
       const projectPath = getProjectPath();
       const buildConfiguration = await deps.buildPath.loadConfiguration(projectPath);
       const sourceRoots = (buildConfiguration.sourceFolders || [])
@@ -295,7 +321,7 @@
       const mainClass = await deps.mainClassFinder.inspectFile(filePath, sourceRoot);
       if (!mainClass) {
         deps.alert?.("This Java file does not declare a public static void main method.");
-        return false;
+        return null;
       }
       const existing = deps.store.getSnapshot().configurations.find((item) =>
         item.type === "java-application" && item.java?.mainClass === mainClass.className);
@@ -312,6 +338,17 @@
           classpathOverride: ""
         }
       });
+      return configuration;
+    }
+
+    /**
+     * Create or reuse a saved Java Application configuration for one source file, then run it.
+     * @param {string} filePath Java source file path.
+     * @returns {Promise<boolean>} Whether execution succeeded.
+     */
+    async function runJavaFile(filePath) {
+      const configuration = await ensureJavaFileConfiguration(filePath);
+      if (!configuration) return false;
       return runConfiguration(configuration);
     }
 
@@ -327,8 +364,10 @@
 
     const api = {
       canRunJavaFile,
+      ensureJavaFileConfiguration,
       isRunning: () => runningTitles.length > 0,
       preview,
+      resolveJavaLaunchContext,
       runActive,
       runById,
       runConfiguration,

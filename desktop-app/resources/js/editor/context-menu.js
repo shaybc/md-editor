@@ -477,6 +477,7 @@
 
     function getEditorSourceActionContext() {
       return {
+        activeTab: getActiveTab(),
         selection: Object.assign({}, editorContextMenuSelection),
         source: getEditorValue()
       };
@@ -1311,7 +1312,7 @@
       const sourceActions = getSourceActions();
       const actions = sourceActions?.getAvailableActions?.(getEditorSourceActionContext()) || [];
       const sourceMenuActions = moveCorrectIndentationIntoFormatGroup(
-        actions.filter((action) => action?.menu !== "refactor" && action?.menu !== "root")
+        actions.filter((action) => action?.menu !== "debugger" && action?.menu !== "refactor" && action?.menu !== "root")
       );
       const activeTab = getActiveTab();
       const activeLanguage = getCodeMirrorEditor()?.getActiveLanguage?.();
@@ -1347,6 +1348,73 @@
       const sourceActions = getSourceActions();
       return (sourceActions?.getAvailableActions?.(getEditorSourceActionContext()) || [])
         .filter((action) => action?.menu === "root");
+    }
+
+    function splitEditorDebugRootActions(rootActions) {
+      const debugRootActionOrder = ["run-java-main", "debug-java-main"];
+      const debugRootActionIds = new Set(debugRootActionOrder);
+      const groups = rootActions.reduce((result, action) => {
+        if (debugRootActionIds.has(action?.id)) result.debugRootActions.push(action);
+        else result.rootActions.push(action);
+        return result;
+      }, { rootActions: [], debugRootActions: [] });
+      groups.debugRootActions.sort((a, b) => debugRootActionOrder.indexOf(a.id) - debugRootActionOrder.indexOf(b.id));
+      return groups;
+    }
+
+    function getEditorDebuggerActions() {
+      const sourceActions = getSourceActions();
+      return (sourceActions?.getAvailableActions?.(getEditorSourceActionContext()) || [])
+        .filter((action) => action?.menu === "debugger");
+    }
+
+    function splitEditorDebuggerActions(debuggerActions) {
+      const quickActionIds = [
+        "debug-toggle-breakpoint",
+        "debug-run-to-cursor",
+        "debug-evaluate-selection",
+        "debug-evaluate-expression",
+        "debug-add-selection-watch"
+      ];
+      const selectedIds = new Set();
+      const quickActions = quickActionIds.flatMap(function(id) {
+        const action = debuggerActions.find((candidate) => candidate?.id === id && !selectedIds.has(candidate.id));
+        if (!action) return [];
+        selectedIds.add(action.id);
+        return [action];
+      });
+      return { quickActions };
+    }
+
+    function insertEditorRefactorSubmenuAfterSurround(rootActions, refactorActions) {
+      if (!refactorActions.length) return rootActions;
+      const groupedActions = rootActions.slice();
+      const refactorAction = { id: "refactor", label: "Refactor", icon: "bi-tools", children: refactorActions };
+      const surroundIndex = groupedActions.findIndex((action) => action?.id === "surround-with");
+      const insertIndex = surroundIndex >= 0 ? surroundIndex + 1 : groupedActions.length;
+      groupedActions.splice(insertIndex, 0, refactorAction);
+      return groupedActions;
+    }
+
+    function insertEditorDebugSubmenuAfterSurround(rootActions, debuggerActions, debugRootActions = []) {
+      const debugChildren = [
+        ...debugRootActions,
+        ...(debugRootActions.length && debuggerActions.length ? [{ type: "separator" }] : []),
+        ...debuggerActions
+      ];
+      if (!debugChildren.length) return rootActions;
+      const groupedActions = rootActions.slice();
+      const debugActions = [
+        { type: "separator" },
+        { id: "debug", label: "Debug", icon: "bi-bug-fill", children: debugChildren }
+      ];
+      const surroundIndex = groupedActions.findIndex((action) => action?.id === "surround-with");
+      const refactorIndex = groupedActions.findIndex((action) => action?.id === "refactor");
+      const insertIndex = refactorIndex >= 0 && (surroundIndex < 0 || refactorIndex > surroundIndex)
+        ? refactorIndex + 1
+        : surroundIndex >= 0 ? surroundIndex + 1 : groupedActions.length;
+      groupedActions.splice(insertIndex, 0, ...debugActions);
+      return groupedActions;
     }
 
     function getEditorRefactorActions() {
@@ -1426,27 +1494,21 @@
       const renderToken = editorContextMenuRenderToken;
       const menu = getEditorContextMenu();
       const sourceActions = getEditorSourceActions();
-      const rootActions = getEditorRootActions();
+      const rootActionGroups = splitEditorDebugRootActions(getEditorRootActions());
+      const debuggerActions = getEditorDebuggerActions();
+      const debuggerMenuActions = splitEditorDebuggerActions(debuggerActions);
       const refactorActions = getEditorRefactorActions();
+      const rootWithRefactorActions = insertEditorRefactorSubmenuAfterSurround(rootActionGroups.rootActions, refactorActions);
+      const rootMenuActions = insertEditorDebugSubmenuAfterSurround(rootWithRefactorActions, debuggerMenuActions.quickActions, rootActionGroups.debugRootActions);
       const sharedContextActions = getEditorSharedContextActions();
-      const browserLikeActions = sourceActions.length ? sharedContextActions.slice(1) : sharedContextActions;
+      const browserLikeActions = sourceActions.length || debuggerActions.length ? sharedContextActions.slice(1) : sharedContextActions;
       const editAction = getEditorEditAction(false);
-      const foldActions = [
-        { type: "collapse-all-folds", label: "Collapse all", icon: "bi-chevron-bar-contract" },
-        { type: "expand-all-folds", label: "Expand all", icon: "bi-chevron-bar-expand" }
-      ];
-
       menu.innerHTML = `
         <div class="editor-context-menu-items editor-context-menu-native-items">
           ${browserLikeActions.map(renderEditorContextActionButton).join("")}
-          ${renderEditorSourceSubmenu(sourceActions)}
           ${renderEditorContextAction(editAction)}
-          ${rootActions.map(renderEditorContextAction).join("")}
-          ${renderEditorRefactorSubmenu(refactorActions)}
-        </div>
-        <div class="editor-context-menu-divider" role="separator"></div>
-        <div class="editor-context-menu-items editor-context-menu-native-items">
-          ${foldActions.map(renderEditorContextActionButton).join("")}
+          ${renderEditorSourceSubmenu(sourceActions)}
+          ${rootMenuActions.map(renderEditorContextAction).join("")}
         </div>
       `;
 
@@ -1468,9 +1530,13 @@
       const canConvertMarkdownSelection = canShowMarkdownConversionSection();
       const sharedContextActions = getEditorSharedContextActions();
       const sourceActions = getEditorSourceActions();
-      const rootActions = getEditorRootActions();
+      const rootActionGroups = splitEditorDebugRootActions(getEditorRootActions());
+      const debuggerActions = getEditorDebuggerActions();
+      const debuggerMenuActions = splitEditorDebuggerActions(debuggerActions);
       const refactorActions = getEditorRefactorActions();
-      const visibleSharedContextActions = sourceActions.length ? sharedContextActions.slice(1) : sharedContextActions;
+      const rootWithRefactorActions = insertEditorRefactorSubmenuAfterSurround(rootActionGroups.rootActions, refactorActions);
+      const rootMenuActions = insertEditorDebugSubmenuAfterSurround(rootWithRefactorActions, debuggerMenuActions.quickActions, rootActionGroups.debugRootActions);
+      const visibleSharedContextActions = sourceActions.length || debuggerActions.length ? sharedContextActions.slice(1) : sharedContextActions;
       const browserLikeActions = [
         ...visibleSharedContextActions,
         { type: caseToggleAction, label: caseToggleLabel, shortcut: "", icon: editorSelectionMatchCaseSensitive ? "bi-type" : "bi-type-bold" }
@@ -1480,10 +1546,9 @@
       menu.innerHTML = `
         <div class="editor-context-menu-items editor-context-menu-native-items">
           ${browserLikeActions.map(renderEditorContextActionButton).join("")}
-          ${renderEditorSourceSubmenu(sourceActions)}
           ${renderEditorContextAction(editAction)}
-          ${rootActions.map(renderEditorContextAction).join("")}
-          ${renderEditorRefactorSubmenu(refactorActions)}
+          ${renderEditorSourceSubmenu(sourceActions)}
+          ${rootMenuActions.map(renderEditorContextAction).join("")}
         </div>
         ${canConvertMarkdownSelection ? `
           <div class="editor-context-menu-divider" role="separator"></div>

@@ -107,7 +107,9 @@ function createSidebarViewHarness() {
   const dropzoneResizer = new FakeElement("sidebar-dropzone-resizer");
   const queryInput = new FakeElement("workspace-search-query");
   [folderTreeRoot, workspaceSearchPanel, workspaceGitPanel, apiClientPanel, regexTesterPanel, folderTreePane, dropzoneResizer, queryInput].forEach((element) => elements.set(element.id, element));
+  const body = new FakeElement("body");
   const document = {
+    body,
     getElementById: (id) => elements.get(id) || null,
     querySelector: (selector) => selector === ".sidebar-dropzone-panel" ? dropzonePanel : selector === ".folder-tree-topbar" ? folderTreeTopbar : buttons.find((button) => selector === ".sidebar-view-option.active" && button.classList.contains("active")) || null,
     querySelectorAll: (selector) => selector === ".sidebar-view-option" ? buttons : selector === ".open-regex-tester" ? [regexButton] : []
@@ -115,11 +117,15 @@ function createSidebarViewHarness() {
   const aiCompanionPanel = {
     openCalls: [],
     closeCalls: 0,
-    setWorkspaceOpen(open, options) { this.openCalls.push({ open, options }); },
+    setOpen(open, options) {
+      this.openCalls.push({ open, options });
+      body.classList.toggle("ai-companion-open", open === true);
+    },
+    setWorkspaceOpen(open, options) { this.openCalls.push({ open, options, workspace: true }); },
     closeWorkspaceForExternalNavigation() { this.closeCalls += 1; }
   };
   const app = { modules: { aiCompanionPanel, workspaceGit: { refreshWorkspaceGitStatus() { this.refreshed = true; } } }, registerModule(name, api) { this.modules[name] = api; } };
-  return { app, document, buttons, regexButton, folderTreeRoot, workspaceSearchPanel, workspaceGitPanel, apiClientPanel, regexTesterPanel, folderTreePane, folderTreeTopbar, dropzonePanel, dropzoneResizer, aiCompanionPanel };
+  return { app, document, body, buttons, regexButton, folderTreeRoot, workspaceSearchPanel, workspaceGitPanel, apiClientPanel, regexTesterPanel, folderTreePane, folderTreeTopbar, dropzonePanel, dropzoneResizer, aiCompanionPanel };
 }
 
 test("workspace search uses the async workspace entry provider", async () => {
@@ -427,17 +433,16 @@ test("workspace replace preview keeps source content unchanged until apply", () 
   assert.equal(preview.files[0].nextContent, "omega beta omega");
 });
 
-test("sidebar AI view opens workspace and marks AI active", () => {
+test("sidebar AI view opens the right sidebar AI panel", () => {
   const harness = createSidebarViewHarness();
   const module = loadWorkspaceSearchModule({ app: harness.app, document: harness.document });
 
   module.setSidebarView("ai-companion");
 
   assert.deepEqual(harness.aiCompanionPanel.openCalls.map((call) => call.open), [true]);
-  assert.equal(harness.aiCompanionPanel.openCalls[0].options.previousSidebarView, "files");
-  assert.equal(harness.buttons.find((button) => button.dataset.sidebarView === "ai-companion").getAttribute("aria-pressed"), "true");
-  assert.equal(harness.folderTreeRoot.hidden, true);
-  assert.equal(harness.folderTreePane.classList.contains("ai-companion-workspace-rail"), true);
+  assert.equal(harness.aiCompanionPanel.openCalls[0].workspace, undefined);
+  assert.equal(harness.folderTreeRoot.hidden, false);
+  assert.equal(harness.folderTreePane.classList.contains("ai-companion-workspace-rail"), false);
 });
 
 test("normal sidebar views close AI workspace before activating", () => {

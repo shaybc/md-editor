@@ -192,14 +192,17 @@
       sidebarWidthResizer.addEventListener('keydown', handleSidebarWidthResizeKeydown);
     }
 
-    if (aiCompanionWidthResizer) {
-      aiCompanionWidthResizer.addEventListener('mousedown', startAiCompanionWidthResize);
+    const rightSidebarWidthResizers = [aiCompanionWidthResizer, typeof rightSidebarWidthResizer !== "undefined" ? rightSidebarWidthResizer : null].filter(Boolean);
+    if (rightSidebarWidthResizers.length) {
+      rightSidebarWidthResizers.forEach((resizer) => {
+        resizer.addEventListener('mousedown', startAiCompanionWidthResize);
+        resizer.addEventListener('touchstart', startAiCompanionWidthResizeTouch);
+        resizer.addEventListener('keydown', handleAiCompanionWidthResizeKeydown);
+      });
       document.addEventListener('mousemove', handleAiCompanionWidthResize);
       document.addEventListener('mouseup', stopAiCompanionWidthResize);
-      aiCompanionWidthResizer.addEventListener('touchstart', startAiCompanionWidthResizeTouch);
       document.addEventListener('touchmove', handleAiCompanionWidthResizeTouch);
       document.addEventListener('touchend', stopAiCompanionWidthResize);
-      aiCompanionWidthResizer.addEventListener('keydown', handleAiCompanionWidthResizeKeydown);
     }
   }
 
@@ -248,6 +251,7 @@
     sidebarDropzonePanel.dataset.previousFlex = flexValue;
     if (shouldPersist) {
       saveGlobalState({ sidebarDropzoneHeight });
+      notifyPanelSizesChanged();
     }
   }
 
@@ -261,6 +265,7 @@
     updateSidebarWidthResizerAccessibility(sidebarWidth);
     if (shouldPersist) {
       saveGlobalState({ sidebarWidth });
+      notifyPanelSizesChanged();
     }
     if (currentViewMode === 'split') {
       requestAnimationFrame(applyPaneWidths);
@@ -316,12 +321,19 @@
     applySidebarWidth(folderTreePane.getBoundingClientRect().width);
   }
 
+  function getAiCompanionResizeTarget() {
+    const rightSidebar = typeof rightSidebarElement !== "undefined" ? rightSidebarElement : null;
+    if (rightSidebar && rightSidebar.hidden !== true) return rightSidebar;
+    return aiCompanionPanelElement || null;
+  }
+
   function startAiCompanionWidthResize(e) {
     if (document.body.classList.contains('ai-companion-workspace-open')) return;
-    if (!aiCompanionPanelElement || !document.body.classList.contains('ai-companion-open')) return;
+    const resizeTarget = getAiCompanionResizeTarget();
+    if (!resizeTarget || (resizeTarget === aiCompanionPanelElement && !document.body.classList.contains('ai-companion-open'))) return;
     e.preventDefault();
     isAiCompanionWidthResizing = true;
-    aiCompanionPanelElement.classList.add('ai-companion-width-resizing');
+    resizeTarget.classList.add('ai-companion-width-resizing');
     document.body.classList.add('resizing');
     document.body.classList.add('ai-companion-width-resizing');
   }
@@ -344,33 +356,38 @@
   }
 
   function applyAiCompanionPanelWidth(width, shouldPersist = true) {
-    if (!aiCompanionPanelElement) return;
+    const resizeTarget = getAiCompanionResizeTarget();
+    if (!resizeTarget) return;
     aiCompanionPanelWidth = getClampedAiCompanionPanelWidth(width);
-    aiCompanionPanelElement.style.setProperty('--ai-companion-panel-width', `${aiCompanionPanelWidth}px`);
+    aiCompanionPanelElement?.style?.setProperty('--ai-companion-panel-width', aiCompanionPanelWidth + 'px');
+    resizeTarget.style.setProperty('--ai-companion-panel-width', aiCompanionPanelWidth + 'px');
     updateAiCompanionWidthResizerAccessibility(aiCompanionPanelWidth);
     if (shouldPersist) {
       saveGlobalState({ aiCompanionPanelWidth });
+      notifyPanelSizesChanged();
     }
   }
 
   function updateAiCompanionWidthResizerAccessibility(aiCompanionPanelWidth) {
-    if (!aiCompanionWidthResizer) return;
-    aiCompanionWidthResizer.setAttribute('aria-valuemin', String(MIN_AI_COMPANION_PANEL_WIDTH));
-    aiCompanionWidthResizer.setAttribute('aria-valuemax', String(Math.round(getMaxAiCompanionPanelWidth())));
-    aiCompanionWidthResizer.setAttribute('aria-valuenow', String(Math.round(aiCompanionPanelWidth)));
+    [aiCompanionWidthResizer, typeof rightSidebarWidthResizer !== "undefined" ? rightSidebarWidthResizer : null].filter(Boolean).forEach((resizer) => {
+      resizer.setAttribute('aria-valuemin', String(MIN_AI_COMPANION_PANEL_WIDTH));
+      resizer.setAttribute('aria-valuemax', String(Math.round(getMaxAiCompanionPanelWidth())));
+      resizer.setAttribute('aria-valuenow', String(Math.round(aiCompanionPanelWidth)));
+    });
   }
 
   function updateAiCompanionPanelWidthFromClientX(clientX, shouldPersist = false) {
-    if (!aiCompanionPanelElement || !contentContainer) return;
+    if (!getAiCompanionResizeTarget() || !contentContainer) return;
     const containerRect = contentContainer.getBoundingClientRect();
     applyAiCompanionPanelWidth(containerRect.right - clientX, shouldPersist);
   }
 
   function handleAiCompanionWidthResizeKeydown(e) {
     if (document.body.classList.contains('ai-companion-workspace-open')) return;
-    if (!aiCompanionPanelElement || !['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(e.key)) return;
+    const resizeTarget = getAiCompanionResizeTarget();
+    if (!resizeTarget || !['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(e.key)) return;
     e.preventDefault();
-    const currentWidth = aiCompanionPanelElement.getBoundingClientRect().width;
+    const currentWidth = resizeTarget.getBoundingClientRect().width;
     const step = e.shiftKey ? 40 : 10;
     if (e.key === 'Home') applyAiCompanionPanelWidth(MIN_AI_COMPANION_PANEL_WIDTH);
     if (e.key === 'End') applyAiCompanionPanelWidth(getMaxAiCompanionPanelWidth());
@@ -391,15 +408,63 @@
   function stopAiCompanionWidthResize() {
     if (!isAiCompanionWidthResizing) return;
     isAiCompanionWidthResizing = false;
-    aiCompanionPanelElement.classList.remove('ai-companion-width-resizing');
+    aiCompanionPanelElement?.classList?.remove('ai-companion-width-resizing');
+    if (typeof rightSidebarElement !== "undefined") rightSidebarElement?.classList?.remove('ai-companion-width-resizing');
     document.body.classList.remove('resizing');
     document.body.classList.remove('ai-companion-width-resizing');
-    applyAiCompanionPanelWidth(aiCompanionPanelElement.getBoundingClientRect().width);
+    const resizeTarget = getAiCompanionResizeTarget();
+    if (resizeTarget) applyAiCompanionPanelWidth(resizeTarget.getBoundingClientRect().width);
   }
 
   function clampAiCompanionPanelWidthToViewport() {
-    if (!aiCompanionPanelElement) return;
-    applyAiCompanionPanelWidth(aiCompanionPanelElement.getBoundingClientRect().width, false);
+    const resizeTarget = getAiCompanionResizeTarget();
+    if (!resizeTarget) return;
+    applyAiCompanionPanelWidth(resizeTarget.getBoundingClientRect().width, false);
+  }
+
+  function getCurrentPanelSizes() {
+    const state = typeof loadGlobalState === "function" ? loadGlobalState() : {};
+    const sidebarWidth = Number(folderTreePane?.getBoundingClientRect?.().width || state.sidebarWidth);
+    const sidebarDropzoneHeight = Number(sidebarDropzonePanel?.getBoundingClientRect?.().height || state.sidebarDropzoneHeight);
+    const rightSidebarWidth = Number(getAiCompanionResizeTarget()?.getBoundingClientRect?.().width || state.aiCompanionPanelWidth || aiCompanionPanelWidth);
+    const bottomPanelHeight = Number(app.modules?.bottomPanelTabs?.getPanelHeight?.());
+    const sizes = {};
+    if (Number.isFinite(sidebarWidth) && sidebarWidth > 0) sizes.sidebarWidth = Math.round(getClampedSidebarWidth(sidebarWidth));
+    if (Number.isFinite(sidebarDropzoneHeight) && sidebarDropzoneHeight > 0) {
+      const clampedSidebarDropzoneHeight = getClampedSidebarDropzoneHeight(sidebarDropzoneHeight);
+      if (clampedSidebarDropzoneHeight !== null) sizes.sidebarDropzoneHeight = Math.round(clampedSidebarDropzoneHeight);
+    }
+    if (Number.isFinite(rightSidebarWidth) && rightSidebarWidth > 0) sizes.rightSidebarWidth = Math.round(getClampedAiCompanionPanelWidth(rightSidebarWidth));
+    if (Number.isFinite(bottomPanelHeight) && bottomPanelHeight >= MIN_SIDEBAR_PANEL_HEIGHT) sizes.bottomPanelHeight = Math.round(bottomPanelHeight);
+    return sizes;
+  }
+
+  function getDefaultPanelSizes() {
+    return {
+      sidebarWidth: DEFAULT_SIDEBAR_WIDTH,
+      sidebarDropzoneHeight: MIN_SIDEBAR_PANEL_HEIGHT,
+      rightSidebarWidth: DEFAULT_AI_COMPANION_PANEL_WIDTH,
+      bottomPanelHeight: 220
+    };
+  }
+
+  function notifyPanelSizesChanged() {
+    if (typeof onPanelSizesChanged === "function") onPanelSizesChanged(getCurrentPanelSizes());
+  }
+
+  function applyPanelSizes(sizes = {}) {
+    if (!sizes || typeof sizes !== "object") return;
+    if (Number.isFinite(Number(sizes.sidebarWidth))) applySidebarWidth(sizes.sidebarWidth, false);
+    if (Number.isFinite(Number(sizes.sidebarDropzoneHeight))) applySidebarDropzoneHeight(sizes.sidebarDropzoneHeight, false);
+    if (Number.isFinite(Number(sizes.rightSidebarWidth))) {
+      const rightSidebarWidth = getClampedAiCompanionPanelWidth(sizes.rightSidebarWidth);
+      aiCompanionPanelWidth = rightSidebarWidth;
+      aiCompanionPanelElement?.style?.setProperty('--ai-companion-panel-width', rightSidebarWidth + 'px');
+      if (typeof rightSidebarElement !== "undefined") rightSidebarElement?.style?.setProperty('--ai-companion-panel-width', rightSidebarWidth + 'px');
+      getAiCompanionResizeTarget()?.style?.setProperty('--ai-companion-panel-width', rightSidebarWidth + 'px');
+      updateAiCompanionWidthResizerAccessibility(rightSidebarWidth);
+    }
+    if (Number.isFinite(Number(sizes.bottomPanelHeight))) app.modules?.bottomPanelTabs?.setPanelHeight?.(sizes.bottomPanelHeight, { persist: false });
   }
 
   function startSidebarDropzoneResize(e) {
@@ -587,6 +652,9 @@
       api.handleAiCompanionWidthResizeTouch = handleAiCompanionWidthResizeTouch;
       api.stopAiCompanionWidthResize = stopAiCompanionWidthResize;
       api.clampAiCompanionPanelWidthToViewport = clampAiCompanionPanelWidthToViewport;
+      api.getCurrentPanelSizes = getCurrentPanelSizes;
+      api.getDefaultPanelSizes = getDefaultPanelSizes;
+      api.applyPanelSizes = applyPanelSizes;
       api.startSidebarDropzoneResize = startSidebarDropzoneResize;
       api.handleSidebarDropzoneResize = handleSidebarDropzoneResize;
       api.stopSidebarDropzoneResize = stopSidebarDropzoneResize;

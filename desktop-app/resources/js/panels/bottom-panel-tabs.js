@@ -11,16 +11,26 @@
    * @returns {object} Bottom panel tab API.
    */
   function registerMarkdownViewerBottomPanelTabs(app, deps = {}) {
-    const panel = deps.panel || document.getElementById("find-in-files-results-panel");
-    const tabList = deps.tabList || document.getElementById("bottom-panel-tab-list");
-    const contentHost = deps.contentHost || document.getElementById("bottom-panel-content-host");
-    const searchResultsView = deps.searchResultsView || document.getElementById("bottom-panel-search-results");
-    const closeButton = deps.closeButton || document.getElementById("find-in-files-results-close");
+    const panel = Object.prototype.hasOwnProperty.call(deps, "panel") ? deps.panel : document.getElementById("find-in-files-results-panel");
+    const tabList = Object.prototype.hasOwnProperty.call(deps, "tabList") ? deps.tabList : document.getElementById("bottom-panel-tab-list");
+    const contentHost = Object.prototype.hasOwnProperty.call(deps, "contentHost") ? deps.contentHost : document.getElementById("bottom-panel-content-host");
+    const searchResultsView = Object.prototype.hasOwnProperty.call(deps, "searchResultsView") ? deps.searchResultsView : document.getElementById("bottom-panel-search-results");
+    const closeButton = Object.prototype.hasOwnProperty.call(deps, "closeButton") ? deps.closeButton : document.getElementById("find-in-files-results-close");
     const tabHeader = deps.tabHeader || tabList?.parentElement;
-    const stateKey = "bottomPanel";
+    const defaultTabId = String(deps.defaultTabId || SEARCH_RESULTS_TAB_ID);
+    const defaultTabOrder = Array.isArray(deps.defaultTabOrder) ? deps.defaultTabOrder.map(String) : (defaultTabId ? [defaultTabId] : DEFAULT_TAB_ORDER);
+    const stateKey = String(deps.stateKey || "bottomPanel");
+    const moduleName = deps.moduleName === false ? "" : String(deps.moduleName || "bottomPanelTabs");
+    const panelHeightEnabled = deps.panelHeight !== false;
+    const maximizeEnabled = deps.maximize !== false;
+    const maximizeClassName = String(deps.maximizeClassName || "bottom-panel-maximized");
+    const closeAllAction = String(deps.closeAllAction || "hide");
     const tabs = new Map();
-    let activeTabId = SEARCH_RESULTS_TAB_ID;
+    const stateChangeListeners = new Set();
+    const dockTransfer = { dockId: String(deps.dockId || moduleName || stateKey), dragGroup: "", getTransferData: null, canAcceptExternalTabDrop: null, onExternalTabDrop: null };
+    let activeTabId = defaultTabId;
     let draggedTabId = null;
+    let api = null;
     let tabContextMenu = null;
     let tabContextTargetId = null;
     let tabScrollbarOverlay = null;
@@ -29,25 +39,49 @@
       active: false,
       aiCompanionWasVisible: false
     };
+    function setDockTransfer(options = {}) {
+      dockTransfer.dockId = String(options.dockId || dockTransfer.dockId || moduleName || stateKey);
+      dockTransfer.dragGroup = options.dragGroup ? String(options.dragGroup) : "";
+      dockTransfer.getTransferData = typeof options.getTransferData === "function" ? options.getTransferData : null;
+      dockTransfer.canAcceptExternalTabDrop = typeof options.canAcceptExternalTabDrop === "function" ? options.canAcceptExternalTabDrop : null;
+      dockTransfer.onExternalTabDrop = typeof options.onExternalTabDrop === "function" ? options.onExternalTabDrop : null;
+    }
+
+    setDockTransfer(deps.dockTransfer || {});
+
 
     function getFeatureState() {
       return deps.loadGlobalState?.()[stateKey] || {};
     }
 
-    function saveFeatureState(patch) {
+    function getStateSnapshot() {
+      return { tabOrder: getOrderedTabIds(), activeTabId, visible: isPanelVisible() };
+    }
+
+    function notifyStateChanged(reason = "state") {
+      if (!api) return;
+      const snapshot = getStateSnapshot();
+      deps.onStateChanged?.(snapshot, reason, api);
+      stateChangeListeners.forEach((listener) => {
+        try { listener(snapshot, reason, api); } catch (_error) { /* Tab observers cannot interrupt tab state updates. */ }
+      });
+    }
+
+    function saveFeatureState(patch, reason = "state") {
       deps.saveGlobalState?.({ [stateKey]: { ...getFeatureState(), ...patch } });
+      notifyStateChanged(reason);
     }
 
     function getSavedTabOrder() {
       const savedOrder = Array.isArray(getFeatureState().tabOrder) ? getFeatureState().tabOrder : [];
-      return savedOrder.filter((id) => id === SEARCH_RESULTS_TAB_ID || tabs.has(id));
+      return savedOrder.map(String).filter((id) => tabs.has(id));
     }
 
     function getOrderedTabIds() {
       const savedOrder = getSavedTabOrder();
       const allIds = Array.from(tabs.keys());
       const ordered = [...savedOrder, ...allIds.filter((id) => !savedOrder.includes(id))];
-      return ordered.length ? ordered : DEFAULT_TAB_ORDER;
+      return ordered.length ? ordered : defaultTabOrder.filter((id) => tabs.has(id));
     }
 
     function persistCurrentTabOrder() {
@@ -55,16 +89,23 @@
     }
 
     function getPanelHeight() {
+      if (!panelHeightEnabled) return null;
+      const inlineHeight = Number.parseFloat(panel?.style?.height || "");
+      if (Number.isFinite(inlineHeight) && inlineHeight >= 120) return inlineHeight;
+      const measuredHeight = Number(panel?.getBoundingClientRect?.().height || 0);
+      if (Number.isFinite(measuredHeight) && measuredHeight >= 120) return measuredHeight;
       const state = deps.loadGlobalState?.() || {};
       const savedHeight = Number(state[stateKey]?.panelHeight ?? state.findInFiles?.panelHeight);
       return Number.isFinite(savedHeight) && savedHeight >= 120 ? savedHeight : null;
     }
 
-    function setPanelHeight(height) {
+    function setPanelHeight(height, options = {}) {
+      if (!panelHeightEnabled) return false;
       const nextHeight = Number(height);
       if (!Number.isFinite(nextHeight) || nextHeight < 120) return false;
       if (panel) panel.style.height = `${nextHeight}px`;
-      saveFeatureState({ panelHeight: nextHeight });
+      if (options.persist !== false) saveFeatureState({ panelHeight: nextHeight });
+      else notifyStateChanged("panel-height");
       return true;
     }
 
@@ -74,7 +115,7 @@
     }
 
     function getSavedActiveTabId() {
-      return String(getFeatureState().activeTabId || SEARCH_RESULTS_TAB_ID);
+      return String(getFeatureState().activeTabId || defaultTabId);
     }
 
     function isSavedVisible() {
@@ -90,7 +131,8 @@
       if (maximizeState.active) return;
       maximizeState.active = true;
       maximizeState.aiCompanionWasVisible = isAiCompanionVisible();
-      document.body?.classList?.add?.("bottom-panel-maximized");
+      document.body?.classList?.add?.(maximizeClassName);
+      deps.onMaximize?.(activeTabId, api);
       deps.setSidebarVisible?.(false, false, false);
       deps.getAiCompanionPanel?.()?.setOpen?.(false, { persist: false });
     }
@@ -101,7 +143,8 @@
       const aiCompanionWasVisible = maximizeState.aiCompanionWasVisible;
       maximizeState.active = false;
       maximizeState.aiCompanionWasVisible = false;
-      document.body?.classList?.remove?.("bottom-panel-maximized");
+      document.body?.classList?.remove?.(maximizeClassName);
+      deps.onRestore?.(activeTabId, api);
       deps.setSidebarVisible?.(true, false, false);
       deps.getAiCompanionPanel?.()?.setOpen?.(aiCompanionWasVisible, { persist: false });
       applySavedPanelHeight();
@@ -137,7 +180,7 @@
     function togglePanel(tabId = activeTabId) {
       if (!panel) return;
       if (panel.hidden) {
-        activateTab(tabId || SEARCH_RESULTS_TAB_ID);
+        activateTab(tabId || defaultTabId);
       } else {
         hidePanel();
       }
@@ -150,8 +193,78 @@
       tab.view.classList.toggle("active", isActive);
     }
 
-    function activateTab(tabId = SEARCH_RESULTS_TAB_ID) {
-      const normalizedTabId = tabs.has(tabId) ? tabId : SEARCH_RESULTS_TAB_ID;
+    function getGlobalTabDrag() {
+      return global.__markdownViewerPanelTabDrag || null;
+    }
+
+    function setGlobalTabDrag(value) {
+      global.__markdownViewerPanelTabDrag = value || null;
+    }
+
+    function getTabTransferData(tab) {
+      if (!dockTransfer.dragGroup || !dockTransfer.getTransferData) return null;
+      const data = dockTransfer.getTransferData(tab, api);
+      if (!data) return null;
+      return Object.assign({}, data, {
+        dragGroup: dockTransfer.dragGroup,
+        source: api,
+        sourceDockId: dockTransfer.dockId,
+        sourceTabId: tab.id
+      });
+    }
+
+    function canAcceptExternalTabDrop(data, beforeTabId = "") {
+      if (!data || data.source === api || !dockTransfer.dragGroup || data.dragGroup !== dockTransfer.dragGroup) return false;
+      if (!dockTransfer.onExternalTabDrop) return false;
+      return dockTransfer.canAcceptExternalTabDrop ? dockTransfer.canAcceptExternalTabDrop(data, beforeTabId, api) !== false : true;
+    }
+
+    function handleExternalTabDrop(event, beforeTabId = "") {
+      const data = getGlobalTabDrag();
+      if (!canAcceptExternalTabDrop(data, beforeTabId)) return false;
+      event.preventDefault();
+      event.stopPropagation();
+      dockTransfer.onExternalTabDrop(Object.assign({}, data, {
+        target: api,
+        targetDockId: dockTransfer.dockId,
+        beforeTabId,
+        event
+      }));
+      return true;
+    }
+
+    function moveExternalTabHere(data, options = {}) {
+      const source = data?.source;
+      const sourceTabId = String(data?.sourceTabId || data?.panelTabId || "").trim();
+      if (!source || source === api || !sourceTabId || typeof source.detachTab !== "function" || tabs.has(sourceTabId)) return false;
+      const tab = source.detachTab(sourceTabId);
+      if (!tab?.view) return false;
+      addTab({
+        id: tab.id,
+        title: tab.title,
+        icon: tab.icon,
+        view: tab.view,
+        permanent: tab.permanent === true,
+        buttonDataAttributes: tab.buttonDataAttributes || null,
+        onActivate: tab.onActivate,
+        onClose: tab.onClose,
+        activate: options.activate !== false
+      });
+      const beforeTabId = String(options.beforeTabId || "").trim();
+      if (beforeTabId && tabs.has(beforeTabId)) reorderTab(tab.id, beforeTabId);
+      return true;
+    }
+
+    function activateTab(tabId = defaultTabId) {
+      const fallbackTabId = tabs.has(defaultTabId) ? defaultTabId : (getOrderedTabIds()[0] || "");
+      const normalizedTabId = tabs.has(tabId) ? tabId : fallbackTabId;
+      if (!normalizedTabId) {
+        activeTabId = "";
+        tabs.forEach((tab) => setViewActive(tab, false));
+        renderTabs();
+        saveFeatureState({ activeTabId: "" });
+        return null;
+      }
       activeTabId = normalizedTabId;
       tabs.forEach((tab, id) => setViewActive(tab, id === normalizedTabId));
       renderTabs();
@@ -177,8 +290,15 @@
         tab.view?.remove?.();
         tabs.delete(tabId);
       });
-      if (!tabs.has(activeTabId)) activeTabId = SEARCH_RESULTS_TAB_ID;
+      if (!tabs.has(activeTabId)) activeTabId = tabs.has(defaultTabId) ? defaultTabId : (getOrderedTabIds()[0] || "");
       persistCurrentTabOrder();
+      if (!tabs.size) {
+        activeTabId = "";
+        renderTabs();
+        saveFeatureState({ activeTabId: "" });
+        deps.onTabsEmpty?.();
+        return true;
+      }
       activateTab(activeTabId);
       return true;
     }
@@ -234,7 +354,10 @@
         hideTabContextMenu();
         if (action === "close") closeTab(targetTabId);
         else if (action === "close-others") closeOtherTabs(targetTabId);
-        else if (action === "close-all") hidePanel();
+        else if (action === "close-all") {
+          if (closeAllAction === "close") closeTabs(getClosableTabIds());
+          else hidePanel();
+        }
       });
       document.body?.appendChild(tabContextMenu);
       return tabContextMenu;
@@ -258,6 +381,9 @@
       button.type = "button";
       button.className = `bottom-panel-tab${tab.id === activeTabId ? " active" : ""}`;
       button.dataset.bottomPanelTabId = tab.id;
+      Object.entries(tab.buttonDataAttributes || {}).forEach(([key, value]) => {
+        button.dataset[key] = String(value);
+      });
       button.setAttribute("role", "tab");
       button.setAttribute("aria-selected", tab.id === activeTabId ? "true" : "false");
       button.setAttribute("draggable", "true");
@@ -286,26 +412,39 @@
 
       button.addEventListener("click", () => activateTab(tab.id));
       button.addEventListener("contextmenu", (event) => showTabContextMenu(event, tab));
-      button.addEventListener("dblclick", (event) => {
-        if (event.target?.closest?.(".bottom-panel-tab-close")) return;
-        toggleBottomPanelMaximized(tab.id);
-      });
-      button.addEventListener("dragstart", () => {
+      if (maximizeEnabled) {
+        button.addEventListener("dblclick", (event) => {
+          if (event.target?.closest?.(".bottom-panel-tab-close")) return;
+          toggleBottomPanelMaximized(tab.id);
+        });
+      }
+      button.addEventListener("dragstart", (event) => {
         draggedTabId = tab.id;
+        const transferData = getTabTransferData(tab);
+        if (transferData) {
+          setGlobalTabDrag(transferData);
+          event.dataTransfer?.setData?.("application/x-md-editor-tab", JSON.stringify({ dragGroup: transferData.dragGroup, tabId: tab.id }));
+          if (event.dataTransfer) event.dataTransfer.effectAllowed = "move";
+        }
         window.setTimeout(() => button.classList.add("dragging"), 0);
       });
       button.addEventListener("dragend", () => {
+        const transferData = getGlobalTabDrag();
+        if (transferData?.source === api) setGlobalTabDrag(null);
         draggedTabId = null;
         button.classList.remove("dragging");
       });
       button.addEventListener("dragover", (event) => {
-        event.preventDefault();
-        button.classList.add("drag-over");
+        if (draggedTabId || canAcceptExternalTabDrop(getGlobalTabDrag(), tab.id)) {
+          event.preventDefault();
+          button.classList.add("drag-over");
+        }
       });
       button.addEventListener("dragleave", () => button.classList.remove("drag-over"));
       button.addEventListener("drop", (event) => {
-        event.preventDefault();
         button.classList.remove("drag-over");
+        if (handleExternalTabDrop(event, tab.id)) return;
+        event.preventDefault();
         reorderTab(draggedTabId, tab.id);
       });
       button.style.order = String(index);
@@ -334,18 +473,47 @@
       renderTabs();
       return true;
     }
+    function setTabOrder(tabIds) {
+      const requestedOrder = Array.from(new Set((Array.isArray(tabIds) ? tabIds : []).map((tabId) => String(tabId || "").trim()).filter((tabId) => tabId && tabs.has(tabId))));
+      const currentOrder = getOrderedTabIds();
+      const order = [...requestedOrder, ...currentOrder.filter((tabId) => !requestedOrder.includes(tabId))];
+      if (!order.length) return false;
+      saveFeatureState({ tabOrder: order });
+      renderTabs();
+      return true;
+    }
+    function detachTab(tabId) {
+      const id = String(tabId || "").trim();
+      const tab = tabs.get(id);
+      if (!tab) return null;
+      tabs.delete(id);
+      setViewActive(tab, false);
+      if (!tabs.has(activeTabId)) activeTabId = tabs.has(defaultTabId) ? defaultTabId : (getOrderedTabIds()[0] || "");
+      persistCurrentTabOrder();
+      if (!tabs.size) {
+        activeTabId = "";
+        renderTabs();
+        saveFeatureState({ activeTabId: "" });
+        deps.onTabsEmpty?.();
+      } else {
+        activateTab(activeTabId);
+      }
+      return tab;
+    }
+
 
     function addTab(options = {}) {
       const id = String(options.id || "").trim();
       const view = options.view || null;
       if (!id || !view) throw new Error("Bottom panel tabs require an id and view.");
-      if (!view.parentElement && contentHost) contentHost.appendChild(view);
+      if (contentHost && view.parentElement !== contentHost) contentHost.appendChild(view);
       const tab = {
         id,
         title: String(options.title || "Panel"),
         icon: String(options.icon || "bi-layout-text-window"),
         view,
         permanent: options.permanent === true,
+        buttonDataAttributes: options.buttonDataAttributes || null,
         onActivate: options.onActivate,
         onClose: options.onClose
       };
@@ -353,7 +521,9 @@
       setViewActive(tab, false);
       persistCurrentTabOrder();
       renderTabs();
-      if (initialized && id === getSavedActiveTabId()) {
+      if (options.activate === true) {
+        activateTab(id);
+      } else if (initialized && id === getSavedActiveTabId()) {
         activeTabId = id;
         tabs.forEach((candidate, candidateId) => setViewActive(candidate, candidateId === id));
         renderTabs();
@@ -379,6 +549,12 @@
         });
       }
       closeButton?.addEventListener("click", hidePanel);
+      tabList?.addEventListener?.("dragover", (event) => {
+        if (canAcceptExternalTabDrop(getGlobalTabDrag())) event.preventDefault();
+      });
+      tabList?.addEventListener?.("drop", (event) => {
+        handleExternalTabDrop(event);
+      });
       if (typeof global.createMarkdownViewerTabScrollbarOverlay === "function") {
         tabScrollbarOverlay = global.createMarkdownViewerTabScrollbarOverlay({
           tabBar: tabHeader,
@@ -413,11 +589,14 @@
 
     initialize();
 
-    const api = {
+    api = {
       SEARCH_RESULTS_TAB_ID,
+      DEFAULT_TAB_ID: defaultTabId,
       addTab,
       activateTab,
       closeTab,
+      detachTab,
+      moveExternalTabHere,
       hidePanel,
       showPanel,
       isPanelVisible,
@@ -425,20 +604,35 @@
       setPanelHeight,
       togglePanel,
       reorderTab,
+      setTabOrder,
       restoreSavedPanelState,
+      setDockTransfer,
+      hasTab(tabId) {
+        return tabs.has(String(tabId || ""));
+      },
+      getTabCount() {
+        return tabs.size;
+      },
       getActiveTabId() {
         return activeTabId;
       },
       getTabOrder() {
         return getOrderedTabIds();
       },
+      getStateSnapshot,
+      addStateChangeListener(listener) {
+        if (typeof listener !== "function") return () => {};
+        stateChangeListeners.add(listener);
+        return () => stateChangeListeners.delete(listener);
+      },
       _test: {
         closeOtherTabs,
         getOrderedTabIds,
-        reorderTab
+        reorderTab,
+        setTabOrder
       }
     };
-    app.registerModule?.("bottomPanelTabs", api);
+    if (moduleName) app.registerModule?.(moduleName, api);
     return api;
   }
 

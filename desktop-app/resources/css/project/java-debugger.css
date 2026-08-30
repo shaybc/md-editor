@@ -1,0 +1,579 @@
+.java-debug-panel { background: var(--app-surface, #111827); color: var(--text-color, #e5e7eb); height: 100%; overflow: auto; padding: 8px; }
+.java-debug-perspective-left { background: var(--app-surface, #111827); color: var(--text-color, #e5e7eb); display: flex; flex: 1 1 auto; flex-direction: column; min-height: 0; overflow: hidden; padding: 0; }
+.java-debug-right-dock { border-left: 1px solid rgba(148,163,184,.24); display: flex; flex: 0 0 var(--ai-companion-panel-width, min(390px, 32vw)); min-height: 0; min-width: 320px; max-width: none; width: var(--ai-companion-panel-width, min(390px, 32vw)); }
+.java-debug-right-dock[hidden], .java-debug-perspective-left[hidden] { display: none !important; }
+.java-debug-right-dock:not([hidden]) > .java-debug-right-width-resizer { display: block !important; flex: 0 0 10px; }
+.java-debug-right-perspective { background: var(--app-surface, #111827); color: var(--text-color, #e5e7eb); display: flex; flex: 1 1 auto; flex-direction: column; height: 100%; min-height: 0; min-width: 0; overflow: hidden; }
+body.java-debug-perspective-active #folder-tree-pane .folder-tree-topbar,
+body.java-debug-perspective-active #folder-tree-root { display: none !important; }
+body.java-debug-perspective-active #folder-tree-pane .folder-tree-content { min-height: 0; }
+.java-debug-perspective-left .java-debug-workbench-section { background: rgba(15,23,42,.45); border: 1px solid rgba(148,163,184,.18); margin-bottom: 8px; padding: 0; }
+.java-debug-perspective-left .java-debug-pane-header,
+.java-debug-right-perspective .java-debug-pane-header { background: rgba(30,41,59,.72); border-bottom: 1px solid rgba(148,163,184,.22); margin-bottom: 0; min-height: 30px; padding: 4px 6px; }
+.java-debug-perspective-left .java-debug-workbench-section > :not(.java-debug-pane-header),
+.java-debug-right-perspective .java-debug-workbench-section > :not(.java-debug-pane-header) { margin: 6px; }
+.java-debug-perspective-tab-header { min-height: 34px; }
+.java-debug-right-perspective .bottom-panel-tab-list { min-width: 0; }
+.java-debug-perspective-body { flex: 1 1 auto; min-height: 0; overflow: hidden; padding: 0; }
+.java-debug-perspective-tab-view { height: 100%; overflow: auto; padding: 8px; }
+.java-debug-perspective-tab-view-ai-companion { display: flex; overflow: hidden; padding: 0; }
+.java-debug-right-dock .ai-companion-dock { border-left: 0; flex: 1 1 auto; height: 100%; min-height: 0; min-width: 0; }
+.java-debug-right-dock .ai-companion-width-resizer { display: none !important; }
+.java-debug-right-dock .ai-companion-panel { flex: 1 1 auto; min-width: 0; width: auto; }
+.java-debug-perspective-empty { align-items: center; color: #94a3b8; display: flex; flex: 1 1 auto; justify-content: center; min-height: 0; padding: 16px; text-align: center; }
+body.java-debug-left-dock-maximized .editor-workspace,
+body.java-debug-left-dock-maximized #java-debug-right-dock,
+body.java-debug-left-dock-maximized .ai-companion-dock,
+body.java-debug-right-dock-maximized .content-container.view-editor-only:not(.sidebar-hidden) .folder-tree-pane,
+body.java-debug-right-dock-maximized .content-container.view-preview-only:not(.sidebar-hidden) .folder-tree-pane,
+body.java-debug-right-dock-maximized .content-container.view-split:not(.sidebar-hidden) .folder-tree-pane,
+body.java-debug-right-dock-maximized .folder-tree-pane,
+body.java-debug-right-dock-maximized .editor-workspace,
+body.bottom-panel-maximized #java-debug-right-dock { display: none !important; }
+body.java-debug-left-dock-maximized .folder-tree-pane,
+body.java-debug-right-dock-maximized #java-debug-right-dock { flex: 1 1 auto; width: auto; min-width: 0; max-width: none; }
+body.java-debug-left-dock-maximized .folder-tree-pane { border-right: 0; }
+body.java-debug-left-dock-maximized .sidebar-view-rail,
+body.java-debug-left-dock-maximized .sidebar-width-resizer { display: none !important; }
+body.java-debug-left-dock-maximized #java-debug-left-perspective,
+body.java-debug-right-dock-maximized #java-debug-right-perspective { height: 100%; }
+.java-debug-toolbar { align-items: center; border-bottom: 1px solid rgba(148,163,184,.25); display: flex; gap: 4px; min-height: 34px; padding-bottom: 6px; }
+.java-debug-view-switcher { align-items: center; border-bottom: 1px solid rgba(148,163,184,.16); display: flex; flex-wrap: wrap; gap: 4px; margin: 0 -2px 8px; padding: 6px 2px; }
+.java-debug-view-button { align-items: center; background: transparent; border: 1px solid transparent; color: #94a3b8; display: inline-flex; font-size: 12px; gap: 5px; min-height: 28px; padding: 3px 8px; }
+.java-debug-view-button:hover { background: rgba(148,163,184,.14); border-color: rgba(148,163,184,.26); color: #dbeafe; }
+.java-debug-view-button.active { background: rgba(37,99,235,.24); border-color: rgba(96,165,250,.48); color: #dbeafe; }
+.java-debug-layout-picker { align-items: center; color: #94a3b8; display: inline-flex; font-size: 11px; gap: 5px; margin-left: auto; min-height: 28px; }
+.java-debug-layout-picker span { font-weight: 600; text-transform: uppercase; }
+.java-debug-layout-picker select { background: rgba(15,23,42,.72); border: 1px solid rgba(148,163,184,.28); color: #e5e7eb; font-size: 12px; min-height: 26px; min-width: 118px; padding: 2px 6px; }
+.java-debug-layout-picker select:focus { border-color: rgba(96,165,250,.58); outline: none; }
+.java-debug-header-toolbar { align-items: center; display: flex; min-width: 0; }
+.header-panel-controls .view-mode-group[hidden] { display: none !important; }
+.header-panel-controls .java-debug-header-toolbar { max-width: min(520px, 44vw); overflow: hidden; }
+.header-panel-controls .java-debug-header-controls { overflow-x: auto; scrollbar-width: none; }
+.header-panel-controls .java-debug-header-controls::-webkit-scrollbar { display: none; }
+@media (max-width: 1180px) { .java-debug-header-state { display: none; } .header-panel-controls .java-debug-header-toolbar { max-width: 36vw; } }
+.java-debug-header-controls { align-items: center; background: rgba(15,23,42,.42); border: 1px solid rgba(148,163,184,.22); display: flex; gap: 2px; min-height: 32px; min-width: 0; padding: 2px 5px; }
+.java-debug-header-button { align-items: center; background: transparent; border: 1px solid transparent; color: #dbeafe; display: inline-flex; height: 26px; justify-content: center; min-width: 26px; padding: 0; }
+.java-debug-header-button:hover:not(:disabled), .java-debug-header-button.active { background: rgba(99,102,241,.2); border-color: rgba(129,140,248,.42); }
+.java-debug-header-button:disabled { color: rgba(148,163,184,.42); cursor: not-allowed; }
+.java-debug-step-over-icon { display: inline-block; transform: scaleY(-1); }
+.java-debug-icon { background: currentColor; color: #7dd3fc; display: inline-block; flex: 0 0 auto; font-size: 0; height: 19px; -webkit-mask: var(--java-debug-icon-mask) center / contain no-repeat; mask: var(--java-debug-icon-mask) center / contain no-repeat; width: 19px; }
+.java-debug-icon::before { content: none; }
+.java-debug-header-button:disabled .java-debug-icon, .java-debug-button:disabled .java-debug-icon { color: rgba(148,163,184,.45); }
+.java-debug-icon-continue { --java-debug-icon-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M5 4v16M10 5l9 7-9 7z' fill='none' stroke='black' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E"); }
+.java-debug-icon-step-over { --java-debug-icon-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M5 10c0-3 3-5 7-5h6M15 2l4 3-4 3M9 11c-2 0-2 2-2 3 0 1-1 1-2 1 1 0 2 0 2 1 0 1 0 3 2 3M15 11c2 0 2 2 2 3 0 1 1 1 2 1-1 0-2 0-2 1 0 1 0 3-2 3' fill='none' stroke='black' stroke-width='2.1' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E"); }
+.java-debug-icon-step-into { --java-debug-icon-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M12 3v8M8 8l4 4 4-4M8 12c-2 0-2 2-2 3 0 1-1 1-2 1 1 0 2 0 2 1 0 1 0 3 2 3M16 12c2 0 2 2 2 3 0 1 1 1 2 1-1 0-2 0-2 1 0 1 0 3-2 3' fill='none' stroke='black' stroke-width='2.1' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E"); }
+.java-debug-icon-step-out { --java-debug-icon-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M12 15V7M8 10l4-4 4 4M8 12c-2 0-2 2-2 3 0 1-1 1-2 1 1 0 2 0 2 1 0 1 0 3 2 3M16 12c2 0 2 2 2 3 0 1 1 1 2 1-1 0-2 0-2 1 0 1 0 3-2 3' fill='none' stroke='black' stroke-width='2.1' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E"); }
+.java-debug-header-separator { align-self: stretch; border-left: 1px solid rgba(148,163,184,.24); margin: 3px 3px; }
+.java-debug-header-state { border-left: 1px solid rgba(148,163,184,.24); color: #bfdbfe; font-size: 11px; margin-left: 3px; max-width: 150px; overflow: hidden; padding-left: 7px; text-transform: none; text-overflow: ellipsis; white-space: nowrap; }
+.java-debug-header-state-failed { color: #fecaca; }
+.java-debug-header-state-stopped-at-breakpoint, .java-debug-header-state-paused { color: #fef3c7; }
+.java-debug-header-state-running, .java-debug-header-state-launching, .java-debug-header-state-stepping, .java-debug-header-state-evaluating { color: #bbf7d0; }
+.debug-menu-status { align-items: center; background: rgba(15,23,42,.62); border: 1px solid rgba(148,163,184,.2); color: #dbeafe; display: grid; gap: 8px; grid-template-columns: 20px minmax(0, 1fr); margin: 4px 6px 6px; min-width: 0; padding: 7px 8px; }
+.debug-menu-status i { color: #93c5fd; font-size: 14px; }
+.debug-menu-status span, .debug-menu-status small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.debug-menu-status-label { font-size: 12px; font-weight: 600; }
+.debug-menu-status-detail { color: #94a3b8; font-size: 11px; margin-top: 2px; }
+.debug-menu-status[data-debug-state="failed"] { border-color: rgba(248,113,113,.42); }
+.debug-menu-status[data-debug-state="failed"] i, .debug-menu-status[data-debug-state="failed"] .debug-menu-status-label { color: #fecaca; }
+.debug-menu-status[data-debug-state="paused"] .debug-menu-status-label, .debug-menu-status[data-debug-state="stopped-at-breakpoint"] .debug-menu-status-label { color: #fef3c7; }
+.debug-menu-status[data-debug-state="running"] .debug-menu-status-label, .debug-menu-status[data-debug-state="launching"] .debug-menu-status-label, .debug-menu-status[data-debug-state="stepping"] .debug-menu-status-label, .debug-menu-status[data-debug-state="evaluating"] .debug-menu-status-label { color: #bbf7d0; }
+.debug-menu-section-label { color: #93c5fd; font-size: 10px; font-weight: 700; letter-spacing: 0; line-height: 1.2; margin: 4px 0 1px; padding: 4px 10px 2px; text-transform: uppercase; }
+.debug-menu-status-divider, .debug-layout-divider { margin-top: 5px; }
+.application-menu-debug .dropdown-divider { border-color: rgba(148,163,184,.14); margin: 5px 0; }
+.java-debug-toolbar + .java-debug-workbench-main, .java-debug-toolbar + .java-debug-workbench-section, .java-debug-toolbar + .java-debug-console, .java-debug-view-switcher + .java-debug-workbench-main, .java-debug-view-switcher + .java-debug-workbench-section, .java-debug-view-switcher + .java-debug-console, .java-debug-error + .java-debug-workbench-main, .java-debug-error + .java-debug-workbench-section, .java-debug-error + .java-debug-console { margin-top: 8px; }
+.java-debug-button, .java-debug-inline, .java-debug-evaluate { align-items: center; background: transparent; border: 1px solid transparent; color: inherit; display: inline-flex; height: 28px; justify-content: center; min-width: 28px; padding: 0 6px; }
+.java-debug-button:hover:not(:disabled), .java-debug-inline:hover:not(:disabled), .java-debug-evaluate:hover:not(:disabled) { background: rgba(148,163,184,.16); border-color: rgba(148,163,184,.28); }
+.java-debug-button:disabled, .java-debug-inline:disabled { color: rgba(148,163,184,.45); cursor: not-allowed; }
+.java-debug-thread-toggle { align-items: center; background: transparent; border: 0; color: #94a3b8; display: inline-flex; height: 22px; justify-content: center; padding: 0; width: 18px; }
+.java-debug-state { border-left: 1px solid rgba(148,163,184,.25); font-size: 12px; margin-left: 6px; padding-left: 10px; text-transform: none; }
+.java-debug-toolbar-separator { align-self: stretch; border-left: 1px solid rgba(148,163,184,.24); margin: 3px 3px; }
+.java-debug-layout { display: grid; gap: 8px; grid-template-columns: minmax(220px, 1fr) minmax(260px, 1.2fr) minmax(220px, 1fr) minmax(220px, 1fr); min-height: 240px; }
+.java-debug-layout section, .java-debug-console { border-top: 1px solid rgba(148,163,184,.18); min-width: 0; padding-top: 6px; }
+.java-debug-workspace-grid { align-items: stretch; grid-template-areas: "threads stack variables" "watches expressions breakpoints" "console console console"; grid-template-columns: minmax(220px, var(--java-debug-workspace-col-1, .95fr)) minmax(260px, var(--java-debug-workspace-col-2, 1.1fr)) minmax(300px, var(--java-debug-workspace-col-3, 1.25fr)); grid-template-rows: minmax(160px, var(--java-debug-workspace-row-1, 1fr)) minmax(140px, var(--java-debug-workspace-row-2, .85fr)) minmax(220px, var(--java-debug-workspace-row-3, .9fr)); position: relative; }
+.java-debug-workspace-grid .java-debug-pane-threads { grid-area: threads; }
+.java-debug-workspace-grid .java-debug-pane-stack { grid-area: stack; }
+.java-debug-workspace-grid .java-debug-pane-variables { grid-area: variables; }
+.java-debug-workspace-grid .java-debug-pane-watches { grid-area: watches; }
+.java-debug-workspace-grid .java-debug-pane-expressions { grid-area: expressions; }
+.java-debug-workspace-grid .java-debug-pane-breakpoints { grid-area: breakpoints; }
+.java-debug-workspace-grid .java-debug-console { grid-area: console; }
+.java-debug-workspace-grid .java-debug-workbench-section, .java-debug-workspace-grid .java-debug-console { background: rgba(15,23,42,.45); border: 1px solid rgba(148,163,184,.18); min-height: 160px; overflow: auto; padding: 6px; }
+.java-debug-workspace-grid .java-debug-console { display: flex; flex-direction: column; min-height: 220px; overflow: hidden; }
+.java-debug-workspace-grid .java-debug-console .java-debug-console-body > pre[data-debug-console-output] { flex: 1 1 auto; max-height: none; min-height: 130px; }
+.java-debug-workspace-grid { background: rgba(2,6,23,.24); border: 1px solid rgba(148,163,184,.16); gap: 10px; padding: 8px; }
+.java-debug-workspace-grid .java-debug-workbench-section, .java-debug-workspace-grid .java-debug-console { background: #0b1220; border-color: rgba(148,163,184,.34); box-shadow: inset 0 1px 0 rgba(255,255,255,.04); padding: 0; }
+.java-debug-workspace-grid .java-debug-pane-header, .java-debug-workspace-grid .java-debug-console-toolbar { background: rgba(30,41,59,.72); border-bottom: 1px solid rgba(148,163,184,.22); min-height: 30px; padding: 4px 6px; }
+.java-debug-workspace-grid .java-debug-pane-header { margin-bottom: 0; }
+.java-debug-workspace-grid .java-debug-console-toolbar { margin-bottom: 0; }
+.java-debug-workspace-grid .java-debug-workbench-section > :not(.java-debug-pane-header), .java-debug-workspace-grid .java-debug-console > :not(.java-debug-console-toolbar) { margin: 6px; }
+.java-debug-workspace-grid.has-maximized-pane { grid-template-areas: "maximized"; grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(360px, 1fr); }
+.java-debug-workspace-grid.has-maximized-pane .maximized { grid-area: maximized; min-height: 360px; }
+.java-debug-workspace-grid.has-maximized-pane .workspace-hidden { display: none; }
+.java-debug-workspace-grid.has-maximized-pane .java-debug-console.maximized pre { min-height: 260px; }
+.java-debug-workspace-splitter { background: transparent; border: 0; padding: 0; position: absolute; z-index: 6; }
+.java-debug-workspace-splitter::after { background: rgba(148,163,184,.18); content: ""; display: block; transition: background .12s ease, box-shadow .12s ease; }
+.java-debug-workspace-splitter:hover::after, .java-debug-workspace-splitter:focus-visible::after { background: rgba(96,165,250,.58); box-shadow: 0 0 0 1px rgba(96,165,250,.28); outline: none; }
+.java-debug-workspace-splitter-column { bottom: 0; cursor: col-resize; top: 0; transform: translateX(-5px); width: 10px; }
+.java-debug-workspace-splitter-column::after { height: 100%; margin: 0 auto; width: 1px; }
+.java-debug-workspace-splitter-column-1 { left: var(--java-debug-workspace-col-split-1, 29%); }
+.java-debug-workspace-splitter-column-2 { left: var(--java-debug-workspace-col-split-2, 62%); }
+.java-debug-workspace-splitter-row { cursor: row-resize; height: 10px; left: 0; right: 0; transform: translateY(-5px); }
+.java-debug-workspace-splitter-row::after { height: 1px; margin: 4px 0 0; width: 100%; }
+.java-debug-workspace-splitter-row-1 { top: var(--java-debug-workspace-row-split-1, 36%); }
+.java-debug-workspace-splitter-row-2 { top: var(--java-debug-workspace-row-split-2, 67%); }
+@media (max-width: 1300px) { .java-debug-workspace-grid { grid-template-areas: "threads stack" "variables variables" "watches expressions" "breakpoints breakpoints" "console console"; grid-template-columns: 1fr 1fr; grid-template-rows: auto; } .java-debug-workspace-splitter { display: none; } }
+@media (max-width: 900px) { .java-debug-workspace-grid { grid-template-areas: "threads" "stack" "variables" "watches" "expressions" "breakpoints" "console"; grid-template-columns: 1fr; } }
+.java-debug-workbench-main, .java-debug-workbench-section { min-width: 0; }
+.java-debug-workbench-section { border-top: 1px solid rgba(148,163,184,.18); min-width: 0; padding-top: 6px; }
+.java-debug-panel-main .java-debug-workbench-section, .java-debug-panel-console .java-debug-console { border-top: 0; padding-top: 0; }
+.java-debug-panel-console .java-debug-console { display: flex; flex-direction: column; height: 100%; min-height: 220px; overflow: hidden; }
+.java-debug-panel-console .java-debug-console .java-debug-console-body > pre[data-debug-console-output] { flex: 1 1 auto; max-height: none; min-height: 140px; }
+.java-debug-layout h4, .java-debug-workbench-section h4, .java-debug-console h4 { font-size: 12px; font-weight: 600; margin: 0 0 6px; }
+.java-debug-pane-header { align-items: center; display: flex; gap: 6px; margin-bottom: 6px; min-width: 0; }
+.java-debug-pane-header h4 { flex: 1 1 auto; margin: 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.java-debug-pane-title { align-items: center; display: inline-flex; gap: 6px; max-width: 100%; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.java-debug-pane-title i { color: #93c5fd; flex: 0 0 auto; font-size: 12px; }
+.java-debug-pane-title span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.java-debug-pane-count { border: 1px solid rgba(148,163,184,.24); color: #94a3b8; flex: 0 0 auto; font-size: 10px; line-height: 1.2; padding: 2px 5px; white-space: nowrap; }
+.java-debug-pane-toggle { align-items: center; background: transparent; border: 1px solid transparent; color: #94a3b8; display: inline-flex; height: 22px; justify-content: center; min-width: 22px; padding: 0; }
+.java-debug-pane-toggle:hover { background: rgba(148,163,184,.16); border-color: rgba(148,163,184,.28); color: #dbeafe; }
+.java-debug-pane-maximize[aria-pressed="true"] { background: rgba(96,165,250,.18); border-color: rgba(96,165,250,.34); color: #dbeafe; }
+.java-debug-workbench-section.collapsed, .java-debug-console.collapsed { min-height: 34px; overflow: hidden; }
+.java-debug-workbench-section.collapsed .java-debug-pane-header, .java-debug-console.collapsed .java-debug-console-toolbar { margin-bottom: 0; }
+.java-debug-workspace-grid .java-debug-workbench-section.collapsed, .java-debug-workspace-grid .java-debug-console.collapsed { min-height: 34px; }
+.java-debug-thread-title { align-items: center; color: #93c5fd; display: flex; font-size: 12px; font-weight: 600; gap: 4px; padding: 3px 0; }
+.java-debug-thread-title small { color: #94a3b8; font-weight: 400; margin-left: 6px; }
+.java-debug-thread-name { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.java-debug-summary { display: grid; gap: 4px; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); margin: 0 0 6px; }
+.java-debug-summary-item { background: rgba(15,23,42,.58); border: 1px solid rgba(148,163,184,.18); display: grid; gap: 2px; min-width: 0; padding: 5px 6px; }
+.java-debug-summary-item.primary { background: rgba(59,130,246,.14); border-color: rgba(96,165,250,.42); }
+.java-debug-summary-item span { color: #94a3b8; font-size: 10px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; text-transform: uppercase; white-space: nowrap; }
+.java-debug-summary-item strong { color: #e5e7eb; font-size: 12px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.java-debug-summary-item.primary strong { color: #bfdbfe; }
+.java-debug-session-overview { align-items: stretch; background: rgba(15,23,42,.52); border: 1px solid rgba(148,163,184,.24); display: grid; gap: 6px; grid-template-columns: minmax(180px, .9fr) minmax(170px, .85fr) repeat(4, minmax(120px, 1fr)); margin: 0 0 8px; min-width: 0; padding: 6px; }
+.java-debug-session-overview-state, .java-debug-session-overview-item { background: rgba(2,6,23,.46); border: 1px solid rgba(148,163,184,.18); display: grid; gap: 2px; min-width: 0; padding: 5px 7px; }
+.java-debug-session-picker { background: rgba(2,6,23,.46); border: 1px solid rgba(148,163,184,.18); display: grid; gap: 2px; min-width: 0; padding: 5px 7px; }
+.java-debug-session-picker span { color: #94a3b8; font-size: 10px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; text-transform: uppercase; white-space: nowrap; }
+.java-debug-session-picker select { background: rgba(15,23,42,.72); border: 1px solid rgba(148,163,184,.24); color: #e5e7eb; font-size: 12px; min-height: 24px; min-width: 0; padding: 1px 5px; }
+.java-debug-session-picker select:focus { border-color: rgba(96,165,250,.58); outline: none; }
+.java-debug-session-overview-state { align-items: center; grid-template-columns: 22px minmax(0, 1fr); }
+.java-debug-session-overview-state i { color: #93c5fd; }
+.java-debug-session-overview-state span, .java-debug-session-overview-item span { color: #94a3b8; font-size: 10px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; text-transform: uppercase; white-space: nowrap; }
+.java-debug-session-overview-state small, .java-debug-session-overview-item strong { color: #e5e7eb; font-size: 12px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.java-debug-session-overview-item.primary { border-color: rgba(96,165,250,.42); }
+.java-debug-session-overview-item.primary strong { color: #bfdbfe; }
+.java-debug-session-overview-state-paused small, .java-debug-session-overview-state-stopped-at-breakpoint small { color: #fef3c7; }
+.java-debug-session-overview-state-running small, .java-debug-session-overview-state-launching small, .java-debug-session-overview-state-stepping small, .java-debug-session-overview-state-evaluating small { color: #bbf7d0; }
+.java-debug-session-overview-state-failed small { color: #fecaca; }
+@media (max-width: 1300px) { .java-debug-session-overview { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 700px) { .java-debug-session-overview { grid-template-columns: 1fr; } }
+.java-debug-thread-toolbar { align-items: center; display: flex; gap: 3px; justify-content: flex-end; margin: 0 0 4px; }
+.java-debug-call-stack-thread-picker { align-items: center; display: grid; gap: 5px; grid-template-columns: auto minmax(0, 1fr); margin: 0 0 5px; }
+.java-debug-call-stack-thread-picker span { color: #94a3b8; font-size: 10px; font-weight: 600; text-transform: uppercase; }
+.java-debug-call-stack-thread-picker select { background: rgba(15,23,42,.72); border: 1px solid rgba(148,163,184,.24); color: #e5e7eb; font-size: 12px; min-height: 26px; min-width: 0; padding: 2px 6px; }
+.java-debug-thread-list { display: grid; gap: 4px; }
+.java-debug-thread-empty { align-items: flex-start; border: 1px dashed rgba(148,163,184,.28); display: grid; gap: 5px; }
+.java-debug-thread-empty strong { color: #dbeafe; font-size: 12px; font-weight: 600; }
+.java-debug-thread-empty > span { color: #94a3b8; }
+.java-debug-thread-entry { border-bottom: 1px solid rgba(148,163,184,.12); min-width: 0; padding-bottom: 2px; }
+.java-debug-thread-entry:last-child { border-bottom: 0; }
+.java-debug-thread-card { align-items: center; cursor: pointer; display: grid; font-size: 12px; gap: 4px; grid-template-columns: 22px minmax(0, 1fr) auto auto; padding: 5px 6px; }
+.java-debug-thread-card:hover, .java-debug-thread-card:focus-visible, .java-debug-thread-card.active, .java-debug-thread-entry.active .java-debug-thread-card { background: rgba(59,130,246,.16); outline: none; }
+.java-debug-thread-card .java-debug-expander { height: 22px; min-width: 22px; width: 22px; }
+.java-debug-thread-card-main { display: grid; gap: 2px; min-width: 0; }
+.java-debug-thread-count { align-items: center; border: 1px solid rgba(148,163,184,.28); color: #bfdbfe; display: inline-flex; font-size: 11px; height: 22px; justify-content: center; min-width: 22px; padding: 0 5px; }
+.java-debug-thread-stack { border-left: 1px solid rgba(148,163,184,.18); display: grid; gap: 1px; margin: 1px 0 3px 17px; min-width: 0; padding-left: 6px; }
+.java-debug-thread-stack .java-debug-frame { padding-left: 4px; }
+.java-debug-thread-frame { background: transparent; border: 0; color: inherit; display: grid; font: inherit; font-size: 12px; gap: 2px; min-width: 0; padding: 3px 4px; text-align: left; width: 100%; }
+.java-debug-thread-frame:hover, .java-debug-thread-frame:focus-visible, .java-debug-thread-frame.active { background: rgba(59,130,246,.16); outline: none; }
+.java-debug-thread-frame span, .java-debug-thread-frame small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.java-debug-thread-frame small, .java-debug-thread-stack-more { color: #94a3b8; font-size: 11px; }
+.java-debug-thread-stack-more { padding: 3px 4px; }
+.java-debug-thread-card-main span, .java-debug-thread-card-main small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.java-debug-thread-card-main small { color: #94a3b8; }
+.java-debug-frame, .java-debug-breakpoint { background: transparent; border: 0; color: inherit; display: grid; font-size: 12px; gap: 2px; padding: 4px 6px; text-align: left; width: 100%; }
+.java-debug-breakpoint { cursor: pointer; }
+.java-debug-frame:hover, .java-debug-frame:focus-within, .java-debug-frame.active, .java-debug-breakpoint:hover, .java-debug-breakpoint:focus-visible { background: rgba(59,130,246,.16); outline: none; }
+.java-debug-frame { align-items: center; grid-template-columns: minmax(0, 1fr) auto; }
+.java-debug-frame-main { background: transparent; border: 0; color: inherit; display: grid; font: inherit; gap: 2px; min-width: 0; padding: 0; text-align: left; }
+.java-debug-frame-main span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.java-debug-frame-title { align-items: baseline; display: grid; gap: 6px; grid-template-columns: minmax(0, 1fr) auto; min-width: 0; }
+.java-debug-frame-title small { color: #64748b; font-family: Consolas, 'Cascadia Mono', monospace; font-size: 11px; }
+.java-debug-frame-meta { align-items: center; display: flex; flex-wrap: wrap; gap: 3px; min-width: 0; }
+.java-debug-frame-meta > span:first-child { color: #94a3b8; flex: 1 1 120px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.java-debug-frame-badge { border: 1px solid rgba(148,163,184,.24); color: #94a3b8; flex: 0 0 auto; font-size: 10px; line-height: 1.2; max-width: 100%; overflow: hidden; padding: 1px 4px; text-overflow: ellipsis; text-transform: uppercase; white-space: nowrap; }
+.java-debug-frame-badge.active { border-color: rgba(96,165,250,.42); color: #bfdbfe; }
+.java-debug-frame-badge.can-drop { border-color: rgba(52,211,153,.36); color: #86efac; }
+.java-debug-frame-actions { align-items: center; display: flex; gap: 2px; justify-content: flex-end; }
+.java-debug-frame-actions .java-debug-inline { height: 24px; min-width: 24px; padding: 0; }
+.java-debug-frame small, .java-debug-breakpoint small, .java-debug-watch small { color: #94a3b8; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.java-debug-frame-context { border-bottom: 1px solid rgba(148,163,184,.18); display: grid; font-size: 12px; gap: 2px; margin-bottom: 6px; min-width: 0; padding: 2px 0 6px; }
+.java-debug-frame-context span, .java-debug-frame-context small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.java-debug-frame-context span { color: #93c5fd; font-weight: 600; }
+.java-debug-frame-context small, .java-debug-frame-context.empty { color: #94a3b8; }
+.java-debug-variable-groups { display: grid; gap: 8px; }
+.java-debug-variable-toolbar { align-items: center; display: flex; gap: 3px; justify-content: flex-end; margin: 0 0 4px; }
+.java-debug-variable-toolbar .java-debug-inline { height: 24px; min-width: 24px; padding: 0; }
+.java-debug-variable-group { border-top: 1px solid rgba(148,163,184,.12); display: grid; gap: 2px; padding-top: 5px; }
+.java-debug-variable-group:first-child { border-top: 0; padding-top: 0; }
+.java-debug-variable-group h5 { color: #dbeafe; font-size: 11px; font-weight: 600; letter-spacing: 0; margin: 0 0 2px; text-transform: uppercase; }
+.java-debug-values { display: grid; gap: 1px; }
+.java-debug-variable-empty { align-items: flex-start; border: 1px dashed rgba(148,163,184,.28); display: grid; gap: 5px; }
+.java-debug-variable-empty strong { color: #dbeafe; font-size: 12px; font-weight: 600; }
+.java-debug-variable-empty > span { color: #94a3b8; }
+.java-debug-value { align-items: center; display: grid; gap: 4px; grid-template-columns: 22px 46px minmax(0, 1fr) repeat(6, 24px); padding-left: calc(var(--depth, 0) * 16px); }
+.java-debug-value:hover, .java-debug-value:focus-visible, .java-debug-watch:hover, .java-debug-watch:focus-visible { background: rgba(59,130,246,.12); outline: none; }
+.java-debug-value-kind { border: 1px solid rgba(148,163,184,.26); border-radius: 3px; color: #cbd5e1; font-size: 10px; line-height: 1.2; overflow: hidden; padding: 1px 4px; text-align: center; text-transform: uppercase; white-space: nowrap; }
+.java-debug-value-kind-this { border-color: rgba(96,165,250,.45); color: #93c5fd; }
+.java-debug-value-kind-local { border-color: rgba(52,211,153,.38); color: #86efac; }
+.java-debug-value-kind-parameter { border-color: rgba(14,165,233,.42); color: #7dd3fc; }
+.java-debug-value-kind-field { border-color: rgba(167,139,250,.38); color: #c4b5fd; }
+.java-debug-value-kind-static { border-color: rgba(251,191,36,.42); color: #fde68a; }
+.java-debug-value-kind-element, .java-debug-value-kind-entry { border-color: rgba(45,212,191,.36); color: #99f6e4; }
+.java-debug-value-kind-result { border-color: rgba(244,114,182,.36); color: #f9a8d4; }
+.java-debug-value-kind-error { border-color: rgba(248,113,113,.45); color: #fecaca; }
+.java-debug-value-text { font-family: Consolas, 'Cascadia Mono', monospace; font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.java-debug-value .java-debug-inline { height: 24px; min-width: 24px; padding: 0; }
+.java-debug-expander { background: transparent; border: 0; color: #94a3b8; height: 22px; padding: 0; }
+.java-debug-watch-toolbar { align-items: center; display: grid; gap: 4px; grid-template-columns: minmax(0, 1fr) 28px 28px 28px; margin-bottom: 4px; }
+.java-debug-watch-add-input, .java-debug-watch-expression { background: rgba(15,23,42,.62); border: 1px solid transparent; color: inherit; font-family: Consolas, "Cascadia Mono", monospace; font-size: 12px; min-height: 26px; min-width: 0; padding: 2px 6px; }
+.java-debug-watch-add-input { border-color: rgba(148,163,184,.26); }
+.java-debug-watch-add-input:focus, .java-debug-watch-expression:focus { background: rgba(15,23,42,.9); border-color: rgba(96,165,250,.58); outline: none; }
+.java-debug-watch-list { display: grid; gap: 2px; }
+.java-debug-watch-empty { align-items: flex-start; border: 1px dashed rgba(148,163,184,.28); display: grid; gap: 5px; }
+.java-debug-watch-empty strong { color: #dbeafe; font-size: 12px; font-weight: 600; }
+.java-debug-watch-empty > span { color: #94a3b8; }
+.java-debug-watch-entry { min-width: 0; }
+.java-debug-watch { align-items: center; display: grid; gap: 4px; grid-template-columns: 24px 22px minmax(0, 1fr) minmax(0, 1fr) auto; font-size: 12px; padding: 3px 0; }
+.java-debug-watch.disabled { opacity: .62; }
+.java-debug-watch.error .java-debug-watch-expression { color: #fecaca; }
+.java-debug-watch-expression, .java-debug-watch-result { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.java-debug-watch-expression { width: 100%; }
+.java-debug-watch-result-error { color: #fecaca; }
+.java-debug-watch-actions { align-items: center; display: flex; gap: 2px; justify-content: flex-end; }
+.java-debug-expression-panel { display: grid; gap: 6px; min-width: 0; }
+.java-debug-expression-empty { align-items: flex-start; border: 1px dashed rgba(148,163,184,.28); display: grid; gap: 5px; }
+.java-debug-expression-empty strong { color: #dbeafe; font-size: 12px; font-weight: 600; }
+.java-debug-expression-empty > span { color: #94a3b8; }
+.java-debug-evaluator { display: grid; gap: 4px; grid-template-columns: minmax(0, 1fr) 30px 30px; margin-top: 6px; }
+.java-debug-evaluator input { background: rgba(15,23,42,.8); border: 1px solid rgba(148,163,184,.3); color: inherit; min-height: 28px; padding: 2px 6px; }
+.java-debug-evaluation-result { align-items: center; display: grid; font-size: 12px; gap: 4px; grid-template-columns: 22px minmax(0, 1fr) auto; margin-top: 4px; min-width: 0; }
+.java-debug-evaluation-result-main { display: grid; gap: 2px; min-width: 0; }
+.java-debug-evaluation-result span, .java-debug-evaluation-result small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.java-debug-evaluation-result small { color: #d1d5db; font-family: Consolas, 'Cascadia Mono', monospace; }
+.java-debug-evaluation-result.error small { color: #fecaca; }
+.java-debug-evaluation-actions, .java-debug-expression-history-actions { align-items: center; display: flex; gap: 2px; justify-content: flex-end; }
+.java-debug-evaluation-members { border-top: 1px solid rgba(148,163,184,.14); margin-top: 4px; max-height: 180px; overflow: auto; padding-top: 4px; }
+.java-debug-expression-history { border-top: 1px solid rgba(148,163,184,.14); display: grid; gap: 2px; margin-top: 4px; padding-top: 6px; }
+.java-debug-expression-history h4 { color: #dbeafe; font-size: 11px; font-weight: 600; letter-spacing: 0; margin: 0 0 2px; text-transform: uppercase; }
+.java-debug-expression-history-row { align-items: center; display: grid; gap: 4px; grid-template-columns: minmax(0, 1fr) auto; }
+.java-debug-expression-history-text { background: transparent; border: 0; color: #d1d5db; font-family: Consolas, 'Cascadia Mono', monospace; font-size: 12px; min-width: 0; overflow: hidden; padding: 3px 4px; text-align: left; text-overflow: ellipsis; white-space: nowrap; }
+.java-debug-expression-history-text:hover { background: rgba(59,130,246,.16); color: #eff6ff; }
+.java-debug-console-body { display: flex; flex: 1 1 auto; flex-direction: column; min-height: 0; }
+.java-debug-console pre { background: #05070b; color: #d1d5db; font-family: Consolas, 'Cascadia Mono', monospace; font-size: 12px; margin: 0; max-height: 180px; min-height: 0; overflow: auto; padding: 8px; white-space: pre-wrap; }
+.java-debug-console-entry { display: grid; grid-template-columns: 72px minmax(0, 1fr); min-width: 0; }
+.java-debug-console-label { color: #64748b; user-select: none; }
+.java-debug-console-empty { color: #64748b; display: block; font-style: italic; }
+.java-debug-console-entry-stderr { color: #fca5a5; }
+.java-debug-console-entry-stdin { color: #86efac; }
+.java-debug-console-entry-debugger { color: #c4b5fd; }
+.java-debug-console-entry-logpoint { color: #93c5fd; }
+.java-debug-console-entry-error { color: #fecaca; }
+.java-debug-inspector { border-top: 1px solid rgba(148,163,184,.18); margin-top: 8px; min-width: 0; padding-top: 6px; }
+.java-debug-inspector-toolbar { align-items: center; display: flex; gap: 4px; margin-bottom: 4px; }
+.java-debug-inspector-toolbar h4 { font-size: 12px; font-weight: 600; margin: 0 auto 0 0; }
+.java-debug-inspector-meta { display: grid; gap: 2px; font-size: 12px; margin-bottom: 4px; min-width: 0; }
+.java-debug-inspector-meta span, .java-debug-inspector-meta small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.java-debug-inspector-meta small { color: #94a3b8; }
+.java-debug-inspector pre { background: #05070b; color: #d1d5db; font-family: Consolas, 'Cascadia Mono', monospace; font-size: 12px; margin: 0; max-height: 220px; overflow: auto; padding: 8px; white-space: pre-wrap; word-break: break-word; }
+.java-debug-inspector-members { border-top: 1px solid rgba(148,163,184,.14); margin-top: 6px; max-height: 240px; overflow: auto; padding-top: 6px; }
+.java-debug-empty, .java-debug-error { color: #94a3b8; font-size: 12px; padding: 6px; }
+.java-debug-error { color: #fecaca; }
+.java-debug-breakpoint-empty { align-items: flex-start; border: 1px dashed rgba(148,163,184,.28); display: grid; gap: 5px; }
+.java-debug-breakpoint-empty strong { color: #dbeafe; font-size: 12px; font-weight: 600; }
+.java-debug-breakpoint-empty > span { color: #94a3b8; }
+.java-debug-empty-action { align-items: center; background: rgba(59,130,246,.14); border: 1px solid rgba(96,165,250,.36); color: #dbeafe; display: inline-flex; font-size: 12px; gap: 6px; justify-content: center; min-height: 28px; padding: 3px 8px; width: fit-content; }
+.java-debug-empty-action:hover:not(.disabled) { background: rgba(59,130,246,.22); border-color: rgba(96,165,250,.52); }
+.java-debug-empty-action.disabled { background: rgba(15,23,42,.42); border-color: rgba(148,163,184,.18); color: #64748b; }
+@media (max-width: 1100px) { .java-debug-layout { grid-template-columns: 1fr 1fr; } }
+.cm-debugBreakpointGutter .cm-gutterElement { align-items: center; cursor: pointer; display: flex; justify-content: center; min-width: 18px; padding: 0 2px; }
+.cm-debugBreakpointMarker, .cm-debugBreakpointEmptyMarker, .cm-debugExecutionLineMarker { box-sizing: border-box; display: inline-block; height: 12px; transform: translateY(1px); width: 12px; }
+.cm-debugBreakpointMarker, .cm-debugBreakpointEmptyMarker { border-radius: 999px; }
+.cm-debugBreakpointEmptyMarker { border: 1px solid transparent; opacity: 0; }
+.cm-debugBreakpointGutter:hover .cm-debugBreakpointEmptyMarker, .cm-debugBreakpointGutter .cm-gutterElement:hover .cm-debugBreakpointEmptyMarker { border-color: color-mix(in srgb, var(--editor-line-number-color, #94a3b8) 72%, transparent); opacity: .72; }
+.cm-debugBreakpointMarker-enabled { background: #e51400; border: 1px solid color-mix(in srgb, #ffffff 45%, #e51400); box-shadow: 0 0 0 1px color-mix(in srgb, #e51400 35%, transparent); }
+.cm-debugBreakpointMarker-disabled { background: transparent; border: 1px solid color-mix(in srgb, var(--editor-line-number-color, #94a3b8) 68%, transparent); box-shadow: none; opacity: .72; }
+.cm-debugBreakpointMarker-unresolved { background: #f59e0b; border-color: #fbbf24; }
+.cm-debugBreakpointMarker-conditional::after, .cm-debugBreakpointMarker-hit-count::after, .cm-debugBreakpointMarker-logpoint::after { background: #fff; border-radius: 999px; content: ""; display: block; height: 4px; margin: 3px auto 0; width: 4px; }
+.cm-debugBreakpointMarker-logpoint { background: #0ea5e9; border-color: #7dd3fc; }
+.cm-debugBreakpointMarker-current, .cm-debugExecutionLineMarker { box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent-color, #8b5cf6) 58%, transparent); }
+.cm-debugExecutionLineMarker { background: var(--accent-color, #8b5cf6); border-radius: 2px; clip-path: polygon(0 0, 100% 50%, 0 100%); }
+.cm-debugExecutionLine { background: color-mix(in srgb, #facc15 24%, var(--editor-current-line-bg, transparent)); box-shadow: inset 3px 0 0 #f59e0b; }
+.java-debug-breakpoint-controls { align-items: center; display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 4px; }
+.java-debug-breakpoint-search { background: rgba(15,23,42,.8); border: 1px solid rgba(148,163,184,.3); color: inherit; flex: 1 1 180px; min-height: 28px; min-width: 160px; padding: 2px 6px; }
+.java-debug-breakpoint-section { border-top: 1px solid rgba(148,163,184,.14); margin-top: 6px; padding-top: 6px; }
+.java-debug-breakpoint-section-title { align-items: center; color: #dbeafe; display: flex; font-size: 11px; font-weight: 600; gap: 6px; letter-spacing: 0; padding: 2px 6px 4px; text-transform: uppercase; }
+.java-debug-breakpoint-section-title i { color: #93c5fd; }
+.java-debug-breakpoint-group { border-top: 1px solid rgba(148,163,184,.12); margin-top: 4px; padding-top: 4px; }
+.java-debug-breakpoint-group-title { align-items: center; color: #bfdbfe; display: grid; font-size: 12px; gap: 5px; grid-template-columns: 18px auto minmax(0, 1fr); padding: 3px 6px; }
+.java-debug-breakpoint-group-title small { color: #64748b; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.java-debug-breakpoint { align-items: center; grid-template-columns: 24px minmax(0, 1fr) 24px; }
+.java-debug-breakpoint-summary { display: grid; gap: 2px; min-width: 0; }
+.java-debug-breakpoint-summary span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.java-debug-breakpoint.disabled { opacity: .62; }
+.java-debug-breakpoint-main { align-items: baseline; display: grid; gap: 6px; grid-template-columns: minmax(0, 1fr) auto; min-width: 0; }
+.java-debug-breakpoint-main small { color: #64748b; font-family: Consolas, 'Cascadia Mono', monospace; font-size: 11px; }
+.java-debug-breakpoint-meta { align-items: center; display: flex; flex-wrap: wrap; gap: 3px; min-width: 0; }
+.java-debug-breakpoint-chip { border: 1px solid rgba(148,163,184,.24); color: #cbd5e1; font-size: 10px; line-height: 1.2; max-width: 100%; overflow: hidden; padding: 1px 4px; text-overflow: ellipsis; text-transform: uppercase; white-space: nowrap; }
+.java-debug-breakpoint-chip-resolved { border-color: rgba(52,211,153,.36); color: #86efac; }
+.java-debug-breakpoint-chip-pending { border-color: rgba(251,191,36,.42); color: #fde68a; }
+.java-debug-breakpoint-chip-disabled { border-color: rgba(148,163,184,.28); color: #94a3b8; }
+.java-debug-breakpoint-chip-condition { border-color: rgba(96,165,250,.42); color: #93c5fd; }
+.java-debug-breakpoint-chip-hit-count, .java-debug-breakpoint-chip-hits { border-color: rgba(251,191,36,.34); color: #fcd34d; }
+.java-debug-breakpoint-chip-logpoint { border-color: rgba(14,165,233,.42); color: #7dd3fc; }
+.java-debug-breakpoint-chip-location { max-width: 100%; text-transform: none; }
+.java-debug-breakpoint-preview, .java-debug-breakpoint-detail { background: rgba(2,6,23,.58); border-left: 2px solid rgba(96,165,250,.46); color: #d1d5db; display: block; font-family: Consolas, 'Cascadia Mono', monospace; font-size: 11px; overflow: hidden; padding: 3px 5px; text-overflow: ellipsis; white-space: nowrap; }
+.java-debug-breakpoint-detail { color: #94a3b8; }
+.java-debug-breakpoint-actions { align-items: center; display: flex; gap: 2px; justify-content: flex-end; }
+.java-debug-breakpoint { grid-template-columns: 24px minmax(0, 1fr) auto; }
+.java-debug-exception-breakpoint { align-items: center; display: grid; font-size: 12px; gap: 2px; grid-template-columns: 24px minmax(0, 1fr) auto; padding: 4px 6px; }
+.java-debug-exception-breakpoint:hover, .java-debug-exception-breakpoint:focus-visible { background: rgba(59,130,246,.16); outline: none; }
+.java-debug-exception-breakpoint.disabled { opacity: .62; }
+.java-debug-method-breakpoint { align-items: center; display: grid; font-size: 12px; gap: 2px; grid-template-columns: 24px minmax(0, 1fr) auto; padding: 4px 6px; }
+.java-debug-method-breakpoint:hover, .java-debug-method-breakpoint:focus-visible { background: rgba(59,130,246,.16); outline: none; }
+.java-debug-method-breakpoint.disabled { opacity: .62; }
+.java-debug-inline.active { color: #93c5fd; }
+.java-debug-console-toolbar { align-items: center; display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 4px; }
+.java-debug-console-toolbar h4 { flex: 1 1 auto; margin-right: auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.java-debug-console-filters { align-items: center; display: inline-flex; flex-wrap: wrap; gap: 3px; }
+.java-debug-console-filter { background: rgba(15,23,42,.64); border: 1px solid rgba(148,163,184,.24); color: #94a3b8; font-size: 11px; min-height: 24px; padding: 2px 6px; white-space: nowrap; }
+.java-debug-console-filter:hover { background: rgba(148,163,184,.16); color: #dbeafe; }
+.java-debug-console-filter.active { background: rgba(37,99,235,.28); border-color: rgba(96,165,250,.55); color: #dbeafe; }
+.java-debug-console-filter span { color: #64748b; margin-left: 3px; }
+.java-debug-console-filter.active span { color: #bfdbfe; }
+.java-debug-console-search { background: rgba(15,23,42,.8); border: 1px solid rgba(148,163,184,.3); color: inherit; min-height: 26px; min-width: 150px; padding: 2px 6px; }
+.java-debug-console-toggle { align-items: center; color: #94a3b8; display: inline-flex; font-size: 12px; gap: 4px; padding: 0 4px; white-space: nowrap; }
+.java-debug-console pre mark { background: #facc15; color: #111827; padding: 0 1px; }
+.java-debug-console-evaluation { border-top: 1px solid rgba(148,163,184,.14); display: grid; gap: 4px; margin-top: 4px; padding-top: 4px; }
+.java-debug-console-evaluator { margin-top: 0; }
+.java-debug-console-evaluation .java-debug-evaluation-result { margin-top: 0; }
+.java-debug-console-input { align-items: center; background: #05070b; border-top: 1px solid rgba(148,163,184,.18); display: grid; flex: 0 0 auto; gap: 0; grid-template-columns: auto minmax(0, 1fr) 32px; margin-top: 0; padding: 6px 8px; }
+.java-debug-console-input-label { align-items: center; align-self: stretch; background: rgba(15,23,42,.82); border: 1px solid rgba(148,163,184,.3); border-right: 0; color: #86efac; display: inline-flex; font-family: Consolas, 'Cascadia Mono', monospace; font-size: 12px; min-height: 28px; padding: 0 8px; user-select: none; white-space: nowrap; }
+.java-debug-console-input input { background: rgba(15,23,42,.82); border: 1px solid rgba(148,163,184,.3); border-left: 0; border-right: 0; color: inherit; min-height: 28px; min-width: 0; padding: 2px 7px; }
+.java-debug-console-input input:focus { border-color: rgba(129,140,248,.85); outline: none; }
+.java-debug-console-input:focus-within .java-debug-console-input-label, .java-debug-console-input:focus-within .java-debug-evaluate { border-color: rgba(129,140,248,.85); }
+.java-debug-console-input .java-debug-evaluate { align-self: stretch; background: rgba(15,23,42,.82); border: 1px solid rgba(148,163,184,.3); color: #bfdbfe; height: auto; min-height: 28px; min-width: 32px; padding: 0; }
+.java-debug-console-input .java-debug-evaluate:hover:not(:disabled) { background: rgba(59,130,246,.22); border-color: rgba(129,140,248,.85); color: #eff6ff; }
+.java-debug-console-input input:disabled, .java-debug-console-input .java-debug-evaluate:disabled { cursor: not-allowed; opacity: .62; }
+.java-debug-hover-tooltip { background: #05070b; border: 1px solid rgba(148,163,184,.35); box-shadow: 0 10px 24px rgba(0,0,0,.32); color: #e5e7eb; font-size: 12px; max-width: 360px; padding: 7px 9px; pointer-events: none; position: fixed; z-index: 5200; }
+.java-debug-hover-title { color: #93c5fd; font-weight: 600; margin-bottom: 3px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.java-debug-hover-value { font-family: Consolas, 'Cascadia Mono', monospace; overflow-wrap: anywhere; white-space: pre-wrap; }
+
+.java-debug-context-menu {
+  background-color: var(--preview-bg);
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  box-shadow: 0 16px 36px rgba(27, 31, 35, 0.22);
+  color: var(--text-color);
+  display: grid;
+  gap: 0.1rem;
+  max-height: min(520px, calc(100vh - 16px));
+  overflow-y: auto;
+  padding: 0.45rem;
+  position: fixed;
+  width: min(300px, calc(100vw - 16px));
+  z-index: 10020;
+}
+
+.java-debug-context-menu:has(.java-debug-context-menu-submenu) {
+  overflow: visible;
+}
+
+.java-debug-context-menu.hidden { display: none; }
+
+.java-debug-context-menu-separator {
+  background: var(--menu-separator-color);
+  height: 1px;
+  margin: 0.35rem 0.2rem;
+}
+
+.java-debug-context-menu-item {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  border-radius: 7px;
+  color: var(--text-color);
+  cursor: pointer;
+  display: flex;
+  font: inherit;
+  font-size: 0.88rem;
+  gap: 0.55rem;
+  padding: 0.4rem 0.5rem;
+  text-align: left;
+  width: 100%;
+}
+
+.java-debug-context-menu-item:hover:not(:disabled),
+.java-debug-context-menu-item:focus-visible:not(:disabled) {
+  background-color: var(--button-hover);
+  outline: none;
+}
+
+.java-debug-context-menu-item:disabled {
+  color: var(--disabled-text-color);
+  cursor: not-allowed;
+}
+
+.java-debug-context-menu-item i {
+  color: var(--accent-color);
+  flex: 0 0 1rem;
+  text-align: center;
+  width: 1rem;
+}
+
+.java-debug-context-menu-item span {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.java-debug-context-menu-submenu {
+  position: relative;
+}
+
+.java-debug-context-menu-submenu-button .java-debug-context-menu-submenu-arrow {
+  color: var(--accent-color);
+  flex: 0 0 auto;
+  font-size: 0.88rem;
+  margin-left: auto;
+}
+
+.java-debug-context-menu-submenu-panel {
+  background-color: var(--preview-bg);
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  box-shadow: 0 16px 36px rgba(27, 31, 35, 0.22);
+  display: none;
+  left: 100%;
+  max-height: calc(100vh - 16px);
+  overflow-y: auto;
+  padding: 0.45rem;
+  position: absolute;
+  top: 0;
+  width: min(340px, calc(100vw - 16px));
+  z-index: 10021;
+}
+
+.java-debug-context-menu-submenu:hover > .java-debug-context-menu-submenu-panel,
+.java-debug-context-menu-submenu:focus-within > .java-debug-context-menu-submenu-panel {
+  display: grid;
+  gap: 0.1rem;
+}
+.java-debug-breakpoint-properties-modal {
+  max-width: min(560px, calc(100vw - 32px));
+  width: 560px;
+}
+
+.java-debug-breakpoint-properties,
+.java-debug-set-value {
+  display: grid;
+  gap: 10px;
+  margin-top: 4px;
+}
+
+.java-debug-breakpoint-properties-toggle {
+  align-items: center;
+  color: #dbeafe;
+  display: inline-flex;
+  gap: 8px;
+  font-size: 13px;
+}
+
+.java-debug-breakpoint-properties-field {
+  color: #94a3b8;
+  display: grid;
+  font-size: 12px;
+  gap: 4px;
+}
+
+.java-debug-breakpoint-properties-field input,
+.java-debug-breakpoint-properties-field textarea {
+  background: rgba(15, 23, 42, .86);
+  border: 1px solid rgba(148, 163, 184, .32);
+  color: #e5e7eb;
+  font: 12px Consolas, 'Cascadia Mono', monospace;
+  min-height: 30px;
+  padding: 5px 7px;
+  resize: vertical;
+}
+
+.java-debug-breakpoint-properties-field input:focus,
+.java-debug-breakpoint-properties-field textarea:focus {
+  border-color: rgba(96, 165, 250, .76);
+  outline: none;
+}
+.java-debug-set-value-modal {
+  max-width: min(620px, calc(100vw - 32px));
+  width: 620px;
+}
+
+.java-debug-set-value-metadata {
+  display: grid;
+  gap: 4px 8px;
+  grid-template-columns: auto minmax(0, 1fr);
+}
+
+.java-debug-set-value-metadata span {
+  color: #94a3b8;
+  font-size: 11px;
+  text-transform: uppercase;
+}
+
+.java-debug-set-value-metadata code {
+  background: rgba(15, 23, 42, .86);
+  border: 1px solid rgba(148, 163, 184, .18);
+  color: #e5e7eb;
+  font: 12px Consolas, 'Cascadia Mono', monospace;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  padding: 4px 6px;
+}
+.java-debug-attach-modal {
+  max-width: min(520px, calc(100vw - 32px));
+  width: 520px;
+}
+
+.java-debug-attach-fields {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: minmax(0, 2fr) minmax(120px, 1fr);
+  margin-top: 4px;
+}
+
+.java-debug-attach-field {
+  color: #94a3b8;
+  display: grid;
+  font-size: 12px;
+  gap: 4px;
+}
+
+.java-debug-attach-field input {
+  background: rgba(15, 23, 42, .86);
+  border: 1px solid rgba(148, 163, 184, .32);
+  color: #e5e7eb;
+  font: 12px Consolas, 'Cascadia Mono', monospace;
+  min-height: 30px;
+  padding: 5px 7px;
+}
+
+.java-debug-attach-field input:focus {
+  border-color: rgba(96, 165, 250, .76);
+  outline: none;
+}
+
+@media (max-width: 560px) {
+  .java-debug-attach-fields { grid-template-columns: 1fr; }
+}

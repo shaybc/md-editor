@@ -380,10 +380,26 @@
       const hideFolderView = toolView || aiCompanionView;
       const previousSidebarView = getActiveSidebarView();
       if (aiCompanionView) {
+        folderTreePane?.classList.toggle("ai-companion-workspace-rail", true);
+        document.querySelectorAll(".sidebar-view-option").forEach((button) => {
+          const isActive = button.dataset.sidebarView === targetView;
+          button.classList.toggle("active", isActive);
+          button.setAttribute("aria-pressed", isActive ? "true" : "false");
+        });
+        document.querySelectorAll(".open-regex-tester").forEach((button) => {
+          button.classList.remove("active");
+          button.setAttribute("aria-pressed", "false");
+        });
+        document.querySelectorAll(".open-java-debug-panel").forEach((button) => {
+          button.classList.remove("active");
+          button.setAttribute("aria-pressed", "false");
+        });
+        deps.setWorkspaceLayoutMode?.("ai");
         getAiCompanionPanel()?.setWorkspaceOpen?.(true, { previousSidebarView });
-      } else {
-        getAiCompanionPanel()?.closeWorkspaceForExternalNavigation?.();
+        return;
       }
+      getAiCompanionPanel()?.closeWorkspaceForExternalNavigation?.();
+      deps.setWorkspaceLayoutMode?.("developer");
       if (panel) panel.hidden = !searchView;
       if (gitPanel) gitPanel.hidden = !gitView;
       if (regexTesterPanel) regexTesterPanel.hidden = !regexTesterView;
@@ -408,6 +424,10 @@
         button.classList.toggle("active", regexTesterView);
         button.setAttribute("aria-pressed", regexTesterView ? "true" : "false");
       });
+      document.querySelectorAll(".open-java-debug-panel").forEach((button) => {
+        button.classList.remove("active");
+        button.setAttribute("aria-pressed", "false");
+      });
       if (searchView) setTimeout(() => queryInput?.focus(), 0);
       if (gitView) app.modules?.workspaceGit?.refreshWorkspaceGitStatus?.();
     }
@@ -421,7 +441,8 @@
     function toggleSidebarView(view) {
       const targetView = view || "files";
       const sidebarVisible = deps.isSidebarVisible ? deps.isSidebarVisible() : true;
-      if (targetView !== "ai-companion" && sidebarVisible && getActiveSidebarView() === targetView) {
+      const aiWorkspaceOpen = document.body?.classList?.contains?.("ai-companion-workspace-open") === true;
+      if (targetView !== "ai-companion" && !aiWorkspaceOpen && sidebarVisible && getActiveSidebarView() === targetView) {
         deps.setSidebarVisible?.(false);
         return;
       }

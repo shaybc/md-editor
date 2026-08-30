@@ -101,14 +101,17 @@
 
     async function execute(commandName, overrides = {}) {
       if (commandName === "show-problems") {
+        if (deps.isPanelTabVisible?.("problems") === true) return deps.hidePanelTab?.("problems") === true;
         deps.problemsPanel?.show?.();
         return true;
       }
       if (commandName === "show-tasks") {
-        deps.tasksPanel?.toggle?.();
+        if (deps.isPanelTabVisible?.("tasks") === true) return deps.hidePanelTab?.("tasks") === true;
+        deps.tasksPanel?.show?.();
         return true;
       }
       if (commandName === "show-java-rebuild") {
+        if (deps.isPanelTabVisible?.("java-rebuild") === true) return deps.hidePanelTab?.("java-rebuild") === true;
         const context = getContext(overrides);
         if (!getCapability(null, commandName, context)) return false;
         try {

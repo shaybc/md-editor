@@ -128,6 +128,9 @@
       const osName = options.osName || deps.osName || global.NL_OS;
       const parts = [options.javacExecutable ? quoteShellArgument(options.javacExecutable, osName) : "javac"];
       const classpath = (options.classpathEntries || []).map(normalizePath).filter(Boolean);
+      if (options.debugInfo === true) {
+        parts.push("-g:lines,vars,source");
+      }
       if (classpath.length) {
         parts.push("-classpath", quoteShellArgument(classpath.join(osName === "Windows" ? ";" : ":"), osName));
       }

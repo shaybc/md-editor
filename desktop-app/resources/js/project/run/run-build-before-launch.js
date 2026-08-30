@@ -122,16 +122,17 @@
      * @param {object} buildConfiguration Java Build Path configuration.
      * @param {object} runtime Resolved project JDK.
      * @param {object} context Detected build-tool and main-class context.
+     * @param {object} options Launch-specific build options.
      * @returns {Promise<object|null>} Build result, or null when no build was required.
      */
-    async function prepare(projectPath, configuration, buildConfiguration, runtime, context = {}) {
+    async function prepare(projectPath, configuration, buildConfiguration, runtime, context = {}, options = {}) {
       if (configuration.buildBeforeRun !== true) return null;
       if (!await isStale(projectPath, configuration, buildConfiguration, context)) return null;
       if (buildConfiguration.buildSystem === "maven") return buildMaven(configuration, context, runtime);
       if (buildConfiguration.buildSystem === "gradle") return buildGradle(configuration, context, runtime);
       const succeeded = await deps.projectProvider.rebuildProject(
         { folderPath: projectPath },
-        { useLastOptions: true, runAnalyzers: false }
+        { useLastOptions: true, runAnalyzers: false, debugInfo: options.debugInfo === true }
       );
       if (!succeeded) throw new Error(`Build: ${configuration.name} did not complete.`);
       return { exitCode: 0, output: "" };

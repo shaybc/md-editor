@@ -34,7 +34,6 @@
         '<button class="dropdown-item action-menu-item" type="button" data-run-menu-command="dialog"><i class="bi bi-play-circle me-2"></i>Run...</button>' +
         '<button class="dropdown-item action-menu-item" type="button" data-run-menu-command="active"><i class="bi bi-play-fill me-2"></i><span class="run-active-label">Run Active Configuration</span></button>' +
         '<button class="dropdown-item action-menu-item" type="button" data-run-menu-command="configurations"><i class="bi bi-sliders me-2"></i>Run Configurations...</button>' +
-        '<hr class="dropdown-divider">' +
         '<button class="dropdown-item action-menu-item" type="button" data-run-menu-command="stop"><i class="bi bi-stop-fill me-2"></i>Stop</button>' +
         '<hr class="dropdown-divider run-saved-divider" hidden>' +
         '<div class="run-saved-configurations" role="group" aria-label="Saved Run configurations"></div>';
@@ -70,7 +69,6 @@
       if (activeButton) activeButton.disabled = !active;
       if (activeLabel) activeLabel.textContent = active ? `Run '${active.name}'` : "Run Active Configuration";
       if (stopButton) stopButton.disabled = !deps.launcher.isRunning();
-
       const host = content?.querySelector(".run-saved-configurations");
       const divider = content?.querySelector(".run-saved-divider");
       if (!host) return;

@@ -8,7 +8,8 @@
       active: false,
       bottomPanelWasVisible: false,
       bottomPanelActiveTabId: null,
-      aiCompanionWasVisible: false
+      aiCompanionWasVisible: false,
+      javaDebugPerspectiveWasOpen: false
     };
 
     with (deps) {
@@ -580,6 +581,10 @@
     return app.modules?.aiCompanionPanel || null;
   }
 
+  function getJavaDebugPanel() {
+    return app.modules?.javaDebugPanel || null;
+  }
+
   function isAiCompanionPanelVisible() {
     return document.body?.classList?.contains?.("ai-companion-open") === true;
   }
@@ -587,10 +592,13 @@
   function maximizeEditorTabs() {
     const bottomPanelTabs = getBottomPanelTabs();
     const aiCompanionPanel = getAiCompanionPanel();
+    const javaDebugPanel = getJavaDebugPanel();
     tabMaximizeState.bottomPanelWasVisible = !!bottomPanelTabs?.isPanelVisible?.();
     tabMaximizeState.bottomPanelActiveTabId = bottomPanelTabs?.getActiveTabId?.() || null;
     tabMaximizeState.aiCompanionWasVisible = isAiCompanionPanelVisible();
+    tabMaximizeState.javaDebugPerspectiveWasOpen = javaDebugPanel?.isPerspectiveOpen?.() === true;
     tabMaximizeState.active = true;
+    javaDebugPanel?.closePerspective?.({ persist: false });
     setSidebarVisible?.(false, false, false);
     bottomPanelTabs?.hidePanel?.();
     aiCompanionPanel?.setOpen?.(false, { persist: false });
@@ -599,14 +607,21 @@
   function restoreEditorTabs() {
     const bottomPanelTabs = getBottomPanelTabs();
     const aiCompanionPanel = getAiCompanionPanel();
+    const javaDebugPanel = getJavaDebugPanel();
     const bottomPanelWasVisible = tabMaximizeState.bottomPanelWasVisible;
     const bottomPanelActiveTabId = tabMaximizeState.bottomPanelActiveTabId;
     const aiCompanionWasVisible = tabMaximizeState.aiCompanionWasVisible;
+    const javaDebugPerspectiveWasOpen = tabMaximizeState.javaDebugPerspectiveWasOpen;
     tabMaximizeState.active = false;
     tabMaximizeState.bottomPanelWasVisible = false;
     tabMaximizeState.bottomPanelActiveTabId = null;
     tabMaximizeState.aiCompanionWasVisible = false;
-    setSidebarVisible?.(true, false, false);
+    tabMaximizeState.javaDebugPerspectiveWasOpen = false;
+    if (javaDebugPerspectiveWasOpen) {
+      void javaDebugPanel?.openPerspective?.({ persist: false });
+    } else {
+      setSidebarVisible?.(true, false, false);
+    }
     if (bottomPanelWasVisible) {
       bottomPanelTabs?.activateTab?.(bottomPanelActiveTabId || bottomPanelTabs.SEARCH_RESULTS_TAB_ID);
     } else {

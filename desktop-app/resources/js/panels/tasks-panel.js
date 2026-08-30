@@ -430,7 +430,7 @@
 
     /** Show the Tasks tab, recreating it after the user closed it. */
     function show() {
-      if (!view?.parentElement) addTasksTab({ activate: true });
+      if (!bottomPanel?.hasTab?.("tasks") || !view?.parentElement) addTasksTab({ activate: true });
       else bottomPanel?.activateTab?.("tasks");
       updateToggleButtons();
     }

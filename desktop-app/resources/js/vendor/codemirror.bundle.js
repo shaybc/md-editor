@@ -98531,6 +98531,7 @@ ${suggestion}` : message
     showFindLineBookmarkContextMenu(view, event);
   }
   function isFindLineBookmarkContextMenuTarget(target) {
+    if (target?.closest?.(".cm-navigationMarkerGutter, .cm-navigationMarker, .cm-debugBreakpointGutter")) return false;
     return !!(target?.closest?.(".cm-findLineBookmarkGutter") || target?.closest?.(".cm-findLineBookmarkMarker") || target?.closest?.(".cm-findLineBookmarkEmptyMarker"));
   }
   function ensureFindLineBookmarkDocumentContextMenu() {
@@ -98743,6 +98744,673 @@ ${suggestion}` : message
     });
     positionFindLineBookmarkContextMenu(menu, event.clientX, event.clientY);
   }
+class DebugBreakpointMarker extends GutterMarker {
+  constructor(breakpoint, executionLine = false) {
+    super();
+    this.enabled = breakpoint?.enabled !== false;
+    this.condition = String(breakpoint?.condition || "");
+    this.logMessage = String(breakpoint?.logMessage || "");
+    this.hitCount = Math.max(0, Number(breakpoint?.hitCount) || 0);
+    this.verified = breakpoint?.verified === true;
+    this.message = String(breakpoint?.message || "");
+    this.status = String(breakpoint?.status || (this.verified ? "resolved" : this.message ? "unresolved" : ""));
+    this.executionLine = executionLine === true;
+  }
+
+  eq(other) {
+    return other instanceof DebugBreakpointMarker
+      && other.enabled === this.enabled
+      && other.condition === this.condition
+      && other.logMessage === this.logMessage
+      && other.hitCount === this.hitCount
+      && other.verified === this.verified
+      && other.message === this.message
+      && other.status === this.status
+      && other.executionLine === this.executionLine;
+  }
+
+  toDOM() {
+    const marker = document.createElement("span");
+    marker.className = [
+      "cm-debugBreakpointMarker",
+      this.enabled ? "cm-debugBreakpointMarker-enabled" : "cm-debugBreakpointMarker-disabled",
+      this.condition ? "cm-debugBreakpointMarker-conditional" : "",
+      this.logMessage ? "cm-debugBreakpointMarker-logpoint" : "",
+      this.hitCount > 0 ? "cm-debugBreakpointMarker-hit-count" : "",
+      this.status ? `cm-debugBreakpointMarker-${this.status}` : "",
+      this.executionLine ? "cm-debugBreakpointMarker-current" : ""
+    ].filter(Boolean).join(" ");
+    const details = [];
+    if (this.executionLine) details.push("Current execution line");
+    if (this.message && !this.verified) details.push(this.message);
+    if (this.condition) details.push(`Condition: ${this.condition}`);
+    if (this.logMessage) details.push(`Logpoint: ${this.logMessage}`);
+    if (this.hitCount > 0) details.push(`Hit count: ${this.hitCount}`);
+    const summary = details.length ? details.join("\n") : "Breakpoint";
+    marker.title = `${summary}\nDouble-click to toggle breakpoint. Single-click to add bookmark. Right-click for more options.`;
+    marker.setAttribute("aria-label", `${summary}. Double-click to toggle breakpoint. Single-click to add bookmark. Right-click for more options.`);
+    return marker;
+  }
+}
+
+class DebugExecutionLineMarker extends GutterMarker {
+  constructor(lineNumber) {
+    super();
+    this.lineNumber = lineNumber;
+  }
+
+  eq(other) {
+    return other instanceof DebugExecutionLineMarker && other.lineNumber === this.lineNumber;
+  }
+
+  toDOM() {
+    const marker = document.createElement("span");
+    marker.className = "cm-debugExecutionLineMarker";
+    marker.title = "Current execution line. Double-click to toggle breakpoint. Single-click to add bookmark. Right-click for more options.";
+    marker.dataset.debugBreakpointLine = String(this.lineNumber);
+    marker.setAttribute("aria-label", "Current execution line. Double-click to toggle breakpoint. Single-click to add bookmark. Right-click for more options.");
+    return marker;
+  }
+}
+
+class EmptyDebugBreakpointMarker extends GutterMarker {
+  constructor(lineNumber) {
+    super();
+    this.lineNumber = lineNumber;
+  }
+
+  eq(other) {
+    return other instanceof EmptyDebugBreakpointMarker && other.lineNumber === this.lineNumber;
+  }
+
+  toDOM() {
+    const marker = document.createElement("span");
+    marker.className = "cm-debugBreakpointEmptyMarker";
+    marker.title = "Double-click to toggle breakpoint. Single-click to add bookmark. Right-click for more options.";
+    marker.dataset.debugBreakpointLine = String(this.lineNumber);
+    marker.setAttribute("aria-label", `Line ${this.lineNumber}. Double-click to toggle breakpoint. Single-click to add bookmark. Right-click for more options.`);
+    return marker;
+  }
+}
+
+class NavigationMarker extends GutterMarker {
+  constructor(options = {}) {
+    super();
+    this.lineNumber = Math.floor(Number(options.lineNumber) || 0);
+    this.breakpoint = options.breakpoint || null;
+    this.bookmarked = options.bookmarked === true;
+    this.executionLine = options.executionLine === true;
+    this.empty = options.empty === true;
+    this.breakpointLineAvailable = options.breakpointLineAvailable !== false;
+  }
+
+  eq(other) {
+    return other instanceof NavigationMarker
+      && other.lineNumber === this.lineNumber
+      && other.bookmarked === this.bookmarked
+      && other.executionLine === this.executionLine
+      && other.empty === this.empty
+      && other.breakpointLineAvailable === this.breakpointLineAvailable
+      && JSON.stringify(other.breakpoint || null) === JSON.stringify(this.breakpoint || null);
+  }
+
+  createBookmarkMarker(empty) {
+    const marker = document.createElement("span");
+    marker.className = empty ? "cm-findLineBookmarkEmptyMarker" : "cm-findLineBookmarkMarker";
+    marker.title = empty ? "Bookmark line" : "Bookmarked find result";
+    marker.dataset.bookmarkLine = String(this.lineNumber);
+    marker.setAttribute("aria-hidden", "true");
+    return marker;
+  }
+
+  getMarkerSummary() {
+    const markers = [];
+    if (this.breakpoint) markers.push("Line breakpoint on line " + this.lineNumber);
+    if (this.bookmarked) markers.push("Bookmark on line " + this.lineNumber);
+    if (this.executionLine) markers.push("Current execution line " + this.lineNumber);
+    return markers;
+  }
+
+  toDOM() {
+    const marker = document.createElement("span");
+    const summaries = this.getMarkerSummary();
+    marker.className = [
+      "cm-navigationMarker",
+      this.empty ? "cm-navigationMarker-empty" : "",
+      summaries.length > 1 ? "cm-navigationMarker-multiple" : ""
+    ].filter(Boolean).join(" ");
+    marker.dataset.navigationMarkerLine = String(this.lineNumber);
+    marker.title = summaries.length > 1
+      ? "Multiple markers at this line\n- " + summaries.join("\n- ")
+      : (summaries[0] || "Line " + this.lineNumber);
+    marker.setAttribute("aria-label", marker.title);
+    if (this.breakpoint) {
+      marker.appendChild(new DebugBreakpointMarker(this.breakpoint, this.executionLine).toDOM());
+    } else if (this.executionLine) {
+      marker.appendChild(new DebugExecutionLineMarker(this.lineNumber).toDOM());
+    }
+    if (this.bookmarked || this.empty) {
+      marker.appendChild(this.createBookmarkMarker(this.empty));
+    }
+    if (this.empty && this.breakpointLineAvailable && !this.breakpoint && !this.executionLine) {
+      marker.appendChild(new EmptyDebugBreakpointMarker(this.lineNumber).toDOM());
+    }
+    return marker;
+  }
+}
+
+const debugExecutionLineDecoration = Decoration.line({ class: "cm-debugExecutionLine" });
+const setDebugBreakpointsEffect = StateEffect.define();
+const clearDebugBreakpointsEffect = StateEffect.define();
+const setDebugExecutionLineEffect = StateEffect.define();
+const clearDebugExecutionLineEffect = StateEffect.define();
+const debugBreakpointHandlers = new WeakMap();
+const recentDebugBreakpointToggles = new WeakMap();
+const debugBreakpointLineNumberElementHandlers = new WeakMap();
+const debugBreakpointLineAvailabilityCache = new WeakMap();
+
+function maskDebugBreakpointNonCode(source) {
+  let result = "";
+  let state = "code";
+  for (let index = 0; index < source.length; index += 1) {
+    const char = source[index];
+    const next = source[index + 1] || "";
+    if (state === "line-comment") {
+      result += char === "\n" ? "\n" : " ";
+      if (char === "\n") state = "code";
+    } else if (state === "block-comment") {
+      result += char === "\n" ? "\n" : " ";
+      if (char === "*" && next === "/") { result += " "; index += 1; state = "code"; }
+    } else if (state === "string") {
+      result += char === "\n" ? "\n" : " ";
+      if (char === "\\") { result += next === "\n" ? "\n" : " "; index += 1; }
+      else if (char === "\"") state = "code";
+    } else if (state === "char") {
+      result += char === "\n" ? "\n" : " ";
+      if (char === "\\") { result += next === "\n" ? "\n" : " "; index += 1; }
+      else if (char === "'") state = "code";
+    } else if (char === "/" && next === "/") {
+      result += "  ";
+      index += 1;
+      state = "line-comment";
+    } else if (char === "/" && next === "*") {
+      result += "  ";
+      index += 1;
+      state = "block-comment";
+    } else if (char === "\"") {
+      result += " ";
+      state = "string";
+    } else if (char === "'") {
+      result += " ";
+      state = "char";
+    } else {
+      result += char;
+    }
+  }
+  return result;
+}
+
+function getDebugBreakpointMaskedLines(doc) {
+  const cached = debugBreakpointLineAvailabilityCache.get(doc);
+  if (cached) return cached;
+  const lines = maskDebugBreakpointNonCode(doc.toString()).split(/\r?\n/);
+  debugBreakpointLineAvailabilityCache.set(doc, lines);
+  return lines;
+}
+
+function hasDebugBreakpointExecutableTextAfterBlockOpen(text) {
+  const openIndex = text.indexOf("{");
+  return openIndex >= 0 && text.slice(openIndex + 1).replace(/[{};]/g, "").trim().length > 0;
+}
+
+function isDebugBreakpointTypeDeclarationLine(text) {
+  return /^(?:(?:public|protected|private|static|final|abstract|sealed|non-sealed|strictfp)\s+)*(?:class|interface|enum|record)\b/.test(text);
+}
+
+function isDebugBreakpointMethodDeclarationOnlyLine(text) {
+  const match = text.match(/^(?:@[A-Za-z_$][\w$]*(?:\([^)]*\))?\s*)*(?:(?:public|protected|private|static|final|synchronized|native|abstract|default|strictfp)\s+)*(?:<[^;{}()]+>\s*)?(?:(?:[\w$.[\]<>?,]+\s+)+)?([A-Za-z_$][\w$]*)\s*\([^;{}]*\)\s*(?:throws[^{;]*)?\{/);
+  if (!match) return false;
+  if (new Set(["if", "for", "while", "switch", "catch", "synchronized"]).has(match[1])) return false;
+  return !hasDebugBreakpointExecutableTextAfterBlockOpen(text);
+}
+
+function findDebugBreakpointMatchingBrace(source, openIndex) {
+  let depth = 0;
+  for (let index = openIndex; index < source.length; index += 1) {
+    if (source[index] === "{") depth += 1;
+    else if (source[index] === "}") {
+      depth -= 1;
+      if (depth === 0) return index;
+    }
+  }
+  return source.length;
+}
+
+function getDebugBreakpointLineStartOffset(source, lineNumber) {
+  let offset = 0;
+  for (let currentLine = 1; currentLine < lineNumber && offset < source.length; currentLine += 1) {
+    const nextLine = source.indexOf("\n", offset);
+    offset = nextLine < 0 ? source.length : nextLine + 1;
+  }
+  return offset;
+}
+
+function isDebugBreakpointInsideMethod(source, maskedSource, maskedLines, lineNumber) {
+  const lineStart = getDebugBreakpointLineStartOffset(source, lineNumber);
+  const tokenOffset = lineStart + Math.max(0, String(maskedLines[lineNumber - 1] || "").search(/\S/));
+  const methodPattern = /(?:^|[;{}\n])\s*(?:@[A-Za-z_$][\w$]*(?:\([^)]*\))?\s*)*(?:(?:public|protected|private|static|final|synchronized|native|abstract|default|strictfp)\s+)*(?:<[^;{}()]+>\s*)?(?:(?:[\w$.[\]<>?,]+\s+)+)?([A-Za-z_$][\w$]*)\s*\([^;{}]*\)\s*(?:throws[^{;]*)?\{/gm;
+  const keywords = new Set(["if", "for", "while", "switch", "catch", "synchronized"]);
+  let match;
+  while ((match = methodPattern.exec(maskedSource))) {
+    if (keywords.has(match[1])) continue;
+    const openBrace = maskedSource.indexOf("{", match.index);
+    if (openBrace < 0 || openBrace > tokenOffset) continue;
+    if (findDebugBreakpointMatchingBrace(maskedSource, openBrace) >= tokenOffset) return true;
+  }
+  return false;
+}
+
+function isDebugBreakpointLineAvailable(doc, lineNumber) {
+  const normalizedLine = Math.floor(Number(lineNumber) || 0);
+  if (!normalizedLine || normalizedLine < 1 || normalizedLine > doc.lines) return false;
+  const source = doc.toString();
+  const maskedSource = maskDebugBreakpointNonCode(source);
+  const maskedLines = maskedSource.split(/\r?\n/);
+  const text = String(maskedLines[normalizedLine - 1] || "").trim();
+  if (!text || /^[{};,]+$/.test(text)) return false;
+  if (/^(?:package|import)\b/.test(text) || /^@/.test(text)) return false;
+  if (isDebugBreakpointTypeDeclarationLine(text)) return hasDebugBreakpointExecutableTextAfterBlockOpen(text);
+  if (isDebugBreakpointMethodDeclarationOnlyLine(text)) return false;
+  if (isDebugBreakpointInsideMethod(source, maskedSource, maskedLines, normalizedLine)) return true;
+  return /(?:=|\bnew\b|[A-Za-z_$][\w$]*\s*\()/.test(text) && !/^(?:public|protected|private)?\s*(?:static\s+)?\{?$/.test(text);
+}
+
+function normalizeDebugBreakpointItems(doc, breakpoints) {
+  const byLine = new Map();
+  (Array.isArray(breakpoints) ? breakpoints : []).forEach((breakpoint) => {
+    const lineNumber = Math.floor(Number(breakpoint?.line) || 0);
+    if (lineNumber < 1 || lineNumber > doc.lines) return;
+    byLine.set(lineNumber, { ...breakpoint, line: lineNumber });
+  });
+  return Array.from(byLine.values()).sort((left, right) => left.line - right.line);
+}
+
+function normalizeDebugExecutionLineNumber(doc, lineNumber) {
+  const normalizedLineNumber = Math.floor(Number(lineNumber) || 0);
+  return normalizedLineNumber >= 1 && normalizedLineNumber <= doc.lines ? normalizedLineNumber : 0;
+}
+
+function buildDebugGutterMarkerRanges(doc, breakpoints, executionLineNumber) {
+  const builder = new RangeSetBuilder();
+  const executionLine = normalizeDebugExecutionLineNumber(doc, executionLineNumber);
+  const byLine = new Map();
+  normalizeDebugBreakpointItems(doc, breakpoints).forEach((breakpoint) => {
+    byLine.set(breakpoint.line, { lineNumber: breakpoint.line, breakpoint });
+  });
+  if (executionLine) {
+    byLine.set(executionLine, { ...(byLine.get(executionLine) || { lineNumber: executionLine }), executionLine: true });
+  }
+  Array.from(byLine.values())
+    .sort((left, right) => left.lineNumber - right.lineNumber)
+    .forEach((item) => {
+      const line = doc.line(item.lineNumber);
+      const marker = item.breakpoint
+        ? new DebugBreakpointMarker(item.breakpoint, item.executionLine === true)
+        : new DebugExecutionLineMarker(item.lineNumber);
+      builder.add(line.from, line.from, marker);
+    });
+  return builder.finish();
+}
+
+
+function buildNavigationMarkerRanges(doc, breakpoints, executionLineNumber, bookmarkLines) {
+  const builder = new RangeSetBuilder();
+  const executionLine = normalizeDebugExecutionLineNumber(doc, executionLineNumber);
+  const byLine = new Map();
+  normalizeDebugBreakpointItems(doc, breakpoints).forEach((breakpoint) => {
+    byLine.set(breakpoint.line, { lineNumber: breakpoint.line, breakpoint });
+  });
+  normalizeFindLineBookmarkNumbers(doc, bookmarkLines).forEach((lineNumber) => {
+    byLine.set(lineNumber, { ...(byLine.get(lineNumber) || { lineNumber }), bookmarked: true });
+  });
+  if (executionLine) {
+    byLine.set(executionLine, { ...(byLine.get(executionLine) || { lineNumber: executionLine }), executionLine: true });
+  }
+  Array.from(byLine.values())
+    .sort((left, right) => left.lineNumber - right.lineNumber)
+    .forEach((item) => {
+      const line = doc.line(item.lineNumber);
+      builder.add(line.from, line.from, new NavigationMarker({ ...item, breakpointLineAvailable: isDebugBreakpointLineAvailable(doc, item.lineNumber) }));
+    });
+  return builder.finish();
+}
+
+function remapDebugBreakpointsAfterChange(update) {
+  if (!update?.docChanged) return [];
+  let debugState = null;
+  try { debugState = update.startState.field(debugBreakpointMarkers, false); } catch (_error) { return []; }
+  const breakpoints = debugState?.breakpoints || [];
+  return breakpoints.map((breakpoint) => {
+    if (!breakpoint?.line || breakpoint.line < 1 || breakpoint.line > update.startState.doc.lines) return null;
+    const previousLine = update.startState.doc.line(breakpoint.line);
+    const mappedPosition = update.changes.mapPos(previousLine.from, 1);
+    const nextPosition = Math.max(0, Math.min(mappedPosition, update.state.doc.length));
+    const nextLine = update.state.doc.lineAt(nextPosition).number;
+    return nextLine && nextLine !== breakpoint.line ? { ...breakpoint, nextLine } : null;
+  }).filter(Boolean);
+}
+
+function buildDebugExecutionLineRanges(doc, lineNumber) {
+  const normalizedLineNumber = Math.floor(Number(lineNumber) || 0);
+  if (normalizedLineNumber < 1 || normalizedLineNumber > doc.lines) return Decoration.none;
+  const builder = new RangeSetBuilder();
+  const line = doc.line(normalizedLineNumber);
+  builder.add(line.from, line.from, debugExecutionLineDecoration);
+  return builder.finish();
+}
+
+function getDebugBreakpointLineNumber(view, line, event) {
+  const target = event.target instanceof Element ? event.target : null;
+  return Number(target?.closest("[data-debug-breakpoint-line]")?.dataset.debugBreakpointLine || target?.closest("[data-navigation-marker-line]")?.dataset.navigationMarkerLine || findLineNumberForBlock(view, line));
+}
+
+
+function isFindLineBookmarked(view, lineNumber) {
+  return getFindLineBookmarkNumbers(view.state.doc, view.state.field(findLineBookmarkMarkers)).includes(lineNumber);
+}
+
+function toggleFindLineBookmarkAtLine(view, lineNumber) {
+  view.dispatch({ effects: toggleFindLineBookmarkEffect.of(lineNumber) });
+  view.focus();
+  return true;
+}
+
+function getFoldRangeAtLine(view, lineNumber) {
+  if (!lineNumber || lineNumber < 1 || lineNumber > view.state.doc.lines) return null;
+  const line = view.state.doc.line(lineNumber);
+  return foldable(view.state, line.from, line.to) || null;
+}
+
+function getFoldedRangeAtLine(view, lineNumber) {
+  if (!lineNumber || lineNumber < 1 || lineNumber > view.state.doc.lines) return null;
+  const line = view.state.doc.line(lineNumber);
+  let match = null;
+  foldedRanges(view.state).between(line.from, line.to, (from, to) => {
+    if (from === line.from) {
+      match = { from, to };
+      return false;
+    }
+    return undefined;
+  });
+  return match;
+}
+
+function collapseFoldAtLine(view, lineNumber) {
+  const range = getFoldRangeAtLine(view, lineNumber);
+  if (!range) return false;
+  view.dispatch({ effects: foldEffect.of(range) });
+  view.focus();
+  return true;
+}
+
+function expandFoldAtLine(view, lineNumber) {
+  const range = getFoldedRangeAtLine(view, lineNumber);
+  if (!range) return false;
+  view.dispatch({ effects: unfoldEffect.of(range) });
+  view.focus();
+  return true;
+}
+
+function toggleFoldAtLine(view, lineNumber) {
+  return getFoldedRangeAtLine(view, lineNumber)
+    ? expandFoldAtLine(view, lineNumber)
+    : collapseFoldAtLine(view, lineNumber);
+}
+
+function getNavigationMarkerDetails(view, lineNumber) {
+  const canFold = !!getFoldRangeAtLine(view, lineNumber) || !!getFoldedRangeAtLine(view, lineNumber);
+  const hasBookmarks = hasFindLineBookmarks(view.state);
+  return {
+    isBookmarked: isFindLineBookmarked(view, lineNumber),
+    hasBookmarks,
+    toggleBookmark: () => toggleFindLineBookmarkAtLine(view, lineNumber),
+    cutBookmarkedLines: async () => {
+      const text = getFindLineBookmarkText(view.state);
+      await writeFindLineBookmarkTextToClipboard(text);
+      deleteFindLineBookmarkLines(view);
+      return true;
+    },
+    copyBookmarkedLines: async () => writeFindLineBookmarkTextToClipboard(getFindLineBookmarkText(view.state)),
+    deleteBookmarkedLines: () => deleteFindLineBookmarkLines(view),
+    clearBookmarks: () => {
+      view.dispatch({ effects: clearFindLineBookmarksEffect.of(null) });
+      view.focus();
+      return true;
+    },
+    canFold,
+    isFolded: !!getFoldedRangeAtLine(view, lineNumber),
+    toggleFold: () => toggleFoldAtLine(view, lineNumber),
+    collapseFold: () => collapseFoldAtLine(view, lineNumber),
+    expandFold: () => expandFoldAtLine(view, lineNumber),
+    collapseAllFolds: () => collapseTopLevelFolds(view),
+    expandAllFolds: () => expandTopLevelFolds(view)
+  };
+}
+
+function hasNavigationMarkerAtLine(view, lineNumber) {
+  const debugState = view.state.field(debugBreakpointMarkers);
+  return debugState.executionLineNumber === lineNumber
+    || debugState.breakpoints.some((breakpoint) => breakpoint.line === lineNumber)
+    || isFindLineBookmarked(view, lineNumber);
+}
+
+function syncDebugBreakpointLineNumberAffordance(view) {
+  const active = debugBreakpointHandlers.has(view);
+  view.dom.classList.toggle("cm-debugBreakpointLineNumbersActive", active);
+  view.dom.querySelectorAll(".cm-lineNumbers .cm-gutterElement").forEach((element) => {
+    if (!(element instanceof HTMLElement)) return;
+    if (!active) {
+      if (element.dataset.debugBreakpointLineNumberAffordance === "true") {
+        unbindDebugBreakpointLineNumberElement(element);
+        element.removeAttribute("title");
+        element.removeAttribute("aria-label");
+        delete element.dataset.debugBreakpointLineNumberAffordance;
+      }
+      return;
+    }
+    const lineNumber = Number(String(element.textContent || "").trim());
+    if (!lineNumber) return;
+    bindDebugBreakpointLineNumberElement(view, element);
+    element.dataset.debugBreakpointLineNumberAffordance = "true";
+    const breakpointLineAvailable = isDebugBreakpointLineAvailable(view.state.doc, lineNumber);
+    const lineNumberLabel = breakpointLineAvailable
+      ? `Line ${lineNumber}. Double-click to toggle breakpoint. Single-click to add bookmark. Right-click for more options.`
+      : `Line ${lineNumber}. Single-click to add bookmark. Right-click for more options.`;
+    element.title = lineNumberLabel;
+    element.setAttribute("aria-label", lineNumberLabel);
+  });
+}
+
+function getDebugLineNumberGutterLine(event) {
+  const target = event.target instanceof Element ? event.target.closest(".cm-lineNumbers .cm-gutterElement") : null;
+  const lineNumber = Number(String(target?.textContent || "").trim());
+  return Number.isFinite(lineNumber) && lineNumber > 0 ? lineNumber : 0;
+}
+
+function unbindDebugBreakpointLineNumberElement(element) {
+  const listeners = debugBreakpointLineNumberElementHandlers.get(element);
+  if (!listeners) return;
+  element.removeEventListener("mousedown", listeners.mousedown, true);
+  element.removeEventListener("dblclick", listeners.dblclick, true);
+  element.removeEventListener("contextmenu", listeners.contextmenu, true);
+  debugBreakpointLineNumberElementHandlers.delete(element);
+}
+
+function bindDebugBreakpointLineNumberElement(view, element) {
+  const existing = debugBreakpointLineNumberElementHandlers.get(element);
+  if (existing?.view === view) return;
+  unbindDebugBreakpointLineNumberElement(element);
+  const invoke = (event, action) => {
+    if (action === "toggle" && event.button !== 0) return false;
+    const lineNumber = getDebugLineNumberGutterLine(event);
+    if (action === "toggle" && !isDebugBreakpointLineAvailable(view.state.doc, lineNumber)) {
+      event.preventDefault();
+      return toggleFindLineBookmarkAtLine(view, lineNumber);
+    }
+    return invokeDebugBreakpointHandler(view, lineNumber, event, action);
+  };
+  const listeners = {
+    view,
+    mousedown: (event) => invoke(event, "toggle"),
+    dblclick: (event) => invoke(event, "toggle"),
+    contextmenu: (event) => invoke(event, "contextmenu")
+  };
+  element.addEventListener("mousedown", listeners.mousedown, true);
+  element.addEventListener("dblclick", listeners.dblclick, true);
+  element.addEventListener("contextmenu", listeners.contextmenu, true);
+  debugBreakpointLineNumberElementHandlers.set(element, listeners);
+}
+
+function invokeDebugBreakpointHandler(view, lineNumber, event, action = "toggle") {
+  const handler = debugBreakpointHandlers.get(view);
+  if (typeof handler !== "function" || !lineNumber) return false;
+  event.preventDefault();
+  if (action === "toggle") {
+    const now = Date.now();
+    const recent = recentDebugBreakpointToggles.get(view);
+    if (Number(event?.detail || 0) > 1 && recent?.lineNumber === lineNumber && now - recent.time < 400) {
+      view.focus();
+      return true;
+    }
+    recentDebugBreakpointToggles.set(view, { lineNumber, time: now });
+  }
+  Promise.resolve(handler(lineNumber, event, { action, ...getNavigationMarkerDetails(view, lineNumber) })).catch((error) => console.error("Debug breakpoint action failed", error));
+  view.focus();
+  return true;
+}
+
+const debugBreakpointMarkers = StateField.define({
+  create() {
+    return { breakpoints: [], executionLineNumber: 0, markers: emptyFindLineBookmarkMarkers() };
+  },
+  update(debugGutterState, transaction) {
+    let nextState = transaction.docChanged
+      ? { ...debugGutterState, markers: debugGutterState.markers.map(transaction.changes) }
+      : debugGutterState;
+    for (const effect of transaction.effects) {
+      if (effect.is(setDebugBreakpointsEffect)) {
+        const breakpoints = normalizeDebugBreakpointItems(transaction.state.doc, effect.value);
+        nextState = { ...nextState, breakpoints, markers: buildDebugGutterMarkerRanges(transaction.state.doc, breakpoints, nextState.executionLineNumber) };
+      } else if (effect.is(clearDebugBreakpointsEffect)) {
+        nextState = { ...nextState, breakpoints: [], markers: buildDebugGutterMarkerRanges(transaction.state.doc, [], nextState.executionLineNumber) };
+      } else if (effect.is(setDebugExecutionLineEffect)) {
+        const executionLineNumber = normalizeDebugExecutionLineNumber(transaction.state.doc, effect.value);
+        nextState = { ...nextState, executionLineNumber, markers: buildDebugGutterMarkerRanges(transaction.state.doc, nextState.breakpoints, executionLineNumber) };
+      } else if (effect.is(clearDebugExecutionLineEffect)) {
+        nextState = { ...nextState, executionLineNumber: 0, markers: buildDebugGutterMarkerRanges(transaction.state.doc, nextState.breakpoints, 0) };
+      }
+    }
+    return nextState;
+  }
+});
+
+const debugExecutionLineDecorations = StateField.define({
+  create() {
+    return Decoration.none;
+  },
+  update(decoration, transaction) {
+    let nextDecoration = transaction.docChanged ? decoration.map(transaction.changes) : decoration;
+    for (const effect of transaction.effects) {
+      if (effect.is(setDebugExecutionLineEffect)) {
+        nextDecoration = buildDebugExecutionLineRanges(transaction.state.doc, effect.value);
+      } else if (effect.is(clearDebugExecutionLineEffect)) {
+        nextDecoration = Decoration.none;
+      }
+    }
+    return nextDecoration;
+  },
+  provide: (field) => EditorView.decorations.from(field)
+});
+
+const navigationMarkerGutter = gutter({
+  class: "cm-navigationMarkerGutter cm-debugBreakpointGutter",
+  markers(view) {
+    const debugState = view.state.field(debugBreakpointMarkers);
+    return buildNavigationMarkerRanges(
+      view.state.doc,
+      debugState.breakpoints,
+      debugState.executionLineNumber,
+      getFindLineBookmarkNumbers(view.state.doc, view.state.field(findLineBookmarkMarkers))
+    );
+  },
+  lineMarker(view, line) {
+    const lineNumber = findLineNumberForBlock(view, line);
+    return hasNavigationMarkerAtLine(view, lineNumber) ? null : new NavigationMarker({ lineNumber, empty: true, breakpointLineAvailable: isDebugBreakpointLineAvailable(view.state.doc, lineNumber) });
+  },
+  domEventHandlers: {
+    mousedown(view, line, event) {
+      if (event.button !== 0) return false;
+      const lineNumber = getDebugBreakpointLineNumber(view, line, event);
+      const target = event.target instanceof Element ? event.target : null;
+      if (Number(event.detail || 0) > 1 && debugBreakpointHandlers.has(view) && isDebugBreakpointLineAvailable(view.state.doc, lineNumber)) {
+        return invokeDebugBreakpointHandler(view, lineNumber, event, "toggle");
+      }
+      if (target?.closest?.("[data-debug-breakpoint-line]") && debugBreakpointHandlers.has(view)) {
+        return invokeDebugBreakpointHandler(view, lineNumber, event, "toggle");
+      }
+      event.preventDefault();
+      return toggleFindLineBookmarkAtLine(view, lineNumber);
+    },
+    contextmenu(view, line, event) {
+      const lineNumber = getDebugBreakpointLineNumber(view, line, event);
+      if (debugBreakpointHandlers.has(view)) {
+        return invokeDebugBreakpointHandler(view, lineNumber, event, "contextmenu");
+      }
+      event.preventDefault();
+      return true;
+    }
+  }
+});
+
+const debugBreakpointLineNumberContextMenu = EditorView.domEventHandlers({
+  mousedown(event, view) {
+    if (event.button !== 0) return false;
+    const target = event.target instanceof Element ? event.target.closest(".cm-lineNumbers .cm-gutterElement") : null;
+    if (!target) return false;
+    return invokeDebugBreakpointHandler(view, getDebugLineNumberGutterLine(event), event, "toggle");
+  },
+  dblclick(event, view) {
+    if (event.button !== 0) return false;
+    const target = event.target instanceof Element ? event.target.closest(".cm-lineNumbers .cm-gutterElement") : null;
+    if (!target) return false;
+    return invokeDebugBreakpointHandler(view, getDebugLineNumberGutterLine(event), event, "toggle");
+  },
+  contextmenu(event, view) {
+    const target = event.target instanceof Element ? event.target.closest(".cm-lineNumbers .cm-gutterElement") : null;
+    if (!target) return false;
+    return invokeDebugBreakpointHandler(view, getDebugLineNumberGutterLine(event), event, "contextmenu");
+  }
+});
+
+const debugBreakpointLineNumberAffordance = ViewPlugin.define((view) => {
+  syncDebugBreakpointLineNumberAffordance(view);
+  return {
+    update() {
+      syncDebugBreakpointLineNumberAffordance(view);
+    },
+    destroy() {
+      view.dom.classList.remove("cm-debugBreakpointLineNumbersActive");
+    }
+  };
+});
+
+const debugBreakpointExtension = [
+  debugBreakpointMarkers,
+  debugExecutionLineDecorations,
+  navigationMarkerGutter,
+  debugBreakpointLineNumberContextMenu,
+  debugBreakpointLineNumberAffordance
+];
   var findLineBookmarkDecorations = StateField.define({
     create() {
       return Decoration.none;
@@ -98786,28 +99454,6 @@ ${suggestion}` : message
         }
       }
       return nextBookmarks;
-    }
-  });
-  var findLineBookmarkGutter = gutter({
-    class: "cm-findLineBookmarkGutter",
-    markers: (view) => view.state.field(findLineBookmarkMarkers),
-    lineMarker(view, line4) {
-      return new EmptyFindLineBookmarkMarker(findLineNumberForBlock(view, line4));
-    },
-    domEventHandlers: {
-      mousedown(view, line4, event) {
-        if (event.button !== 0) return false;
-        event.preventDefault();
-        const target = event.target instanceof Element ? event.target : null;
-        const lineNumber = Number(target?.closest("[data-bookmark-line]")?.dataset.bookmarkLine || findLineNumberForBlock(view, line4));
-        view.dispatch({ effects: toggleFindLineBookmarkEffect.of(lineNumber) });
-        view.focus();
-        return true;
-      },
-      contextmenu(view, _line, event) {
-        showFindLineBookmarkContextMenu(view, event);
-        return true;
-      }
     }
   });
   var findLineBookmarkContextMenuHandler = EditorView.domEventHandlers({
@@ -99329,7 +99975,7 @@ ${suggestion}` : message
     ".cm-findLineBookmark": {
       backgroundColor: "color-mix(in srgb, var(--accent-color) 14%, transparent)"
     },
-    ".cm-findLineBookmarkGutter .cm-gutterElement": {
+    ".cm-navigationMarkerGutter .cm-gutterElement": {
       minWidth: "16px",
       display: "flex",
       alignItems: "center",
@@ -99352,7 +99998,7 @@ ${suggestion}` : message
       borderRadius: "1px 1px 2px 2px",
       opacity: "0"
     },
-    ".cm-findLineBookmarkGutter .cm-gutterElement:hover .cm-findLineBookmarkEmptyMarker": {
+    ".cm-navigationMarkerGutter .cm-gutterElement:hover .cm-findLineBookmarkEmptyMarker": {
       background: "var(--editor-line-number-color)",
       clipPath: "polygon(0 0, 100% 0, 100% 100%, 50% 72%, 0 100%)",
       opacity: "0.28"
@@ -99366,7 +100012,6 @@ ${suggestion}` : message
   var findLineBookmarkExtension = [
     findLineBookmarkDecorations,
     findLineBookmarkMarkers,
-    findLineBookmarkGutter,
     findLineBookmarkContextMenuHandler,
     findLineBookmarkTheme
   ];
@@ -100931,6 +101576,10 @@ function repositionCodeMirrorCompletionInfoTooltip(reason) {
     });
     const updateListener2 = EditorView.updateListener.of((update) => {
       if (typeof options2.onUpdate === "function") options2.onUpdate(update);
+      if (typeof options2.onDebugBreakpointsRemapped === "function") {
+        const remappedBreakpoints = remapDebugBreakpointsAfterChange(update);
+        if (remappedBreakpoints.length) options2.onDebugBreakpointsRemapped(remappedBreakpoints);
+      }
     });
     const lspCompletionStarter = EditorView.updateListener.of((update) => {
       if (update.docChanged && activeLspClient) scheduleLspFoldingRangeRefresh(update.view);
@@ -100956,8 +101605,9 @@ function repositionCodeMirrorCompletionInfoTooltip(reason) {
     };
     const openKeyboardUnifiedHover = createOpenKeyboardUnifiedHover(() => currentLanguageId, unifiedHoverOptions);
     const extensions = [
-      lineNumbers(),
       findLineBookmarkExtension,
+      debugBreakpointExtension,
+      lineNumbers(),
       aiGhostSuggestionExtension,
       highlightActiveLineGutter(),
       EditorState.allowMultipleSelections.of(true),
@@ -101023,11 +101673,14 @@ function repositionCodeMirrorCompletionInfoTooltip(reason) {
         ".cm-line": { paddingLeft: "0" },
         ".cm-gutters": { backgroundColor: "var(--editor-gutter-bg)", color: "var(--editor-line-number-color)", border: "0" },
         ".cm-activeLineGutter": { color: "var(--editor-active-line-number-color)", backgroundColor: "var(--editor-current-line-bg)" },
+        ".cm-lineNumbers .cm-gutterElement": {
+          padding: "0 3px 0 1px"
+        },
         ".cm-foldGutter": {
           minWidth: "16px"
         },
         ".cm-foldGutter .cm-gutterElement": {
-          padding: "0 2px",
+          padding: "0 1px",
           display: "flex",
           alignItems: "center",
           justifyContent: "center"
@@ -101068,6 +101721,99 @@ function repositionCodeMirrorCompletionInfoTooltip(reason) {
         },
         ".cm-foldGutter .cm-gutterElement:hover .cm-fold-marker": {
           color: "var(--editor-active-line-number-color)"
+        },
+        ".cm-navigationMarkerGutter": {
+          minWidth: "16px"
+        },
+        ".cm-navigationMarkerGutter .cm-gutterElement": {
+          padding: "0 1px",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          cursor: "pointer"
+        },
+        ".cm-navigationMarker": {
+          position: "relative",
+          display: "inline-flex",
+          alignItems: "center",
+          justifyContent: "center",
+          width: "14px",
+          minHeight: "16px"
+        },
+        ".cm-navigationMarker .cm-findLineBookmarkMarker": {
+          position: "absolute",
+          left: "1px",
+          top: "1px"
+        },
+        ".cm-navigationMarker .cm-debugBreakpointMarker, .cm-navigationMarker .cm-debugExecutionLineMarker": {
+          position: "absolute",
+          right: "0",
+          bottom: "1px"
+        },
+        ".cm-navigationMarker-empty .cm-debugBreakpointEmptyMarker": {
+          position: "absolute",
+          right: "0",
+          bottom: "1px"
+        },
+        ".cm-editor.cm-debugBreakpointLineNumbersActive .cm-lineNumbers .cm-gutterElement": {
+          cursor: "pointer",
+          transition: "background-color 120ms ease, color 120ms ease"
+        },
+        ".cm-editor.cm-debugBreakpointLineNumbersActive .cm-lineNumbers .cm-gutterElement:hover": {
+          backgroundColor: "color-mix(in srgb, var(--accent-color) 14%, transparent)",
+          color: "var(--editor-active-line-number-color)"
+        },
+        ".cm-debugBreakpointMarker, .cm-debugExecutionLineMarker, .cm-debugBreakpointEmptyMarker": {
+          boxSizing: "border-box",
+          display: "inline-block",
+          width: "12px",
+          height: "12px",
+          borderRadius: "50%",
+          transform: "translateY(1px)",
+          transition: "opacity 120ms ease, background-color 120ms ease, border-color 120ms ease, box-shadow 120ms ease"
+        },
+        ".cm-debugBreakpointEmptyMarker": {
+          border: "1px solid transparent",
+          opacity: "0"
+        },
+        ".cm-navigationMarkerGutter:hover .cm-debugBreakpointEmptyMarker, .cm-navigationMarkerGutter .cm-gutterElement:hover .cm-debugBreakpointEmptyMarker": {
+          borderColor: "color-mix(in srgb, var(--editor-line-number-color) 72%, transparent)",
+          opacity: "0.72"
+        },
+        ".cm-debugBreakpointMarker-enabled": {
+          backgroundColor: "#e51400",
+          border: "1px solid color-mix(in srgb, #ffffff 45%, #e51400)",
+          boxShadow: "0 0 0 1px color-mix(in srgb, #e51400 35%, transparent)"
+        },
+        ".cm-debugBreakpointMarker-disabled": {
+          backgroundColor: "transparent",
+          border: "1px solid color-mix(in srgb, var(--editor-line-number-color) 68%, transparent)",
+          opacity: "0.72"
+        },
+        ".cm-debugBreakpointMarker-unresolved": {
+          backgroundColor: "#f59e0b",
+          borderColor: "#fbbf24"
+        },
+        ".cm-debugBreakpointMarker-conditional::after, .cm-debugBreakpointMarker-hit-count::after, .cm-debugBreakpointMarker-logpoint::after": {
+          content: "''",
+          display: "block",
+          width: "4px",
+          height: "4px",
+          margin: "3px auto 0",
+          borderRadius: "50%",
+          backgroundColor: "#ffffff"
+        },
+        ".cm-debugBreakpointMarker-logpoint": {
+          backgroundColor: "#0ea5e9",
+          borderColor: "#7dd3fc"
+        },
+        ".cm-debugBreakpointMarker-current, .cm-debugExecutionLineMarker": {
+          boxShadow: "0 0 0 2px color-mix(in srgb, var(--accent-color) 58%, transparent)"
+        },
+        ".cm-debugExecutionLineMarker": {
+          borderRadius: "2px",
+          backgroundColor: "var(--accent-color)",
+          clipPath: "polygon(0 0, 100% 50%, 0 100%)"
         },
         ".cm-activeLine": { backgroundColor: "var(--editor-current-line-bg)" },
         ".cm-cursor": { borderLeftColor: "var(--accent-color)" },
@@ -101357,6 +102103,28 @@ function repositionCodeMirrorCompletionInfoTooltip(reason) {
       },
       clearBookmarkedLines() {
         view.dispatch({ effects: clearFindLineBookmarksEffect.of(null) });
+        return true;
+      },
+      setDebugBreakpoints(breakpoints) {
+        view.dispatch({ effects: setDebugBreakpointsEffect.of(breakpoints || []) });
+        return true;
+      },
+      clearDebugBreakpoints() {
+        view.dispatch({ effects: clearDebugBreakpointsEffect.of(null) });
+        return true;
+      },
+      setDebugExecutionLine(lineNumber) {
+        view.dispatch({ effects: setDebugExecutionLineEffect.of(lineNumber) });
+        return true;
+      },
+      clearDebugExecutionLine() {
+        view.dispatch({ effects: clearDebugExecutionLineEffect.of(null) });
+        return true;
+      },
+      setDebugBreakpointHandler(handler) {
+        if (typeof handler === "function") debugBreakpointHandlers.set(view, handler);
+        else debugBreakpointHandlers.delete(view);
+        syncDebugBreakpointLineNumberAffordance(view);
         return true;
       },
       clearBookmarkedLinesEffect() {

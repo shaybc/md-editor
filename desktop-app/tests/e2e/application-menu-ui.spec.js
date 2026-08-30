@@ -10,6 +10,24 @@ test.describe("application-wide desktop menu", () => {
     await expect(page.locator("#desktop-application-menu")).toBeVisible();
   });
 
+
+  test("View menu exposes the View Mode submenu", async ({ page }) => {
+    await openApp(page);
+
+    const viewMenu = page.locator("#desktop-application-menu .application-menu-view");
+    await viewMenu.locator("> .application-menu-category-toggle").click();
+    const viewModeSubmenu = viewMenu.locator(".view-mode-menu-submenu");
+    await expect(viewModeSubmenu.locator("> .dropdown-toggle")).toContainText("View Mode");
+    await viewModeSubmenu.locator("> .dropdown-toggle").hover();
+    await expect(viewModeSubmenu.locator("> .action-submenu")).toBeVisible();
+
+    await expect(viewModeSubmenu.locator('.view-mode-menu-item[data-mode="split"]')).toHaveAttribute("aria-pressed", "true");
+    await viewModeSubmenu.locator('.view-mode-menu-item[data-mode="preview"]').click();
+
+    await expect(page.locator('.header-panel-controls .view-mode-btn[data-mode="preview"]')).toHaveAttribute("aria-pressed", "true");
+    await expect(viewModeSubmenu.locator('.view-mode-menu-item[data-mode="preview"]')).toHaveAttribute("aria-pressed", "true");
+  });
+
   test("hamburger layout includes the New submenu and Project", async ({ page }) => {
     await openApp(page);
     await openActionMenu(page);

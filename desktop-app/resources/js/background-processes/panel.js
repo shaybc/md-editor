@@ -43,7 +43,7 @@
         button.setAttribute("aria-label", label);
         button.setAttribute("aria-pressed", String(visible));
         const text = button.querySelector(".background-processes-toggle-label");
-        if (text) text.textContent = visible ? "Hide Background Processes" : "Background Processes";
+        if (text) text.textContent = label;
       });
     }
 
@@ -130,7 +130,7 @@
     }
 
     function show() {
-      if (!view?.parentElement) addTab({ activate: true });
+      if (!bottomPanel?.hasTab?.(TAB_ID) || !view?.parentElement) addTab({ activate: true });
       else bottomPanel?.activateTab?.(TAB_ID);
       updateToggleButtons();
       return true;

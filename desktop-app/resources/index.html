@@ -33,6 +33,7 @@
     <link rel="stylesheet" href="/css/files/hex-editor.css">
     <link rel="stylesheet" href="/css/project/maven-build-options.css">
     <link rel="stylesheet" href="/css/project/run-configurations.css">
+    <link rel="stylesheet" href="/css/project/java-debugger.css">
     <link rel="stylesheet" href="/css/project/new-project.css">
     <link rel="stylesheet" href="/css/project/command-result-modal.css">
     <link rel="stylesheet" href="/css/project/helm-template-preview-dialog.css">
@@ -375,9 +376,6 @@
                                     <button class="dropdown-item action-menu-item open-find-in-files-dialog" type="button" title="Find in files">
                                         <i class="bi bi-files me-2"></i><span>Find in Files...</span><span class="menu-shortcut-label">Ctrl+Alt+F</span>
                                     </button>
-                                    <button class="dropdown-item action-menu-item toggle-find-in-files-results-panel" type="button" title="Show or hide Find in Files results">
-                                        <i class="bi bi-layout-split me-2"></i><span>Show / Hide Find in Files Results</span><span class="menu-shortcut-label">F7</span>
-                                    </button>
                                 </div>
                             </div>
                             <hr class="dropdown-divider">
@@ -392,27 +390,96 @@
                                     <button class="dropdown-item action-menu-item open-downloads-window-button" type="button" title="Show downloads">
                                         <i class="bi bi-download me-2"></i><span>Downloads ...</span><span class="menu-shortcut-label">Ctrl+J</span>
                                     </button>
+                                    <div class="dropdown-submenu action-menu-submenu view-mode-menu-submenu">
+                                        <button class="dropdown-item action-menu-item dropdown-toggle" type="button" aria-haspopup="true" aria-expanded="false">
+                                            <i class="bi bi-layout-split me-2"></i> View Mode
+                                        </button>
+                                        <div class="dropdown-menu action-submenu" aria-label="View mode options">
+                                            <button class="dropdown-item action-menu-item view-mode-menu-item" type="button" data-mode="editor" aria-pressed="false" title="Editor only">
+                                                <i class="bi bi-file-text me-2"></i><span>Editor</span>
+                                            </button>
+                                            <button class="dropdown-item action-menu-item view-mode-menu-item active" type="button" data-mode="split" aria-pressed="true" title="Split view">
+                                                <i class="bi bi-layout-split me-2"></i><span>Split</span>
+                                            </button>
+                                            <button class="dropdown-item action-menu-item view-mode-menu-item" type="button" data-mode="preview" aria-pressed="false" title="Preview only">
+                                                <i class="bi bi-eye me-2"></i><span>Preview</span>
+                                            </button>
+                                        </div>
+                                    </div>
+                                    <div class="dropdown-submenu action-menu-submenu view-layout-menu-submenu">
+                                        <button class="dropdown-item action-menu-item dropdown-toggle" type="button" aria-haspopup="true" aria-expanded="false">
+                                            <i class="bi bi-window-sidebar me-2"></i> View Layout
+                                        </button>
+                                        <div class="dropdown-menu action-submenu" aria-label="View layout options">
+                                            <button class="dropdown-item action-menu-item layout-mode-option" type="button" role="menuitemradio" aria-checked="true" data-layout-mode="developer">
+                                                <i class="bi bi-code-slash me-2" aria-hidden="true"></i><span>Develop Layout</span>
+                                            </button>
+                                            <button class="dropdown-item action-menu-item layout-mode-option" type="button" role="menuitemradio" aria-checked="false" data-layout-mode="debug">
+                                                <i class="bi bi-bug-fill me-2" aria-hidden="true"></i><span>Debug Layout</span>
+                                            </button>
+                                            <button class="dropdown-item action-menu-item layout-mode-option" type="button" role="menuitemradio" aria-checked="false" data-layout-mode="ai">
+                                                <i class="bi bi-stars me-2" aria-hidden="true"></i><span>AI Layout</span>
+                                            </button>
+                                        </div>
+                                    </div>
+                                    <div class="dropdown-submenu action-menu-submenu show-hide-tabs-menu-submenu">
+                                        <button class="dropdown-item action-menu-item dropdown-toggle" type="button" aria-haspopup="true" aria-expanded="false">
+                                            <i class="bi bi-window-sidebar me-2"></i> Show/Hide Tabs
+                                        </button>
+                                        <div class="dropdown-menu action-submenu" aria-label="Show or hide tabs">
+                                            <button class="dropdown-item action-menu-item project-command" type="button" data-project-command="show-problems">
+                                                <i class="bi bi-exclamation-triangle me-2" aria-hidden="true"></i><span class="problems-toggle-label">Show Problems</span><span class="menu-shortcut-label">F8</span>
+                                            </button>
+                                            <button class="dropdown-item action-menu-item project-command" type="button" data-project-command="show-java-rebuild" disabled aria-disabled="true">
+                                                <i class="bi bi-terminal me-2" aria-hidden="true"></i><span class="java-rebuild-toggle-label">Show Java Rebuild</span>
+                                            </button>
+                                            <button class="dropdown-item action-menu-item toggle-ai-companion-panel" type="button" title="Show or hide AI Companion" aria-pressed="false">
+                                                <i class="bi bi-stars me-2"></i><span class="ai-companion-toggle-label">Show AI Companion</span>
+                                            </button>
+                                            <button class="dropdown-item action-menu-item project-command" type="button" data-project-command="show-tasks" title="Show Tasks" aria-label="Show Tasks">
+                                                <i class="bi bi-check2-square me-2" aria-hidden="true"></i><span class="tasks-toggle-label">Show Tasks</span><span class="menu-shortcut-label">F9</span>
+                                            </button>
+                                            <button class="dropdown-item action-menu-item toggle-background-processes" type="button" title="Show Background Processes" aria-label="Show Background Processes" aria-pressed="false">
+                                                <i class="bi bi-gear-wide-connected me-2" aria-hidden="true"></i><span class="background-processes-toggle-label">Show Background Processes</span>
+                                            </button>
+                                            <button class="dropdown-item action-menu-item toggle-find-in-files-results-panel" type="button" title="Show or hide Find in Files results">
+                                                <i class="bi bi-layout-split me-2"></i><span class="find-results-toggle-label">Show Find in Files Results</span><span class="menu-shortcut-label">F7</span>
+                                            </button>
+                                            <button class="dropdown-item action-menu-item toggle-dropzone-panel" type="button" title="Hide Dropzone Panel">
+                                                <i class="bi bi-layout-sidebar-inset me-2"></i><span class="dropzone-toggle-label">Hide Dropzone Panel</span>
+                                            </button>
+                                            <button class="dropdown-item action-menu-item toggle-outline-panel" type="button" title="Hide Outline Panel">
+                                                <i class="bi bi-list-nested me-2"></i><span class="outline-toggle-label">Hide Outline Panel</span>
+                                            </button>
+                                            <button class="dropdown-item action-menu-item" type="button" data-debug-menu-command="show-threads">
+                                                <i class="bi bi-list-nested me-2"></i><span class="debug-view-toggle-label" data-debug-menu-view-label="threads">Show Threads</span>
+                                            </button>
+                                            <button class="dropdown-item action-menu-item" type="button" data-debug-menu-command="show-stack">
+                                                <i class="bi bi-layers me-2"></i><span class="debug-view-toggle-label" data-debug-menu-view-label="stack">Show Call Stack</span>
+                                            </button>
+                                            <button class="dropdown-item action-menu-item" type="button" data-debug-menu-command="show-variables">
+                                                <i class="bi bi-diagram-3 me-2"></i><span class="debug-view-toggle-label" data-debug-menu-view-label="variables">Show Variables</span>
+                                            </button>
+                                            <button class="dropdown-item action-menu-item" type="button" data-debug-menu-command="show-watches">
+                                                <i class="bi bi-eye me-2"></i><span class="debug-view-toggle-label" data-debug-menu-view-label="watches">Show Watches</span>
+                                            </button>
+                                            <button class="dropdown-item action-menu-item" type="button" data-debug-menu-command="show-expressions">
+                                                <i class="bi bi-terminal me-2"></i><span class="debug-view-toggle-label" data-debug-menu-view-label="expressions">Show Expressions</span>
+                                            </button>
+                                            <button class="dropdown-item action-menu-item" type="button" data-debug-menu-command="show-breakpoints">
+                                                <i class="bi bi-record-circle me-2"></i><span class="debug-view-toggle-label" data-debug-menu-view-label="breakpoints">Show Breakpoints</span>
+                                            </button>
+                                            <button class="dropdown-item action-menu-item" type="button" data-debug-menu-command="show-console">
+                                                <i class="bi bi-terminal me-2"></i><span class="debug-view-toggle-label" data-debug-menu-view-label="console">Show Debug Console</span>
+                                            </button>
+                                        </div>
+                                    </div>
                                     <hr class="dropdown-divider">
                                     <button id="theme-toggle" class="dropdown-item action-menu-item" title="Toggle Dark Mode">
                                         <i class="bi bi-moon me-2"></i> Theme
                                     </button>
-                                    <button class="dropdown-item action-menu-item toggle-ai-companion-panel" type="button" title="Show or hide AI Companion" aria-pressed="false">
-                                        <i class="bi bi-stars me-2"></i> AI Companion
-                                    </button>
-                                    <button class="dropdown-item action-menu-item project-command" type="button" data-project-command="show-tasks" title="Show Tasks" aria-label="Show Tasks">
-                                        <i class="bi bi-check2-square me-2" aria-hidden="true"></i><span class="tasks-toggle-label">Show Tasks</span><span class="menu-shortcut-label">F9</span>
-                                    </button>
-                                    <button class="dropdown-item action-menu-item toggle-background-processes" type="button" title="Show Background Processes" aria-label="Show Background Processes" aria-pressed="false">
-                                        <i class="bi bi-gear-wide-connected me-2" aria-hidden="true"></i><span class="background-processes-toggle-label">Background Processes</span>
-                                    </button>
                                     <button class="dropdown-item action-menu-item toggle-sidebar" type="button" title="Hide Sidebar" aria-controls="folder-tree-pane">
                                         <i class="bi bi-layout-sidebar me-2"></i><span class="sidebar-toggle-label">Hide Sidebar</span>
-                                    </button>
-                                    <button class="dropdown-item action-menu-item toggle-dropzone-panel" type="button" title="Hide Dropzone Panel">
-                                        <i class="bi bi-layout-sidebar-inset me-2"></i><span class="dropzone-toggle-label">Hide Dropzone Panel</span>
-                                    </button>
-                                    <button class="dropdown-item action-menu-item toggle-outline-panel" type="button" title="Hide Outline Panel">
-                                        <i class="bi bi-list-nested me-2"></i><span class="outline-toggle-label">Hide Outline Panel</span>
                                     </button>
                                     <button class="dropdown-item action-menu-item toggle-status-bar" type="button" title="Hide Status Bar" aria-controls="app-status-line" aria-pressed="false">
                                         <i class="bi bi-window-dock me-2"></i><span class="status-bar-toggle-label">Hide Status Bar</span>
@@ -755,7 +822,7 @@
                             </button>
 
                             <button class="mobile-menu-item toggle-find-in-files-results-panel" type="button" title="Show or hide Find in Files results">
-                                <i class="bi bi-layout-split me-2"></i><span>Show / Hide Find in Files Results</span><span class="menu-shortcut-label">F7</span>
+                                <i class="bi bi-layout-split me-2"></i><span class="find-results-toggle-label">Show Find in Files Results</span><span class="menu-shortcut-label">F7</span>
                             </button>
 
                             <button id="mobile-export-md" class="mobile-menu-item" title="Export as Markdown">
@@ -816,7 +883,7 @@
                                 <i class="bi bi-filetype-md me-2"></i> Convert Code to MD
                             </button>
                             <button class="mobile-menu-item toggle-ai-companion-panel" type="button" title="Show or hide AI Companion" aria-pressed="false">
-                                <i class="bi bi-stars me-2"></i> AI Companion
+                                <i class="bi bi-stars me-2"></i><span class="ai-companion-toggle-label">Show AI Companion</span>
                             </button>
 
                             <button class="mobile-menu-item set-original-source-root" type="button" title="Set the original source root for the open generated Markdown folder" disabled>
@@ -948,6 +1015,7 @@
                     <button id="toggle-sync" class="tool-button header-sync-toggle sync-toggle-button sync-enabled border-primary" type="button" title="Toggle Sync Scrolling" aria-label="Toggle sync scrolling" aria-pressed="true">
                         <i class="bi bi-link"></i> <span>Sync On</span>
                     </button>
+                    <div id="java-debug-header-toolbar" class="java-debug-header-toolbar" aria-label="Java debugger"></div>
                 </div>
 
                 <input type="file" id="file-input" class="file-input" accept=".md,.markdown,.mermaid,.mdviewer-graph.json,.mdgraph.json,.json,.txt,.java,.cs,.css,.js,.ts,.html,.xml,.csv,.yml,.yaml,.toml,.ini,.log,text/*,application/json">
@@ -955,7 +1023,28 @@
                 <input type="file" id="folder-input" class="file-input" webkitdirectory directory multiple>
 
                 <!-- Right section: Brand -->
-                <div class="header-right d-flex align-items-center gap-2">
+                <div class="header-right d-flex align-items-center gap-4">
+                    <div class="layout-mode-control" title="Switch workspace layout">
+                        <button id="layout-mode-select" class="layout-mode-select" type="button" aria-label="Workspace layout" aria-haspopup="menu" aria-expanded="false" data-layout-mode="developer">
+                            <i id="layout-mode-icon" class="bi bi-code-slash" aria-hidden="true"></i>
+                            <span id="layout-mode-label">Develop Layout</span>
+                            <i class="bi bi-chevron-down layout-mode-chevron" aria-hidden="true"></i>
+                        </button>
+                        <div id="layout-mode-menu" class="layout-mode-menu" role="menu" aria-labelledby="layout-mode-select" hidden>
+                            <button class="layout-mode-option" type="button" role="menuitemradio" aria-checked="true" data-layout-mode="developer">
+                                <i class="bi bi-code-slash" aria-hidden="true"></i>
+                                <span>Develop Layout</span>
+                            </button>
+                            <button class="layout-mode-option" type="button" role="menuitemradio" aria-checked="false" data-layout-mode="debug">
+                                <i class="bi bi-bug-fill" aria-hidden="true"></i>
+                                <span>Debug Layout</span>
+                            </button>
+                            <button class="layout-mode-option" type="button" role="menuitemradio" aria-checked="false" data-layout-mode="ai">
+                                <i class="bi bi-stars" aria-hidden="true"></i>
+                                <span>AI Layout</span>
+                            </button>
+                        </div>
+                    </div>
                     <div id="header-brand-right" class="header-brand header-brand-right">
                         <h1 class="h4 mb-0 me-2">MD-Editor</h1>
                         <a href="https://github.com/shaybc/md-editor" class="github-link" title="View on GitHub" target="_blank" rel="noopener noreferrer">
@@ -1865,8 +1954,7 @@
                     <span><span class="settings-switch-title">Show Regex Tester</span><span class="settings-switch-description">Show the Regex Tester icon on the side rail bar.</span></span>
                     <input type="checkbox" id="settings-sidebar-rail-show-regex-tester" class="settings-switch-input" checked />
                     <span class="settings-switch" aria-hidden="true"></span>
-                  </label>
-                  <label class="settings-switch-row" for="settings-sidebar-rail-show-ai-companion">
+                  </label>                  <label class="settings-switch-row" for="settings-sidebar-rail-show-ai-companion">
                     <span><span class="settings-switch-title">Show AI Companion</span><span class="settings-switch-description">Show the AI Companion icon on the side rail bar.</span></span>
                     <input type="checkbox" id="settings-sidebar-rail-show-ai-companion" class="settings-switch-input" checked />
                     <span class="settings-switch" aria-hidden="true"></span>
@@ -4393,8 +4481,7 @@
                     <button class="sidebar-view-rail-button sidebar-view-option" type="button" data-sidebar-rail-icon="git" data-sidebar-view="git" title="Git" aria-label="Git" aria-pressed="false">
                         <i class="bi bi-git" aria-hidden="true"></i>
                         <span class="sidebar-view-rail-label">Git</span>
-                    </button>
-        <button class="sidebar-view-rail-button sidebar-view-option" type="button" data-sidebar-rail-icon="api-client" data-sidebar-view="api-client" title="API Client" aria-label="API Client" aria-pressed="false">
+                    </button>        <button class="sidebar-view-rail-button sidebar-view-option" type="button" data-sidebar-rail-icon="api-client" data-sidebar-view="api-client" title="API Client" aria-label="API Client" aria-pressed="false">
                         <i class="bi bi-send" aria-hidden="true"></i>
                         <span class="sidebar-view-rail-label">API</span>
                     </button>
@@ -4807,6 +4894,8 @@
                         </div>
                     </div>
                 </div>
+                <section id="java-debug-left-perspective" class="java-debug-perspective-left" aria-label="Java debug navigator" hidden></section>
+
 
                 <div class="sidebar-dropzone-resizer" id="sidebar-dropzone-resizer" role="separator" aria-orientation="horizontal" aria-label="Resize lower sidebar panel" tabindex="0"></div>
                 <div class="sidebar-dropzone-panel sidebar-lower-panel">
@@ -4843,7 +4932,7 @@
                     <i class="bi bi-arrow-counterclockwise tab-reset-legacy-icon" aria-hidden="true"></i>
                     <span class="tab-reset-legacy-label">Close All</span>
                   </button>
-                  <button id="ai-companion-close" class="folder-tree-tool-button ai-companion-panel-toggle" type="button" title="Show AI Companion" aria-label="Show AI Companion" aria-controls="ai-companion-panel" aria-pressed="false"><i class="bi bi-layout-sidebar-inset-reverse" aria-hidden="true"></i></button>
+                  <button id="ai-companion-close" class="folder-tree-tool-button ai-companion-panel-toggle" type="button" title="Show right sidebar" aria-label="Show right sidebar" aria-controls="ai-companion-panel" aria-pressed="false"><i class="bi bi-layout-sidebar-inset-reverse" aria-hidden="true"></i></button>
                 </div>
                 <div class="editor-formatting-toolbar" role="toolbar" aria-label="Markdown formatting tools">
                   <button class="editor-format-button" type="button" data-editor-format-action="undo" title="Undo" aria-label="Undo">
@@ -5024,6 +5113,10 @@
                     </button>
                 </div>
             </main>
+            <div id="java-debug-right-dock" class="java-debug-right-dock" hidden>
+                <div class="ai-companion-width-resizer java-debug-right-width-resizer" id="java-debug-right-width-resizer" role="separator" aria-orientation="vertical" aria-label="Resize right sidebar" tabindex="0"></div>
+                <aside id="java-debug-right-perspective" class="java-debug-right-perspective" aria-label="Java debug inspectors"></aside>
+            </div>
             <div class="ai-companion-dock">
                 <div class="ai-companion-width-resizer" id="ai-companion-width-resizer" role="separator" aria-orientation="vertical" aria-label="Resize AI Companion panel" tabindex="0"></div>
                 <aside id="ai-companion-panel" class="ai-companion-panel" aria-label="AI Companion" hidden>
@@ -5914,6 +6007,16 @@
     <script src="js/project/run/run-configuration-dialog.js"></script>
     <script src="js/project/run/run-command-menu.js"></script>
     <script src="js/project/run/run-editor-actions.js"></script>
+    <script src="js/project/debug/java-debug-protocol-client.js"></script>
+    <script src="js/project/debug/java-debug-breakpoint-store.js"></script>
+    <script src="js/project/debug/java-debug-session.js"></script>
+    <script src="js/project/debug/java-debug-session-manager.js"></script>
+    <script src="js/project/debug/java-debug-source-context.js"></script>
+    <script src="js/project/debug/java-debug-panel.js"></script>
+    <script src="js/project/debug/java-debug-global-toolbar.js"></script>
+    <script src="js/project/debug/java-debug-command-menu.js"></script>
+    <script src="js/project/debug/java-debug-editor-actions.js"></script>
+    <script src="js/project/debug/java-debug-hover.js"></script>
     <script src="js/markdown/mermaid-tools.js"></script>
     <script src="js/markdown/render.js"></script>
     <script src="js/tags/index.js"></script>

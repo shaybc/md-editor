@@ -185,8 +185,22 @@ function createTabsHarness(options = {}) {
       body.classList.toggle("ai-companion-open", open === true);
     }
   };
+  const javaDebugPanelCalls = [];
+  const javaDebugPanel = {
+    perspectiveOpen: options.javaDebugPerspectiveOpen === true,
+    isPerspectiveOpen() { return this.perspectiveOpen; },
+    closePerspective(options = {}) {
+      this.perspectiveOpen = false;
+      javaDebugPanelCalls.push(["closePerspective", { persist: options.persist }]);
+    },
+    openPerspective(options = {}) {
+      this.perspectiveOpen = true;
+      javaDebugPanelCalls.push(["openPerspective", { persist: options.persist }]);
+      return Promise.resolve(true);
+    }
+  };
   const app = {
-    modules: { bottomPanelTabs: bottomPanel, aiCompanionPanel },
+    modules: { bottomPanelTabs: bottomPanel, aiCompanionPanel, javaDebugPanel },
     services: {},
     registerModule(name, api) { this.modules[name] = api; }
   };
@@ -272,7 +286,7 @@ function createTabsHarness(options = {}) {
   Object.assign(deps, options.deps || {});
   const api = context.window.registerMarkdownViewerTabs(app, deps);
   api.renderTabBar(tabs, activeTabId);
-  return { api, tabs, tabList, sidebarCalls, activeTabChanges, bottomPanelCalls, bottomPanel, aiCompanionCalls, body, getActiveTabId: () => activeTabId };
+  return { api, tabs, tabList, sidebarCalls, activeTabChanges, bottomPanelCalls, bottomPanel, aiCompanionCalls, javaDebugPanelCalls, javaDebugPanel, body, getActiveTabId: () => activeTabId };
 }
 
 test("API Client tabs render with a distinct tab icon", () => {
@@ -319,6 +333,21 @@ test("double-click restore keeps the bottom panel and AI companion hidden when t
   assert.equal(harness.body.classList.contains("ai-companion-open"), false);
 });
 
+test("double-clicking a tab hides and restores the debug perspective right dock", () => {
+  const harness = createTabsHarness({ javaDebugPerspectiveOpen: true });
+
+  harness.tabList.children[0].dispatch("dblclick");
+
+  assert.deepEqual(harness.javaDebugPanelCalls[0], ["closePerspective", { persist: false }]);
+  assert.equal(harness.javaDebugPanel.perspectiveOpen, false);
+  assert.deepEqual(harness.sidebarCalls[0], [false, false, false]);
+
+  harness.tabList.children[0].dispatch("dblclick");
+
+  assert.deepEqual(harness.javaDebugPanelCalls[1], ["openPerspective", { persist: false }]);
+  assert.equal(harness.javaDebugPanel.perspectiveOpen, true);
+  assert.deepEqual(harness.sidebarCalls, [[false, false, false]]);
+});
 test("double-clicks from a tab close button do not toggle tab maximize", () => {
   const harness = createTabsHarness({ bottomPanelVisible: true, temporary: true });
   const tabItem = harness.tabList.children[0];

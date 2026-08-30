@@ -20,6 +20,7 @@
     const getEditorPath = deps.getEditorPath || function() { return getActiveEditorPath(); };
     const getEditorLanguageOverride = deps.getEditorLanguageOverride || function() { return null; };
     const onEditorLanguageChange = deps.onEditorLanguageChange || function() {};
+    const onEditorDebugBreakpointsRemapped = deps.onEditorDebugBreakpointsRemapped || function() {};
     const openEditorFindReplace = deps.openEditorFindReplace;
     const goToEditorLinePrompt = deps.goToEditorLinePrompt;
     const openLspDefinitionTarget = deps.openLspDefinitionTarget;
@@ -347,6 +348,11 @@
         getActiveEditorPath: function() { return getEditorPath(view.tabId); },
         getLanguageOverride: function() { return getEditorLanguageOverride(view.tabId); },
         onLanguageChange: function(language) { onEditorLanguageChange(view.tabId, language); },
+        onDebugBreakpointsRemapped: function(payload) {
+          Promise.resolve(onEditorDebugBreakpointsRemapped(view.tabId, payload)).catch(function(error) {
+            console.warn("Failed to remap Java debug breakpoints after edit:", error);
+          });
+        },
         openEditorFindReplace,
         goToEditorLinePrompt,
         openLspDefinitionTarget,

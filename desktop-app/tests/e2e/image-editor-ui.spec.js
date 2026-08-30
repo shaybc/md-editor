@@ -1117,11 +1117,28 @@ test('flatten layers uses the app-wide styled confirmation dialog', async ({ pag
 
   await expect(page.locator('#app-notification-modal')).toBeVisible();
   await expect(page.locator('#app-notification-title')).toHaveText('Flatten layers?');
-  await expect(page.locator('#app-notification-message')).toHaveText('Flatten visible content into one layer? Hidden content will be discarded.');
+  await expect(page.locator('#app-notification-message')).toHaveText('Create a flattened copy of the visible content as a new layer? Existing layers will remain unchanged.');
   await expect(page.locator('[data-notification-button-id="confirm"]')).toHaveText('Flatten');
   expect(await page.evaluate(() => window.__nativeFlattenConfirmCalls)).toBe(0);
   await page.locator('[data-notification-button-id="cancel"]').click();
   await expect(page.locator('#app-notification-modal')).toBeHidden();
+
+  await panel.locator('[data-layer-action="flatten"]').click();
+  await page.locator('[data-notification-button-id="confirm"]').click();
+  await expect(page.locator('#app-notification-modal')).toBeHidden();
+  const flattenedState = await page.evaluate(() => {
+    const root = document.querySelector('.tab-view.active[data-tab-view-kind=image-editor]');
+    const controller = window.markdownViewerApp.services.imageEditor.getView(root.dataset.tabId);
+    return {
+      activeName: window.MarkdownViewerImageEditor.findDocumentNode(controller.documentStore.document, controller.documentStore.document.activeLayerId)?.node?.name,
+      selectedNames: [...controller.documentStore.selectedIds].map((id) => window.MarkdownViewerImageEditor.findDocumentNode(controller.documentStore.document, id)?.node?.name).filter(Boolean),
+      rootNames: controller.documentStore.document.nodes.map((node) => node.name)
+    };
+  });
+  expect(flattenedState).toEqual({ activeName: 'Flattened image', selectedNames: ['Flattened image'], rootNames: ['Flattened image', 'Layer', 'Background'] });
+  await expect(panel.locator('[data-layer-item]')).toHaveCount(2);
+  await expect(panel.locator('[data-layer-item]').first().locator('.image-editor-layer-name')).toHaveText('Flattened image');
+  await expect(panel.locator('.image-editor-layer-name')).toContainText(['Flattened image', 'Layer']);
 });
 
 test('image editor color picker switches modes and remembers independent FG and BG opacity', async ({ page }) => {

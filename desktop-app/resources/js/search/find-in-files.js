@@ -279,10 +279,25 @@
       if (panelStatus) panelStatus.textContent = message || "";
     }
 
+    function ensureSearchResultsTab() {
+      const searchResultsTabId = deps.bottomPanel?.SEARCH_RESULTS_TAB_ID || "search-results";
+      if (deps.bottomPanel?.addTab && !deps.bottomPanel?.hasTab?.(searchResultsTabId)) {
+        deps.bottomPanel.addTab({
+          id: searchResultsTabId,
+          title: "Search Results",
+          icon: "bi-search",
+          view: panel,
+          permanent: true,
+          activate: false
+        });
+      }
+      return searchResultsTabId;
+    }
+
     function showPanel() {
       if (!panel) return;
       if (deps.bottomPanel?.activateTab) {
-        deps.bottomPanel.activateTab(deps.bottomPanel.SEARCH_RESULTS_TAB_ID || "search-results");
+        deps.bottomPanel.activateTab(ensureSearchResultsTab());
         applyPanelHeight();
         return;
       }
@@ -306,7 +321,7 @@
     function toggleResultsPanel() {
       if (!panel) return;
       if (deps.bottomPanel?.activateTab && deps.bottomPanel?.hidePanel) {
-        const searchResultsTabId = deps.bottomPanel.SEARCH_RESULTS_TAB_ID || "search-results";
+        const searchResultsTabId = ensureSearchResultsTab();
         const searchResultsAreActive = deps.bottomPanel.getActiveTabId?.() === searchResultsTabId;
         const bottomPanelIsVisible = deps.bottomPanel.isPanelVisible?.() ?? panel.hidden !== true;
         if (bottomPanelIsVisible && searchResultsAreActive) {
