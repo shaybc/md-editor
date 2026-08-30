@@ -280,6 +280,46 @@ function getNeutralinoSavedTaskRecords(harness) {
     .map(([filePath, content]) => ({ filePath, record: JSON.parse(String(content)) }));
 }
 
+function addNeutralinoDirectoryEntry(neutralinoDirectories, parentPath, name) {
+  const entries = neutralinoDirectories.get(parentPath) || [];
+  if (!entries.some((entry) => (entry?.name || entry?.entry) === name)) entries.push({ name, entry: name, type: "DIRECTORY" });
+  neutralinoDirectories.set(parentPath, entries);
+}
+
+function seedNeutralinoSavedChat(harness, chatIndex, taskRecords, options = {}) {
+  const profileDir = options.profileDir || "profile";
+  const createdAt = Number(chatIndex.createdAt || Date.now()) || Date.now();
+  const date = new Date(createdAt);
+  const year = String(date.getFullYear());
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  const chatsDir = profileDir + "/companion/chats";
+  const yearDir = chatsDir + "/" + year;
+  const monthDir = yearDir + "/" + month;
+  const dayDir = monthDir + "/" + day;
+  const chatDir = dayDir + "/" + chatIndex.id;
+  addNeutralinoDirectoryEntry(harness.neutralinoDirectories, chatsDir, year);
+  addNeutralinoDirectoryEntry(harness.neutralinoDirectories, yearDir, month);
+  addNeutralinoDirectoryEntry(harness.neutralinoDirectories, monthDir, day);
+  addNeutralinoDirectoryEntry(harness.neutralinoDirectories, dayDir, chatIndex.id);
+  const tasks = taskRecords.map((record, index) => ({
+    id: record.id,
+    fileName: record.fileName || record.id + ".json",
+    sequence: record.sequence || index + 1,
+    title: record.title || record.prompt,
+    createdAt: record.createdAt,
+    updatedAt: record.updatedAt,
+    status: record.status || "completed",
+    attachments: record.attachments || [],
+    ...(record.mode ? { mode: record.mode } : {})
+  }));
+  harness.neutralinoFiles.set(chatDir + "/index.json", JSON.stringify({ ...chatIndex, tasks }));
+  for (const record of taskRecords) {
+    harness.neutralinoFiles.set(chatDir + "/" + (record.fileName || record.id + ".json"), JSON.stringify({ ...record, chatId: chatIndex.id }));
+  }
+  return { chatsDir, dayDir, chatDir };
+}
+
 function createTextFile(name, content, options = {}) {
   return {
     name,
@@ -627,13 +667,26 @@ function createPanelHarness(options = {}) {
   const neutralinoDirectories = options.neutralinoDirectories || new Map();
   const neutralinoFiles = options.neutralinoFiles || new Map();
   const neutralinoWrites = options.neutralinoWrites || [];
+  function rememberNeutralinoDirectory(directoryPath) {
+    if (options.isNeutralinoRuntime !== true) return;
+    const normalized = String(directoryPath || "").replace(/\\/g, "/");
+    if (!normalized) return;
+    if (!neutralinoDirectories.has(normalized)) neutralinoDirectories.set(normalized, []);
+    const slashIndex = normalized.lastIndexOf("/");
+    if (slashIndex <= 0) return;
+    const parentPath = normalized.slice(0, slashIndex);
+    const name = normalized.slice(slashIndex + 1);
+    const entries = neutralinoDirectories.get(parentPath) || [];
+    if (!entries.some((entry) => (entry?.name || entry?.entry) === name)) entries.push({ name, entry: name, type: "DIRECTORY" });
+    neutralinoDirectories.set(parentPath, entries);
+  }
   const openedDocuments = [];
   const openedFolders = [];
   const reloadedPaths = [];
   const clipboardWrites = [];
   const neutralino = options.isNeutralinoRuntime ? {
     filesystem: {
-      createDirectory: async () => {},
+      createDirectory: async (directoryPath) => { rememberNeutralinoDirectory(directoryPath); },
       readDirectory: async (directoryPath) => neutralinoDirectories.get(directoryPath) || [],
       getStats: async (filePath) => {
         if (!neutralinoFiles.has(filePath)) throw new Error(`Missing fake file: ${filePath}`);
@@ -840,6 +893,7 @@ function createPanelHarness(options = {}) {
     appDebugLogs,
     storage,
     neutralinoWrites,
+    neutralinoDirectories,
     neutralinoFiles,
     openedDocuments,
     openedFolders,
@@ -3929,6 +3983,170 @@ test("AI Companion previous chat switching does not rewrite unchanged loaded cha
   assert.deepEqual(neutralinoWrites, []);
 });
 
+test("AI Companion split creates an independent saved chat through the selected response", async () => {
+  const profileDir = "C:/profile";
+  const workspaceRoot = "C:/project";
+  const chatId = "chat_20260703_170000_original";
+  const createdAt = 1783090800000;
+  const chatDayDir = profileDir + "/companion/chats/2026/07/03";
+  const taskIds = [
+    "task_000001_20260703_170001_original",
+    "task_000002_20260703_170002_original",
+    "task_000003_20260703_170003_original"
+  ];
+  const savedAttachmentPath = chatDayDir + "/" + chatId + "/attachments/" + taskIds[1] + "/saved.txt";
+  const workspacePath = workspaceRoot + "/src/workspace.md";
+  const externalPath = "D:/shared/external.txt";
+  const neutralinoFiles = new Map([
+    [savedAttachmentPath, "saved context"],
+    [workspacePath, "workspace context"],
+    [externalPath, "external context"]
+  ]);
+  const payloads = [];
+  const harness = createPanelHarness({
+    isNeutralinoRuntime: true,
+    profileDir,
+    workspaceRoot,
+    neutralinoFiles,
+    bridge: {
+      chat: async (payload) => {
+        payloads.push(plain(payload));
+        return { content: "Branch answer" };
+      }
+    }
+  });
+  const records = taskIds.map((id, index) => ({
+    version: 6,
+    id,
+    fileName: id + ".json",
+    sequence: index + 1,
+    prompt: "Prompt " + (index + 1),
+    rootPrompt: "Prompt " + (index + 1),
+    title: "Task " + (index + 1),
+    createdAt: createdAt + index + 1,
+    updatedAt: createdAt + index + 1,
+    workspaceRoot,
+    mode: "agent",
+    status: "completed",
+    attachments: [],
+    events: [{ type: "chat-response", content: "Answer " + (index + 1) }]
+  }));
+  records[1].attachments = [
+    { name: "saved.txt", path: savedAttachmentPath, size: 13, type: "text/plain", kind: "text" },
+    { name: "workspace.md", path: workspacePath, size: 17, type: "text/markdown", kind: "text" },
+    { name: "external.txt", path: externalPath, size: 16, type: "text/plain", kind: "text" }
+  ];
+  const seeded = seedNeutralinoSavedChat(harness, {
+    version: 1,
+    id: chatId,
+    title: "Original chat",
+    createdAt,
+    updatedAt: createdAt + 3,
+    workspaceRoot,
+    tokenTotals: { totalSent: 900, totalReceived: 300, requestCount: 3 }
+  }, records, { profileDir });
+  const originalIndexPath = seeded.chatDir + "/index.json";
+  const originalSecondTaskPath = seeded.chatDir + "/" + taskIds[1] + ".json";
+  const originalIndexBefore = neutralinoFiles.get(originalIndexPath);
+  const originalSecondTaskBefore = neutralinoFiles.get(originalSecondTaskPath);
+
+  await harness.api.refreshChatSelectOptions();
+  clickChatMenuItem(harness, 0);
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  const splitButton = getTaskOutput(harness.toolLog.children[1])?.querySelector(".ai-companion-box-split-chat");
+
+  assert.ok(splitButton);
+  assert.equal(splitButton.getAttribute("aria-label"), "Split new chat from here");
+  splitButton.click();
+  await new Promise((resolve) => setTimeout(resolve, 50));
+
+  const splitEntries = Array.from(neutralinoFiles.entries())
+    .filter(([filePath]) => filePath.endsWith("/index.json"))
+    .map(([filePath, content]) => ({ filePath, index: JSON.parse(String(content)) }))
+    .filter((entry) => entry.index.id !== chatId);
+  assert.equal(splitEntries.length, 1);
+  const splitEntry = splitEntries[0];
+  const splitIndex = splitEntry.index;
+  const splitChatDir = splitEntry.filePath.replace(/\/index\.json$/, "");
+  assert.notEqual(splitIndex.id, chatId);
+  assert.equal(splitIndex.title, "Original chat - split");
+  assert.equal(splitIndex.workspaceRoot, workspaceRoot);
+  assert.equal(splitIndex.tasks.length, 2);
+  assert.deepEqual(splitIndex.tasks.map((task) => task.title), ["Task 1", "Task 2"]);
+  assert.equal(splitIndex.tasks.some((task) => task.id === taskIds[2]), false);
+  assert.deepEqual(splitIndex.tokenTotals, { requestCount: 2 });
+
+  const splitRecords = splitIndex.tasks.map((task) => JSON.parse(String(neutralinoFiles.get(splitChatDir + "/" + task.fileName))));
+  assert.deepEqual(splitRecords.map((record) => record.prompt), ["Prompt 1", "Prompt 2"]);
+  assert.equal(splitRecords.every((record) => record.chatId === splitIndex.id), true);
+  assert.equal(splitRecords.some((record) => taskIds.includes(record.id)), false);
+  const clonedSavedAttachment = splitRecords[1].attachments.find((attachment) => attachment.name === "saved.txt");
+  const copiedAttachmentValue = neutralinoFiles.get(clonedSavedAttachment.path);
+  const copiedAttachmentText = copiedAttachmentValue instanceof Uint8Array ? Buffer.from(copiedAttachmentValue).toString("binary") : String(copiedAttachmentValue);
+  assert.match(clonedSavedAttachment.path, new RegExp("/attachments/" + splitRecords[1].id + "/saved\\.txt$"));
+  assert.equal(copiedAttachmentText, "saved context");
+  assert.equal(splitRecords[1].attachments.find((attachment) => attachment.name === "workspace.md").path, workspacePath);
+  assert.equal(splitRecords[1].attachments.find((attachment) => attachment.name === "external.txt").path, externalPath);
+  assert.equal(neutralinoFiles.get(originalIndexPath), originalIndexBefore);
+  assert.equal(neutralinoFiles.get(originalSecondTaskPath), originalSecondTaskBefore);
+
+  harness.agentInput.value = "Continue branch";
+  harness.agentInput.dispatchEvent("input");
+  harness.agentRunButton.click();
+  await new Promise((resolve) => setTimeout(resolve, 50));
+
+  assert.equal(payloads.length, 1);
+  assert.equal(payloads[0].chatId, splitIndex.id);
+  assert.equal(payloads[0].workspaceRoot, workspaceRoot);
+});
+
+test("AI Companion split failure uses the app notification service", async () => {
+  const profileDir = "C:/profile";
+  const chatId = "chat_20260703_170000_split_failure";
+  const taskId = "task_000001_20260703_170001_split_failure";
+  const chatDayDir = profileDir + "/companion/chats/2026/07/03";
+  const missingAttachmentPath = chatDayDir + "/" + chatId + "/attachments/" + taskId + "/missing.txt";
+  const modalRequests = [];
+  const neutralinoFiles = new Map();
+  const harness = createPanelHarness({
+    isNeutralinoRuntime: true,
+    profileDir,
+    neutralinoFiles,
+    appServices: { notify: { show: async (request) => { modalRequests.push(plain(request)); return "ok"; } } }
+  });
+  seedNeutralinoSavedChat(harness, {
+    version: 1,
+    id: chatId,
+    title: "Failure chat",
+    createdAt: 1783090800000,
+    updatedAt: 1783090801000
+  }, [{
+    version: 6,
+    id: taskId,
+    fileName: taskId + ".json",
+    sequence: 1,
+    prompt: "Prompt",
+    title: "Prompt",
+    createdAt: 1783090801000,
+    updatedAt: 1783090801000,
+    status: "completed",
+    attachments: [{ name: "missing.txt", path: missingAttachmentPath, size: 7, type: "text/plain", kind: "text" }],
+    events: [{ type: "chat-response", content: "Answer" }]
+  }], { profileDir });
+
+  await harness.api.refreshChatSelectOptions();
+  clickChatMenuItem(harness, 0);
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  getTaskOutput(harness.toolLog.children[0])?.querySelector(".ai-companion-box-split-chat")?.click();
+  await new Promise((resolve) => setTimeout(resolve, 50));
+
+  const splitIndexes = Array.from(neutralinoFiles.values())
+    .filter((content) => String(content).includes("Failure chat - split"));
+  assert.equal(splitIndexes.length, 0);
+  assert.equal(modalRequests.length, 1);
+  assert.equal(modalRequests[0].title, "AI Companion");
+  assert.equal(modalRequests[0].message, "Unable to split chat");
+});
 test("AI Companion previous chat menu opens from the header button", async () => {
   const harness = createPanelHarness();
   harness.storage.set("ai-companion-chats", JSON.stringify({

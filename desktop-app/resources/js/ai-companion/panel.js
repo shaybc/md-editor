@@ -402,7 +402,8 @@
         onCopyError: () => notifyAiCompanionError("Copy failed"),
         onOpenTabError: () => notifyAiCompanionError("Open failed"),
         openMarkdownInNewTab,
-        onContinueTask: () => continueTaskFromSummary(container)
+        onContinueTask: () => continueTaskFromSummary(container),
+        onSplitTask: () => splitChatFromContainer(container)
       }) || null;
     }
 
@@ -410,10 +411,46 @@
       return copyActions?.attachCopyAction?.(element, getMarkdown, { ...options, label }) || null;
     }
 
+    function insertResponseActionBeforeTimestamp(actions, button) {
+      if (!actions || !button) return;
+      const timestamp = Array.from(actions.children || []).find((child) => child.classList?.contains?.("ai-companion-box-timestamp"));
+      if (timestamp) actions.insertBefore(button, timestamp);
+      else actions.append(button);
+    }
+
+    function createSplitChatButton(entry) {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "ai-companion-box-copy ai-companion-box-split-chat";
+      button.title = "Split new chat from here";
+      button.setAttribute("aria-label", button.title);
+      const icon = document.createElement("i");
+      icon.className = "bi bi-signpost-split";
+      icon.setAttribute("aria-hidden", "true");
+      button.append(icon);
+      button.addEventListener("click", async (event) => {
+        event.preventDefault?.();
+        event.stopPropagation?.();
+        button.disabled = true;
+        try {
+          await splitChatFromEntry(entry);
+        } finally {
+          button.disabled = false;
+        }
+      });
+      return button;
+    }
+
+    function appendSplitChatButton(actions, entry) {
+      if (!actions || !entry?.record?.id || actions.querySelector?.(".ai-companion-box-split-chat")) return;
+      insertResponseActionBeforeTimestamp(actions, createSplitChatButton(entry));
+    }
+
     function attachChatResponseCopyAction(entry, response, content, completedAt) {
       const markdown = String(content || "").trim();
       if (markdown) {
         const actions = attachCopyAction(response, () => markdown, "Copy response as Markdown", { timestamp: completedAt, isModelResponse: true });
+        appendSplitChatButton(actions, entry);
         appendExecutePlanButton(actions, entry);
       }
     }
@@ -4762,6 +4799,11 @@
       });
     }
 
+    async function splitChatFromContainer(container) {
+      const entry = agentEntries.find((candidate) => candidate.output === container);
+      await splitChatFromEntry(entry);
+    }
+
     function migrateTaskRecord(savedRecord = {}, legacyStorage = false) {
       const retained = { ...savedRecord };
       [
@@ -5935,15 +5977,19 @@
       return uniqueName;
     }
 
-    async function getAgentTaskAttachmentDirPath(recordOrId) {
+    async function ensureAgentTaskAttachmentDirPathForChat(chat, recordOrId) {
       const taskId = typeof recordOrId === "object" && recordOrId ? recordOrId.id : String(recordOrId || "");
-      const chatDir = await ensureAgentChatDirPath();
+      const chatDir = await ensureAgentChatDirPath(chat);
       if (!chatDir || !taskId) return "";
       const attachmentsDir = deps.joinPath(chatDir, "attachments");
       const taskDir = deps.joinPath(attachmentsDir, taskId);
       await ensureProfileDirectory(attachmentsDir);
       await ensureProfileDirectory(taskDir);
       return taskDir;
+    }
+
+    async function getAgentTaskAttachmentDirPath(recordOrId) {
+      return ensureAgentTaskAttachmentDirPathForChat(activeAgentChat, recordOrId);
     }
 
     async function getAgentTaskFilePath(recordOrId) {
@@ -6217,6 +6263,185 @@
       const chatDir = await ensureAgentChatDirPath();
       const indexPath = chatDir ? deps.joinPath(chatDir, CHAT_TASK_INDEX_FILE_NAME) : "";
       if (indexPath) await deps.Neutralino.filesystem.writeFile(indexPath, JSON.stringify(payload, null, 2));
+    }
+
+    function cloneJsonObject(value, fallback = {}) {
+      try {
+        return JSON.parse(JSON.stringify(value ?? fallback));
+      } catch (_error) {
+        return { ...fallback };
+      }
+    }
+
+    function getSplitChatTitle(sourceChat, includedTasks) {
+      const displayChat = { ...(sourceChat || {}), tasks: includedTasks };
+      return `${getChatDisplayName(displayChat, getChatMode(displayChat))} - split`;
+    }
+
+    function createSplitChatIndexShell(sourceChat, includedTasks) {
+      const now = Date.now();
+      return {
+        version: 1,
+        id: createChatId(now),
+        title: getSplitChatTitle(sourceChat, includedTasks),
+        createdAt: now,
+        updatedAt: now,
+        workspaceRoot: String(sourceChat?.workspaceRoot || deps.getWorkspaceRoot?.() || ""),
+        taskCount: 0,
+        tokenTotals: { requestCount: 0 },
+        tasks: []
+      };
+    }
+
+    async function copySplitAttachmentFile(sourcePath, destinationPath) {
+      const filesystem = deps.Neutralino?.filesystem;
+      if (!filesystem || !sourcePath || !destinationPath) throw new Error("Missing split attachment file path.");
+      if (typeof filesystem.copy === "function") {
+        try {
+          await filesystem.copy(sourcePath, destinationPath);
+          return;
+        } catch (error) {
+          if (typeof filesystem.readBinaryFile !== "function" || typeof filesystem.writeBinaryFile !== "function") throw error;
+        }
+      }
+      if (typeof filesystem.readBinaryFile === "function" && typeof filesystem.writeBinaryFile === "function") {
+        const bytes = await filesystem.readBinaryFile(sourcePath);
+        await filesystem.writeBinaryFile(destinationPath, bytes);
+        return;
+      }
+      if (typeof filesystem.readFile === "function" && typeof filesystem.writeFile === "function") {
+        const content = await filesystem.readFile(sourcePath);
+        await filesystem.writeFile(destinationPath, content);
+        return;
+      }
+      throw new Error("Attachment copy is not available.");
+    }
+
+    async function rewriteSplitAttachmentReferences(attachments, splitChat, splitTaskId, chatsDir) {
+      const references = normalizeAttachmentReferences(attachments);
+      if (!references.length || !chatsDir || !deps.isNeutralinoRuntime?.()) return references;
+      const usedNames = new Set();
+      const rewritten = [];
+      for (const reference of references) {
+        const sourcePath = getSavedAttachmentResolvedPath(reference);
+        if (!sourcePath || !isPathWithinFolder(sourcePath, chatsDir)) {
+          rewritten.push(reference);
+          continue;
+        }
+        const taskDir = await ensureAgentTaskAttachmentDirPathForChat(splitChat, splitTaskId);
+        if (!taskDir) throw new Error("Unable to create split attachment directory.");
+        const fileName = createUniqueAttachmentFileName(reference.name || getActivityFileName(sourcePath), usedNames);
+        const destinationPath = deps.joinPath(taskDir, fileName);
+        await copySplitAttachmentFile(sourcePath, destinationPath);
+        rewritten.push({ ...reference, name: fileName, path: destinationPath });
+      }
+      return rewritten;
+    }
+
+    function createSplitTaskIndexItem(record) {
+      return {
+        id: record.id,
+        fileName: record.fileName,
+        sequence: record.sequence,
+        title: record.title || getTaskTitle(record.prompt, record.attachments),
+        createdAt: record.createdAt,
+        updatedAt: record.updatedAt,
+        status: record.status || "completed",
+        attachments: normalizeAttachmentReferences(record.attachments),
+        ...(record.mode ? { mode: record.mode } : {}),
+        ...(record.plan ? { plan: { id: record.plan.id, title: record.plan.title || "", path: record.plan.path || "", status: record.plan.status, milestones: record.plan.milestones || [], updatedAt: record.plan.updatedAt } } : {})
+      };
+    }
+
+    async function cloneTaskRecordForSplit(sourceRecord, splitChat, fallbackSequence, chatsDir) {
+      const sequence = Number(sourceRecord?.sequence || fallbackSequence) || fallbackSequence;
+      const cloned = cloneJsonObject(sourceRecord, {});
+      const createdAt = Number(cloned.createdAt || Date.now()) || Date.now();
+      const id = createTaskId(sequence, createdAt);
+      const attachments = await rewriteSplitAttachmentReferences(cloned.attachments, splitChat, id, chatsDir);
+      return {
+        ...cloned,
+        version: Math.max(6, Number(cloned.version) || 6),
+        id,
+        runId: id,
+        chatId: splitChat.id,
+        fileName: `${id}.json`,
+        sequence,
+        workspaceRoot: cloned.workspaceRoot || splitChat.workspaceRoot,
+        attachments
+      };
+    }
+
+    async function writeSplitTaskRecord(record, splitChat) {
+      if (!record?.id) return;
+      if (!deps.isNeutralinoRuntime?.() || !deps.Neutralino?.filesystem?.writeFile) {
+        localStorage.setItem(`${AGENT_TASKS_STORAGE_KEY}:${record.id}`, JSON.stringify(record));
+        return;
+      }
+      const chatDir = await ensureAgentChatDirPath(splitChat);
+      const filePath = chatDir ? deps.joinPath(chatDir, record.fileName || `${record.id}.json`) : "";
+      if (filePath) await deps.Neutralino.filesystem.writeFile(filePath, JSON.stringify(record, null, 2));
+    }
+
+    async function writeSplitChatIndex(splitChatIndex) {
+      if (!splitChatIndex?.id) return;
+      if (!deps.isNeutralinoRuntime?.() || !deps.Neutralino?.filesystem?.writeFile) {
+        localStorage.setItem(AGENT_CHATS_STORAGE_KEY, JSON.stringify(splitChatIndex));
+        localStorage.setItem(AGENT_TASKS_STORAGE_KEY, JSON.stringify(splitChatIndex));
+        return;
+      }
+      const chatDir = await ensureAgentChatDirPath(splitChatIndex);
+      const indexPath = chatDir ? deps.joinPath(chatDir, CHAT_TASK_INDEX_FILE_NAME) : "";
+      if (indexPath) await deps.Neutralino.filesystem.writeFile(indexPath, JSON.stringify(splitChatIndex, null, 2));
+    }
+
+    async function createSplitChatFromEntry(entry) {
+      const selectedId = String(entry?.record?.id || "");
+      if (!selectedId) throw new Error("Missing split task.");
+      const sortedTasks = [...(agentTaskIndex.length ? agentTaskIndex : await readAgentTaskIndex())].sort(compareAgentTaskIndexItems);
+      const splitIndex = sortedTasks.findIndex((task) => task.id === selectedId);
+      if (splitIndex < 0) throw new Error("Missing split point.");
+      const includedTasks = sortedTasks.slice(0, splitIndex + 1);
+      const sourceChat = { ...(activeAgentChat || {}), tasks: sortedTasks };
+      const splitChat = createSplitChatIndexShell(sourceChat, includedTasks);
+      const chatsDir = await getAgentChatsDirPath();
+      const clonedRecords = [];
+      for (let index = 0; index < includedTasks.length; index += 1) {
+        const item = includedTasks[index];
+        const sourceRecord = getVisibleAgentTaskRecord(item.id) || await readAgentTaskRecord(item);
+        if (!sourceRecord) throw new Error("Unable to read split task.");
+        clonedRecords.push(await cloneTaskRecordForSplit(sourceRecord, splitChat, Number(item.sequence || index + 1) || index + 1, chatsDir));
+      }
+      const clonedTasks = clonedRecords.map(createSplitTaskIndexItem).sort(compareAgentTaskIndexItems);
+      const splitChatIndex = {
+        ...splitChat,
+        updatedAt: Date.now(),
+        taskCount: clonedTasks.length,
+        tokenTotals: { requestCount: clonedTasks.length },
+        tasks: clonedTasks
+      };
+      for (const record of clonedRecords) await writeSplitTaskRecord(record, splitChatIndex);
+      await writeSplitChatIndex(splitChatIndex);
+      return splitChatIndex;
+    }
+
+    async function splitChatFromEntry(entry) {
+      if (!entry?.record?.id) return;
+      if (isAgentRunning()) {
+        notifyAiCompanionBlocked("Stop the current task before splitting this chat");
+        return;
+      }
+      try {
+        await saveVisibleAgentEntries();
+        const splitChatIndex = await createSplitChatFromEntry(entry);
+        await loadChatIntoPanel(splitChatIndex);
+        await refreshChatSelectOptions();
+        if (workspaceOpen) setWorkspaceHistoryTab("chats");
+        setStatus("Chat split");
+      } catch (error) {
+        console.warn("Failed to split AI Companion chat:", error);
+        notifyAiCompanionError("Unable to split chat");
+      }
     }
 
     function getChatRenameInitialTitle(chat) {

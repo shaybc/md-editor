@@ -97,15 +97,28 @@ test("AI Companion chat actions rename, delete, and reveal saved chat storage", 
   assert.match(panelSource, /async function showSavedChatFolder\(chat\)/);
   assert.match(panelSource, /await deps\.openPathInExplorer\(chatDir\)/);
 });
+test("AI Companion split persists cloned chat state without rewriting the source", () => {
+  assert.match(panelSource, /async function splitChatFromEntry\(entry\)/);
+  assert.match(panelSource, /notifyAiCompanionBlocked\("Stop the current task before splitting this chat"\)/);
+  assert.match(panelSource, /await saveVisibleAgentEntries\(\)/);
+  assert.match(panelSource, /const includedTasks = sortedTasks\.slice\(0, splitIndex \+ 1\)/);
+  assert.match(panelSource, /async function cloneTaskRecordForSplit\(sourceRecord, splitChat, fallbackSequence, chatsDir\)/);
+  assert.match(panelSource, /id = createTaskId\(sequence, createdAt\)/);
+  assert.match(panelSource, /chatId: splitChat\.id/);
+  assert.match(panelSource, /tokenTotals: \{ requestCount: clonedTasks\.length \}/);
+  assert.match(panelSource, /await copySplitAttachmentFile\(sourcePath, destinationPath\)/);
+  assert.match(panelSource, /await loadChatIntoPanel\(splitChatIndex\)/);
+  assert.match(panelSource, /notifyAiCompanionError\("Unable to split chat"\)/);
+});
 test("AI Companion builds same-chat conversation history for new requests", () => {
   assert.match(panelSource, /const CONVERSATION_HISTORY_TURN_LIMIT = 12/);
   assert.match(panelSource, /const CONVERSATION_HISTORY_MESSAGE_MAX_CHARS = 4000/);
-  assert.match(panelSource, /function buildConversationHistory\(excludedEntry = null\)/);
+  assert.match(panelSource, /async function buildConversationHistory\(excludedEntry = null, currentPrompt = "", continuationRecordId = ""\)/);
   assert.match(panelSource, /record\?\.status === "interrupted" \|\| record\?\.status === "running"/);
   assert.match(panelSource, /getVisibleAgentTaskRecord\(item\.id\) \|\| await readAgentTaskRecord\(item\)/);
   assert.match(panelSource, /event\?\.type === "chat-response" && event\.isError !== true/);
   assert.match(panelSource, /event\.finalResponse \|\| event\.outcome/);
-  assert.match(panelSource, /const conversationHistory = await buildConversationHistory\(existingEntry\)/);
+  assert.match(panelSource, /const conversationHistory = await buildConversationHistory\(existingEntry, prompt, overrides\.continuationRecordId\)/);
   assert.match(panelSource, /const requestPayload = \{/);
   assert.match(panelSource, /workspaceRoot: deps\.getWorkspaceRoot\(\)/);
   assert.match(panelSource, /conversationHistory,/);
@@ -128,7 +141,7 @@ test("AI Companion persists version-6 autonomous recovery metadata", () => {
   assert.ok(panelSource.includes("recoverySummary: null"));
   assert.ok(panelSource.includes("recoveryInspection: null"));
   assert.ok(panelSource.includes("function migrateTaskRecord(savedRecord = {}, legacyStorage = false)"));
-  assert.ok(panelSource.includes("runRecoveryInspect"));
+  assert.ok(panelSource.includes("recoveryInspection"));
   assert.ok(panelSource.includes("resumeRun: true"));
 });
 

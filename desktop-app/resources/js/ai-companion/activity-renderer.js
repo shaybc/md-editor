@@ -65,6 +65,32 @@
       return copyActions?.attachCopyAction?.(element, getMarkdown, { ...options, label }) || null;
     }
 
+    function insertActionBeforeTimestamp(actions, button) {
+      const timestamp = Array.from(actions.children || []).find((child) => child.classList?.contains?.("ai-companion-box-timestamp"));
+      if (timestamp) actions.insertBefore(button, timestamp);
+      else actions.append(button);
+    }
+
+    function appendSplitTaskButton(actions, event) {
+      if (!actions || typeof deps.onSplitTask !== "function") return;
+      const button = createElement("button", "ai-companion-box-copy ai-companion-box-split-chat");
+      button.type = "button";
+      button.title = "Split new chat from here";
+      button.setAttribute("aria-label", button.title);
+      const icon = createElement("i", "bi bi-signpost-split");
+      icon.setAttribute("aria-hidden", "true");
+      button.append(icon);
+      button.addEventListener("click", (clickEvent) => {
+        clickEvent.preventDefault?.();
+        clickEvent.stopPropagation?.();
+        button.disabled = true;
+        Promise.resolve(deps.onSplitTask(event)).finally(() => {
+          button.disabled = false;
+        });
+      });
+      insertActionBeforeTimestamp(actions, button);
+    }
+
     function appendContinueTaskButton(actions, event) {
       const status = String(event?.status || "").toLowerCase();
       if (!actions || !["aborted", "cancelled", "canceled"].includes(status) || typeof deps.onContinueTask !== "function") return;
@@ -80,9 +106,7 @@
         clickEvent.stopPropagation?.();
         void deps.onContinueTask(event);
       });
-      const timestamp = Array.from(actions.children || []).find((child) => child.classList?.contains?.("ai-companion-box-timestamp"));
-      if (timestamp) actions.insertBefore(button, timestamp);
-      else actions.append(button);
+      insertActionBeforeTimestamp(actions, button);
     }
 
     function appendWorkspaceResponseBadge(target) {
@@ -624,6 +648,7 @@
       appendWorkedFooter(row, event);
       ensureResultArea().appendChild(row);
       const actions = attachCopyAction(row, () => formatSummaryMarkdown(event), "Copy task summary as Markdown", { timestamp: getEventTimestamp(event), isModelResponse: true });
+      appendSplitTaskButton(actions, event);
       appendContinueTaskButton(actions, event);
       deps.scrollToEnd?.();
     }

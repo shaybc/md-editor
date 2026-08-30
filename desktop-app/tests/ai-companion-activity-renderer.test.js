@@ -132,7 +132,8 @@ function createHarness(renderMarkdownContent, options = {}) {
     openMarkdownInNewTab: options.openMarkdownInNewTab,
     openCompare: options.openCompare,
     openExternalUrl: options.openExternalUrl,
-    onContinueTask: options.onContinueTask
+    onContinueTask: options.onContinueTask,
+    onSplitTask: options.onSplitTask
   });
   return { container, renderer, scrollEvents };
 }
@@ -193,8 +194,9 @@ test("AI Companion final response renders through shared markdown renderer", () 
 });
 
 
-test("AI Companion model response actions show copy, open in new tab, then timestamp", () => {
-  const harness = createHarness(null, { openMarkdownInNewTab: () => {} });
+test("AI Companion model response actions show copy, open in new tab, split, then timestamp", () => {
+  const splitEvents = [];
+  const harness = createHarness(null, { openMarkdownInNewTab: () => {}, onSplitTask: (event) => splitEvents.push(event) });
   const completedAt = Date.UTC(2026, 0, 1, 9, 5);
 
   harness.renderer.appendSummary({
@@ -207,11 +209,16 @@ test("AI Companion model response actions show copy, open in new tab, then times
 
   const summary = harness.container.children[0].children[0];
   const actions = summary.nextElementSibling;
-  assert.equal(actions.children.length, 3);
+  assert.equal(actions.children.length, 4);
   assert.match(actions.children[0].className, /ai-companion-box-copy/);
   assert.match(actions.children[1].className, /ai-companion-box-open-tab/);
   assert.equal(actions.children[1].attributes.get("aria-label"), "Open in a new tab");
-  assert.match(actions.children[2].className, /ai-companion-box-timestamp/);
+  assert.match(actions.children[2].className, /ai-companion-box-split-chat/);
+  assert.equal(actions.children[2].attributes.get("aria-label"), "Split new chat from here");
+  assert.match(actions.children[2].children[0].className, /bi-signpost-split/);
+  actions.children[2].dispatch("click");
+  assert.equal(splitEvents.length, 1);
+  assert.match(actions.children[3].className, /ai-companion-box-timestamp/);
 });
 
 test("AI Companion cancelled and aborted summaries offer continuation from that point", async () => {
