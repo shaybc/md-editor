@@ -301,6 +301,30 @@ test("AI Companion summary changed files show line counts, compare, rollback, an
   assert.deepEqual(rollbacks, ["src/panel.js"]);
   assert.deepEqual(histories, ["src/panel.js"]);
   assert.deepEqual(taskRollbacks, ["task-1"]);
+
+  const fallbackRollbacks = [];
+  const fallbackHistories = [];
+  const fallbackTaskRollbacks = [];
+  const fallbackHarness = createHarness(null, {
+    onRollbackFile: (payload) => fallbackRollbacks.push(payload.file.path),
+    onShowFileHistory: (payload) => fallbackHistories.push(payload.file.path),
+    onRollbackTask: (event) => fallbackTaskRollbacks.push(event.taskId || "summary")
+  });
+  fallbackHarness.renderer.appendSummary({
+    taskId: "task-2",
+    changeJournal: { restorable: true, checkpointId: "checkpoint-2" },
+    elapsedMs: 1000,
+    changedFiles: [{ path: "src/fallback.js", description: "Updated file." }],
+    attemptedChanges: []
+  });
+  const fallbackButtons = findAllByClass(fallbackHarness.container, "ai-companion-activity-action");
+  assert.equal(fallbackButtons.length, 3);
+  fallbackButtons[0].dispatch("click");
+  fallbackButtons[1].dispatch("click");
+  fallbackButtons[2].dispatch("click");
+  assert.deepEqual(fallbackRollbacks, ["src/fallback.js"]);
+  assert.deepEqual(fallbackHistories, ["src/fallback.js"]);
+  assert.deepEqual(fallbackTaskRollbacks, ["task-2"]);
 });
 
 test("AI Companion activities render source links through the external opener", async () => {

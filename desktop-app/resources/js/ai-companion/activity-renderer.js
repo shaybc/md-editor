@@ -335,7 +335,7 @@
     function appendRollbackTaskButton(actions, event) {
       if (!actions || typeof deps.onRollbackTask !== "function") return;
       const files = Array.isArray(event.changedFiles) ? event.changedFiles : [];
-      if (!files.some(hasRollbackMetadata)) return;
+      if (!files.some(hasRollbackMetadata) && !hasRollbackMetadata(event)) return;
       actions.append(createRollbackButton("Rollback task", "Preview rollback for this task", deps.onRollbackTask, event));
     }
 
@@ -597,16 +597,20 @@
       const description = createElement("span", "ai-companion-summary-description");
       description.append(document.createTextNode(": "));
       appendTextWithCode(description, file.description || "Updated file.");
-      item.append(icon, link, description);
+      item.append(icon, link);
+      const actions = createElement("span", "ai-companion-summary-file-actions");
+      if (file.compare) actions.append(createCompareButton(file.compare));
+      const rollbackable = hasRollbackMetadata(file) || hasRollbackMetadata(event);
+      if (rollbackable && typeof deps.onRollbackFile === "function") {
+        actions.append(createRollbackButton("Rollback", "Preview rollback for this file", deps.onRollbackFile, { file, event }));
+      }
+      if (rollbackable && typeof deps.onShowFileHistory === "function") {
+        actions.append(createRollbackButton("History", "Show agent file history", deps.onShowFileHistory, { file, event }));
+      }
+      if (actions.children?.length) item.append(actions);
+      item.append(description);
       const delta = createLineDeltaElement(file);
       if (delta) item.append(delta);
-      if (file.compare) item.append(createCompareButton(file.compare));
-      if (hasRollbackMetadata(file) && typeof deps.onRollbackFile === "function") {
-        item.append(createRollbackButton("Rollback", "Preview rollback for this file", deps.onRollbackFile, { file, event }));
-      }
-      if (hasRollbackMetadata(file) && typeof deps.onShowFileHistory === "function") {
-        item.append(createRollbackButton("History", "Show agent file history", deps.onShowFileHistory, { file, event }));
-      }
       return item;
     }
 

@@ -8048,7 +8048,7 @@ a:focus {
   cursor: pointer;
   font-size: 16px;
   flex-shrink: 0;
-  margin-left: 4px;
+  flex: 0 0 auto;
   transition: background-color 0.15s ease, border-color 0.15s ease;
 }
 
@@ -8625,7 +8625,7 @@ body.tab-style-legacy .tab-reset-btn:disabled:hover {
 }
 
 .image-editor-color-range-sampling span {
-  margin-left: 4px;
+  flex: 0 0 auto;
   color: var(--disabled-text-color);
   font-size: 12px;
 }
@@ -19051,6 +19051,13 @@ button.ai-companion-context-file-row.openable:focus-visible {
   color: var(--disabled-text-color);
 }
 
+.ai-companion-summary-file-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: 6px;
+  margin-right: 4px;
+}
 .ai-companion-summary-line-delta,
 .ai-companion-workspace-change-delta {
   display: inline-flex;
@@ -19197,6 +19204,12 @@ button.ai-companion-workspace-change-file.openable:focus-visible {
   white-space: nowrap;
 }
 
+.ai-companion-workspace-change-file-name {
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
+  gap: 6px;
+}
 .ai-companion-rollback-action {
   display: inline-flex;
   align-items: center;
@@ -19238,7 +19251,7 @@ button.ai-companion-workspace-change-file.openable:focus-visible {
   display: inline-flex;
   align-items: center;
   gap: 3px;
-  margin-left: 4px;
+  flex: 0 0 auto;
 }
 
 .ai-companion-workspace-change-action {
@@ -22790,7 +22803,7 @@ html[data-desktop-menu-layout="full"] .header-action-menu {
 }
 
 .problems-panel-load-rest {
-  margin-left: 4px;
+  flex: 0 0 auto;
   vertical-align: middle;
 }
 

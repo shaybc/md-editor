@@ -704,6 +704,23 @@
       return value.changeJournal || value.raw?.result?.changeJournal || null;
     }
 
+    function getEventRollbackMetadata(event = {}) {
+      return event.changeJournal || event.result?.changeJournal || event.activity?.changeJournal || event.activity?.raw?.result?.changeJournal || null;
+    }
+
+    function getTaskRollbackMetadata(record = {}) {
+      const events = Array.isArray(record?.events) ? record.events : [];
+      for (let index = events.length - 1; index >= 0; index--) {
+        const metadata = getEventRollbackMetadata(events[index]);
+        if (hasRollbackMetadata({ changeJournal: metadata })) return metadata;
+      }
+      return null;
+    }
+
+    function taskRecordHasRollbackMetadata(record = {}) {
+      return hasRollbackMetadata({ changeJournal: getTaskRollbackMetadata(record) });
+    }
+
     function findEntryForRollback(container, event = {}) {
       const taskId = String(event.taskId || event.file?.taskId || "");
       if (taskId) {
@@ -1336,17 +1353,20 @@
           else void openActivityFile(file.path);
         });
       }
-      row.append(status, title);
-      appendTaskChangeDelta(row, file);
-      if (hasRollbackMetadata(file)) {
+      const fileName = document.createElement("span");
+      fileName.className = "ai-companion-workspace-change-file-name";
+      fileName.appendChild(title);
+      if (hasRollbackMetadata(file) || taskRecordHasRollbackMetadata(record)) {
         const actions = document.createElement("span");
         actions.className = "ai-companion-workspace-change-actions";
         actions.append(
           createTaskChangeActionButton("bi-arrow-counterclockwise", "Rollback file", () => rollbackFileFromChangeRow(record, file)),
           createTaskChangeActionButton("bi-clock-history", "File history", () => showFileHistoryFromChangeRow(record, file))
         );
-        row.appendChild(actions);
+        fileName.appendChild(actions);
       }
+      row.append(status, fileName);
+      appendTaskChangeDelta(row, file);
       return row;
     }
 
@@ -5184,6 +5204,8 @@
         savedEvent.attemptedChanges = changes.attempted;
         savedEvent.blockedChanges = changes.blocked;
         activeAgentEntry.record.changes = changes;
+        const rollbackMetadata = getTaskRollbackMetadata(activeAgentEntry.record);
+        if (!hasRollbackMetadata(savedEvent) && rollbackMetadata) savedEvent.changeJournal = rollbackMetadata;
       }
       const existingInputIndex = savedEvent.type === "user-input" && savedEvent.interactionId
         ? activeAgentEntry.record.events.findLastIndex((entry) => entry?.type === "user-input" && entry?.interactionId === savedEvent.interactionId)
@@ -6046,7 +6068,8 @@
           ...withSavedEventCompletedAt(entry, event),
           changedFiles: changes.files,
           attemptedChanges: changes.attempted,
-          blockedChanges: changes.blocked
+          blockedChanges: changes.blocked,
+          changeJournal: event.changeJournal || getTaskRollbackMetadata(entry.record)
         });
         renderTaskChangesPanel(entry.record);
       }
@@ -8064,7 +8087,7 @@
         appendAutonomousRuntimeStatus(event);
         return;
       }
-      if (["run-started", "context-thinned", "observation-released", "observation-release-reminder", "tool-catalog-updated", "tool-schema-activated", "tool-schema-restored", "tool-schema-unavailable", "extension-tool-activated", "extension-tool-started", "extension-tool-completed", "extension-tool-failed", "extension-capability-unavailable", "rules-discovered", "rule-activated", "rule-unavailable", "rules-refreshed", "continuity-updated", "chronicle-saved", "run-restored", "recovery-warning", "compaction", "run-completed", "run-cancelled", "run-aborted", "run-failed"].includes(event.type) || /^(work|worker|memory|route)-/.test(event.type) || ["permission-mode-changed", "tool-denied", "denial-guard-tripped"].includes(event.type)) {
+      if (["run-started", "context-thinned", "observation-released", "observation-release-reminder", "tool-catalog-updated", "tool-schema-activated", "tool-schema-restored", "tool-schema-unavailable", "extension-tool-activated", "extension-tool-started", "extension-tool-completed", "extension-tool-failed", "extension-capability-unavailable", "rules-discovered", "rule-activated", "rule-unavailable", "rules-refreshed", "continuity-updated", "chronicle-saved", "run-restored", "recovery-warning", "change-journal-checkpoint", "compaction", "run-completed", "run-cancelled", "run-aborted", "run-failed"].includes(event.type) || /^(work|worker|memory|route)-/.test(event.type) || ["permission-mode-changed", "tool-denied", "denial-guard-tripped"].includes(event.type)) {
         if (["context-thinned", "observation-released", "observation-release-reminder", "tool-catalog-updated", "tool-schema-activated", "tool-schema-restored", "tool-schema-unavailable", "rules-discovered", "rule-activated", "rule-unavailable", "rules-refreshed", "continuity-updated", "run-restored", "recovery-warning", "change-journal-checkpoint", "compaction", "memory-proposed", "memory-confirmed", "memory-rejected", "memory-forgotten", "permission-mode-changed", "tool-denied", "denial-guard-tripped", "route-selected", "route-fallback", "route-unavailable"].includes(event.type)) appendAutonomousRuntimeStatus(event);
         else recordAgentEvent(event);
         if (activeAgentEntry && ["run-restored", "recovery-warning"].includes(event.type)) {
