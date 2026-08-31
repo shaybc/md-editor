@@ -33,6 +33,7 @@ const approvalCapabilities = requireAiCompanionModule("core/approval-capability-
 const extensionService = requireAiCompanionModule("orchestration/autonomous/extensions/extension-service");
 const { inspectRunRecovery } = requireAiCompanionModule("orchestration/autonomous/recovery/recovery-inspector");
 const { RunScheduler } = requireAiCompanionModule("orchestration/autonomous/scheduling/run-scheduler");
+const { CompanionChangeJournal } = requireAiCompanionModule("orchestration/autonomous/change-journal");
 const activeRequests = new Map();
 const pendingApprovals = new Map();
 const pendingAppActions = new Map();
@@ -245,6 +246,10 @@ async function handleApproval(message) {
   if (message.id) send({ id: String(message.id), type: "done", action: "approval", result: { accepted: true, approvalId, decision: decision.decision } });
 }
 
+async function openChangeJournal(request) {
+  return new CompanionChangeJournal(request).open();
+}
+
 function handleCancel(message) {
   const targetId = String(message.targetId || "");
   const controller = activeRequests.get(targetId);
@@ -345,6 +350,18 @@ async function handleRequest(session, message) {
       result = await companionOrchestration.run(request, {}, emit);
     } else if (message.action === "runRecoveryInspect") {
       result = await inspectRunRecovery(request);
+    } else if (message.action === "change_journal_preview_restore") {
+      const journal = await openChangeJournal(request);
+      result = await journal.previewRestore(message);
+    } else if (message.action === "change_journal_apply_restore") {
+      const journal = await openChangeJournal(request);
+      result = await journal.applyRestore(message.previewId, { includeConflicts: message.includeConflicts === true });
+    } else if (message.action === "change_journal_file_history") {
+      const journal = await openChangeJournal(request);
+      result = await journal.listFileHistory(message);
+    } else if (message.action === "change_journal_compare_checkpoint") {
+      const journal = await openChangeJournal(request);
+      result = await journal.compareCheckpoint(message);
     } else if (message.action === "schedulesClaimDue") {
       const scheduler = new RunScheduler(request);
       await scheduler.load();

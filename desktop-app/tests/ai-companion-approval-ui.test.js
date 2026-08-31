@@ -42,7 +42,7 @@ test("AI Companion approval cards explain the requested action", () => {
   assert.match(panelSource, /addSection\("Limitations", analysis\.limitations/);
   assert.match(panelSource, /addSection\("Resource", analysis\.resourcePath/);
   assert.match(panelSource, /actionAnalysis\.canApprove === false \? "Action cannot be approved"/);
-  assert.match(panelSource, /analysis\.operation !== "no-op" && event\.compare\.changed !== false/);
+  assert.match(panelSource, /analysis\.operation !== "no-op"[\s\S]*event\.compare\.changed !== false/);
   assert.match(stylesSource, /\.ai-companion-approval-warning/);
   assert.match(stylesSource, /\.ai-companion-approval-operation/);
   assert.match(stylesSource, /\.ai-companion-approval\.blocked/);
@@ -93,7 +93,7 @@ test("AI Companion restored approvals remain read-only and recovery uses autonom
   assert.match(panelSource, /function canResumeRun\(record = \{\}\)/);
   assert.match(panelSource, /record\.recoveryInspection\?\.canResume === true/);
   assert.match(panelSource, /resumeRun: true/);
-  assert.match(panelSource, /runRecoveryInspect/);
+  assert.match(rendererBridgeSource, /runRecoveryInspect/);
   assert.doesNotMatch(indexSource, /interrupted-task-resume\.js/);
 });
 
@@ -131,4 +131,18 @@ test("AI Companion approval styles include review, modal, and response state", (
   assert.match(stylesSource, /\.ai-companion-approval-modal/);
   assert.match(stylesSource, /\.ai-companion-approval-modal-body/);
   assert.match(stylesSource, /\.ai-companion-approval\.instructed/);
+});
+
+
+test("AI Companion rollback uses journal bridge actions and styled dialogs", () => {
+  assert.match(rendererBridgeSource, /changeJournalPreviewRestore/);
+  assert.match(rendererBridgeSource, /change_journal_apply_restore/);
+  assert.match(rendererBridgeSource, /change_journal_file_history/);
+  assert.match(desktopBridgeSource, /CompanionChangeJournal/);
+  assert.match(desktopBridgeSource, /change_journal_compare_checkpoint/);
+  assert.match(panelSource, /function confirmRollbackPreview/);
+  assert.match(panelSource, /notification\.show\(\{/);
+  assert.match(panelSource, /changeJournalPreviewRestore/);
+  assert.match(panelSource, /changeJournalApplyRestore/);
+  assert.match(stylesSource, /.ai-companion-rollback-action/);
 });

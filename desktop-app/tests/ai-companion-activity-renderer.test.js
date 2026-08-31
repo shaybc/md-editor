@@ -133,7 +133,12 @@ function createHarness(renderMarkdownContent, options = {}) {
     openCompare: options.openCompare,
     openExternalUrl: options.openExternalUrl,
     onContinueTask: options.onContinueTask,
-    onSplitTask: options.onSplitTask
+    onSplitTask: options.onSplitTask,
+    onRollbackTask: options.onRollbackTask,
+    onRollbackFile: options.onRollbackFile,
+    onRollbackAction: options.onRollbackAction,
+    onShowFileHistory: options.onShowFileHistory,
+    isRollbackDisabled: options.isRollbackDisabled
   });
   return { container, renderer, scrollEvents };
 }
@@ -262,24 +267,40 @@ test("AI Companion summary renders the model final response without synthetic ou
   assert.deepEqual(renderCalls, ["The model answer starts here."]);
 });
 
-test("AI Companion summary changed files show line counts and open compare", () => {
+test("AI Companion summary changed files show line counts, compare, rollback, and history", () => {
   const opened = [];
+  const rollbacks = [];
+  const histories = [];
+  const taskRollbacks = [];
   const compare = { path: "src/panel.js", beforeContent: "old", afterContent: "new" };
-  const harness = createHarness(null, { openCompare: (payload) => opened.push(payload) });
+  const changeJournal = { restorable: true, checkpointId: "checkpoint-1", path: "src/panel.js" };
+  const harness = createHarness(null, {
+    openCompare: (payload) => opened.push(payload),
+    onRollbackFile: (payload) => rollbacks.push(payload.file.path),
+    onShowFileHistory: (payload) => histories.push(payload.file.path),
+    onRollbackTask: (event) => taskRollbacks.push(event.taskId || "summary")
+  });
 
   harness.renderer.appendSummary({
+    taskId: "task-1",
     elapsedMs: 1000,
-    changedFiles: [{ path: "src/panel.js", description: "Updated panel.", additions: 12, deletions: 4, compare }],
+    changedFiles: [{ path: "src/panel.js", description: "Updated panel.", additions: 12, deletions: 4, compare, changeJournal }],
     attemptedChanges: []
   });
 
   const summary = harness.container.children[0].children[0];
   assert.equal(findByClass(summary, "ai-companion-summary-line-added").textContent, "+12");
   assert.equal(findByClass(summary, "ai-companion-summary-line-removed").textContent, "-4");
-  const compareButton = findAllByClass(summary, "ai-companion-activity-action")[0];
-  assert.equal(compareButton.textContent, "Compare");
-  compareButton.dispatch("click");
+  const buttons = findAllByClass(harness.container, "ai-companion-activity-action");
+  assert.equal(buttons[0].textContent, "Compare");
+  buttons[0].dispatch("click");
+  buttons[1].dispatch("click");
+  buttons[2].dispatch("click");
+  buttons[3].dispatch("click");
   assert.deepEqual(opened, [compare]);
+  assert.deepEqual(rollbacks, ["src/panel.js"]);
+  assert.deepEqual(histories, ["src/panel.js"]);
+  assert.deepEqual(taskRollbacks, ["task-1"]);
 });
 
 test("AI Companion activities render source links through the external opener", async () => {

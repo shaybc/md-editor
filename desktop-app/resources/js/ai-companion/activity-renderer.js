@@ -307,6 +307,38 @@
       return button;
     }
 
+    function getRollbackMetadata(value = {}) {
+      return value.changeJournal || value.raw?.result?.changeJournal || null;
+    }
+
+    function hasRollbackMetadata(value = {}) {
+      const metadata = getRollbackMetadata(value);
+      if (metadata?.restorable === true) return true;
+      return Array.isArray(metadata?.mutations) && metadata.mutations.some((entry) => entry?.restorable === true);
+    }
+
+    function createRollbackButton(label, title, handler, payload) {
+      const button = createElement("button", "ai-companion-activity-action ai-companion-rollback-action");
+      button.type = "button";
+      button.title = title;
+      button.append(createElement("i", "bi bi-arrow-counterclockwise"), createElement("span", "", label));
+      const disabled = deps.isRollbackDisabled?.() === true;
+      button.disabled = disabled;
+      if (disabled) button.title = "Rollback is disabled while an agent task is running";
+      button.addEventListener("click", () => {
+        if (button.disabled) return;
+        handler?.(payload);
+      });
+      return button;
+    }
+
+    function appendRollbackTaskButton(actions, event) {
+      if (!actions || typeof deps.onRollbackTask !== "function") return;
+      const files = Array.isArray(event.changedFiles) ? event.changedFiles : [];
+      if (!files.some(hasRollbackMetadata)) return;
+      actions.append(createRollbackButton("Rollback task", "Preview rollback for this task", deps.onRollbackTask, event));
+    }
+
     function renderRawDetails(activity) {
       if (!activity.raw) return null;
       const details = createElement("details", "ai-companion-activity-details");
@@ -482,9 +514,12 @@
         body.append(header, primary, meta);
       }
 
-      if (activity.compare) {
+      if (activity.compare || hasRollbackMetadata(activity)) {
         const actions = createElement("div", "ai-companion-activity-actions");
-        actions.append(createCompareButton(activity.compare));
+        if (activity.compare) actions.append(createCompareButton(activity.compare));
+        if (hasRollbackMetadata(activity) && typeof deps.onRollbackAction === "function") {
+          actions.append(createRollbackButton("Rollback", "Preview rollback for this action", deps.onRollbackAction, activity));
+        }
         body.append(actions);
       }
 
@@ -554,7 +589,7 @@
       return true;
     }
 
-    function renderSummaryFile(file) {
+    function renderSummaryFile(file, event) {
       const item = createElement("li", "ai-companion-summary-file");
       const icon = createElement("i", `bi ${file.icon || "bi-file-earmark-code"}`);
       icon.setAttribute("aria-hidden", "true");
@@ -566,14 +601,20 @@
       const delta = createLineDeltaElement(file);
       if (delta) item.append(delta);
       if (file.compare) item.append(createCompareButton(file.compare));
+      if (hasRollbackMetadata(file) && typeof deps.onRollbackFile === "function") {
+        item.append(createRollbackButton("Rollback", "Preview rollback for this file", deps.onRollbackFile, { file, event }));
+      }
+      if (hasRollbackMetadata(file) && typeof deps.onShowFileHistory === "function") {
+        item.append(createRollbackButton("History", "Show agent file history", deps.onShowFileHistory, { file, event }));
+      }
       return item;
     }
 
-    function appendFileSection(row, heading, files) {
+    function appendFileSection(row, heading, files, event) {
       if (!files.length) return;
       row.append(createElement("div", "ai-companion-summary-heading", heading));
       const list = createElement("ul", "ai-companion-summary-files");
-      files.forEach((file) => list.append(renderSummaryFile(file)));
+      files.forEach((file) => list.append(renderSummaryFile(file, event)));
       row.append(list);
     }
 
@@ -583,7 +624,7 @@
       const details = createElement("details", "ai-companion-summary-blocked");
       const summary = createElement("summary", "", `Blocked proposals (${files.length})`);
       const list = createElement("ul", "ai-companion-summary-files");
-      files.forEach((file) => list.append(renderSummaryFile(file)));
+      files.forEach((file) => list.append(renderSummaryFile(file, {})));
       details.append(summary, list);
       row.append(details);
     }
@@ -634,8 +675,8 @@
       const worked = createElement("div", "ai-companion-summary-worked", getSummaryWorkedLabel(event));
       row.append(worked, renderTaskStatus(event));
 
-      appendFileSection(row, "Changed files:", Array.isArray(event.changedFiles) ? event.changedFiles : []);
-      appendFileSection(row, "Attempted changes:", Array.isArray(event.attemptedChanges) ? event.attemptedChanges : []);
+      appendFileSection(row, "Changed files:", Array.isArray(event.changedFiles) ? event.changedFiles : [], event);
+      appendFileSection(row, "Attempted changes:", Array.isArray(event.attemptedChanges) ? event.attemptedChanges : [], event);
       appendBlockedChangesSection(row, Array.isArray(event.blockedChanges) ? event.blockedChanges : []);
 
       (event.notes || []).forEach((note) => row.append(createElement("p", "ai-companion-summary-note", note)));
@@ -650,6 +691,7 @@
       const actions = attachCopyAction(row, () => formatSummaryMarkdown(event), "Copy task summary as Markdown", { timestamp: getEventTimestamp(event), isModelResponse: true });
       appendSplitTaskButton(actions, event);
       appendContinueTaskButton(actions, event);
+      appendRollbackTaskButton(actions, event);
       deps.scrollToEnd?.();
     }
 

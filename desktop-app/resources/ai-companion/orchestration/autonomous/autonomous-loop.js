@@ -160,7 +160,7 @@ async function runAutonomousLoop(input) {
         if (name === "work_create" || name === "work_update") context.workTrackingReminder?.recordWorkMutation?.(context.work?.list?.() || []);
         await context.skillPathObserver?.afterTool?.(name, result, registration);
         consecutiveFailures = 0;
-        events.emit({ type: EVENT_TYPES.TOOL_COMPLETED, tool: name, callId: call.id, result });
+        events.emit({ type: EVENT_TYPES.TOOL_COMPLETED, tool: name, callId: call.id, input: effectiveInput, result });
         const afterTool = await context.hooks?.run("after-tool", { tool: name, call: effectiveCall, input: effectiveInput, result });
         let effectiveResult = afterTool?.updatedOutput === undefined ? result : afterTool.updatedOutput;
         if (afterTool?.updatedOutput !== undefined || afterTool?.suppressOutput === true) {
@@ -180,7 +180,7 @@ async function runAutonomousLoop(input) {
         if (error?.code === "LIFECYCLE_RUN_STOPPED") throw error;
         consecutiveFailures += 1;
         const message = error?.message || String(error);
-        events.emit({ type: EVENT_TYPES.TOOL_FAILED, tool: name, callId: call.id, error: message });
+        events.emit({ type: EVENT_TYPES.TOOL_FAILED, tool: name, callId: call.id, input: effectiveInput, error: message });
         const failureDecision = await context.hooks?.run("tool-failure", { tool: name, call, error: message });
         for (const additionalContext of failureDecision?.additionalContext || []) messages.push({ role: "system", content: `Lifecycle context after tool failure:\n${additionalContext}` });
         await context.chronicle?.append?.("tool-failed", { round, tool: name, callId: call.id, error: message });

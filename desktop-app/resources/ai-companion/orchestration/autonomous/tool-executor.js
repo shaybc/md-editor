@@ -91,14 +91,16 @@ async function executeTool(call, context) {
       let result;
       try { result = await workspaceTools.applyEdit(target.root, target.relativePath, args.search, args.replacement, { ...options, allowWrites: true, preparedEdit: mutationPreview.preparedEdit }); }
       catch (error) { error.resolvedPath = target.resolvedPath; throw error; }
-      return { ...result, path: target.external ? target.resolvedPath : result.path, resolvedPath: target.resolvedPath };
+      const changeJournal = await recordFileChangeJournal(context, name, call, target, mutationPreview);
+      return withRollbackMetadata({ ...result, path: target.external ? target.resolvedPath : result.path, resolvedPath: target.resolvedPath }, mutationPreview?.compare, changeJournal);
     }
     if (name === "write_file") {
       context.windowSteward?.recordFile?.(target.resolvedPath);
       let result;
       try { result = await workspaceTools.writeFile(target.root, target.relativePath, args.content, { ...options, allowWrites: true, preparedWrite: mutationPreview.preparedWrite }); }
       catch (error) { error.resolvedPath = target.resolvedPath; throw error; }
-      return { ...result, path: target.external ? target.resolvedPath : result.path, resolvedPath: target.resolvedPath };
+      const changeJournal = await recordFileChangeJournal(context, name, call, target, mutationPreview);
+      return withRollbackMetadata({ ...result, path: target.external ? target.resolvedPath : result.path, resolvedPath: target.resolvedPath }, mutationPreview?.compare, changeJournal);
     }
     if (digestCommand(normalizeCommand(args.command)) !== commandAnalysis.commandDigest) {
       const error = new Error("The command changed after authorization and must be analyzed again.");
@@ -112,13 +114,15 @@ async function executeTool(call, context) {
       timestamp: new Date().toISOString(), requestId: context.request.requestId, workspace: root,
       tool: name, requestedCommand: commandAnalysis.preview, commandImpact, approvalSource: approval.approvalSource || "unknown", automatic: approval.automatic === true, decision: "requested"
     });
+    const beforeCommandScan = commandAnalysis.impact === "workspace-write" ? await scanChangeJournalWorkspace(context) : null;
     try {
       const result = await workspaceTools.runCommand(commandRoot, args.command, { ...options, allowCommands: true, timeoutMs: args.timeoutMs, environment: args.environment, expectedCommandDigest: commandAnalysis.commandDigest });
       await context.request.securityContext?.auditLogger?.record({
         timestamp: new Date().toISOString(), requestId: context.request.requestId, workspace: root,
         tool: name, requestedCommand: commandAnalysis.preview, commandImpact, approvalSource: approval.approvalSource || "unknown", automatic: approval.automatic === true, decision: result.success === false ? "executed-failure" : "executed-success"
       });
-      return result;
+      const commandJournal = commandAnalysis.impact === "workspace-write" ? await recordCommandChangeJournal(context, call, beforeCommandScan, commandImpact) : null;
+      return commandJournal ? { ...result, changeJournal: commandJournal, partialRollback: commandJournal.partialRollback === true } : result;
     } catch (error) {
       await context.request.securityContext?.auditLogger?.record({
         timestamp: new Date().toISOString(), requestId: context.request.requestId, workspace: root,
@@ -249,6 +253,58 @@ async function executeTool(call, context) {
 }
 
 module.exports = { executeTool, parseArguments };
+
+async function recordFileChangeJournal(context, tool, call, target, mutationPreview) {
+  if (!context.changeJournal?.recordFileMutation) return null;
+  try {
+    const compare = mutationPreview?.compare || {};
+    return await context.changeJournal.recordFileMutation({
+      tool,
+      chatId: context.request.chatId,
+      taskId: context.request.taskId,
+      actionId: call.id,
+      round: context.currentRound,
+      path: target.external ? target.resolvedPath : target.relativePath,
+      beforeContent: compare.beforeContent || "",
+      afterContent: compare.afterContent || "",
+      beforeExists: compare.beforeName !== "File does not exist",
+      afterExists: true
+    });
+  } catch (error) {
+    return { restorable: false, partialRollback: true, error: error?.message || String(error) };
+  }
+}
+
+async function scanChangeJournalWorkspace(context) {
+  if (!context.changeJournal?.scanWorkspace) return null;
+  try { return await context.changeJournal.scanWorkspace({ signal: context.request.signal }); }
+  catch (error) { return { files: {}, truncated: true, warnings: [error?.message || String(error)] }; }
+}
+
+async function recordCommandChangeJournal(context, call, beforeScan, commandImpact) {
+  if (!context.changeJournal?.recordCommandMutation || !beforeScan) return null;
+  try {
+    const afterScan = await context.changeJournal.scanWorkspace({ signal: context.request.signal });
+    return await context.changeJournal.recordCommandMutation({
+      chatId: context.request.chatId,
+      taskId: context.request.taskId,
+      actionId: call.id,
+      round: context.currentRound,
+      beforeScan,
+      afterScan,
+      commandImpact: { ...commandImpact, workspaceWrites: commandImpact?.impact === "workspace-write" }
+    });
+  } catch (error) {
+    return { restorable: false, partialRollback: true, mutations: [], warnings: [error?.message || String(error)] };
+  }
+}
+
+function withRollbackMetadata(result, compare, changeJournal) {
+  const next = { ...result };
+  if (compare) next.compare = compare;
+  if (changeJournal) next.changeJournal = changeJournal;
+  return next;
+}
 
 function allowedMemoryScopes(context) {
   const scopes = context.routeSession?.active?.route?.dataScopes || {};

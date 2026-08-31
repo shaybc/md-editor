@@ -38,6 +38,7 @@ const { ContextReleaseReminder } = require("./context/context-release-reminder")
 const { WorkflowModeReminder } = require("./context/workflow-mode-reminder");
 const { WorkTrackingReminder } = require("./work/work-tracking-reminder");
 const { RunChronicle } = require("./recovery/run-chronicle");
+const { CompanionChangeJournal } = require("./change-journal");
 const { RestartReconciler } = require("./recovery/restart-reconciler");
 const { PlanRepositorySession } = require("./plan-repository-session");
 const { RuleCatalog } = require("./rules/rule-catalog");
@@ -134,6 +135,7 @@ class AutonomousOrchestrator {
         journaledEvents.emit({ type: EVENT_TYPES.RECOVERY_WARNING, reason: "lifecycle-source-invalid", source: issue.source, error: issue.error, summary: `A lifecycle automation source was not loaded: ${issue.error}` });
       }
       const restored = await chronicle.loadRecovery({ applicationRestart: request.applicationRestart === true });
+      const changeJournal = await openChangeJournal(request, restored?.changeJournal, journaledEvents);
       const pathAuthority = new PathAuthority(request);
       const runSummary = new RunSummary(policy.mode, Date.now(), restored?.runSummary);
       ruleCatalog.setEmitter(journaledEvents.emit);
@@ -243,7 +245,7 @@ class AutonomousOrchestrator {
         loadedExtensions: new Set(restored?.loadedExtensions || []),
         loadedExtensionBodies: new Map(Array.isArray(restored?.loadedExtensionBodies) ? restored.loadedExtensionBodies : []),
         work, planRepository, memoryRepository, memoryProposals, permissionPolicy, denialLedger, riskAdvisor, pathAuthority, runSummary,
-        interactionGate, internetResearch, notebooks, workspaceAtlas, initialWorkspaceStructure, runtimeEnvironment,
+        interactionGate, internetResearch, notebooks, workspaceAtlas, initialWorkspaceStructure, runtimeEnvironment, changeJournal,
         routeCatalog, routeSession, routeDataScopes, taskGrants: [], workers: null, pendingTools: []
       };
       hooks.setContext(context);
@@ -373,6 +375,7 @@ class AutonomousOrchestrator {
           routing: routeSession.snapshot(),
           artifacts: artifactVault.snapshot(),
           windowState: windowSteward.snapshot(),
+          changeJournal: changeJournal?.snapshot?.(),
           observationRelease: {
             ledger: observationLedger.snapshot(),
             reminder: contextReleaseReminder.snapshot()
@@ -395,6 +398,10 @@ class AutonomousOrchestrator {
         });
       };
 
+      if (decision.classification !== "recoverable") {
+        const checkpoint = await createChangeJournalCheckpoint(changeJournal, journaledEvents, { kind: "before-task", chatId: request.chatId, taskId: request.taskId, turnIndex: request.turnIndex, label: "Before task" });
+        if (checkpoint) journaledEvents.emit({ type: "change-journal-checkpoint", checkpoint, checkpointId: checkpoint.checkpointId, taskId: request.taskId, chatId: request.chatId, summary: "Rollback checkpoint saved before the task." });
+      }
       if (decision.classification === "recoverable") {
         events.emit({ type: EVENT_TYPES.RUN_RESTORED, classification: "recoverable", summary: recoverySummary });
         const resumedInteraction = await interactionGate.resumePending();
@@ -423,6 +430,10 @@ class AutonomousOrchestrator {
       const savedPlan = planRepository.plan?.path ? { ...planRepository.plan } : null;
       const content = policy.requirePlanPersistence === true ? String(planRepository.body || "").trim() : modelContent;
       await hooks.run("run-finish", { mode: policy.mode, status: "completed" });
+      const afterTaskCheckpoint = changeJournal?.hasTaskChanges?.(request.taskId)
+        ? await createChangeJournalCheckpoint(changeJournal, journaledEvents, { kind: "after-task", chatId: request.chatId, taskId: request.taskId, turnIndex: request.turnIndex, label: "After task" })
+        : null;
+      if (afterTaskCheckpoint) journaledEvents.emit({ type: "change-journal-checkpoint", checkpoint: afterTaskCheckpoint, checkpointId: afterTaskCheckpoint.checkpointId, taskId: request.taskId, chatId: request.chatId, summary: "Rollback checkpoint saved after the task." });
       await context.saveSnapshot("completed", { finalResponse: content, authoritativeFinal: true });
       await chronicle.append("run-completed", { finalResponse: content, ...(savedPlan ? { plan: savedPlan } : {}) });
       events.final(content, { mode: policy.mode, ...(savedPlan ? { plan: savedPlan } : {}) });
@@ -511,6 +522,25 @@ async function refreshLoadedExtensions(context, notices = []) {
   }
 }
 
+async function openChangeJournal(request, snapshot, events) {
+  try {
+    return await new CompanionChangeJournal(request).open(snapshot);
+  } catch (error) {
+    events.emit({ type: EVENT_TYPES.RECOVERY_WARNING, reason: "change-journal-unavailable", error: error?.message || String(error), summary: "Rollback journaling is unavailable for this task." });
+    return null;
+  }
+}
+
+async function createChangeJournalCheckpoint(changeJournal, events, input) {
+  if (!changeJournal) return null;
+  try {
+    return await changeJournal.createTaskCheckpoint(input);
+  } catch (error) {
+    events.emit({ type: EVENT_TYPES.RECOVERY_WARNING, reason: "change-journal-checkpoint-failed", error: error?.message || String(error), summary: "A rollback checkpoint could not be saved." });
+    return null;
+  }
+}
+
 function fingerprint(value) {
   return crypto.createHash("sha256").update(JSON.stringify(value || null)).digest("hex");
 }
@@ -529,7 +559,7 @@ function shouldJournalEvent(type) {
   if (/^(memory|route)-/.test(String(type || ""))) return true;
   if (/^(user-input|internet|page|notebook|workspace-structure)-/.test(String(type || ""))) return true;
   if (["slash-workflow-expanded", "skill-invocation-failed"].includes(type)) return true;
-  return ["artifact-stored", "context-thinned", "observation-released", "observation-release-reminder", "tool-catalog-updated", "tool-schema-activated", "tool-schema-restored", "tool-schema-unavailable", "rules-discovered", "rule-activated", "rule-unavailable", "rules-refreshed", "skills-discovered", "skill-invocation-started", "skill-invocation-completed", "skill-unavailable", "skills-changed", "schedule-created", "schedule-cancelled", "schedule-fired", "continuity-updated", "compaction", "recovery-warning", "plan-saved", "plan-updated", "permission-mode-changed", "tool-denied", "denial-guard-tripped"].includes(type)
+  return ["artifact-stored", "change-journal-checkpoint", "rollback-applied", "context-thinned", "observation-released", "observation-release-reminder", "tool-catalog-updated", "tool-schema-activated", "tool-schema-restored", "tool-schema-unavailable", "rules-discovered", "rule-activated", "rule-unavailable", "rules-refreshed", "skills-discovered", "skill-invocation-started", "skill-invocation-completed", "skill-unavailable", "skills-changed", "schedule-created", "schedule-cancelled", "schedule-fired", "continuity-updated", "compaction", "recovery-warning", "plan-saved", "plan-updated", "permission-mode-changed", "tool-denied", "denial-guard-tripped"].includes(type)
     || /^(work|worker|workflow)-/.test(String(type || ""));
 }
 

@@ -87,6 +87,7 @@
     }) || null;
     const rateLimitWaitCountdown = window.createMarkdownViewerAiRateLimitWaitCountdown?.() || null;
     const AGENT_TASK_HISTORY_LIMIT = 20;
+    const AGENT_TASK_RECORD_VERSION = 7;
     const AGENT_TASKS_STORAGE_KEY = "ai-companion-agent-tasks";
     const AGENT_CHATS_STORAGE_KEY = "ai-companion-chats";
     const CHAT_TASK_INDEX_FILE_NAME = "index.json";
@@ -403,7 +404,12 @@
         onOpenTabError: () => notifyAiCompanionError("Open failed"),
         openMarkdownInNewTab,
         onContinueTask: () => continueTaskFromSummary(container),
-        onSplitTask: () => splitChatFromContainer(container)
+        onSplitTask: () => splitChatFromContainer(container),
+        onRollbackTask: (event) => rollbackTaskFromSummary(container, event),
+        onRollbackFile: (payload) => rollbackFileFromSummary(container, payload),
+        onRollbackAction: (activity) => rollbackActionFromActivity(container, activity),
+        onShowFileHistory: (payload) => showFileHistoryFromSummary(container, payload),
+        isRollbackDisabled: isAgentRunning
       }) || null;
     }
 
@@ -688,6 +694,204 @@
       showAiCompanionDialog("AI Companion", message);
     }
 
+    function hasRollbackMetadata(value = {}) {
+      const metadata = value.changeJournal || value.raw?.result?.changeJournal || null;
+      if (metadata?.restorable === true) return true;
+      return Array.isArray(metadata?.mutations) && metadata.mutations.some((entry) => entry?.restorable === true);
+    }
+
+    function getRollbackMetadata(value = {}) {
+      return value.changeJournal || value.raw?.result?.changeJournal || null;
+    }
+
+    function findEntryForRollback(container, event = {}) {
+      const taskId = String(event.taskId || event.file?.taskId || "");
+      if (taskId) {
+        const byTask = agentEntries.find((entry) => entry.record?.id === taskId);
+        if (byTask) return byTask;
+      }
+      return agentEntries.find((candidate) => candidate.output === container) || activeAgentEntry || null;
+    }
+
+    async function confirmRollbackPreview(preview = {}) {
+      const files = Array.isArray(preview.affectedFiles) ? preview.affectedFiles : [];
+      const shown = files.slice(0, 8).map((file) => file.action + ": " + file.path).join("\\n");
+      const extra = files.length > 8 ? "\\n+" + (files.length - 8) + " more" : "";
+      const blocked = preview.blockedFiles?.length ? "\\n\\nConflicts: " + preview.blockedFiles.length + " file(s) will be skipped." : "";
+      const warnings = preview.warnings?.length ? "\\n\\n" + preview.warnings.join("\\n") : "";
+      const message = [preview.title || "Rollback preview", shown + extra, blocked, warnings].filter(Boolean).join("\\n\\n");
+      const notification = app?.services?.notify;
+      if (typeof notification?.show === "function") {
+        const decision = await notification.show({
+          title: "Preview rollback",
+          message,
+          dismissValue: "cancel",
+          buttons: [
+            { id: "cancel", label: "Cancel", value: "cancel", variant: "cancel" },
+            { id: "apply", label: "Apply Rollback", value: "apply", variant: "destructive", autoFocus: true }
+          ]
+        });
+        return decision === "apply";
+      }
+      if (typeof deps.confirm === "function") {
+        return deps.confirm(message, {
+          title: "Preview rollback",
+          confirmLabel: "Apply Rollback",
+          confirmVariant: "danger"
+        });
+      }
+      if (typeof app?.services?.confirm === "function") {
+        return app.services.confirm({
+          title: "Preview rollback",
+          message,
+          confirmLabel: "Apply Rollback",
+          confirmVariant: "danger"
+        });
+      }
+      notifyAiCompanionError("Rollback preview is unavailable because no styled confirmation dialog is available.");
+      return false;
+    }
+
+    async function refreshWorkspaceAfterRollback(paths = []) {
+      for (const changedPath of paths) {
+        const fullPath = joinWorkspacePath(changedPath);
+        if (fullPath) await deps.reloadOpenTabsFromDisk?.(fullPath);
+      }
+      await deps.reloadFolderTree?.({ skipSavedGraphPrompt: true });
+      await deps.refreshFolderTree?.();
+      await deps.refreshWorkspaceGitFromAgentTool?.({ type: "tool", tool: "rollback", summary: "Completed" });
+    }
+
+    function appendRollbackAppliedEvent(entry, result, preview) {
+      if (!entry?.record) return;
+      const completedAt = Date.now();
+      const restored = Array.isArray(result.restoredFiles) ? result.restoredFiles : [];
+      const skipped = Array.isArray(result.skippedFiles) ? result.skippedFiles : [];
+      const summary = "Rollback restored " + restored.length + " file" + (restored.length === 1 ? "" : "s") + ".";
+      const event = {
+        type: "rollback-applied",
+        taskId: entry.record.id,
+        chatId: entry.record.chatId || "",
+        checkpointId: result.checkpointId || preview.checkpointId || "",
+        restoredFiles: restored,
+        skippedFiles: skipped,
+        summary,
+        completedAt,
+        activity: {
+          id: "rollback_" + completedAt,
+          tool: "rollback",
+          status: "completed",
+          icon: "bi-arrow-counterclockwise",
+          title: "Rollback applied",
+          primaryText: restored.slice(0, 3).join(", ") || preview.title || "Rollback",
+          resultSummary: skipped.length ? skipped.length + " skipped" : "Completed",
+          raw: { previewId: preview.previewId, result }
+        }
+      };
+      entry.record.events = Array.isArray(entry.record.events) ? entry.record.events : [];
+      entry.record.events.push(event);
+      entry.record.updatedAt = completedAt;
+      entry.isDirty = true;
+      entry.renderer?.appendActivity?.(event);
+      scheduleAgentEntrySave(entry);
+      renderTaskChangesPanel(entry.record);
+    }
+
+    async function previewAndApplyRollback(entry, payload) {
+      if (isAgentRunning()) {
+        notifyAiCompanionBlocked("Stop the current task before rolling back changes");
+        return;
+      }
+      if (!entry?.record || !deps.bridge?.changeJournalPreviewRestore || !deps.bridge?.changeJournalApplyRestore) {
+        notifyAiCompanionError("Rollback is unavailable.");
+        return;
+      }
+      try {
+        const preview = await deps.bridge.changeJournalPreviewRestore({
+          chatId: entry.record.chatId || "",
+          taskId: entry.record.id,
+          ...payload
+        });
+        if (preview?.ok === false) throw new Error(preview.error || "Rollback preview failed.");
+        const firstCompare = preview.affectedFiles?.find((file) => file.compare)?.compare;
+        if (firstCompare) openActivityCompare(firstCompare);
+        if (!(await confirmRollbackPreview(preview))) return;
+        const result = await deps.bridge.changeJournalApplyRestore({ previewId: preview.previewId });
+        if (result?.ok === false) throw new Error(result.error || "Rollback failed.");
+        await refreshWorkspaceAfterRollback(result.restoredFiles || []);
+        appendRollbackAppliedEvent(entry, result, preview);
+      } catch (error) {
+        notifyAiCompanionError(error?.message || String(error), "Rollback failed");
+      }
+    }
+
+    function rollbackTaskFromSummary(container, event = {}) {
+      const entry = findEntryForRollback(container, event);
+      void previewAndApplyRollback(entry, { mode: "task" });
+    }
+
+    function rollbackFileFromSummary(container, payload = {}) {
+      const entry = findEntryForRollback(container, payload.event || {});
+      const file = payload.file || {};
+      void previewAndApplyRollback(entry, { mode: "file", path: file.path || file.name || "" });
+    }
+
+    function rollbackFileFromChangeRow(record, file = {}) {
+      const entry = agentEntries.find((candidate) => candidate.record === record || candidate.record?.id === record?.id) || activeAgentEntry;
+      void previewAndApplyRollback(entry, { mode: "file", path: file.path || file.name || "" });
+    }
+
+    function rollbackActionFromActivity(container, activity = {}) {
+      const metadata = getRollbackMetadata(activity);
+      const mutation = Array.isArray(metadata?.mutations) ? metadata.mutations.find((entry) => entry?.restorable) : metadata;
+      const checkpointId = mutation?.beforeCheckpointId || metadata?.beforeCheckpointId || "";
+      const entry = findEntryForRollback(container, activity);
+      void previewAndApplyRollback(entry, {
+        mode: "checkpoint",
+        checkpointId,
+        path: mutation?.path || metadata?.path || ""
+      });
+    }
+
+    function formatFileHistoryMarkdown(history = {}) {
+      const entries = Array.isArray(history.entries) ? history.entries : [];
+      const lines = ["# Agent file history: " + (history.path || "file"), ""];
+      if (!entries.length) lines.push("No agent-authored versions were recorded.");
+      entries.forEach((entry) => {
+        lines.push("- " + (entry.createdAt || "unknown") + " - " + (entry.kind || "checkpoint") + " - " + (entry.checkpointId || ""));
+      });
+      return lines.join("\\n");
+    }
+
+    async function showFileHistoryFromSummary(container, payload = {}) {
+      const entry = findEntryForRollback(container, payload.event || {});
+      const file = payload.file || {};
+      await showFileHistory(entry, file);
+    }
+
+    function showFileHistoryFromChangeRow(record, file = {}) {
+      const entry = agentEntries.find((candidate) => candidate.record === record || candidate.record?.id === record?.id) || activeAgentEntry;
+      void showFileHistory(entry, file);
+    }
+
+    async function showFileHistory(entry, file = {}) {
+      if (!entry?.record || !deps.bridge?.changeJournalFileHistory) {
+        notifyAiCompanionError("File history is unavailable.");
+        return;
+      }
+      try {
+        const history = await deps.bridge.changeJournalFileHistory({
+          chatId: entry.record.chatId || "",
+          path: file.path || file.name || ""
+        });
+        if (history?.ok === false) throw new Error(history.error || "File history could not be loaded.");
+        openMarkdownInNewTab(formatFileHistoryMarkdown(history));
+      } catch (error) {
+        notifyAiCompanionError(error?.message || String(error), "File history failed");
+      }
+    }
+
+
     function isAbsoluteLocalPath(value) {
       const path = String(value || "");
       return /^[a-zA-Z]:[\\/]/.test(path) || /^\\\\/.test(path) || /^\//.test(path);
@@ -902,7 +1106,8 @@
         description: String(file.description || "Updated file.").trim(),
         additions: counts.additions,
         deletions: counts.deletions,
-        compare
+        compare,
+        changeJournal: file.changeJournal || compare?.changeJournal || null
       };
     }
 
@@ -916,7 +1121,8 @@
         description: String(file.description || file.error || "Change was attempted.").trim(),
         additions: Number(file.additions) || 0,
         deletions: Number(file.deletions) || 0,
-        compare: file.compare || null
+        compare: file.compare || null,
+        changeJournal: file.changeJournal || null
       };
     }
 
@@ -933,6 +1139,17 @@
         count: Math.max(Number(group.count) || 0, items.length),
         items
       };
+    }
+
+    function appendNormalizedTaskFile(files, input = {}) {
+      const normalized = normalizeTaskChangedFile(input);
+      const existing = normalized ? files.find((file) => file.path === normalized.path) : null;
+      if (existing) {
+        existing.additions += normalized.additions;
+        existing.deletions += normalized.deletions;
+        existing.compare = existing.compare || normalized.compare;
+        existing.changeJournal = existing.changeJournal || normalized.changeJournal;
+      } else if (normalized) files.push(normalized);
     }
 
     function summarizeTaskChanges(files = [], attempted = [], blocked = []) {
@@ -963,7 +1180,7 @@
       const files = [];
       const attempted = [];
       const blocked = [];
-      const mutationTools = new Set(["write_file", "apply_edit"]);
+      const mutationTools = new Set(["write_file", "apply_edit", "run_command"]);
       for (const event of events) {
         const tool = String(event?.tool || event?.activity?.tool || "");
         if (!mutationTools.has(tool)) continue;
@@ -975,18 +1192,24 @@
           blocked.push(normalizeTaskBlockedGroup({ code: "mutation-denied", count: 1, items: [{ tool, path: filePath, reason: result.instructions || "Mutation was denied." }] }));
           continue;
         }
+        if (tool === "run_command" && Array.isArray(result.changeJournal?.mutations)) {
+          result.changeJournal.mutations.forEach((mutation) => appendNormalizedTaskFile(files, {
+            path: mutation.path,
+            action: mutation.action === "create" ? "created" : (mutation.action === "delete" ? "deleted" : "modified"),
+            description: result.changeJournal.partialRollback ? "Updated by command; rollback may be partial." : "Updated by command.",
+            changeJournal: mutation
+          }));
+          continue;
+        }
         if (["created", "modified"].includes(action) && filePath) {
-          const normalized = normalizeTaskChangedFile({
+          appendNormalizedTaskFile(files, {
             path: filePath,
             action,
             additions: result.additions,
-            deletions: result.deletions
+            deletions: result.deletions,
+            compare: result.compare,
+            changeJournal: result.changeJournal
           });
-          const existing = normalized ? files.find((file) => file.path === normalized.path) : null;
-          if (existing) {
-            existing.additions += normalized.additions;
-            existing.deletions += normalized.deletions;
-          } else if (normalized) files.push(normalized);
         } else if (["tool-error", "tool-failed"].includes(event?.type) && filePath) {
           const normalized = normalizeTaskAttemptedFile({ path: filePath, tool, reason: event.error || event.summary || "Mutation failed." });
           if (normalized) attempted.push(normalized);
@@ -1068,33 +1291,62 @@
       return { created: "A", modified: "M", deleted: "D", renamed: "R" }[action] || "!";
     }
 
-    function renderTaskChangeRow(file = {}) {
+    function createTaskChangeActionButton(iconName, label, onClick) {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "ai-companion-workspace-change-action";
+      button.title = label;
+      button.setAttribute("aria-label", label);
+      button.disabled = isAgentRunning();
+      const icon = document.createElement("i");
+      icon.className = "bi " + iconName;
+      icon.setAttribute("aria-hidden", "true");
+      button.appendChild(icon);
+      button.addEventListener("click", (event) => {
+        event.preventDefault?.();
+        event.stopPropagation?.();
+        if (button.disabled) return;
+        onClick?.();
+      });
+      return button;
+    }
+
+    function renderTaskChangeRow(file = {}, record = null) {
       const action = String(file.action || "modified").toLowerCase();
       const canOpenCurrentFile = ["created", "modified", "renamed"].includes(action);
       const canOpenDeletedDiff = action === "deleted" && !!file.compare;
       const isOpenable = canOpenCurrentFile || canOpenDeletedDiff;
-      const row = document.createElement(isOpenable ? "button" : "div");
-      row.className = `ai-companion-workspace-change-file status-${action}${isOpenable ? " openable" : ""}`;
+      const row = document.createElement("div");
+      row.className = "ai-companion-workspace-change-file status-" + action + (isOpenable ? " openable" : "");
       const fullPath = joinWorkspacePath(file.path) || file.path || file.name || "file";
       const displayPath = getTaskChangeDisplayPath(file.path || file.name);
-      row.title = [fullPath, file.description].filter(Boolean).join("\n");
-      if (isOpenable) {
-        row.type = "button";
-        row.setAttribute("aria-label", `${action} ${fullPath}`);
-        row.addEventListener("click", () => {
-          if (canOpenDeletedDiff) openActivityCompare(file.compare);
-          else void openActivityFile(file.path);
-        });
-      }
+      row.title = [fullPath, file.description].filter(Boolean).join("\\n");
       const status = document.createElement("span");
       status.className = "ai-companion-workspace-change-status";
       status.textContent = getTaskChangeStatus(action);
       status.title = action;
-      const title = document.createElement("span");
+      const title = document.createElement(isOpenable ? "button" : "span");
       title.className = "ai-companion-workspace-change-file-title";
       title.textContent = displayPath;
+      if (isOpenable) {
+        title.type = "button";
+        title.setAttribute("aria-label", action + " " + fullPath);
+        title.addEventListener("click", () => {
+          if (canOpenDeletedDiff) openActivityCompare(file.compare);
+          else void openActivityFile(file.path);
+        });
+      }
       row.append(status, title);
       appendTaskChangeDelta(row, file);
+      if (hasRollbackMetadata(file)) {
+        const actions = document.createElement("span");
+        actions.className = "ai-companion-workspace-change-actions";
+        actions.append(
+          createTaskChangeActionButton("bi-arrow-counterclockwise", "Rollback file", () => rollbackFileFromChangeRow(record, file)),
+          createTaskChangeActionButton("bi-clock-history", "File history", () => showFileHistoryFromChangeRow(record, file))
+        );
+        row.appendChild(actions);
+      }
       return row;
     }
 
@@ -1219,8 +1471,8 @@
         taskChangesSummary.appendChild(blocked);
       }
       const renderedEntries = [];
-      changes.files.forEach((file) => renderedEntries.push(renderTaskChangeRow(file)));
-      changes.attempted.forEach((file) => renderedEntries.push(renderTaskChangeRow(file)));
+      changes.files.forEach((file) => renderedEntries.push(renderTaskChangeRow(file, record)));
+      changes.attempted.forEach((file) => renderedEntries.push(renderTaskChangeRow(file, record)));
       const blockedGroup = renderBlockedChangesGroup(changes);
       if (blockedGroup) renderedEntries.push(blockedGroup);
       renderedEntries.forEach((entry, index) => {
@@ -4816,7 +5068,7 @@
       const wasInterrupted = ["running", "interrupted"].includes(savedRecord.status);
       return {
         ...retained,
-        version: 6,
+        version: AGENT_TASK_RECORD_VERSION,
         status: historical && wasInterrupted ? "historical" : savedRecord.status,
         migrationNotice: historical && wasInterrupted
           ? "This task was created by the retired runtime and is available as read-only history."
@@ -4843,7 +5095,7 @@
         executionGeneration: Math.max(1, Number(savedRecord.executionGeneration) || 1),
         runId: String(savedRecord.runId || id)
       } : {
-        version: 6,
+        version: AGENT_TASK_RECORD_VERSION,
         chatId: chat.id,
         id,
         runId: id,
@@ -4916,6 +5168,8 @@
       if (!activeAgentEntry) return null;
       const savedEvent = cloneEvent(event);
       const completedAt = savedEvent.completedAt || Date.now();
+      if (!savedEvent.taskId) savedEvent.taskId = activeAgentEntry.record.id;
+      if (!savedEvent.chatId) savedEvent.chatId = activeAgentEntry.record.chatId || "";
       savedEvent.completedAt = completedAt;
       if (savedEvent.activity && savedEvent.activity.status !== "running" && !savedEvent.activity.completedAt) savedEvent.activity.completedAt = completedAt;
       if (savedEvent.type === "agent-summary") {
@@ -5005,6 +5259,8 @@
           result: event.result
         }
       };
+      if (event.result?.compare) activity.compare = event.result.compare;
+      if (event.result?.changeJournal) activity.changeJournal = event.result.changeJournal;
       if (status === "failed") activity.resultSummary = event.error || summary || "Failed";
       return { ...event, activity };
     }
@@ -7281,6 +7537,8 @@
         "hook-input-rewritten": "Lifecycle input rewritten",
         "run-restored": "Autonomous run restored",
         "recovery-warning": "Recovery warning",
+        "change-journal-checkpoint": "Rollback checkpoint saved",
+        "rollback-applied": "Rollback applied",
         compaction: "Context renewed"
       };
       const summary = event.summary || event.error || event.reason || (event.estimatedTokensBefore
@@ -7301,6 +7559,8 @@
         display.activity.raw = { path: event.path, mode: event.mode, before: event.before, after: event.after, artifactIds: event.artifactIds || [] };
       } else if (event.type === "workspace-structure-built") {
         display.activity.raw = { rendered: event.rendered || "", artifactId: event.artifactId || "", fileCount: event.fileCount, tokenCount: event.tokenCount };
+      } else if (event.type === "change-journal-checkpoint" && event.checkpointId) {
+        display.activity.changeJournal = { restorable: true, checkpointId: event.checkpointId, taskId: event.taskId || "", chatId: event.chatId || "" };
       }
       const savedEvent = recordAgentEvent({ ...event, activity: display.activity }) || { ...event, activity: display.activity };
       activeActivityRenderer?.appendActivity?.(savedEvent);
@@ -7799,7 +8059,7 @@
         return;
       }
       if (["run-started", "context-thinned", "observation-released", "observation-release-reminder", "tool-catalog-updated", "tool-schema-activated", "tool-schema-restored", "tool-schema-unavailable", "extension-tool-activated", "extension-tool-started", "extension-tool-completed", "extension-tool-failed", "extension-capability-unavailable", "rules-discovered", "rule-activated", "rule-unavailable", "rules-refreshed", "continuity-updated", "chronicle-saved", "run-restored", "recovery-warning", "compaction", "run-completed", "run-cancelled", "run-aborted", "run-failed"].includes(event.type) || /^(work|worker|memory|route)-/.test(event.type) || ["permission-mode-changed", "tool-denied", "denial-guard-tripped"].includes(event.type)) {
-        if (["context-thinned", "observation-released", "observation-release-reminder", "tool-catalog-updated", "tool-schema-activated", "tool-schema-restored", "tool-schema-unavailable", "rules-discovered", "rule-activated", "rule-unavailable", "rules-refreshed", "continuity-updated", "run-restored", "recovery-warning", "compaction", "memory-proposed", "memory-confirmed", "memory-rejected", "memory-forgotten", "permission-mode-changed", "tool-denied", "denial-guard-tripped", "route-selected", "route-fallback", "route-unavailable"].includes(event.type)) appendAutonomousRuntimeStatus(event);
+        if (["context-thinned", "observation-released", "observation-release-reminder", "tool-catalog-updated", "tool-schema-activated", "tool-schema-restored", "tool-schema-unavailable", "rules-discovered", "rule-activated", "rule-unavailable", "rules-refreshed", "continuity-updated", "run-restored", "recovery-warning", "change-journal-checkpoint", "compaction", "memory-proposed", "memory-confirmed", "memory-rejected", "memory-forgotten", "permission-mode-changed", "tool-denied", "denial-guard-tripped", "route-selected", "route-fallback", "route-unavailable"].includes(event.type)) appendAutonomousRuntimeStatus(event);
         else recordAgentEvent(event);
         if (activeAgentEntry && ["run-restored", "recovery-warning"].includes(event.type)) {
           activeAgentEntry.record.recoverySummary = {
