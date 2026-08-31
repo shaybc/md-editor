@@ -274,6 +274,7 @@
 
     const api = {
       applyLayout,
+      closeCategories,
       normalizeLayout,
       getLayout() {
         return currentLayout;

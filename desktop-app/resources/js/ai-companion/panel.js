@@ -1575,6 +1575,12 @@
       applyWorkspaceInspectorWidth(getWorkspaceGlobalStateNumber("aiCompanionWorkspaceInspectorWidth", DEFAULT_WORKSPACE_INSPECTOR_WIDTH), false);
     }
 
+    function resetWorkspaceLayout() {
+      applyWorkspaceHistoryWidth(DEFAULT_WORKSPACE_HISTORY_WIDTH, true);
+      applyWorkspaceInspectorWidth(DEFAULT_WORKSPACE_INSPECTOR_WIDTH, true);
+      return true;
+    }
+
     function getChatPrimaryTask(chat = {}) {
       const tasks = Array.isArray(chat.tasks) ? [...chat.tasks].sort(compareAgentTaskIndexItems) : [];
       return tasks[tasks.length - 1] || null;
@@ -8714,7 +8720,7 @@
     updateAgentRunButton();
     setOpen(false, { persist: false });
 
-    const api = { setOpen, setWorkspaceOpen, closeWorkspaceForExternalNavigation, selectTab, refreshModeMessages, setStatus, refreshChatSelectOptions, refreshPlans: loadRepositoryPlans, setPlansViewOpen, runProblemFix };
+    const api = { setOpen, setWorkspaceOpen, closeWorkspaceForExternalNavigation, resetWorkspaceLayout, selectTab, refreshModeMessages, setStatus, refreshChatSelectOptions, refreshPlans: loadRepositoryPlans, setPlansViewOpen, runProblemFix };
     app.registerModule("aiCompanionPanel", api);
     return api;
   }

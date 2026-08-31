@@ -193,6 +193,7 @@
     const browseButton = document.getElementById("find-in-files-browse");
     const status = document.getElementById("find-in-files-status");
     const panel = document.getElementById("find-in-files-results-panel");
+    const panelView = document.getElementById("bottom-panel-search-results") || panel;
     const panelStatus = document.getElementById("find-in-files-results-status");
     const panelCloseButton = document.getElementById("find-in-files-results-close");
     const panelBody = document.getElementById("find-in-files-results-body");
@@ -286,7 +287,7 @@
           id: searchResultsTabId,
           title: "Search Results",
           icon: "bi-search",
-          view: panel,
+          view: panelView,
           permanent: true,
           activate: false
         });

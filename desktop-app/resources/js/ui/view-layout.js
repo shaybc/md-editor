@@ -439,12 +439,26 @@
     return sizes;
   }
 
+  function getDefaultSidebarDropzoneHeight() {
+    const paneHeight = Number(folderTreePane?.getBoundingClientRect?.().height || 0);
+    const defaultHeight = paneHeight > 0 ? paneHeight * 0.25 : 220;
+    const clampedHeight = getClampedSidebarDropzoneHeight(defaultHeight);
+    return clampedHeight === null ? MIN_SIDEBAR_PANEL_HEIGHT : Math.round(clampedHeight);
+  }
+
+  function getSidebarDropzoneResizerHeight() {
+    const resizer = document.getElementById("sidebar-dropzone-resizer");
+    const height = Number(resizer?.offsetHeight || 0);
+    return Number.isFinite(height) && height > 0 ? Math.round(height) : 8;
+  }
+
   function getDefaultPanelSizes() {
+    const defaultLowerPanelHeight = getDefaultSidebarDropzoneHeight();
     return {
       sidebarWidth: DEFAULT_SIDEBAR_WIDTH,
-      sidebarDropzoneHeight: MIN_SIDEBAR_PANEL_HEIGHT,
+      sidebarDropzoneHeight: defaultLowerPanelHeight,
       rightSidebarWidth: DEFAULT_AI_COMPANION_PANEL_WIDTH,
-      bottomPanelHeight: 220
+      bottomPanelHeight: Math.max(MIN_SIDEBAR_PANEL_HEIGHT, defaultLowerPanelHeight + getSidebarDropzoneResizerHeight())
     };
   }
 

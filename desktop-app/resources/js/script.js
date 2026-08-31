@@ -2334,6 +2334,7 @@ ${getMarkdownAlertBody(alertType, selectedText)}`;
   const layoutModeLabel = document.getElementById("layout-mode-label");
   const layoutModeMenu = document.getElementById("layout-mode-menu");
   const layoutModeOptions = document.querySelectorAll(".layout-mode-option");
+  const layoutResetOptions = document.querySelectorAll(".layout-reset-option");
   const folderPicker = window.registerMarkdownViewerFolderPicker(app);
   let lspServerRegistry = null;
   let lspVsixInstaller = null;
@@ -9625,6 +9626,7 @@ Markdown content is processed client-side in your browser and sanitized before p
   }
 
   function closeOpenActionMenus() {
+    applicationMenu?.closeCategories?.();
     const desktopActionMenuButton = document.getElementById("desktopActionMenu");
     if (desktopActionMenuButton && typeof bootstrap !== "undefined" && bootstrap?.Dropdown) {
       bootstrap.Dropdown.getOrCreateInstance(desktopActionMenuButton).hide();
@@ -17748,6 +17750,31 @@ ${error?.message || String(error || "")}`,
     updatePanelToggleMenuLabels();
   }
 
+  function getDefaultDeveloperLayoutPanelTabs() {
+    return [bottomPanelTabs?.SEARCH_RESULTS_TAB_ID || "search-results", "problems", "tasks", "background-processes"];
+  }
+
+  function getLayoutPanelTabs(layout = {}) {
+    const tabIds = new Set();
+    ["left", "right", "bottom"].forEach(function(dockId) {
+      (layout?.docks?.[dockId]?.tabs || []).forEach(function(layoutTabId) {
+        const id = String(layoutTabId || "").trim();
+        if (id.startsWith("panel:")) tabIds.add(id.slice("panel:".length));
+      });
+    });
+    return tabIds;
+  }
+
+  function ensureLayoutPanelTabs(_layoutId, layout = {}) {
+    const tabIds = getLayoutPanelTabs(layout);
+    if (!tabIds.size) return;
+    const searchResultsTabId = bottomPanelTabs?.SEARCH_RESULTS_TAB_ID || "search-results";
+    if (tabIds.has(searchResultsTabId) && !bottomPanelTabs?.hasTab?.(searchResultsTabId) && javaDebugPanel?.hasLayoutTab?.(searchResultsTabId) !== true) toggleFindInFilesResultsPanel?.();
+    if (tabIds.has("problems") && !bottomPanelTabs?.hasTab?.("problems") && javaDebugPanel?.hasLayoutTab?.("problems") !== true) problemsPanel?.show?.();
+    if (tabIds.has("tasks") && !bottomPanelTabs?.hasTab?.("tasks") && javaDebugPanel?.hasLayoutTab?.("tasks") !== true) tasksPanel?.show?.();
+    if (tabIds.has("background-processes") && !bottomPanelTabs?.hasTab?.("background-processes") && javaDebugPanel?.hasLayoutTab?.("background-processes") !== true) backgroundProcessesPanel?.show?.();
+  }
+
   const javaDebugPanel = window.registerMarkdownViewerJavaDebugPanel?.(app, {
     bottomPanel: bottomPanelTabs,
     session: javaDebugSession,
@@ -17770,6 +17797,8 @@ ${error?.message || String(error || "")}`,
     applyPanelSizes: function(sizes) { return viewLayout.applyPanelSizes?.(sizes); },
     getSidebarLowerPanelState: getSidebarLowerPanelLayoutState,
     applySidebarLowerPanelState: applySidebarLowerPanelLayoutState,
+    getDefaultDeveloperPanelTabs: getDefaultDeveloperLayoutPanelTabs,
+    ensureLayoutPanelTabs,
     getActiveEditorPath: getActiveJavaDebugEditorPath,
     getActiveEditorLine: getActiveJavaDebugSourceLine,
     getActiveEditorValue: function() { return activeEditorCommands.getActiveEditorValue(); },
@@ -17884,6 +17913,24 @@ ${error?.message || String(error || "")}`,
     saveGlobalState({ lastWorkspaceLayout: normalizeWorkspaceLayout(mode) });
   }
 
+  function getCurrentWorkspaceLayoutMode() {
+    return normalizeWorkspaceLayout(layoutModeSelect?.dataset.layoutMode || loadGlobalState().lastWorkspaceLayout || DEFAULT_WORKSPACE_LAYOUT);
+  }
+
+  function resetWorkspaceLayoutMode(mode) {
+    const normalizedMode = normalizeWorkspaceLayout(mode);
+    const apply = getCurrentWorkspaceLayoutMode() === normalizedMode;
+    if (normalizedMode === "ai") {
+      aiCompanionPanel?.resetWorkspaceLayout?.({ apply });
+      if (apply) setWorkspaceLayoutMode("ai");
+      return true;
+    }
+    const reset = javaDebugPanel?.resetWorkspaceLayout?.(normalizedMode, { apply });
+    if (apply) setWorkspaceLayoutMode(normalizedMode);
+    updatePanelToggleMenuLabels();
+    return reset;
+  }
+
   function openWorkspaceLayoutMode(mode, options = {}) {
     const normalizedMode = normalizeWorkspaceLayout(mode);
     if (normalizedMode === "debug") {
@@ -17930,6 +17977,14 @@ ${error?.message || String(error || "")}`,
       const mode = option.dataset.layoutMode || "developer";
       saveLastWorkspaceLayout(mode);
       void openWorkspaceLayoutMode(mode);
+    });
+  });
+  layoutResetOptions.forEach(function(option) {
+    option.addEventListener("click", function(event) {
+      event.preventDefault();
+      event.stopPropagation();
+      closeOpenActionMenus();
+      resetWorkspaceLayoutMode(option.dataset.layoutReset || "developer");
     });
   });
   document.addEventListener("click", function(event) {

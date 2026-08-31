@@ -107,6 +107,8 @@
     const DEBUG_LAYOUT_FILE_NAME = "java-debug-layouts.json";
     const DEBUG_LAYOUT_DOCUMENT_TYPE = "md-editor-java-debug-layouts";
     const DEBUG_LAYOUT_IDS = new Set(["developer", "debug"]);
+    const DEFAULT_DEVELOPER_PANEL_TABS = ["search-results", "problems", "tasks", "background-processes"];
+    const DEFAULT_DEBUG_LAYOUT_SIDEBAR_WIDTH = 390;
     let debugLayoutProjectPath = "";
     let debugLayoutDocument = createDebugLayoutDocument();
     let debugLayoutWriteQueue = Promise.resolve();
@@ -429,28 +431,8 @@
     }
 
     function resetDebugWorkspaceLayout() {
-      let resetApplied = false;
-      const defaultPanelSizes = normalizeDebugPanelSizes(deps.getDefaultPanelSizes?.() || {});
-      const wasRestoringDebugLayout = restoringDebugLayout;
-      restoringDebugLayout = true;
-      try {
-        resetApplied = applyDebugWorkspaceLayoutPreset("eclipse");
-        returnSideDockPanelTabsToBottom();
-        debugLayoutDocument.layouts.debug = createDefaultDebugPerspectiveLayout("debug", { includeAiCompanion: false, sizes: defaultPanelSizes });
-      } finally {
-        restoringDebugLayout = wasRestoringDebugLayout;
-      }
-      if (perspectiveOpen) {
-        restoreDebugPerspectiveLayout("debug");
-        deps.applyPanelSizes?.(defaultPanelSizes);
-        global.requestAnimationFrame?.(() => deps.applyPanelSizes?.(defaultPanelSizes));
-      } else {
-        queueSaveDebugLayoutDocument();
-      }
-      renderDockableDebugTabs(lastState);
-      return resetApplied;
+      return resetWorkspaceLayout("debug");
     }
-
     function findFrame(frameId, threads = lastState.threads) {
       for (const thread of threads || []) for (const frame of thread.frames || []) if (frame.id === frameId) return frame;
       return null;
@@ -1246,6 +1228,11 @@
       return perspectiveOpen ? "debug" : "developer";
     }
 
+    function getDefaultDeveloperPanelLayoutTabs() {
+      const source = typeof deps.getDefaultDeveloperPanelTabs === "function" ? deps.getDefaultDeveloperPanelTabs() : DEFAULT_DEVELOPER_PANEL_TABS;
+      return (Array.isArray(source) ? source : []).map(normalizePanelLayoutTabId).filter(Boolean);
+    }
+
     function createDefaultDebugPerspectiveLayout(layoutId = "debug", options = {}) {
       const normalizedLayoutId = DEBUG_LAYOUT_IDS.has(layoutId) ? layoutId : "debug";
       const docks = { left: { tabs: [], active: "", visible: false }, right: { tabs: [], active: "", visible: false }, bottom: { tabs: [], active: "", visible: false } };
@@ -1258,15 +1245,25 @@
           if (!docks[dockId].active) docks[dockId].active = item.view;
           docks[dockId].visible = true;
         });
-      } else if (deps.aiCompanionDockElement) {
-        docks.right.tabs.push("ai-companion");
-        docks.right.active = "ai-companion";
-        docks.right.visible = isAiCompanionOpen() || isRightSidebarVisible();
+      } else if (normalizedLayoutId === "developer") {
+        const defaultPanelTabs = getDefaultDeveloperPanelLayoutTabs();
+        if (defaultPanelTabs.length) {
+          docks.bottom.tabs.push(...defaultPanelTabs);
+          docks.bottom.active = defaultPanelTabs[0];
+          docks.bottom.visible = true;
+        }
+        if (deps.aiCompanionDockElement) {
+          docks.right.tabs.push("ai-companion");
+          docks.right.active = "ai-companion";
+          docks.right.visible = Object.prototype.hasOwnProperty.call(options, "rightVisible") ? options.rightVisible === true : (isAiCompanionOpen() || isRightSidebarVisible());
+        }
       }
+      const sizes = normalizeDebugPanelSizes(options.sizes || deps.getPanelSizes?.() || {});
+      if (normalizedLayoutId === "debug") sizes.sidebarWidth = DEFAULT_DEBUG_LAYOUT_SIDEBAR_WIDTH;
       return {
         docks,
         assignments,
-        sizes: normalizeDebugPanelSizes(options.sizes || deps.getPanelSizes?.() || {}),
+        sizes,
         sidebarLowerPanel: normalizeSidebarLowerPanelState(Object.prototype.hasOwnProperty.call(options, "sidebarLowerPanel") ? options.sidebarLowerPanel : (normalizedLayoutId === "developer" ? deps.getSidebarLowerPanelState?.() || {} : {}))
       };
     }
@@ -1424,6 +1421,21 @@
       const layout = getDebugPerspectiveLayout(normalizedLayoutId);
       layout.sizes = normalizeDebugPanelSizes(deps.getPanelSizes?.() || {}, layout.sizes || {});
       if (options.persist !== false) queueSaveDebugLayoutDocument();
+    }
+
+    function resetWorkspaceLayout(layoutId = getActiveDebugLayoutId(), options = {}) {
+      const normalizedLayoutId = DEBUG_LAYOUT_IDS.has(layoutId) ? layoutId : getActiveDebugLayoutId();
+      const defaultPanelSizes = normalizeDebugPanelSizes(deps.getDefaultPanelSizes?.() || {});
+      debugLayoutDocument.layouts[normalizedLayoutId] = normalizeDebugPerspectiveLayout(createDefaultDebugPerspectiveLayout(normalizedLayoutId, {
+        includeAiCompanion: normalizedLayoutId !== "debug",
+        rightVisible: normalizedLayoutId === "developer",
+        sizes: defaultPanelSizes,
+        sidebarLowerPanel: {}
+      }), normalizedLayoutId);
+      if (options.apply !== false && normalizedLayoutId === getActiveDebugLayoutId()) restoreDebugPerspectiveLayout(normalizedLayoutId);
+      else queueSaveDebugLayoutDocument();
+      renderDockableDebugTabs(lastState);
+      return true;
     }
 
     function queueSaveDebugLayoutDocument() {
@@ -1591,6 +1603,7 @@
         ensureDebugDockManager("left");
         ensureDebugDockManager("right");
         ensureDebugDockManager("bottom");
+        deps.ensureLayoutPanelTabs?.(normalizedLayoutId, layout);
         detachAllDockableDebugTabs();
         detachPanelTabsNotInLayout(layout);
         debugDockAssignments = normalizeDebugAssignments(layout.assignments);
@@ -1616,8 +1629,8 @@
           setDebugDockVisibility("right", layout.docks.right?.visible === true);
         }
         setDebugDockVisibility("bottom", layout.docks.bottom?.visible !== false);
-        deps.applyPanelSizes?.(layout.sizes || {});
         deps.applySidebarLowerPanelState?.(layout.sidebarLowerPanel || {});
+        deps.applyPanelSizes?.(layout.sizes || {});
         syncAiCompanionForRestoredLayout(layout);
         DEBUG_DOCK_IDS.forEach(syncDebugDockEmptyState);
         debugDockTabsInitialized = true;
@@ -1841,6 +1854,16 @@
       return "";
     }
 
+    function hasLayoutTab(layoutTabId) {
+      const normalizedLayoutTabId = normalizePanelLayoutTabId(layoutTabId);
+      if (!normalizedLayoutTabId) return false;
+      for (const dockId of DEBUG_DOCK_IDS) {
+        const tabsApi = dockId === "bottom" ? deps.bottomPanel : debugDockApis.get(dockId);
+        const dockTabId = getDockTabIdFromLayoutTab(normalizedLayoutTabId, dockId);
+        if (tabsApi?.hasTab?.(dockTabId)) return true;
+      }
+      return false;
+    }
     function isLayoutTabVisible(layoutTabId) {
       const normalizedLayoutTabId = normalizePanelLayoutTabId(layoutTabId);
       if (!normalizedLayoutTabId) return false;
@@ -3691,7 +3714,7 @@
     }
     deps.session.subscribe?.(followDebugSessionLifecycle);
 
-    const api = { open, openView, openPerspective, closePerspective, showRightSidebar, openAiCompanionRightSidebar, hideRightSidebar, isRightSidebarVisible, isLayoutTabVisible, hideLayoutTab, captureCurrentLayout: captureCurrentDebugLayout, captureCurrentLayoutSizes, isPerspectiveOpen: () => perspectiveOpen, restoreForProject, getLayoutPath: getDebugLayoutPath, render, focusExpressionInput, addWatchExpression, addMethodBreakpoint, configureActiveLineBreakpoint, configureActiveLineBreakpointField, editExceptionBreakpointProperties, resetLayout: resetDebugWorkspaceLayout, applyLayoutPreset: applyDebugWorkspaceLayoutPreset, getActiveView: () => activeDebugView };
+    const api = { open, openView, openPerspective, closePerspective, showRightSidebar, openAiCompanionRightSidebar, hideRightSidebar, isRightSidebarVisible, hasLayoutTab, isLayoutTabVisible, hideLayoutTab, captureCurrentLayout: captureCurrentDebugLayout, captureCurrentLayoutSizes, isPerspectiveOpen: () => perspectiveOpen, restoreForProject, getLayoutPath: getDebugLayoutPath, render, focusExpressionInput, addWatchExpression, addMethodBreakpoint, configureActiveLineBreakpoint, configureActiveLineBreakpointField, editExceptionBreakpointProperties, resetLayout: resetDebugWorkspaceLayout, resetWorkspaceLayout, applyLayoutPreset: applyDebugWorkspaceLayoutPreset, getActiveView: () => activeDebugView };
     app.registerModule?.("javaDebugPanel", api);
     return api;
   }

@@ -42,7 +42,10 @@
           host.style.minHeight = "";
         }
       }
-      if (resizer) resizer.style.display = hostVisible ? "" : "none";
+      if (resizer) {
+        resizer.style.display = hostVisible ? "" : "none";
+        if (hostVisible) resizer.style.flex = "";
+      }
       if (tabList) tabList.hidden = !hostVisible;
 
       if (!enabledViews.some((view) => view.id === activeViewId)) {

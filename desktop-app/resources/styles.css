@@ -14290,6 +14290,7 @@ body.sidebar-rail-spacious .content-container.sidebar-hidden .folder-tree-pane {
   border-bottom: 1px solid var(--border-color);
   background: var(--bg-color);
   position: relative;
+  z-index: 2;
 }
 .sidebar-dropzone-resizer::after {
   content: "";
