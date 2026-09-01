@@ -21610,7 +21610,63 @@ body.ai-companion-workspace-resizing .ai-companion-workspace-resizer::after {
   border-radius: 6px;
   background: color-mix(in srgb, var(--button-bg) 72%, #0f172a 28%);
   color: var(--muted-text-color);
+  font: inherit;
   font-size: 12px;
+}
+
+.ai-companion-workspace-model-picker {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+.ai-companion-workspace-model-chip {
+  gap: 6px;
+  cursor: pointer;
+}
+
+.ai-companion-workspace-model-chip::after {
+  content: "\25BE";
+  font-size: 9px;
+  line-height: 1;
+  opacity: 0.8;
+}
+
+.ai-companion-workspace-model-menu {
+  right: auto;
+  left: 0;
+  min-width: 220px;
+  max-width: min(360px, calc(100vw - 24px));
+}
+
+.ai-companion-workspace-model-menu button {
+  align-items: center;
+  padding: 6px 8px;
+}
+
+.ai-companion-workspace-model-option-text {
+  display: flex;
+  flex: 1 1 auto;
+  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.ai-companion-workspace-model-option-title {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ai-companion-workspace-model-option-source,
+.ai-companion-workspace-model-empty {
+  color: var(--muted-text-color);
+  font-size: 11px;
+}
+
+.ai-companion-workspace-model-empty {
+  padding: 6px 8px;
 }
 
 .ai-companion-workspace-chip.is-ready,

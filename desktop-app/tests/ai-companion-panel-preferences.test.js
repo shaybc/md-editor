@@ -550,9 +550,15 @@ function createPanelHarness(options = {}) {
   workspaceTaskDetailsAnchor.append(workspaceTaskDetailsToggle, workspaceTaskDetailsPopover);
   const workspaceStatusChip = new FakeElement("ai-companion-workspace-status-chip");
   const workspaceModeChip = new FakeElement("ai-companion-workspace-mode-chip");
-  const workspaceModelChip = new FakeElement("ai-companion-workspace-model-chip");
+  const workspaceModelPicker = new FakeElement("ai-companion-workspace-model-picker");
+  workspaceModelPicker.classList.add("ai-companion-workspace-model-picker");
+  const workspaceModelChip = new FakeElement("ai-companion-workspace-model-chip", "button");
+  const workspaceModelMenu = new FakeElement("ai-companion-workspace-model-menu");
+  workspaceModelMenu.classList.add("ai-companion-workspace-menu", "ai-companion-workspace-model-menu");
+  workspaceModelMenu.hidden = true;
+  workspaceModelPicker.append(workspaceModelChip, workspaceModelMenu);
   const workspaceTimeChip = new FakeElement("ai-companion-workspace-time-chip");
-  workspaceHeaderMeta.append(workspaceStatusChip, workspaceModeChip, workspaceModelChip, workspaceTimeChip);
+  workspaceHeaderMeta.append(workspaceStatusChip, workspaceModeChip, workspaceModelPicker, workspaceTimeChip);
   workspaceHeading.append(workspaceChatTitle, workspaceTitleEditButton, workspaceTaskDetailsAnchor);
   const workspaceRestoreButton = new FakeElement("ai-companion-workspace-restore", "button");
   workspaceRestoreButton.hidden = true;
@@ -627,7 +633,7 @@ function createPanelHarness(options = {}) {
   agentView.append(toolLog, taskChangesSection, disabledNotice, workspaceContextStrip, agentComposer);
   [workspaceHistory, workspaceHistoryResizer, modeIcon, workspaceHeading, workspaceHeaderMeta, workspaceRestoreButton, plansToggleButton, newAgentButton, chatPicker, plansView, agentView, workspaceInspectorResizer, workspaceInspector, tokenElement, elapsedElement]
     .forEach((element) => panel.appendChild(element));
-  [panel, closeButton, toggleButton, chatTab, agentTab, planTab, modeIcon, plansToggleButton, agentView, plansView, plansStatusSelect, plansSearchInput, plansRefreshButton, plansList, planDetail, toolLog, taskChangesSection, taskChangesPanel, disabledNotice, attachmentList, attachmentInput, attachFilesButton, agentInput, agentRunButton, agentActions, agentComposer, modeMenu, modeMenuToggle, modeMenuList, newAgentButton, chatPicker, chatSelect, chatSelectLabel, chatMenu, tokenElement, elapsedElement, workspaceHistory, workspaceHistoryResizer, workspaceChatsTab, workspacePlansTab, workspaceChatsPane, workspacePlansPane, workspaceChatSearch, workspaceChatFilterButton, workspaceChatFilterMenu, workspaceChatList, workspaceNewChatButton, workspaceNewChatMenuButton, workspaceNewChatMenuList, workspaceHeading, workspaceHeaderMeta, workspaceChatTitle, workspaceTitleEditButton, workspaceTaskDetailsAnchor, workspaceTaskDetailsToggle, workspaceTaskDetailsPopover, workspaceStatusChip, workspaceModeChip, workspaceModelChip, workspaceTimeChip, workspaceRestoreButton, workspaceInspectorResizer, workspaceInspector, workspaceContextSection, workspaceToolsSection, workspaceApprovalsSection, workspaceContextToggle, workspaceToolsToggle, workspaceApprovalsToggle, workspaceContextInfoButton, workspaceToolsInfoButton, workspaceApprovalsInfoButton, workspaceInspectorInfoPopover, workspaceInspectorInfoTitle, workspaceInspectorInfoBody, workspaceContext, workspaceTools, workspaceApprovals, workspaceTaskDetails, workspaceNewPlanButton, workspaceContextStrip, workspaceAddContextButton, workspaceContextCount]
+  [panel, closeButton, toggleButton, chatTab, agentTab, planTab, modeIcon, plansToggleButton, agentView, plansView, plansStatusSelect, plansSearchInput, plansRefreshButton, plansList, planDetail, toolLog, taskChangesSection, taskChangesPanel, disabledNotice, attachmentList, attachmentInput, attachFilesButton, agentInput, agentRunButton, agentActions, agentComposer, modeMenu, modeMenuToggle, modeMenuList, newAgentButton, chatPicker, chatSelect, chatSelectLabel, chatMenu, tokenElement, elapsedElement, workspaceHistory, workspaceHistoryResizer, workspaceChatsTab, workspacePlansTab, workspaceChatsPane, workspacePlansPane, workspaceChatSearch, workspaceChatFilterButton, workspaceChatFilterMenu, workspaceChatList, workspaceNewChatButton, workspaceNewChatMenuButton, workspaceNewChatMenuList, workspaceHeading, workspaceHeaderMeta, workspaceChatTitle, workspaceTitleEditButton, workspaceTaskDetailsAnchor, workspaceTaskDetailsToggle, workspaceTaskDetailsPopover, workspaceStatusChip, workspaceModeChip, workspaceModelPicker, workspaceModelChip, workspaceModelMenu, workspaceTimeChip, workspaceRestoreButton, workspaceInspectorResizer, workspaceInspector, workspaceContextSection, workspaceToolsSection, workspaceApprovalsSection, workspaceContextToggle, workspaceToolsToggle, workspaceApprovalsToggle, workspaceContextInfoButton, workspaceToolsInfoButton, workspaceApprovalsInfoButton, workspaceInspectorInfoPopover, workspaceInspectorInfoTitle, workspaceInspectorInfoBody, workspaceContext, workspaceTools, workspaceApprovals, workspaceTaskDetails, workspaceNewPlanButton, workspaceContextStrip, workspaceAddContextButton, workspaceContextCount]
     .forEach((element) => elements.set(element.id, element));
 
   const documentListeners = new Map();
@@ -835,6 +841,7 @@ function createPanelHarness(options = {}) {
     workspaceStatusChip,
     workspaceModeChip,
     workspaceModelChip,
+    workspaceModelMenu,
     workspaceRestoreButton,
     workspaceInspectorResizer,
     workspaceInspector,
@@ -5624,6 +5631,74 @@ test("workspace approvals show pending approvals before resolved approvals", asy
   harness.workspaceApprovals.children[3].click();
   assert.deepEqual(focusedApprovals, ["pending-approval", "resolved-approval"]);
 });
+test("workspace model chip opens configured models and persists selected model", async () => {
+  const harness = createPanelHarness({
+    settings: {
+      enabled: true,
+      chatEnabled: true,
+      agentEnabled: true,
+      providerMode: "openai-compatible",
+      model: "current-model",
+      litellmModelAlias: "",
+      connectionProfiles: [
+        { id: "fast", providerMode: "openai-compatible", model: "fast-model" },
+        { id: "lite", providerMode: "litellm", model: "fallback-model", litellmModelAlias: "alias-model" }
+      ],
+      providerRoutes: [{ id: "review", model: "review-model" }]
+    }
+  });
+
+  harness.api.setWorkspaceOpen(true, { previousSidebarView: "files" });
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.equal(harness.workspaceModelChip.textContent, "current-model");
+
+  harness.workspaceModelChip.click();
+
+  assert.equal(harness.workspaceModelMenu.hidden, false);
+  assert.match(harness.workspaceModelMenu.textContent, /fast-model/);
+  assert.match(harness.workspaceModelMenu.textContent, /alias-model/);
+  assert.match(harness.workspaceModelMenu.textContent, /review-model/);
+
+  const fastModelButton = harness.workspaceModelMenu.children.find((button) => button.textContent.includes("fast-model"));
+  assert.ok(fastModelButton);
+  fastModelButton.click();
+
+  const settingsPatch = plain(harness.savedPatches.at(-1)).aiCompanionSettings;
+  assert.equal(harness.workspaceModelMenu.hidden, true);
+  assert.equal(harness.workspaceModelChip.textContent, "fast-model");
+  assert.equal(settingsPatch.model, "fast-model");
+  assert.equal(settingsPatch.litellmModelAlias, "");
+});
+
+test("workspace model chip updates LiteLLM alias for LiteLLM settings", async () => {
+  const harness = createPanelHarness({
+    settings: {
+      enabled: true,
+      chatEnabled: true,
+      agentEnabled: true,
+      providerMode: "litellm",
+      model: "fallback-model",
+      litellmModelAlias: "current-alias",
+      connectionProfiles: [{ id: "remote", providerMode: "litellm", litellmModelAlias: "next-alias" }],
+      providerRoutes: []
+    }
+  });
+
+  harness.api.setWorkspaceOpen(true, { previousSidebarView: "files" });
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.equal(harness.workspaceModelChip.textContent, "current-alias");
+
+  harness.workspaceModelChip.click();
+  const nextAliasButton = harness.workspaceModelMenu.children.find((button) => button.textContent.includes("next-alias"));
+  assert.ok(nextAliasButton);
+  nextAliasButton.click();
+
+  const settingsPatch = plain(harness.savedPatches.at(-1)).aiCompanionSettings;
+  assert.equal(harness.workspaceModelChip.textContent, "next-alias");
+  assert.equal(settingsPatch.model, "fallback-model");
+  assert.equal(settingsPatch.litellmModelAlias, "next-alias");
+});
+
 test("workspace top bar places task details beside title and omits saved plans button", () => {
   const html = fs.readFileSync(path.join(webRoot, "index.html"), "utf8");
   const titleEditIndex = html.indexOf('id="ai-companion-workspace-title-edit"');

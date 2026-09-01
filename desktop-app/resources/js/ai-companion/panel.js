@@ -65,6 +65,7 @@
     const workspaceStatusChip = panel.querySelector("#ai-companion-workspace-status-chip");
     const workspaceModeChip = panel.querySelector("#ai-companion-workspace-mode-chip");
     const workspaceModelChip = panel.querySelector("#ai-companion-workspace-model-chip");
+    const workspaceModelMenu = panel.querySelector("#ai-companion-workspace-model-menu");
     const workspaceTimeChip = panel.querySelector("#ai-companion-workspace-time-chip");
     const workspaceInspector = panel.querySelector("#ai-companion-workspace-inspector");
     const workspaceContextSection = panel.querySelector('[data-ai-companion-inspector-section="context"]') || panel.querySelector("#ai-companion-workspace-context")?.closest?.(".ai-companion-workspace-inspector-section");
@@ -2019,6 +2020,97 @@
       };
     }
 
+    function getWorkspaceSettingsModel(settings = getCurrentSettings()) {
+      return settings?.providerMode === "litellm" && settings?.litellmModelAlias
+        ? settings.litellmModelAlias
+        : settings?.model || settings?.litellmModelAlias || "";
+    }
+
+    function getConfiguredWorkspaceModels(settings = getCurrentSettings()) {
+      const models = [];
+      const seen = new Set();
+      const addModel = (model, source) => {
+        const modelName = String(model || "").trim();
+        if (!modelName || seen.has(modelName)) return;
+        seen.add(modelName);
+        models.push({ model: modelName, source });
+      };
+      addModel(getWorkspaceSettingsModel(settings), "Current connection");
+      addModel(settings?.model, "Current model");
+      addModel(settings?.litellmModelAlias, "Current LiteLLM alias");
+      (Array.isArray(settings?.connectionProfiles) ? settings.connectionProfiles : []).forEach((profile) => {
+        const profileId = String(profile?.id || "").trim();
+        addModel(profile?.providerMode === "litellm" ? profile?.litellmModelAlias : "", profileId ? "Connection " + profileId : "Connection profile");
+        addModel(profile?.model, profileId ? "Connection " + profileId : "Connection profile");
+      });
+      (Array.isArray(settings?.providerRoutes) ? settings.providerRoutes : []).forEach((route) => {
+        const routeId = String(route?.id || "").trim();
+        addModel(route?.model, routeId ? "Route " + routeId : "Provider route");
+      });
+      return models;
+    }
+
+    function setWorkspaceModelMenuOpen(open) {
+      if (!workspaceModelChip || !workspaceModelMenu) return;
+      const shouldOpen = open === true;
+      if (shouldOpen) renderWorkspaceModelMenu();
+      workspaceModelMenu.hidden = !shouldOpen;
+      workspaceModelChip.setAttribute("aria-expanded", shouldOpen ? "true" : "false");
+    }
+
+    function selectWorkspaceModel(model) {
+      const selectedModel = String(model || "").trim();
+      if (!selectedModel) return;
+      const settings = getCurrentSettings();
+      const nextSettings = settings?.providerMode === "litellm"
+        ? { ...settings, litellmModelAlias: selectedModel }
+        : { ...settings, model: selectedModel };
+      deps.saveGlobalState?.({ aiCompanionSettings: nextSettings });
+      setWorkspaceModelMenuOpen(false);
+      updateWorkspaceModelChip(nextSettings);
+      contextIndicator?.refresh?.();
+    }
+
+    function renderWorkspaceModelMenu(settings = getCurrentSettings()) {
+      if (!workspaceModelMenu) return;
+      if (typeof workspaceModelMenu.replaceChildren === "function") workspaceModelMenu.replaceChildren();
+      else workspaceModelMenu.innerHTML = "";
+      const activeModel = getWorkspaceSettingsModel(settings);
+      const models = getConfiguredWorkspaceModels(settings);
+      if (!models.length) {
+        const empty = document.createElement("div");
+        empty.className = "ai-companion-workspace-model-empty";
+        empty.textContent = "No configured models";
+        workspaceModelMenu.appendChild(empty);
+        return;
+      }
+      models.forEach((item) => {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.setAttribute("role", "menuitemradio");
+        button.setAttribute("aria-checked", item.model === activeModel ? "true" : "false");
+        button.classList.toggle("active", item.model === activeModel);
+        const text = document.createElement("span");
+        text.className = "ai-companion-workspace-model-option-text";
+        const title = document.createElement("span");
+        title.className = "ai-companion-workspace-model-option-title";
+        title.textContent = item.model;
+        const detail = document.createElement("small");
+        detail.className = "ai-companion-workspace-model-option-source";
+        detail.textContent = item.source || "Configured model";
+        text.append(title, detail);
+        button.appendChild(text);
+        button.addEventListener("click", () => selectWorkspaceModel(item.model));
+        workspaceModelMenu.appendChild(button);
+      });
+    }
+
+    function updateWorkspaceModelChip(settings = getCurrentSettings()) {
+      if (!workspaceModelChip) return;
+      workspaceModelChip.textContent = getWorkspaceSettingsModel(settings) || "Model";
+      if (workspaceModelMenu?.hidden === false) renderWorkspaceModelMenu(settings);
+    }
+
     function renderWorkspaceHeader() {
       const record = getSelectedWorkspaceRecord();
       const displayChat = getActiveWorkspaceChatDisplaySource();
@@ -2031,7 +2123,7 @@
         applyWorkspaceStatusClass(workspaceStatusChip, statusKey);
       }
       if (workspaceModeChip) workspaceModeChip.textContent = getCompactModeLabel(record?.mode || activeTab);
-      if (workspaceModelChip) workspaceModelChip.textContent = getCurrentSettings()?.model || getCurrentSettings()?.litellmModelAlias || "Model";
+      updateWorkspaceModelChip(getCurrentSettings());
       if (workspaceTimeChip) workspaceTimeChip.textContent = formatWorkspaceDate(record?.updatedAt || activeAgentChat?.updatedAt || Date.now());
       if (workspaceTaskDetailsToggle) {
         workspaceTaskDetailsToggle.innerHTML = '<i class="bi bi-info-circle" aria-hidden="true"></i>';
@@ -2554,6 +2646,7 @@
       setWorkspaceVisible(false);
       closeWorkspaceInfoPopover();
       closeWorkspaceTaskDetails();
+      setWorkspaceModelMenuOpen(false);
       setWorkspaceNewChatMenuOpen(false);
       if (options.restore === true) {
         setOpen(true, { persist: false });
@@ -7846,6 +7939,7 @@
     function refreshModeMessages(settings = getCurrentSettings()) {
       updateDisabledNotice(settings);
       updateElapsedVisibility(settings);
+      updateWorkspaceModelChip(settings);
       updateAgentRunButton();
     }
 
@@ -8641,6 +8735,7 @@
         if (workspacePlanFilterMenu) workspacePlanFilterMenu.hidden = true;
         workspacePlanFilterButton?.setAttribute("aria-expanded", "false");
       }
+      if (!event.target?.closest?.("#ai-companion-workspace-model-chip, #ai-companion-workspace-model-menu")) setWorkspaceModelMenuOpen(false);
       if (!event.target?.closest?.("#ai-companion-workspace-new-chat-menu, #ai-companion-workspace-new-chat-menu-list")) setWorkspaceNewChatMenuOpen(false);
     });
     panel.addEventListener("keydown", (event) => {
@@ -8650,6 +8745,7 @@
         setChatMenuOpen(false);
         closeWorkspaceTaskDetails();
         closeWorkspaceInfoPopover();
+        setWorkspaceModelMenuOpen(false);
         setWorkspaceNewChatMenuOpen(false);
       }
     });
@@ -8663,6 +8759,11 @@
     plansStatusSelect?.addEventListener("change", () => { selectedRepositoryPlan = null; void loadRepositoryPlans(); });
     plansSearchInput?.addEventListener("input", () => { selectedRepositoryPlan = null; void loadRepositoryPlans(); });
     chatSelect?.addEventListener("click", handleChatSelectClick);
+    workspaceModelChip?.addEventListener("click", (event) => {
+      event.preventDefault?.();
+      event.stopPropagation?.();
+      setWorkspaceModelMenuOpen(workspaceModelMenu?.hidden !== false);
+    });
     workspaceChatSearch?.addEventListener("input", () => {
       workspaceChatVisibleLimit = WORKSPACE_CHAT_INITIAL_LIMIT;
       renderWorkspaceChatHistory(workspaceChatIndexes);
