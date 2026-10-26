@@ -507,6 +507,7 @@
     }
 
     function enhancePreview(preview, cache, perf) {
+      deps.mermaidSourceMap?.capturePreview(preview);
       deps.enhanceWikiLinks(preview);
       perf?.mark("enhance wiki links");
       deps.enhancePreviewMarkdownImages(preview);
@@ -633,6 +634,8 @@
       if (!activeMarkdownEditor || !activeMarkdownPreview) return;
       const tab = getActiveTab();
       const editorSource = activeMarkdownEditor.value || "";
+      deps.mermaidSourceMap?.setPreviewContext(activeMarkdownPreview, editorSource, tab,
+        deps.isMermaidPath?.(getActiveTabPath(tab)) === true);
 
       // HTML files are rendered directly in a sandboxed iframe, not via the markdown pipeline
       if (isHtmlTab(tab)) {

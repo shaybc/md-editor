@@ -5149,16 +5149,30 @@
     </div>
 
     <!-- Mermaid Zoom Modal -->
-    <div id="mermaid-zoom-modal" role="dialog" aria-modal="true" aria-label="Diagram zoom view">
+    <div id="mermaid-zoom-modal" role="dialog" aria-modal="true" aria-labelledby="mermaid-modal-title">
         <div class="mermaid-modal-content">
             <div class="mermaid-modal-header">
-                <span>Diagram</span>
+                <span id="mermaid-modal-title">Diagram</span>
                 <button class="mermaid-modal-close" id="mermaid-modal-close" title="Close" aria-label="Close diagram modal">
                     <i class="bi bi-x-lg"></i>
                 </button>
             </div>
             <div class="mermaid-modal-diagram" id="mermaid-modal-diagram"></div>
+            <form id="mermaid-modal-label-editor" class="mermaid-label-editor" hidden>
+                <label for="mermaid-modal-label-text">Node text</label>
+                <textarea id="mermaid-modal-label-text" rows="3" spellcheck="false"></textarea>
+                <div class="mermaid-label-editor-actions">
+                    <button type="button" class="mermaid-toolbar-btn" id="mermaid-modal-cancel-label">Cancel Label</button>
+                    <button type="submit" class="mermaid-toolbar-btn settings-primary-action" id="mermaid-modal-apply-label">Apply Label</button>
+                </div>
+            </form>
+            <div id="mermaid-modal-edit-status" class="mermaid-edit-status" role="status" aria-live="polite"></div>
             <div class="mermaid-modal-controls">
+                <button class="mermaid-toolbar-btn" id="mermaid-modal-edit" title="Edit node labels" disabled>
+                    <i class="bi bi-pencil"></i> Edit
+                </button>
+                <button class="mermaid-toolbar-btn" id="mermaid-modal-cancel-edit" hidden>Cancel</button>
+                <button class="mermaid-toolbar-btn settings-primary-action" id="mermaid-modal-save" hidden>Save</button>
                 <button class="mermaid-toolbar-btn" id="mermaid-modal-select-text" title="Switch to text selection mode" aria-pressed="false">
                     <i class="bi bi-cursor-text"></i> Select Text
                 </button>
@@ -6039,6 +6053,11 @@
     <script src="js/project/debug/java-debug-command-menu.js"></script>
     <script src="js/project/debug/java-debug-editor-actions.js"></script>
     <script src="js/project/debug/java-debug-hover.js"></script>
+    <script src="js/markdown/mermaid-editing/models/diagram-component.js"></script>
+    <script src="js/markdown/mermaid-editing/source-map.js"></script>
+    <script src="js/markdown/mermaid-editing/svg-component-map.js"></script>
+    <script src="js/markdown/mermaid-editing/edit-session.js"></script>
+    <script src="js/markdown/mermaid-editing/label-editor.js"></script>
     <script src="js/markdown/mermaid-tools.js"></script>
     <script src="js/markdown/render.js"></script>
     <script src="js/tags/index.js"></script>

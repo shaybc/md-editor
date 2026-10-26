@@ -7598,6 +7598,67 @@ a:focus {
   opacity: 1;
 }
 
+.mermaid-modal-controls [hidden],
+.mermaid-label-editor[hidden] {
+  display: none;
+}
+
+.mermaid-modal-diagram.editing,
+.mermaid-modal-diagram.editing * {
+  cursor: default;
+}
+
+.mermaid-modal-diagram.editing [data-mermaid-editable="true"],
+.mermaid-modal-diagram.editing [data-mermaid-editable="true"] * {
+  cursor: text;
+}
+
+.mermaid-modal-diagram.editing [data-mermaid-editable="true"] > :is(rect, circle, ellipse, polygon, path) {
+  stroke: var(--accent-color) !important;
+  stroke-dasharray: 4 3;
+}
+
+.mermaid-label-editor {
+  position: fixed;
+  z-index: 2001;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  box-sizing: border-box;
+  border: 1px solid var(--border-color);
+  background: var(--bg-color);
+  color: var(--text-color);
+}
+
+.mermaid-label-editor textarea {
+  width: 100%;
+  box-sizing: border-box;
+  resize: vertical;
+  max-height: 40vh;
+  padding: 8px;
+  background: var(--bg-color);
+  color: var(--text-color);
+  border: 1px solid var(--border-color);
+  font: inherit;
+}
+
+.mermaid-label-editor-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.mermaid-edit-status {
+  color: var(--text-color);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.mermaid-edit-status:empty {
+  display: none;
+}
+
 /* ========================================
    DOCUMENT TABS & SESSION MANAGEMENT
    ======================================== */

@@ -130,6 +130,19 @@
 
   const mermaidZoomModal   = document.getElementById('mermaid-zoom-modal');
   const mermaidModalDiagram = document.getElementById('mermaid-modal-diagram');
+  const labelEditor = global.createMarkdownViewerMermaidLabelEditor?.({
+    ...deps,
+    getSvg: () => modalCurrentSvgEl,
+    replaceSvg(svg) {
+      modalCurrentSvgEl?.replaceWith(svg);
+      modalCurrentSvgEl = svg;
+      svg.removeAttribute('width');
+      svg.removeAttribute('height');
+      Object.assign(svg.style, { width: 'auto', height: 'auto', maxWidth: '80vw', maxHeight: '60vh', transformOrigin: 'center' });
+      applyModalTransform();
+    },
+    setPanMode: () => setModalTextSelection(false)
+  });
 
   /** Switches the diagram between drag-to-pan and native text selection. */
   function setModalTextSelection(enabled) {
@@ -149,11 +162,13 @@
     if (modalCurrentSvgEl) {
       modalCurrentSvgEl.style.transform =
         `translate(${modalPanX}px, ${modalPanY}px) scale(${modalZoomScale})`;
+      labelEditor?.reposition();
     }
   }
 
-  function closeMermaidModal() {
+  async function closeMermaidModal() {
     if (!mermaidZoomModal.classList.contains('active')) return;
+    if (labelEditor && !await labelEditor.requestClose()) return;
     mermaidZoomModal.classList.remove('active');
     setModalTextSelection(false);
     mermaidModalDiagram.innerHTML = '';
@@ -187,6 +202,7 @@
     modalCurrentSvgEl = svgClone;
 
     mermaidZoomModal.classList.add('active');
+    labelEditor?.open(container);
   }
 
   // Modal close button
@@ -224,7 +240,7 @@
 
   // Drag to pan inside modal
   mermaidModalDiagram.addEventListener('mousedown', function(e) {
-    if (modalTextSelectionEnabled || e.button !== 0) return;
+    if (modalTextSelectionEnabled || labelEditor?.isEditing() || e.button !== 0) return;
     e.preventDefault();
     modalIsDragging = true;
     modalDragStart = { x: e.clientX - modalPanX, y: e.clientY - modalPanY };
@@ -312,6 +328,8 @@
       if (container.querySelector('.mermaid-toolbar')) return; // already added
       const svgEl = container.querySelector('svg');
       if (!svgEl) return; // diagram not yet rendered
+      const diagram = global.MarkdownViewerMermaidSourceMap?.get(container);
+      if (diagram) global.MarkdownViewerMermaidSvgMap.attach(svgEl, diagram);
 
       const toolbar = document.createElement('div');
       toolbar.className = 'mermaid-toolbar';

@@ -7798,12 +7798,40 @@ ${getMarkdownAlertBody(alertType, selectedText)}`;
 
   const mermaidTools = window.registerMarkdownViewerMermaidTools(app, {
     markdownPreview,
-    getActiveMarkdownPreview: function() { return editorViewManager.getActiveMarkdownPreview(); }
+    getActiveMarkdownPreview: function() { return editorViewManager.getActiveMarkdownPreview(); },
+    getDocument: function() {
+      const tab = tabs.find(function(item) { return item.id === activeTabId; });
+      return tab ? { tabId: tab.id, source: editorViewManager.getActiveMarkdownEditor()?.value || "",
+        readOnly: tab.transformedForViewing === true } : null;
+    },
+    applySource: function(start, end, source) {
+      const applied = activeEditorCommands.replaceActiveEditorRange(start, end, source);
+      if (applied) markdownRender.renderMarkdown({ reason: "mermaid-label-save", reuseCache: false });
+      return applied;
+    },
+    validate: function(source) { return mermaid.parse(source); },
+    render: async function(source) {
+      const result = await mermaid.render("mermaid-edit-" + crypto.randomUUID(), source);
+      const holder = document.createElement("div");
+      holder.innerHTML = result.svg;
+      return holder.querySelector("svg");
+    },
+    persist: async function() {
+      const tab = tabs.find(function(item) { return item.id === activeTabId; });
+      return tab?.sourceFilePath || tab?.sourceFileHandle
+        ? fileSave.saveMarkdownTabToSource(tab)
+        : fileSave.saveMarkdownTabWithSaveDialog(tab);
+    },
+    confirm: function(message, applied) {
+      return app.services.confirm({ title: "Diagram edits", message, cancelLabel: "Keep Editing",
+        confirmLabel: applied ? "Leave Editing" : "Discard", confirmVariant: applied ? "primary" : "danger" });
+    }
   });
   const addMermaidToolbars = mermaidTools.addMermaidToolbars;
   const closeMermaidModal = mermaidTools.closeMermaidModal;
 
   markdownRender = window.registerMarkdownViewerRender(app, {
+    mermaidSourceMap: window.MarkdownViewerMermaidSourceMap,
     RENDER_DELAY,
     markdownEditor,
     markdownPreview,
