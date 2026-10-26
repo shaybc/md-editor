@@ -8,6 +8,7 @@ const { createToolSchemaRecord } = require("./tool-schema-record");
 class ToolSchemaInventory {
   constructor(registrations = []) {
     this.records = new Map();
+    this.aliases = new Map();
     this.sources = new Map();
     this.revision = 0;
     this.replaceSource("initial", registrations);
@@ -17,7 +18,9 @@ class ToolSchemaInventory {
   register(registration) {
     const record = createToolSchemaRecord(registration);
     if (this.records.has(record.name)) throw new Error("Duplicate autonomous tool schema name: " + record.name);
+    buildAliasMap(new Map([...this.records, [record.name, record]]));
     this.records.set(record.name, record);
+    this.rebuildAliases();
     this.sources.set("registration:" + record.name, new Set([record.name]));
     this.revision += 1;
     return record;
@@ -40,6 +43,10 @@ class ToolSchemaInventory {
       }
     }
     const removed = Array.from(previous).filter((name) => !next.has(name));
+    const prospective = new Map(this.records);
+    for (const name of removed) prospective.delete(name);
+    for (const record of nextRecords) prospective.set(record.name, record);
+    buildAliasMap(prospective);
     const added = [];
     const changed = [];
     for (const name of removed) this.records.delete(name);
@@ -49,6 +56,7 @@ class ToolSchemaInventory {
       else if (existing.fingerprint !== record.fingerprint) changed.push(record.name);
       this.records.set(record.name, record);
     }
+    this.rebuildAliases();
     this.sources.set(owner, next);
     if (added.length || removed.length || changed.length) this.revision += 1;
     return { added, removed, changed };
@@ -56,6 +64,13 @@ class ToolSchemaInventory {
 
   /** Return one record by canonical name. */
   find(name) { return this.records.get(String(name || "")) || null; }
+
+  /** Resolve one canonical name or explicitly registered alias. */
+  resolve(name) {
+    const key = String(name || "");
+    const canonical = this.find(key);
+    return canonical || this.find(this.aliases.get(key));
+  }
 
   /** Return all records in stable canonical-name order. */
   list() { return Array.from(this.records.values()).sort((left, right) => left.name.localeCompare(right.name)); }
@@ -70,6 +85,21 @@ class ToolSchemaInventory {
   snapshot() {
     return { revision: this.revision, fingerprint: this.fingerprint(), names: this.list().map((record) => record.name) };
   }
+
+  rebuildAliases() {
+    this.aliases = buildAliasMap(this.records);
+  }
+}
+
+function buildAliasMap(records) {
+  const aliases = new Map();
+  for (const record of records.values()) {
+    for (const alias of record.aliases || []) {
+      if (records.has(alias) || aliases.has(alias)) throw new Error("Duplicate autonomous tool schema alias: " + alias);
+      aliases.set(alias, record.name);
+    }
+  }
+  return aliases;
 }
 
 module.exports = { ToolSchemaInventory };

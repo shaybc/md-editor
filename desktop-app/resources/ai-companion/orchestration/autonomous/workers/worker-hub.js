@@ -12,6 +12,7 @@ const { ObservationLedger } = require("../context/observation-ledger");
 const { ContextReleaseReminder } = require("../context/context-release-reminder");
 const { WorkflowModeReminder } = require("../context/workflow-mode-reminder");
 const { WorkTrackingReminder } = require("../work/work-tracking-reminder");
+const { ToolFailureLoopGuard } = require("../tool-failure-loop-guard");
 const { finishWorkerWorkspace, prepareWorkerWorkspace } = require("./worker-workspace");
 const { getRunIdentity } = require("../work/run-identity");
 const { buildRuleActivationMessage, buildSkillActivationMessage } = require("../context-builder");
@@ -327,6 +328,8 @@ class WorkerHub {
         loadedExtensions: new Set(),
         loadedExtensionBodies: new Map(),
         hooks: createWorkerHooks(entry),
+        completionEvaluator: null,
+        toolFailureLoopGuard: new ToolFailureLoopGuard(entry.toolFailureLoop),
         ruleCatalog,
         rulePathObserver: new ToolPathObserver(ruleCatalog),
         skillCatalog,
@@ -346,6 +349,7 @@ class WorkerHub {
         saveSnapshot: async () => {
           entry.observationRelease = { ledger: observationLedger.snapshot(), reminder: contextReleaseReminder.snapshot() };
           entry.toolSchemaState = capabilities.snapshot();
+          entry.toolFailureLoop = context.toolFailureLoopGuard.snapshot();
           entry.reminderState = { workTracking: workTrackingReminder.snapshot(), workflowMode: workflowModeReminder.snapshot() };
           entry.ruleState = ruleCatalog.snapshot();
           entry.skillState = { catalog: skillCatalog.snapshot(), invocation: skillInvocation.snapshot() };
@@ -368,8 +372,8 @@ class WorkerHub {
         }
       };
       const result = await runAutonomousLoop({ provider, messages: entry.messages, tools: capabilities.providerDefinitions(), getTools: () => capabilities.providerDefinitions(), request: context.request, events: workerEvents, context });
-      entry.result = String(result || "").slice(0, MAX_RESULT_CHARS);
-      entry.status = "completed";
+      entry.result = String(result?.content ?? result ?? "").slice(0, MAX_RESULT_CHARS);
+      entry.status = result?.status === "blocked" ? "blocked" : "completed";
       const previousWorkspace = entry.workspace;
       entry.workspace = await finishWorkerWorkspace(this.request, entry.workspace);
       if (previousWorkspace?.root !== entry.workspace?.root) {
@@ -430,7 +434,7 @@ function workerInteractionGate(entry, events) {
     snapshot() { return { version: 1, pending: null }; }
   };
 }
-function isTerminal(status) { return ["completed", "failed", "stopped", "interrupted"].includes(status); }
+function isTerminal(status) { return ["completed", "blocked", "failed", "stopped", "interrupted"].includes(status); }
 function publicEntry(entry) { return { id: entry.id, description: entry.description, agentId: entry.agentId, routeId: entry.routeId || "", routePurpose: entry.routePurpose || "worker", status: entry.status, background: entry.background, isolation: entry.workspace?.isolation || entry.isolation, workspace: entry.workspace ? { root: entry.workspace.root, branch: entry.workspace.branch, retained: entry.workspace.retained, fallbackReason: entry.workspace.fallbackReason } : undefined, result: entry.result, error: entry.error }; }
 
 function privateEntry(entry) {
@@ -443,6 +447,7 @@ function privateEntry(entry) {
     messages: JSON.parse(JSON.stringify(entry.messages || [])),
     observationRelease: JSON.parse(JSON.stringify(entry.observationRelease || {})),
     toolSchemaState: JSON.parse(JSON.stringify(entry.toolSchemaState || {})),
+    toolFailureLoop: JSON.parse(JSON.stringify(entry.toolFailureLoop || {})),
     reminderState: JSON.parse(JSON.stringify(entry.reminderState || {})),
     ruleState: JSON.parse(JSON.stringify(entry.ruleState || {})),
     skillState: JSON.parse(JSON.stringify(entry.skillState || {})),
@@ -469,6 +474,7 @@ function restoredEntry(snapshot, agent, authority, status) {
     messages: Array.isArray(snapshot.messages) ? JSON.parse(JSON.stringify(snapshot.messages)) : [],
     observationRelease: snapshot.observationRelease ? JSON.parse(JSON.stringify(snapshot.observationRelease)) : {},
     toolSchemaState: snapshot.toolSchemaState ? JSON.parse(JSON.stringify(snapshot.toolSchemaState)) : {},
+    toolFailureLoop: snapshot.toolFailureLoop ? JSON.parse(JSON.stringify(snapshot.toolFailureLoop)) : {},
     reminderState: snapshot.reminderState ? JSON.parse(JSON.stringify(snapshot.reminderState)) : {},
     ruleState: snapshot.ruleState ? JSON.parse(JSON.stringify(snapshot.ruleState)) : {},
     skillState: snapshot.skillState ? JSON.parse(JSON.stringify(snapshot.skillState)) : {},

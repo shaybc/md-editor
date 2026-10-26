@@ -7558,6 +7558,25 @@ a:focus {
   cursor: grab;
 }
 
+/* Keep SVG labels from overriding the viewer's interaction mode. */
+.mermaid-modal-diagram:not(.text-selection),
+.mermaid-modal-diagram:not(.text-selection) * {
+  -webkit-user-select: none !important;
+  user-select: none !important;
+  cursor: inherit;
+}
+
+.mermaid-modal-diagram:not(.text-selection) {
+  cursor: grab;
+}
+
+.mermaid-modal-diagram.text-selection,
+.mermaid-modal-diagram.text-selection * {
+  -webkit-user-select: text !important;
+  user-select: text !important;
+  cursor: text;
+}
+
 .mermaid-modal-diagram.dragging {
   cursor: grabbing;
 }
@@ -18991,6 +19010,10 @@ button.ai-companion-context-file-row.openable:focus-visible {
   color: var(--disabled-text-color, #6c757d);
 }
 
+.ai-companion-task-status.blocked {
+  color: var(--warning-color, #d39e00);
+}
+
 .ai-companion-task-status span {
   color: var(--text-color);
 }
@@ -21509,6 +21532,7 @@ body.ai-companion-workspace-resizing .ai-companion-workspace-resizer::after {
 .ai-companion-workspace-chat-status-dot.status-completed { background: var(--success-color, #22c55e); }
 .ai-companion-workspace-chat-status-dot.status-incomplete,
 .ai-companion-workspace-chat-status-dot.status-error { background: var(--danger-color, #ef4444); }
+.ai-companion-workspace-chat-status-dot.status-blocked { background: var(--warning-color, #d39e00); }
 .ai-companion-workspace-chat-status-dot.status-cancelled,
 .ai-companion-workspace-chat-status-dot.status-aborted { background: #9ca3af; }
 .ai-companion-workspace-chat-status-dot.status-planned { background: #a855f7; }
@@ -21685,6 +21709,12 @@ body.ai-companion-workspace-resizing .ai-companion-workspace-resizer::after {
   border-color: color-mix(in srgb, var(--danger-color, #ef4444) 52%, transparent);
   background: color-mix(in srgb, var(--danger-color, #ef4444) 14%, transparent);
   color: var(--danger-color, #ef4444);
+}
+
+#ai-companion-workspace-status-chip.status-blocked {
+  color: var(--warning-color, #d39e00);
+  border-color: color-mix(in srgb, var(--warning-color, #d39e00) 45%, transparent);
+  background: color-mix(in srgb, var(--warning-color, #d39e00) 12%, transparent);
 }
 
 #ai-companion-workspace-status-chip.status-cancelled,

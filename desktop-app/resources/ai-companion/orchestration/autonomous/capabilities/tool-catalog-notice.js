@@ -24,8 +24,8 @@ class ToolCatalogNotice {
       if (!groups.has(group)) groups.set(group, []);
       groups.get(group).push(record.name);
     }
-    const lines = ["Secondary tool schemas are available on demand. Before calling one, activate it with capability_search. Available names:"];
-    for (const [group, names] of groups) lines.push("- " + group + ": " + names.sort().join(", "));
+    const lines = ["Secondary tool schemas are available on demand. Before calling one, activate it with capability_search. Domains and exact callable names:"];
+    for (const [group, names] of groups) lines.push("- Domain '" + group + "' - callable names: " + names.sort().map((name) => "'" + name + "'").join(", "));
     const full = lines.join("\n");
     if (full.length <= MAX_NOTICE_CHARACTERS) return full;
     const counts = Array.from(groups, ([group, names]) => "- " + group + ": " + names.length + " tools");

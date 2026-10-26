@@ -9,6 +9,8 @@ const { executeTool } = require("./tool-executor");
 const { validateToolInput } = require("./capabilities/tool-input-validator");
 const { isContextOverflowError } = require("./context/window-steward");
 const { buildModelResponseCorrection, findModelResponseIssue } = require("./model-response-guard");
+const { TERMINAL_STATUSES, createTerminalOutcome, findUnresolvedMutationBlocker } = require("./terminal-outcome");
+const { ToolFailureLoopGuard } = require("./tool-failure-loop-guard");
 
 function assistantMessage(response) {
   const message = { role: "assistant", content: String(response.content || "") };
@@ -20,7 +22,8 @@ function assistantMessage(response) {
 async function runAutonomousLoop(input) {
   const { provider, messages, tools, getTools, request, events, context } = input;
   const maxRounds = Math.max(1, Math.min(Number(request.autonomousMaxRounds || 40), 100));
-  let consecutiveFailures = 0;
+  const failureLoopGuard = context.toolFailureLoopGuard || new ToolFailureLoopGuard();
+  context.toolFailureLoopGuard = failureLoopGuard;
   let consecutiveRejectedResponses = 0;
   for (let round = 1; round <= maxRounds; round++) {
     context.currentRound = round;
@@ -117,19 +120,48 @@ async function runAutonomousLoop(input) {
           continue;
         }
       }
+      const completionDecision = await context.completionEvaluator?.evaluate?.({
+        provider: context.activeProvider || provider,
+        prompt: request.prompt,
+        content: String(finalDecision?.updatedOutput ?? response.content ?? ""),
+        evidence: {
+          mutations: context.runSummary?.snapshot?.() || {},
+          work: context.work?.snapshot?.() || {},
+          failureBlocker: failureLoopGuard.blocker()
+        },
+        signal: request.signal
+      });
+      if (completionDecision?.retry === true) {
+        messages.push({ role: "system", content: `Completion check: ${completionDecision.nextInstruction}` });
+        await context.saveSnapshot?.("running", { round, boundary: "goal-completion-continuation" });
+        continue;
+      }
       await context.saveSnapshot?.("running", { round, boundary: "natural-completion" });
-      if (finalDecision?.suppressOutput === true) return "";
-      return String(finalDecision?.updatedOutput ?? response.content ?? "").trim();
+      const content = finalDecision?.suppressOutput === true ? "" : String(finalDecision?.updatedOutput ?? response.content ?? "").trim();
+      const mutationBlocker = findUnresolvedMutationBlocker(context.runSummary?.snapshot?.() || {});
+      const requestedStatus = String(completionDecision?.status || "").toLowerCase();
+      const evaluationBlocker = requestedStatus === TERMINAL_STATUSES.BLOCKED
+        ? { category: "GOAL_BLOCKED", target: "", error: String(completionDecision?.reason || "The explicit goal is blocked.") }
+        : null;
+      const status = requestedStatus === TERMINAL_STATUSES.SUCCESS && completionDecision?.verified === true
+        ? TERMINAL_STATUSES.SUCCESS
+        : (requestedStatus === TERMINAL_STATUSES.BLOCKED || mutationBlocker ? TERMINAL_STATUSES.BLOCKED : TERMINAL_STATUSES.COMPLETED);
+      return createTerminalOutcome(status, content, {
+        reason: completionDecision?.reason || finalDecision?.stopReason || (mutationBlocker ? "unresolved-mutation-attempt" : "natural-model-completion"),
+        verified: completionDecision?.verified === true,
+        blocker: evaluationBlocker || mutationBlocker
+      });
     }
     if (response.content) events.emit({ type: "narration", content: response.content });
 
     context.pendingTools = response.toolCalls.map((call) => ({ id: call.id, name: String(call?.function?.name || "tool"), startedAt: new Date().toISOString() }));
     await context.saveSnapshot?.("running", { round, boundary: "before-tools" });
     const results = await Promise.all(response.toolCalls.map(async (call) => {
-      const name = String(call?.function?.name || "tool");
+      const requestedName = String(call?.function?.name || "tool");
+      const name = context.capabilities?.canonicalName?.(requestedName) || requestedName;
       events.emit({ type: EVENT_TYPES.TOOL_STARTED, tool: name, callId: call.id, round });
       await context.chronicle?.append?.("tool-started", { round, tool: name, callId: call.id });
-      let effectiveCall = call;
+      let effectiveCall = withToolName(call, name);
       let effectiveInput = {};
       try {
         const originalInput = parseToolArguments(call);
@@ -144,7 +176,7 @@ async function runAutonomousLoop(input) {
           error.doNotRetry = true;
           throw error;
         }
-        effectiveCall = withToolInput(call, beforeTool?.updatedInput);
+        effectiveCall = withToolInput(effectiveCall, beforeTool?.updatedInput);
         effectiveInput = parseToolArguments(effectiveCall);
         const registration = context.capabilities?.registration?.(name);
         if (effectiveCall !== call) {
@@ -156,10 +188,10 @@ async function runAutonomousLoop(input) {
         await context.skillPathObserver?.beforeTool?.(name, effectiveInput, registration);
         const result = await executeTool(effectiveCall, context);
         context.runSummary?.recordToolCompleted(name, effectiveInput, result);
+        failureLoopGuard.recordSuccess(name, effectiveInput);
         await context.rulePathObserver?.afterTool?.(name, effectiveInput, result, registration);
         if (name === "work_create" || name === "work_update") context.workTrackingReminder?.recordWorkMutation?.(context.work?.list?.() || []);
         await context.skillPathObserver?.afterTool?.(name, result, registration);
-        consecutiveFailures = 0;
         events.emit({ type: EVENT_TYPES.TOOL_COMPLETED, tool: name, callId: call.id, input: effectiveInput, result });
         const afterTool = await context.hooks?.run("after-tool", { tool: name, call: effectiveCall, input: effectiveInput, result });
         let effectiveResult = afterTool?.updatedOutput === undefined ? result : afterTool.updatedOutput;
@@ -178,8 +210,8 @@ async function runAutonomousLoop(input) {
       } catch (error) {
         context.runSummary?.recordToolFailed(name, effectiveInput, error);
         if (error?.code === "LIFECYCLE_RUN_STOPPED") throw error;
-        consecutiveFailures += 1;
         const message = error?.message || String(error);
+        const repeatedFailure = failureLoopGuard.recordFailure(name, effectiveInput, error);
         events.emit({ type: EVENT_TYPES.TOOL_FAILED, tool: name, callId: call.id, input: effectiveInput, error: message });
         const failureDecision = await context.hooks?.run("tool-failure", { tool: name, call, error: message });
         for (const additionalContext of failureDecision?.additionalContext || []) messages.push({ role: "system", content: `Lifecycle context after tool failure:\n${additionalContext}` });
@@ -187,8 +219,10 @@ async function runAutonomousLoop(input) {
         const toolMessage = { role: "tool", tool_call_id: call.id, content: JSON.stringify({
           error: message,
           code: error?.code || undefined,
-          retryable: failureDecision?.retry === true ? true : (error?.retryable === false ? false : consecutiveFailures < 3),
-          doNotRetry: error?.doNotRetry === true
+          retryable: repeatedFailure ? false : (failureDecision?.retry === true ? true : error?.retryable !== false),
+          doNotRetry: repeatedFailure ? true : error?.doNotRetry === true,
+          recoveryTool: error?.recoveryTool || undefined,
+          suggestedTool: error?.suggestedTool || undefined
         }) };
         context.observationLedger?.register?.(toolMessage, { tool: name, callId: call.id, round });
         return toolMessage;
@@ -200,7 +234,18 @@ async function runAutonomousLoop(input) {
     await context.interactionGate?.acknowledgeToolResults?.(results);
     context.continuity?.scheduleUpdate?.(messages, { reportedTokens: context.windowSteward.reportedTokens });
     await context.saveSnapshot?.("running", { round, boundary: "after-tools" });
-    if (consecutiveFailures >= 3) messages.push({ role: "system", content: "Tool attempts failed repeatedly. Change strategy or explain the blocker; do not repeat an unchanged call." });
+    const blocker = failureLoopGuard.blocker();
+    if (blocker) {
+      const content = `The task is blocked because ${blocker.tool} failed ${blocker.count} times for the same target (${blocker.target}). Last error: ${blocker.error}`;
+      events.emit({ type: EVENT_TYPES.TOOL_FAILURE_LOOP_TRIPPED, ...blocker, summary: content });
+      await context.chronicle?.append?.("tool-failure-loop-tripped", blocker);
+      await context.saveSnapshot?.("running", { boundary: "tool-failure-loop", blocker });
+      return createTerminalOutcome(TERMINAL_STATUSES.BLOCKED, content, {
+        reason: "equivalent-tool-failure-loop",
+        code: "TOOL_FAILURE_LOOP",
+        blocker
+      });
+    }
   }
   throw new Error(`Autonomous runtime reached its structural limit of ${maxRounds} model rounds.`);
 }
@@ -215,6 +260,11 @@ function parseToolArguments(call) {
 function withToolInput(call, updatedInput) {
   if (!updatedInput || typeof updatedInput !== "object") return call;
   return { ...call, function: { ...call.function, arguments: JSON.stringify({ ...parseToolArguments(call), ...updatedInput }) } };
+}
+
+function withToolName(call, name) {
+  if (String(call?.function?.name || "") === name) return call;
+  return { ...call, function: { ...call.function, name } };
 }
 
 function lifecycleStop(message) {

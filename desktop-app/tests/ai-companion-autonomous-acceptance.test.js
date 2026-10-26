@@ -172,6 +172,7 @@ test("denied writes become model observations instead of rejected final response
   const result = await new AutonomousOrchestrator().run(createRequest({ requestApproval: async () => ({ approved: false }) }), { provider }, () => {});
   assert.equal(observedDenial, true);
   assert.match(result.content, /denied/);
+  assert.equal(result.status, "blocked");
 });
 
 test("cancellation emits a terminal cancellation event", async () => {

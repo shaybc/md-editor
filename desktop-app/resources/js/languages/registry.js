@@ -18,7 +18,7 @@
 
     const languages = [
       entry("markdown", "Markdown", ["md", "markdown"], "bi-file-earmark-text", "language-color-markdown", "markdown", "prettier-markdown"),
-      entry("mermaid", "Mermaid", ["mermaid"], "bi-diagram-2", "language-color-markdown", "markdown", ""),
+      entry("mermaid", "Mermaid", ["mermaid", "mmd"], "bi-diagram-2", "language-color-markdown", "markdown", ""),
       entry("java", "Java", ["java", "aj"], "bi-filetype-java", "language-color-java", "java", "prettier-java"),
       entry("csharp", "C#", ["cs", "csx"], "bi-file-earmark-code", "language-color-csharp", "csharp", ""),
       entry("xml", "XML", ["xml", "xsd", "xsl", "xslt", "svg", "classpath", "project"], "bi-filetype-xml", "language-color-xml", "xml", "prettier-xml"),
@@ -75,7 +75,7 @@
       });
     });
     const defaultSupportedTextExtensions = Array.from(languagesByExtension.keys()).sort();
-    const requiredProjectTextExtensions = new Set(["aj", "classpath", "ftl", "mermaid", "project", "proto", "sdkmanrc", "testexecutionlistener"]);
+    const requiredProjectTextExtensions = new Set(["aj", "classpath", "ftl", "mermaid", "mmd", "project", "proto", "sdkmanrc", "testexecutionlistener"]);
     const dockerComposeYamlNames = ["docker-compose.yml", "docker-compose.yaml", "compose.yml", "compose.yaml"];
     const kubernetesYamlNames = ["deployment", "service", "ingress", "configmap", "secret", "namespace", "serviceaccount", "job", "cronjob", "hpa", "horizontalpodautoscaler"];
     const kubernetesYamlDirectories = ["k8s", "kubernetes", "manifests"];

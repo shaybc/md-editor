@@ -3,9 +3,9 @@
 "use strict";
 
 const os = require("node:os");
-const path = require("node:path");
 const { execFile } = require("node:child_process");
 const { promisify } = require("node:util");
+const { describeWorkspaceContext } = require("./workspace-context");
 
 const execFileAsync = promisify(execFile);
 const MAX_STATUS_LINES = 40;
@@ -22,11 +22,15 @@ function boundedSetting(value, fallback) {
  * @returns {Promise<object>} Current date, platform, working directory, branch, and repository status.
  */
 async function collectRuntimeEnvironment(request = {}) {
-  const workingDirectory = path.resolve(String(request.workingDirectory || request.cwd || request.workspaceRoot || process.cwd()));
+  const workspace = describeWorkspaceContext(request);
+  const workingDirectory = workspace.runtimeCwd;
   const environment = {
     currentDate: currentLocalDate(),
     platform: `${process.platform} ${os.release()} (${process.arch})`,
     workingDirectory,
+    workspaceAvailable: workspace.workspaceAvailable,
+    workspaceRoot: workspace.workspaceRoot,
+    pathAuthority: workspace.pathAuthority,
     branch: "not a Git repository",
     repositoryStatus: "not available"
   };
@@ -55,6 +59,8 @@ function renderRuntimeEnvironment(environment = {}) {
     `Current date: ${boundedSetting(environment.currentDate, "not exposed")}`,
     `Platform: ${boundedSetting(environment.platform, "not exposed")}`,
     `Working directory: ${boundedSetting(environment.workingDirectory, "not exposed")}`,
+    `Opened workspace: ${environment.workspaceAvailable ? boundedSetting(environment.workspaceRoot, "not exposed") : "none"}`,
+    `Path authority: ${boundedSetting(environment.pathAuthority, "user-provided-paths-only")}`,
     `Git branch: ${boundedSetting(environment.branch, "not available")}`,
     `Repository status:\n${status}`
   ].join("\n");

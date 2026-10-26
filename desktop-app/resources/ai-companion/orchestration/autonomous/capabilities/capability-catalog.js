@@ -114,14 +114,19 @@ class CapabilityCatalog {
   /** Classify a model-requested tool without interpreting task semantics. */
   classifyCall(name) {
     const key = String(name || "");
-    const record = this.inventory.find(key);
+    const record = this.inventory.resolve(key);
     if (!record) {
       if (this.unavailable.has(key)) return { status: "unavailable", reason: this.unavailable.get(key) };
       if (this.prohibited.has(key)) return { status: "prohibited" };
       return { status: "unknown" };
     }
-    if (this.exposure.isImmediate(record) || this.activation.has(key)) return { status: "active", record };
+    if (this.exposure.isImmediate(record) || this.activation.has(record.name)) return { status: "active", record, requestedName: key };
     return { status: "deferred", record };
+  }
+
+  /** Return a canonical callable name only for canonical names or explicit aliases. */
+  canonicalName(name) {
+    return this.inventory.resolve(name)?.name || String(name || "");
   }
 
   /** Reject only structurally inactive known schemas before execution. */
@@ -148,7 +153,24 @@ class CapabilityCatalog {
       error.doNotRetry = true;
       throw error;
     }
-    return null;
+    const suggestion = this.suggestCanonicalName(name);
+    const error = new Error(suggestion
+      ? "Unknown tool schema '" + name + "'. Did you mean the canonical tool name '" + suggestion + "'?"
+      : "Unknown tool schema '" + name + "'. Use capability_search instead of guessing tool names.");
+    error.code = "TOOL_SCHEMA_UNKNOWN";
+    error.retryable = Boolean(suggestion);
+    error.doNotRetry = !suggestion;
+    error.suggestedTool = suggestion || undefined;
+    throw error;
+  }
+
+  /** Suggest one unambiguous canonical name without treating it as an executable alias. */
+  suggestCanonicalName(name) {
+    const requested = String(name || "").trim();
+    const suffix = requested.includes(":") ? requested.slice(requested.lastIndexOf(":") + 1) : requested;
+    const normalized = normalizeToolName(suffix);
+    const matches = this.inventory.list().filter((record) => normalizeToolName(record.name) === normalized);
+    return matches.length === 1 ? matches[0].name : "";
   }
 
   /** Restore only names that remain permitted and definition-compatible. */
@@ -294,5 +316,6 @@ class CapabilityCatalog {
 }
 
 function sanitize(value) { return String(value || "").replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 64).toLowerCase(); }
+function normalizeToolName(value) { return String(value || "").trim().toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, ""); }
 
 module.exports = { CapabilityCatalog };

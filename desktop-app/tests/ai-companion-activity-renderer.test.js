@@ -226,8 +226,8 @@ test("AI Companion model response actions show copy, open in new tab, split, the
   assert.match(actions.children[3].className, /ai-companion-box-timestamp/);
 });
 
-test("AI Companion cancelled and aborted summaries offer continuation from that point", async () => {
-  for (const status of ["cancelled", "aborted"]) {
+test("AI Companion blocked, cancelled, and aborted summaries offer continuation from that point", async () => {
+  for (const status of ["blocked", "cancelled", "aborted"]) {
     const continued = [];
     const harness = createHarness(null, { onContinueTask: (event) => continued.push(event.status) });
     harness.renderer.appendSummary({ status, finalResponse: `Task ${status}`, changedFiles: [], attemptedChanges: [] });
@@ -441,6 +441,8 @@ test("AI Companion focuses registered external activity rows", () => {
 test("AI Companion summary uses explicit terminal status labels", () => {
   const cases = [
     { status: "success", label: "Task Succeeded", className: "succeeded" },
+    { status: "completed", label: "Task Completed", className: "unverified" },
+    { status: "blocked", label: "Task Blocked", className: "blocked" },
     { status: "failure", label: "Task Failed", className: "failed" },
     { status: "cancelled", label: "Task Cancelled", className: "cancelled" },
     { status: "aborted", label: "Task Aborted", className: "aborted" }

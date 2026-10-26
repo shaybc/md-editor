@@ -5855,6 +5855,8 @@ test("agent terminal lifecycle is summary-owned and stale runs become aborted", 
   assert.match(source, /\["running", "interrupted"\]\.includes\(entry\.record\.status\)/);
   assert.match(source, /ensureAbortedTaskSummary\(entry\.record\)/);
   assert.match(source, /event\.type === "run-aborted"/);
+  assert.match(source, /event\.type === "run-blocked"/);
+  assert.match(source, /status === "blocked" \? "blocked"/);
   assert.match(source, /status === "aborted" \? "aborted"/);
   assert.doesNotMatch(source, /record\.recoveryInspection\?\.classification === "recoverable"\) record\.status = "interrupted"/);
 });

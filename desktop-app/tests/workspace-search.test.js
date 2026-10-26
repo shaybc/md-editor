@@ -433,16 +433,30 @@ test("workspace replace preview keeps source content unchanged until apply", () 
   assert.equal(preview.files[0].nextContent, "omega beta omega");
 });
 
-test("sidebar AI view opens the right sidebar AI panel", () => {
+test("sidebar AI view opens the workspace AI panel", () => {
   const harness = createSidebarViewHarness();
   const module = loadWorkspaceSearchModule({ app: harness.app, document: harness.document });
 
   module.setSidebarView("ai-companion");
 
   assert.deepEqual(harness.aiCompanionPanel.openCalls.map((call) => call.open), [true]);
-  assert.equal(harness.aiCompanionPanel.openCalls[0].workspace, undefined);
+  assert.equal(harness.aiCompanionPanel.openCalls[0].workspace, true);
   assert.equal(harness.folderTreeRoot.hidden, false);
-  assert.equal(harness.folderTreePane.classList.contains("ai-companion-workspace-rail"), false);
+  assert.equal(harness.folderTreePane.classList.contains("ai-companion-workspace-rail"), true);
+});
+
+test("AI rail click does not save AI as the last workspace layout", () => {
+  const harness = createSidebarViewHarness();
+  const savedLayouts = [];
+  loadWorkspaceSearchModule({
+    app: harness.app,
+    document: harness.document,
+    saveLastWorkspaceLayout: (layout) => savedLayouts.push(layout)
+  });
+
+  harness.buttons.find((button) => button.dataset.sidebarView === "ai-companion").listener.handler();
+
+  assert.deepEqual(savedLayouts, []);
 });
 
 test("normal sidebar views close AI workspace before activating", () => {

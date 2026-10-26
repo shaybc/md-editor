@@ -56,6 +56,7 @@ class RunSummary {
       type: "agent-summary",
       status: details.status,
       isError: details.status === "failure" || details.status === "aborted",
+      blocker: details.blocker && typeof details.blocker === "object" ? { ...details.blocker } : null,
       outcome: terminalResponse,
       finalResponse: terminalResponse,
       changedFiles: this.changedFiles.map((entry) => ({ ...entry })),

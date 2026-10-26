@@ -93,7 +93,7 @@
 
     function appendContinueTaskButton(actions, event) {
       const status = String(event?.status || "").toLowerCase();
-      if (!actions || !["aborted", "cancelled", "canceled"].includes(status) || typeof deps.onContinueTask !== "function") return;
+      if (!actions || !["aborted", "blocked", "cancelled", "canceled"].includes(status) || typeof deps.onContinueTask !== "function") return;
       const button = createElement("button", "ai-companion-box-copy ai-companion-box-continue-task");
       button.type = "button";
       button.title = "Continue task from this point";
@@ -636,6 +636,8 @@
     function getSummaryStatus(event) {
       const explicitStatus = String(event.status || "").toLowerCase();
       if (explicitStatus === "success") return { key: "succeeded", label: "Task Succeeded", icon: "bi-check-lg" };
+      if (explicitStatus === "completed") return { key: "unverified", label: "Task Completed", icon: "bi-check-lg" };
+      if (explicitStatus === "blocked") return { key: "blocked", label: "Task Blocked", icon: "bi-exclamation-triangle" };
       if (explicitStatus === "failure") return { key: "failed", label: "Task Failed", icon: "bi-x-lg" };
       if (explicitStatus === "cancelled") return { key: "cancelled", label: "Task Cancelled", icon: "bi-stop-fill" };
       if (explicitStatus === "aborted") return { key: "aborted", label: "Task Aborted", icon: "bi-slash-circle" };

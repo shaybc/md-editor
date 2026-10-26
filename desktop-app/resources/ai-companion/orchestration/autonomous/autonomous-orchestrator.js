@@ -57,12 +57,15 @@ const { ProviderRouteCatalog } = require("./routing/provider-route-catalog");
 const { ProviderRouteSession } = require("./routing/provider-route-session");
 const { PathAuthority } = require("./path-authority");
 const { RunSummary } = require("./run-summary");
+const { TERMINAL_STATUSES, createTerminalOutcome } = require("./terminal-outcome");
 const { InteractionGate } = require("./interaction/interaction-gate");
 const { hasInteractionToolResult, insertInteractionToolResult } = require("./interaction/pending-interaction-recovery");
 const { InternetResearchService } = require("./internet/internet-research-service");
 const { NotebookDocumentService } = require("./notebooks/notebook-document-service");
 const { WorkspaceAtlas } = require("./structure/workspace-atlas");
 const { collectRuntimeEnvironment } = require("./runtime-identity");
+const { GoalCompletionEvaluator } = require("./goal-completion-evaluator");
+const { ToolFailureLoopGuard } = require("./tool-failure-loop-guard");
 
 class AutonomousOrchestrator {
   /** Run Chat, Plan, or Agent through one model-directed kernel. */
@@ -154,11 +157,12 @@ class AutonomousOrchestrator {
       }
       if (decision.classification === "completed") {
         const restoredPlan = restored.planPersistence?.plan || null;
+        const restoredOutcome = createTerminalOutcome(restored.terminalOutcome?.status || TERMINAL_STATUSES.COMPLETED, restored.finalResponse, restored.terminalOutcome);
         events.emit({ type: EVENT_TYPES.RUN_RESTORED, classification: "completed", summary: restored.recoverySummary || "Restored completed run." });
         events.final(restored.finalResponse, { mode: policy.mode, recovered: true, ...(restoredPlan ? { plan: restoredPlan } : {}) });
-        runSummary.publish(events.emit, { status: "success", finalResponse: restored.finalResponse, outcome: restored.recoverySummary || restored.finalResponse });
-        events.emit({ type: EVENT_TYPES.RUN_COMPLETED, mode: policy.mode, recovered: true, ...(restoredPlan ? { plan: restoredPlan } : {}) });
-        return { content: restored.finalResponse, architecture: "autonomous", recovered: true, ...(restoredPlan ? { plan: restoredPlan } : {}) };
+        runSummary.publish(events.emit, { status: restoredOutcome.status, finalResponse: restored.finalResponse, outcome: restored.recoverySummary || restored.finalResponse, blocker: restoredOutcome.blocker });
+        events.emit({ type: restoredOutcome.status === TERMINAL_STATUSES.BLOCKED ? EVENT_TYPES.RUN_BLOCKED : EVENT_TYPES.RUN_COMPLETED, mode: policy.mode, status: restoredOutcome.status, recovered: true, ...(restoredPlan ? { plan: restoredPlan } : {}) });
+        return { content: restored.finalResponse, status: restoredOutcome.status, architecture: "autonomous", recovered: true, ...(restoredPlan ? { plan: restoredPlan } : {}) };
       }
       if (decision.classification === "cancelled") {
         events.emit({ type: EVENT_TYPES.RUN_RESTORED, classification: "cancelled", summary: "The saved run was cancelled and was not resumed." });
@@ -213,6 +217,8 @@ class AutonomousOrchestrator {
         })
         : null;
       const runtimeEnvironment = await collectRuntimeEnvironment(request);
+      const completionEvaluator = new GoalCompletionEvaluator(request, journaledEvents.emit, restored?.completionEvaluation);
+      const toolFailureLoopGuard = new ToolFailureLoopGuard(restored?.toolFailureLoop);
       const internetResearch = new InternetResearchService(request, {
         emit: journaledEvents.emit,
         artifacts: artifactVault,
@@ -245,7 +251,7 @@ class AutonomousOrchestrator {
         loadedExtensions: new Set(restored?.loadedExtensions || []),
         loadedExtensionBodies: new Map(Array.isArray(restored?.loadedExtensionBodies) ? restored.loadedExtensionBodies : []),
         work, planRepository, memoryRepository, memoryProposals, permissionPolicy, denialLedger, riskAdvisor, pathAuthority, runSummary,
-        interactionGate, internetResearch, notebooks, workspaceAtlas, initialWorkspaceStructure, runtimeEnvironment, changeJournal,
+        interactionGate, internetResearch, notebooks, workspaceAtlas, initialWorkspaceStructure, runtimeEnvironment, completionEvaluator, toolFailureLoopGuard, changeJournal,
         routeCatalog, routeSession, routeDataScopes, taskGrants: [], workers: null, pendingTools: []
       };
       hooks.setContext(context);
@@ -372,6 +378,8 @@ class AutonomousOrchestrator {
           denials: denialLedger.snapshot(),
           permissionMode,
           runSummary: runSummary.snapshot(),
+          toolFailureLoop: toolFailureLoopGuard.snapshot(),
+          completionEvaluation: completionEvaluator.snapshot(),
           routing: routeSession.snapshot(),
           artifacts: artifactVault.snapshot(),
           windowState: windowSteward.snapshot(),
@@ -422,27 +430,34 @@ class AutonomousOrchestrator {
         await chronicle.append("transcript-initialized", { messages });
       }
 
-      const modelContent = await runAutonomousLoop({
+      const modelOutcome = await runAutonomousLoop({
         provider, messages,
         tools: capabilities.providerDefinitions(), getTools: () => capabilities.providerDefinitions(), request, events, context
       });
       planRepository.assertRequiredPlanSaved();
       const savedPlan = planRepository.plan?.path ? { ...planRepository.plan } : null;
-      const content = policy.requirePlanPersistence === true ? String(planRepository.body || "").trim() : modelContent;
-      await hooks.run("run-finish", { mode: policy.mode, status: "completed" });
+      const terminalOutcome = typeof modelOutcome === "string"
+        ? createTerminalOutcome(TERMINAL_STATUSES.COMPLETED, modelOutcome)
+        : createTerminalOutcome(modelOutcome?.status, modelOutcome?.content, modelOutcome);
+      const content = policy.requirePlanPersistence === true ? String(planRepository.body || "").trim() : terminalOutcome.content;
+      const finalOutcome = createTerminalOutcome(terminalOutcome.status, content, terminalOutcome);
+      await hooks.run("run-finish", { mode: policy.mode, status: finalOutcome.status, reason: finalOutcome.reason });
       const afterTaskCheckpoint = changeJournal?.hasTaskChanges?.(request.taskId)
         ? await createChangeJournalCheckpoint(changeJournal, journaledEvents, { kind: "after-task", chatId: request.chatId, taskId: request.taskId, turnIndex: request.turnIndex, label: "After task" })
         : null;
       if (afterTaskCheckpoint) journaledEvents.emit({ type: "change-journal-checkpoint", checkpoint: afterTaskCheckpoint, checkpointId: afterTaskCheckpoint.checkpointId, taskId: request.taskId, chatId: request.chatId, summary: "Rollback checkpoint saved after the task." });
-      await context.saveSnapshot("completed", { finalResponse: content, authoritativeFinal: true });
-      await chronicle.append("run-completed", { finalResponse: content, ...(savedPlan ? { plan: savedPlan } : {}) });
-      events.final(content, { mode: policy.mode, ...(savedPlan ? { plan: savedPlan } : {}) });
-      runSummary.publish(events.emit, { status: "success", finalResponse: content, outcome: content });
-      events.emit({ type: EVENT_TYPES.RUN_COMPLETED, mode: policy.mode, ...(savedPlan ? { plan: savedPlan } : {}) });
-      return { content, architecture: "autonomous", ...(savedPlan ? { plan: savedPlan } : {}) };
+      await context.saveSnapshot("completed", { finalResponse: content, authoritativeFinal: true, terminalOutcome: finalOutcome });
+      await chronicle.append(finalOutcome.status === TERMINAL_STATUSES.BLOCKED ? "run-blocked" : "run-completed", { finalResponse: content, terminalOutcome: finalOutcome, ...(savedPlan ? { plan: savedPlan } : {}) });
+      events.final(content, { mode: policy.mode, status: finalOutcome.status, ...(savedPlan ? { plan: savedPlan } : {}) });
+      runSummary.publish(events.emit, { status: finalOutcome.status, finalResponse: content, outcome: content, blocker: finalOutcome.blocker });
+      events.emit({ type: finalOutcome.status === TERMINAL_STATUSES.BLOCKED ? EVENT_TYPES.RUN_BLOCKED : EVENT_TYPES.RUN_COMPLETED, mode: policy.mode, status: finalOutcome.status, ...(savedPlan ? { plan: savedPlan } : {}) });
+      return { content, status: finalOutcome.status, architecture: "autonomous", ...(savedPlan ? { plan: savedPlan } : {}) };
     } catch (error) {
       const stopped = request.signal?.aborted || error?.name === "AbortError";
-      const userCancelled = request.signal?.aborted === true && request.signal?.reason?.code === "USER_CANCELLED";
+      const userCancelled = request.signal?.aborted === true && (
+        request.signal?.reason?.code === "USER_CANCELLED"
+        || /cancelled|canceled/i.test(error?.message || "")
+      );
       const status = userCancelled ? "cancelled" : (stopped ? "aborted" : "failure");
       try { await hooks?.run?.(stopped ? "run-cancelled" : "run-failed", { error: error?.message || String(error), status }); }
       catch (_hookError) { /* Preserve the original runtime failure. */ }

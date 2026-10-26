@@ -5,7 +5,7 @@
 
     with (deps) {
   function getMarkdownTitleFromFileName(fileName) {
-    return (fileName || "document.md").replace(/\.(md|markdown|mermaid)$/i, "");
+    return (fileName || "document.md").replace(/\.(md|markdown|mermaid|mmd)$/i, "");
   }
 
   function isGraphFilePath(path) {
@@ -36,7 +36,7 @@
       return /(^|[\/])(dockerfile|makefile|rakefile|gemfile|license|readme|changelog|authors|contributors)$/i.test(path || "");
     }
     return new Set([
-      "txt", "text", "md", "markdown", "mermaid", "drawio", "json", "jsonc", "js", "jsx", "ts", "tsx", "mjs", "cjs",
+      "txt", "text", "md", "markdown", "mermaid", "mmd", "drawio", "json", "jsonc", "js", "jsx", "ts", "tsx", "mjs", "cjs",
       "css", "scss", "sass", "less", "html", "htm", "xml", "svg", "csv", "tsv", "yaml", "yml",
       "toml", "ini", "conf", "config", "env", "properties", "java", "c", "h", "cpp", "hpp", "cc",
       "cs", "go", "rs", "py", "rb", "php", "swift", "kt", "kts", "sh", "bash", "zsh", "fish",
@@ -166,7 +166,7 @@
 
   /** Return whether a path represents a standalone Mermaid diagram source file. */
   function isMermaidPath(path) {
-    return /\.mermaid$/i.test(path || "");
+    return /\.(mermaid|mmd)$/i.test(path || "");
   }
 
   function getFileName(path) {

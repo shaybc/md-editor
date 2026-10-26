@@ -699,7 +699,7 @@
           filters: [
             { name: "MD-Editor layered images", extensions: ["mdimage"] },
             { name: "Draw.io diagrams", extensions: ["drawio", "xml"] },
-            { name: "Text-based files", extensions: ["md", "markdown", "mermaid", "mdviewer-graph.json", "mdgraph.json", "mdviewer-k8s-topology.json", "json", "txt", "java", "cs", "css", "js", "ts", "html", "xml", "csv", "yml", "yaml", "toml", "ini", "log"] },
+            { name: "Text-based files", extensions: ["md", "markdown", "mermaid", "mmd", "mdviewer-graph.json", "mdgraph.json", "mdviewer-k8s-topology.json", "json", "txt", "java", "cs", "css", "js", "ts", "html", "xml", "csv", "yml", "yaml", "toml", "ini", "log"] },
             { name: "All files", extensions: ["*"] }
           ]
         });
@@ -728,7 +728,7 @@
               accept: {
                 "application/vnd.md-editor.image+zip": [".mdimage"],
                 "application/xml": [".drawio", ".xml"],
-                "text/markdown": [".md", ".markdown", ".mermaid"],
+                "text/markdown": [".md", ".markdown", ".mermaid", ".mmd"],
                 "text/plain": [".txt", ".text", ".java", ".cs", ".css", ".js", ".ts", ".html", ".xml", ".csv", ".yml", ".yaml", ".toml", ".ini", ".log"],
                 "application/json": [".json"]
               }

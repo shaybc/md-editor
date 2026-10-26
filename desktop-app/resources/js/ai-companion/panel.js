@@ -123,7 +123,7 @@
     const MAX_WORKSPACE_SIDE_WIDTH = 520;
     const WORKSPACE_CHAT_INITIAL_LIMIT = 25;
     const WORKSPACE_CHAT_LOAD_MORE_SIZE = 15;
-    const WORKSPACE_STATUS_CLASS_NAMES = ["status-completed", "status-incomplete", "status-error", "status-cancelled", "status-aborted", "status-planned", "status-running", "status-ready"];
+    const WORKSPACE_STATUS_CLASS_NAMES = ["status-completed", "status-incomplete", "status-error", "status-blocked", "status-cancelled", "status-aborted", "status-planned", "status-running", "status-ready"];
     const BUNDLED_WORKFLOW_SUGGESTIONS = [
       { name: "investigate-defect", description: "Investigate a defect from evidence to root cause.", allowedModes: ["plan", "agent"] },
       { name: "develop-change", description: "Implement a scoped repository change.", allowedModes: ["agent"] },
@@ -1674,6 +1674,7 @@
       if (["completed", "complete", "implemented", "success", "succeeded"].includes(normalized)) return "completed";
       if (normalized === "incomplete") return "incomplete";
       if (["error", "failed", "failure"].includes(normalized)) return "error";
+      if (normalized === "blocked") return "blocked";
       if (["cancelled", "canceled"].includes(normalized)) return "cancelled";
       if (["aborted", "interrupted"].includes(normalized)) return "aborted";
       if (["planned", "pending"].includes(normalized)) return "planned";
@@ -1686,6 +1687,7 @@
       if (key === "completed") return "Completed";
       if (key === "incomplete") return "Incomplete";
       if (key === "error") return "Error";
+      if (key === "blocked") return "Blocked";
       if (key === "cancelled") return "Cancelled";
       if (key === "planned") return "Planned";
       if (key === "aborted") return "Aborted";
@@ -5312,7 +5314,7 @@
       if (event.type === "agent-summary") {
         const status = String(event.status || "").toLowerCase();
         activeAgentEntry.record.status = status === "cancelled" ? "cancelled"
-          : (status === "aborted" ? "aborted" : (status === "failure" || event.isError === true ? "error" : "completed"));
+          : (status === "aborted" ? "aborted" : (status === "blocked" ? "blocked" : (status === "failure" || event.isError === true ? "error" : "completed")));
         renderTaskChangesPanel(activeAgentEntry.record);
       }
       activeAgentEntry.isDirty = true;
@@ -8181,7 +8183,7 @@
         appendAutonomousRuntimeStatus(event);
         return;
       }
-      if (["run-started", "context-thinned", "observation-released", "observation-release-reminder", "tool-catalog-updated", "tool-schema-activated", "tool-schema-restored", "tool-schema-unavailable", "extension-tool-activated", "extension-tool-started", "extension-tool-completed", "extension-tool-failed", "extension-capability-unavailable", "rules-discovered", "rule-activated", "rule-unavailable", "rules-refreshed", "continuity-updated", "chronicle-saved", "run-restored", "recovery-warning", "change-journal-checkpoint", "compaction", "run-completed", "run-cancelled", "run-aborted", "run-failed"].includes(event.type) || /^(work|worker|memory|route)-/.test(event.type) || ["permission-mode-changed", "tool-denied", "denial-guard-tripped"].includes(event.type)) {
+      if (["run-started", "context-thinned", "observation-released", "observation-release-reminder", "tool-catalog-updated", "tool-schema-activated", "tool-schema-restored", "tool-schema-unavailable", "extension-tool-activated", "extension-tool-started", "extension-tool-completed", "extension-tool-failed", "extension-capability-unavailable", "rules-discovered", "rule-activated", "rule-unavailable", "rules-refreshed", "continuity-updated", "chronicle-saved", "run-restored", "recovery-warning", "change-journal-checkpoint", "compaction", "run-completed", "run-blocked", "run-cancelled", "run-aborted", "run-failed", "tool-failure-loop-tripped"].includes(event.type) || /^(work|worker|memory|route)-/.test(event.type) || ["permission-mode-changed", "tool-denied", "denial-guard-tripped"].includes(event.type)) {
         if (["context-thinned", "observation-released", "observation-release-reminder", "tool-catalog-updated", "tool-schema-activated", "tool-schema-restored", "tool-schema-unavailable", "rules-discovered", "rule-activated", "rule-unavailable", "rules-refreshed", "continuity-updated", "run-restored", "recovery-warning", "change-journal-checkpoint", "compaction", "memory-proposed", "memory-confirmed", "memory-rejected", "memory-forgotten", "permission-mode-changed", "tool-denied", "denial-guard-tripped", "route-selected", "route-fallback", "route-unavailable"].includes(event.type)) appendAutonomousRuntimeStatus(event);
         else recordAgentEvent(event);
         if (activeAgentEntry && ["run-restored", "recovery-warning"].includes(event.type)) {
@@ -8195,6 +8197,7 @@
         if (activeAgentEntry && event.type === "run-completed") activeAgentEntry.record.status = activeRunMode === "plan"
           ? (event.plan?.path || activeAgentEntry.record.plan?.path || activeAgentEntry.pendingPlanMetadata?.path ? "planned" : "error")
           : (String(getRecordFinalResponse(activeAgentEntry.record) || "").trim() ? "completed" : "error");
+        if (activeAgentEntry && event.type === "run-blocked") activeAgentEntry.record.status = "blocked";
         if (activeAgentEntry && event.type === "run-cancelled") activeAgentEntry.record.status = "cancelled";
         if (activeAgentEntry && event.type === "run-aborted") activeAgentEntry.record.status = "aborted";
         if (activeAgentEntry && event.type === "run-failed") activeAgentEntry.record.status = "error";

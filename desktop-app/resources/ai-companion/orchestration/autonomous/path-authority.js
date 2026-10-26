@@ -159,6 +159,13 @@ function collectUserText(value) {
 }
 function isWithin(candidate, root) { return candidate === root || candidate.startsWith(root + path.sep); }
 function isDirectory(value) { try { return fs.statSync(value).isDirectory(); } catch (_error) { return false; } }
-function pathAuthorityError(code, message) { const error = new Error(message); error.code = code; error.retryable = false; error.doNotRetry = true; return error; }
+function pathAuthorityError(code, message) {
+  const error = new Error(message);
+  error.code = code;
+  error.retryable = false;
+  error.doNotRetry = true;
+  error.recoveryTool = "request_user_choice";
+  return error;
+}
 
 module.exports = { KNOWN_FOLDER_NAMES, PathAuthority, resolveKnownFolderReference };

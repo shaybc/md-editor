@@ -12,9 +12,10 @@ function createToolSchemaRecord(value = {}) {
   const description = String(value.description || definition.function.description || "").trim();
   const searchHint = String(value.searchHint || "").trim();
   const displayName = String(value.displayName || name.replace(/_/g, " ")).trim();
+  const aliases = Object.freeze((Array.isArray(value.aliases) ? value.aliases : []).map((alias) => String(alias || "").trim()).filter(Boolean));
   const rulePaths = normalizeRulePaths(value.rulePaths);
   return Object.freeze({
-    name, definition, source,
+    name, definition, source, aliases,
     domain: String(value.domain || source),
     displayName,
     summary: String(value.summary || description).trim(),
@@ -35,7 +36,7 @@ function createToolSchemaRecord(value = {}) {
     serverId: String(value.serverId || ""),
     remoteName: String(value.remoteName || ""),
     rulePaths,
-    fingerprint: fingerprint({ name, definition, source, description, searchHint, requiredMode: value.requiredMode, requiredCapability: value.requiredCapability, permissionScope: value.permissionScope, executionOwner: value.executionOwner, allowedModes: value.allowedModes, adapter: value.adapter, extensionId: value.extensionId, extensionDigest: value.extensionDigest, rulePaths })
+    fingerprint: fingerprint({ name, definition, source, aliases, description, searchHint, requiredMode: value.requiredMode, requiredCapability: value.requiredCapability, permissionScope: value.permissionScope, executionOwner: value.executionOwner, allowedModes: value.allowedModes, adapter: value.adapter, extensionId: value.extensionId, extensionDigest: value.extensionDigest, rulePaths })
   });
 }
 

@@ -9,6 +9,7 @@ const { loadExtension } = require("./extension-registry");
 const { executeApplicationTool } = require("./application-tool-adapter");
 const { CommandImpactInspector, digestCommand, normalizeCommand, redactCommand } = require("../../security/command-impact/command-impact-inspector");
 const { publicCommandImpact } = require("../../security/command-impact/command-impact-view");
+const { requireWorkspaceForTool } = require("./workspace-context");
 
 function parseArguments(call) {
   const raw = call?.function?.arguments;
@@ -22,6 +23,7 @@ async function executeTool(call, context) {
   const name = String(call?.function?.name || "");
   const args = parseArguments(call);
   const root = context.request.workspaceRoot;
+  requireWorkspaceForTool(context.request, name);
   if (name === "run_command" && context.request.securityContext?.policy?.shell?.mode !== "sandbox-shell") {
     await context.request.securityContext?.auditLogger?.record({
       timestamp: new Date().toISOString(), requestId: context.request.requestId, workspace: root,

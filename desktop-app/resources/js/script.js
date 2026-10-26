@@ -16456,6 +16456,7 @@ async function* collectWorkspaceSearchFilesFromNeutralinoDirectory(parentPath, p
     isSidebarVisible,
     setSidebarVisible,
     copyTextToClipboard: copyTextToSystemClipboard,
+    saveLastWorkspaceLayout,
     setWorkspaceLayoutMode
   });
   const openWorkspaceSearchModal = workspaceSearch.openWorkspaceSearchModal;

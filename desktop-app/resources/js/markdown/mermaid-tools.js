@@ -124,11 +124,26 @@
   let modalPanX = 0;
   let modalPanY = 0;
   let modalIsDragging = false;
+  let modalTextSelectionEnabled = false;
   let modalDragStart = { x: 0, y: 0 };
   let modalCurrentSvgEl = null;
 
   const mermaidZoomModal   = document.getElementById('mermaid-zoom-modal');
   const mermaidModalDiagram = document.getElementById('mermaid-modal-diagram');
+
+  /** Switches the diagram between drag-to-pan and native text selection. */
+  function setModalTextSelection(enabled) {
+    modalTextSelectionEnabled = enabled;
+    modalIsDragging = false;
+    mermaidModalDiagram.classList.remove('dragging');
+    mermaidModalDiagram.classList.toggle('text-selection', enabled);
+    const button = document.getElementById('mermaid-modal-select-text');
+    button.setAttribute('aria-pressed', String(enabled));
+    button.title = enabled ? 'Switch to pan mode' : 'Switch to text selection mode';
+    button.innerHTML = enabled
+      ? '<i class="bi bi-hand-index"></i> Pan'
+      : '<i class="bi bi-cursor-text"></i> Select Text';
+  }
 
   function applyModalTransform() {
     if (modalCurrentSvgEl) {
@@ -140,6 +155,7 @@
   function closeMermaidModal() {
     if (!mermaidZoomModal.classList.contains('active')) return;
     mermaidZoomModal.classList.remove('active');
+    setModalTextSelection(false);
     mermaidModalDiagram.innerHTML = '';
     modalCurrentSvgEl = null;
     modalZoomScale = 1;
@@ -153,6 +169,7 @@
     if (!svgEl) return;
 
     mermaidModalDiagram.innerHTML = '';
+    setModalTextSelection(false);
     modalZoomScale = 1;
     modalPanX = 0;
     modalPanY = 0;
@@ -179,9 +196,13 @@
     if (e.target === mermaidZoomModal) closeMermaidModal();
   });
 
+  document.getElementById('mermaid-modal-select-text').addEventListener('click', () => {
+    setModalTextSelection(!modalTextSelectionEnabled);
+  });
+
   // Zoom controls
   document.getElementById('mermaid-modal-zoom-in').addEventListener('click', () => {
-    modalZoomScale = Math.min(modalZoomScale + 0.25, 10);
+    modalZoomScale = Math.min(modalZoomScale + 0.25, 15);
     applyModalTransform();
   });
   document.getElementById('mermaid-modal-zoom-out').addEventListener('click', () => {
@@ -197,12 +218,14 @@
   mermaidModalDiagram.addEventListener('wheel', function(e) {
     e.preventDefault();
     const delta = e.deltaY < 0 ? 0.15 : -0.15;
-    modalZoomScale = Math.min(Math.max(modalZoomScale + delta, 0.1), 10);
+    modalZoomScale = Math.min(Math.max(modalZoomScale + delta, 0.1), 15);
     applyModalTransform();
   }, { passive: false });
 
   // Drag to pan inside modal
   mermaidModalDiagram.addEventListener('mousedown', function(e) {
+    if (modalTextSelectionEnabled || e.button !== 0) return;
+    e.preventDefault();
     modalIsDragging = true;
     modalDragStart = { x: e.clientX - modalPanX, y: e.clientY - modalPanY };
     mermaidModalDiagram.classList.add('dragging');
